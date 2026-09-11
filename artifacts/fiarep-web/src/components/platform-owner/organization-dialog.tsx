@@ -191,11 +191,11 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               {isEditing && (
-                <FormItem>
-                  <FormLabel className="text-slate-700 font-semibold">Organization Code</FormLabel>
-                  <Input value={organization.id} readOnly className="font-mono bg-slate-50" />
-                  <FormDescription>System-generated code used by organization staff at sign-in.</FormDescription>
-                </FormItem>
+                <div className="space-y-2">
+                  <label htmlFor="organization-code-edit" className="text-sm font-semibold text-slate-700">Organization Code</label>
+                  <Input id="organization-code-edit" value={organization.id} readOnly className="font-mono bg-slate-50" />
+                  <p className="text-sm text-slate-500">System-generated code used by organization staff at sign-in.</p>
+                </div>
               )}
               <FormField
                 control={form.control}
@@ -213,14 +213,14 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
             </div>
             {generatedCode && (
               <div className="rounded-lg border border-teal-200 bg-teal-50 p-4">
-                <FormLabel className="text-teal-900 font-semibold">Organization Code</FormLabel>
+                <label htmlFor="generated-organization-code" className="text-sm font-semibold text-teal-900">Organization Code</label>
                 <div className="mt-2 flex gap-2">
-                  <Input value={generatedCode} readOnly className="font-mono bg-white" />
+                  <Input id="generated-organization-code" value={generatedCode} readOnly className="font-mono bg-white" />
                   <Button type="button" variant="outline" onClick={copyOrganizationCode}>
                     <Copy className="mr-2 h-4 w-4" /> Copy
                   </Button>
                 </div>
-                <FormDescription className="mt-2 text-teal-800">Save this code. Organization staff use it when signing in.</FormDescription>
+                <p className="mt-2 text-sm text-teal-800">Save this code. Organization staff use it when signing in.</p>
                 {copySucceeded && <p role="status" className="mt-2 text-sm font-medium text-teal-800">Copied successfully.</p>}
                 {copyError && <p role="alert" className="mt-2 text-sm font-medium text-rose-700">{copyError}</p>}
                 <Button type="button" variant="link" className="mt-1 h-auto px-0 text-teal-800" onClick={() => setAcknowledged(true)}>
