@@ -1,6 +1,6 @@
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getCurrentPosition } from '../lib/store';
+import { clearAppMode, logout, getCurrentPosition } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -14,7 +14,7 @@ type Section = { heading: string; color: string; tiles: Tile[] };
 
 export default function ManagementHome() {
   const router = useRouter();
-  const { mode } = useAppMode();
+  const { mode, refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
   const _pos = (position || '').trim().toLowerCase();
@@ -29,6 +29,21 @@ export default function ManagementHome() {
   // gets a read-only Emergency Activity view for their development.
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('management'); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, []));
+
+  function onSignOut() {
+    Alert.alert('Sign out?', 'You will need to enter your name and code to sign in again.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          await logout();
+          await clearAppMode();
+          refresh();
+        },
+      },
+    ]);
+  }
 
   const sections: Section[] = [
     {
@@ -89,6 +104,7 @@ export default function ManagementHome() {
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
         ...(!restricted ? [{ label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' as Tone }, { label: 'Default rates', onPress: () => router.push('/settings'), tone: 'tint' as Tone }] : []),
+        { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },
   ];
