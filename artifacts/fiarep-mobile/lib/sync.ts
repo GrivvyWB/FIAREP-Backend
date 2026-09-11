@@ -4,7 +4,7 @@ import {
   pullSync,
   updateEntityRecord,
 } from '@workspace/api-client-react';
-import { db, getAccessToken, getCurrentActor, getSessionIdentity } from './store';
+import { db, getAccessToken, getAlertsMuted, getCurrentActor, getSessionIdentity } from './store';
 import { ensureQueue } from './queue';
 import { registerRemotePhotos } from './photoResolver';
 import { notifyLocal } from './push';
@@ -339,14 +339,17 @@ export async function syncAllEntities(): Promise<void> {
        ON CONFLICT(key) DO UPDATE SET value=excluded.value`, scope, result.cursor,
     );
   });
+  const alertsMuted = await getAlertsMuted().catch(() => false);
   for (const notification of newNotifications) {
     const urgent = /emergency|priority|elevator|resident report/i.test(
       `${notification.message} ${notification.detail || ''}`,
     );
-    await notifyLocal(
-      notification.message || 'FIAREP alert',
-      notification.detail || 'A new item needs your attention.',
-      urgent,
-    );
+    if (!alertsMuted) {
+      await notifyLocal(
+        notification.message || 'FIAREP alert',
+        notification.detail || 'A new item needs your attention.',
+        urgent,
+      );
+    }
   }
 }

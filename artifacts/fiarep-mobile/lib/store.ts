@@ -1482,12 +1482,48 @@ export async function restoreServerSession(): Promise<Staff | null> {
 }
 
 export async function registerPushToken(): Promise<void> {
+  if (await getAlertsMuted().catch(() => false)) return;
   const { registerForPush } = await import('./push');
   const token = await registerForPush();
   if (token) {
     await registerDeviceToken({ token, platform: 'expo' });
     const d = await db();
     await d.runAsync('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'push_token', token);
+  }
+}
+
+async function alertMuteSettingKey(): Promise<string> {
+  const identity = await getSessionIdentity();
+  return `alerts_muted:${identity?.tenantId || 'default'}:${identity?.staffId || 'unknown'}`;
+}
+
+export async function getAlertsMuted(): Promise<boolean> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key=?',
+    await alertMuteSettingKey(),
+  );
+  return row?.value === 'true';
+}
+
+export async function setAlertsMuted(muted: boolean): Promise<void> {
+  const d = await db();
+  await d.runAsync(
+    'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+    await alertMuteSettingKey(),
+    muted ? 'true' : 'false',
+  );
+  if (muted) {
+    const push = await d.getFirstAsync<{ value: string }>(
+      'SELECT value FROM settings WHERE key=?',
+      'push_token',
+    );
+    if (push?.value) {
+      await unregisterDeviceToken({ token: push.value }).catch(() => undefined);
+      await d.runAsync('DELETE FROM settings WHERE key=?', 'push_token');
+    }
+  } else {
+    await registerPushToken().catch(() => undefined);
   }
 }
 

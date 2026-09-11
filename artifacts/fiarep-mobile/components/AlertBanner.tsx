@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Text, Pressable, Vibration } from 'react-native';
 import { useRouter } from 'expo-router';
+import { getAlertsMuted } from '../lib/store';
 
 // A red alert banner that pulses (blinks) when there are unread alerts, so the
 // user notices it the moment they land on their home screen. Taps to the Inbox.
@@ -19,7 +20,11 @@ export default function AlertBanner({ count }: { count: number }) {
     );
     // Buzz once when new alerts appear (count increased).
     if (count > prevCount.current) {
-      try { Vibration.vibrate(400); } catch (e) {}
+      getAlertsMuted().then((muted) => {
+        if (!muted) {
+          try { Vibration.vibrate(400); } catch (e) {}
+        }
+      }).catch(() => undefined);
     }
     prevCount.current = count;
     loop.start();

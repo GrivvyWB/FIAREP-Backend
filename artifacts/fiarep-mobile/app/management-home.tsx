@@ -7,6 +7,7 @@ import { useFocusEffect } from 'expo-router';
 import { unreadCount, getCurrentActor } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
+import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
 
 type Tone = 'solid' | 'outline' | 'tint';
 type Tile = { label: string; onPress: () => void; tone: Tone };
@@ -100,6 +101,7 @@ export default function ManagementHome() {
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <AlertBanner count={unread} />
+      <UpperManagementMuteToggle />
       <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{heading}</Text>
       {sections.filter((sec) => sec.tiles.length > 0).map((sec, si) => (
         <View key={si} style={{ marginBottom: 18 }}>
