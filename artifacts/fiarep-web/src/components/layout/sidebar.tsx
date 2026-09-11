@@ -50,11 +50,11 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
       <aside 
         className={`w-[264px] bg-sidebar text-sidebar-foreground flex flex-col flex-shrink-0 fixed md:sticky top-0 h-[100dvh] z-60 transition-transform duration-250 ease-in-out ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
       >
-        <div className="p-[10px_16px] border-b border-sidebar-border flex items-center justify-center shrink-0">
+        <div className="w-full border-b border-sidebar-border shrink-0 overflow-hidden bg-white">
           <img
             src={`${import.meta.env.BASE_URL}fiarep-sidebar-logo.png`}
             alt="FIAREP"
-            className="h-14 w-[190px] object-contain"
+            className="block h-auto w-full"
           />
         </div>
 
