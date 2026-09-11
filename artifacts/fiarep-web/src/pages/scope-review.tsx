@@ -5,6 +5,9 @@ import { useListEntityRecords, usePerformEntityAction } from "@workspace/api-cli
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getListEntityRecordsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useToast } from "@/hooks/use-toast";
 
 export default function ScopeReview() {
   const { staff } = useAuth();
@@ -13,6 +16,8 @@ export default function ScopeReview() {
     !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "");
   const { data, isLoading } = useListEntityRecords("procurement", { status: "submitted" });
   const action = usePerformEntityAction();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [notes, setNotes] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -21,7 +26,20 @@ export default function ScopeReview() {
   if (!allowed) return null;
   const rows = (data || []).filter((r) => (r.state as any)?.status === "submitted");
   async function decide(id: string, name: "approve" | "reject") {
-    await action.mutateAsync({ entity: "procurement", id, action: name, data: notes[id] ? { note: notes[id] } : {} });
+    try {
+      await action.mutateAsync({ entity: "procurement", id, action: name, data: notes[id] ? { note: notes[id] } : {} });
+      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("procurement") });
+      toast({
+        title: name === "approve" ? "Scope approved" : "Scope returned",
+        description: name === "approve" ? "The scope is ready for procurement." : "The scope was returned to CPM.",
+      });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Unable to update scope",
+        description: error?.message || "Please try again.",
+      });
+    }
   }
   return <div className="space-y-6">
     <div><h1 className="text-2xl font-bold">Scope Review</h1><p className="text-muted-foreground">Submitted CPM scopes awaiting Management review.</p></div>

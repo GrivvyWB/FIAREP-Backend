@@ -1,12 +1,5 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import {
-  getListEntityRecordsQueryKey,
-  useCreateEntityRecord,
-  useListEntityRecords,
-  useUpdateEntityRecord,
-} from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
 import { User, LogOut, Shield, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,37 +15,52 @@ const DEFAULT_RATES = {
 
 export default function Settings() {
   const { staff, logout } = useAuth();
-  const { data: rateRecords } = useListEntityRecords("global-settings");
-  const createRates = useCreateEntityRecord();
-  const updateRates = useUpdateEntityRecord();
-  const queryClient = useQueryClient();
   const { toast } = useToast();
-  const rateRecord = rateRecords?.find((record) => record.id === "default-rates");
   const [rates, setRates] = useState(DEFAULT_RATES);
+  const [ratesLoading, setRatesLoading] = useState(true);
+  const [ratesSaving, setRatesSaving] = useState(false);
   const canEditRates = staff?.position === "Borough Director";
 
   useEffect(() => {
-    if (rateRecord?.state) setRates({ ...DEFAULT_RATES, ...(rateRecord.state as Partial<typeof DEFAULT_RATES>) });
-  }, [rateRecord]);
+    let cancelled = false;
+    fetch("/api/v1/settings/default-rates", {
+      headers: { Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}` },
+    })
+      .then(async (response) => {
+        if (response.status === 404) return null;
+        if (!response.ok) throw new Error("Unable to load shared rates.");
+        return response.json() as Promise<{ value?: Partial<typeof DEFAULT_RATES> }>;
+      })
+      .then((setting) => {
+        if (!cancelled && setting?.value) setRates({ ...DEFAULT_RATES, ...setting.value });
+      })
+      .catch((error: any) => {
+        if (!cancelled) toast({ variant: "destructive", title: "Unable to load rates", description: error?.message || "Please try again." });
+      })
+      .finally(() => { if (!cancelled) setRatesLoading(false); });
+    return () => { cancelled = true; };
+  }, [toast]);
 
   const saveRates = async () => {
     try {
-      if (rateRecord) {
-        await updateRates.mutateAsync({
-          entity: "global-settings",
-          id: rateRecord.id,
-          data: { id: rateRecord.id, state: rates, version: rateRecord.version },
-        });
-      } else {
-        await createRates.mutateAsync({
-          entity: "global-settings",
-          data: { id: "default-rates", state: rates, version: 1 },
-        });
+      setRatesSaving(true);
+      const response = await fetch("/api/v1/settings/default-rates", {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}`,
+        },
+        body: JSON.stringify({ value: rates }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || "Unable to save shared rates.");
       }
-      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("global-settings") });
       toast({ title: "Default rates saved", description: "Mobile devices will receive these rates during synchronization." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Unable to save rates", description: error?.message || "Please try again." });
+    } finally {
+      setRatesSaving(false);
     }
   };
 
@@ -110,7 +118,7 @@ export default function Settings() {
                   <Input
                     type="number"
                     step="0.01"
-                    disabled={!canEditRates}
+                    disabled={!canEditRates || ratesLoading}
                     value={rates[key as keyof typeof rates]}
                     onChange={(event) => setRates((current) => ({
                       ...current,
@@ -123,7 +131,7 @@ export default function Settings() {
             {canEditRates ? (
               <Button
                 onClick={saveRates}
-                disabled={createRates.isPending || updateRates.isPending}
+                disabled={ratesLoading || ratesSaving}
               >
                 Save shared rates
               </Button>

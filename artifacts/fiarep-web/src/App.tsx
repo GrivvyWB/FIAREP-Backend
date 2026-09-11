@@ -26,6 +26,7 @@ import Team from '@/pages/team';
 import Violations from '@/pages/violations';
 import Procurement from '@/pages/procurement';
 import Emergency from '@/pages/emergency';
+import ChangeOrders from '@/pages/change-orders';
 import Elevators from '@/pages/elevators';
 import Leave from '@/pages/leave';
 import Notifications from '@/pages/notifications';
@@ -112,7 +113,8 @@ function AppRouter() {
           <Route path="/violations" component={Violations} />
           <Route path="/scope-review" component={ScopeReview} />
           <Route path="/procurement" component={Procurement} />
-          <Route path="/emergency" component={Emergency} />
+          <Route path="/emergency" component={ManagementRouteEmergency} />
+          <Route path="/change-orders" component={ManagementRouteChangeOrders} />
           <Route path="/elevators" component={Elevators} />
           <Route path="/leave" component={Leave} />
           <Route path="/notifications" component={Notifications} />
@@ -123,6 +125,26 @@ function AppRouter() {
       </RoutedErrorBoundary>
     </Shell>
   );
+}
+
+function ManagementRoute({ children }: { children: ReactNode }) {
+  const [, setLocation] = useLocation();
+  const { staff } = useAuth();
+  const allowed = staff?.role === "management" || staff?.role === "administrator";
+
+  useEffect(() => {
+    if (!allowed) setLocation(staff?.role === "procurement" ? "/procurement" : "/dashboard");
+  }, [allowed, setLocation, staff?.role]);
+
+  return allowed ? <>{children}</> : null;
+}
+
+function ManagementRouteEmergency() {
+  return <ManagementRoute><Emergency /></ManagementRoute>;
+}
+
+function ManagementRouteChangeOrders() {
+  return <ManagementRoute><ChangeOrders /></ManagementRoute>;
 }
 
 function OwnerAppRouter() {

@@ -20,6 +20,7 @@ import {
   Plane,
   Database,
   MoreHorizontal,
+  FileCog,
 } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
@@ -42,7 +43,10 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Violations", href: "/violations", icon: AlertTriangle },
     ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart }] : []),
     ...(staff?.role === "management" && !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "") ? [{ name: "Scope Review", href: "/scope-review", icon: ClipboardCheck }] : []),
-    { name: "Emergency", href: "/emergency", icon: BellRing },
+    ...((staff?.role === "management" || staff?.role === "administrator") ? [
+      { name: "Emergency", href: "/emergency", icon: BellRing },
+      { name: "Change Orders", href: "/change-orders", icon: FileCog },
+    ] : []),
     { name: "Elevators", href: "/elevators", icon: ArrowUpToLine },
     { name: "Leave", href: "/leave", icon: Plane },
     { name: "Shared Data", href: "/shared-data", icon: Database },

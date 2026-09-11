@@ -1,6 +1,54 @@
-import { GenericEntityPage } from "@/components/layout/generic-entity-page";
-import { Plane } from "lucide-react";
+import { useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { getListEntityRecordsQueryKey, useCreateEntityRecord, useListEntityRecords, usePerformEntityAction, useUpdateEntityRecord } from "@workspace/api-client-react";
+import { CalendarDays, Check, Plane, Search, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { useAuth } from "@/hooks/use-auth";
+import { useToast } from "@/hooks/use-toast";
+
+type Row = { id: string; version: number; development?: string | null; state?: Record<string, unknown>; createdAt: string };
 
 export default function Leave() {
-  return <GenericEntityPage entity="leave-requests" title="Leave Requests" description="Manage leave requests." icon={Plane} />;
+  const { staff } = useAuth();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const query = useListEntityRecords("leave-requests", undefined, { query: { queryKey: getListEntityRecordsQueryKey("leave-requests"), refetchInterval: 30_000 } });
+  const action = usePerformEntityAction();
+  const create = useCreateEntityRecord();
+  const update = useUpdateEntityRecord();
+  const [search, setSearch] = useState("");
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState<Row | null>(null);
+  const [draft, setDraft] = useState({ employee: "", startDate: "", endDate: "", reason: "" });
+  const rows = (query.data || []) as Row[];
+  const canReview = staff?.role === "management";
+  const filtered = rows.filter((row) => {
+    const s = row.state || {};
+    return [row.id, row.development, s.employee, s.reason, s.status].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase());
+  });
+  const refresh = () => queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("leave-requests") });
+  const save = async () => {
+    try {
+      const state = { ...draft, title: `${draft.employee || "Staff"} leave` };
+      if (editing) await update.mutateAsync({ entity: "leave-requests", id: editing.id, data: { id: editing.id, version: editing.version, state } });
+      else await create.mutateAsync({ entity: "leave-requests", data: { id: crypto.randomUUID(), state, version: 1, development: staff?.developments?.[0] } });
+      await refresh(); setOpen(false); toast({ title: editing ? "Leave request updated" : "Leave request submitted" });
+    } catch (error: any) { toast({ variant: "destructive", title: "Unable to save leave request", description: error?.message || "Please try again." }); }
+  };
+  const decide = async (row: Row, name: "approve" | "deny") => {
+    try { await action.mutateAsync({ entity: "leave-requests", id: row.id, action: name }); await refresh(); toast({ title: `Leave request ${name}d` }); }
+    catch (error: any) { toast({ variant: "destructive", title: "Workflow action failed", description: error?.message || "The server rejected this action." }); }
+  };
+  return <div className="space-y-6">
+    <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight">Leave Requests</h1><p className="text-sm text-muted-foreground">Review staff leave requests and their current approval status.</p></div><Button onClick={() => { setEditing(null); setDraft({ employee: staff?.name || "", startDate: "", endDate: "", reason: "" }); setOpen(true); }}>New leave request</Button></div>
+    <div className="rounded-[14px] border border-border bg-card shadow-sm"><div className="border-b border-border p-4"><div className="relative max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Search employee, reason, status…" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div><div className="p-4">
+      {query.isLoading && <div className="p-10 text-center text-muted-foreground">Loading leave requests…</div>}
+      {query.isError && <div className="p-10 text-center text-destructive">Unable to load leave requests. <Button variant="outline" onClick={() => query.refetch()}>Retry</Button></div>}
+      {!query.isLoading && !query.isError && !filtered.length && <div className="p-12 text-center text-muted-foreground"><CalendarDays className="mx-auto mb-3 h-10 w-10 opacity-30" />{rows.length ? "No requests match your search." : "No leave requests yet."}</div>}
+      <div className="grid gap-3">{filtered.map((row) => { const s = row.state || {}; const status = String(s.status || "Pending"); return <div key={row.id} className="rounded-xl border border-border p-4"><div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-secondary"><Plane className="h-5 w-5" /></div><div className="min-w-0 flex-1"><h3 className="font-semibold">{String(s.employee || s.title || "Staff leave request")}</h3><p className="text-sm text-muted-foreground">{String(s.startDate || "—")} – {String(s.endDate || "—")} · {row.development || "All developments"}</p>{Boolean(s.reason) && <p className="mt-1 text-sm">{String(s.reason)}</p>}</div><span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{status}</span></div><div className="mt-3 flex justify-end gap-2">{status === "Pending" && canReview && <><Button size="sm" onClick={() => decide(row, "approve")} disabled={action.isPending}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button><Button size="sm" variant="outline" onClick={() => decide(row, "deny")} disabled={action.isPending}><X className="mr-1 h-3.5 w-3.5" />Deny</Button></>}{(status === "Pending" || s.requesterStaffId === staff?.id) && <Button size="sm" variant="ghost" onClick={() => { setEditing(row); setDraft({ employee: String(s.employee || ""), startDate: String(s.startDate || ""), endDate: String(s.endDate || ""), reason: String(s.reason || "") }); setOpen(true); }}>Edit details</Button>}</div></div>; })}</div>
+    </div></div>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{editing ? "Edit leave request" : "New leave request"}</DialogTitle></DialogHeader><div className="space-y-3"><Input placeholder="Employee name" value={draft.employee} onChange={(e) => setDraft({ ...draft, employee: e.target.value })} /><div className="grid grid-cols-2 gap-2"><Input type="date" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value })} /><Input type="date" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} /></div><Input placeholder="Reason (optional)" value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} /><Button className="w-full" onClick={save} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? "Saving…" : "Save request"}</Button></div></DialogContent></Dialog>
+  </div>;
 }

@@ -8,3 +8,4 @@
 - [NYC property source resilience](nyc-property-source-resilience.md) — retry temporary source failures briefly, then return successful datasets with source-specific warnings.
 - [FIAREP organization licensing](fiarep-organization-licensing.md) — platform ownership is separate from tenant roles; customer access fails closed unless its license is active.
 - [FIAREP alert delivery](fiarep-alert-delivery.md) — Resident and emergency alerts require inbox persistence, immediate red escalation, sound/badge, and native push when available.
+- [FIAREP website audience](fiarep-website-audience.md) — preserve the existing website theme; web is management-first while regular field staff use mobile.
