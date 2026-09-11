@@ -36,7 +36,6 @@ export default function ManagementHome() {
       color: '#1E7D4F',
       tiles: [
         ...(!restricted ? [
-          { label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone },
           { label: 'Projects', onPress: () => router.push('/'), tone: 'outline' as Tone },
           { label: 'HUD Inspections', onPress: () => router.push('/hud-review'), tone: 'outline' as Tone },
         ] : []),
@@ -49,6 +48,7 @@ export default function ManagementHome() {
       heading: 'Jobs',
       color: ACCENT,
       tiles: [
+        ...(!restricted ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         { label: 'Assign a Job', onPress: () => router.push('/dispatch-job'), tone: 'solid' },
         { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' },
         { label: 'Staff Member Jobs', onPress: () => router.push('/worker'), tone: 'tint' },
