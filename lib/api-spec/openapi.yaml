@@ -418,6 +418,9 @@ components:
         ticketId: { type: string, nullable: true }
         errorCode: { type: string, nullable: true }
         detail: { type: string, nullable: true }
+        receiptAttempts: { type: integer }
+        nextReceiptCheckAt: { type: string, format: date-time, nullable: true }
+        completedAt: { type: string, format: date-time, nullable: true }
         attemptedAt: { type: string, format: date-time }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }

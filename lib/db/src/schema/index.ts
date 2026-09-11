@@ -160,6 +160,11 @@ export const pushDeliveries = pgTable(
     ticketId: text("ticket_id"),
     errorCode: text("error_code"),
     detail: text("detail"),
+    receiptAttempts: integer("receipt_attempts").notNull().default(0),
+    nextReceiptCheckAt: timestamp("next_receipt_check_at", {
+      withTimezone: true,
+    }),
+    completedAt: timestamp("completed_at", { withTimezone: true }),
     attemptedAt: timestamp("attempted_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -171,6 +176,10 @@ export const pushDeliveries = pgTable(
       table.notificationId,
     ),
     index("push_delivery_status_idx").on(table.tenantId, table.status),
+    index("push_receipt_queue_idx").on(
+      table.status,
+      table.nextReceiptCheckAt,
+    ),
   ],
 );
 

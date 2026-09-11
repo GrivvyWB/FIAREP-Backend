@@ -98,6 +98,9 @@ export interface PushDelivery {
   ticketId?: string | null;
   errorCode?: string | null;
   detail?: string | null;
+  receiptAttempts?: number;
+  nextReceiptCheckAt?: string | null;
+  completedAt?: string | null;
   attemptedAt: string;
   createdAt: string;
   updatedAt: string;

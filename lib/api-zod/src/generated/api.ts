@@ -320,6 +320,9 @@ export const ListPushDeliveriesResponseItem = zod.object({
   "ticketId": zod.string().nullish(),
   "errorCode": zod.string().nullish(),
   "detail": zod.string().nullish(),
+  "receiptAttempts": zod.number().int().optional(),
+  "nextReceiptCheckAt": zod.coerce.date().nullish(),
+  "completedAt": zod.coerce.date().nullish(),
   "attemptedAt": zod.coerce.date(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
