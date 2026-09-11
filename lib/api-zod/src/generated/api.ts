@@ -23,7 +23,6 @@ export const loginBodyCodeMin = 4;
 export const loginBodyCodeMax = 4;
 
 
-
 export const LoginBody = zod.object({
   "name": zod.string(),
   "code": zod.string().min(loginBodyCodeMin).max(loginBodyCodeMax),
@@ -52,7 +51,6 @@ export const LoginResponse = zod.object({
  */
 export const bootstrapAdministratorBodyCodeMin = 4;
 export const bootstrapAdministratorBodyCodeMax = 4;
-
 
 
 export const BootstrapAdministratorBody = zod.object({
@@ -132,7 +130,6 @@ export const ListStaffResponse = zod.array(ListStaffResponseItem)
 
 export const createStaffBodyCodeMin = 4;
 export const createStaffBodyCodeMax = 4;
-
 
 
 export const CreateStaffBody = zod.object({
@@ -358,3 +355,49 @@ export const PullSyncResponse = zod.object({
   "at": zod.coerce.date()
 }))
 })
+
+/**
+ * @summary Request a direct upload URL for a project file
+ */
+export const requestFileUploadUrlBodyNameMax = 255;
+
+export const RequestFileDownloadUrlResponse = zod.object({
+  "downloadUrl": zod.string().url(),
+  "expiresIn": zod.number().int()
+})
+
+export const RequestFileUploadUrlBody = zod.object({
+  "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope']),
+  "name": zod.string().min(1).max(requestFileUploadUrlBodyNameMax),
+  "size": zod.number().int().min(1).max(requestFileUploadUrlBodySizeMax),
+  "contentType": zod.string().min(1).max(requestFileUploadUrlBodyContentTypeMax)
+})
+
+export const requestFileUploadUrlBodyContentTypeMax = 100;
+
+export const RequestFileUploadUrlResponse = zod.object({
+  "uploadUrl": zod.string().url(),
+  "file": zod.object({
+  "id": zod.string().uuid(),
+  "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope']),
+  "name": zod.string(),
+  "size": zod.number().int().min(1).max(requestFileUploadUrlResponseFileSizeMax),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "createdBy": zod.string()
+})
+})
+
+export const requestFileUploadUrlResponseFileSizeMax = 52428800;
+
+/**
+ * @summary Request a temporary download URL for a stored project file
+ */
+export const requestFileDownloadUrlBodyObjectPathRegExp = new RegExp('^/objects/tenants');
+
+export const RequestFileDownloadUrlBody = zod.object({
+  "objectPath": zod.string().regex(requestFileDownloadUrlBodyObjectPathRegExp)
+})
+
+export const requestFileUploadUrlBodySizeMax = 52428800;

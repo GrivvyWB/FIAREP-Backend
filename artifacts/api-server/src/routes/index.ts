@@ -6,6 +6,7 @@ import notificationRouter from "./notifications";
 import syncRouter from "./sync";
 import systemRouter from "./system";
 import entityRouter from "./entities";
+import fileRouter from "./files";
 
 const router: IRouter = Router();
 
@@ -16,5 +17,6 @@ router.use(notificationRouter);
 router.use(syncRouter);
 router.use(systemRouter);
 router.use(entityRouter);
+router.use(fileRouter);
 
 export default router;

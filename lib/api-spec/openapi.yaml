@@ -16,6 +16,7 @@ tags:
   - name: notifications
   - name: sync
   - name: system
+  - name: files
 paths:
   /healthz:
     get:
@@ -300,6 +301,60 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SyncResponse"
+  /v1/files/upload-url:
+    post:
+      operationId: requestFileUploadUrl
+      tags: [files]
+      summary: Request a direct upload URL for a project file
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileUploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL and persistent file envelope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileUploadUrlResponse"
+        "400":
+          description: Invalid file metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "413":
+          description: File exceeds the 50 MB limit
+        "415":
+          description: Unsupported file type
+        "503":
+          description: File storage unavailable
+  /v1/files/download-url:
+    post:
+      operationId: requestFileDownloadUrl
+      tags: [files]
+      summary: Request a temporary download URL for a stored project file
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FileDownloadUrlRequest"
+      responses:
+        "200":
+          description: Temporary presigned download URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FileDownloadUrlResponse"
+        "404":
+          description: File is outside the current tenant
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 components:
   securitySchemes:
     bearerAuth:
@@ -435,9 +490,57 @@ components:
         notifications:
           type: array
           items: { $ref: "#/components/schemas/Notification" }
+    FileKind:
+      type: string
+      enum:
+        - room-photo
+        - inspection-evidence
+        - completion-photo
+        - scan
+        - procurement-scope
+    StoredFile:
+      type: object
+      required: [id, kind, name, size, contentType, objectPath, createdAt, createdBy]
+      properties:
+        id: { type: string, format: uuid }
+        kind: { $ref: "#/components/schemas/FileKind" }
+        name: { type: string }
+        size: { type: integer, minimum: 1, maximum: 52428800 }
+        contentType: { type: string }
+        objectPath: { type: string }
+        createdAt: { type: string, format: date-time }
+        createdBy: { type: string }
+    FileUploadUrlRequest:
+      type: object
+      required: [kind, name, size, contentType]
+      additionalProperties: false
+      properties:
+        kind: { $ref: "#/components/schemas/FileKind" }
+        name: { type: string, minLength: 1, maxLength: 255 }
+        size: { type: integer, minimum: 1, maximum: 52428800 }
+        contentType: { type: string, minLength: 1, maxLength: 100 }
+    FileUploadUrlResponse:
+      type: object
+      required: [uploadUrl, file]
+      properties:
+        uploadUrl: { type: string, format: uri }
+        file: { $ref: "#/components/schemas/StoredFile" }
+    FileDownloadUrlRequest:
+      type: object
+      required: [objectPath]
+      additionalProperties: false
+      properties:
+        objectPath:
+          type: string
+          pattern: "^/objects/tenants/"
+    FileDownloadUrlResponse:
+      type: object
+      required: [downloadUrl, expiresIn]
+      properties:
+        downloadUrl: { type: string, format: uri }
+        expiresIn: { type: integer }
     Error:
       type: object
       required: [error]
       properties:
         error: { type: string }
-

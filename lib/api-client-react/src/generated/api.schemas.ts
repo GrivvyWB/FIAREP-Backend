@@ -112,6 +112,7 @@ export interface SyncResponse {
   notifications: Notification[];
 }
 
+export type FileKind = typeof FileKind[keyof typeof FileKind];
 export interface Error {
   error: string;
 }
@@ -161,3 +162,60 @@ since?: string;
 entities?: string;
 };
 
+
+export const FileKind = {
+  'room-photo': 'room-photo',
+  'inspection-evidence': 'inspection-evidence',
+  'completion-photo': 'completion-photo',
+  scan: 'scan',
+  'procurement-scope': 'procurement-scope',
+} as const;
+
+export interface FileDownloadUrlResponse {
+  downloadUrl: string;
+  expiresIn: number;
+}
+
+export interface StoredFile {
+  id: string;
+  kind: FileKind;
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 52428800
+     */
+  size: number;
+  contentType: string;
+  objectPath: string;
+  createdAt: string;
+  createdBy: string;
+}
+
+export interface FileUploadUrlRequest {
+  kind: FileKind;
+  /**
+     * @minLength 1
+     * @maxLength 255
+     */
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 52428800
+     */
+  size: number;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  contentType: string;
+}
+
+export interface FileUploadUrlResponse {
+  uploadUrl: string;
+  file: StoredFile;
+}
+
+export interface FileDownloadUrlRequest {
+  /** @pattern ^/objects/tenants/ */
+  objectPath: string;
+}
