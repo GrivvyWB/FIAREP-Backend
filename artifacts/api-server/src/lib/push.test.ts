@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { after, test } from "node:test";
-import { eq } from "drizzle-orm";
+import { after, before, test } from "node:test";
+import { eq, sql } from "drizzle-orm";
 import {
   db,
   deviceTokens,
@@ -14,6 +14,25 @@ import type { Actor } from "./auth";
 import { deliverPushNotification } from "./push";
 
 const realFetch = globalThis.fetch;
+const PUSH_TEST_TENANT_PATTERN =
+  "^push-test-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$";
+
+async function cleanupStalePushTestTenants(): Promise<void> {
+  const isPushTestTenant = (tenantId: { name: string }) =>
+    sql`${tenantId} ~ ${PUSH_TEST_TENANT_PATTERN}`;
+
+  await db
+    .delete(pushDeliveries)
+    .where(isPushTestTenant(pushDeliveries.tenantId));
+  await db.delete(notifications).where(isPushTestTenant(notifications.tenantId));
+  await db.delete(deviceTokens).where(isPushTestTenant(deviceTokens.tenantId));
+  await db.delete(staffAccounts).where(isPushTestTenant(staffAccounts.tenantId));
+}
+
+before(async () => {
+  await cleanupStalePushTestTenants();
+});
+
 after(() => {
   globalThis.fetch = realFetch;
 });
@@ -97,6 +116,43 @@ async function waitFor(
     }
   }
 }
+
+test("startup cleanup removes only abandoned push-test tenants", async () => {
+  const staleTenantId = tenant();
+  const normalTenantId = "push-test-customer";
+  try {
+    await addStaff(staleTenantId, "Stale Test Staff", "Inspector");
+    const normalStaffId = await addStaff(
+      normalTenantId,
+      "Normal Staff",
+      "Inspector",
+    );
+
+    await cleanupStalePushTestTenants();
+
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(staffAccounts)
+          .where(eq(staffAccounts.tenantId, staleTenantId))
+      ).length,
+      0,
+    );
+    assert.equal(
+      (
+        await db
+          .select()
+          .from(staffAccounts)
+          .where(eq(staffAccounts.id, normalStaffId))
+      ).length,
+      1,
+    );
+  } finally {
+    await cleanup(staleTenantId);
+    await cleanup(normalTenantId);
+  }
+});
 
 test("routes name targets only within the tenant to approved staff", async () => {
   const tenantId = tenant();
