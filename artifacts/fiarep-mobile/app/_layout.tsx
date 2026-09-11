@@ -172,7 +172,7 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
         source={require('../assets/field-inspection-logo.png')}
         accessibilityLabel="FIAREP logo"
         resizeMode="contain"
-        style={{ width: 132, height: 132, borderRadius: 24, alignSelf: 'center', marginBottom: 6 }}
+        style={{ width: 300, height: 150, alignSelf: 'center', marginBottom: 6 }}
       />
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Who's using this device?</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 12 }]}>Staff roles require an issued code.</Text>
