@@ -78,6 +78,7 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
       const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role, props.expectedPosition, organizationId);
       if (ok) {
         await setRememberedStaff(props.role, name.trim()).catch(() => undefined);
+        await syncAllEntities().catch(() => undefined);
         props.onUnlock();
       }
       else setMsg('No approved account matches that name and code.');
@@ -420,6 +421,7 @@ export default function Layout() {
         const restoredMode = restored.role === 'emergency'
           ? 'emergency'
           : restored.role as AppMode;
+        await syncAllEntities().catch(() => undefined);
         setMode(restoredMode);
       }
     }).catch(() => undefined).finally(() => {

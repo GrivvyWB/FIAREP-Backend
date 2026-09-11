@@ -25,6 +25,7 @@ import {
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useAppMode } from './_layout';
+import { syncAllEntities } from '../lib/sync';
 
 const STATUS_LABEL: Record<ResidentReport['status'], string> = {
   submitted: 'Submitted',
@@ -135,7 +136,26 @@ export default function Management() {
       else setMyDevs([]);
     })();
   }, []);
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    let syncing = false;
+    const refresh = async () => {
+      if (syncing) return;
+      syncing = true;
+      try {
+        await syncAllEntities();
+        if (active) load();
+      } finally {
+        syncing = false;
+      }
+    };
+    void refresh();
+    const timer = setInterval(() => { void refresh(); }, 15_000);
+    return () => {
+      active = false;
+      clearInterval(timer);
+    };
+  }, [load]));
 
   // Admin edits all. Management with no assigned developments edits all (backward-compatible).
   // Management with assigned developments edits only reports in those developments; others are read-only.

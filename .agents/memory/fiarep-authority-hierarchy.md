@@ -7,10 +7,12 @@ Borough Director is FIAREP's highest operational authority across staff and deve
 
 Ordinary Administrators are limited to assigned developments and lower-authority staff. Do not infer or add further Administrator capabilities; define them incrementally as the user specifies them.
 
+Public Resident complaints go to Management for internal routing. The reporter does not need to be a tenant or belong to the development, and the Borough Director must always receive and see every complaint within the organization regardless of development assignment.
+
 Emergency Unit is an explicit issued-code staff identity, not a Worker mode. Emergency records and actions must remain assignment-scoped across normal reads, synchronization, and workflow actions.
 
 CPM may prepare and submit only its own scope/request to ordinary Management. Ordinary Management—not Administrator, Borough Director, Regional Director, or Superintendent—may return it to CPM or approve it for Procurement. Procurement sees it only after Management approval and alone may release it to vendors, select a real vendor bid, award, and close it.
 
 **Why:** The user explicitly confirmed that Borough Director ranks above Administrator, then explicitly excluded Procurement from Borough Director authority and required Procurement-only control.
 
-**How to apply:** Check Procurement boundaries before any Borough Director override in list, sync, create, update, delete, and workflow-action authorization. Enforce lifecycle visibility: CPM owns draft/submitted/returned, ordinary Management sees submitted, Procurement sees approved/downstream, and Vendor sees only released scopes by capability code. Keep Procurement out of general staff navigation/login and mobile.
+**How to apply:** Check Procurement boundaries before any Borough Director override in list, sync, create, update, delete, and workflow-action authorization. Never apply development filtering to Borough Director access for Resident complaints; Management receives new complaints and routes them to the proper development or staff. Enforce lifecycle visibility: CPM owns draft/submitted/returned, ordinary Management sees submitted, Procurement sees approved/downstream, and Vendor sees only released scopes by capability code. Keep Procurement out of general staff navigation/login and mobile.
