@@ -15,6 +15,7 @@ tags:
   - name: entities
   - name: notifications
   - name: sync
+  - name: system
 paths:
   /healthz:
     get:
@@ -242,6 +243,48 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Notification" }
+  /v1/devices/token:
+    post:
+      operationId: registerDeviceToken
+      tags: [system]
+      security: [{ bearerAuth: [] }]
+      summary: Register or refresh an Expo push token for the current staff member
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+                platform: { type: string }
+      responses:
+        "201":
+          description: Registered device token
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DeviceToken" }
+        "400":
+          description: Invalid Expo push token
+  /v1/push-deliveries:
+    get:
+      operationId: listPushDeliveries
+      tags: [system]
+      security: [{ bearerAuth: [] }]
+      summary: List recent push delivery attempts for management
+      parameters:
+        - { name: notificationId, in: query, schema: { type: string } }
+      responses:
+        "200":
+          description: Recent delivery attempts
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PushDelivery" }
+        "403":
+          description: Elevated management access required
   /v1/sync:
     get:
       operationId: pullSync
@@ -349,6 +392,35 @@ components:
         reportId: { type: string, nullable: true }
         read: { type: boolean }
         at: { type: string, format: date-time }
+    DeviceToken:
+      type: object
+      required: [id, tenantId, staffId, token, lastSeenAt, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        staffId: { type: string }
+        token: { type: string }
+        platform: { type: string, nullable: true }
+        lastSeenAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    PushDelivery:
+      type: object
+      required:
+        [id, tenantId, notificationId, status, attemptedAt, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        tenantId: { type: string }
+        notificationId: { type: string }
+        tokenId: { type: string, nullable: true }
+        staffId: { type: string, nullable: true }
+        status: { type: string }
+        ticketId: { type: string, nullable: true }
+        errorCode: { type: string, nullable: true }
+        detail: { type: string, nullable: true }
+        attemptedAt: { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
     SyncResponse:
       type: object
       required: [cursor, records, notifications]

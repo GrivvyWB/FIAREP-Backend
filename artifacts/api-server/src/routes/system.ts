@@ -1,7 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
-import { auditLog, db, deviceTokens, settings } from "@workspace/db";
+import {
+  auditLog,
+  db,
+  deviceTokens,
+  pushDeliveries,
+  settings,
+} from "@workspace/db";
 import { isElevated } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
@@ -12,7 +18,7 @@ router.post("/v1/devices/token", async (req, res) => {
   const actor = actorFrom(res);
   const body = req.body as Record<string, unknown>;
   const token = typeof body["token"] === "string" ? body["token"] : "";
-  if (!token.startsWith("ExponentPushToken[")) {
+  if (!/^(Expo|Exponent)PushToken\[[^\]]+\]$/.test(token)) {
     res.status(400).json({ error: "A valid Expo push token is required" });
     return;
   }
@@ -94,6 +100,32 @@ router.get("/v1/audit-log", async (_req, res) => {
     .from(auditLog)
     .where(eq(auditLog.tenantId, actor.tenantId))
     .orderBy(desc(auditLog.at));
+  res.json(rows);
+});
+
+router.get("/v1/push-deliveries", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!isElevated(actor)) {
+    res.status(403).json({ error: "Elevated management access required" });
+    return;
+  }
+  const notificationId =
+    typeof req.query["notificationId"] === "string"
+      ? req.query["notificationId"]
+      : undefined;
+  const rows = await db
+    .select()
+    .from(pushDeliveries)
+    .where(
+      notificationId
+        ? and(
+            eq(pushDeliveries.tenantId, actor.tenantId),
+            eq(pushDeliveries.notificationId, notificationId),
+          )
+        : eq(pushDeliveries.tenantId, actor.tenantId),
+    )
+    .orderBy(desc(pushDeliveries.attemptedAt))
+    .limit(250);
   res.json(rows);
 });
 

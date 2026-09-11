@@ -283,6 +283,50 @@ export const MarkNotificationReadResponse = zod.object({
 })
 
 
+/**
+ * @summary Register or refresh an Expo push token for the current staff member
+ */
+export const RegisterDeviceTokenBody = zod.object({
+  "token": zod.string(),
+  "platform": zod.string().optional()
+})
+
+export const RegisterDeviceTokenResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "staffId": zod.string(),
+  "token": zod.string(),
+  "platform": zod.string().nullish(),
+  "lastSeenAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List recent push delivery attempts for management
+ */
+export const ListPushDeliveriesQueryParams = zod.object({
+  "notificationId": zod.coerce.string().optional()
+})
+
+export const ListPushDeliveriesResponseItem = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "notificationId": zod.string(),
+  "tokenId": zod.string().nullish(),
+  "staffId": zod.string().nullish(),
+  "status": zod.string(),
+  "ticketId": zod.string().nullish(),
+  "errorCode": zod.string().nullish(),
+  "detail": zod.string().nullish(),
+  "attemptedAt": zod.coerce.date(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListPushDeliveriesResponse = zod.array(ListPushDeliveriesResponseItem)
+
+
 export const PullSyncQueryParams = zod.object({
   "since": zod.date().optional(),
   "entities": zod.coerce.string().optional()

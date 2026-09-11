@@ -77,6 +77,32 @@ export interface Notification {
   at: string;
 }
 
+export interface DeviceToken {
+  id: string;
+  tenantId: string;
+  staffId: string;
+  token: string;
+  platform?: string | null;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PushDelivery {
+  id: string;
+  tenantId: string;
+  notificationId: string;
+  tokenId?: string | null;
+  staffId?: string | null;
+  status: string;
+  ticketId?: string | null;
+  errorCode?: string | null;
+  detail?: string | null;
+  attemptedAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface SyncResponse {
   cursor: string;
   records: EntityRecord[];
@@ -116,6 +142,15 @@ export type ListEntityRecordsParams = {
 projectId?: string;
 development?: string;
 status?: string;
+};
+
+export type RegisterDeviceTokenBody = {
+  token: string;
+  platform?: string;
+};
+
+export type ListPushDeliveriesParams = {
+notificationId?: string;
 };
 
 export type PullSyncParams = {

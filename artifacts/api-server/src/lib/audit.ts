@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { db, auditLog, notifications } from "@workspace/db";
 import type { Actor } from "./auth";
+import { logger } from "./logger";
+import { deliverPushNotification } from "./push";
 
 export async function audit(
   actor: Actor,
@@ -26,12 +28,23 @@ export async function notify(
   detail?: string,
   reportId?: string,
 ) {
-  await db.insert(notifications).values({
-    id: randomUUID(),
-    tenantId: actor.tenantId,
-    target,
-    message,
-    detail,
-    reportId,
+  const [notification] = await db
+    .insert(notifications)
+    .values({
+      id: randomUUID(),
+      tenantId: actor.tenantId,
+      target,
+      message,
+      detail,
+      reportId,
+    })
+    .returning();
+
+  if (!notification) return;
+  void deliverPushNotification(notification).catch((error) => {
+    logger.error(
+      { err: error, notificationId: notification.id },
+      "Unexpected push delivery error",
+    );
   });
 }

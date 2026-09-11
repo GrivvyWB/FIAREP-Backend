@@ -148,5 +148,31 @@ export const deviceTokens = pgTable(
   ],
 );
 
+export const pushDeliveries = pgTable(
+  "push_deliveries",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull().default("default"),
+    notificationId: text("notification_id").notNull(),
+    tokenId: text("token_id"),
+    staffId: text("staff_id"),
+    status: text("status").notNull(),
+    ticketId: text("ticket_id"),
+    errorCode: text("error_code"),
+    detail: text("detail"),
+    attemptedAt: timestamp("attempted_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    index("push_delivery_notification_idx").on(
+      table.tenantId,
+      table.notificationId,
+    ),
+    index("push_delivery_status_idx").on(table.tenantId, table.status),
+  ],
+);
+
 export type StaffAccount = typeof staffAccounts.$inferSelect;
 export type EntityRecord = typeof entityRecords.$inferSelect;

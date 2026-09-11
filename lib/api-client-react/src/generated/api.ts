@@ -22,15 +22,19 @@ import type {
 import type {
   AuthResponse,
   BootstrapAdministratorBody,
+  DeviceToken,
   EntityInput,
   EntityRecord,
   HealthStatus,
   ListEntityRecordsParams,
+  ListPushDeliveriesParams,
   ListStaffParams,
   LoginInput,
   Notification,
   PullSyncParams,
+  PushDelivery,
   RefreshSessionBody,
+  RegisterDeviceTokenBody,
   Staff,
   StaffInput,
   SyncResponse,
@@ -1058,6 +1062,161 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getMarkNotificationReadMutationOptions(options));
     }
+
+export const getRegisterDeviceTokenUrl = () => {
+
+
+
+
+  return `/api/v1/devices/token`
+}
+
+/**
+ * @summary Register or refresh an Expo push token for the current staff member
+ */
+export const registerDeviceToken = async (registerDeviceTokenBody: RegisterDeviceTokenBody, options?: Parameters<typeof customFetch>[1]): Promise<DeviceToken> => {
+
+  return customFetch<DeviceToken>(getRegisterDeviceTokenUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(registerDeviceTokenBody)
+  }
+);}
+
+
+
+
+
+export const getRegisterDeviceTokenMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerDeviceToken>>, TError,{data: BodyType<RegisterDeviceTokenBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof registerDeviceToken>>, TError,{data: BodyType<RegisterDeviceTokenBody>}, TContext> => {
+
+const mutationKey = ['registerDeviceToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof registerDeviceToken>>, {data: BodyType<RegisterDeviceTokenBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  registerDeviceToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RegisterDeviceTokenMutationResult = NonNullable<Awaited<ReturnType<typeof registerDeviceToken>>>
+    export type RegisterDeviceTokenMutationBody = BodyType<RegisterDeviceTokenBody>
+    export type RegisterDeviceTokenMutationError = ErrorType<void>
+
+    /**
+ * @summary Register or refresh an Expo push token for the current staff member
+ */
+export const useRegisterDeviceToken = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof registerDeviceToken>>, TError,{data: BodyType<RegisterDeviceTokenBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof registerDeviceToken>>,
+        TError,
+        {data: BodyType<RegisterDeviceTokenBody>},
+        TContext
+      > => {
+      return useMutation(getRegisterDeviceTokenMutationOptions(options));
+    }
+
+export const getListPushDeliveriesUrl = (params?: ListPushDeliveriesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/push-deliveries?${stringifiedParams}` : `/api/v1/push-deliveries`
+}
+
+/**
+ * @summary List recent push delivery attempts for management
+ */
+export const listPushDeliveries = async (params?: ListPushDeliveriesParams, options?: Parameters<typeof customFetch>[1]): Promise<PushDelivery[]> => {
+
+  return customFetch<PushDelivery[]>(getListPushDeliveriesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListPushDeliveriesQueryKey = (params?: ListPushDeliveriesParams,) => {
+    return [
+    `/api/v1/push-deliveries`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListPushDeliveriesQueryOptions = <TData = Awaited<ReturnType<typeof listPushDeliveries>>, TError = ErrorType<void>>(params?: ListPushDeliveriesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPushDeliveries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListPushDeliveriesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listPushDeliveries>>> = ({ signal }) => listPushDeliveries(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listPushDeliveries>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListPushDeliveriesQueryResult = NonNullable<Awaited<ReturnType<typeof listPushDeliveries>>>
+export type ListPushDeliveriesQueryError = ErrorType<void>
+
+
+/**
+ * @summary List recent push delivery attempts for management
+ */
+
+export function useListPushDeliveries<TData = Awaited<ReturnType<typeof listPushDeliveries>>, TError = ErrorType<void>>(
+ params?: ListPushDeliveriesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listPushDeliveries>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListPushDeliveriesQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getPullSyncUrl = (params?: PullSyncParams,) => {
   const normalizedParams = new URLSearchParams();
