@@ -179,7 +179,7 @@ export default function OwnerDashboard() {
                   <TableHead className="font-semibold text-slate-900">Status</TableHead>
                   <TableHead className="font-semibold text-slate-900">License Dates</TableHead>
                   <TableHead className="font-semibold text-slate-900 text-right">Usage (Staff / Props)</TableHead>
-                  <TableHead className="text-right w-[80px]"></TableHead>
+                  <TableHead className="text-right w-[210px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -246,6 +246,19 @@ export default function OwnerDashboard() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex items-center justify-end gap-0.5">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-8 gap-1.5 px-2.5 text-xs"
+                            onClick={() => {
+                              setPropertyOrg(org.id);
+                              setPropertyAddress("");
+                            }}
+                          >
+                            <Building2 className="h-3.5 w-3.5" />
+                            Addresses
+                          </Button>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-900">
