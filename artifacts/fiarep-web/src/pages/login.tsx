@@ -14,12 +14,16 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
+import { REGEXP_ONLY_DIGITS_AND_CHARS } from "input-otp";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  code: z.string().length(4, "Code must be exactly 4 digits"),
+  code: z
+    .string()
+    .length(4, "Code must be exactly 4 characters")
+    .regex(/^[a-zA-Z0-9]+$/, "Code can only contain letters and numbers"),
 });
 
 export default function Login() {
@@ -108,7 +112,13 @@ export default function Login() {
                     <FormLabel>Access Code</FormLabel>
                     <FormControl>
                       <div className="flex justify-center">
-                        <InputOTP maxLength={4} {...field} data-testid="input-otp-code">
+                        <InputOTP
+                          maxLength={4}
+                          pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
+                          autoComplete="one-time-code"
+                          {...field}
+                          data-testid="input-otp-code"
+                        >
                           <InputOTPGroup>
                             <InputOTPSlot index={0} />
                             <InputOTPSlot index={1} />
