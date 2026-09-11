@@ -10,3 +10,9 @@ Metro must treat `wasm` as an asset for `expo-sqlite` web workers.
 **Why:** The Expo web shell rendered blank when Metro could not resolve the SQLite WASM binary, and successful logins returned to the credential form after reload when token cleanup assumed SecureStore was durable on web.
 
 **How to apply:** Verify both the correct Expo-domain root URL and one full reload. Keep native token cleanup conditional on successful native SecureStore writes; never weaken native storage to match web behavior.
+
+Database initialization must be single-flight: do not cache or return an opened SQLite handle until required schema creation has completed.
+
+**Why:** Concurrent Expo-web startup calls can otherwise receive the shared handle and query tables before the first caller finishes creating them.
+
+**How to apply:** Share one initialization promise across callers and assign the reusable database handle only after migrations and schema setup succeed.

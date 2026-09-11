@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
@@ -8,8 +8,6 @@ import {
   vendorStartProcurement,
   vendorCompleteProcurement,
   clearAppMode,
-  getCurrentActor,
-  logout,
   type ProcurementRequest,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
@@ -44,16 +42,17 @@ export default function VendorHome() {
   const [bidNote, setBidNote] = useState('');
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
-  useEffect(() => {
-    getCurrentActor().then((actor) => setBidName(actor.name || '')).catch(() => undefined);
-  }, []);
 
   async function lookup() {
     const q = query.trim();
-    if (!q) return;
+    const vendor = bidName.trim();
+    if (!q || !vendor) {
+      Alert.alert('Name and code required', 'Enter your vendor name and the code Procurement emailed you.');
+      return;
+    }
     setBusy(true);
     try {
-      const r = await getProcurementByTracking(q);
+      const r = await getProcurementByTracking(q, vendor);
       setJob(r);
       setSearched(true);
       setNote('');
@@ -89,9 +88,15 @@ export default function VendorHome() {
 
   function openQuote() {
     if (!job) return;
-    const vendor = bidName.trim();
-    if (!vendor) { Alert.alert('Account required', 'Sign in again with your vendor account.'); return; }
-    router.push('/vendor-quote?trackingId=' + encodeURIComponent(job.trackingId) + '&vendor=' + encodeURIComponent(vendor) + '&address=' + encodeURIComponent(job.address || '') + '&scope=' + encodeURIComponent(job.scope || '') + '&projectId=' + encodeURIComponent(job.projectId || '') + '&jobId=' + encodeURIComponent(job.id || ''));
+    Alert.prompt('Your company name', 'Enter the vendor name procurement has on file.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Continue', onPress: (nm?: string) => {
+        const vendor = (nm || '').trim();
+        if (!vendor) { Alert.alert('Name required', 'Enter your vendor name.'); return; }
+        setBidName(vendor);
+        router.push('/vendor-quote?trackingId=' + encodeURIComponent(job.trackingId) + '&vendor=' + encodeURIComponent(vendor) + '&address=' + encodeURIComponent(job.address || '') + '&scope=' + encodeURIComponent(job.scope || '') + '&projectId=' + encodeURIComponent(job.projectId || '') + '&jobId=' + encodeURIComponent(job.id || ''));
+      } },
+    ], 'plain-text', bidName);
   }
   async function onBid() {
     if (!job) return;
@@ -113,8 +118,7 @@ export default function VendorHome() {
     }
   }
 
-  async function onSignOut() {
-    await logout();
+  async function onExit() {
     await clearAppMode();
     refresh();
   }
@@ -124,12 +128,20 @@ export default function VendorHome() {
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
       <Text style={ui.h}>Your Assigned Work</Text>
 
-      <Text style={ui.label}>Enter your job ID</Text>
+      <Text style={ui.label}>Vendor name</Text>
+      <TextInput
+        style={ui.input}
+        value={bidName}
+        onChangeText={setBidName}
+        placeholder="Company or contact name"
+        autoCapitalize="words"
+      />
+      <Text style={ui.label}>Enter the code Procurement emailed you</Text>
       <TextInput
         style={ui.input}
         value={query}
         onChangeText={setQuery}
-        placeholder="e.g. sr-24513"
+        placeholder="e.g. RC-46789"
         autoCapitalize="none"
         autoCorrect={false}
         onSubmitEditing={lookup}
@@ -215,8 +227,8 @@ export default function VendorHome() {
 
           {job.status === 'bidding' && (
             <View style={{ gap: 8, marginTop: 6 }}>
-              <Text style={ui.label}>Vendor account</Text>
-              <TextInput style={ui.input} value={bidName} editable={false} placeholder="Authenticated vendor" />
+              <Text style={ui.label}>Your vendor name</Text>
+              <TextInput style={ui.input} value={bidName} onChangeText={setBidName} placeholder="Company or contact name" autoCapitalize="words" />
               <Text style={ui.label}>Your bid amount</Text>
               <TextInput style={ui.input} value={bidAmount} onChangeText={setBidAmount} placeholder="$" keyboardType="numeric" />
               <Text style={ui.label}>Note (optional)</Text>
@@ -236,8 +248,8 @@ export default function VendorHome() {
         </View>
       )}
 
-      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onSignOut}>
-        <Text style={ui.btnOutlineText}>Sign out</Text>
+      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onExit}>
+        <Text style={ui.btnOutlineText}>Exit</Text>
       </Pressable>
     </ScrollView>
     </KeyboardAvoidingView>

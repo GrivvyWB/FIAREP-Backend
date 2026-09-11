@@ -41,8 +41,11 @@ import type {
   LoginInput,
   LogoutBody,
   LookupNycPropertyParams,
+  LookupPublicResidentReportsParams,
+  LookupPublicVendorScopeParams,
   Notification,
   NycPropertyLookup,
+  PublicVendorBidInput,
   PullSyncParams,
   PushDelivery,
   RefreshSessionBody,
@@ -1032,6 +1035,303 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateEntityRecordMutationOptions(options));
+    }
+
+export const getSubmitPublicResidentReportUrl = () => {
+
+
+
+
+  return `/api/v1/public/resident-reports`
+}
+
+export const submitPublicResidentReport = async (entityInput: EntityInput, options?: Parameters<typeof customFetch>[1]): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getSubmitPublicResidentReportUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(entityInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitPublicResidentReportMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPublicResidentReport>>, TError,{data: BodyType<EntityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitPublicResidentReport>>, TError,{data: BodyType<EntityInput>}, TContext> => {
+
+const mutationKey = ['submitPublicResidentReport'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitPublicResidentReport>>, {data: BodyType<EntityInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  submitPublicResidentReport(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitPublicResidentReportMutationResult = NonNullable<Awaited<ReturnType<typeof submitPublicResidentReport>>>
+    export type SubmitPublicResidentReportMutationBody = BodyType<EntityInput>
+    export type SubmitPublicResidentReportMutationError = ErrorType<unknown>
+
+    export const useSubmitPublicResidentReport = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPublicResidentReport>>, TError,{data: BodyType<EntityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitPublicResidentReport>>,
+        TError,
+        {data: BodyType<EntityInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitPublicResidentReportMutationOptions(options));
+    }
+
+export const getLookupPublicResidentReportsUrl = (complaintNo: string,
+    params: LookupPublicResidentReportsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/public/resident-reports/${complaintNo}?${stringifiedParams}` : `/api/v1/public/resident-reports/${complaintNo}`
+}
+
+export const lookupPublicResidentReports = async (complaintNo: string,
+    params: LookupPublicResidentReportsParams, options?: Parameters<typeof customFetch>[1]): Promise<EntityRecord[]> => {
+
+  return customFetch<EntityRecord[]>(getLookupPublicResidentReportsUrl(complaintNo,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getLookupPublicResidentReportsQueryKey = (complaintNo: string,
+    params?: LookupPublicResidentReportsParams,) => {
+    return [
+    `/api/v1/public/resident-reports/${complaintNo}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getLookupPublicResidentReportsQueryOptions = <TData = Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError = ErrorType<unknown>>(complaintNo: string,
+    params: LookupPublicResidentReportsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getLookupPublicResidentReportsQueryKey(complaintNo,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupPublicResidentReports>>> = ({ signal }) => lookupPublicResidentReports(complaintNo,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: complaintNo !== null && complaintNo !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type LookupPublicResidentReportsQueryResult = NonNullable<Awaited<ReturnType<typeof lookupPublicResidentReports>>>
+export type LookupPublicResidentReportsQueryError = ErrorType<unknown>
+
+
+
+export function useLookupPublicResidentReports<TData = Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError = ErrorType<unknown>>(
+ complaintNo: string,
+    params: LookupPublicResidentReportsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getLookupPublicResidentReportsQueryOptions(complaintNo,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getLookupPublicVendorScopeUrl = (trackingId: string,
+    params: LookupPublicVendorScopeParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/public/vendor-scopes/${trackingId}?${stringifiedParams}` : `/api/v1/public/vendor-scopes/${trackingId}`
+}
+
+export const lookupPublicVendorScope = async (trackingId: string,
+    params: LookupPublicVendorScopeParams, options?: Parameters<typeof customFetch>[1]): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getLookupPublicVendorScopeUrl(trackingId,params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getLookupPublicVendorScopeQueryKey = (trackingId: string,
+    params?: LookupPublicVendorScopeParams,) => {
+    return [
+    `/api/v1/public/vendor-scopes/${trackingId}`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getLookupPublicVendorScopeQueryOptions = <TData = Awaited<ReturnType<typeof lookupPublicVendorScope>>, TError = ErrorType<Error>>(trackingId: string,
+    params: LookupPublicVendorScopeParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupPublicVendorScope>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getLookupPublicVendorScopeQueryKey(trackingId,params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupPublicVendorScope>>> = ({ signal }) => lookupPublicVendorScope(trackingId,params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: trackingId !== null && trackingId !== undefined, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof lookupPublicVendorScope>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type LookupPublicVendorScopeQueryResult = NonNullable<Awaited<ReturnType<typeof lookupPublicVendorScope>>>
+export type LookupPublicVendorScopeQueryError = ErrorType<Error>
+
+
+
+export function useLookupPublicVendorScope<TData = Awaited<ReturnType<typeof lookupPublicVendorScope>>, TError = ErrorType<Error>>(
+ trackingId: string,
+    params: LookupPublicVendorScopeParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupPublicVendorScope>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getLookupPublicVendorScopeQueryOptions(trackingId,params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSubmitPublicVendorBidUrl = (trackingId: string,) => {
+
+
+
+
+  return `/api/v1/public/vendor-scopes/${trackingId}/bids`
+}
+
+export const submitPublicVendorBid = async (trackingId: string,
+    publicVendorBidInput: PublicVendorBidInput, options?: Parameters<typeof customFetch>[1]): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getSubmitPublicVendorBidUrl(trackingId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(publicVendorBidInput)
+  }
+);}
+
+
+
+
+
+export const getSubmitPublicVendorBidMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPublicVendorBid>>, TError,{trackingId: string;data: BodyType<PublicVendorBidInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof submitPublicVendorBid>>, TError,{trackingId: string;data: BodyType<PublicVendorBidInput>}, TContext> => {
+
+const mutationKey = ['submitPublicVendorBid'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof submitPublicVendorBid>>, {trackingId: string;data: BodyType<PublicVendorBidInput>}> = (props) => {
+          const {trackingId,data} = props ?? {};
+
+          return  submitPublicVendorBid(trackingId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SubmitPublicVendorBidMutationResult = NonNullable<Awaited<ReturnType<typeof submitPublicVendorBid>>>
+    export type SubmitPublicVendorBidMutationBody = BodyType<PublicVendorBidInput>
+    export type SubmitPublicVendorBidMutationError = ErrorType<unknown>
+
+    export const useSubmitPublicVendorBid = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof submitPublicVendorBid>>, TError,{trackingId: string;data: BodyType<PublicVendorBidInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof submitPublicVendorBid>>,
+        TError,
+        {trackingId: string;data: BodyType<PublicVendorBidInput>},
+        TContext
+      > => {
+      return useMutation(getSubmitPublicVendorBidMutationOptions(options));
     }
 
 export const getGetEntityRecordUrl = (entity: string,

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { useRouter } from 'expo-router';
-import { createResidentReport, getCurrentActor, listDevelopmentNames, LOCATION_CATEGORIES } from '../lib/store';
+import { createResidentReport, listDevelopmentNames, LOCATION_CATEGORIES } from '../lib/store';
 import AddressInput from '../components/AddressInput';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
@@ -39,9 +39,6 @@ export default function ResidentScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
-  useEffect(() => {
-    getCurrentActor().then((actor) => setName(actor.name || '')).catch(() => undefined);
-  }, []);
 
   const names = useMemo(() => listDevelopmentNames(), []);
   const filtered = useMemo(() => {
@@ -72,13 +69,8 @@ export default function ResidentScreen() {
   }
 
   async function onSubmit() {
-    const needsUnit = (location || '').toLowerCase().includes('apartment') || (location || '').toLowerCase().includes('unit');
-    if (needsUnit && !unit.trim()) {
-      Alert.alert('Unit required', 'Please enter your unit or apartment number.');
-      return;
-    }
-    if (!development.trim()) {
-      Alert.alert('Development required', 'Please select your development.');
+    if (!address.trim()) {
+      Alert.alert('Address required', 'Please enter your building address.');
       return;
     }
     if (!description.trim()) {
@@ -88,8 +80,8 @@ export default function ResidentScreen() {
     setSubmitting(true);
     try {
       const effLoc = location === 'Other' ? (locationOther.trim() || 'Other') : location;
-      await createResidentReport(unit.trim(), address.trim(), description.trim(), photos, development.trim(), name.trim(), effLoc);
-      Alert.alert('Report submitted', 'Your report has been sent to management.', [
+      const report = await createResidentReport(unit.trim(), address.trim(), description.trim(), photos, development.trim(), name.trim(), effLoc);
+      Alert.alert('Report submitted', `Your complaint number is ${report.complaintNo}. Save this number to check the status of your work.`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (e: any) {
@@ -110,8 +102,8 @@ export default function ResidentScreen() {
       <TextInput
         style={styles.input}
         value={name}
-        editable={false}
-        placeholder="Authenticated resident"
+        onChangeText={setName}
+        placeholder="e.g. John Smith"
         placeholderTextColor="#999"
         autoCapitalize="words"
       />
@@ -142,14 +134,14 @@ export default function ResidentScreen() {
         autoCapitalize="characters"
       />
 
-      <Text style={styles.label}>Development</Text>
+      <Text style={styles.label}>Development (optional)</Text>
       <TouchableOpacity style={styles.input} onPress={() => setPickerOpen(true)}>
         <Text style={{ fontSize: 16, color: development ? '#111' : '#999' }}>
           {development || 'Select development'}
         </Text>
       </TouchableOpacity>
 
-      <Text style={styles.label}>Building Address (optional)</Text>
+      <Text style={styles.label}>Building Address</Text>
       <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 123 Main St" style={styles.input} />
 
       <Text style={styles.label}>Description</Text>

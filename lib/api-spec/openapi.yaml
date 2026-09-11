@@ -287,6 +287,73 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/EntityRecord"
+  /v1/public/resident-reports:
+    post:
+      operationId: submitPublicResidentReport
+      tags: [entities]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/EntityInput"
+      responses:
+        "201":
+          description: Resident complaint submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntityRecord" }
+  /v1/public/resident-reports/{complaintNo}:
+    get:
+      operationId: lookupPublicResidentReports
+      tags: [entities]
+      parameters:
+        - { name: complaintNo, in: path, required: true, schema: { type: string } }
+        - { name: address, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Matching resident complaint
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/EntityRecord" }
+  /v1/public/vendor-scopes/{trackingId}:
+    get:
+      operationId: lookupPublicVendorScope
+      tags: [entities]
+      parameters:
+        - { name: trackingId, in: path, required: true, schema: { type: string } }
+        - { name: vendorName, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Procurement-released vendor scope
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntityRecord" }
+        "404":
+          description: Scope not found or not released
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /v1/public/vendor-scopes/{trackingId}/bids:
+    post:
+      operationId: submitPublicVendorBid
+      tags: [entities]
+      parameters:
+        - { name: trackingId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicVendorBidInput"
+      responses:
+        "201":
+          description: Vendor bid submitted
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntityRecord" }
   /v1/{entity}/{id}:
     parameters:
       - { name: entity, in: path, required: true, schema: { type: string } }
@@ -523,6 +590,14 @@ components:
           schema:
             $ref: "#/components/schemas/Error"
   schemas:
+    PublicVendorBidInput:
+      type: object
+      additionalProperties: false
+      required: [vendorName, amount]
+      properties:
+        vendorName: { type: string, minLength: 1 }
+        amount: { type: number, exclusiveMinimum: 0 }
+        note: { type: string }
     NycProperty:
       type: object
       required: [query, formattedAddress, houseNumber, street, borough]

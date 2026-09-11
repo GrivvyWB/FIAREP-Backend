@@ -5,6 +5,14 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface PublicVendorBidInput {
+  /** @minLength 1 */
+  vendorName: string;
+  /** @exclusiveMinimum 0 */
+  amount: number;
+  note?: string;
+}
+
 export interface NycProperty {
   query: string;
   formattedAddress: string;
@@ -403,6 +411,14 @@ export type ListEntityRecordsParams = {
 projectId?: string;
 development?: string;
 status?: string;
+};
+
+export type LookupPublicResidentReportsParams = {
+address: string;
+};
+
+export type LookupPublicVendorScopeParams = {
+vendorName: string;
 };
 
 export type DeleteEntityRecordBody = {

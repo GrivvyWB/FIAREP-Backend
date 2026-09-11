@@ -18,8 +18,27 @@ export function useAppMode() { return useContext(ModeContext); }
 type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'procurement' | 'resident' | 'vendor';
 const CODE_LEN = 4;
 const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
-const roleLabel = (r: StaffRole) =>
-  r === 'administrator' ? 'Administrator' : r === 'management' ? 'Borough Director / Management' : r === 'worker' ? 'Staff' : r === 'procurement' ? 'Procurement' : 'CPM / Inspector';
+const ROLE_LABEL: Record<StaffRole, string> = {
+  administrator: 'Administrator',
+  management: 'Management',
+  worker: 'Staff Member',
+  inspector: 'CPM / Inspector',
+  procurement: 'Procurement',
+  resident: 'Resident',
+  vendor: 'Vendor',
+};
+const roleLabel = (role: StaffRole) => ROLE_LABEL[role];
+
+const HOME_FOR_MODE: Record<AppMode, string> = {
+  management: '/management-home',
+  administrator: '/admin-home',
+  procurement: '/procurement-home',
+  worker: '/worker-home',
+  inspector: '/cpm-home',
+  resident: '/resident-home',
+  vendor: '/vendor-home',
+  emergency: '/emergency-units',
+};
 
 function Screen({ children }: { children: React.ReactNode }) {
   return (
@@ -58,8 +77,7 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
     try {
       const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role, props.expectedPosition);
       if (ok) {
-        await setRememberedStaff(props.role, name.trim());
-        await syncAllEntities();
+        await setRememberedStaff(props.role, name.trim()).catch(() => undefined);
         props.onUnlock();
       }
       else setMsg('No approved account matches that name and code.');
@@ -179,11 +197,11 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
       />
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Who's using this device?</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 12 }]}>Staff roles require an issued code.</Text>
-      <Pressable style={ui.btn} onPress={() => pickStaffRole('resident')}>
-        <Text style={ui.btnText}>Resident  🔒</Text>
+      <Pressable style={ui.btn} onPress={() => onPick('resident')}>
+        <Text style={ui.btnText}>Resident</Text>
       </Pressable>
-      <Pressable style={ui.btn} onPress={() => pickStaffRole('vendor')}>
-        <Text style={ui.btnText}>Vendor  🔒</Text>
+      <Pressable style={ui.btn} onPress={() => onPick('vendor')}>
+        <Text style={ui.btnText}>Vendor</Text>
       </Pressable>
       <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => onPick('emergency')}>
         <Text style={ui.btnText}>Emergency Unit</Text>
@@ -406,25 +424,12 @@ export default function Layout() {
   const [mode, setMode] = useState<AppMode | null>(null);
   const [booting, setBooting] = useState(true);
 
-  const homeForMode = (nextMode: AppMode) => {
-    if (nextMode === 'management') return '/management-home';
-    if (nextMode === 'administrator') return '/admin-home';
-    if (nextMode === 'procurement') return '/procurement-home';
-    if (nextMode === 'worker') return '/worker-home';
-    if (nextMode === 'inspector') return '/cpm-home';
-    if (nextMode === 'resident') return '/resident-home';
-    if (nextMode === 'vendor') return '/vendor-home';
-    if (nextMode === 'emergency') return '/emergency-home';
-    return '/';
-  };
-
   useEffect(() => {
     let mounted = true;
     restoreServerSession().then((restored) => {
       if (restored && mounted) {
         const restoredMode = restored.role as AppMode;
         setMode(restoredMode);
-        setTimeout(() => router.replace(homeForMode(restoredMode)), 0);
       }
     }).catch(() => undefined).finally(() => {
       if (mounted) setBooting(false);
@@ -437,12 +442,17 @@ export default function Layout() {
     return () => { mounted = false; sub.remove(); };
   }, []);
 
+  useEffect(() => {
+    if (!booting && mode) {
+      router.replace(HOME_FOR_MODE[mode] as never);
+    }
+  }, [booting, mode, router]);
+
   const refresh = useCallback(() => { setMode(null); }, []);
 
   async function pick(m: AppMode) {
-    await setAppMode(m);
     setMode(m);
-    setTimeout(() => router.replace(homeForMode(m)), 0);
+    await setAppMode(m).catch(() => undefined);
   }
 
   let content;

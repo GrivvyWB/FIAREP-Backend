@@ -358,6 +358,121 @@ export const CreateEntityRecordResponse = zod.object({
 }))
 
 
+
+
+
+export const SubmitPublicResidentReportBody = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string().optional(),
+  "development": zod.string().optional(),
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1).optional()
+})
+
+
+
+
+export const SubmitPublicResidentReportResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string().optional(),
+  "development": zod.string().optional(),
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
+}).and(zod.object({
+  "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "version": zod.number().int()
+}))
+
+
+export const LookupPublicResidentReportsParams = zod.object({
+  "complaintNo": zod.coerce.string()
+})
+
+export const LookupPublicResidentReportsQueryParams = zod.object({
+  "address": zod.coerce.string()
+})
+
+
+
+
+export const LookupPublicResidentReportsResponseItem = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string().optional(),
+  "development": zod.string().optional(),
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
+}).and(zod.object({
+  "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "version": zod.number().int()
+}))
+export const LookupPublicResidentReportsResponse = zod.array(LookupPublicResidentReportsResponseItem)
+
+
+export const LookupPublicVendorScopeParams = zod.object({
+  "trackingId": zod.coerce.string()
+})
+
+export const LookupPublicVendorScopeQueryParams = zod.object({
+  "vendorName": zod.coerce.string()
+})
+
+
+
+
+export const LookupPublicVendorScopeResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string().optional(),
+  "development": zod.string().optional(),
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
+}).and(zod.object({
+  "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "version": zod.number().int()
+}))
+
+
+export const SubmitPublicVendorBidParams = zod.object({
+  "trackingId": zod.coerce.string()
+})
+
+
+export const submitPublicVendorBidBodyAmountExclusiveMin = 0;
+
+
+
+export const SubmitPublicVendorBidBody = zod.object({
+  "vendorName": zod.string().min(1),
+  "amount": zod.number().gt(submitPublicVendorBidBodyAmountExclusiveMin),
+  "note": zod.string().optional()
+})
+
+
+
+
+export const SubmitPublicVendorBidResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string().optional(),
+  "development": zod.string().optional(),
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
+}).and(zod.object({
+  "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "version": zod.number().int()
+}))
+
+
 export const GetEntityRecordParams = zod.object({
   "entity": zod.coerce.string(),
   "id": zod.coerce.string()

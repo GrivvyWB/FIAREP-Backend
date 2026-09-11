@@ -6,11 +6,15 @@ import {
   createStaff,
   getBootstrapStatus,
   getCurrentStaff,
+  lookupPublicResidentReports,
+  lookupPublicVendorScope,
   listStaff,
   login as loginOnServer,
   logout as logoutOnServer,
   refreshSession,
   registerDeviceToken,
+  submitPublicResidentReport,
+  submitPublicVendorBid,
   unregisterDeviceToken,
   setAuthTokenGetter,
   setAuthRefreshHandler,
@@ -52,6 +56,7 @@ export type Project = { id: string; name: string; client: string; createdAt: str
 export type Room = { id: string; projectId: string; name: string; unit?: string; lines: LineItem[]; photos?: string[]; walls2d?: { x1:number; y1:number; x2:number; y2:number }[]; scan?: any; remoteFiles?: any[] };
 
 let _db: SQLite.SQLiteDatabase | null = null;
+let _dbInit: Promise<SQLite.SQLiteDatabase> | null = null;
 let _refreshInFlight: Promise<string | null> | null = null;
 let _refreshing = false;
 let _syncTimer: ReturnType<typeof setTimeout> | null = null;
@@ -78,8 +83,10 @@ export function isRoleAuthorized(staff: Pick<Staff, 'role'>, requested: string):
 }
 export async function db() {
   if (_db) return _db;
-  _db = await SQLite.openDatabaseAsync('construction.db');
-  await _db.execAsync(`
+  if (_dbInit) return _dbInit;
+  _dbInit = (async () => {
+  const database = await SQLite.openDatabaseAsync('construction.db');
+  await database.execAsync(`
     PRAGMA journal_mode = WAL;
     CREATE TABLE IF NOT EXISTS projects (
       id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, client TEXT, createdAt TEXT NOT NULL
@@ -101,24 +108,31 @@ export async function db() {
   // line-item schema. If an old rooms table exists without a 'lines' column,
   // drop it once so the new schema is created clean.
   try {
-    const cols = await _db.getAllAsync<{ name: string }>("PRAGMA table_info(rooms)");
+    const cols = await database.getAllAsync<{ name: string }>("PRAGMA table_info(rooms)");
     const hasRooms = cols.length > 0;
     const hasLines = cols.some(c => c.name === 'lines');
-    if (hasRooms && !hasLines) { await _db.execAsync('DROP TABLE rooms'); }
+    if (hasRooms && !hasLines) { await database.execAsync('DROP TABLE rooms'); }
   } catch (e) { /* no rooms table yet */ }
-  await _db.execAsync(`
+  await database.execAsync(`
     CREATE TABLE IF NOT EXISTS rooms (
       id TEXT PRIMARY KEY NOT NULL, projectId TEXT NOT NULL, name TEXT NOT NULL, unit TEXT, lines TEXT NOT NULL, photos TEXT, walls2d TEXT, remoteFiles TEXT
     );
   `);
-  try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN unit TEXT'); } catch (e) {}
-  try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN photos TEXT'); } catch (e) {}
-  try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN walls2d TEXT'); } catch (e) {}
-  try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN scan TEXT'); } catch (e) {}
-  try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN remoteFiles TEXT'); } catch (e) {}
-  try { await _db.execAsync('ALTER TABLE projects ADD COLUMN rates TEXT'); } catch (e) { /* exists */ }
-  try { await _db.execAsync('ALTER TABLE projects ADD COLUMN meta TEXT'); } catch (e) {}
-  return _db;
+  try { await database.execAsync('ALTER TABLE rooms ADD COLUMN unit TEXT'); } catch (e) {}
+  try { await database.execAsync('ALTER TABLE rooms ADD COLUMN photos TEXT'); } catch (e) {}
+  try { await database.execAsync('ALTER TABLE rooms ADD COLUMN walls2d TEXT'); } catch (e) {}
+  try { await database.execAsync('ALTER TABLE rooms ADD COLUMN scan TEXT'); } catch (e) {}
+  try { await database.execAsync('ALTER TABLE rooms ADD COLUMN remoteFiles TEXT'); } catch (e) {}
+  try { await database.execAsync('ALTER TABLE projects ADD COLUMN rates TEXT'); } catch (e) { /* exists */ }
+  try { await database.execAsync('ALTER TABLE projects ADD COLUMN meta TEXT'); } catch (e) {}
+  _db = database;
+  return database;
+  })();
+  try {
+    return await _dbInit;
+  } finally {
+    if (!_db) _dbInit = null;
+  }
 }
 async function queueMutation(entity: string, id: string, state: any, operation: 'upsert' | 'delete' = 'upsert', baseVersion?: number) {
   const d = await db();
@@ -485,44 +499,30 @@ function normalizeResidentReport(r: any): ResidentReport {
 }
 
 export async function createResidentReport(unit: string, address: string, description: string, photos: string[] = [], development: string = '', residentName: string = '', location: string = '', contact: string = ''): Promise<ResidentReport> {
-  const d = await db();
-  await ensureResidentTable(d);
-  const meta = await newMeta(d);
   const now = new Date().toISOString();
-  const complaintNo = 'RC-' + Math.floor(10000 + Math.random() * 90000);
-  const r: ResidentReport = {
+  const submitted = await submitPublicResidentReport({
     id: uid(),
-    complaintNo,
-    residentName: residentName.trim(),
-    contact: (contact || '').trim() || undefined,
-    location: location.trim(),
-    unit: unit.trim(),
-    address: address.trim(),
-    development: development.trim(),
-    description: description.trim(),
-    photos,
-    status: 'submitted',
-    assignedTo: undefined,
-    updates: [{ status: 'submitted', by: 'resident', at: now }],
-    createdAt: now,
-    _meta: meta,
-  };
-  await d.runAsync('INSERT INTO resident_reports (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
-  await queueMutation('resident-reports', r.id, r);
-  await logAudit('resident', residentName.trim(), 'Report submitted', 'Unit ' + unit.trim() + (development.trim() ? ' \u00b7 ' + development.trim() : ''), r.id);
-  const _detail = 'Unit ' + unit.trim() + (development.trim() ? ' \u00b7 ' + development.trim() : '');
-  if (development.trim()) {
-    const mgrs = await listManagementForDevelopment(development.trim());
-    if (mgrs.length > 0) {
-      for (const m of mgrs) { await addNotification(m.name, 'New resident report', _detail, r.id); }
-    } else {
-      // No management assigned to this development yet — fall back to all management.
-      await addNotification('management', 'New resident report', _detail, r.id);
-    }
-  } else {
-    await addNotification('management', 'New resident report', _detail, r.id);
-  }
-  await addNotification('administrator', 'New resident report', _detail, r.id);
+    development: development.trim() || undefined,
+    state: {
+      residentName: residentName.trim(),
+      contact: contact.trim() || undefined,
+      location: location.trim(),
+      unit: unit.trim(),
+      address: address.trim(),
+      development: development.trim(),
+      description: description.trim(),
+      photos: [],
+      status: 'submitted',
+      updates: [{ status: 'submitted', by: 'resident', at: now }],
+      createdAt: now,
+    },
+  });
+  const r = normalizeResidentReport({ ...(submitted.state as object), id: submitted.id, photos });
+  try {
+    const d = await db();
+    await ensureResidentTable(d);
+    await d.runAsync('INSERT OR REPLACE INTO resident_reports (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
+  } catch {}
   return r;
 }
 
@@ -640,23 +640,9 @@ export async function getResidentReport(id: string): Promise<ResidentReport | nu
   try { return normalizeResidentReport(JSON.parse(row.state)); } catch { return null; }
 }
 
-export async function findResidentReports(unit: string, area: string): Promise<ResidentReport[]> {
-  // Flexible lookup: match on unit (or location) plus an "area" that can be the development OR the address.
-  // Address is optional on submission, so residents can look up by unit + development (e.g. "5J" + "Castle Hill").
-  const u = unit.trim().toLowerCase();
-  const a = area.trim().toLowerCase();
-  const all = await listResidentReports();
-  return all.filter(r => {
-    const rUnit = (r.unit || '').trim().toLowerCase();
-    const rLoc = (r.location || '').trim().toLowerCase();
-    const rAddr = (r.address || '').trim().toLowerCase();
-    const rDev = (r.development || '').trim().toLowerCase();
-    // Unit must match (against unit or location). If no unit entered, skip that check.
-    const unitOk = u ? (rUnit === u || rLoc === u || rUnit.includes(u)) : true;
-    // Area matches development OR address (whichever the resident typed). If blank, skip.
-    const areaOk = a ? (rDev === a || rAddr === a || rDev.includes(a) || rAddr.includes(a)) : true;
-    return unitOk && areaOk && (u || a);
-  });
+export async function findResidentReports(complaintNo: string, address: string): Promise<ResidentReport[]> {
+  const rows = await lookupPublicResidentReports(complaintNo.trim(), { address: address.trim() });
+  return rows.map((row) => normalizeResidentReport({ ...(row.state as object), id: row.id }));
 }
 
 export async function updateResidentReportStatus(id: string, status: ResidentReport['status']): Promise<void> {
@@ -2178,7 +2164,7 @@ async function ensureProcurementTable(d: any) {
 
 function newTrackingId(): string {
   const n = Math.floor(10000 + Math.random() * 90000);
-  return 'sr-' + String(n);
+  return 'RC-' + String(n);
 }
 
 export async function createProcurementRequest(
@@ -2472,15 +2458,14 @@ export async function getProcurementRequest(id: string): Promise<ProcurementRequ
 // Vendor-facing lookup: a contractor is handed the sr- tracking id and enters
 // it to reach their one job. Match is case-insensitive and tolerant of a
 // missing 'sr-' prefix.
-export async function getProcurementByTracking(tracking: string): Promise<ProcurementRequest | null> {
-  const raw = (tracking || '').trim().toLowerCase();
-  if (!raw) return null;
-  const norm = raw.startsWith('sr-') ? raw : 'sr-' + raw.replace(/^sr/, '').replace(/^-/, '');
-  const all = await listProcurementRequests();
-  for (const r of all) {
-    if ((r.trackingId || '').trim().toLowerCase() === norm) return r;
+export async function getProcurementByTracking(tracking: string, vendorName: string): Promise<ProcurementRequest | null> {
+  if (!tracking.trim() || !vendorName.trim()) return null;
+  try {
+    const row = await lookupPublicVendorScope(tracking.trim(), { vendorName: vendorName.trim() });
+    return { ...(row.state as object), id: row.id } as ProcurementRequest;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 // Vendor marks their awarded job as started. No-op unless it is awarded.
@@ -2536,6 +2521,7 @@ async function ensureBidsTable(d: any) {
 
 async function saveProcurementRequest(d: any, r: ProcurementRequest): Promise<void> {
   await d.runAsync('UPDATE procurement SET state = ? WHERE id = ?', JSON.stringify(r), r.id);
+  await queueMutation('procurement', r.id, r);
 }
 
 // Procurement broadcasts the job to every vendor contact: moves the request to
@@ -2570,30 +2556,16 @@ export async function broadcastProcurement(id: string, walkthroughAt: string = '
 // A vendor submits a bid against a job they were invited to. Keyed by the
 // tracking id the contact was given.
 export async function submitBid(trackingId: string, vendorName: string, amount: number, note: string = ''): Promise<ProcurementBid | null> {
-  const req = await getProcurementByTracking(trackingId);
-  if (!req) return null;
-  const d = await db();
-  await ensureBidsTable(d);
-  const bid: ProcurementBid = {
-    id: uid(),
-    requestId: req.id,
-    trackingId: req.trackingId,
-    vendorName: (vendorName || '').trim(),
-    amount: Number.isFinite(amount) ? amount : 0,
-    note: (note || '').trim() || undefined,
-    submittedAt: new Date().toISOString(),
-  };
-  await d.runAsync('INSERT INTO procurement_bids (id,state) VALUES (?,?)', bid.id, JSON.stringify(bid));
-  await queueMutation('procurement-bids', bid.id, bid);
-  const bidMsg = 'New bid on ' + req.trackingId;
-  const bidDetail = (bid.vendorName || 'Vendor') + '  $' + bid.amount;
-  // Procurement owns bids, so notify the procurement inbox for every submission.
-  await addNotification('procurement', bidMsg, bidDetail, req.id);
-  // Also keep the original requester (CPM) informed.
-  if (req.requestedBy) {
-    await addNotification(req.requestedBy, bidMsg, bidDetail, req.id);
+  try {
+    const row = await submitPublicVendorBid(trackingId.trim(), {
+      vendorName: vendorName.trim(),
+      amount,
+      note: note.trim() || undefined,
+    });
+    return { ...(row.state as object), id: row.id } as ProcurementBid;
+  } catch {
+    return null;
   }
-  return bid;
 }
 
 export async function listBids(requestId: string): Promise<ProcurementBid[]> {

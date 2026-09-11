@@ -9,11 +9,13 @@ import entityRouter from "./entities";
 import fileRouter from "./files";
 import aiRouter from "./ai";
 import propertyRouter from "./property";
+import publicAccessRouter from "./publicAccess";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(publicAccessRouter);
 router.use(staffRouter);
 router.use(notificationRouter);
 router.use(syncRouter);

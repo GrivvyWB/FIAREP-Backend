@@ -1,9 +1,10 @@
-import { useState, useMemo } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
+import { useState } from 'react';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
-import { findResidentReports, type ResidentReport, listDevelopmentNames } from '../lib/store';
+import { findResidentReports, type ResidentReport } from '../lib/store';
+import AddressInput from '../components/AddressInput';
 import { ui, ACCENT } from '../lib/ui';
 
 const STATUS_LABEL: Record<ResidentReport['status'], string> = {
@@ -25,27 +26,20 @@ function fmt(iso: string): string {
 }
 
 export default function ResidentLookup() {
-  const [unit, setUnit] = useState('');
+  const [complaintNo, setComplaintNo] = useState('');
   const [viewerUri, setViewerUri] = useState<string | null>(null);
-  const [development, setDevelopment] = useState('');
-  const [devPickerOpen, setDevPickerOpen] = useState(false);
-  const [devQuery, setDevQuery] = useState('');
-  const devNames = useMemo(() => listDevelopmentNames(), []);
-  const devFiltered = useMemo(() => {
-    const q = devQuery.trim().toLowerCase();
-    return q ? devNames.filter((n) => n.toLowerCase().includes(q)) : devNames;
-  }, [devQuery, devNames]);
+  const [address, setAddress] = useState('');
   const [results, setResults] = useState<ResidentReport[] | null>(null);
   const [searching, setSearching] = useState(false);
 
   async function onLookup() {
-    if (!unit.trim() && !development.trim()) {
-      Alert.alert('Missing info', 'Enter your unit and/or development to find your report.');
+    if (!complaintNo.trim() || !address.trim()) {
+      Alert.alert('Missing info', 'Enter your complaint number and building address.');
       return;
     }
     setSearching(true);
     try {
-      const found = await findResidentReports(unit.trim(), development.trim());
+      const found = await findResidentReports(complaintNo.trim(), address.trim());
       setResults(found);
     } catch (e: any) {
       Alert.alert('Lookup failed', e?.message ?? 'Could not look up reports.');
@@ -58,24 +52,22 @@ export default function ResidentLookup() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Check Report Status</Text>
-      <Text style={ui.label}>Enter your unit and/or development. Address is not required.</Text>
+      <Text style={ui.label}>Enter the complaint number you received and the same building address used on the complaint.</Text>
 
       <View>
-        <Text style={ui.label}>Unit / Apartment</Text>
+        <Text style={ui.label}>Complaint number</Text>
         <TextInput
           style={ui.input}
-          value={unit}
-          onChangeText={setUnit}
-          placeholder="e.g. 4B"
+          value={complaintNo}
+          onChangeText={setComplaintNo}
+          placeholder="e.g. RC-46789"
           autoCapitalize="characters"
         />
       </View>
 
       <View>
-        <Text style={ui.label}>Development</Text>
-        <Pressable style={ui.input} onPress={() => { setDevQuery(''); setDevPickerOpen(true); }}>
-          <Text style={{ color: development ? '#000' : '#999' }}>{development || 'Select development'}</Text>
-        </Pressable>
+        <Text style={ui.label}>Building address</Text>
+        <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 123 Main St" style={ui.input} />
       </View>
 
       <Pressable style={ui.btn} onPress={onLookup} disabled={searching}>
@@ -83,7 +75,7 @@ export default function ResidentLookup() {
       </Pressable>
 
       {results !== null && results.length === 0 && (
-        <Text style={ui.empty}>No reports found for that unit / development.</Text>
+        <Text style={ui.empty}>No report matched that complaint number and address.</Text>
       )}
 
       {results !== null && results.map((r) => (
@@ -128,26 +120,6 @@ export default function ResidentLookup() {
         </View>
       ))}
     <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
-          <Modal visible={devPickerOpen} animationType="slide" onRequestClose={() => setDevPickerOpen(false)}>
-        <View style={{ flex: 1, padding: 16, paddingTop: 60, gap: 10 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={ui.h}>Select development</Text>
-            <Pressable onPress={() => setDevPickerOpen(false)}><Text style={{ color: ACCENT, fontWeight: '700', fontSize: 16 }}>Close</Text></Pressable>
-          </View>
-          <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments..." autoFocus />
-          <FlatList
-            data={devFiltered}
-            keyExtractor={(n) => n}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <Pressable style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }} onPress={() => { setDevelopment(item); setDevPickerOpen(false); setDevQuery(''); }}>
-                <Text style={{ fontSize: 16 }}>{item}</Text>
-              </Pressable>
-            )}
-            ListEmptyComponent={<Text style={ui.empty}>No matches.</Text>}
-          />
-        </View>
-      </Modal>
     </ScrollView>
     </KeyboardAvoidingView>
   );
