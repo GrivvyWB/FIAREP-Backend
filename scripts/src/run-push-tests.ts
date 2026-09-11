@@ -4,6 +4,8 @@ import process from "node:process";
 
 const SCHEMA_PREFIX = "integration_test_";
 const LOCK_ID = 1_905_202_601;
+const testFile =
+  process.argv[2] ?? "../artifacts/api-server/src/lib/push.test.ts";
 
 if (!process.env.DATABASE_URL) {
   throw new Error("DATABASE_URL must be set to prepare the integration database.");
@@ -79,12 +81,7 @@ try {
 
   child = spawn(
     process.execPath,
-    [
-      "--import",
-      "tsx",
-      "--test",
-      "../artifacts/api-server/src/lib/push.test.ts",
-    ],
+    ["--import", "tsx", "--test", testFile],
     {
       cwd: new URL("..", import.meta.url),
       env: {
