@@ -6,6 +6,7 @@ import {
   db,
   deviceTokens,
   notifications,
+  pool,
   pushDeliveries,
   staffAccounts,
 } from "@workspace/db";
@@ -30,11 +31,22 @@ async function cleanupStalePushTestTenants(): Promise<void> {
 }
 
 before(async () => {
+  const expectedSchema = process.env.TEST_DATABASE_SCHEMA;
+  assert.match(expectedSchema ?? "", /^integration_test_[a-z0-9_]+$/);
+  const result = await pool.query<{ schema: string }>(
+    "select current_schema() as schema",
+  );
+  assert.equal(
+    result.rows[0]?.schema,
+    expectedSchema,
+    "Push integration tests refuse to run outside their disposable schema",
+  );
   await cleanupStalePushTestTenants();
 });
 
-after(() => {
+after(async () => {
   globalThis.fetch = realFetch;
+  await pool.end();
 });
 
 function tenant(): string {
