@@ -146,8 +146,14 @@ export function GenericEntityPage({
 
   const handleDeleteConfirm = async () => {
     if (!deletingRecordId) return;
+    const deletingRecord = data?.find((record) => record.id === deletingRecordId);
+    if (!deletingRecord) return;
     try {
-      await deleteMutation.mutateAsync({ entity, id: deletingRecordId });
+      await deleteMutation.mutateAsync({
+        entity,
+        id: deletingRecordId,
+        data: { version: deletingRecord.version },
+      });
       toast({ title: "Deleted successfully" });
       queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey(entity) });
     } catch (err: any) {

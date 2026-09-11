@@ -7,11 +7,25 @@ export default function Team() {
   const { data: staff, isLoading } = useListStaff();
   const [search, setSearch] = useState("");
 
-  const filtered = staff?.filter(s => {
-    if (!search) return true;
-    const q = search.toLowerCase();
-    return s.name.toLowerCase().includes(q) || s.role.toLowerCase().includes(q);
-  });
+  const authorityOrder = (member: NonNullable<typeof staff>[number]) => {
+    if (member.position === "Borough Director") return 0;
+    if (member.role === "administrator") return 1;
+    if (member.role === "management") return 2;
+    if (member.role === "procurement") return 3;
+    if (member.role === "worker") return 4;
+    if (member.role === "inspector") return 5;
+    return 6;
+  };
+
+  const filtered = staff
+    ?.filter(s => {
+      if (!search) return true;
+      const q = search.toLowerCase();
+      return s.name.toLowerCase().includes(q)
+        || s.role.toLowerCase().includes(q)
+        || s.position.toLowerCase().includes(q);
+    })
+    .sort((a, b) => authorityOrder(a) - authorityOrder(b) || a.name.localeCompare(b.name));
 
   return (
     <div className="space-y-6">
