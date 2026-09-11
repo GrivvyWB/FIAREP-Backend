@@ -7,12 +7,16 @@ import {
   canCreateEntity,
   canDeleteEntity,
   canMutateEntity,
+  canPerformEntityAction,
   canReadEntity,
   entityDevelopmentAllowed,
   generatedCode,
   isBoroughDirector,
+  isValidEntityTransition,
+  patchesWorkflowManagedFields,
   recordId,
   stripPricing,
+  withInitialWorkflowState,
 } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
@@ -153,6 +157,12 @@ router.post("/v1/:entity", async (req, res, next) => {
     return;
   }
   const now = new Date();
+  const createdState = withInitialWorkflowState(
+    entity,
+    entity === "leave-requests"
+      ? { ...rawState, requesterStaffId: actor.id }
+      : rawState,
+  );
   const [created] = await db
     .insert(entityRecords)
     .values({
@@ -161,7 +171,7 @@ router.post("/v1/:entity", async (req, res, next) => {
       entity,
       projectId,
       development,
-      state: withGeneratedFields(entity, rawState),
+      state: withGeneratedFields(entity, createdState),
       createdBy: actor.id,
       createdAt: now,
       updatedAt: now,
@@ -225,6 +235,12 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
   const patch = stateOf(input?.["state"]) ?? input;
   if (!patch) {
     res.status(400).json({ error: "A JSON update is required" });
+    return;
+  }
+  if (patchesWorkflowManagedFields(entity, patch)) {
+    res.status(403).json({
+      error: "Workflow-managed fields must be changed through an authorized action",
+    });
     return;
   }
   const [current] = await db
@@ -361,31 +377,23 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     res.status(400).json({ error: "Unsupported workflow action" });
     return;
   }
-  const procurementOnly = new Set([
-    "broadcast",
-    "award",
-    "rate-close",
-    "return",
-  ]);
-  if (
-    entity === "procurement" &&
-    procurementOnly.has(action) &&
-    actor.role !== "procurement" &&
-    !isBoroughDirector(actor)
-  ) {
-    res.status(403).json({ error: "Procurement access required" });
+  if (!canPerformEntityAction(actor, entity, action, current.state)) {
+    res.status(403).json({ error: "Not allowed to perform this workflow action" });
     return;
   }
-  if (
-    entity === "leave-requests" &&
-    !["administrator", "management"].includes(actor.role) &&
-    action !== "cancel" &&
-    !isBoroughDirector(actor)
-  ) {
-    res.status(403).json({ error: "Management access required" });
+  if (!isValidEntityTransition(entity, action, current.state)) {
+    res.status(409).json({
+      error: "This workflow action is not valid for the current status",
+    });
     return;
   }
   const body = stateOf(req.body) ?? {};
+  if (patchesWorkflowManagedFields(entity, body)) {
+    res.status(403).json({
+      error: "Workflow-managed fields are controlled by the selected action",
+    });
+    return;
+  }
   const now = new Date();
   const state = {
     ...current.state,

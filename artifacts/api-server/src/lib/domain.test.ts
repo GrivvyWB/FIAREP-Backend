@@ -3,7 +3,11 @@ import test from "node:test";
 import type { Actor } from "./auth";
 import {
   canReadEntity,
+  canPerformEntityAction,
   entityDevelopmentAllowed,
+  isValidEntityTransition,
+  patchesWorkflowManagedFields,
+  withInitialWorkflowState,
 } from "./domain";
 
 function actor(overrides: Partial<Actor> = {}): Actor {
@@ -67,6 +71,175 @@ test("restricted management roles cannot synchronize procurement records", () =>
   assert.equal(canReadEntity(actor(), "procurement"), false);
   assert.equal(
     canReadEntity(actor({ position: "Regional Director" }), "procurement"),
+    true,
+  );
+});
+
+test("workflow actions require their explicit management or specialist role", () => {
+  const manager = actor();
+  const worker = actor({ role: "worker", position: "Maintenance Worker" });
+  const procurement = actor({ role: "procurement", position: "CPM" });
+  const cpm = actor({ role: "inspector", position: "CPM" });
+
+  assert.equal(
+    canPerformEntityAction(manager, "building-violations", "approve", {}),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(worker, "building-violations", "approve", {}),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(worker, "building-violations", "complete", {}),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(procurement, "procurement", "award", {}),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(manager, "procurement", "award", {}),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(cpm, "procurement", "submit", {}),
+    true,
+  );
+});
+
+test("staff can cancel only their own leave request", () => {
+  const worker = actor({
+    id: "worker-1",
+    name: "Taylor Smith",
+    role: "worker",
+  });
+  assert.equal(
+    canPerformEntityAction(worker, "leave-requests", "cancel", {
+      requesterStaffId: "worker-1",
+    }),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(worker, "leave-requests", "cancel", {
+      requesterStaffId: "worker-2",
+    }),
+    false,
+  );
+});
+
+test("legacy name-only leave requests do not grant cancellation ownership", () => {
+  const worker = actor({
+    id: "worker-1",
+    name: "Taylor Smith",
+    role: "worker",
+  });
+  assert.equal(
+    canPerformEntityAction(worker, "leave-requests", "cancel", {
+      employee: "Taylor Smith",
+      requestedBy: "Taylor Smith",
+    }),
+    false,
+  );
+});
+
+test("generic patches cannot bypass protected workflow actions", () => {
+  assert.equal(
+    patchesWorkflowManagedFields("building-violations", {
+      status: "approved",
+    }),
+    true,
+  );
+  assert.equal(
+    patchesWorkflowManagedFields("leave-requests", {
+      clearedByMgmt: true,
+    }),
+    true,
+  );
+  assert.equal(
+    patchesWorkflowManagedFields("procurement", {
+      awardAt: new Date().toISOString(),
+    }),
+    true,
+  );
+  assert.equal(
+    patchesWorkflowManagedFields("projects", { status: "approved" }),
+    false,
+  );
+  assert.equal(
+    patchesWorkflowManagedFields("building-violations", {
+      notes: "Updated notes",
+    }),
+    false,
+  );
+});
+
+test("workflow creation discards privileged client state", () => {
+  assert.deepEqual(
+    withInitialWorkflowState("building-violations", {
+      status: "approved",
+      clearedByMgmt: true,
+      approvedAt: "forged",
+      building: "100 Main Street",
+    }),
+    {
+      status: "submitted",
+      building: "100 Main Street",
+    },
+  );
+  assert.equal(
+    withInitialWorkflowState("leave-requests", {
+      status: "Approved",
+      employee: "Taylor Smith",
+    }).status,
+    "Pending",
+  );
+  assert.equal(
+    withInitialWorkflowState("procurement", {
+      status: "awarded",
+    }).status,
+    "draft",
+  );
+});
+
+test("workflow actions cannot skip required stages", () => {
+  assert.equal(
+    isValidEntityTransition("procurement", "award", { status: "draft" }),
+    false,
+  );
+  assert.equal(
+    isValidEntityTransition("procurement", "award", { status: "bidding" }),
+    true,
+  );
+  assert.equal(
+    isValidEntityTransition("resident-reports", "resolve", {
+      status: "submitted",
+    }),
+    false,
+  );
+  assert.equal(
+    isValidEntityTransition("resident-reports", "resolve", {
+      status: "in_progress",
+    }),
+    true,
+  );
+});
+
+test("Borough Director overrides every protected workflow action", () => {
+  const director = actor({
+    role: "administrator",
+    position: "Borough Director",
+    developments: [],
+  });
+  assert.equal(
+    canPerformEntityAction(director, "procurement", "award", {}),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(director, "leave-requests", "cancel", {}),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(director, "emergency-jobs", "complete", {}),
     true,
   );
 });

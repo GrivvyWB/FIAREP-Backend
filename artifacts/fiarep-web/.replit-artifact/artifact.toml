@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "FIAREP Web"
+description = "The unified FIAREP operations dashboard for inspections, violations, procurement, staff, emergency work, elevators, leave, notifications, and cross-device project activity."
+version = "1.0.0"
+id = "artifacts/fiarep-web"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 22892
+
+[services.development]
+run = "pnpm --filter @workspace/fiarep-web run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fiarep-web", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/fiarep-web/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "22892"
+BASE_PATH = "/"

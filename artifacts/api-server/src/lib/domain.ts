@@ -184,6 +184,176 @@ export function canDeleteEntity(
   return actor.role === "administrator" || actor.role === "management";
 }
 
+export function canPerformEntityAction(
+  actor: Actor,
+  entity: string,
+  action: string,
+  state: Record<string, unknown>,
+): boolean {
+  if (isBoroughDirector(actor)) return true;
+
+  const isManagement =
+    actor.role === "administrator" || actor.role === "management";
+  const isFieldStaff =
+    actor.role === "worker" || actor.role === "inspector";
+
+  if (entity === "procurement") {
+    if (action === "submit") {
+      return actor.role === "inspector" && actor.position === "CPM";
+    }
+    if (action === "approve" || action === "reject") return isManagement;
+    return (
+      actor.role === "procurement" &&
+      ["broadcast", "award", "rate-close", "return"].includes(action)
+    );
+  }
+
+  if (entity === "resident-reports") {
+    if (action === "assign" || action === "resolve" || action === "clear") {
+      return isManagement;
+    }
+    return action === "start" && isFieldStaff;
+  }
+
+  if (entity === "building-violations") {
+    if (["approve", "route", "clear"].includes(action)) return isManagement;
+    return action === "complete" && isFieldStaff;
+  }
+
+  if (entity === "leave-requests") {
+    if (action === "approve" || action === "deny") return isManagement;
+    if (action !== "cancel") return false;
+    return state["requesterStaffId"] === actor.id;
+  }
+
+  if (entity === "elevator-jobs" || entity === "emergency-jobs") {
+    return (
+      ["on-my-way", "start", "complete"].includes(action) &&
+      (isManagement || isFieldStaff)
+    );
+  }
+
+  return false;
+}
+
+const WORKFLOW_ENTITIES = new Set([
+  "procurement",
+  "resident-reports",
+  "building-violations",
+  "leave-requests",
+  "elevator-jobs",
+  "emergency-jobs",
+]);
+
+const WORKFLOW_MANAGED_FIELDS = new Set([
+  "status",
+  "clearedByMgmt",
+  "submitAt",
+  "approveAt",
+  "rejectAt",
+  "returnAt",
+  "broadcastAt",
+  "awardAt",
+  "rate_closeAt",
+  "assignAt",
+  "startAt",
+  "resolveAt",
+  "clearAt",
+  "completeAt",
+  "denyAt",
+  "cancelAt",
+  "on_my_wayAt",
+  "approvedAt",
+  "returnedAt",
+  "assignedAt",
+  "startedAt",
+  "resolvedAt",
+  "completedAt",
+  "cancelledAt",
+]);
+
+export function patchesWorkflowManagedFields(
+  entity: string,
+  patch: Record<string, unknown>,
+): boolean {
+  return (
+    WORKFLOW_ENTITIES.has(entity) &&
+    Object.keys(patch).some((key) => WORKFLOW_MANAGED_FIELDS.has(key))
+  );
+}
+
+const INITIAL_WORKFLOW_STATUS: Record<string, string> = {
+  procurement: "draft",
+  "resident-reports": "submitted",
+  "building-violations": "submitted",
+  "leave-requests": "Pending",
+  "elevator-jobs": "assigned",
+  "emergency-jobs": "assigned",
+};
+
+export function withInitialWorkflowState(
+  entity: string,
+  state: Record<string, unknown>,
+): Record<string, unknown> {
+  const initialStatus = INITIAL_WORKFLOW_STATUS[entity];
+  if (!initialStatus) return state;
+  return {
+    ...Object.fromEntries(
+      Object.entries(state).filter(
+        ([key]) => !WORKFLOW_MANAGED_FIELDS.has(key),
+      ),
+    ),
+    status: initialStatus,
+  };
+}
+
+export function isValidEntityTransition(
+  entity: string,
+  action: string,
+  state: Record<string, unknown>,
+): boolean {
+  const status = state["status"];
+  const allowed: Record<string, Record<string, readonly unknown[]>> = {
+    procurement: {
+      submit: ["draft", "returned"],
+      approve: ["submitted"],
+      reject: ["submitted"],
+      return: ["approved", "bidding"],
+      broadcast: ["approved"],
+      award: ["bidding"],
+      "rate-close": ["awarded"],
+    },
+    "resident-reports": {
+      assign: ["submitted"],
+      start: ["assigned"],
+      resolve: ["in_progress"],
+      clear: ["resolved"],
+    },
+    "building-violations": {
+      approve: ["submitted"],
+      route: ["approved"],
+      complete: ["routed"],
+      clear: ["done"],
+    },
+    "leave-requests": {
+      approve: ["Pending"],
+      deny: ["Pending"],
+      cancel: ["Pending"],
+    },
+    "elevator-jobs": {
+      "on-my-way": ["assigned"],
+      start: ["assigned"],
+      complete: ["assigned"],
+    },
+    "emergency-jobs": {
+      "on-my-way": ["assigned"],
+      start: ["assigned"],
+      complete: ["assigned"],
+    },
+  };
+  return allowed[entity]?.[action]?.includes(status) === true;
+}
+
 export function stripPricing(
   actor: Actor,
   value: unknown,
