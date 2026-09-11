@@ -30,7 +30,9 @@ export default function Login() {
 
   useEffect(() => {
     if (isAuthenticated && location === "/login") {
-      setLocation("/dashboard");
+      const returnTo = sessionStorage.getItem("fiarep_return_to");
+      sessionStorage.removeItem("fiarep_return_to");
+      setLocation(returnTo?.startsWith("/") && returnTo !== "/login" ? returnTo : "/dashboard");
     }
   }, [isAuthenticated, location, setLocation]);
 
@@ -50,7 +52,9 @@ export default function Login() {
     try {
       setIsSubmitting(true);
       await login(values.name, values.code);
-      setLocation("/dashboard");
+      const returnTo = sessionStorage.getItem("fiarep_return_to");
+      sessionStorage.removeItem("fiarep_return_to");
+      setLocation(returnTo?.startsWith("/") && returnTo !== "/login" ? returnTo : "/dashboard");
     } catch (err: any) {
       toast({
         variant: "destructive",

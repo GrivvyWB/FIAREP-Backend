@@ -1,10 +1,10 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
-import { AuthProvider } from '@/hooks/use-auth';
+import { AuthProvider, useAuth } from '@/hooks/use-auth';
 import { Shell } from '@/components/layout/shell';
 
 // Pages
@@ -39,7 +39,15 @@ const queryClient = new QueryClient({
 });
 
 function AppRouter() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
+  const { isAuthenticated, isLoading } = useAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && location !== '/login') {
+      sessionStorage.setItem('fiarep_return_to', location);
+      setLocation('/login');
+    }
+  }, [isAuthenticated, isLoading, location, setLocation]);
 
   // If login, don't wrap in Shell
   if (location === '/login') {
@@ -47,6 +55,14 @@ function AppRouter() {
       <RoutedErrorBoundary>
         <Login />
       </RoutedErrorBoundary>
+    );
+  }
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-background grid place-items-center">
+        <p className="text-sm text-muted-foreground">Loading FIAREP...</p>
+      </div>
     );
   }
 
