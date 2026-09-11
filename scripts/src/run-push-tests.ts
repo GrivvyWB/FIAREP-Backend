@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import process from "node:process";
 
 const SCHEMA_PREFIX = "integration_test_";
@@ -92,6 +93,9 @@ try {
       stdio: "inherit",
     },
   );
+  if (process.env.PUSH_TEST_CHILD_PID_FILE && child.pid) {
+    writeFileSync(process.env.PUSH_TEST_CHILD_PID_FILE, String(child.pid));
+  }
   const exitCode = await new Promise<number>((resolve, reject) => {
     child?.once("error", reject);
     child?.once("exit", (code, signal) => {

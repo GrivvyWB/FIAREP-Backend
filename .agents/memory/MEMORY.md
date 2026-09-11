@@ -1,0 +1,1 @@
+- [Node test lifecycle fixtures](node-test-lifecycle-fixtures.md) — use a real I/O handle, not only an unresolved promise or timer, when a fixture must remain alive.

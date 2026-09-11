@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import process from "node:process";
 import test, { after } from "node:test";
 
@@ -43,17 +46,55 @@ async function waitForAbandonedSchema(
   throw new Error("Timed out waiting for the launcher to create its schema.");
 }
 
+async function waitForProcessPid(
+  pidFile: string,
+  processDescription: string,
+): Promise<number> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      const pid = Number.parseInt(await readFile(pidFile, "utf8"), 10);
+      if (Number.isSafeInteger(pid) && pid > 0) return pid;
+    } catch {
+      // The fixture has not written its process ID yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for ${processDescription} to start.`);
+}
+
+function processExists(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code !== "ESRCH";
+  }
+}
+
+async function waitForProcessExit(pid: number): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    if (!processExists(pid)) return;
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  throw new Error(`Child process ${pid} remained after launcher shutdown.`);
+}
+
 function runLauncher(
   extraEnvironment: NodeJS.ProcessEnv = {},
 ): ReturnType<typeof spawn> {
+  const environment: NodeJS.ProcessEnv = {
+    ...process.env,
+    NODE_ENV: "development",
+    ...extraEnvironment,
+  };
+  delete environment.NODE_TEST_CONTEXT;
+
   return spawn(process.execPath, ["--import", "tsx", launcher, fixture], {
     cwd: scriptsDirectory,
     detached: true,
-    env: {
-      ...process.env,
-      NODE_ENV: "development",
-      ...extraEnvironment,
-    },
+    env: environment,
     stdio: ["ignore", "pipe", "pipe"],
   });
 }
@@ -75,6 +116,91 @@ async function waitForExit(child: ReturnType<typeof spawn>): Promise<{
     child.once("error", reject);
     child.once("exit", (code, signal) => resolve({ code, signal, output }));
   });
+}
+
+for (const [signal, expectedExitCode] of [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+] as const) {
+  test(
+    `${signal} stops the fixture and removes its disposable schema`,
+    { timeout: 60_000 },
+    async () => {
+      assert.ok(process.env.DATABASE_URL, "DATABASE_URL must be set");
+      const schemasBeforeRun = new Set(await disposableSchemas());
+      const temporaryDirectory = await mkdtemp(
+        join(tmpdir(), "push-test-lifecycle-"),
+      );
+      const childPidFile = join(temporaryDirectory, "child.pid");
+      const fixturePidFile = join(temporaryDirectory, "fixture.pid");
+      const interruptedRun = runLauncher({
+        PUSH_TEST_FIXTURE_HANG: "1",
+        PUSH_TEST_CHILD_PID_FILE: childPidFile,
+        PUSH_TEST_FIXTURE_PID_FILE: fixturePidFile,
+      });
+      const interruptedExit = waitForExit(interruptedRun);
+      let childPid: number | undefined;
+      let fixturePid: number | undefined;
+
+      try {
+        const schema = await waitForAbandonedSchema(schemasBeforeRun);
+        childPid = await waitForProcessPid(
+          childPidFile,
+          "the launcher child",
+        );
+        fixturePid = await waitForProcessPid(
+          fixturePidFile,
+          "the hanging fixture",
+        );
+        assert.ok(processExists(childPid), "Child exited before interruption");
+        assert.ok(processExists(fixturePid), "Fixture exited before interruption");
+        assert.ok(interruptedRun.pid, "Launcher did not receive a process ID");
+
+        interruptedRun.kill(signal);
+        const interruptedResult = await interruptedExit;
+
+        assert.equal(
+          interruptedResult.code,
+          expectedExitCode,
+          `Launcher failed during ${signal} shutdown:\n${interruptedResult.output}`,
+        );
+        await waitForProcessExit(childPid);
+        await waitForProcessExit(fixturePid);
+        assert.ok(
+          !(await disposableSchemas()).includes(schema),
+          "Disposable schema remained after launcher shutdown",
+        );
+        assert.deepEqual(
+          await disposableSchemas(),
+          [],
+          "Integration-test schemas remained after launcher shutdown",
+        );
+      } finally {
+        if (interruptedRun.pid) {
+          try {
+            process.kill(-interruptedRun.pid, "SIGKILL");
+          } catch {
+            // The process group already exited.
+          }
+        }
+        if (childPid && processExists(childPid)) {
+          try {
+            process.kill(childPid, "SIGKILL");
+          } catch {
+            // The child already exited.
+          }
+        }
+        if (fixturePid && processExists(fixturePid)) {
+          try {
+            process.kill(fixturePid, "SIGKILL");
+          } catch {
+            // The child already exited.
+          }
+        }
+        await rm(temporaryDirectory, { recursive: true, force: true });
+      }
+    },
+  );
 }
 
 test(
