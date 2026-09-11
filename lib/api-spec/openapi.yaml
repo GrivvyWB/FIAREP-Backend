@@ -402,6 +402,28 @@ paths:
                 version: { type: integer, minimum: 1 }
       responses:
         "204": { description: Record deleted }
+  /v1/{entity}/{id}/actions/{action}:
+    post:
+      operationId: performEntityAction
+      tags: [entities]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: entity, in: path, required: true, schema: { type: string } }
+        - { name: id, in: path, required: true, schema: { type: string } }
+        - { name: action, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        "200":
+          description: Updated entity record
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EntityRecord" }
   /v1/notifications:
     get:
       operationId: listNotifications

@@ -19,6 +19,8 @@ import {
   withInitialWorkflowState,
 } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
+import { emailReleasedScope } from "../lib/vendorEmail";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -459,10 +461,20 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     });
     return;
   }
+  const vendorRecipients = Array.isArray(body["vendorRecipients"])
+    ? body["vendorRecipients"].flatMap((item) => {
+        const contact = stateOf(item);
+        const name = typeof contact?.["name"] === "string" ? contact["name"].trim() : "";
+        const email = typeof contact?.["email"] === "string" ? contact["email"].trim() : "";
+        return email ? [{ name, email }] : [];
+      })
+    : [];
+  const persistedBody = { ...body };
+  delete persistedBody["vendorRecipients"];
   const now = new Date();
   const state = {
     ...current.state,
-    ...body,
+    ...persistedBody,
     status: nextStatus,
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
@@ -492,6 +504,14 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     `${action} ${entity} record`,
     current.id,
   );
+  if (entity === "procurement" && action === "broadcast") {
+    try {
+      const delivery = await emailReleasedScope(actor.tenantId, state, vendorRecipients);
+      logger.info({ procurementId: current.id, ...delivery }, "Vendor scope emails processed");
+    } catch (err) {
+      logger.error({ err, procurementId: current.id }, "Vendor scope email delivery failed");
+    }
+  }
   const target =
     typeof body["target"] === "string"
       ? body["target"]

@@ -426,6 +426,8 @@ export type DeleteEntityRecordBody = {
   version: number;
 };
 
+export type PerformEntityActionBody = { [key: string]: unknown };
+
 export type RegisterDeviceTokenBody = {
   token: string;
   platform?: string;

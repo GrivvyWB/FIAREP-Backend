@@ -547,6 +547,32 @@ export const DeleteEntityRecordBody = zod.object({
 export const DeleteEntityRecordResponse = zod.void()
 
 
+export const PerformEntityActionParams = zod.object({
+  "entity": zod.coerce.string(),
+  "id": zod.coerce.string(),
+  "action": zod.coerce.string()
+})
+
+export const PerformEntityActionBody = zod.record(zod.string(), zod.unknown())
+
+
+
+
+export const PerformEntityActionResponse = zod.object({
+  "id": zod.string(),
+  "projectId": zod.string().optional(),
+  "development": zod.string().optional(),
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
+}).and(zod.object({
+  "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "version": zod.number().int()
+}))
+
+
 export const ListNotificationsResponseItem = zod.object({
   "id": zod.string(),
   "target": zod.string(),

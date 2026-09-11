@@ -11,6 +11,7 @@ import {
   listStaff,
   login as loginOnServer,
   logout as logoutOnServer,
+  performEntityAction,
   refreshSession,
   registerDeviceToken,
   submitPublicResidentReport,
@@ -2533,23 +2534,19 @@ export async function broadcastProcurement(id: string, walkthroughAt: string = '
   const r = await getProcurementRequest(id);
   if (!r) return null;
   if (r.status === 'closed') throw new Error('This job is closed and can no longer be changed. Start a new scope instead.');
-  const next: ProcurementRequest = {
-    ...r,
-    trackingId: r.trackingId || newTrackingId(),
-    status: 'bidding',
-    invitedAt: r.invitedAt || new Date().toISOString(),
+  const trackingId = r.trackingId || newTrackingId();
+  const vendorRecipients = (await listVendorContacts())
+    .filter((contact) => contact.email.trim())
+    .map((contact) => ({ name: contact.name, email: contact.email }));
+  const result = await performEntityAction('procurement', id, 'broadcast', {
+    trackingId,
+    vendorRecipients,
     walkthroughAt: (walkthroughAt || '').trim() || r.walkthroughAt,
     walkthroughNote: (walkthroughNote || '').trim() || r.walkthroughNote,
     bidCloseAt: (bidCloseAt || '').trim() || r.bidCloseAt,
-  };
-  await saveProcurementRequest(d, next);
-  const contacts = await listVendorContacts();
-  let detail = next.address + '  ID: ' + next.trackingId;
-  if (next.walkthroughAt) detail += '  Walkthrough: ' + next.walkthroughAt;
-  if (next.bidCloseAt) detail += '  Bids close: ' + next.bidCloseAt;
-  for (const c of contacts) {
-    if (c.name) await addNotification(c.name, 'New job open for bid', detail, next.id);
-  }
+  });
+  const next = { ...(result.state as object), id: result.id } as ProcurementRequest;
+  await d.runAsync('UPDATE procurement SET state = ? WHERE id = ?', JSON.stringify(next), id);
   return next;
 }
 
@@ -2778,6 +2775,7 @@ export async function addVendorContact(name: string, phone: string, email: strin
     createdAt: new Date().toISOString(),
   };
   await d.runAsync('INSERT INTO vendor_contacts (id,state) VALUES (?,?)', c.id, JSON.stringify(c));
+  await queueMutation('vendor-contacts', c.id, c);
   return c;
 }
 
@@ -2795,6 +2793,7 @@ export async function updateVendorContact(id: string, name: string, phone: strin
     email: (email || '').trim(),
   };
   await d.runAsync('UPDATE vendor_contacts SET state = ? WHERE id = ?', JSON.stringify(next), id);
+  await queueMutation('vendor-contacts', id, next);
   return next;
 }
 

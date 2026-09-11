@@ -45,6 +45,7 @@ import type {
   LookupPublicVendorScopeParams,
   Notification,
   NycPropertyLookup,
+  PerformEntityActionBody,
   PublicVendorBidInput,
   PullSyncParams,
   PushDelivery,
@@ -1544,6 +1545,76 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getDeleteEntityRecordMutationOptions(options));
+    }
+
+export const getPerformEntityActionUrl = (entity: string,
+    id: string,
+    action: string,) => {
+
+
+
+
+  return `/api/v1/${entity}/${id}/actions/${action}`
+}
+
+export const performEntityAction = async (entity: string,
+    id: string,
+    action: string,
+    performEntityActionBody?: PerformEntityActionBody, options?: Parameters<typeof customFetch>[1]): Promise<EntityRecord> => {
+
+  return customFetch<EntityRecord>(getPerformEntityActionUrl(entity,id,action),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(performEntityActionBody)
+  }
+);}
+
+
+
+
+
+export const getPerformEntityActionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof performEntityAction>>, TError,{entity: string;id: string;action: string;data?: BodyType<PerformEntityActionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof performEntityAction>>, TError,{entity: string;id: string;action: string;data?: BodyType<PerformEntityActionBody>}, TContext> => {
+
+const mutationKey = ['performEntityAction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof performEntityAction>>, {entity: string;id: string;action: string;data?: BodyType<PerformEntityActionBody>}> = (props) => {
+          const {entity,id,action,data} = props ?? {};
+
+          return  performEntityAction(entity,id,action,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PerformEntityActionMutationResult = NonNullable<Awaited<ReturnType<typeof performEntityAction>>>
+    export type PerformEntityActionMutationBody = BodyType<PerformEntityActionBody> | undefined
+    export type PerformEntityActionMutationError = ErrorType<unknown>
+
+    export const usePerformEntityAction = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof performEntityAction>>, TError,{entity: string;id: string;action: string;data?: BodyType<PerformEntityActionBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof performEntityAction>>,
+        TError,
+        {entity: string;id: string;action: string;data?: BodyType<PerformEntityActionBody>},
+        TContext
+      > => {
+      return useMutation(getPerformEntityActionMutationOptions(options));
     }
 
 export const getListNotificationsUrl = () => {
