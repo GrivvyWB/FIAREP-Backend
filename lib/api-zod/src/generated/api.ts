@@ -156,10 +156,49 @@ export const LoginResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
-  "role": zod.string(),
-  "position": zod.string(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
-  "developments": zod.array(zod.string())
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
+})
+})
+
+
+/**
+ * @summary Procurement-only staff login
+ */
+export const procurementLoginBodyCodeMin = 4;
+export const procurementLoginBodyCodeMax = 4;
+
+
+
+
+export const ProcurementLoginBody = zod.object({
+  "name": zod.string(),
+  "code": zod.string().min(procurementLoginBodyCodeMin).max(procurementLoginBodyCodeMax),
+  "organizationId": zod.string().min(1)
+})
+
+export const ProcurementLoginResponse = zod.object({
+  "accessToken": zod.string(),
+  "refreshToken": zod.string(),
+  "expiresIn": zod.number().int().optional(),
+  "staff": zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
+  "status": zod.string(),
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
 })
 })
 
@@ -221,10 +260,13 @@ export const BootstrapAdministratorResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
-  "role": zod.string(),
-  "position": zod.string(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
-  "developments": zod.array(zod.string())
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
 })
 })
 
@@ -251,10 +293,13 @@ export const RefreshSessionResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
-  "role": zod.string(),
-  "position": zod.string(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
-  "developments": zod.array(zod.string())
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
 })
 })
 
@@ -275,10 +320,13 @@ export const GetCurrentStaffResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
-  "role": zod.string(),
-  "position": zod.string(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
-  "developments": zod.array(zod.string())
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
 })
 
 
@@ -458,10 +506,13 @@ export const ListStaffResponseItem = zod.object({
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
-  "role": zod.string(),
-  "position": zod.string(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
-  "developments": zod.array(zod.string())
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
 })
 export const ListStaffResponse = zod.array(ListStaffResponseItem)
 
@@ -475,11 +526,16 @@ export const CreateStaffBody = zod.object({
   "name": zod.string(),
   "firstName": zod.string().optional(),
   "lastName": zod.string().optional(),
-  "role": zod.string(),
-  "position": zod.string(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "developments": zod.array(zod.string()).optional(),
   "code": zod.string().min(createStaffBodyCodeMin).max(createStaffBodyCodeMax).optional()
 })
+
+export const createStaffResponseTwoCodeMin = 4;
+export const createStaffResponseTwoCodeMax = 4;
+
+
 
 export const CreateStaffResponse = zod.object({
   "id": zod.string(),
@@ -487,10 +543,69 @@ export const CreateStaffResponse = zod.object({
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
-  "role": zod.string(),
-  "position": zod.string(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
-  "developments": zod.array(zod.string())
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
+}).and(zod.object({
+  "code": zod.string().min(createStaffResponseTwoCodeMin).max(createStaffResponseTwoCodeMax)
+}))
+
+
+/**
+ * @summary List active developments assignable to staff by the current actor
+ */
+export const ListStaffDevelopmentsResponseItem = zod.string()
+export const ListStaffDevelopmentsResponse = zod.array(ListStaffDevelopmentsResponseItem)
+
+
+export const ResetStaffCodeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const resetStaffCodeResponseTwoCodeMin = 4;
+export const resetStaffCodeResponseTwoCodeMax = 4;
+
+
+
+export const ResetStaffCodeResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
+  "status": zod.string(),
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
+}).and(zod.object({
+  "code": zod.string().min(resetStaffCodeResponseTwoCodeMin).max(resetStaffCodeResponseTwoCodeMax)
+}))
+
+
+export const RevokeStaffParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const RevokeStaffResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "role": zod.enum(['administrator', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
+  "status": zod.string(),
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional()
 })
 
 

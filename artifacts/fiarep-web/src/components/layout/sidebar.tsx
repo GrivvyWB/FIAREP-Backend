@@ -1,4 +1,5 @@
 import { Link, useLocation } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
 import { 
   LayoutDashboard, 
   ClipboardCheck, 
@@ -22,6 +23,7 @@ import {
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
+  const { staff } = useAuth();
 
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -34,7 +36,8 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Clients", href: "/clients", icon: Users },
     { name: "Team", href: "/team", icon: UsersRound },
     { name: "Violations", href: "/violations", icon: AlertTriangle },
-    { name: "Procurement", href: "/procurement", icon: ShoppingCart },
+    ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart }] : []),
+    ...(staff?.role === "management" && !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "") ? [{ name: "Scope Review", href: "/scope-review", icon: ClipboardCheck }] : []),
     { name: "Emergency", href: "/emergency", icon: BellRing },
     { name: "Elevators", href: "/elevators", icon: ArrowUpToLine },
     { name: "Leave", href: "/leave", icon: Plane },

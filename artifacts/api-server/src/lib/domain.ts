@@ -29,6 +29,9 @@ export const STAFF_POSITIONS = [
   "Elevator Service",
   "Plumber",
   "Electrician",
+  "Plumber Supervisor",
+  "Electric Supervisor",
+  "Elevator Supervisor",
   "Carpenter",
   "Roofer",
   "General Construction",
@@ -110,7 +113,21 @@ export function isElevated(actor: Actor): boolean {
   );
 }
 
+/** The only management actors who may review procurement scopes.  Keep this
+ * predicate deliberately strict: position is an authorization boundary, not
+ * merely a display label. */
+export function isOrdinaryManagement(actor: Actor): boolean {
+  return actor.role === "management" &&
+    !isBoroughDirector(actor) &&
+    !ELEVATED_POSITIONS.has(actor.position);
+}
+
 export function canReadEntity(actor: Actor, entity: string): boolean {
+  if (entity === "procurement" || entity === "procurement-bids") {
+    return actor.role === "procurement" ||
+      isOrdinaryManagement(actor) ||
+      (entity === "procurement" && actor.role === "inspector" && actor.position === "CPM");
+  }
   if (actor.role === "emergency") return entity === "emergency-jobs" || entity === "emergency-units";
   if (entity === "emergency-jobs" || entity === "emergency-units") {
     return actor.role === "administrator" || actor.role === "management" || isBoroughDirector(actor);
@@ -120,6 +137,24 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
     return isElevated(actor);
   }
   return true;
+}
+
+export function procurementRecordAllowed(
+  actor: Actor,
+  row: { entity: string; createdBy: string | null; state: Record<string, unknown> },
+): boolean {
+  if (row.entity !== "procurement" && row.entity !== "procurement-bids") return true;
+  const status = String(row.state["status"] ?? "");
+  if (actor.role === "procurement") {
+    return row.entity === "procurement-bids" ||
+      ["approved", "bidding", "awarded", "closed"].includes(status);
+  }
+  if (isOrdinaryManagement(actor)) {
+    return row.entity === "procurement" && status === "submitted";
+  }
+  return actor.role === "inspector" && actor.position === "CPM" &&
+    row.entity === "procurement" && row.createdBy === actor.id &&
+    ["draft", "submitted", "returned"].includes(status);
 }
 
 export function developmentAllowed(
@@ -154,7 +189,7 @@ export function entityDevelopmentAllowed(
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
   if (actor.role === "emergency") return false;
-  if (isBoroughDirector(actor)) return true;
+  if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
   if (entity === "emergency-units" || entity === "emergency-jobs") {
     return (
@@ -164,7 +199,9 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
     );
   }
   if (entity === "procurement-bids" || entity === "vendor-quotes") {
-    return actor.role === "vendor" || actor.role === "procurement";
+    // Bids are public-vendor submissions; authenticated Procurement staff may
+    // read/process them but must never manufacture one.
+    return entity === "vendor-quotes" && actor.role === "vendor";
   }
   if (entity === "resident-reports" && actor.role === "resident") return true;
   if (entity === "procurement") {
@@ -178,18 +215,24 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
   if (actor.role === "emergency") return entity === "emergency-jobs";
-  if (isBoroughDirector(actor)) return true;
+  if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
   if (entity === "procurement" || entity === "procurement-bids") {
-    return actor.role === "procurement";
+    return entity === "procurement" &&
+      actor.role === "inspector" && actor.position === "CPM";
   }
   return canCreateEntity(actor, entity);
 }
 
 export function canDeleteEntity(
   actor: Actor,
+  entity: string,
   state: Record<string, unknown>,
 ): boolean {
+  if (entity === "procurement" || entity === "procurement-bids") {
+    return entity === "procurement" &&
+      actor.role === "inspector" && actor.position === "CPM";
+  }
   if (isBoroughDirector(actor)) return true;
   if (actor.role === "worker" || actor.role === "inspector") {
     return state["clearedByMgmt"] === true;
@@ -203,10 +246,9 @@ export function canPerformEntityAction(
   action: string,
   state: Record<string, unknown>,
 ): boolean {
-  if (isBoroughDirector(actor)) return true;
+  if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
 
-  const isManagement =
-    actor.role === "administrator" || actor.role === "management";
+  const isManagement = isOrdinaryManagement(actor);
   const isFieldStaff =
     actor.role === "worker" || actor.role === "inspector";
   if (actor.role === "emergency") {
@@ -217,7 +259,11 @@ export function canPerformEntityAction(
     if (action === "submit") {
       return actor.role === "inspector" && actor.position === "CPM";
     }
-    if (action === "approve" || action === "reject") return isManagement;
+     if (action === "approve" || action === "reject") return isOrdinaryManagement(actor);
+     if (action === "return") {
+       return (isOrdinaryManagement(actor) && state["status"] === "submitted") ||
+         (actor.role === "procurement" && state["status"] === "approved");
+     }
     return (
       actor.role === "procurement" &&
       ["broadcast", "award", "rate-close", "return"].includes(action)
@@ -334,7 +380,7 @@ export function isValidEntityTransition(
       submit: ["draft", "returned"],
       approve: ["submitted"],
       reject: ["submitted"],
-      return: ["approved", "bidding"],
+      return: ["submitted", "approved"],
       broadcast: ["approved"],
       award: ["bidding"],
       "rate-close": ["awarded"],

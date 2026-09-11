@@ -123,6 +123,39 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     res.status(401).json({ error: "Invalid staff name or code" });
     return;
   }
+  if (staff.role === "procurement") {
+    res.status(401).json({ error: "Use the Procurement sign-in" });
+    return;
+  }
+  if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) {
+    res.status(403).json({ error: "Organization license is not active" });
+    return;
+  }
+  res.json({ ...(await issueSession(staff)), staff: publicStaff(staff) });
+});
+
+router.post("/v1/auth/procurement/login", rateLimit("procurement-login", 12), async (req, res) => {
+  const { name, code, organizationId } = req.body as {
+    name?: unknown; code?: unknown; organizationId?: unknown;
+  };
+  const tenantId = typeof organizationId === "string" && organizationId.trim()
+    ? organizationId.trim() : "default";
+  if (typeof name !== "string" || typeof code !== "string" ||
+      !/^[A-HJ-NP-Z2-9]{4}$/i.test(code.trim())) {
+    res.status(400).json({ error: "name, organizationId, and a 4-character code are required" });
+    return;
+  }
+  const [staff] = await db.select().from(staffAccounts).where(and(
+    sql`lower(${staffAccounts.name}) = lower(${name.trim()})`,
+    eq(staffAccounts.code, code.trim().toUpperCase()),
+    eq(staffAccounts.role, "procurement"),
+    eq(staffAccounts.status, "approved"),
+    eq(staffAccounts.tenantId, tenantId),
+  )).limit(1);
+  if (!staff) {
+    res.status(401).json({ error: "Invalid procurement credentials" });
+    return;
+  }
   if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) {
     res.status(403).json({ error: "Organization license is not active" });
     return;

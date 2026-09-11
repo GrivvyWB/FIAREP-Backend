@@ -64,7 +64,7 @@ export default function ChangeOrders() {
   }
   async function viewOriginalScope(co: ChangeOrder) {
     const req = await findScopeForChangeOrder(co.reportId, co.reportRef).catch(() => null);
-    if (req) router.push('/scope-review?id=' + req.id);
+    if (req) Alert.alert('Linked scope', 'The original scope is available to the CPM.');
     else Alert.alert('No linked scope', 'Could not find the original scope for this change order. Verify the address or work order.');
   }
   async function decline(co: ChangeOrder) {
@@ -90,11 +90,6 @@ export default function ChangeOrders() {
             <View style={ui.line}><Text style={ui.lineK}>For</Text><Text style={ui.lineV}>{co.targetName || co.targetPosition}</Text></View>
             <Text style={{ fontSize: 14, color: '#333' }}>{co.description}</Text>
             <View style={ui.line}><Text style={[ui.lineK, { fontWeight: '700', color: '#000' }]}>Cost of change</Text><Text style={[ui.lineV, { fontWeight: '700' }]}>{money(co.cost)}</Text></View>
-            {isMgmt && (
-              <Pressable style={[ui.btnOutline, { marginTop: 2 }]} onPress={() => viewOriginalScope(co)}>
-                <Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>View original scope</Text>
-              </Pressable>
-            )}
             <Text style={{ fontSize: 12, color: '#999' }}>{fmt(co.createdAt)}{co.createdByName ? ' \u00b7 ' + co.createdByName : ''}</Text>
             <Text style={{ fontSize: 13, fontWeight: '700', color: st.color }}>{st.label}{co.respondedByName ? ' \u00b7 ' + co.respondedByName : ''}</Text>
             {!!co.reason && <Text style={{ fontSize: 13, color: '#c0392b' }}>Reason: {co.reason}</Text>}

@@ -13,6 +13,8 @@ import {
   login as loginOnServer,
   logout as logoutOnServer,
   performEntityAction,
+  createEntityRecord,
+  updateEntityRecord,
   refreshSession,
   registerDeviceToken,
   submitPublicResidentReport,
@@ -35,6 +37,10 @@ import { DEVELOPMENT_NAMES } from './developments.seed';
 import { ensureQueue, recoverLegacyQueue } from './queue';
 import { hydrateRemotePhotosFromDb } from './photoResolver';
 import { photoUri } from './photos';
+
+// Workflow screens use the generated server action directly; keep this
+// re-export alongside the rest of the store API.
+export { performEntityAction };
 async function rotateActorCache(staff: Staff) {
   const d = await db();
   const fingerprint = `${staff.tenantId || ''}:${staff.id}:${[...(staff.developments || [])].sort().join('|')}`;
@@ -2256,6 +2262,36 @@ async function ensureProcurementTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS procurement (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
 }
 
+async function ensureDraftOnServer(r: ProcurementRequest): Promise<ProcurementRequest> {
+  if (!(await getAccessToken())) {
+    throw new Error('Submit requires an online connection. Save the draft and reconnect before submitting.');
+  }
+  const data = {
+    id: r.id,
+    projectId: r.projectId || undefined,
+    state: { ...r, status: 'draft' },
+    version: 1,
+  } as any;
+  try {
+    const created = await createEntityRecord('procurement', data);
+    const localDb = await db();
+    await localDb.runAsync("DELETE FROM sync_queue WHERE entity=? AND id=?", "procurement", r.id);
+    return { ...(created.state as object), id: created.id } as ProcurementRequest;
+  } catch (error: any) {
+    if (error?.status !== 409 && error?.status !== 404) throw error;
+    const version = Number((r as any)?._meta?.serverVersion || 0);
+    if (!version) throw new Error('Could not synchronize the draft before submission. Reconnect and try again.');
+    const updated = await updateEntityRecord('procurement', r.id, {
+      id: r.id,
+      state: { ...r, status: 'draft' },
+      version,
+    } as any);
+    const localDb = await db();
+    await localDb.runAsync("DELETE FROM sync_queue WHERE entity=? AND id=?", "procurement", r.id);
+    return { ...(updated.state as object), id: updated.id } as ProcurementRequest;
+  }
+}
+
 function newTrackingId(): string {
   const n = Math.floor(10000 + Math.random() * 90000);
   return 'RC-' + String(n);
@@ -2381,18 +2417,25 @@ export async function submitProjectScope(projectId: string, scopeName: string = 
   const name = (scopeName || '').trim() || (r && r.scope) || 'Scope of Work';
 
   if (!r) {
-    r = await createProcurementRequest(pid, address, name, me);
+    r = {
+      id: uid(), trackingId: '', projectId: pid, address, scope: name,
+      status: 'draft', requestedBy: me, requestedAt: new Date().toISOString(),
+    };
+    await d.runAsync('INSERT INTO procurement (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
   }
 
-  const next: ProcurementRequest = {
+  const draft: ProcurementRequest = {
     ...r,
     address: address || r.address,
     scope: name,
-    status: 'submitted',
+    status: 'draft',
     returnedAt: undefined,
     returnNote: undefined,
   };
-  await saveProcurementRequest(d, next);
+  const serverDraft = await ensureDraftOnServer(draft);
+  const next: ProcurementRequest = { ...serverDraft, ...draft, status: 'submitted' };
+  await performEntityAction('procurement', next.id, 'submit');
+  await d.runAsync('UPDATE procurement SET state=? WHERE id=?', JSON.stringify(next), next.id);
   await removeNotificationsByRef(next.id, 'Scope submitted for approval');
   await addNotification('management', 'Scope submitted for approval', next.address, next.id);
   return next;
@@ -2435,6 +2478,9 @@ export async function submitScopeForApproval(id: string, scopeFile: string = '',
   await ensureProcurementTable(d);
   const r = await getProcurementRequest(id);
   if (!r) return null;
+  if (!(await getAccessToken())) {
+    throw new Error('Submit requires an online connection. Save the draft and try again when connected.');
+  }
   const next: ProcurementRequest = {
     ...r,
     status: 'submitted',
@@ -2445,7 +2491,11 @@ export async function submitScopeForApproval(id: string, scopeFile: string = '',
     returnedAt: undefined,
     returnNote: undefined,
   };
-  await saveProcurementRequest(d, next);
+  // Workflow state is server-owned. Do not queue a status PATCH: submit must
+  // be an authorized action against the already-created server draft.
+  const serverDraft = await ensureDraftOnServer({ ...next, status: 'draft' });
+  await performEntityAction('procurement', serverDraft.id, 'submit');
+  await d.runAsync('UPDATE procurement SET state=? WHERE id=?', JSON.stringify(next), id);
   await removeNotificationsByRef(next.id, 'Scope submitted for approval');
   await addNotification('management', 'Scope submitted for approval', next.address, next.id);
   return next;
@@ -2459,14 +2509,9 @@ export async function approveProcurementRequest(id: string, approvedBy: string):
   const r = await getProcurementRequest(id);
   if (!r) return null;
   if (r.status === 'closed') throw new Error('This job is closed and can no longer be changed. Start a new scope instead.');
-  const next: ProcurementRequest = {
-    ...r,
-    status: 'approved',
-    approvedBy: (approvedBy || '').trim(),
-    approvedAt: new Date().toISOString(),
-  };
-  await saveProcurementRequest(d, next);
-  await addNotification('procurement', 'Scope approved \u2014 ready to send to vendors', next.address, next.id);
+  const result = await performEntityAction('procurement', id, 'approve', {});
+  const next = { ...(result.state as object), id: result.id } as ProcurementRequest;
+  await d.runAsync('UPDATE procurement SET state=? WHERE id=?', JSON.stringify(next), id);
   return next;
 }
 
@@ -2501,21 +2546,9 @@ export async function rejectScope(id: string, note: string = ''): Promise<Procur
   const r = await getProcurementRequest(id);
   if (!r) return null;
   if (r.status === 'closed') throw new Error('This job is closed and can no longer be changed. Start a new scope instead.');
-  const next: ProcurementRequest = {
-    ...r,
-    status: 'draft',
-    returnNote: (note || '').trim() || undefined,
-    returnedAt: new Date().toISOString(),
-  };
-  await saveProcurementRequest(d, next);
-  await removeNotificationsByRef(next.id, 'Scope submitted for approval');
-  if (next.requestedBy) {
-    const detail = next.address + (note.trim() ? '  \u2014 ' + note.trim() : '');
-    // A project-sourced scope routes the CPM back to the project they already
-    // built (proj: prefix), so they revise in place rather than starting over.
-    const ref = (next.projectId && next.projectId.trim()) ? 'proj:' + next.projectId.trim() : next.id;
-    await addNotification(next.requestedBy, 'Scope returned for revision', detail, ref);
-  }
+  const result = await performEntityAction('procurement', id, 'reject', note.trim() ? { note: note.trim() } : {});
+  const next = { ...(result.state as object), id: result.id } as ProcurementRequest;
+  await d.runAsync('UPDATE procurement SET state=? WHERE id=?', JSON.stringify(next), id);
   return next;
 }
 

@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
-import { db, entityRecords, publicAccessCodes } from "@workspace/db";
+import { db, entityRecords, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, notify } from "../lib/audit";
 import {
   ENTITIES,
@@ -18,6 +18,7 @@ import {
   recordId,
   stripPricing,
   withInitialWorkflowState,
+  procurementRecordAllowed,
 } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { emailReleasedScope } from "../lib/vendorEmail";
@@ -133,6 +134,7 @@ router.get("/v1/:entity", async (req, res, next) => {
     rows
       .filter((row) => entityDevelopmentAllowed(actor, entity, row.development))
       .filter((row) => privateRecordAllowed(actor, row))
+      .filter((row) => procurementRecordAllowed(actor, row))
       .filter((row) => emergencyRecordAllowed(actor, row))
       .filter((row) => !projectId || row.projectId === projectId)
       .filter(
@@ -169,6 +171,14 @@ router.post("/v1/:entity", async (req, res, next) => {
     .where(eq(entityRecords.id, id))
     .limit(1);
   if (existing) {
+    if (
+      existing.entity === "procurement" &&
+      (!canReadEntity(actor, entity) || !procurementRecordAllowed(actor, existing))
+    ) {
+      // Do not reveal whether an id belongs to a downstream scope.
+      res.status(404).json({ error: "Record not found" });
+      return;
+    }
     if (
       existing.tenantId === actor.tenantId &&
       existing.entity === entity &&
@@ -222,6 +232,12 @@ router.post("/v1/:entity", async (req, res, next) => {
       ? { ...rawState, requesterStaffId: actor.id }
       : rawState,
   );
+  if (entity === "procurement") {
+    // Preserve a server-derived notification target; clients must not be able
+    // to impersonate another CPM in workflow routing.
+    createdState["cpmName"] = actor.name;
+    createdState["cpmId"] = actor.id;
+  }
   const [created] = await db
     .insert(entityRecords)
     .values({
@@ -276,6 +292,7 @@ router.get("/v1/:entity/:id", async (req, res, next) => {
     !row ||
     !entityDevelopmentAllowed(actor, entity, row.development) ||
     !privateRecordAllowed(actor, row)
+    || !procurementRecordAllowed(actor, row)
     || !emergencyRecordAllowed(actor, row)
   ) {
     res.status(404).json({ error: "Record not found" });
@@ -328,15 +345,21 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     !current ||
     !entityDevelopmentAllowed(actor, entity, current.development) ||
     !privateRecordAllowed(actor, current)
+    || !procurementRecordAllowed(actor, current)
     || !emergencyRecordAllowed(actor, current)
   ) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
+  if (entity === "procurement" &&
+      actor.role === "inspector" && actor.position === "CPM" &&
+      !["draft", "returned"].includes(String(current.state["status"] ?? ""))) {
+    res.status(403).json({ error: "Submitted procurement scopes are read-only" });
+    return;
+  }
   if (
     entity === "procurement" &&
-    current.state["status"] === "closed" &&
-    !isBoroughDirector(actor)
+     current.state["status"] === "closed"
   ) {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
@@ -410,14 +433,17 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
+  if (!procurementRecordAllowed(actor, current)) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
   if (!entityDevelopmentAllowed(actor, entity, current.development)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
   if (
     entity === "procurement" &&
-    current.state["status"] === "closed" &&
-    !isBoroughDirector(actor)
+     current.state["status"] === "closed"
   ) {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
@@ -461,6 +487,11 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     res.status(403).json({ error: "Not allowed to perform this workflow action" });
     return;
   }
+  if (entity === "procurement" && action === "submit" &&
+      current.createdBy !== actor.id) {
+    res.status(403).json({ error: "Only the record owner may submit a procurement draft" });
+    return;
+  }
   if (!isValidEntityTransition(entity, action, current.state)) {
     res.status(409).json({
       error: "This workflow action is not valid for the current status",
@@ -482,8 +513,14 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
         return email ? [{ name, email }] : [];
       })
     : [];
+  // Routing and review provenance are server-owned.  A caller may provide a
+  // review note, but cannot redirect the resulting notification or forge the
+  // reviewer identity/timestamp.
   const persistedBody = { ...body };
   delete persistedBody["vendorRecipients"];
+  delete persistedBody["target"];
+  const reviewNote = typeof body["note"] === "string" ? body["note"].trim() : "";
+  delete persistedBody["note"];
   const now = new Date();
   const state: Record<string, unknown> = {
     ...current.state,
@@ -492,10 +529,39 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
   };
-  if (entity === "procurement" && action === "award" &&
-      (typeof state["vendor"] !== "string" || !String(state["vendor"]).trim())) {
-    res.status(400).json({ error: "An awarded procurement must name the winning vendor" });
-    return;
+  if (entity === "procurement" &&
+      (action === "approve" || action === "reject" || action === "return") &&
+      reviewNote) {
+    state["reviewNote"] = reviewNote;
+    state["reviewBy"] = actor.id;
+    state["reviewAt"] = now.toISOString();
+  }
+  if (entity === "procurement" && action === "award") {
+    const bidRows = await db.select().from(entityRecords).where(and(
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.entity, "procurement-bids"),
+      eq(entityRecords.deleted, false),
+    ));
+    const bidId = typeof body["bidId"] === "string" ? body["bidId"] : "";
+    if (!bidId) {
+      res.status(400).json({ error: "An existing vendor bid is required" });
+      return;
+    }
+    const selected = bidRows.find((bid) =>
+      bid.id === bidId &&
+      bid.state["requestId"] === current.id &&
+      typeof bid.createdBy === "string" &&
+      bid.createdBy.startsWith("public-vendor:") &&
+      bid.tenantId === actor.tenantId);
+    if (!selected) {
+      res.status(400).json({ error: "An existing vendor bid for this scope is required" });
+      return;
+    }
+    state["bidId"] = selected.id;
+    state["vendor"] = selected.state["vendorName"];
+    state["bidAmount"] = selected.state["amount"];
+    state["bidNote"] = selected.state["note"];
+    delete state["amount"];
   }
   let updated: typeof entityRecords.$inferSelect | undefined;
   const transitionAttempts = entity === "procurement" && action === "broadcast" ? 8 : 1;
@@ -572,20 +638,51 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
       logger.error({ err, procurementId: current.id }, "Vendor scope email delivery failed");
     }
   }
-  const target =
-    typeof body["target"] === "string"
-      ? body["target"]
-      : entity === "leave-requests"
-        ? String(current.state["employee"] ?? "")
-        : "management";
+  let target = "";
+  if (entity === "leave-requests") {
+    target = String(current.state["employee"] ?? "");
+  } else if (entity === "procurement") {
+    // Every procurement notification follows the canonical workflow.  Never
+    // honor a client supplied target.
+    if (action === "submit") target = "management";
+    else if (action === "approve") target = "procurement";
+    else if (action === "reject" || action === "return") {
+      target = typeof current.state["cpmName"] === "string"
+        ? current.state["cpmName"]
+        : typeof current.state["inspectorName"] === "string"
+          ? current.state["inspectorName"]
+          : "management";
+    }
+  } else {
+    target = "management";
+  }
   if (target) {
-    await notify(
-      actor,
-      target,
-      `${entity.replaceAll("-", " ")} ${nextStatus}`,
-      undefined,
-      current.id,
-    );
+    if (entity === "procurement" && action === "submit") {
+      const reviewers = await db.select({ name: staffAccounts.name, position: staffAccounts.position })
+        .from(staffAccounts)
+        .where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.role, "management"),
+          eq(staffAccounts.status, "approved"),
+        ));
+      for (const reviewer of reviewers) {
+        if (["Borough Director", "Regional Director", "Superintendent"].includes(reviewer.position)) continue;
+        await notify(actor, reviewer.name, "Scope submitted for Management review", undefined, current.id);
+      }
+    } else if (entity === "procurement" && action === "approve") {
+      const recipients = await db.select({ name: staffAccounts.name })
+        .from(staffAccounts)
+        .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.role, "procurement"), eq(staffAccounts.status, "approved")));
+      for (const recipient of recipients) await notify(actor, recipient.name, "Scope approved for Procurement", undefined, current.id);
+    } else if (entity === "procurement" && (action === "reject" || action === "return")) {
+      const [origin] = await db.select({ name: staffAccounts.name, position: staffAccounts.position })
+        .from(staffAccounts)
+        .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.id, current.createdBy || "")))
+        .limit(1);
+      if (origin && origin.position === "CPM") await notify(actor, origin.name, `Scope ${nextStatus}`, undefined, current.id);
+    } else {
+      await notify(actor, target, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
+    }
   }
   res.json(outward(actor, updated!));
 });
@@ -613,12 +710,23 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (!entityDevelopmentAllowed(actor, entity, current.development)) {
-    res.status(404).json({ error: "Record not found" });
+  if (!canReadEntity(actor, entity) || !procurementRecordAllowed(actor, current) ||
+      !canDeleteEntity(actor, entity, current.state)) {
+    res.status(403).json({ error: "Not allowed to delete this record" });
     return;
   }
-  if (!canDeleteEntity(actor, current.state)) {
-    res.status(403).json({ error: "Management clearance is required" });
+  if (entity === "procurement" &&
+      actor.role === "inspector" && actor.position === "CPM" &&
+      !["draft", "returned"].includes(String(current.state["status"] ?? ""))) {
+    res.status(403).json({ error: "Submitted procurement scopes cannot be deleted" });
+    return;
+  }
+  if (entity === "procurement" && current.state["status"] === "closed") {
+    res.status(409).json({ error: "Closed procurement records are immutable" });
+    return;
+  }
+  if (!entityDevelopmentAllowed(actor, entity, current.development)) {
+    res.status(404).json({ error: "Record not found" });
     return;
   }
   const expectedVersion = (req.body as { version?: unknown })?.version;

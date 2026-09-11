@@ -1,12 +1,15 @@
-import { useCallback, useState } from 'react';
-import { View, Text, ScrollView, Pressable, Alert } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { View, Text, TextInput, ScrollView, Pressable, Alert } from 'react-native';
 import * as Sharing from 'expo-sharing';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
+  getCurrentActor,
+  getCurrentPosition,
   getProcurementRequest,
   getCostEstimate,
   getProjectScopeForm,
-  updateScopeDraft,
+  listProcurementRequests,
+  performEntityAction,
   type ProcurementRequest,
 } from '../lib/store';
 import { COST_CATEGORIES } from '../lib/costEstimate';
@@ -22,12 +25,42 @@ const money = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDi
 
 export default function ScopeReview() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [req, setReq] = useState<ProcurementRequest | null>(null);
   const [est, setEst] = useState<any>(null);
   const [divScope, setDivScope] = useState<VendorScope | null>(null);
+  const [queue, setQueue] = useState<ProcurementRequest[]>([]);
+  const [note, setNote] = useState('');
 
-  const load = useCallback(() => {
-    if (!id) return;
+  useEffect(() => {
+    let mounted = true;
+    Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
+      if (!mounted) return;
+       const allowed = actor?.role === 'management' &&
+         position !== 'Borough Director' &&
+         position !== 'Regional Director' &&
+         position !== 'Superintendent';
+      setAuthorized(allowed);
+      if (!allowed) {
+         Alert.alert('Access denied', 'Scope review is available only to ordinary Management.');
+         router.replace('/management-home');
+      }
+    }).catch(() => {
+      if (!mounted) return;
+      setAuthorized(false);
+      router.replace('/');
+    });
+    return () => { mounted = false; };
+  }, [router]);
+
+  const load = useCallback(async () => {
+     if (!authorized) return;
+     await import('../lib/sync').then(({ syncAllEntities }) => syncAllEntities()).catch(() => undefined);
+     if (!id) {
+       listProcurementRequests('submitted').then(setQueue).catch(() => setQueue([]));
+       return;
+     }
     getProcurementRequest(id).then(async (r) => {
       setReq(r || null);
       // The Divisions scope (and the old cost estimate) may be keyed by the
@@ -37,23 +70,36 @@ export default function ScopeReview() {
         || await getProjectScopeForm(id).catch(() => null);
       if (div && Array.isArray(div.divisions) && div.divisions.length > 0) setDivScope(div);
       else setDivScope(null);
-      // Self-heal legacy records whose address got stored as a raw id: if the
-      // Divisions header has a real address, write it back to the record so the
-      // approvals list and everything downstream show it correctly.
-      if (r) {
-        const stored = String(r.address || '');
-        const idLike = !!stored && (!stored.includes(' ') || stored === String(r.projectId || ''));
-        const headerAddr = (div && div.header && div.header.address) ? String(div.header.address) : '';
-        if (idLike && headerAddr && headerAddr !== stored) {
-          const fixed = await updateScopeDraft(r.id, headerAddr, r.scope || '').catch(() => null);
-          if (fixed) setReq(fixed);
-        }
-      }
       const e = await getCostEstimate(key).catch(() => null);
       setEst(e || null);
     });
-  }, [id]);
-  useFocusEffect(load);
+  }, [authorized, id]);
+  useFocusEffect(() => { void load(); });
+
+  if (authorized !== true) {
+    return (
+      <ScrollView contentContainerStyle={ui.wrap}>
+        <Text style={ui.empty}>{authorized === null ? 'Checking access…' : 'Access denied.'}</Text>
+      </ScrollView>
+    );
+  }
+
+  if (!id) {
+    return (
+      <ScrollView contentContainerStyle={ui.wrap}>
+        <Text style={ui.h}>Scope Review</Text>
+        <Text style={ui.label}>Submitted scopes awaiting Management approval.</Text>
+        {queue.length === 0 && <Text style={ui.empty}>No submitted scopes.</Text>}
+        {queue.map((item) => (
+          <Pressable key={item.id} style={ui.card} onPress={() => router.push(`/scope-review?id=${encodeURIComponent(item.id)}`)}>
+            <Text style={{ fontWeight: '700' }}>{item.address || 'Scope'}</Text>
+            <Text style={ui.listSub}>{item.scope}</Text>
+            <Text style={ui.listSub}>Submitted {fmt(item.requestedAt)}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
+    );
+  }
 
   if (!req) {
     return (
@@ -99,10 +145,27 @@ export default function ScopeReview() {
     }
   }
 
+  async function review(action: 'approve' | 'reject') {
+    if (!req) return;
+    try {
+      const updated = await performEntityAction('procurement', req.id, action, note.trim() ? { note: note.trim() } : {});
+      setReq({ ...(updated.state as object), id: updated.id } as ProcurementRequest);
+      Alert.alert(action === 'approve' ? 'Approved' : 'Returned', action === 'approve' ? 'Sent to Procurement.' : 'Returned to the originating CPM.');
+      router.back();
+    } catch (e: any) {
+      Alert.alert('Action failed', e?.message || 'Could not update this scope.');
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Scope Review</Text>
       <Text style={ui.label}>Full scope and quote, read-only.</Text>
+      <TextInput style={ui.input} placeholder="Optional review note" value={note} onChangeText={setNote} multiline />
+      <View style={{ flexDirection: 'row', gap: 8 }}>
+        <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => review('approve')}><Text style={ui.btnText}>Approve for Procurement</Text></Pressable>
+        <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => review('reject')}><Text style={ui.btnOutlineText}>Return to CPM</Text></Pressable>
+      </View>
 
       <Pressable style={[ui.btnOutline, { marginTop: 4 }]} onPress={exportExcel}>
         <Text style={[ui.btnOutlineText, { color: ACCENT }]}>Export to Excel</Text>

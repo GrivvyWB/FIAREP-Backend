@@ -3,6 +3,7 @@ import {
   useCreateEntityRecord, 
   useUpdateEntityRecord, 
   useDeleteEntityRecord,
+  usePerformEntityAction,
   getListEntityRecordsQueryKey,
   EntityRecord
 } from "@workspace/api-client-react";
@@ -34,17 +35,21 @@ export function GenericEntityPage({
   entity, 
   title, 
   description, 
-  icon: Icon 
+  icon: Icon,
+  workflow = false,
 }: { 
   entity: string;
   title: string;
   description: string;
   icon: LucideIcon;
+  workflow?: boolean;
 }) {
   const { data, isLoading } = useListEntityRecords(entity);
+  const { data: bidData } = useListEntityRecords("procurement-bids");
   const createMutation = useCreateEntityRecord();
   const updateMutation = useUpdateEntityRecord();
   const deleteMutation = useDeleteEntityRecord();
+  const actionMutation = usePerformEntityAction();
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -55,6 +60,7 @@ export function GenericEntityPage({
   
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
+  const [selectedBid, setSelectedBid] = useState<Record<string, string>>({});
 
   // Protected entities manage their own workflow/status via other actions
   const protectedEntities = [
@@ -66,6 +72,7 @@ export function GenericEntityPage({
     'emergency-jobs',
   ];
   const isProtected = protectedEntities.includes(entity);
+  const isProcurement = entity === "procurement";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -164,6 +171,17 @@ export function GenericEntityPage({
     }
   };
 
+  const performAction = async (record: EntityRecord, action: string, bid?: any) => {
+    try {
+      if (action === "award" && !bid) throw new Error("Select an existing vendor bid before awarding.");
+      await actionMutation.mutateAsync({ entity, id: record.id, action, data: action === "award" ? { vendor: bid.vendorName, bidAmount: bid.amount, bidNote: bid.note, bidId: bid.id } : undefined });
+      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey(entity) });
+      toast({ title: `${action} completed` });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Workflow action failed", description: err?.message || "Action unavailable" });
+    }
+  };
+
   const filtered = data?.filter(i => {
     if (!search) return true;
     const itemTitle = (i.state as any)?.title?.toLowerCase() || i.id.toLowerCase();
@@ -178,9 +196,9 @@ export function GenericEntityPage({
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
           <p className="text-muted-foreground text-sm">{description}</p>
         </div>
-        <Button onClick={handleOpenCreate} className="font-semibold gap-2" data-testid={`button-create-${entity}`}>
+        {!isProcurement && <Button onClick={handleOpenCreate} className="font-semibold gap-2" data-testid={`button-create-${entity}`}>
           <Plus className="w-4 h-4" /> New {title.replace(/s$/, '')}
-        </Button>
+        </Button>}
       </div>
 
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
@@ -231,7 +249,7 @@ export function GenericEntityPage({
                         </div>
                       )}
                     </div>
-                    <div className="text-right shrink-0">
+                     <div className="text-right shrink-0">
                       {state?.status && (
                         <div className="text-[13px] font-bold text-primary capitalize px-2 py-0.5 rounded-full bg-primary/10 inline-block mb-1" data-testid={`text-status-${item.id}`}>
                           {state.status}
@@ -240,15 +258,35 @@ export function GenericEntityPage({
                       <div className="text-xs text-muted-foreground block">
                         {new Date(item.createdAt).toLocaleDateString()}
                       </div>
+                       {workflow && state?.status !== "closed" && (
+                         <div className="flex flex-wrap justify-end gap-1 mt-2">
+                            {([
+                              ...(isProcurement ? [] : [["draft", "submit"], ["returned", "submit"], ["submitted", "approve"], ["submitted", "reject"]] as const), ["approved", "return"],
+                             ["approved", "broadcast"], ["bidding", "award"], ["awarded", "rate-close"],
+                            ] as const).filter(([status]) => status === state?.status).map(([, action]) => {
+                              if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => performAction(item, action)}>{action}</Button>;
+                              const bids = (bidData || []).filter((b: any) => (b.state as any)?.requestId === item.id);
+                              return <span key={action} className="flex gap-1 items-center">
+                                <select className="h-9 rounded-md border px-2 text-sm" value={selectedBid[item.id] || ""} onChange={(e) => setSelectedBid((s) => ({ ...s, [item.id]: e.target.value }))}>
+                                  <option value="">Select bid</option>
+                                  {bids.map((b: any) => <option key={b.id} value={b.id}>{(b.state as any)?.vendorName} · ${Number((b.state as any)?.amount || 0).toLocaleString()} · {(b.state as any)?.note || "No note"}</option>)}
+                                </select>
+                                <Button size="sm" variant="outline" disabled={!selectedBid[item.id]} onClick={() => performAction(item, action, bids.find((b: any) => b.id === selectedBid[item.id])?.state && { id: selectedBid[item.id], ...(bids.find((b: any) => b.id === selectedBid[item.id])?.state as any) })}>award</Button>
+                              </span>;
+                            })}
+                         </div>
+                       )}
                     </div>
-                    <div className="flex items-center gap-1 ml-2">
-                      <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(item)} data-testid={`button-edit-${item.id}`}>
-                        <Edit2 className="w-4 h-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingRecordId(item.id); setIsDeleteDialogOpen(true); }} data-testid={`button-delete-${item.id}`}>
-                        <Trash2 className="w-4 h-4" />
-                      </Button>
-                    </div>
+                    {(!workflow || (!isProcurement && state?.status !== "closed")) && (
+                      <div className="flex items-center gap-1 ml-2">
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(item)} data-testid={`button-edit-${item.id}`}>
+                          <Edit2 className="w-4 h-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingRecordId(item.id); setIsDeleteDialogOpen(true); }} data-testid={`button-delete-${item.id}`}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 );
               })}

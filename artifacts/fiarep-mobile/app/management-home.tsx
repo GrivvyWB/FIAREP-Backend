@@ -28,6 +28,8 @@ export default function ManagementHome() {
   // may assign emergencies and register trucks. Everyone else (mgmt/supervisors)
   // gets a read-only Emergency Activity view for their development.
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
+  const ordinaryManagement = mode === 'management' &&
+    !['borough director', 'regional director', 'superintendent'].includes(_pos);
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('management'); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, []));
 
   async function onSignOut() {
@@ -68,6 +70,7 @@ export default function ManagementHome() {
       heading: 'Purchasing',
       color: '#B4741A',
       tiles: restricted ? [] : [
+        ...(ordinaryManagement ? [{ label: 'Scope Review', onPress: () => router.push('/scope-review'), tone: 'solid' as Tone }] : []),
         { label: 'Change Orders', onPress: () => router.push('/change-orders'), tone: 'outline' as Tone },
         { label: 'Vendor Score', onPress: () => router.push('/contractor-scores'), tone: 'tint' as Tone },
         { label: 'Development Scores', onPress: () => router.push('/dev-scores'), tone: 'tint' as Tone },
@@ -78,14 +81,6 @@ export default function ManagementHome() {
       color: '#C0392B',
       tiles: [
         ...(!restricted ? [{ label: 'Review Reports', onPress: () => router.push('/management'), tone: 'solid' as Tone }] : []),
-        { label: 'Scope Approvals', onPress: () => router.push('/scope-approvals'), tone: 'tint' },
-      ],
-    },
-    {
-      heading: 'Staff',
-      color: '#5B3FA8',
-      tiles: [
-        ...(!restricted ? [{ label: 'Staff Approvals', onPress: () => router.push('/staff-approvals'), tone: 'solid' as Tone }, { label: 'Bulk Employees', onPress: () => router.push('/bulk-employees'), tone: 'outline' as Tone }] : []),
       ],
     },
     {

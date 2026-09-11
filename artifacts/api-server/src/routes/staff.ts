@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, asc, eq, sql, count } from "drizzle-orm";
-import { db, staffAccounts, organizations } from "@workspace/db";
+import { db, staffAccounts, organizations, organizationProperties } from "@workspace/db";
 import { audit } from "../lib/audit";
 import {
   STAFF_POSITIONS,
@@ -15,11 +15,22 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 const router: IRouter = Router();
 router.use("/v1/staff", requireAuth);
 
-function safe(staff: typeof staffAccounts.$inferSelect, includeCode = false) {
-  const { sessionVersion: _version, tenantId: _tenant, ...data } = staff;
+function safe(
+  staff: typeof staffAccounts.$inferSelect,
+  includeCode = false,
+  actor?: ReturnType<typeof actorFrom>,
+) {
+  const { sessionVersion: _version, ...data } = staff;
+  const permissions = actor
+    ? {
+        canManage: canManageStaff(actor, staff),
+        canResetCode: canManageStaff(actor, staff),
+        canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
+      }
+    : {};
   if (includeCode) return data;
   const { code: _code, ...withoutCode } = data;
-  return withoutCode;
+  return { ...withoutCode, ...permissions };
 }
 
 function developmentsWithinScope(
@@ -42,11 +53,48 @@ function canManageStaff(
   >,
 ) {
   if (isBoroughDirector(actor)) return true;
-  if (actor.role !== "administrator") return false;
   if (target.position === "Borough Director" || target.role === "administrator") {
     return false;
   }
-  return developmentsWithinScope(actor, target.developments);
+  if (!developmentsWithinScope(actor, target.developments)) return false;
+  if (actor.role === "administrator") return true;
+  if (actor.role !== "management") return false;
+  if (target.role === "management") {
+    return actor.position === "Regional Director";
+  }
+  return ["worker", "inspector", "emergency"].includes(target.role);
+}
+
+function canIssueStaff(
+  actor: ReturnType<typeof actorFrom>,
+  role: string,
+  position: string,
+  developments: string[],
+) {
+  // Resident is a supported domain/directory role, but can never be issued
+  // through employee management.
+  if (role === "resident") return false;
+  if (position === "Borough Director" && !isBoroughDirector(actor)) return false;
+  if (!developmentsWithinScope(actor, developments)) return false;
+  if (isBoroughDirector(actor)) return true;
+  if (actor.role === "administrator") {
+    return role !== "administrator";
+  }
+  if (actor.role !== "management") return false;
+  if (role === "management") return actor.position === "Regional Director";
+  return ["worker", "inspector", "emergency"].includes(role);
+}
+
+export function scopedDevelopmentNames(
+  values: Array<string | null | undefined>,
+  actor: ReturnType<typeof actorFrom>,
+) {
+  const names = [...new Set(values.filter((value): value is string =>
+    typeof value === "string" && value.trim().length > 0,
+  ).map((value) => value.trim()))].sort((a, b) => a.localeCompare(b));
+  if (isBoroughDirector(actor)) return names;
+  const allowed = new Set(actor.developments);
+  return names.filter((name) => allowed.has(name));
 }
 
 router.get("/v1/staff", async (req, res) => {
@@ -65,7 +113,19 @@ router.get("/v1/staff", async (req, res) => {
         : eq(staffAccounts.tenantId, actor.tenantId),
     )
     .orderBy(asc(staffAccounts.name));
-  res.json(rows.map((row) => safe(row)));
+  res.json(rows.map((row) => safe(row, false, actor)));
+});
+
+router.get("/v1/staff/developments", async (_req, res) => {
+  const actor = actorFrom(res);
+  const rows = await db
+    .select({ development: organizationProperties.development })
+    .from(organizationProperties)
+    .where(and(
+      eq(organizationProperties.organizationId, actor.tenantId),
+      eq(organizationProperties.active, true),
+    ));
+  res.json(scopedDevelopmentNames(rows.map((row) => row.development), actor));
 });
 
 router.post("/v1/staff", async (req, res) => {
@@ -88,15 +148,7 @@ router.post("/v1/staff", async (req, res) => {
     res.status(400).json({ error: "Valid name, role, and position are required" });
     return;
   }
-  const canIssue =
-    isBoroughDirector(actor) ||
-    (actor.role === "administrator" &&
-      role !== "administrator" &&
-      position !== "Borough Director" &&
-      developmentsWithinScope(actor, developments)) ||
-    (actor.role === "management" &&
-      ((actor.position === "Regional Director" && role !== "administrator") ||
-       (["worker", "inspector", "emergency"].includes(role) && isElevated(actor))));
+  const canIssue = canIssueStaff(actor, role, position, developments);
   if (!canIssue) {
     res.status(403).json({ error: "Not allowed to issue this account" });
     return;
@@ -104,6 +156,10 @@ router.post("/v1/staff", async (req, res) => {
   const [organization] = await db.select({ staffLimit: organizations.staffLimit }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
   const suppliedCode =
     typeof input["code"] === "string" ? input["code"].toUpperCase() : undefined;
+  if (suppliedCode && !/^[A-Z0-9]{4}$/.test(suppliedCode)) {
+    res.status(400).json({ error: "Code must be exactly 4 letters or numbers" });
+    return;
+  }
   if (suppliedCode) {
     const [existing] = await db
       .select()
@@ -116,8 +172,8 @@ router.post("/v1/staff", async (req, res) => {
         ),
       )
       .limit(1);
-    if (existing) {
-      res.json(safe(existing, true));
+      if (existing) {
+       res.json(safe(existing, true, actor));
       return;
     }
   }
@@ -131,7 +187,7 @@ router.post("/v1/staff", async (req, res) => {
     const [row] = await tx
       .insert(staffAccounts)
       .values({
-      id: typeof input["id"] === "string" ? input["id"] : randomUUID(),
+       id: randomUUID(),
       tenantId: actor.tenantId,
       name,
       firstName:
@@ -141,8 +197,7 @@ router.post("/v1/staff", async (req, res) => {
       role,
       position,
       code: suppliedCode ?? staffCode(),
-      status:
-        typeof input["status"] === "string" ? input["status"] : "approved",
+       status: "approved",
       developments,
       createdBy: actor.id,
       issuerName: actor.name,
@@ -157,7 +212,7 @@ router.post("/v1/staff", async (req, res) => {
   });
   if (!created) return;
   await audit(actor, "staff.created", `Issued account for ${name}`, created?.id);
-  res.status(201).json(safe(created!, true));
+  res.status(201).json(safe(created!, true, actor));
 });
 
 router.post("/v1/staff/:id/reset-code", async (req, res) => {
@@ -200,7 +255,7 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     return;
   }
   await audit(actor, "staff.code_reset", `Reset code for ${updated.name}`, updated.id);
-  res.json(safe(updated, true));
+  res.json(safe(updated, true, actor));
 });
 
 router.post("/v1/staff/:id/revoke", async (req, res) => {
@@ -242,7 +297,7 @@ router.post("/v1/staff/:id/revoke", async (req, res) => {
     return;
   }
   await audit(actor, "staff.revoked", `Revoked ${updated.name}`, updated.id);
-  res.json(safe(updated));
+  res.json(safe(updated, false, actor));
 });
 
 export default router;

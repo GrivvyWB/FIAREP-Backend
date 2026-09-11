@@ -6,6 +6,7 @@ interface AuthContextType {
   staff: Staff | null;
   isLoading: boolean;
   login: (name: string, code: string, organizationId?: string) => Promise<void>;
+  procurementLogin: (name: string, code: string, organizationId: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -71,7 +72,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         }
         
-        if (refreshToken) {
+      if (refreshToken) {
           const res = await refreshMutation.mutateAsync({ data: { refreshToken } });
           localStorage.setItem("fiarep_access_token", res.accessToken);
           localStorage.setItem("fiarep_refresh_token", res.refreshToken);
@@ -103,6 +104,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStaff(res.staff);
   };
 
+  const procurementLogin = async (name: string, code: string, organizationId: string) => {
+    const response = await fetch("/api/v1/auth/procurement/login", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, code, organizationId }),
+    });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload?.error || "Invalid procurement credentials");
+    localStorage.setItem("fiarep_access_token", payload.accessToken);
+    localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
+    setStaff(payload.staff);
+  };
+
   const logout = () => {
     localStorage.removeItem("fiarep_access_token");
     localStorage.removeItem("fiarep_refresh_token");
@@ -116,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         staff,
         isLoading,
         login,
+        procurementLogin,
         logout,
         isAuthenticated: !!staff,
       }}

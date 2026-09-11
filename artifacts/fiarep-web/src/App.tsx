@@ -31,6 +31,8 @@ import Leave from '@/pages/leave';
 import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
 import SharedData from '@/pages/shared-data';
+import ProcurementLogin from '@/pages/procurement-login';
+import ScopeReview from '@/pages/scope-review';
 
 // Owner Pages
 import OwnerLogin from '@/pages/platform-owner/login';
@@ -47,14 +49,17 @@ const queryClient = new QueryClient({
 
 function AppRouter() {
   const [location, setLocation] = useLocation();
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, staff } = useAuth();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && location !== '/login') {
+    if (!isLoading && !isAuthenticated && location !== '/login' && location !== '/procurement/login') {
       sessionStorage.setItem('fiarep_return_to', location);
       setLocation('/login');
+    } else if (!isLoading && isAuthenticated && staff?.role === "procurement" &&
+      location !== "/procurement" && !location.startsWith("/procurement/")) {
+      setLocation("/procurement");
     }
-  }, [isAuthenticated, isLoading, location, setLocation]);
+  }, [isAuthenticated, isLoading, location, setLocation, staff?.role]);
 
   if (location === '/login') {
     return (
@@ -64,10 +69,26 @@ function AppRouter() {
     );
   }
 
+  if (location === '/procurement/login') {
+    return <RoutedErrorBoundary><ProcurementLogin /></RoutedErrorBoundary>;
+  }
+
   if (isLoading || !isAuthenticated) {
     return (
       <div className="min-h-screen bg-background grid place-items-center">
         <p className="text-sm text-muted-foreground">Loading FIAREP...</p>
+      </div>
+    );
+  }
+
+  if (location === "/procurement" || location.startsWith("/procurement/")) {
+    if (staff?.role !== "procurement") {
+      setLocation("/login");
+      return null;
+    }
+    return (
+      <div className="min-h-screen bg-background">
+        <RoutedErrorBoundary><Switch><Route path="/procurement" component={Procurement} /><Route component={NotFound} /></Switch></RoutedErrorBoundary>
       </div>
     );
   }
@@ -89,6 +110,7 @@ function AppRouter() {
           <Route path="/clients" component={Clients} />
           <Route path="/team" component={Team} />
           <Route path="/violations" component={Violations} />
+          <Route path="/scope-review" component={ScopeReview} />
           <Route path="/procurement" component={Procurement} />
           <Route path="/emergency" component={Emergency} />
           <Route path="/elevators" component={Elevators} />

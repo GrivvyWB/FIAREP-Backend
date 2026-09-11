@@ -6,6 +6,7 @@ import {
   canReadEntity,
   entityDevelopmentAllowed,
   stripPricing,
+  procurementRecordAllowed,
 } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
@@ -65,14 +66,25 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       ),
     )
     .orderBy(asc(notifications.updatedAt));
+  const visibleRecords = records
+    .filter((row) => entityDevelopmentAllowed(actor, row.entity, row.development))
+    .filter((row) => emergencyVisible(actor, row))
+    .filter((row) => procurementRecordAllowed(actor, row));
+  // A workflow transition can make a record disappear from a role's filtered
+  // view.  Emit a metadata-only tombstone so mobile caches cannot retain the
+  // old submitted/approved scope indefinitely.
+  const tombstones = records
+    .filter((row) => row.entity === "procurement" && !procurementRecordAllowed(actor, row))
+    .filter((row) => {
+      if (actor.role === "inspector" && actor.position === "CPM") return row.createdBy === actor.id;
+      if (actor.role === "management") return actor.position !== "Borough Director" &&
+        !["Regional Director", "Superintendent"].includes(actor.position);
+      return actor.role === "procurement";
+    })
+    .map((row) => ({ id: row.id, entity: row.entity, deleted: true, version: row.version }));
   res.json({
     cursor: cursor.toISOString(),
-    records: records
-      .filter((row) =>
-        entityDevelopmentAllowed(actor, row.entity, row.development),
-      )
-        .filter((row) => emergencyVisible(actor, row))
-      .map((row) => ({
+    records: [...visibleRecords.map((row) => ({
       id: row.id,
       entity: row.entity,
       projectId: row.projectId,
@@ -82,7 +94,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       version: row.version,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-      })),
+       })), ...tombstones],
     notifications: alerts,
   });
 });

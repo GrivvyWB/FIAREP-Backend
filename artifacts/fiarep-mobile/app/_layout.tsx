@@ -250,9 +250,7 @@ function AdministratorStack() {
       <Stack.Screen name="emergency-activity" options={{ title: 'Emergency Activity' }} />
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
       <Stack.Screen name="leave-dashboard" options={{ title: 'Leave Calendar' }} />
-      <Stack.Screen name="bulk-employees" options={{ title: 'Bulk Employees' }} />
       <Stack.Screen name="contractor-scores" options={{ title: 'Contractor Scores' }} />
-      <Stack.Screen name="staff-approvals" options={{ title: 'Staff' }} />
       <Stack.Screen name="dev-scores" options={{ title: 'Development Scores' }} />
       <Stack.Screen name="management" options={{ title: 'Resident Reports' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
@@ -273,7 +271,6 @@ function AdministratorStack() {
       <Stack.Screen name="hud-inspection" options={{ title: 'HUD Inspection' }} />
       <Stack.Screen name="hud-review" options={{ title: 'HUD Inspections' }} />
       <Stack.Screen name="hud-view" options={{ title: 'Inspection' }} />
-      <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
       <Stack.Screen name="violation-send" options={{ title: 'Send Violation' }} />
       <Stack.Screen name="assign-route" options={{ title: 'Assign a Route' }} />
     </Stack>
@@ -335,15 +332,11 @@ function ManagementStack() {
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
       <Stack.Screen name="resident" options={{ title: 'Report an Issue' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
-      <Stack.Screen name="staff-approvals" options={{ title: 'Staff' }} />
       <Stack.Screen name="dev-scores" options={{ title: 'Development Scores' }} />
-      <Stack.Screen name="bulk-employees" options={{ title: 'Bulk Employees' }} />
       <Stack.Screen name="contractor-scores" options={{ title: 'Contractor Scores' }} />
       <Stack.Screen name="hud-review" options={{ title: 'HUD Inspections' }} />
       <Stack.Screen name="hud-view" options={{ title: 'Inspection' }} />
-      <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
       <Stack.Screen name="violation-send" options={{ title: 'Send Violation' }} />
-      <Stack.Screen name="scope-approvals" options={{ title: 'Scope Approvals' }} />
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
       <Stack.Screen name="leave-dashboard" options={{ title: 'Leave Calendar' }} />
       <Stack.Screen name="assign-emergency" options={{ title: 'Assign Emergency Unit' }} />
@@ -353,6 +346,7 @@ function ManagementStack() {
       <Stack.Screen name="emergency-activity" options={{ title: 'Emergency Activity' }} />
       <Stack.Screen name="elevator-dashboard" options={{ title: 'Elevator Dashboard' }} />
       <Stack.Screen name="inspection-approvals" options={{ title: 'Inspection Approvals' }} />
+      <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
       <Stack.Screen name="assign-route" options={{ title: 'Assign a Route' }} />
     </Stack>
   );

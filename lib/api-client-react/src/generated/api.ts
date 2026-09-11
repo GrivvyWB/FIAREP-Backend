@@ -60,6 +60,7 @@ import type {
   PlatformOwnerLogin200,
   PlatformOwnerLoginBody,
   PlatformOwnerSession,
+  ProcurementLoginInput,
   PublicResidentPhotoConfirmInput,
   PublicResidentPhotoUploadInput,
   PublicResidentReportResponse,
@@ -73,6 +74,7 @@ import type {
   ResidentPhotoMetadata,
   Staff,
   StaffInput,
+  StaffIssueResponse,
   SyncResponse,
   UnauthorizedResponse,
   UnregisterDeviceTokenBody,
@@ -409,6 +411,77 @@ export const useLogin = <TError = ErrorType<UnauthorizedResponse>,
         TContext
       > => {
       return useMutation(getLoginMutationOptions(options));
+    }
+
+export const getProcurementLoginUrl = () => {
+
+
+
+
+  return `/api/v1/auth/procurement/login`
+}
+
+/**
+ * @summary Procurement-only staff login
+ */
+export const procurementLogin = async (procurementLoginInput: ProcurementLoginInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthResponse> => {
+
+  return customFetch<AuthResponse>(getProcurementLoginUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(procurementLoginInput)
+  }
+);}
+
+
+
+
+
+export const getProcurementLoginMutationOptions = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof procurementLogin>>, TError,{data: BodyType<ProcurementLoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof procurementLogin>>, TError,{data: BodyType<ProcurementLoginInput>}, TContext> => {
+
+const mutationKey = ['procurementLogin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof procurementLogin>>, {data: BodyType<ProcurementLoginInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  procurementLogin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ProcurementLoginMutationResult = NonNullable<Awaited<ReturnType<typeof procurementLogin>>>
+    export type ProcurementLoginMutationBody = BodyType<ProcurementLoginInput>
+    export type ProcurementLoginMutationError = ErrorType<UnauthorizedResponse>
+
+    /**
+ * @summary Procurement-only staff login
+ */
+export const useProcurementLogin = <TError = ErrorType<UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof procurementLogin>>, TError,{data: BodyType<ProcurementLoginInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof procurementLogin>>,
+        TError,
+        {data: BodyType<ProcurementLoginInput>},
+        TContext
+      > => {
+      return useMutation(getProcurementLoginMutationOptions(options));
     }
 
 export const getPlatformOwnerLoginUrl = () => {
@@ -1670,9 +1743,9 @@ export const getCreateStaffUrl = () => {
   return `/api/v1/staff`
 }
 
-export const createStaff = async (staffInput: StaffInput, options?: Parameters<typeof customFetch>[1]): Promise<Staff> => {
+export const createStaff = async (staffInput: StaffInput, options?: Parameters<typeof customFetch>[1]): Promise<StaffIssueResponse> => {
 
-  return customFetch<Staff>(getCreateStaffUrl(),
+  return customFetch<StaffIssueResponse>(getCreateStaffUrl(),
   {
     ...options,
     method: 'POST',
@@ -1725,6 +1798,213 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getCreateStaffMutationOptions(options));
+    }
+
+export const getListStaffDevelopmentsUrl = () => {
+
+
+
+
+  return `/api/v1/staff/developments`
+}
+
+/**
+ * @summary List active developments assignable to staff by the current actor
+ */
+export const listStaffDevelopments = async ( options?: Parameters<typeof customFetch>[1]): Promise<string[]> => {
+
+  return customFetch<string[]>(getListStaffDevelopmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStaffDevelopmentsQueryKey = () => {
+    return [
+    `/api/v1/staff/developments`
+    ] as const;
+    }
+
+
+export const getListStaffDevelopmentsQueryOptions = <TData = Awaited<ReturnType<typeof listStaffDevelopments>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStaffDevelopments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStaffDevelopmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStaffDevelopments>>> = ({ signal }) => listStaffDevelopments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStaffDevelopments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStaffDevelopmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listStaffDevelopments>>>
+export type ListStaffDevelopmentsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List active developments assignable to staff by the current actor
+ */
+
+export function useListStaffDevelopments<TData = Awaited<ReturnType<typeof listStaffDevelopments>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStaffDevelopments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStaffDevelopmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getResetStaffCodeUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/staff/${id}/reset-code`
+}
+
+export const resetStaffCode = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<StaffIssueResponse> => {
+
+  return customFetch<StaffIssueResponse>(getResetStaffCodeUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getResetStaffCodeMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['resetStaffCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetStaffCode>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  resetStaffCode(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ResetStaffCodeMutationResult = NonNullable<Awaited<ReturnType<typeof resetStaffCode>>>
+
+    export type ResetStaffCodeMutationError = ErrorType<Error>
+
+    export const useResetStaffCode = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof resetStaffCode>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getResetStaffCodeMutationOptions(options));
+    }
+
+export const getRevokeStaffUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/staff/${id}/revoke`
+}
+
+export const revokeStaff = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<Staff> => {
+
+  return customFetch<Staff>(getRevokeStaffUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRevokeStaffMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeStaff>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeStaff>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['revokeStaff'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeStaff>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  revokeStaff(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeStaffMutationResult = NonNullable<Awaited<ReturnType<typeof revokeStaff>>>
+
+    export type RevokeStaffMutationError = ErrorType<Error>
+
+    export const useRevokeStaff = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeStaff>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeStaff>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getRevokeStaffMutationOptions(options));
     }
 
 export const getListEntityRecordsUrl = (entity: string,

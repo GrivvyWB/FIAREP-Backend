@@ -380,16 +380,77 @@ export interface LoginInput {
   organizationId?: string;
 }
 
+export interface ProcurementLoginInput {
+  name: string;
+  /**
+     * @minLength 4
+     * @maxLength 4
+     */
+  code: string;
+  /** @minLength 1 */
+  organizationId: string;
+}
+
+export type StaffRole = typeof StaffRole[keyof typeof StaffRole];
+
+
+export const StaffRole = {
+  administrator: 'administrator',
+  management: 'management',
+  worker: 'worker',
+  inspector: 'inspector',
+  procurement: 'procurement',
+  vendor: 'vendor',
+  resident: 'resident',
+  emergency: 'emergency',
+} as const;
+
+export type StaffPosition = typeof StaffPosition[keyof typeof StaffPosition];
+
+
+export const StaffPosition = {
+  Borough_Director: 'Borough Director',
+  Regional_Director: 'Regional Director',
+  Property_Manager: 'Property Manager',
+  Assistant_Property_Manager: 'Assistant Property Manager',
+  Superintendent: 'Superintendent',
+  Assistant_Superintendent: 'Assistant Superintendent',
+  Housing_Assistant: 'Housing Assistant',
+  Maintenance_Worker: 'Maintenance Worker',
+  Caretaker: 'Caretaker',
+  Groundskeeper: 'Groundskeeper',
+  Janitorial_Staff: 'Janitorial Staff',
+  CPM: 'CPM',
+  Inspector: 'Inspector',
+  Elevator_Service: 'Elevator Service',
+  Plumber: 'Plumber',
+  Electrician: 'Electrician',
+  Plumber_Supervisor: 'Plumber Supervisor',
+  Electric_Supervisor: 'Electric Supervisor',
+  Elevator_Supervisor: 'Elevator Supervisor',
+  Carpenter: 'Carpenter',
+  Roofer: 'Roofer',
+  General_Construction: 'General Construction',
+  CCTV_Installation: 'CCTV Installation',
+  Heating_Service: 'Heating Service',
+  Staff_Worker: 'Staff Worker',
+  Director: 'Director',
+  Other: 'Other',
+} as const;
+
 export interface Staff {
   id: string;
   tenantId: string;
   name: string;
   firstName?: string | null;
   lastName?: string | null;
-  role: string;
-  position: string;
+  role: StaffRole;
+  position: StaffPosition;
   status: string;
   developments: string[];
+  canManage?: boolean;
+  canResetCode?: boolean;
+  canRevoke?: boolean;
 }
 
 export interface AuthResponse {
@@ -424,12 +485,66 @@ export interface PlatformLicenseAudit {
   at: string;
 }
 
+export type StaffIssueResponse = Staff & {
+  /**
+     * @minLength 4
+     * @maxLength 4
+     */
+  code: string;
+};
+
+export type StaffInputRole = typeof StaffInputRole[keyof typeof StaffInputRole];
+
+
+export const StaffInputRole = {
+  administrator: 'administrator',
+  management: 'management',
+  worker: 'worker',
+  inspector: 'inspector',
+  procurement: 'procurement',
+  vendor: 'vendor',
+  emergency: 'emergency',
+} as const;
+
+export type StaffInputPosition = typeof StaffInputPosition[keyof typeof StaffInputPosition];
+
+
+export const StaffInputPosition = {
+  Borough_Director: 'Borough Director',
+  Regional_Director: 'Regional Director',
+  Property_Manager: 'Property Manager',
+  Assistant_Property_Manager: 'Assistant Property Manager',
+  Superintendent: 'Superintendent',
+  Assistant_Superintendent: 'Assistant Superintendent',
+  Housing_Assistant: 'Housing Assistant',
+  Maintenance_Worker: 'Maintenance Worker',
+  Caretaker: 'Caretaker',
+  Groundskeeper: 'Groundskeeper',
+  Janitorial_Staff: 'Janitorial Staff',
+  CPM: 'CPM',
+  Inspector: 'Inspector',
+  Elevator_Service: 'Elevator Service',
+  Plumber: 'Plumber',
+  Electrician: 'Electrician',
+  Plumber_Supervisor: 'Plumber Supervisor',
+  Electric_Supervisor: 'Electric Supervisor',
+  Elevator_Supervisor: 'Elevator Supervisor',
+  Carpenter: 'Carpenter',
+  Roofer: 'Roofer',
+  General_Construction: 'General Construction',
+  CCTV_Installation: 'CCTV Installation',
+  Heating_Service: 'Heating Service',
+  Staff_Worker: 'Staff Worker',
+  Director: 'Director',
+  Other: 'Other',
+} as const;
+
 export interface StaffInput {
   name: string;
   firstName?: string;
   lastName?: string;
-  role: string;
-  position: string;
+  role: StaffInputRole;
+  position: StaffInputPosition;
   developments?: string[];
   /**
      * @minLength 4

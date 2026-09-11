@@ -30,3 +30,6 @@ FIAREP_STAGING_TENANT_ID = "staging-smoke"
 
 [userenv.shared]
 FIAREP_PLATFORM_OWNER_NAME = "FIAREP Platform Owner"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-d0d51f06-5a7d-472d-8e7b-d71c48379baa"

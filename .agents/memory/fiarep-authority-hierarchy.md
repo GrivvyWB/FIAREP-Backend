@@ -3,12 +3,14 @@ name: FIAREP authority hierarchy
 description: The confirmed authority ordering and rule for expanding Administrator permissions.
 ---
 
-Borough Director is FIAREP's highest authority and has full override across modules, workflows, procurement, staff, and developments. An account may have the Administrator role while deriving top authority from the Borough Director position.
+Borough Director is FIAREP's highest operational authority across staff and developments, except Procurement. Procurement is an isolated authority domain with its own website sign-in; Borough Director and Administrators cannot view, create, edit, delete, approve, release, award, or close Procurement records.
 
 Ordinary Administrators are limited to assigned developments and lower-authority staff. Do not infer or add further Administrator capabilities; define them incrementally as the user specifies them.
 
 Emergency Unit is an explicit issued-code staff identity, not a Worker mode. Emergency records and actions must remain assignment-scoped across normal reads, synchronization, and workflow actions.
 
-**Why:** The user explicitly confirmed that Borough Director ranks above Administrator and wants to define Administrator capabilities over time.
+CPM may prepare and submit only its own scope/request to ordinary Management. Ordinary Management—not Administrator, Borough Director, Regional Director, or Superintendent—may return it to CPM or approve it for Procurement. Procurement sees it only after Management approval and alone may release it to vendors, select a real vendor bid, award, and close it.
 
-**How to apply:** Make authorization position-aware. Check Borough Director first, then apply only explicitly established Administrator permissions and existing lower-role rules. Never rely on a locally entered unit code as server authorization.
+**Why:** The user explicitly confirmed that Borough Director ranks above Administrator, then explicitly excluded Procurement from Borough Director authority and required Procurement-only control.
+
+**How to apply:** Check Procurement boundaries before any Borough Director override in list, sync, create, update, delete, and workflow-action authorization. Enforce lifecycle visibility: CPM owns draft/submitted/returned, ordinary Management sees submitted, Procurement sees approved/downstream, and Vendor sees only released scopes by capability code. Keep Procurement out of general staff navigation/login and mobile.

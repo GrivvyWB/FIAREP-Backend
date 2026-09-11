@@ -3,11 +3,15 @@ import test from "node:test";
 import type { Actor } from "./auth";
 import {
   canReadEntity,
+  canCreateEntity,
+  canMutateEntity,
+  canDeleteEntity,
   canPerformEntityAction,
   entityDevelopmentAllowed,
   isValidEntityTransition,
   patchesWorkflowManagedFields,
   withInitialWorkflowState,
+  procurementRecordAllowed,
 } from "./domain";
 
 function actor(overrides: Partial<Actor> = {}): Actor {
@@ -53,13 +57,13 @@ test("ordinary administrators are limited to assigned developments", () => {
   assert.equal(entityDevelopmentAllowed(administrator, "projects", null), false);
 });
 
-test("Borough Director has full module and development authority", () => {
+test("Borough Director cannot access procurement records", () => {
   const director = actor({
     role: "administrator",
     position: "Borough Director",
     developments: [],
   });
-  assert.equal(canReadEntity(director, "procurement"), true);
+  assert.equal(canReadEntity(director, "procurement"), false);
   assert.equal(
     entityDevelopmentAllowed(director, "projects", "Any Development"),
     true,
@@ -67,12 +71,25 @@ test("Borough Director has full module and development authority", () => {
   assert.equal(entityDevelopmentAllowed(director, "projects", null), true);
 });
 
+test("procurement entity boundary is role- and ownership-specific", () => {
+  const director = actor({ role: "administrator", position: "Borough Director", developments: [] });
+  const admin = actor({ role: "administrator" });
+  const procurement = actor({ role: "procurement" });
+  const cpm = actor({ role: "inspector", position: "CPM" });
+  assert.equal(canCreateEntity(director, "procurement"), false);
+  assert.equal(canCreateEntity(admin, "procurement"), false);
+  assert.equal(canCreateEntity(procurement, "procurement"), false);
+  assert.equal(canCreateEntity(procurement, "procurement-bids"), false);
+  assert.equal(canCreateEntity(cpm, "procurement"), true);
+  assert.equal(canMutateEntity(director, "procurement"), false);
+  assert.equal(canMutateEntity(admin, "procurement"), false);
+  assert.equal(canDeleteEntity(director, "procurement", {}), false);
+  assert.equal(canDeleteEntity(procurement, "procurement", {}), false);
+});
+
 test("restricted management roles cannot synchronize procurement records", () => {
-  assert.equal(canReadEntity(actor(), "procurement"), false);
-  assert.equal(
-    canReadEntity(actor({ position: "Regional Director" }), "procurement"),
-    true,
-  );
+  assert.equal(canReadEntity(actor(), "procurement"), true);
+  assert.equal(canReadEntity(actor({ position: "Regional Director" }), "procurement"), false);
 });
 
 test("workflow actions require their explicit management or specialist role", () => {
@@ -105,6 +122,23 @@ test("workflow actions require their explicit management or specialist role", ()
     canPerformEntityAction(cpm, "procurement", "submit", {}),
     true,
   );
+  assert.equal(
+    canPerformEntityAction(procurement, "procurement", "submit", {}),
+    false,
+  );
+});
+
+test("procurement visibility follows the lifecycle", () => {
+  const manager = actor();
+  const cpm = actor({ id: "cpm-1", role: "inspector", position: "CPM" });
+  const procurement = actor({ role: "procurement" });
+  const row = (status: string, createdBy = cpm.id) => ({ entity: "procurement", createdBy, state: { status } });
+  assert.equal(procurementRecordAllowed(cpm, row("draft")), true);
+  assert.equal(procurementRecordAllowed(cpm, row("approved")), false);
+  assert.equal(procurementRecordAllowed(manager, row("submitted")), true);
+  assert.equal(procurementRecordAllowed(manager, row("approved")), false);
+  assert.equal(procurementRecordAllowed(procurement, row("approved")), true);
+  assert.equal(procurementRecordAllowed(procurement, row("submitted")), false);
 });
 
 test("staff can cancel only their own leave request", () => {
@@ -224,7 +258,7 @@ test("workflow actions cannot skip required stages", () => {
   );
 });
 
-test("Borough Director overrides every protected workflow action", () => {
+test("Borough Director cannot perform procurement workflow actions", () => {
   const director = actor({
     role: "administrator",
     position: "Borough Director",
@@ -232,7 +266,7 @@ test("Borough Director overrides every protected workflow action", () => {
   });
   assert.equal(
     canPerformEntityAction(director, "procurement", "award", {}),
-    true,
+    false,
   );
   assert.equal(
     canPerformEntityAction(director, "leave-requests", "cancel", {}),

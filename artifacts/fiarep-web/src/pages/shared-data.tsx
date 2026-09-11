@@ -14,7 +14,6 @@ const MODULES = [
   ["violations", "Inspector Violations"],
   ["priority-violations", "Priority Violations"],
   ["route-assignments", "Route Assignments"],
-  ["procurement-bids", "Procurement Bids"],
   ["vendor-contacts", "Vendor Contacts"],
   ["vendor-quotes", "Vendor Quotes"],
   ["change-orders", "Change Orders"],

@@ -77,7 +77,7 @@ export default function Notifications() {
       Alert.alert(n.message, body, buttons);
       return;
     }
-    if (msg.includes('scope submitted')) { router.push('/scope-approvals'); return; }
+    if (msg.includes('scope submitted')) { return; }
     if (msg.includes('returned for revision')) { router.push('/scope-submit' + (n.reportId ? '?openId=' + n.reportId : '')); return; }
     if (msg.includes('scope') || msg.includes('bid') || msg.includes('procurement') || msg.includes('vendor') || msg.includes('won') || msg.includes('job closed') || msg.includes('job open')) {
       if (mode === 'vendor') { router.push('/vendor-home'); return; }

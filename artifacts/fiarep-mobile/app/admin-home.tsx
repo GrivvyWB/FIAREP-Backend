@@ -79,14 +79,6 @@ export default function AdminHome() {
       ],
     },
     {
-      heading: 'Staff',
-      color: '#5B3FA8',
-      tiles: [
-        { label: 'Manage Staff', onPress: () => router.push('/staff-approvals'), tone: 'solid' },
-        { label: 'Bulk Employees', onPress: () => router.push('/bulk-employees'), tone: 'outline' },
-      ],
-    },
-    {
       heading: 'System',
       color: '#4A5560',
       tiles: [

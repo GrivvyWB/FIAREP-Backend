@@ -17,6 +17,7 @@ import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp
 import { REGEXP_ONLY_DIGITS_AND_CHARS } from "input-otp";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
+import { Link } from "wouter";
 
 const loginSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
@@ -154,6 +155,11 @@ export default function Login() {
               </Button>
             </form>
           </Form>
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            <Link href="/procurement/login" className="font-semibold text-primary hover:underline">
+              Procurement sign-in
+            </Link>
+          </p>
         </div>
       </div>
     </div>
