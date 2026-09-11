@@ -1,0 +1,453 @@
+import { Router, type IRouter } from "express";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { db, entityRecords } from "@workspace/db";
+import { audit, notify } from "../lib/audit";
+import {
+  ENTITIES,
+  canCreateEntity,
+  canDeleteEntity,
+  canMutateEntity,
+  canReadEntity,
+  generatedCode,
+  recordId,
+  stripPricing,
+} from "../lib/domain";
+import { actorFrom, requireAuth } from "../middlewares/auth";
+
+const router: IRouter = Router();
+router.use("/v1", requireAuth);
+
+function validEntity(value: string | undefined): value is string {
+  return typeof value === "string" && ENTITIES.has(value);
+}
+
+function stateOf(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function outward(
+  actor: ReturnType<typeof actorFrom>,
+  row: typeof entityRecords.$inferSelect,
+) {
+  return {
+    id: row.id,
+    entity: row.entity,
+    projectId: row.projectId,
+    development: row.development,
+    state: stripPricing(actor, row.state),
+    deleted: row.deleted,
+    version: row.version,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function withGeneratedFields(
+  entity: string,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  const state = { ...input };
+  const code = generatedCode(entity);
+  if (entity === "resident-reports" && !state["complaintNo"]) {
+    state["complaintNo"] = code;
+    state["status"] ??= "submitted";
+  }
+  if (entity === "procurement" && !state["trackingId"]) {
+    state["trackingId"] = code;
+    state["status"] ??= "draft";
+  }
+  if (entity === "elevator-jobs" && !state["elId"]) state["elId"] = code;
+  if (entity === "emergency-jobs" && !state["emId"]) state["emId"] = code;
+  if (entity === "emergency-units" && !state["code"]) state["code"] = code;
+  state["createdAt"] ??= new Date().toISOString();
+  return state;
+}
+
+function developmentAllowed(
+  actor: ReturnType<typeof actorFrom>,
+  development: string | null,
+) {
+  return (
+    actor.role === "administrator" ||
+    actor.developments.length === 0 ||
+    !development ||
+    actor.developments.includes(development)
+  );
+}
+
+router.get("/v1/:entity", async (req, res, next) => {
+  const entity = req.params["entity"];
+  if (!validEntity(entity)) {
+    next();
+    return;
+  }
+  const actor = actorFrom(res);
+  if (!canReadEntity(actor, entity)) {
+    res.status(403).json({ error: "This module is restricted for your role" });
+    return;
+  }
+  const rows = await db
+    .select()
+    .from(entityRecords)
+    .where(
+      and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.entity, entity),
+        eq(entityRecords.deleted, false),
+      ),
+    )
+    .orderBy(desc(entityRecords.updatedAt));
+  const projectId =
+    typeof req.query["projectId"] === "string" ? req.query["projectId"] : null;
+  const development =
+    typeof req.query["development"] === "string"
+      ? req.query["development"]
+      : null;
+  const status =
+    typeof req.query["status"] === "string" ? req.query["status"] : null;
+  res.json(
+    rows
+      .filter((row) => developmentAllowed(actor, row.development))
+      .filter((row) => !projectId || row.projectId === projectId)
+      .filter(
+        (row) =>
+          !development ||
+          row.development?.toLowerCase() === development.toLowerCase(),
+      )
+      .filter((row) => !status || row.state["status"] === status)
+      .map((row) => outward(actor, row)),
+  );
+});
+
+router.post("/v1/:entity", async (req, res, next) => {
+  const entity = req.params["entity"];
+  if (!validEntity(entity)) {
+    next();
+    return;
+  }
+  const actor = actorFrom(res);
+  if (!canCreateEntity(actor, entity)) {
+    res.status(403).json({ error: "Not allowed to create this record" });
+    return;
+  }
+  const body = stateOf(req.body);
+  const rawState = stateOf(body?.["state"]);
+  if (!body || !rawState) {
+    res.status(400).json({ error: "A JSON state object is required" });
+    return;
+  }
+  const id = recordId(body["id"]);
+  const projectId =
+    typeof body["projectId"] === "string"
+      ? body["projectId"]
+      : typeof rawState["projectId"] === "string"
+        ? rawState["projectId"]
+        : null;
+  const development =
+    typeof body["development"] === "string"
+      ? body["development"]
+      : typeof rawState["development"] === "string"
+        ? rawState["development"]
+        : null;
+  if (!developmentAllowed(actor, development)) {
+    res.status(403).json({ error: "Development access denied" });
+    return;
+  }
+  const now = new Date();
+  const [created] = await db
+    .insert(entityRecords)
+    .values({
+      id,
+      tenantId: actor.tenantId,
+      entity,
+      projectId,
+      development,
+      state: withGeneratedFields(entity, rawState),
+      createdBy: actor.id,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning();
+  await audit(actor, `${entity}.created`, `Created ${entity} record`, id);
+  if (entity === "building-violations") {
+    await notify(
+      actor,
+      "management",
+      "Inspection logged and awaiting review",
+      typeof rawState["building"] === "string" ? rawState["building"] : undefined,
+      id,
+    );
+  }
+  res.status(201).json(outward(actor, created!));
+});
+
+router.get("/v1/:entity/:id", async (req, res, next) => {
+  const entity = req.params["entity"];
+  if (!validEntity(entity)) {
+    next();
+    return;
+  }
+  const actor = actorFrom(res);
+  if (!canReadEntity(actor, entity)) {
+    res.status(403).json({ error: "This module is restricted for your role" });
+    return;
+  }
+  const [row] = await db
+    .select()
+    .from(entityRecords)
+    .where(
+      and(
+        eq(entityRecords.id, req.params["id"]!),
+        eq(entityRecords.entity, entity),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+      ),
+    )
+    .limit(1);
+  if (!row || !developmentAllowed(actor, row.development)) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  res.json(outward(actor, row));
+});
+
+router.patch("/v1/:entity/:id", async (req, res, next) => {
+  const entity = req.params["entity"];
+  if (!validEntity(entity)) {
+    next();
+    return;
+  }
+  const actor = actorFrom(res);
+  if (!canMutateEntity(actor, entity)) {
+    res.status(403).json({ error: "Not allowed to update this record" });
+    return;
+  }
+  const input = stateOf(req.body);
+  const patch = stateOf(input?.["state"]) ?? input;
+  if (!patch) {
+    res.status(400).json({ error: "A JSON update is required" });
+    return;
+  }
+  const [current] = await db
+    .select()
+    .from(entityRecords)
+    .where(
+      and(
+        eq(entityRecords.id, req.params["id"]!),
+        eq(entityRecords.entity, entity),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+      ),
+    )
+    .limit(1);
+  if (!current || !developmentAllowed(actor, current.development)) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  if (entity === "procurement" && current.state["status"] === "closed") {
+    res.status(409).json({ error: "Closed procurement records are immutable" });
+    return;
+  }
+  const expectedVersion = input?.["version"];
+  if (
+    typeof expectedVersion === "number" &&
+    expectedVersion !== current.version
+  ) {
+    res.status(409).json({
+      error: "Concurrent update detected",
+      current: outward(actor, current),
+    });
+    return;
+  }
+  const updatedState = { ...current.state, ...patch };
+  const now = new Date();
+  const [updated] = await db
+    .update(entityRecords)
+    .set({
+      state: updatedState,
+      projectId:
+        typeof updatedState["projectId"] === "string"
+          ? updatedState["projectId"]
+          : current.projectId,
+      development:
+        typeof updatedState["development"] === "string"
+          ? updatedState["development"]
+          : current.development,
+      version: sql`${entityRecords.version} + 1`,
+      updatedAt: now,
+    })
+    .where(eq(entityRecords.id, current.id))
+    .returning();
+  await audit(actor, `${entity}.updated`, `Updated ${entity} record`, current.id);
+  res.json(outward(actor, updated!));
+});
+
+router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
+  const entity = req.params["entity"];
+  if (!validEntity(entity)) {
+    next();
+    return;
+  }
+  const actor = actorFrom(res);
+  const action = req.params["action"]!;
+  const [current] = await db
+    .select()
+    .from(entityRecords)
+    .where(
+      and(
+        eq(entityRecords.id, req.params["id"]!),
+        eq(entityRecords.entity, entity),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+      ),
+    )
+    .limit(1);
+  if (!current) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  if (entity === "procurement" && current.state["status"] === "closed") {
+    res.status(409).json({ error: "Closed procurement records are immutable" });
+    return;
+  }
+  const transitions: Record<string, Record<string, string>> = {
+    procurement: {
+      submit: "submitted",
+      approve: "approved",
+      reject: "returned",
+      return: "returned",
+      broadcast: "bidding",
+      award: "awarded",
+      "rate-close": "closed",
+    },
+    "resident-reports": {
+      assign: "assigned",
+      start: "in_progress",
+      resolve: "resolved",
+      clear: "resolved",
+    },
+    "building-violations": {
+      approve: "approved",
+      route: "routed",
+      complete: "done",
+      clear: "done",
+    },
+    "leave-requests": {
+      approve: "Approved",
+      deny: "Denied",
+      cancel: "Cancelled",
+    },
+    "elevator-jobs": { "on-my-way": "assigned", start: "assigned", complete: "done" },
+    "emergency-jobs": { "on-my-way": "assigned", start: "assigned", complete: "done" },
+  };
+  const nextStatus = transitions[entity]?.[action];
+  if (!nextStatus) {
+    res.status(400).json({ error: "Unsupported workflow action" });
+    return;
+  }
+  const procurementOnly = new Set([
+    "broadcast",
+    "award",
+    "rate-close",
+    "return",
+  ]);
+  if (
+    entity === "procurement" &&
+    procurementOnly.has(action) &&
+    actor.role !== "procurement"
+  ) {
+    res.status(403).json({ error: "Procurement access required" });
+    return;
+  }
+  if (
+    entity === "leave-requests" &&
+    !["administrator", "management"].includes(actor.role) &&
+    action !== "cancel"
+  ) {
+    res.status(403).json({ error: "Management access required" });
+    return;
+  }
+  const body = stateOf(req.body) ?? {};
+  const now = new Date();
+  const state = {
+    ...current.state,
+    ...body,
+    status: nextStatus,
+    ...(action === "clear" ? { clearedByMgmt: true } : {}),
+    [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
+  };
+  const [updated] = await db
+    .update(entityRecords)
+    .set({
+      state,
+      version: sql`${entityRecords.version} + 1`,
+      updatedAt: now,
+    })
+    .where(eq(entityRecords.id, current.id))
+    .returning();
+  await audit(
+    actor,
+    `${entity}.${action}`,
+    `${action} ${entity} record`,
+    current.id,
+  );
+  const target =
+    typeof body["target"] === "string"
+      ? body["target"]
+      : entity === "leave-requests"
+        ? String(current.state["employee"] ?? "")
+        : "management";
+  if (target) {
+    await notify(
+      actor,
+      target,
+      `${entity.replaceAll("-", " ")} ${nextStatus}`,
+      undefined,
+      current.id,
+    );
+  }
+  res.json(outward(actor, updated!));
+});
+
+router.delete("/v1/:entity/:id", async (req, res, next) => {
+  const entity = req.params["entity"];
+  if (!validEntity(entity)) {
+    next();
+    return;
+  }
+  const actor = actorFrom(res);
+  const [current] = await db
+    .select()
+    .from(entityRecords)
+    .where(
+      and(
+        eq(entityRecords.id, req.params["id"]!),
+        eq(entityRecords.entity, entity),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+      ),
+    )
+    .limit(1);
+  if (!current) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  if (!canDeleteEntity(actor, current.state)) {
+    res.status(403).json({ error: "Management clearance is required" });
+    return;
+  }
+  await db
+    .update(entityRecords)
+    .set({
+      deleted: true,
+      version: sql`${entityRecords.version} + 1`,
+      updatedAt: new Date(),
+    })
+    .where(eq(entityRecords.id, current.id));
+  await audit(actor, `${entity}.deleted`, `Deleted ${entity} record`, current.id);
+  res.status(204).send();
+});
+
+export default router;

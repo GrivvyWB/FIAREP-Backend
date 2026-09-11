@@ -49,6 +49,33 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+  /v1/auth/bootstrap:
+    post:
+      operationId: bootstrapAdministrator
+      tags: [auth]
+      summary: Create the first administrator for an empty tenant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, code]
+              properties:
+                name: { type: string }
+                code: { type: string, minLength: 4, maxLength: 4 }
+                tenantId: { type: string }
+                firstName: { type: string }
+                lastName: { type: string }
+      responses:
+        "201":
+          description: Bootstrap session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthResponse"
+        "409":
+          description: Administrator already exists
   /v1/auth/refresh:
     post:
       operationId: refreshSession

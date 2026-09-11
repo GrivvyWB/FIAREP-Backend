@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FIAREP — Field Inspection and Repair Estimation Platform</title>
+<style>
+  :root {
+    --accent: #185FA5;
+    --yellow: #FBC02D;
+    --yellow-strong: #F5B301;
+    --ink: #1a1d21;
+    --ink-soft: #5b6470;
+    --line: #e7eaee;
+    --bg: #f4f6f9;
+    --panel: #ffffff;
+    --sidebar: #0d1117;
+    --sidebar-line: #1e2530;
+    --green: #2fae4e;
+    --orange: #f08a24;
+    --red: #e23b3b;
+    --shadow: 0 1px 2px rgba(16,24,40,.04), 0 4px 16px rgba(16,24,40,.05);
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; }
+  body {
+    font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    display: flex;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: 264px;
+    background: var(--sidebar);
+    color: #cfd6df;
+    display: flex;
+    flex-direction: column;
+    flex-shrink: 0;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .brand-block {
+    padding: 18px 16px 16px;
+    border-bottom: 1px solid var(--sidebar-line);
+    display: flex;
+    justify-content: center;
+  }
+  .brand-block img {
+    width: 100%;
+    max-width: 210px;
+    height: auto;
+    display: block;
+  }
+
+  .nav { padding: 14px 12px; flex: 1; overflow-y: auto; }
+  .nav a {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 14px; margin-bottom: 3px;
+    border-radius: 9px;
+    color: #b7c0cc; text-decoration: none;
+    font-size: 14.5px; font-weight: 500;
+    transition: background .15s, color .15s;
+  }
+  .nav a svg { width: 19px; height: 19px; flex-shrink: 0; opacity: .85; }
+  .nav a:hover { background: #161d27; color: #fff; }
+  .nav a.active { background: var(--yellow); color: var(--sidebar); font-weight: 700; }
+  .nav a.active svg { opacity: 1; }
+
+  .quick {
+    margin: 8px 16px 18px;
+    padding: 16px;
+    background: #12161d;
+    border: 1px solid var(--sidebar-line);
+    border-radius: 12px;
+  }
+  .quick h4 { font-size: 11px; letter-spacing: .6px; color: #8b94a1; margin-bottom: 12px; font-weight: 600; }
+  .quick button {
+    width: 100%; border: none; cursor: pointer;
+    padding: 11px; border-radius: 9px;
+    font-size: 13.5px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    margin-bottom: 8px;
+    font-family: inherit;
+  }
+  .quick button svg { width: 16px; height: 16px; }
+  .quick .primary { background: var(--yellow); color: var(--sidebar); }
+  .quick .ghost { background: transparent; color: #cfd6df; border: 1px solid #2a323e; }
+  .quick .ghost:hover { background: #1a212b; }
+  .quick .primary:hover { background: var(--yellow-strong); }
+  .foot { padding: 16px 22px 20px; font-size: 11px; color: #5c6572; border-top: 1px solid var(--sidebar-line); }
+
+  /* ---------- Main ---------- */
+  .main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    background: var(--panel);
+    border-bottom: 1px solid var(--line);
+    padding: 0 30px;
+    height: 68px;
+    display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; z-index: 20;
+  }
+  .topbar .title { font-size: 20px; font-weight: 800; letter-spacing: .3px; }
+  .topbar .title .rep { color: var(--yellow-strong); }
+  .topbar .title small { display: block; font-size: 10.5px; font-weight: 500; color: var(--ink-soft); letter-spacing: 0; }
+  .topbar-right { display: flex; align-items: center; gap: 22px; }
+  .bell { position: relative; color: var(--ink-soft); cursor: pointer; }
+  .bell svg { width: 22px; height: 22px; }
+  .bell .dot {
+    position: absolute; top: -6px; right: -7px;
+    background: var(--yellow-strong); color: var(--sidebar);
+    font-size: 10px; font-weight: 700;
+    width: 17px; height: 17px; border-radius: 50%;
+    display: grid; place-items: center;
+  }
+  .user { display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .user .avatar {
+    width: 38px; height: 38px; border-radius: 50%;
+    background: linear-gradient(135deg, #3d6fa8, #185FA5);
+    color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 14px;
+  }
+  .user .who { line-height: 1.25; }
+  .user .who b { font-size: 13.5px; font-weight: 700; }
+  .user .who span { font-size: 11.5px; color: var(--ink-soft); display: block; }
+  .user .chev { color: var(--ink-soft); }
+
+  .content { padding: 28px 30px 40px; }
+
+  /* Hero */
+  .hero {
+    position: relative; overflow: hidden;
+    border-radius: var(--radius);
+    background:
+      linear-gradient(90deg, rgba(255,255,255,1) 0%, rgba(255,255,255,.94) 42%, rgba(255,255,255,.55) 66%, rgba(255,255,255,.25) 100%),
+      linear-gradient(120deg, #b9c6d6, #8fa3b8);
+    padding: 26px 30px; margin-bottom: 22px;
+    box-shadow: var(--shadow);
+  }
+  .hero::after {
+    content: ""; position: absolute; inset: 0; z-index: -1;
+  }
+  .hero h1 { font-size: 26px; font-weight: 800; letter-spacing: -.3px; }
+  .hero h1 .name { color: var(--yellow-strong); }
+  .hero p { color: var(--ink-soft); margin-top: 6px; font-size: 14px; }
+
+  /* Metric cards */
+  .metrics { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; margin-bottom: 22px; }
+  .metric {
+    background: var(--panel); border-radius: var(--radius);
+    padding: 20px; box-shadow: var(--shadow);
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  .metric .label { font-size: 13px; color: var(--ink-soft); font-weight: 500; }
+  .metric .value { font-size: 30px; font-weight: 800; margin: 8px 0 6px; letter-spacing: -.5px; }
+  .metric .delta { font-size: 12.5px; font-weight: 600; }
+  .metric .delta.up { color: var(--green); }
+  .metric .delta.down { color: var(--red); }
+  .metric .delta span { color: var(--ink-soft); font-weight: 500; }
+  .metric .ic {
+    width: 46px; height: 46px; border-radius: 12px;
+    background: var(--yellow); color: var(--sidebar);
+    display: grid; place-items: center; flex-shrink: 0;
+  }
+  .metric .ic svg { width: 22px; height: 22px; }
+
+  /* Two-column panels */
+  .row { display: grid; grid-template-columns: 1.05fr 1fr; gap: 18px; margin-bottom: 22px; }
+  .panel { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .panel-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 18px 22px; border-bottom: 1px solid var(--line);
+  }
+  .panel-head h3 { font-size: 16px; font-weight: 700; }
+  .panel-head .link { color: var(--accent); font-size: 13px; font-weight: 600; text-decoration: none; }
+  .select {
+    border: 1px solid var(--line); background: #fafbfc;
+    border-radius: 8px; padding: 6px 12px; font-size: 12.5px; color: var(--ink-soft);
+    font-family: inherit; cursor: pointer;
+  }
+
+  /* Donut */
+  .donut-body { padding: 22px; display: flex; align-items: center; gap: 26px; }
+  .donut { position: relative; width: 168px; height: 168px; flex-shrink: 0; }
+  .donut .center { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; }
+  .donut .center b { font-size: 30px; font-weight: 800; display: block; line-height: 1; }
+  .donut .center span { font-size: 12px; color: var(--ink-soft); }
+  .legend { flex: 1; display: flex; flex-direction: column; gap: 14px; }
+  .legend .item { display: flex; align-items: center; font-size: 13.5px; }
+  .legend .item i { width: 10px; height: 10px; border-radius: 50%; margin-right: 10px; }
+  .legend .item .lbl { flex: 1; color: #3d4550; }
+  .legend .item .num { font-weight: 700; }
+  .legend .item .num small { color: var(--ink-soft); font-weight: 500; margin-left: 4px; }
+  .panel-foot { padding: 0 22px 18px; }
+  .panel-foot a { color: var(--accent); font-size: 13px; font-weight: 600; text-decoration: none; }
+
+  /* Recent inspections */
+  .insp-list { padding: 8px 10px; }
+  .insp {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 12px; border-radius: 10px;
+  }
+  .insp:hover { background: #f7f9fb; }
+  .insp .thumb {
+    width: 48px; height: 48px; border-radius: 9px; flex-shrink: 0;
+    background: linear-gradient(135deg, #cdd8e4, #9fb2c6);
+    display: grid; place-items: center; color: #5a6b7d;
+  }
+  .insp .thumb svg { width: 22px; height: 22px; }
+  .insp .info { flex: 1; min-width: 0; }
+  .insp .info b { font-size: 14px; font-weight: 600; }
+  .insp .info span { font-size: 12.5px; color: var(--ink-soft); display: block; }
+  .insp .meta { text-align: right; flex-shrink: 0; }
+  .insp .meta .status { font-size: 12.5px; font-weight: 700; }
+  .insp .meta .date { font-size: 12px; color: var(--ink-soft); }
+  .s-prog { color: var(--yellow-strong); }
+  .s-done { color: var(--green); }
+  .s-pend { color: var(--orange); }
+  .s-over { color: var(--red); }
+
+  /* Estimation summary chart */
+  .est-body { padding: 22px; }
+  .est-total { font-size: 13px; color: var(--ink-soft); }
+  .est-total b { display: block; font-size: 28px; font-weight: 800; color: var(--ink); letter-spacing: -.5px; margin: 4px 0 4px; }
+  .est-total .delta { color: var(--green); font-size: 12.5px; font-weight: 600; }
+  .chart-wrap { margin-top: 16px; }
+  .chart-wrap svg { width: 100%; height: 190px; display: block; }
+
+  /* Activity */
+  .act-list { padding: 12px 20px 18px; }
+  .act {
+    display: flex; gap: 14px; padding: 12px 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .act:last-child { border-bottom: none; }
+  .act .ic {
+    width: 34px; height: 34px; border-radius: 9px; flex-shrink: 0;
+    background: #fff5d6; color: var(--yellow-strong);
+    display: grid; place-items: center;
+  }
+  .act .ic svg { width: 17px; height: 17px; }
+  .act .txt b { font-size: 13.5px; font-weight: 600; }
+  .act .txt span { font-size: 12px; color: var(--ink-soft); display: block; margin-top: 2px; }
+
+  /* Feature strip */
+  .features { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  .feature {
+    background: var(--panel); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .feature .ic {
+    width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
+    background: var(--yellow); color: var(--sidebar);
+    display: grid; place-items: center;
+  }
+  .feature .ic svg { width: 21px; height: 21px; }
+  .feature b { font-size: 14px; font-weight: 700; display: block; }
+  .feature span { font-size: 12.5px; color: var(--ink-soft); }
+
+  /* Responsive */
+  .hamburger { display: none; }
+  @media (max-width: 1100px) {
+    .metrics, .features { grid-template-columns: repeat(2, 1fr); }
+    .row { grid-template-columns: 1fr; }
+  }
+  @media (max-width: 820px) {
+    .sidebar {
+      position: fixed; z-index: 60; left: 0; top: 0;
+      transform: translateX(-100%); transition: transform .25s;
+    }
+    .sidebar.open { transform: translateX(0); }
+    .hamburger {
+      display: grid; place-items: center;
+      width: 40px; height: 40px; border-radius: 9px;
+      border: 1px solid var(--line); background: #fff; cursor: pointer;
+      color: var(--ink);
+    }
+    .hamburger svg { width: 20px; height: 20px; }
+    .topbar { padding: 0 18px; }
+    .content { padding: 20px 18px 36px; }
+    .metrics, .features { grid-template-columns: 1fr; }
+    .donut-body { flex-direction: column; }
+  }
+  @media (min-width: 821px) { .scrim { display: none !important; } }
+  .scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); z-index: 50; }
+</style>
+</head>
+<body>
+
+<!-- ===== Sidebar ===== -->
+<aside class="sidebar" id="sidebar">
+  <div class="brand-block">
+    <img src="fiarep-logo.png" alt="FIAREP — Field Inspection and Repair Estimation Platform">
+  </div>
+
+  <nav class="nav">
+    <a href="#" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg>Dashboard</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg>Inspections</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6M9 13l2 2 3-3"/></svg>Estimates</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z"/></svg>Repairs</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>Projects</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 8h2v8H8zM14 11h2v5h-2z"/></svg>Reports</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M3 10h18M8 2v4M16 2v4"/></svg>Calendar</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg>Clients</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>Team</a>
+    <a href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>Settings</a>
+  </nav>
+
+  <div class="quick">
+    <h4>Quick Action</h4>
+    <button class="primary"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>New Inspection</button>
+    <button class="ghost"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M17 8l-5-5-5 5M12 3v12"/></svg>Upload Report</button>
+  </div>
+
+  <div class="foot">© 2026 FIAREP<br>Grivvy Com LLC</div>
+</aside>
+<div class="scrim" id="scrim" style="display:none" onclick="toggleNav()"></div>
+
+<!-- ===== Main ===== -->
+<div class="main">
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:14px">
+      <button class="hamburger" onclick="toggleNav()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 6h18M3 12h18M3 18h18"/></svg></button>
+      <div class="title">FIA<span class="rep">REP</span><small>Field Inspection and Repair Estimation Platform</small></div>
+    </div>
+    <div class="topbar-right">
+      <div class="bell">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+        <span class="dot">3</span>
+      </div>
+      <div class="user">
+        <div class="avatar">JS</div>
+        <div class="who"><b>John Smith</b><span>Administrator</span></div>
+        <div class="chev"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg></div>
+      </div>
+    </div>
+  </header>
+
+  <main class="content">
+    <!-- Hero -->
+    <section class="hero">
+      <h1>Welcome back, <span class="name">John!</span></h1>
+      <p>Here's what's happening with your inspections today.</p>
+    </section>
+
+    <!-- Metrics -->
+    <section class="metrics">
+      <div class="metric">
+        <div>
+          <div class="label">Total Inspections</div>
+          <div class="value">124</div>
+          <div class="delta up">+12% <span>from last month</span></div>
+        </div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg></div>
+      </div>
+      <div class="metric">
+        <div>
+          <div class="label">Estimates Created</div>
+          <div class="value">87</div>
+          <div class="delta up">+8% <span>from last month</span></div>
+        </div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6"/></svg></div>
+      </div>
+      <div class="metric">
+        <div>
+          <div class="label">Repairs Completed</div>
+          <div class="value">45</div>
+          <div class="delta up">+15% <span>from last month</span></div>
+        </div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z"/></svg></div>
+      </div>
+      <div class="metric">
+        <div>
+          <div class="label">Pending Inspections</div>
+          <div class="value">23</div>
+          <div class="delta down">−5% <span>from last month</span></div>
+        </div>
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div>
+      </div>
+    </section>
+
+    <!-- Overview + Recent Inspections -->
+    <section class="row">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Inspection Overview</h3>
+          <select class="select"><option>This Month</option><option>Last Month</option><option>This Quarter</option></select>
+        </div>
+        <div class="donut-body">
+          <div class="donut">
+            <svg viewBox="0 0 42 42" width="168" height="168">
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="#eef1f4" stroke-width="6"/>
+              <!-- circumference ~100; segments completed36 inprog26 pending19 overdue19 -->
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="#2fae4e" stroke-width="6" stroke-dasharray="36 64" stroke-dashoffset="25" transform="rotate(-90 21 21)"/>
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="#FBC02D" stroke-width="6" stroke-dasharray="26 74" stroke-dashoffset="-11" transform="rotate(-90 21 21)"/>
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="#f08a24" stroke-width="6" stroke-dasharray="19 81" stroke-dashoffset="-37" transform="rotate(-90 21 21)"/>
+              <circle cx="21" cy="21" r="15.9" fill="none" stroke="#e23b3b" stroke-width="6" stroke-dasharray="19 81" stroke-dashoffset="-56" transform="rotate(-90 21 21)"/>
+            </svg>
+            <div class="center"><b>124</b><span>Total</span></div>
+          </div>
+          <div class="legend">
+            <div class="item"><i style="background:#2fae4e"></i><span class="lbl">Completed</span><span class="num">45 <small>(36%)</small></span></div>
+            <div class="item"><i style="background:#FBC02D"></i><span class="lbl">In Progress</span><span class="num">32 <small>(26%)</small></span></div>
+            <div class="item"><i style="background:#f08a24"></i><span class="lbl">Pending</span><span class="num">23 <small>(19%)</small></span></div>
+            <div class="item"><i style="background:#e23b3b"></i><span class="lbl">Overdue</span><span class="num">24 <small>(19%)</small></span></div>
+          </div>
+        </div>
+        <div class="panel-foot"><a href="#">View all inspections →</a></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Recent Inspections</h3>
+          <a href="#" class="link">View all</a>
+        </div>
+        <div class="insp-list">
+          <div class="insp">
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V8l6-4 6 4v13M9 21v-4h6v4"/></svg></div>
+            <div class="info"><b>Sunset Apartments</b><span>123 Sunset Blvd, Miami, FL</span></div>
+            <div class="meta"><div class="status s-prog">In Progress</div><div class="date">May 26, 2025</div></div>
+          </div>
+          <div class="insp">
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V8l6-4 6 4v13M9 21v-4h6v4"/></svg></div>
+            <div class="info"><b>Oceanview Condos</b><span>456 Ocean Dr, Miami, FL</span></div>
+            <div class="meta"><div class="status s-done">Completed</div><div class="date">May 23, 2025</div></div>
+          </div>
+          <div class="insp">
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V8l6-4 6 4v13M9 21v-4h6v4"/></svg></div>
+            <div class="info"><b>Downtown Office Tower</b><span>789 Brickell Ave, Miami, FL</span></div>
+            <div class="meta"><div class="status s-pend">Pending</div><div class="date">May 18, 2025</div></div>
+          </div>
+          <div class="insp">
+            <div class="thumb"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M6 21V8l6-4 6 4v13M9 21v-4h6v4"/></svg></div>
+            <div class="info"><b>Bayfront Plaza</b><span>321 Biscayne Blvd, Miami, FL</span></div>
+            <div class="meta"><div class="status s-over">Overdue</div><div class="date">May 15, 2025</div></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Estimation Summary + Recent Activity -->
+    <section class="row">
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Estimation Summary</h3>
+          <select class="select"><option>This Month</option><option>Last Month</option></select>
+        </div>
+        <div class="est-body">
+          <div class="est-total">Total Estimated Value<b>$2,450,000</b><span class="delta">+18% from last month</span></div>
+          <div class="chart-wrap">
+            <svg viewBox="0 0 620 190" preserveAspectRatio="none">
+              <defs>
+                <linearGradient id="fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#FBC02D" stop-opacity="0.35"/>
+                  <stop offset="100%" stop-color="#FBC02D" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <!-- gridlines -->
+              <g stroke="#eef1f4" stroke-width="1">
+                <line x1="40" y1="20"  x2="620" y2="20"/>
+                <line x1="40" y1="62"  x2="620" y2="62"/>
+                <line x1="40" y1="104" x2="620" y2="104"/>
+                <line x1="40" y1="146" x2="620" y2="146"/>
+              </g>
+              <g fill="#9aa4b0" font-size="10" text-anchor="end" font-family="Inter,sans-serif">
+                <text x="34" y="24">$300k</text>
+                <text x="34" y="66">$200k</text>
+                <text x="34" y="108">$100k</text>
+                <text x="34" y="150">$0</text>
+              </g>
+              <path d="M40,120 L112,96 L184,100 L256,84 L328,92 L400,104 L472,72 L544,58 L616,80 L616,146 L40,146 Z" fill="url(#fill)"/>
+              <path d="M40,120 L112,96 L184,100 L256,84 L328,92 L400,104 L472,72 L544,58 L616,80" fill="none" stroke="#F5B301" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+              <g fill="#F5B301">
+                <circle cx="40" cy="120" r="3.5"/><circle cx="112" cy="96" r="3.5"/><circle cx="184" cy="100" r="3.5"/><circle cx="256" cy="84" r="3.5"/><circle cx="328" cy="92" r="3.5"/><circle cx="400" cy="104" r="3.5"/><circle cx="472" cy="72" r="3.5"/><circle cx="544" cy="58" r="3.5"/><circle cx="616" cy="80" r="3.5"/>
+              </g>
+              <g fill="#9aa4b0" font-size="10" text-anchor="middle" font-family="Inter,sans-serif">
+                <text x="70" y="172">Apr 29</text>
+                <text x="200" y="172">May 4</text>
+                <text x="330" y="172">May 11</text>
+                <text x="470" y="172">May 18</text>
+                <text x="600" y="172">May 25</text>
+              </g>
+            </svg>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h3>Recent Activity</h3>
+          <a href="#" class="link">View all</a>
+        </div>
+        <div class="act-list">
+          <div class="act">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="M22 4L12 14.01l-3-3"/></svg></div>
+            <div class="txt"><b>Inspection complete: Sunset Apartments</b><span>2 minutes ago</span></div>
+          </div>
+          <div class="act">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6"/></svg></div>
+            <div class="txt"><b>Estimate created: Oceanview Condos</b><span>1 hour ago</span></div>
+          </div>
+          <div class="act">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z"/></svg></div>
+            <div class="txt"><b>Repair marked as complete: Bayfront Plaza</b><span>3 hours ago</span></div>
+          </div>
+          <div class="act">
+            <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M20 8v6M23 11h-6"/></svg></div>
+            <div class="txt"><b>New inspection assigned: Downtown Office Tower</b><span>5 hours ago</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Feature strip -->
+    <section class="features">
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8M8 11h8M8 15h5"/></svg></div>
+        <div><b>Accurate Inspections</b><span>Detailed field assessments</span></div>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l5 5v13a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z"/><path d="M14 3v6h6M9 13l2 2 3-3"/></svg></div>
+        <div><b>Precise Estimations</b><span>Accurate repair costing</span></div>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18v3h3l6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2-2z"/></svg></div>
+        <div><b>Efficient Repairs</b><span>Track and manage repairs</span></div>
+      </div>
+      <div class="feature">
+        <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v16H4z"/><path d="M8 8h2v8H8zM14 11h2v5h-2z"/></svg></div>
+        <div><b>Complete Reports</b><span>Professional documentation</span></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+  function toggleNav() {
+    var sb = document.getElementById('sidebar');
+    var sc = document.getElementById('scrim');
+    var open = sb.classList.toggle('open');
+    sc.style.display = open ? 'block' : 'none';
+  }
+</script>
+</body>
+</html>

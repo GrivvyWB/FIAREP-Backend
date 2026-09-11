@@ -1,6 +1,10 @@
-# [Project name]
+# FIAREP Backend
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+Shared API for FIAREP's inspection, repair, procurement, emergency, and leave workflows.
+
+The customer-facing website and platform name is **FIAREP.COM**. Use “Field Inspection and Repair Estimation Platform” as the supporting product description.
+
+Official logo asset: `attached_assets/logo-logo_1789085394103.webp`. Preserve the blueprint-style F mark, black background, white construction lines, and blue drafting accents; do not recolor or redraw it.
 
 ## Run & Operate
 
@@ -9,7 +13,9 @@ _Replace the heading above with the project's name, and this line with one sente
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
 - `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
+- `pnpm --filter @workspace/scripts run seed:fiarep` — seed FIAREP defaults
 - Required env: `DATABASE_URL` — Postgres connection string
+- Required env: `SESSION_SECRET` — signs short-lived access tokens
 
 ## Stack
 
@@ -22,15 +28,25 @@ _Replace the heading above with the project's name, and this line with one sente
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `lib/api-spec/openapi.yaml` — client/server API contract
+- `lib/db/src/schema/index.ts` — persistent schema
+- `artifacts/api-server/src/routes` — API route modules
+- `artifacts/api-server/src/lib/domain.ts` — role, position, code, and pricing rules
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- Existing app-generated record IDs remain primary keys for offline merge safety.
+- Domain state remains JSON-shaped while tenant/entity/project/development/sync fields are indexed.
+- Access tokens are short-lived JWTs; refresh tokens are opaque, hashed, rotated, and revocable.
+- Version checks return HTTP 409 for concurrent edits; pull sync uses `updatedAt` cursors.
+- Current actor/app mode/remembered staff remain device-local; shared settings live here.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Multi-tenant staff login and account lifecycle
+- Role-aware CRUD for FIAREP's 25 shared domain record types
+- Procurement, inspection, resident-report, emergency, elevator, and leave transitions
+- Cross-device cursor sync, notifications, device-token registry, and audit history
 
 ## User preferences
 
@@ -38,7 +54,9 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- Run API codegen after every OpenAPI change.
+- Closed procurement records are immutable.
+- Staff role/position changes must increment `sessionVersion`.
 
 ## Pointers
 
