@@ -1,12 +1,15 @@
 import * as SQLite from 'expo-sqlite';
 import {
   bootstrapAdministrator as bootstrapAdministratorOnServer,
+  createEntityRecord,
   getBootstrapStatus,
   login as loginOnServer,
+  pullSync,
   setAuthTokenGetter,
   setBaseUrl,
   type AuthResponse,
   type Staff,
+  updateEntityRecord,
 } from '@workspace/api-client-react';
 import type { Rates } from './takeoff';
 import type { LineItem } from './catalog';
@@ -86,7 +89,107 @@ export async function createProject(name: string, client: string): Promise<Proje
   const metaWithOwner = { ...meta, ownerName: (actor.name || '').trim(), ownerRole: actor.role || 'inspector' };
   const p: Project = { id: uid(), name, client, createdAt: new Date().toISOString(), rates: null };
   await d.runAsync('INSERT INTO projects (id,name,client,createdAt,meta) VALUES (?,?,?,?,?)', p.id, p.name, p.client, p.createdAt, JSON.stringify(metaWithOwner));
+  await pushProject(d, p.id).catch(() => undefined);
   return p;
+}
+
+async function pushProject(
+  d: SQLite.SQLiteDatabase,
+  projectId: string,
+): Promise<void> {
+  const row = await d.getFirstAsync<any>('SELECT * FROM projects WHERE id = ?', projectId);
+  if (!row) return;
+  const meta = row.meta ? JSON.parse(row.meta) : {};
+  const developmentsRow = await d.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?',
+    'auth_developments',
+  );
+  let developments: string[] = [];
+  try {
+    developments = developmentsRow?.value
+      ? JSON.parse(developmentsRow.value)
+      : [];
+  } catch {}
+  const development = developments.length === 1 ? developments[0] : undefined;
+  const state = {
+    name: row.name,
+    client: row.client || '',
+    rates: row.rates ? JSON.parse(row.rates) : null,
+    meta,
+  };
+  try {
+    await createEntityRecord('projects', { id: row.id, development, state });
+  } catch (error) {
+    if (
+      typeof error !== 'object' ||
+      error === null ||
+      !('status' in error) ||
+      (error as { status?: unknown }).status !== 409
+    ) {
+      throw error;
+    }
+    await updateEntityRecord('projects', row.id, { id: row.id, development, state });
+  }
+  await d.runAsync(
+    'UPDATE projects SET meta = ? WHERE id = ?',
+    JSON.stringify({ ...meta, syncStatus: 'synced' }),
+    row.id,
+  );
+}
+
+export async function syncProjects(): Promise<void> {
+  const d = await db();
+  const localRows = await d.getAllAsync<any>('SELECT id, meta FROM projects');
+  for (const row of localRows) {
+    let meta: any = {};
+    try { meta = row.meta ? JSON.parse(row.meta) : {}; } catch {}
+    if (meta.syncStatus !== 'synced') await pushProject(d, row.id);
+  }
+
+  const cursorRow = await d.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?',
+    'sync_projects_cursor',
+  );
+  const result = await pullSync({
+    since: cursorRow?.value || new Date(0).toISOString(),
+    entities: 'projects',
+  });
+  for (const record of result.records) {
+    if (record.entity !== 'projects') continue;
+    if (record.deleted) {
+      await d.runAsync('DELETE FROM rooms WHERE projectId = ?', record.id);
+      await d.runAsync('DELETE FROM projects WHERE id = ?', record.id);
+      continue;
+    }
+    const state = record.state as Record<string, any>;
+    const meta = {
+      ...(state.meta && typeof state.meta === 'object' ? state.meta : {}),
+      syncStatus: 'synced',
+      serverVersion: record.version,
+      updatedAt: record.updatedAt,
+    };
+    await d.runAsync(
+      `INSERT INTO projects (id,name,client,createdAt,rates,meta)
+       VALUES (?,?,?,?,?,?)
+       ON CONFLICT(id) DO UPDATE SET
+         name = excluded.name,
+         client = excluded.client,
+         createdAt = excluded.createdAt,
+         rates = excluded.rates,
+         meta = excluded.meta`,
+      record.id,
+      String(state.name || 'Untitled project'),
+      String(state.client || ''),
+      String(record.createdAt),
+      state.rates == null ? null : JSON.stringify(state.rates),
+      JSON.stringify(meta),
+    );
+  }
+  await d.runAsync(
+    'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    'sync_projects_cursor',
+    result.cursor,
+  );
 }
 
 // Supervisor dispatches a job to an inspector: create project from address + assign (auto-notifies inspector).
@@ -726,6 +829,11 @@ async function persistServerSession(
     'auth_refresh_token',
     session.refreshToken,
   );
+  await d.runAsync(
+    'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    'auth_developments',
+    JSON.stringify(session.staff.developments),
+  );
   const staff = session.staff as Staff;
   const localAccount: StaffAccount = {
     id: staff.id,
@@ -996,6 +1104,7 @@ export async function verifyStaffLogin(name: string, code: string, role: StaffRo
       role,
     });
     await persistServerSession(session);
+    await syncProjects();
     return true;
   } catch (error) {
     if (
@@ -1075,6 +1184,7 @@ export async function bootstrapAdministrator(name: string): Promise<StaffAccount
     code,
   });
   await persistServerSession(session, code);
+  await syncProjects();
   const all = await listStaffAccounts('approved');
   const account = all.find((item) => item.id === session.staff.id);
   if (!account) throw new Error('Administrator session could not be saved.');

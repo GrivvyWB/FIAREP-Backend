@@ -175,13 +175,18 @@ export const ListEntityRecordsQueryParams = zod.object({
   "status": zod.coerce.string().optional()
 })
 
+
+
+
 export const ListEntityRecordsResponseItem = zod.object({
   "id": zod.string(),
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
-  "state": zod.record(zod.string(), zod.unknown())
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
 }).and(zod.object({
   "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "version": zod.number().int()
@@ -193,20 +198,29 @@ export const CreateEntityRecordParams = zod.object({
   "entity": zod.coerce.string()
 })
 
+
+
+
 export const CreateEntityRecordBody = zod.object({
   "id": zod.string(),
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
-  "state": zod.record(zod.string(), zod.unknown())
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1).optional()
 })
+
+
+
 
 export const CreateEntityRecordResponse = zod.object({
   "id": zod.string(),
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
-  "state": zod.record(zod.string(), zod.unknown())
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
 }).and(zod.object({
   "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "version": zod.number().int()
@@ -218,13 +232,18 @@ export const GetEntityRecordParams = zod.object({
   "id": zod.coerce.string()
 })
 
+
+
+
 export const GetEntityRecordResponse = zod.object({
   "id": zod.string(),
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
-  "state": zod.record(zod.string(), zod.unknown())
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
 }).and(zod.object({
   "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "version": zod.number().int()
@@ -236,20 +255,29 @@ export const UpdateEntityRecordParams = zod.object({
   "id": zod.coerce.string()
 })
 
+
+
+
 export const UpdateEntityRecordBody = zod.object({
   "id": zod.string(),
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
-  "state": zod.record(zod.string(), zod.unknown())
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1).optional()
 })
+
+
+
 
 export const UpdateEntityRecordResponse = zod.object({
   "id": zod.string(),
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
-  "state": zod.record(zod.string(), zod.unknown())
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
 }).and(zod.object({
   "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "version": zod.number().int()
@@ -353,15 +381,20 @@ export const PullSyncQueryParams = zod.object({
   "entities": zod.coerce.string().optional()
 })
 
+
+
+
 export const PullSyncResponse = zod.object({
   "cursor": zod.coerce.date(),
   "records": zod.array(zod.object({
   "id": zod.string(),
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
-  "state": zod.record(zod.string(), zod.unknown())
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
 }).and(zod.object({
   "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "version": zod.number().int()

@@ -111,6 +111,34 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
   return true;
 }
 
+export function developmentAllowed(
+  actor: Actor,
+  development: string | null,
+): boolean {
+  return (
+    actor.role === "administrator" ||
+    actor.developments.length === 0 ||
+    !development ||
+    actor.developments.includes(development)
+  );
+}
+
+export function entityDevelopmentAllowed(
+  actor: Actor,
+  entity: string,
+  development: string | null,
+): boolean {
+  if (
+    entity === "projects" &&
+    !development &&
+    actor.role !== "administrator" &&
+    actor.developments.length > 0
+  ) {
+    return false;
+  }
+  return developmentAllowed(actor, development);
+}
+
 export function canCreateEntity(actor: Actor, entity: string): boolean {
   if (entity === "emergency-units" || entity === "emergency-jobs") {
     return (

@@ -1,7 +1,12 @@
 import { Router, type IRouter } from "express";
-import { and, asc, eq, gt, inArray, or } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, lte, or } from "drizzle-orm";
 import { db, entityRecords, notifications } from "@workspace/db";
-import { ENTITIES, stripPricing } from "../lib/domain";
+import {
+  ENTITIES,
+  canReadEntity,
+  entityDevelopmentAllowed,
+  stripPricing,
+} from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -22,6 +27,10 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
           .filter((item) => ENTITIES.has(item))
       : [...ENTITIES];
   const cursor = new Date();
+  if (requested.some((entity) => !canReadEntity(actor, entity))) {
+    res.status(403).json({ error: "This sync request includes a restricted module" });
+    return;
+  }
   const records =
     requested.length === 0
       ? []
@@ -32,10 +41,11 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
             and(
               eq(entityRecords.tenantId, actor.tenantId),
               gt(entityRecords.updatedAt, since),
+              lte(entityRecords.updatedAt, cursor),
               inArray(entityRecords.entity, requested),
             ),
           )
-          .orderBy(asc(entityRecords.updatedAt));
+          .orderBy(asc(entityRecords.updatedAt), asc(entityRecords.id));
   const alerts = await db
     .select()
     .from(notifications)
@@ -43,6 +53,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       and(
         eq(notifications.tenantId, actor.tenantId),
         gt(notifications.updatedAt, since),
+        lte(notifications.updatedAt, cursor),
         or(
           eq(notifications.target, actor.name),
           eq(notifications.target, actor.role),
@@ -52,7 +63,11 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
     .orderBy(asc(notifications.updatedAt));
   res.json({
     cursor: cursor.toISOString(),
-    records: records.map((row) => ({
+    records: records
+      .filter((row) =>
+        entityDevelopmentAllowed(actor, row.entity, row.development),
+      )
+      .map((row) => ({
       id: row.id,
       entity: row.entity,
       projectId: row.projectId,
@@ -62,7 +77,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       version: row.version,
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
-    })),
+      })),
     notifications: alerts,
   });
 });

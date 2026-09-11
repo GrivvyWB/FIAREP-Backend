@@ -8,6 +8,7 @@ import {
   canDeleteEntity,
   canMutateEntity,
   canReadEntity,
+  entityDevelopmentAllowed,
   generatedCode,
   recordId,
   stripPricing,
@@ -65,18 +66,6 @@ function withGeneratedFields(
   return state;
 }
 
-function developmentAllowed(
-  actor: ReturnType<typeof actorFrom>,
-  development: string | null,
-) {
-  return (
-    actor.role === "administrator" ||
-    actor.developments.length === 0 ||
-    !development ||
-    actor.developments.includes(development)
-  );
-}
-
 router.get("/v1/:entity", async (req, res, next) => {
   const entity = req.params["entity"];
   if (!validEntity(entity)) {
@@ -109,7 +98,7 @@ router.get("/v1/:entity", async (req, res, next) => {
     typeof req.query["status"] === "string" ? req.query["status"] : null;
   res.json(
     rows
-      .filter((row) => developmentAllowed(actor, row.development))
+      .filter((row) => entityDevelopmentAllowed(actor, entity, row.development))
       .filter((row) => !projectId || row.projectId === projectId)
       .filter(
         (row) =>
@@ -145,13 +134,20 @@ router.post("/v1/:entity", async (req, res, next) => {
       : typeof rawState["projectId"] === "string"
         ? rawState["projectId"]
         : null;
-  const development =
+  let development =
     typeof body["development"] === "string"
       ? body["development"]
       : typeof rawState["development"] === "string"
         ? rawState["development"]
         : null;
-  if (!developmentAllowed(actor, development)) {
+  if (
+    entity === "projects" &&
+    !development &&
+    actor.developments.length === 1
+  ) {
+    development = actor.developments[0]!;
+  }
+  if (!entityDevelopmentAllowed(actor, entity, development)) {
     res.status(403).json({ error: "Development access denied" });
     return;
   }
@@ -206,7 +202,7 @@ router.get("/v1/:entity/:id", async (req, res, next) => {
       ),
     )
     .limit(1);
-  if (!row || !developmentAllowed(actor, row.development)) {
+  if (!row || !entityDevelopmentAllowed(actor, entity, row.development)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -242,7 +238,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
       ),
     )
     .limit(1);
-  if (!current || !developmentAllowed(actor, current.development)) {
+  if (!current || !entityDevelopmentAllowed(actor, entity, current.development)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }

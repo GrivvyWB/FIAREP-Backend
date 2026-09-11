@@ -58,10 +58,13 @@ export interface EntityInput {
   projectId?: string;
   development?: string;
   state: EntityInputState;
+  /** @minimum 1 */
+  version?: number;
 }
 
 export type EntityRecord = EntityInput & {
   entity: string;
+  deleted?: boolean;
   createdAt: string;
   updatedAt: string;
   version: number;
