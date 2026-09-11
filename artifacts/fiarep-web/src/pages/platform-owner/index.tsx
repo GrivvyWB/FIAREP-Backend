@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { 
   useListOrganizations, 
   useUpdateOrganization, 
+  useDeleteOrganization,
   OrganizationWithUsage, 
   getListOrganizationsQueryKey 
   ,useListPlatformLicenseAudit
@@ -29,7 +30,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy } from "lucide-react";
+import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy, X } from "lucide-react";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
 import { format, isValid } from "date-fns";
 
@@ -43,6 +44,7 @@ export default function OwnerDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateMutation = useUpdateOrganization();
+  const deleteOrganization = useDeleteOrganization();
   const [propertyOrg, setPropertyOrg] = useState<string | null>(null);
   const [propertyAddress, setPropertyAddress] = useState("");
   const { data: properties = [] } = useListPlatformOrganizationProperties(propertyOrg || "", { query: { enabled: !!propertyOrg, queryKey: getListPlatformOrganizationPropertiesQueryKey(propertyOrg || "") } });
@@ -96,6 +98,22 @@ export default function OwnerDashboard() {
         variant: "destructive",
         title: "Update Failed",
         description: err.message || "Could not update status.",
+      });
+    }
+  };
+
+  const handleDelete = async (org: OrganizationWithUsage) => {
+    if (!window.confirm(`Delete ${org.name} (${org.id})? This cannot be undone.`)) return;
+    try {
+      await deleteOrganization.mutateAsync({ id: org.id });
+      if (propertyOrg === org.id) setPropertyOrg(null);
+      await queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+      toast({ title: "Organization Deleted", description: `${org.name} was deleted.` });
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Delete Failed",
+        description: err?.data?.error || err?.message || "Could not delete organization.",
       });
     }
   };
@@ -227,13 +245,14 @@ export default function OwnerDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-900">
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end" className="w-48 bg-white">
+                        <div className="flex items-center justify-end gap-0.5">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-8 w-8 text-slate-500 hover:text-slate-900">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end" className="w-48 bg-white">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem onClick={() => handleEdit(org)}>
                               <Edit2 className="w-4 h-4 mr-2 text-slate-400" /> Edit Constraints
@@ -260,8 +279,23 @@ export default function OwnerDashboard() {
                                 <XCircle className="w-4 h-4 mr-2 text-rose-500" /> Terminate (Expire)
                               </DropdownMenuItem>
                             )}
-                          </DropdownMenuContent>
-                        </DropdownMenu>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                          {org.id !== "default" && (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 text-slate-300 hover:bg-rose-50 hover:text-rose-600"
+                              aria-label={`Delete ${org.name}`}
+                              title="Delete organization"
+                              disabled={deleteOrganization.isPending}
+                              onClick={() => handleDelete(org)}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   );

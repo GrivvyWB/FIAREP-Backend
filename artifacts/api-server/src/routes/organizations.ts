@@ -206,4 +206,43 @@ router.patch("/v1/platform/organizations/:id", async (req, res) => {
   res.json(org);
 });
 
+router.delete("/v1/platform/organizations/:id", async (req, res): Promise<void> => {
+  const id = String(req.params.id);
+  if (id === "default") {
+    res.status(400).json({ error: "Default organization cannot be deleted" });
+    return;
+  }
+
+  const deleted = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`organization-delete:${id}`}))`);
+    const [organization] = await tx.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+    if (!organization) return null;
+
+    const [{ value: staffCount }] = await tx.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, id));
+    const [{ value: propertyCount }] = await tx.select({ value: count() }).from(organizationProperties).where(eq(organizationProperties.organizationId, id));
+    if (Number(staffCount) > 0 || Number(propertyCount) > 0) {
+      throw Object.assign(new Error("Remove all staff and registered properties before deleting this organization"), { status: 409 });
+    }
+
+    await tx.delete(organizations).where(eq(organizations.id, id));
+    return organization;
+  }).catch((error: any) => {
+    if (error?.status === 409) return error;
+    throw error;
+  });
+
+  if (!deleted) {
+    res.status(404).json({ error: "Organization not found" });
+    return;
+  }
+  if (deleted instanceof Error) {
+    res.status(409).json({ error: deleted.message });
+    return;
+  }
+
+  const owner = res.locals["platformOwner"] as { name: string };
+  await platformAudit(owner.name, "organization.deleted", id, deleted, null);
+  res.status(204).send();
+});
+
 export default router;

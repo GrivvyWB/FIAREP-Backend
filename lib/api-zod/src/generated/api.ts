@@ -442,6 +442,13 @@ export const UpdateOrganizationResponse = zod.object({
 })
 
 
+export const DeleteOrganizationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteOrganizationResponse = zod.void()
+
+
 export const ListPlatformOrganizationPropertiesParams = zod.object({
   "organizationId": zod.coerce.string()
 })

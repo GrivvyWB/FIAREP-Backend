@@ -1385,6 +1385,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getUpdateOrganizationMutationOptions(options));
     }
 
+export const getDeleteOrganizationUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/platform/organizations/${id}`
+}
+
+export const deleteOrganization = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteOrganizationUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteOrganizationMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteOrganization'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteOrganization>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteOrganization(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteOrganization>>>
+
+    export type DeleteOrganizationMutationError = ErrorType<void>
+
+    export const useDeleteOrganization = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteOrganization>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteOrganization>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getDeleteOrganizationMutationOptions(options));
+    }
+
 export const getListPlatformOrganizationPropertiesUrl = (organizationId: string,) => {
 
 
