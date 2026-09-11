@@ -1197,7 +1197,7 @@ export async function revokeStaffAccount(id: string): Promise<void> {
 }
 
 // Verify a login: name + code must match an APPROVED account for the given role.
-export async function verifyStaffLogin(name: string, code: string, role: StaffRole): Promise<boolean> {
+export async function verifyStaffLogin(name: string, code: string, role: StaffRole, expectedPosition?: string): Promise<boolean> {
   try {
     const preDb = await db();
     const priorIdentity = await preDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
@@ -1208,6 +1208,10 @@ export async function verifyStaffLogin(name: string, code: string, role: StaffRo
       code: code.trim(),
       role,
     });
+    if (expectedPosition && session.staff.position !== expectedPosition) {
+      await logoutOnServer({ refreshToken: session.refreshToken }).catch(() => undefined);
+      return false;
+    }
     await rotateActorCache(session.staff);
     await recoverLegacyQueue(preDb, session.staff, evidence);
     await persistServerSession(session);

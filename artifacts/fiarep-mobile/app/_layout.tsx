@@ -33,7 +33,7 @@ function Screen({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) => void; onCancel: () => void }) {
+function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: string; onUnlock: (overrideMode?: AppMode) => void; onCancel: () => void }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
   const [msg, setMsg] = useState('');
@@ -56,7 +56,7 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
   async function doLogin() {
     setMsg(''); setBusy(true);
     try {
-      const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role);
+      const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role, props.expectedPosition);
       if (ok) {
         await setRememberedStaff(props.role, name.trim());
         await syncAllEntities();
@@ -105,7 +105,7 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
 
   return (
     <Screen>
-      <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{roleLabel(props.role)}</Text>
+      <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{props.label || roleLabel(props.role)}</Text>
       <Text style={[ui.label, { textAlign: 'center' }]}>
         {bootstrapping
           ? 'No administrator exists yet. Create the first administrator account.'
@@ -150,6 +150,7 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
 
 function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
   const [gateFor, setGateFor] = useState<StaffRole | null>(null);
+  const [boroughDirectorGate, setBoroughDirectorGate] = useState(false);
   const pickStaffRole = async (role: StaffRole) => {
     const staff = await restoreServerSession();
     if (staff?.role === role) onPick(role as AppMode);
@@ -160,8 +161,10 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
     return (
       <StaffGate
         role={gateFor}
+        label={boroughDirectorGate ? 'Borough Director' : undefined}
+        expectedPosition={boroughDirectorGate ? 'Borough Director' : undefined}
         onUnlock={(override?: AppMode) => { const r = override || (gateFor as AppMode); setGateFor(null); onPick(r); }}
-        onCancel={() => setGateFor(null)}
+        onCancel={() => { setGateFor(null); setBoroughDirectorGate(false); }}
       />
     );
   }
@@ -185,11 +188,14 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
       <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => onPick('emergency')}>
         <Text style={ui.btnText}>Emergency Unit</Text>
       </Pressable>
+      <Pressable style={ui.btn} onPress={() => { setBoroughDirectorGate(true); setGateFor('management'); }}>
+        <Text style={ui.btnText}>Borough Director  🔒</Text>
+      </Pressable>
        <Pressable style={ui.btn} onPress={() => pickStaffRole('administrator')}>
         <Text style={ui.btnText}>Administrator  🔒</Text>
       </Pressable>
        <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
-        <Text style={ui.btnText}>Borough Director / Management  🔒</Text>
+        <Text style={ui.btnText}>Management  🔒</Text>
       </Pressable>
        <Pressable style={ui.btn} onPress={() => pickStaffRole('procurement')}>
         <Text style={ui.btnText}>Procurement  🔒</Text>
