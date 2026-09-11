@@ -18,22 +18,12 @@ function fmt(iso: string): string {
 const CLASS_COLOR: Record<HazardClass, string> = { A: '#1E7D4F', B: '#B4741A', C: '#C0392B' };
 
 export default function InspectorViolations() {
-  const { preBuilding, preViolationNo, preNote } = useLocalSearchParams<{ preBuilding?: string; preViolationNo?: string; preNote?: string }>();
+  const { preBuilding, preUnit, preViolationNo, preNote } = useLocalSearchParams<{ preBuilding?: string; preUnit?: string; preViolationNo?: string; preNote?: string }>();
   const [building, setBuilding] = useState('');
+  const [assignedUnit, setAssignedUnit] = useState('');
   const [violationNo, setViolationNo] = useState('');
   const [prefilled, setPrefilled] = useState(false);
 
-  useFocusEffect(
-    useCallback(() => {
-      if (prefilled) return;
-      if (preBuilding || preViolationNo || preNote) {
-        if (preBuilding) setBuilding(String(preBuilding));
-        if (preViolationNo) setViolationNo(String(preViolationNo));
-        if (preNote) setNotes(String(preNote));
-        setPrefilled(true);
-      }
-    }, [preBuilding, preViolationNo, preNote, prefilled])
-  );
   const [query, setQuery] = useState('');
   const [pickedCode, setPickedCode] = useState<string>('');
   const [pickedDesc, setPickedDesc] = useState<string>('');
@@ -52,13 +42,13 @@ export default function InspectorViolations() {
   }, [building, violationNo]);
   useFocusEffect(load);
 
-  async function handleLookup() {
-    if (!building.trim()) return;
+  async function lookupAddress(address: string) {
+    if (!address.trim()) return;
     setLookupLoading(true);
     setLookupError('');
     setLookupData(null);
     try {
-      const res = await lookupNycProperty({ address: building.trim(), limit: 25 });
+      const res = await lookupNycProperty({ address: address.trim(), limit: 25 });
       setLookupData(res);
     } catch (err: any) {
       setLookupError(err?.message || 'Lookup failed.');
@@ -66,6 +56,37 @@ export default function InspectorViolations() {
       setLookupLoading(false);
     }
   }
+
+  async function handleLookup() {
+    await lookupAddress(building);
+  }
+
+  useFocusEffect(
+    useCallback(() => {
+      if (prefilled) return;
+      if (preBuilding || preUnit || preViolationNo || preNote) {
+        const address = preBuilding ? String(preBuilding) : '';
+        setBuilding(address);
+        if (preUnit) setAssignedUnit(String(preUnit));
+        if (preViolationNo) setViolationNo(String(preViolationNo));
+        if (preNote) setNotes(String(preNote));
+        setPrefilled(true);
+        if (address.trim()) lookupAddress(address).catch(() => undefined);
+      }
+    }, [preBuilding, preUnit, preViolationNo, preNote, prefilled])
+  );
+
+  const normalizedUnit = assignedUnit.trim().toLowerCase().replace(/^(apartment|apt|unit|#)\s*/i, '').replace(/^0+/, '');
+  const matchesAssignedUnit = (apartment?: string | null) => {
+    if (!normalizedUnit || !apartment) return false;
+    return apartment.trim().toLowerCase().replace(/^(apartment|apt|unit|#)\s*/i, '').replace(/^0+/, '') === normalizedUnit;
+  };
+  const hpdViolations = lookupData
+    ? [...lookupData.hpdViolations].sort((a, b) => Number(matchesAssignedUnit(b.apartment)) - Number(matchesAssignedUnit(a.apartment)))
+    : [];
+  const hpdComplaints = lookupData
+    ? [...lookupData.hpdComplaints].sort((a, b) => Number(matchesAssignedUnit(b.apartment)) - Number(matchesAssignedUnit(a.apartment)))
+    : [];
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -106,6 +127,11 @@ export default function InspectorViolations() {
           <Text style={ui.btnText}>{lookupLoading ? 'Wait' : 'Lookup'}</Text>
         </Pressable>
       </View>
+      {!!assignedUnit && (
+        <Text style={{ color: ACCENT, fontWeight: '700', marginTop: 6 }}>
+          Assigned apartment/unit: {assignedUnit}
+        </Text>
+      )}
       {!!lookupError && <Text style={{ color: '#c0392b', marginTop: 4, fontSize: 13 }}>{lookupError}</Text>}
       {lookupData && (
         <View style={[ui.card, { marginTop: 8, backgroundColor: '#f9f9f9', padding: 12 }]}>
@@ -133,13 +159,14 @@ export default function InspectorViolations() {
             </View>
           )}
 
-          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>HPD Violations ({lookupData.summary.hpdViolations} total, {lookupData.summary.openHpdViolations} open)</Text>
-          {lookupData.hpdViolations.length === 0 ? <Text style={ui.listSub}>No HPD violations found.</Text> : lookupData.hpdViolations.map((v, i) => (
+          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>HPD Violations ({lookupData.summary.hpdViolations} building total, {lookupData.summary.openHpdViolations} open)</Text>
+          {hpdViolations.length === 0 ? <Text style={ui.listSub}>No HPD violations found.</Text> : hpdViolations.map((v, i) => (
             <View key={v.id || i} style={{ marginTop: 6, padding: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0' }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                <Text style={{ fontWeight: '600', color: ACCENT }}>Class {v.class || '?'}</Text>
+                <Text style={{ fontWeight: '600', color: ACCENT }}>Class {v.class || '?'}{v.apartment ? ` · Apt ${v.apartment}` : ''}</Text>
                 <Text style={{ color: v.status === 'Open' ? '#c0392b' : '#1E7D4F', fontWeight: '600' }}>{v.status}</Text>
               </View>
+              {matchesAssignedUnit(v.apartment) && <Text style={{ color: '#1E7D4F', fontWeight: '700', fontSize: 12, marginTop: 3 }}>Matches assigned unit</Text>}
               <Text style={{ fontSize: 13, marginTop: 4 }}>{v.description}</Text>
               {!!v.inspectionDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Inspected: {v.inspectionDate}</Text>}
             </View>
@@ -157,13 +184,15 @@ export default function InspectorViolations() {
             </View>
           ))}
 
-          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>HPD Complaints ({lookupData.summary.hpdComplaints} total)</Text>
-          {lookupData.hpdComplaints.length === 0 ? <Text style={ui.listSub}>No HPD complaints found.</Text> : lookupData.hpdComplaints.map((c, i) => (
+          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>HPD Complaints ({lookupData.summary.hpdComplaints} building total)</Text>
+          {hpdComplaints.length === 0 ? <Text style={ui.listSub}>No HPD complaints found.</Text> : hpdComplaints.map((c, i) => (
             <View key={c.id || i} style={{ marginTop: 6, padding: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0' }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ fontWeight: '600', color: ACCENT, flex: 1 }} numberOfLines={1}>{c.majorCategory}</Text>
                 <Text style={{ color: c.status === 'Open' ? '#c0392b' : '#1E7D4F', fontWeight: '600', marginLeft: 8 }}>{c.status}</Text>
               </View>
+              {!!c.apartment && <Text style={ui.listSub}>Apartment: {c.apartment}</Text>}
+              {matchesAssignedUnit(c.apartment) && <Text style={{ color: '#1E7D4F', fontWeight: '700', fontSize: 12, marginTop: 3 }}>Matches assigned unit</Text>}
               <Text style={{ fontSize: 13, marginTop: 4 }}>{c.description}</Text>
               {!!c.receivedDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Received: {c.receivedDate}</Text>}
             </View>

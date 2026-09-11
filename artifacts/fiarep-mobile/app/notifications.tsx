@@ -39,7 +39,9 @@ export default function Notifications() {
     }
     if (msg.includes('violation to look up')) {
       const v = n.reportId ? await getViolationLookup(n.reportId) : null;
-      const addr = v ? (v.address + (v.unit ? '  Unit ' + v.unit : '')) : '';
+      const address = v ? v.address : '';
+      const unit = v?.unit || '';
+      const addr = address + (unit ? '  Unit ' + unit : '');
       const body = v
         ? 'Violation: ' + v.violationNumber + '\nAddress: ' + addr + (v.note ? '\nNote: ' + v.note : '')
         : (n.detail || 'No further details.');
@@ -54,10 +56,11 @@ export default function Notifications() {
       const buttons: any[] = [{ text: 'Close', style: 'cancel' }];
       if (isCpm) {
         buttons.push({ text: 'Create scope', onPress: () => router.push('/scope-submit?preAddress=' + encodeURIComponent(addr) + '&preScope=' + encodeURIComponent(scopeSeed)) });
+        buttons.push({ text: 'View DOB / HPD', onPress: () => router.push('/inspector-violations?preBuilding=' + encodeURIComponent(address) + '&preUnit=' + encodeURIComponent(unit) + '&preViolationNo=' + encodeURIComponent(v ? v.violationNumber : '') + '&preNote=' + encodeURIComponent(v && v.note ? v.note : '')) });
       }
       // Inspectors log the violation (code + A/B/C class).
       if (pos === 'inspector' || pos === '') {
-        buttons.push({ text: 'Log Violation', onPress: () => router.push('/inspector-violations?preBuilding=' + encodeURIComponent(addr) + '&preViolationNo=' + encodeURIComponent(v ? v.violationNumber : '') + '&preNote=' + encodeURIComponent(v && v.note ? v.note : '')) });
+        buttons.push({ text: 'View DOB / HPD', onPress: () => router.push('/inspector-violations?preBuilding=' + encodeURIComponent(address) + '&preUnit=' + encodeURIComponent(unit) + '&preViolationNo=' + encodeURIComponent(v ? v.violationNumber : '') + '&preNote=' + encodeURIComponent(v && v.note ? v.note : '')) });
       }
       // Elevator mechanic: open Elevator Services keyed to their elevator job.
       if (pos === 'elevator service') {

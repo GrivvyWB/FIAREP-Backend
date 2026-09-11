@@ -79,14 +79,15 @@ export default function ReportDetail() {
             </View>
           );
         })()}
-        {position === 'Inspector' && (
+        {(position === 'Inspector' || position === 'CPM') && (
           <Pressable
             style={[ui.btn, { marginTop: 10 }]}
-            onPress={() => router.push('/inspector-violations?preBuilding=' + encodeURIComponent((r.address || '') + (r.unit ? '  Unit ' + r.unit : ''))
+            onPress={() => router.push('/inspector-violations?preBuilding=' + encodeURIComponent(r.address || '')
+              + '&preUnit=' + encodeURIComponent(r.unit || '')
               + '&preViolationNo=' + encodeURIComponent(r.complaintNo || '')
               + '&preNote=' + encodeURIComponent((r.description || '') + (r.residentName ? '  \u2014 ' + r.residentName : '')))}
           >
-            <Text style={ui.btnText}>Log Violation for this</Text>
+            <Text style={ui.btnText}>View DOB / HPD for this address</Text>
           </Pressable>
         )}
         {position === 'Elevator Service' && (

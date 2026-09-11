@@ -73,7 +73,7 @@ export default function MyJobs() {
           <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>Resident requests ({resJobs.length})</Text>
           {resJobs.map((r) => (
             <View key={r.id} style={[ui.card, { gap: 4, marginTop: 8 }]}>
-              <Pressable onPress={() => router.push('/worker')}>
+              <Pressable onPress={() => router.push('/report-detail?id=' + encodeURIComponent(r.id))}>
                 <Text style={{ fontSize: 15, fontWeight: '600' }}>{r.location || r.unit || r.address || 'Request'}</Text>
                 {!!r.description && <Text style={ui.listSub} numberOfLines={2}>{r.description}</Text>}
                 <Text style={{ fontSize: 12, color: ACCENT, fontWeight: '600' }}>Open to complete \u203a</Text>
