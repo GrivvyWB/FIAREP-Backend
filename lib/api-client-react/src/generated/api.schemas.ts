@@ -9,6 +9,63 @@ export interface HealthStatus {
   status: string;
 }
 
+export interface ViolationClassificationRequest {
+  /**
+     * @minLength 32
+     * @maxLength 11184849
+     * @pattern ^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$
+     */
+  image: string;
+}
+
+export type ViolationClassificationClassification = typeof ViolationClassificationClassification[keyof typeof ViolationClassificationClassification];
+
+
+export const ViolationClassificationClassification = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+} as const;
+
+export type ViolationClassificationPriority = typeof ViolationClassificationPriority[keyof typeof ViolationClassificationPriority];
+
+
+export const ViolationClassificationPriority = {
+  Low: 'Low',
+  Medium: 'Medium',
+  High: 'High',
+} as const;
+
+export interface ViolationClassification {
+  classification: ViolationClassificationClassification;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  confidence: number;
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  condition: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  hpCode: string;
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  trade: string;
+  priority: ViolationClassificationPriority;
+  /**
+     * @minLength 1
+     * @maxLength 1000
+     */
+  description: string;
+}
+
 export interface LoginInput {
   name: string;
   /**

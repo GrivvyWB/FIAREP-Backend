@@ -45,7 +45,9 @@ import type {
   Staff,
   StaffInput,
   SyncResponse,
-  UnauthorizedResponse
+  UnauthorizedResponse,
+  ViolationClassification,
+  ViolationClassificationRequest
 } from './api.schemas';
 
 import { customFetch } from '../custom-fetch';
@@ -152,6 +154,77 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getClassifyViolationUrl = () => {
+
+
+
+
+  return `/api/ai/classify-violation`
+}
+
+/**
+ * @summary Classify a photographed housing violation
+ */
+export const classifyViolation = async (violationClassificationRequest: ViolationClassificationRequest, options?: Parameters<typeof customFetch>[1]): Promise<ViolationClassification> => {
+
+  return customFetch<ViolationClassification>(getClassifyViolationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(violationClassificationRequest)
+  }
+);}
+
+
+
+
+
+export const getClassifyViolationMutationOptions = <TError = ErrorType<Error | UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof classifyViolation>>, TError,{data: BodyType<ViolationClassificationRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof classifyViolation>>, TError,{data: BodyType<ViolationClassificationRequest>}, TContext> => {
+
+const mutationKey = ['classifyViolation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof classifyViolation>>, {data: BodyType<ViolationClassificationRequest>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  classifyViolation(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClassifyViolationMutationResult = NonNullable<Awaited<ReturnType<typeof classifyViolation>>>
+    export type ClassifyViolationMutationBody = BodyType<ViolationClassificationRequest>
+    export type ClassifyViolationMutationError = ErrorType<Error | UnauthorizedResponse>
+
+    /**
+ * @summary Classify a photographed housing violation
+ */
+export const useClassifyViolation = <TError = ErrorType<Error | UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof classifyViolation>>, TError,{data: BodyType<ViolationClassificationRequest>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof classifyViolation>>,
+        TError,
+        {data: BodyType<ViolationClassificationRequest>},
+        TContext
+      > => {
+      return useMutation(getClassifyViolationMutationOptions(options));
+    }
 
 export const getLoginUrl = () => {
 

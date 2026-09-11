@@ -1,0 +1,130 @@
+import { ClassifyViolationResponse } from "@workspace/api-zod";
+
+export type ViolationClassification = {
+  classification: "A" | "B" | "C";
+  confidence: number;
+  condition: string;
+  hpCode: string;
+  trade: string;
+  priority: "Low" | "Medium" | "High";
+  description: string;
+};
+
+type FetchLike = typeof fetch;
+
+const SYSTEM_PROMPT = `You classify visible housing-maintenance violations for FIAREP field staff.
+Return only JSON matching the supplied schema. Use:
+- classification A for non-hazardous conditions
+- classification B for hazardous conditions
+- classification C for immediately hazardous conditions
+Choose a likely HPD code only when the image supports it; otherwise use "REVIEW REQUIRED".
+Never claim certainty about concealed conditions. Keep the description concise and factual.`;
+
+function responseText(payload: unknown): string | null {
+  if (!payload || typeof payload !== "object") return null;
+  const choices = (payload as { choices?: unknown }).choices;
+  if (!Array.isArray(choices)) return null;
+  const message = (choices[0] as { message?: unknown } | undefined)?.message;
+  if (!message || typeof message !== "object") return null;
+  const content = (message as { content?: unknown }).content;
+  if (typeof content === "string") return content;
+  if (!Array.isArray(content)) return null;
+  const textPart = content.find(
+    (part) =>
+      part &&
+      typeof part === "object" &&
+      (part as { type?: unknown }).type === "text" &&
+      typeof (part as { text?: unknown }).text === "string",
+  ) as { text: string } | undefined;
+  return textPart?.text ?? null;
+}
+
+export function parseViolationClassification(
+  providerPayload: unknown,
+): ViolationClassification | null {
+  const content = responseText(providerPayload);
+  if (!content) return null;
+  try {
+    const parsed = ClassifyViolationResponse.safeParse(JSON.parse(content));
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function classifyViolationImage(
+  image: string,
+  apiKey: string,
+  fetchImpl: FetchLike = fetch,
+): Promise<ViolationClassification> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetchImpl("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text: "Classify the visible violation in this field photo.",
+              },
+              { type: "image_url", image_url: { url: image, detail: "low" } },
+            ],
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "violation_classification",
+            strict: true,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              required: [
+                "classification",
+                "confidence",
+                "condition",
+                "hpCode",
+                "trade",
+                "priority",
+                "description",
+              ],
+              properties: {
+                classification: { type: "string", enum: ["A", "B", "C"] },
+                confidence: { type: "integer", minimum: 0, maximum: 100 },
+                condition: { type: "string" },
+                hpCode: { type: "string" },
+                trade: { type: "string" },
+                priority: {
+                  type: "string",
+                  enum: ["Low", "Medium", "High"],
+                },
+                description: { type: "string" },
+              },
+            },
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      throw new Error(`OpenAI request failed with status ${response.status}`);
+    }
+    const classification = parseViolationClassification(await response.json());
+    if (!classification) {
+      throw new Error("OpenAI returned an invalid violation classification");
+    }
+    return classification;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

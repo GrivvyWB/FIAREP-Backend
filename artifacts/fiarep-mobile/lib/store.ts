@@ -804,7 +804,7 @@ async function ensureStaffTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS staff_accounts (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
 }
 
-async function getAccessToken(): Promise<string | null> {
+export async function getAccessToken(): Promise<string | null> {
   const d = await db();
   const row = await d.getFirstAsync<{ value: string }>(
     'SELECT value FROM settings WHERE key = ?',

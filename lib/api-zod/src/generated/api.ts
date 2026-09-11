@@ -17,6 +17,44 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Classify a photographed housing violation
+ */
+export const classifyViolationBodyImageMin = 32;
+export const classifyViolationBodyImageMax = 11184849;
+
+
+export const classifyViolationBodyImageRegExp = new RegExp('^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$');
+
+
+export const ClassifyViolationBody = zod.object({
+  "image": zod.string().min(classifyViolationBodyImageMin).max(classifyViolationBodyImageMax).regex(classifyViolationBodyImageRegExp)
+})
+
+export const classifyViolationResponseConfidenceMin = 0;
+export const classifyViolationResponseConfidenceMax = 100;
+
+export const classifyViolationResponseConditionMax = 300;
+
+export const classifyViolationResponseHpCodeMax = 100;
+
+export const classifyViolationResponseTradeMax = 100;
+
+export const classifyViolationResponseDescriptionMax = 1000;
+
+
+
+export const ClassifyViolationResponse = zod.object({
+  "classification": zod.enum(['A', 'B', 'C']),
+  "confidence": zod.number().int().min(classifyViolationResponseConfidenceMin).max(classifyViolationResponseConfidenceMax),
+  "condition": zod.string().min(1).max(classifyViolationResponseConditionMax),
+  "hpCode": zod.string().min(1).max(classifyViolationResponseHpCodeMax),
+  "trade": zod.string().min(1).max(classifyViolationResponseTradeMax),
+  "priority": zod.enum(['Low', 'Medium', 'High']),
+  "description": zod.string().min(1).max(classifyViolationResponseDescriptionMax)
+})
+
+
+/**
  * @summary Staff login with issued code
  */
 export const loginBodyCodeMin = 4;

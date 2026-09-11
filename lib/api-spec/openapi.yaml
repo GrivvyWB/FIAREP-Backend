@@ -17,6 +17,7 @@ tags:
   - name: sync
   - name: system
   - name: files
+  - name: ai
 paths:
   /healthz:
     get:
@@ -31,6 +32,42 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+  /ai/classify-violation:
+    post:
+      operationId: classifyViolation
+      tags: [ai]
+      summary: Classify a photographed housing violation
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ViolationClassificationRequest"
+      responses:
+        "200":
+          description: Validated violation classification
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ViolationClassification"
+        "400":
+          description: Invalid image payload
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "502":
+          description: The AI provider returned an unusable response
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "503":
+          description: AI classification is unavailable
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/auth/login:
     post:
       operationId: login
@@ -413,6 +450,48 @@ components:
           type: string
       required:
         - status
+    ViolationClassificationRequest:
+      type: object
+      additionalProperties: false
+      required: [image]
+      properties:
+        image:
+          type: string
+          minLength: 32
+          maxLength: 11184849
+          pattern: "^data:image/(jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$"
+    ViolationClassification:
+      type: object
+      additionalProperties: false
+      required:
+        [classification, confidence, condition, hpCode, trade, priority, description]
+      properties:
+        classification:
+          type: string
+          enum: [A, B, C]
+        confidence:
+          type: integer
+          minimum: 0
+          maximum: 100
+        condition:
+          type: string
+          minLength: 1
+          maxLength: 300
+        hpCode:
+          type: string
+          minLength: 1
+          maxLength: 100
+        trade:
+          type: string
+          minLength: 1
+          maxLength: 100
+        priority:
+          type: string
+          enum: [Low, Medium, High]
+        description:
+          type: string
+          minLength: 1
+          maxLength: 1000
     LoginInput:
       type: object
       required: [name, code]

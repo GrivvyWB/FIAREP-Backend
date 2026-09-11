@@ -1,3 +1,5 @@
+import { getAccessToken } from './store';
+
 export type ViolationClassification = {
   classification: 'A' | 'B' | 'C';
   confidence: number;      // 0-100
@@ -13,10 +15,15 @@ export async function classifyViolationPhoto(base64DataUrl: string): Promise<Vio
   if (!domain) {
     throw new Error('The FIAREP backend domain is not configured.');
   }
+  const accessToken = await getAccessToken();
+  if (!accessToken) {
+    throw new Error('Sign in before classifying a violation photo.');
+  }
   const res = await fetch(`https://${domain}/api/ai/classify-violation`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
     },
     body: JSON.stringify({ image: base64DataUrl }),
   });
