@@ -21,3 +21,9 @@ timeoutMs = 20000
 
 [nix]
 channel = "stable-25_05"
+
+[userenv]
+
+[userenv.development]
+FIAREP_ENABLE_STAGING_PUSH_SMOKE_TESTS = "true"
+FIAREP_STAGING_TENANT_ID = "staging-smoke"

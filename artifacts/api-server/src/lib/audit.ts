@@ -40,11 +40,12 @@ export async function notify(
     })
     .returning();
 
-  if (!notification) return;
+  if (!notification) return undefined;
   void deliverPushNotification(notification).catch((error) => {
     logger.error(
       { err: error, notificationId: notification.id },
       "Unexpected push delivery error",
     );
   });
+  return notification;
 }

@@ -286,6 +286,28 @@ paths:
                 items: { $ref: "#/components/schemas/PushDelivery" }
         "403":
           description: Elevated management access required
+  /v1/push-smoke-test:
+    post:
+      operationId: createPushSmokeTest
+      tags: [system]
+      security: [{ bearerAuth: [] }]
+      summary: Send an alert to the current staging staff member
+      description: Available only for the configured staging tenant when staging push smoke tests are explicitly enabled.
+      responses:
+        "202":
+          description: Smoke-test notification queued
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [notificationId, message]
+                properties:
+                  notificationId: { type: string }
+                  message: { type: string }
+        "403":
+          description: Elevated management access required
+        "404":
+          description: Staging smoke tests are disabled for this tenant
   /v1/sync:
     get:
       operationId: pullSync

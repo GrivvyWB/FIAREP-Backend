@@ -8,6 +8,7 @@ import {
   pushDeliveries,
   settings,
 } from "@workspace/db";
+import { notify } from "../lib/audit";
 import { isElevated } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
@@ -127,6 +128,38 @@ router.get("/v1/push-deliveries", async (req, res) => {
     .orderBy(desc(pushDeliveries.attemptedAt))
     .limit(250);
   res.json(rows);
+});
+
+router.post("/v1/push-smoke-test", async (_req, res) => {
+  const actor = actorFrom(res);
+  const stagingTenant = process.env["FIAREP_STAGING_TENANT_ID"];
+  if (
+    process.env["FIAREP_ENABLE_STAGING_PUSH_SMOKE_TESTS"] !== "true" ||
+    !stagingTenant ||
+    actor.tenantId !== stagingTenant
+  ) {
+    res.status(404).json({ error: "Not found" });
+    return;
+  }
+  if (!isElevated(actor)) {
+    res.status(403).json({ error: "Elevated management access required" });
+    return;
+  }
+  const marker = new Date().toISOString();
+  const notification = await notify(
+    actor,
+    actor.name,
+    `FIAREP.COM staging alert ${marker}`,
+    "Release smoke test. Confirm this alert is visible on the registered staging device.",
+  );
+  if (!notification) {
+    res.status(500).json({ error: "Unable to create smoke-test notification" });
+    return;
+  }
+  res.status(202).json({
+    notificationId: notification.id,
+    message: notification.message,
+  });
 });
 
 export default router;

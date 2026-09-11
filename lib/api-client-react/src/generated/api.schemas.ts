@@ -113,54 +113,6 @@ export interface SyncResponse {
 }
 
 export type FileKind = typeof FileKind[keyof typeof FileKind];
-export interface Error {
-  error: string;
-}
-
-/**
- * Authentication required
- */
-export type UnauthorizedResponse = Error;
-
-export type BootstrapAdministratorBody = {
-  name: string;
-  /**
-     * @minLength 4
-     * @maxLength 4
-     */
-  code: string;
-  tenantId?: string;
-  firstName?: string;
-  lastName?: string;
-};
-
-export type RefreshSessionBody = {
-  refreshToken: string;
-};
-
-export type ListStaffParams = {
-status?: string;
-};
-
-export type ListEntityRecordsParams = {
-projectId?: string;
-development?: string;
-status?: string;
-};
-
-export type RegisterDeviceTokenBody = {
-  token: string;
-  platform?: string;
-};
-
-export type ListPushDeliveriesParams = {
-notificationId?: string;
-};
-
-export type PullSyncParams = {
-since?: string;
-entities?: string;
-};
 
 
 export const FileKind = {
@@ -170,11 +122,6 @@ export const FileKind = {
   scan: 'scan',
   'procurement-scope': 'procurement-scope',
 } as const;
-
-export interface FileDownloadUrlResponse {
-  downloadUrl: string;
-  expiresIn: number;
-}
 
 export interface StoredFile {
   id: string;
@@ -219,3 +166,63 @@ export interface FileDownloadUrlRequest {
   /** @pattern ^/objects/tenants/ */
   objectPath: string;
 }
+
+export interface FileDownloadUrlResponse {
+  downloadUrl: string;
+  expiresIn: number;
+}
+
+export interface Error {
+  error: string;
+}
+
+/**
+ * Authentication required
+ */
+export type UnauthorizedResponse = Error;
+
+export type BootstrapAdministratorBody = {
+  name: string;
+  /**
+     * @minLength 4
+     * @maxLength 4
+     */
+  code: string;
+  tenantId?: string;
+  firstName?: string;
+  lastName?: string;
+};
+
+export type RefreshSessionBody = {
+  refreshToken: string;
+};
+
+export type ListStaffParams = {
+status?: string;
+};
+
+export type ListEntityRecordsParams = {
+projectId?: string;
+development?: string;
+status?: string;
+};
+
+export type RegisterDeviceTokenBody = {
+  token: string;
+  platform?: string;
+};
+
+export type ListPushDeliveriesParams = {
+notificationId?: string;
+};
+
+export type CreatePushSmokeTest202 = {
+  notificationId: string;
+  message: string;
+};
+
+export type PullSyncParams = {
+since?: string;
+entities?: string;
+};
+

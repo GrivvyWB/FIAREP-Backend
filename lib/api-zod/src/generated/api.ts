@@ -23,6 +23,7 @@ export const loginBodyCodeMin = 4;
 export const loginBodyCodeMax = 4;
 
 
+
 export const LoginBody = zod.object({
   "name": zod.string(),
   "code": zod.string().min(loginBodyCodeMin).max(loginBodyCodeMax),
@@ -51,6 +52,7 @@ export const LoginResponse = zod.object({
  */
 export const bootstrapAdministratorBodyCodeMin = 4;
 export const bootstrapAdministratorBodyCodeMax = 4;
+
 
 
 export const BootstrapAdministratorBody = zod.object({
@@ -130,6 +132,7 @@ export const ListStaffResponse = zod.array(ListStaffResponseItem)
 
 export const createStaffBodyCodeMin = 4;
 export const createStaffBodyCodeMax = 4;
+
 
 
 export const CreateStaffBody = zod.object({
@@ -327,6 +330,16 @@ export const ListPushDeliveriesResponseItem = zod.object({
 export const ListPushDeliveriesResponse = zod.array(ListPushDeliveriesResponseItem)
 
 
+/**
+ * Available only for the configured staging tenant when staging push smoke tests are explicitly enabled.
+ * @summary Send an alert to the current staging staff member
+ */
+export const CreatePushSmokeTestResponse = zod.object({
+  "notificationId": zod.string(),
+  "message": zod.string()
+})
+
+
 export const PullSyncQueryParams = zod.object({
   "since": zod.date().optional(),
   "entities": zod.coerce.string().optional()
@@ -356,15 +369,17 @@ export const PullSyncResponse = zod.object({
 }))
 })
 
+
 /**
  * @summary Request a direct upload URL for a project file
  */
 export const requestFileUploadUrlBodyNameMax = 255;
 
-export const RequestFileDownloadUrlResponse = zod.object({
-  "downloadUrl": zod.string().url(),
-  "expiresIn": zod.number().int()
-})
+export const requestFileUploadUrlBodySizeMax = 52428800;
+
+export const requestFileUploadUrlBodyContentTypeMax = 100;
+
+
 
 export const RequestFileUploadUrlBody = zod.object({
   "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope']),
@@ -373,7 +388,9 @@ export const RequestFileUploadUrlBody = zod.object({
   "contentType": zod.string().min(1).max(requestFileUploadUrlBodyContentTypeMax)
 })
 
-export const requestFileUploadUrlBodyContentTypeMax = 100;
+export const requestFileUploadUrlResponseFileSizeMax = 52428800;
+
+
 
 export const RequestFileUploadUrlResponse = zod.object({
   "uploadUrl": zod.string().url(),
@@ -389,15 +406,18 @@ export const RequestFileUploadUrlResponse = zod.object({
 })
 })
 
-export const requestFileUploadUrlResponseFileSizeMax = 52428800;
 
 /**
  * @summary Request a temporary download URL for a stored project file
  */
 export const requestFileDownloadUrlBodyObjectPathRegExp = new RegExp('^/objects/tenants');
 
+
 export const RequestFileDownloadUrlBody = zod.object({
   "objectPath": zod.string().regex(requestFileDownloadUrlBodyObjectPathRegExp)
 })
 
-export const requestFileUploadUrlBodySizeMax = 52428800;
+export const RequestFileDownloadUrlResponse = zod.object({
+  "downloadUrl": zod.string().url(),
+  "expiresIn": zod.number().int()
+})
