@@ -17,13 +17,17 @@ import {
   ShoppingCart,
   BellRing,
   ArrowUpToLine,
-  Plane
-  ,Database
+  Plane,
+  Database,
+  MoreHorizontal,
 } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
   const { staff } = useAuth();
+  const closeOnMobile = () => {
+    if (window.matchMedia("(max-width: 767px)").matches) setOpen(false);
+  };
 
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
@@ -48,14 +52,25 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
   return (
     <>
       <aside 
-        className={`w-[264px] bg-sidebar text-sidebar-foreground flex flex-col flex-shrink-0 fixed md:sticky top-0 h-[100dvh] z-60 transition-transform duration-250 ease-in-out ${open ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}
+        className={`w-[264px] bg-sidebar text-sidebar-foreground flex flex-col flex-shrink-0 fixed md:sticky top-0 h-[100dvh] z-60 transition-[transform,width] duration-250 ease-in-out ${
+          open ? "translate-x-0 md:w-[264px]" : "-translate-x-full md:w-0 md:overflow-hidden"
+        }`}
       >
-        <div className="w-full border-b border-sidebar-border shrink-0 overflow-hidden bg-white">
+        <div className="relative w-[264px] border-b border-sidebar-border shrink-0 overflow-hidden bg-white">
           <img
             src={`${import.meta.env.BASE_URL}fiarep-sidebar-logo.png`}
             alt="FIAREP"
             className="block h-auto w-full"
           />
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="absolute right-2 top-2 grid h-8 w-8 place-items-center rounded-full border border-slate-300 bg-white/90 text-slate-700 shadow-sm hover:bg-white"
+            aria-label="Close sidebar"
+            title="Close sidebar"
+          >
+            <MoreHorizontal className="h-5 w-5" />
+          </button>
         </div>
 
         <nav className="p-[14px_12px] flex-1 overflow-y-auto overflow-x-hidden space-y-[3px]">
@@ -66,7 +81,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
               <Link 
                 key={item.name} 
                 href={item.href}
-                onClick={() => setOpen(false)}
+                onClick={closeOnMobile}
                 className={`flex items-center gap-3 p-[11px_14px] rounded-[9px] text-[14.5px] font-medium transition-colors ${
                   isActive 
                     ? "bg-primary text-sidebar font-bold" 
@@ -83,13 +98,13 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
 
         <div className="m-[8px_16px_18px] p-[16px] bg-[#12161d] border border-sidebar-border rounded-xl shrink-0">
           <h4 className="text-[11px] tracking-[.6px] text-[#8b94a1] mb-3 font-semibold uppercase">QUICK ACTION</h4>
-          <Link href="/inspections/new" onClick={() => setOpen(false)}>
+          <Link href="/inspections/new" onClick={closeOnMobile}>
             <div className="w-full border-none cursor-pointer p-[11px] rounded-[9px] text-[13.5px] font-semibold flex items-center justify-center gap-2 mb-2 bg-primary text-sidebar hover:bg-[#F5B301] transition-colors">
               <Plus className="w-4 h-4" />
               New Inspection
             </div>
           </Link>
-          <Link href="/reports/upload" onClick={() => setOpen(false)}>
+          <Link href="/reports/upload" onClick={closeOnMobile}>
             <div className="w-full border border-[#2a323e] cursor-pointer p-[11px] rounded-[9px] text-[13.5px] font-semibold flex items-center justify-center gap-2 bg-transparent text-[#cfd6df] hover:bg-[#1a212b] transition-colors">
               <Upload className="w-4 h-4" />
               Upload Report

@@ -1,4 +1,4 @@
-import { Bell, ChevronDown, Menu } from "lucide-react";
+import { Bell, ChevronDown, MoreHorizontal } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
 import {
@@ -8,7 +8,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
+export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onMenuClick: () => void }) {
   const { staff, logout } = useAuth();
   
   // Extract initials
@@ -19,12 +19,17 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
   return (
     <header className="bg-card border-b border-border px-4 md:px-[30px] h-[68px] flex items-center justify-between sticky top-0 z-20 shrink-0">
       <div className="flex items-center gap-3.5">
-        <button 
-          className="md:hidden grid place-items-center w-10 h-10 rounded-[9px] border border-border bg-white cursor-pointer text-foreground"
-          onClick={onMenuClick}
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+        {!sidebarOpen && (
+          <button
+            type="button"
+            className="grid place-items-center w-10 h-10 rounded-[9px] border border-border bg-white cursor-pointer text-foreground hover:bg-muted"
+            onClick={onMenuClick}
+            aria-label="Open sidebar"
+            title="Open sidebar"
+          >
+            <MoreHorizontal className="w-5 h-5" />
+          </button>
+        )}
         <div className="text-[20px] font-extrabold tracking-[.3px] leading-tight">
           FIA<span className="text-[#F5B301]">REP</span>
           <small className="block text-[10.5px] font-medium text-muted-foreground tracking-normal">
