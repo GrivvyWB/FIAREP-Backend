@@ -3,8 +3,10 @@ import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import {
   bootstrapAdministrator as bootstrapAdministratorOnServer,
+  createStaff,
   getBootstrapStatus,
   getCurrentStaff,
+  listStaff,
   login as loginOnServer,
   logout as logoutOnServer,
   refreshSession,
@@ -958,10 +960,101 @@ export async function getSessionIdentity(): Promise<SessionIdentity | null> {
 export async function listStaffAccounts(status?: StaffStatus): Promise<StaffAccount[]> {
   const d = await db();
   await ensureStaffTable(d);
-  const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM staff_accounts');
-  const items = rows.map(r => { try { return JSON.parse(r.state) as StaffAccount; } catch { return null; } }).filter(Boolean) as StaffAccount[];
+  await syncApprovedLocalStaffToServer().catch(() => undefined);
+  const localItems = await readLocalStaffAccounts(d);
+  let items = localItems;
+  if (await getAccessToken()) {
+    try {
+      const remote = await listStaff();
+      const localById = new Map(localItems.map((item) => [item.id, item]));
+      const localByName = new Map(localItems.map((item) => [item.name.trim().toLowerCase(), item]));
+      const hydrated = remote.map((staff) => {
+        const prior = localById.get(staff.id) || localByName.get(staff.name.trim().toLowerCase());
+        return {
+          id: staff.id,
+          name: staff.name,
+          firstName: staff.firstName || undefined,
+          lastName: staff.lastName || undefined,
+          position: staff.position as StaffPosition,
+          developments: staff.developments || [],
+          code: prior?.code || '',
+          role: staff.role as StaffRole,
+          status: staff.status as StaffStatus,
+          createdAt: prior?.createdAt || new Date().toISOString(),
+        };
+      });
+      const remoteIds = new Set(hydrated.map((item) => item.id));
+      const remoteNames = new Set(hydrated.map((item) => item.name.trim().toLowerCase()));
+      items = [
+        ...hydrated,
+        ...localItems.filter((item) => !remoteIds.has(item.id) && !remoteNames.has(item.name.trim().toLowerCase())),
+      ];
+      for (const item of hydrated) await saveLocalStaffAccount(d, item);
+    } catch {
+      items = localItems;
+    }
+  }
   const out = status ? items.filter(a => a.status === status) : items;
   return out.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+}
+
+async function readLocalStaffAccounts(d: SQLite.SQLiteDatabase): Promise<StaffAccount[]> {
+  const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM staff_accounts');
+  return rows
+    .map((row) => { try { return JSON.parse(row.state) as StaffAccount; } catch { return null; } })
+    .filter(Boolean) as StaffAccount[];
+}
+
+async function saveLocalStaffAccount(d: SQLite.SQLiteDatabase, account: StaffAccount): Promise<void> {
+  await d.runAsync(
+    'INSERT INTO staff_accounts (id,state) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state',
+    account.id,
+    JSON.stringify(account),
+  );
+}
+
+async function createServerStaffAccount(account: StaffAccount): Promise<StaffAccount> {
+  const position = STAFF_POSITIONS.includes(account.position as StaffPosition)
+    ? account.position as StaffPosition
+    : 'Other';
+  const remote = await createStaff({
+    id: account.id,
+    name: account.name.trim(),
+    firstName: account.firstName,
+    lastName: account.lastName,
+    role: account.role,
+    position,
+    developments: account.developments || [],
+    code: account.code.trim().toUpperCase(),
+  } as any);
+  return {
+    ...account,
+    id: remote.id,
+    name: remote.name,
+    firstName: remote.firstName || account.firstName,
+    lastName: remote.lastName || account.lastName,
+    position: remote.position as StaffPosition,
+    developments: remote.developments || account.developments || [],
+    role: remote.role as StaffRole,
+    status: remote.status as StaffStatus,
+    code: ((remote as any).code as string | undefined) || account.code,
+  };
+}
+
+async function syncApprovedLocalStaffToServer(): Promise<void> {
+  if (!(await getAccessToken())) return;
+  const d = await db();
+  await ensureStaffTable(d);
+  const local = await readLocalStaffAccounts(d);
+  for (const account of local.filter((item) => item.status === 'approved' && item.code)) {
+    try {
+      const synced = await createServerStaffAccount(account);
+      if (synced.id !== account.id) await d.runAsync('DELETE FROM staff_accounts WHERE id=?', account.id);
+      await saveLocalStaffAccount(d, synced);
+    } catch {
+      // Accounts outside the signed-in manager's authority stay local.
+    }
+  }
 }
 
 export async function listStaffByPosition(position?: string): Promise<StaffAccount[]> {
@@ -1049,7 +1142,16 @@ async function setStaffStatus(id: string, status: StaffStatus): Promise<void> {
   await d.runAsync('UPDATE staff_accounts SET state = ? WHERE id = ?', JSON.stringify(next), id);
 }
 
-export async function approveStaffAccount(id: string): Promise<void> { await setStaffStatus(id, 'approved'); }
+export async function approveStaffAccount(id: string): Promise<void> {
+  const d = await db();
+  await ensureStaffTable(d);
+  const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM staff_accounts WHERE id=?', id);
+  if (!row) return;
+  const account = JSON.parse(row.state) as StaffAccount;
+  const synced = await createServerStaffAccount({ ...account, status: 'approved' });
+  if (synced.id !== id) await d.runAsync('DELETE FROM staff_accounts WHERE id=?', id);
+  await saveLocalStaffAccount(d, synced);
+}
 export async function denyStaffAccount(id: string): Promise<void> { await setStaffStatus(id, 'revoked'); }
 
 // ---- Bulk employee upload (paste "First Last, Trade" lines -> pending accounts) ----
@@ -1248,6 +1350,7 @@ export async function restoreServerSession(): Promise<Staff | null> {
     await recoverLegacyQueue(localDb, staff, evidence);
     await hydrateRemotePhotosFromDb(localDb);
     await setCurrentActor(staff.role, staff.name);
+    await syncApprovedLocalStaffToServer().catch(() => undefined);
     const { syncAllEntities } = await import('./sync');
     await syncAllEntities();
     return staff;
@@ -1317,15 +1420,17 @@ export async function issueStaffAccount(name: string, role: StaffRole, issuedBy:
     id: uid(),
     name: name.trim(),
     code: generateCode(),
+    position: 'Other',
     role,
     status: 'approved',
     createdAt: new Date().toISOString(),
   };
   const withIssuer = { ...acct, issuedBy: issuedBy.trim() } as StaffAccount & { issuedBy?: string };
-  await d.runAsync('INSERT INTO staff_accounts (id,state) VALUES (?,?)', acct.id, JSON.stringify(withIssuer));
+  const synced = await createServerStaffAccount(withIssuer);
+  await saveLocalStaffAccount(d, synced);
   const _a = await getCurrentActor();
   await logAudit(_a.role || issuedBy.trim(), _a.name || issuedBy.trim(), 'Staff account issued', role + ' \u00b7 ' + acct.name);
-  return acct;
+  return synced;
 }
 
 export async function issueStaffAccountFull(firstName: string, lastName: string, position: StaffPosition, role: StaffRole, issuedBy: string, developments: string[] = []): Promise<StaffAccount> {
@@ -1347,10 +1452,11 @@ export async function issueStaffAccountFull(firstName: string, lastName: string,
     createdAt: new Date().toISOString(),
   };
   const withIssuer = { ...acct, issuedBy: issuedBy.trim() } as StaffAccount & { issuedBy?: string };
-  await d.runAsync('INSERT INTO staff_accounts (id,state) VALUES (?,?)', acct.id, JSON.stringify(withIssuer));
+  const synced = await createServerStaffAccount(withIssuer);
+  await saveLocalStaffAccount(d, synced);
   const _a = await getCurrentActor();
   await logAudit(_a.role || issuedBy.trim(), _a.name || issuedBy.trim(), 'Staff account issued', position + ' \u00b7 ' + fullName);
-  return acct;
+  return synced;
 }
 
 export async function bootstrapAdministrator(name: string): Promise<StaffAccount> {

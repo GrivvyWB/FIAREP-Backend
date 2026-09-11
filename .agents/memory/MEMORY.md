@@ -1,4 +1,5 @@
 - [Node test lifecycle fixtures](node-test-lifecycle-fixtures.md) — use a real I/O handle, not only an unresolved promise or timer, when a fixture must remain alive.
 - [FIAREP authority hierarchy](fiarep-authority-hierarchy.md) — Borough Director has full override; Administrator permissions expand only when explicitly defined.
 - [FIAREP offline identity boundaries](fiarep-offline-identity-boundaries.md) — scope queues, caches, cursors, recovery, and file registries to verified server identity.
+- [FIAREP staff account authority](fiarep-staff-account-authority.md) — approved staff must exist on the shared server; local SQLite is only a cache and migration source.
 - [Expo web persistence and SQLite WASM](expo-web-persistence-sqlite-wasm.md) — web needs explicit token persistence and Metro WASM asset handling; native remains SecureStore-first.

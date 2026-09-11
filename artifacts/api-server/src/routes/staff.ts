@@ -101,6 +101,25 @@ router.post("/v1/staff", async (req, res) => {
     res.status(403).json({ error: "Not allowed to issue this account" });
     return;
   }
+  const suppliedCode =
+    typeof input["code"] === "string" ? input["code"].toUpperCase() : undefined;
+  if (suppliedCode) {
+    const [existing] = await db
+      .select()
+      .from(staffAccounts)
+      .where(
+        and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          sql`lower(${staffAccounts.name}) = lower(${name})`,
+          eq(staffAccounts.code, suppliedCode),
+        ),
+      )
+      .limit(1);
+    if (existing) {
+      res.json(safe(existing, true));
+      return;
+    }
+  }
   const now = new Date();
   const [created] = await db
     .insert(staffAccounts)
@@ -114,10 +133,7 @@ router.post("/v1/staff", async (req, res) => {
         typeof input["lastName"] === "string" ? input["lastName"] : null,
       role,
       position,
-      code:
-        typeof input["code"] === "string"
-          ? input["code"].toUpperCase()
-          : staffCode(),
+      code: suppliedCode ?? staffCode(),
       status:
         typeof input["status"] === "string" ? input["status"] : "approved",
       developments,

@@ -30,19 +30,10 @@ export default function ManagementHome() {
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('management'); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, []));
 
-  function onSignOut() {
-    Alert.alert('Sign out?', 'You will need to enter your name and code to sign in again.', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          await logout();
-          await clearAppMode();
-          refresh();
-        },
-      },
-    ]);
+  async function onSignOut() {
+    await logout();
+    await clearAppMode();
+    refresh();
   }
 
   const sections: Section[] = [
