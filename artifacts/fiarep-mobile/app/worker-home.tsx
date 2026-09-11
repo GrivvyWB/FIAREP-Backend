@@ -1,6 +1,6 @@
-import { Text, Pressable, ScrollView, Alert } from 'react-native';
+import { Text, Pressable, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
-import { clearAppMode, clearRememberedStaff, logout } from '../lib/store';
+import { clearAppMode, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -10,16 +10,15 @@ import AlertBanner from '../components/AlertBanner';
 
 export default function WorkerHome() {
   const router = useRouter();
-  const { mode, refresh } = useAppMode();
+  const { refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = a.name ? await unreadCount(a.name) : 0; setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, [])); 
 
-  function onSwitchRole() {
-    Alert.alert('Switch role?', 'Return to the role selection screen.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Switch', style: 'destructive', onPress: async () => { if (mode === 'worker' || mode === 'inspector') await clearRememberedStaff(mode); await logout(); await clearAppMode(); refresh(); } },
-    ]);
+  async function onSignOut() {
+    await logout();
+    await clearAppMode();
+    refresh();
   }
 
   return (
@@ -47,8 +46,8 @@ export default function WorkerHome() {
         <Text style={ui.btnOutlineText}>Check Report Status</Text>
       </Pressable>
 
-      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onSwitchRole}>
-        <Text style={ui.btnOutlineText}>Switch role</Text>
+      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onSignOut}>
+        <Text style={ui.btnOutlineText}>Sign out</Text>
       </Pressable>
     </ScrollView>
   );

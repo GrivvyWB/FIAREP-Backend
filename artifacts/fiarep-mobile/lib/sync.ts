@@ -19,6 +19,9 @@ const TABLES: Array<{ table: string; entity: string; key: string; column?: 'stat
   { table: 'cost_estimates', entity: 'cost-estimates', key: 'projectId' },
   { table: 'intakes', entity: 'intakes', key: 'projectId' },
   { table: 'elevators', entity: 'elevators', key: 'projectId' },
+  { table: 'project_scopes', entity: 'project-scopes', key: 'projectId' },
+  { table: 'project_notes', entity: 'project-notes', key: 'id' },
+  { table: 'project_reviews', entity: 'project-reviews', key: 'id' },
   { table: 'resident_reports', entity: 'resident-reports', key: 'id' },
   { table: 'violations', entity: 'violations', key: 'id' },
   { table: 'building_violations', entity: 'building-violations', key: 'id' },
@@ -33,13 +36,14 @@ const TABLES: Array<{ table: string; entity: string; key: string; column?: 'stat
   { table: 'emergency_units', entity: 'emergency-units', key: 'id' },
   { table: 'emergency_jobs', entity: 'emergency-jobs', key: 'id' },
   { table: 'leave_requests', entity: 'leave-requests', key: 'id' },
+  { table: 'global_settings', entity: 'global-settings', key: 'id' },
 ];
 const ROLE_ENTITIES: Record<string, Set<string>> = {
   administrator: new Set(TABLES.map((item) => item.entity)),
   management: new Set(TABLES.map((item) => item.entity)),
-  procurement: new Set(['projects', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes', 'change-orders']),
-  inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'resident-reports', 'violations', 'building-violations', 'priority-violations', 'route-assignments']),
-  worker: new Set(['projects', 'rooms', 'resident-reports', 'violations', 'building-violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests']),
+  procurement: new Set(['projects', 'project-scopes', 'project-notes', 'project-reviews', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes', 'change-orders']),
+  inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'priority-violations', 'route-assignments', 'global-settings']),
+  worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests', 'global-settings']),
 };
 const PROJECT_KEYED = new Set(['checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes']);
 function normalizeLocalState(mapping: any, state: any) {

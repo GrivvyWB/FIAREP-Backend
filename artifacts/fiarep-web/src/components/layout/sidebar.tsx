@@ -17,6 +17,7 @@ import {
   BellRing,
   ArrowUpToLine,
   Plane
+  ,Database
 } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
@@ -37,6 +38,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Emergency", href: "/emergency", icon: BellRing },
     { name: "Elevators", href: "/elevators", icon: ArrowUpToLine },
     { name: "Leave", href: "/leave", icon: Plane },
+    { name: "Shared Data", href: "/shared-data", icon: Database },
     { name: "Settings", href: "/settings", icon: Settings },
   ];
 

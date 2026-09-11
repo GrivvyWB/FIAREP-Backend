@@ -1,7 +1,7 @@
-import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { clearAppMode, clearRememberedStaff, logout, unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
+import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
@@ -17,11 +17,10 @@ export default function CpmHome() {
   const [position, setPosition] = useState('');
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('inspector'); if (a.name) c += await unreadCount(a.name); setUnread(c); setPosition(await getCurrentPosition()); })(); }, []));
 
-  function onSwitchRole() {
-    Alert.alert('Switch role?', 'Return to the role selection screen.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('inspector'); await logout(); await clearAppMode(); refresh(); } },
-    ]);
+  async function onSignOut() {
+    await logout();
+    await clearAppMode();
+    refresh();
   }
 
   const sections: Section[] = [
@@ -49,7 +48,7 @@ export default function CpmHome() {
       color: '#4A5560',
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
-        { label: 'Switch role', onPress: onSwitchRole, tone: 'outline' },
+        { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },
   ];

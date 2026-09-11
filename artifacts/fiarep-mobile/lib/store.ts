@@ -54,6 +54,17 @@ export type Room = { id: string; projectId: string; name: string; unit?: string;
 let _db: SQLite.SQLiteDatabase | null = null;
 let _refreshInFlight: Promise<string | null> | null = null;
 let _refreshing = false;
+let _syncTimer: ReturnType<typeof setTimeout> | null = null;
+
+function scheduleSync(): void {
+  if (_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(() => {
+    _syncTimer = null;
+    import('./sync')
+      .then(({ syncAllEntities }) => syncAllEntities())
+      .catch(() => undefined);
+  }, 150);
+}
 export function tokenExpiryMs(token: string): number | null {
   try {
     const part = token.split('.')[1] || '';
@@ -75,6 +86,9 @@ export async function db() {
     );
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS global_settings (
+      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS checklists (
       projectId TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL
@@ -142,6 +156,7 @@ async function queueMutation(entity: string, id: string, state: any, operation: 
      baseVersion=excluded.baseVersion,owner=excluded.owner,status='pending',error=NULL`,
     entity, id, state == null ? null : JSON.stringify(state), operation, version, owner,
   );
+  scheduleSync();
 }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -201,6 +216,8 @@ export async function assignProjectInspector(projectId: string, inspectorName: s
     if (row && row.meta) { try { m = JSON.parse(row.meta); } catch {} }
     m.assignedInspector = (inspectorName || '').trim();
     await d.runAsync('UPDATE projects SET meta = ? WHERE id = ?', JSON.stringify(m), projectId);
+    const updated = await getProject(projectId);
+    if (updated) await queueMutation('projects', projectId, updated);
     const a = await getCurrentActor();
     await logAudit(a.role || 'management', a.name, 'Assigned to project', inspectorName.trim(), 'proj:' + projectId);
     // Notify the assigned inspector that they've been given the project.
@@ -218,6 +235,8 @@ export async function submitProjectForReview(projectId: string): Promise<void> {
     if (row && row.meta) { try { m = JSON.parse(row.meta); } catch {} }
     m.status = 'submitted';
     await d.runAsync('UPDATE projects SET meta = ? WHERE id = ?', JSON.stringify(m), projectId);
+    const updated = await getProject(projectId);
+    if (updated) await queueMutation('projects', projectId, updated);
     const a = await getCurrentActor();
     const proj = await getProject(projectId);
     const detail = (proj ? proj.name : 'Project') + (a.name ? ' \u00b7 ' + a.name : '');
@@ -314,13 +333,24 @@ export async function setProjectRates(projectId: string, rates: Rates | null): P
 }
 export async function getGlobalRates(): Promise<Rates> {
   const d = await db();
+  const shared = await d.getFirstAsync<{ state: string }>(
+    'SELECT state FROM global_settings WHERE id=?',
+    'default-rates',
+  );
   const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', 'rates');
   const { DEFAULT_RATES } = await import('./takeoff');
+  if (shared?.state) return { ...DEFAULT_RATES, ...JSON.parse(shared.state) };
   return row ? { ...DEFAULT_RATES, ...JSON.parse(row.value) } : DEFAULT_RATES;
 }
 export async function setGlobalRates(rates: Rates): Promise<void> {
   const d = await db();
   await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'rates', JSON.stringify(rates));
+  await d.runAsync(
+    'INSERT INTO global_settings (id,state) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state',
+    'default-rates',
+    JSON.stringify(rates),
+  );
+  await queueMutation('global-settings', 'default-rates', rates);
 }
 
 
@@ -1314,14 +1344,19 @@ export async function verifyStaffLogin(name: string, code: string, role: StaffRo
       await logoutOnServer({ refreshToken: session.refreshToken }).catch(() => undefined);
       return false;
     }
-    await rotateActorCache(session.staff);
-    await recoverLegacyQueue(preDb, session.staff, evidence);
     await persistServerSession(session);
-    await setCurrentActor(session.staff.role, session.staff.name);
-    await hydrateRemotePhotosFromDb(preDb);
-    await registerPushToken().catch(() => undefined);
-    const { syncAllEntities } = await import('./sync');
-    await syncAllEntities();
+    try {
+      await rotateActorCache(session.staff);
+      await recoverLegacyQueue(preDb, session.staff, evidence);
+      await setCurrentActor(session.staff.role, session.staff.name);
+      await hydrateRemotePhotosFromDb(preDb);
+      await registerPushToken().catch(() => undefined);
+      const { syncAllEntities } = await import('./sync');
+      await syncAllEntities().catch(() => undefined);
+    } catch {
+      // Authentication succeeded and was persisted. Local cache maintenance
+      // and background synchronization must not turn that into a login error.
+    }
     return true;
   } catch (error) {
     if (
@@ -1352,7 +1387,7 @@ export async function restoreServerSession(): Promise<Staff | null> {
     await setCurrentActor(staff.role, staff.name);
     await syncApprovedLocalStaffToServer().catch(() => undefined);
     const { syncAllEntities } = await import('./sync');
-    await syncAllEntities();
+    await syncAllEntities().catch(() => undefined);
     return staff;
   } catch {
     return null;
@@ -1470,7 +1505,7 @@ export async function bootstrapAdministrator(name: string): Promise<StaffAccount
   await setCurrentActor(session.staff.role, session.staff.name);
   await registerPushToken().catch(() => undefined);
   const { syncAllEntities } = await import('./sync');
-  await syncAllEntities();
+  await syncAllEntities().catch(() => undefined);
   const all = await listStaffAccounts('approved');
   const account = all.find((item) => item.id === session.staff.id);
   if (!account) throw new Error('Administrator session could not be saved.');
@@ -1932,6 +1967,7 @@ export async function addProjectNote(projectId: string, text: string, byRole: st
     at: new Date().toISOString(),
   };
   await d.runAsync('INSERT INTO project_notes (id,state) VALUES (?,?)', note.id, JSON.stringify(note));
+  await queueMutation('project-notes', note.id, note);
   await logAudit(byRole || 'admin', byName, 'Project note added', text.trim().slice(0, 50));
 }
 
@@ -1972,6 +2008,7 @@ export async function setProjectReview(projectId: string, decision: ProjectRevie
   };
   // One review per project: use projectId as the row id so it overwrites.
   await d.runAsync('INSERT OR REPLACE INTO project_reviews (id,state) VALUES (?,?)', projectId, JSON.stringify(review));
+  await queueMutation('project-reviews', projectId, review);
   const label = decision === 'approved' ? 'Project approved' : decision === 'needs_revision' ? 'Project needs revision' : 'Project rejected';
   await logAudit(byRole || 'admin', byName, label, notes.trim().slice(0, 50), 'proj:' + projectId);
   // Notify the specific inspector who owns the project (by name); fall back to the inspector role.
@@ -3491,10 +3528,12 @@ export async function getProjectScopeForm(projectId: string): Promise<any> {
 export async function setProjectScopeForm(projectId: string, state: any): Promise<void> {
   const d = await db();
   await ensureProjectScopeTable(d);
+  const stateWithMeta = await withMeta(d, state);
   await d.runAsync(
     'INSERT INTO project_scopes (projectId,state) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET state = excluded.state',
-    projectId, JSON.stringify(state),
+    projectId, JSON.stringify(stateWithMeta),
   );
+  await queueMutation('project-scopes', projectId, stateWithMeta);
 }
 
 // ── Development scoring ────────────────────────────────────────────────────

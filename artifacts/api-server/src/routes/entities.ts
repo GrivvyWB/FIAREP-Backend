@@ -133,6 +133,24 @@ router.post("/v1/:entity", async (req, res, next) => {
     return;
   }
   const id = recordId(body["id"]);
+  const [existing] = await db
+    .select()
+    .from(entityRecords)
+    .where(eq(entityRecords.id, id))
+    .limit(1);
+  if (existing) {
+    if (
+      existing.tenantId === actor.tenantId &&
+      existing.entity === entity &&
+      existing.createdBy === actor.id &&
+      !existing.deleted
+    ) {
+      res.json(outward(actor, existing));
+      return;
+    }
+    res.status(409).json({ error: "A different record already uses this id" });
+    return;
+  }
   const projectId =
     typeof body["projectId"] === "string"
       ? body["projectId"]

@@ -94,7 +94,7 @@ export function GenericEntityPage({
     setEditingRecord(record);
     const state = record.state as any || {};
     form.reset({
-      title: state.title || "",
+      title: state.title || state.name || "",
       development: record.development || "",
       description: state.description || "",
       status: state.status || "new",
@@ -216,7 +216,7 @@ export function GenericEntityPage({
                     </div>
                     <div className="flex-1 min-w-0">
                       <h4 className="font-semibold text-[15px] truncate" data-testid={`text-title-${item.id}`}>
-                        {state?.title || `${title} ${item.id.slice(0,8)}`}
+                        {state?.title || state?.name || state?.address || `${title} ${item.id.slice(0,8)}`}
                       </h4>
                       {item.development && (
                         <div className="flex items-center gap-1.5 text-xs text-muted-foreground mt-1 truncate" data-testid={`text-dev-${item.id}`}>

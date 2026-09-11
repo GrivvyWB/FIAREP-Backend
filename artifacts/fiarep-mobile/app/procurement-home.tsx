@@ -1,7 +1,7 @@
-import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { clearAppMode, clearRememberedStaff, logout, unreadCount, getCurrentActor } from '../lib/store';
+import { clearAppMode, logout, unreadCount, getCurrentActor } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 
@@ -15,11 +15,10 @@ export default function ProcurementHome() {
   const [unread, setUnread] = useState(0);
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('procurement'); if (a.name) c += await unreadCount(a.name); setUnread(c); })(); }, []));
 
-  function onSwitchRole() {
-    Alert.alert('Switch role?', 'Return to the role selection screen.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('procurement'); await logout(); await clearAppMode(); refresh(); } },
-    ]);
+  async function onSignOut() {
+    await logout();
+    await clearAppMode();
+    refresh();
   }
 
   const sections: Section[] = [
@@ -39,7 +38,7 @@ export default function ProcurementHome() {
       color: '#4A5560',
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
-        { label: 'Switch role', onPress: onSwitchRole, tone: 'outline' },
+        { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },
   ];

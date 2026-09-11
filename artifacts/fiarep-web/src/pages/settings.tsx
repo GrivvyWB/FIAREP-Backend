@@ -1,9 +1,60 @@
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { User, LogOut, Shield, Key } from "lucide-react";
+import {
+  getListEntityRecordsQueryKey,
+  useCreateEntityRecord,
+  useListEntityRecords,
+  useUpdateEntityRecord,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { User, LogOut, Shield, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/hooks/use-toast";
+
+const DEFAULT_RATES = {
+  waste: 1.12,
+  sheetCost: 16,
+  laborPerSqFt: 2.1,
+  paintPerSqFt: 0.85,
+  floorPerSqFt: 5.5,
+};
 
 export default function Settings() {
   const { staff, logout } = useAuth();
+  const { data: rateRecords } = useListEntityRecords("global-settings");
+  const createRates = useCreateEntityRecord();
+  const updateRates = useUpdateEntityRecord();
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+  const rateRecord = rateRecords?.find((record) => record.id === "default-rates");
+  const [rates, setRates] = useState(DEFAULT_RATES);
+  const canEditRates = staff?.position === "Borough Director";
+
+  useEffect(() => {
+    if (rateRecord?.state) setRates({ ...DEFAULT_RATES, ...(rateRecord.state as Partial<typeof DEFAULT_RATES>) });
+  }, [rateRecord]);
+
+  const saveRates = async () => {
+    try {
+      if (rateRecord) {
+        await updateRates.mutateAsync({
+          entity: "global-settings",
+          id: rateRecord.id,
+          data: { id: rateRecord.id, state: rates, version: rateRecord.version },
+        });
+      } else {
+        await createRates.mutateAsync({
+          entity: "global-settings",
+          data: { id: "default-rates", state: rates, version: 1 },
+        });
+      }
+      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("global-settings") });
+      toast({ title: "Default rates saved", description: "Mobile devices will receive these rates during synchronization." });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Unable to save rates", description: error?.message || "Please try again." });
+    }
+  };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
@@ -40,6 +91,45 @@ export default function Settings() {
                 <div className="font-semibold capitalize">{staff?.status || "Active"}</div>
               </div>
             </div>
+          </div>
+
+          <div className="space-y-4">
+            <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <Calculator className="w-4 h-4" /> Shared Default Rates
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                ["waste", "Waste multiplier"],
+                ["sheetCost", "Drywall sheet cost"],
+                ["laborPerSqFt", "Labor per sq. ft."],
+                ["paintPerSqFt", "Paint per sq. ft."],
+                ["floorPerSqFt", "Flooring per sq. ft."],
+              ].map(([key, label]) => (
+                <label key={key} className="space-y-1.5">
+                  <span className="text-xs font-medium text-muted-foreground">{label}</span>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    disabled={!canEditRates}
+                    value={rates[key as keyof typeof rates]}
+                    onChange={(event) => setRates((current) => ({
+                      ...current,
+                      [key]: Number(event.target.value),
+                    }))}
+                  />
+                </label>
+              ))}
+            </div>
+            {canEditRates ? (
+              <Button
+                onClick={saveRates}
+                disabled={createRates.isPending || updateRates.isPending}
+              >
+                Save shared rates
+              </Button>
+            ) : (
+              <p className="text-xs text-muted-foreground">Only the Borough Director can change shared default rates.</p>
+            )}
           </div>
 
           <div className="space-y-4">

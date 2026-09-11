@@ -28,6 +28,7 @@ import Elevators from '@/pages/elevators';
 import Leave from '@/pages/leave';
 import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
+import SharedData from '@/pages/shared-data';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -89,6 +90,7 @@ function AppRouter() {
           <Route path="/leave" component={Leave} />
           <Route path="/notifications" component={Notifications} />
           <Route path="/settings" component={Settings} />
+          <Route path="/shared-data" component={SharedData} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>

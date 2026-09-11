@@ -64,6 +64,7 @@ export const ENTITIES = new Set([
   "emergency-units",
   "emergency-jobs",
   "leave-requests",
+  "global-settings",
 ]);
 
 const PRICING_KEYS = new Set([
@@ -148,6 +149,7 @@ export function entityDevelopmentAllowed(
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
   if (isBoroughDirector(actor)) return true;
+  if (entity === "global-settings") return false;
   if (entity === "emergency-units" || entity === "emergency-jobs") {
     return (
       actor.role === "administrator" ||
@@ -167,6 +169,7 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
   if (isBoroughDirector(actor)) return true;
+  if (entity === "global-settings") return false;
   if (entity === "procurement" || entity === "procurement-bids") {
     return actor.role === "procurement";
   }

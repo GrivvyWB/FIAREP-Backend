@@ -1,6 +1,6 @@
-import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
-import { clearAppMode, clearRememberedStaff, logout } from '../lib/store';
+import { clearAppMode, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback, useLayoutEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -30,11 +30,10 @@ export default function AdminHome() {
   const [unread, setUnread] = useState(0);
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('administrator'); if (a.name) c += await unreadCount(a.name); setUnread(c); })(); }, []));
 
-  function onSwitchRole() {
-    Alert.alert('Switch role?', 'Return to the role selection screen.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('administrator'); await logout(); await clearAppMode(); refresh(); } },
-    ]);
+  async function onSignOut() {
+    await logout();
+    await clearAppMode();
+    refresh();
   }
 
   const sections: Section[] = [
@@ -94,7 +93,7 @@ export default function AdminHome() {
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
         { label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' },
-        { label: 'Switch role', onPress: onSwitchRole, tone: 'tint' },
+        { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
       ],
     },
   ];
