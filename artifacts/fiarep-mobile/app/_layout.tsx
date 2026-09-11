@@ -19,7 +19,7 @@ type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'proc
 const CODE_LEN = 4;
 const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
 const roleLabel = (r: StaffRole) =>
-  r === 'administrator' ? 'Administrator' : r === 'management' ? 'Management' : r === 'worker' ? 'Staff' : r === 'procurement' ? 'Procurement' : 'CPM / Inspector';
+  r === 'administrator' ? 'Administrator' : r === 'management' ? 'Borough Director / Management' : r === 'worker' ? 'Staff' : r === 'procurement' ? 'Procurement' : 'CPM / Inspector';
 
 function Screen({ children }: { children: React.ReactNode }) {
   return (
@@ -189,7 +189,7 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
         <Text style={ui.btnText}>Administrator  🔒</Text>
       </Pressable>
        <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
-        <Text style={ui.btnText}>Management  🔒</Text>
+        <Text style={ui.btnText}>Borough Director / Management  🔒</Text>
       </Pressable>
        <Pressable style={ui.btn} onPress={() => pickStaffRole('procurement')}>
         <Text style={ui.btnText}>Procurement  🔒</Text>
