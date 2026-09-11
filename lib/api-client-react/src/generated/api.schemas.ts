@@ -462,6 +462,7 @@ export interface Staff {
   canManage?: boolean;
   canResetCode?: boolean;
   canRevoke?: boolean;
+  canDelete?: boolean;
 }
 
 export interface AuthResponse {
@@ -560,6 +561,15 @@ export interface StaffInput {
   /**
      * @minLength 4
      * @maxLength 4
+     */
+  code?: string;
+}
+
+export interface StaffCodeUpdate {
+  /**
+     * @minLength 4
+     * @maxLength 4
+     * @pattern ^[A-Z0-9]{4}$
      */
   code?: string;
 }

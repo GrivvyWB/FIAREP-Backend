@@ -73,6 +73,7 @@ import type {
   ResidentPhoto,
   ResidentPhotoMetadata,
   Staff,
+  StaffCodeUpdate,
   StaffInput,
   StaffIssueResponse,
   SyncResponse,
@@ -1950,14 +1951,15 @@ export const getResetStaffCodeUrl = (id: string,) => {
   return `/api/v1/staff/${id}/reset-code`
 }
 
-export const resetStaffCode = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<StaffIssueResponse> => {
+export const resetStaffCode = async (id: string,
+    staffCodeUpdate?: StaffCodeUpdate, options?: Parameters<typeof customFetch>[1]): Promise<StaffIssueResponse> => {
 
   return customFetch<StaffIssueResponse>(getResetStaffCodeUrl(id),
   {
     ...options,
-    method: 'POST'
-
-
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(staffCodeUpdate)
   }
 );}
 
@@ -1966,8 +1968,8 @@ export const resetStaffCode = async (id: string, options?: Parameters<typeof cus
 
 
 export const getResetStaffCodeMutationOptions = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string;data?: BodyType<StaffCodeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string;data?: BodyType<StaffCodeUpdate>}, TContext> => {
 
 const mutationKey = ['resetStaffCode'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -1979,10 +1981,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetStaffCode>>, {id: string}> = (props) => {
-          const {id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof resetStaffCode>>, {id: string;data?: BodyType<StaffCodeUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
 
-          return  resetStaffCode(id,requestOptions)
+          return  resetStaffCode(id,data,requestOptions)
         }
 
 
@@ -1993,18 +1995,83 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type ResetStaffCodeMutationResult = NonNullable<Awaited<ReturnType<typeof resetStaffCode>>>
-
+    export type ResetStaffCodeMutationBody = BodyType<StaffCodeUpdate> | undefined
     export type ResetStaffCodeMutationError = ErrorType<Error>
 
     export const useResetStaffCode = <TError = ErrorType<Error>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof resetStaffCode>>, TError,{id: string;data?: BodyType<StaffCodeUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof resetStaffCode>>,
+        TError,
+        {id: string;data?: BodyType<StaffCodeUpdate>},
+        TContext
+      > => {
+      return useMutation(getResetStaffCodeMutationOptions(options));
+    }
+
+export const getDeleteStaffUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/staff/${id}`
+}
+
+export const deleteStaff = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteStaffUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+
+export const getDeleteStaffMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStaff>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteStaff>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['deleteStaff'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteStaff>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteStaff(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteStaffMutationResult = NonNullable<Awaited<ReturnType<typeof deleteStaff>>>
+
+    export type DeleteStaffMutationError = ErrorType<Error>
+
+    export const useDeleteStaff = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteStaff>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteStaff>>,
         TError,
         {id: string},
         TContext
       > => {
-      return useMutation(getResetStaffCodeMutationOptions(options));
+      return useMutation(getDeleteStaffMutationOptions(options));
     }
 
 export const getRevokeStaffUrl = (id: string,) => {

@@ -162,7 +162,8 @@ export const LoginResponse = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 })
 })
 
@@ -198,7 +199,8 @@ export const ProcurementLoginResponse = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 })
 })
 
@@ -266,7 +268,8 @@ export const BootstrapAdministratorResponse = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 })
 })
 
@@ -299,7 +302,8 @@ export const RefreshSessionResponse = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 })
 })
 
@@ -326,7 +330,8 @@ export const GetCurrentStaffResponse = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 })
 
 
@@ -535,7 +540,8 @@ export const ListStaffResponseItem = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 })
 export const ListStaffResponse = zod.array(ListStaffResponseItem)
 
@@ -572,7 +578,8 @@ export const CreateStaffResponse = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 }).and(zod.object({
   "code": zod.string().min(createStaffResponseTwoCodeMin).max(createStaffResponseTwoCodeMax)
 }))
@@ -587,6 +594,17 @@ export const ListStaffDevelopmentsResponse = zod.array(ListStaffDevelopmentsResp
 
 export const ResetStaffCodeParams = zod.object({
   "id": zod.coerce.string()
+})
+
+export const resetStaffCodeBodyCodeMin = 4;
+export const resetStaffCodeBodyCodeMax = 4;
+
+
+export const resetStaffCodeBodyCodeRegExp = new RegExp('^[A-Z0-9]{4}$');
+
+
+export const ResetStaffCodeBody = zod.object({
+  "code": zod.string().min(resetStaffCodeBodyCodeMin).max(resetStaffCodeBodyCodeMax).regex(resetStaffCodeBodyCodeRegExp).optional()
 })
 
 export const resetStaffCodeResponseTwoCodeMin = 4;
@@ -606,10 +624,18 @@ export const ResetStaffCodeResponse = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 }).and(zod.object({
   "code": zod.string().min(resetStaffCodeResponseTwoCodeMin).max(resetStaffCodeResponseTwoCodeMax)
 }))
+
+
+export const DeleteStaffParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const DeleteStaffResponse = zod.void()
 
 
 export const RevokeStaffParams = zod.object({
@@ -628,7 +654,8 @@ export const RevokeStaffResponse = zod.object({
   "developments": zod.array(zod.string()),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
-  "canRevoke": zod.boolean().optional()
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional()
 })
 
 

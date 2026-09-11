@@ -3,6 +3,7 @@ import {
   StaffInputRole,
   StaffRole,
   useCreateStaff,
+  useDeleteStaff,
   useListStaff,
   useResetStaffCode,
   useRevokeStaff,
@@ -10,7 +11,7 @@ import {
   getListStaffQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { UsersRound, Search, Copy, Plus, KeyRound, UserX } from "lucide-react";
+import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -49,6 +50,7 @@ export default function Team() {
   const create = useCreateStaff();
   const reset = useResetStaffCode();
   const revoke = useRevokeStaff();
+  const deleteStaff = useDeleteStaff();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -61,6 +63,8 @@ export default function Team() {
   const [issuedRole, setIssuedRole] = useState<string>("");
   const [issuedEmployee, setIssuedEmployee] = useState<string>("");
   const [actionError, setActionError] = useState("");
+  const [resetTarget, setResetTarget] = useState<{ id: string; name: string; role: string } | null>(null);
+  const [replacementCode, setReplacementCode] = useState("");
 
   const roleOptions = useMemo(() => {
     if (!actor) return [];
@@ -121,12 +125,21 @@ export default function Team() {
       setIssuedCode(result.code); setIssuedRole(role); setIssuedEmployee(name.trim()); await refresh();
     } catch (e) { setActionError(errorMessage(e)); }
   }
-  async function resetCode(id: string, memberName: string, memberRole: string) {
-    if (!window.confirm(`Reset the access code for ${memberName}? The old code will stop working.`)) return;
+  async function resetCode() {
+    if (!resetTarget) return;
     setActionError("");
     try {
-      const result = await reset.mutateAsync({ id });
-      setIssuedCode(result.code); setIssuedRole(memberRole); setIssuedEmployee(memberName); setOpen(true); await refresh();
+      const result = await reset.mutateAsync({
+        id: resetTarget.id,
+        ...(replacementCode.trim() ? { data: { code: replacementCode.trim().toUpperCase() } } : {}),
+      });
+      setResetTarget(null);
+      setReplacementCode("");
+      setIssuedCode(result.code);
+      setIssuedRole(resetTarget.role);
+      setIssuedEmployee(resetTarget.name);
+      setOpen(true);
+      await refresh();
     } catch (e) { setActionError(errorMessage(e)); }
   }
   async function revokeAccount(id: string, memberName: string) {
@@ -134,6 +147,14 @@ export default function Team() {
     setActionError("");
     try { await revoke.mutateAsync({ id }); await refresh(); }
     catch (e) { setActionError(errorMessage(e)); }
+  }
+  async function deleteAccount(id: string, memberName: string) {
+    if (!window.confirm(`Permanently delete ${memberName}? This removes the account and signs it out on every device. This cannot be undone.`)) return;
+    setActionError("");
+    try {
+      await deleteStaff.mutateAsync({ id });
+      await refresh();
+    } catch (e) { setActionError(errorMessage(e)); }
   }
   async function copyCode() {
     if (issuedCode) await navigator.clipboard?.writeText(issuedCode);
@@ -164,7 +185,11 @@ export default function Team() {
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white grid place-items-center font-bold text-sm shrink-0">{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
               <div className="flex-1 min-w-0"><h4 className="font-bold truncate">{member.name}</h4><div className="text-sm text-muted-foreground">{member.position}</div><div className="text-xs text-muted-foreground">{member.developments.join(", ") || "All assigned developments"}</div></div>
               <div className="text-right shrink-0"><div className="text-[13px] font-semibold bg-secondary px-2.5 py-1 rounded-full inline-block">{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
-                {(member.canResetCode || member.canRevoke) && member.status !== "revoked" && <div className="flex gap-2 mt-2 justify-end"><Button size="sm" variant="outline" onClick={() => resetCode(member.id, member.name, member.role)}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button><Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />Revoke</Button></div>}
+                {(member.canResetCode || member.canRevoke || member.canDelete) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
+                  {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => { setResetTarget({ id: member.id, name: member.name, role: member.role }); setReplacementCode(""); }}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
+                  {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />Revoke</Button>}
+                  {member.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
+                </div>}
               </div>
             </div>)}</div>}
         </div>
@@ -205,6 +230,35 @@ export default function Team() {
               <div><Label htmlFor="employee-code">Custom code (optional)</Label><Input id="employee-code" maxLength={4} pattern="[A-Za-z0-9]{4}" value={customCode} onChange={(e) => setCustomCode(e.target.value.toUpperCase())} placeholder="Server generates one" /></div>
               {actionError && <p className="text-sm text-destructive">{actionError}</p>}<DialogFooter><Button type="button" variant="outline" onClick={closeForm}>Cancel</Button><Button type="submit" disabled={create.isPending}>{create.isPending ? "Creating..." : "Create employee"}</Button></DialogFooter>
             </form>}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(resetTarget)} onOpenChange={(value) => { if (!value) { setResetTarget(null); setReplacementCode(""); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset access code</DialogTitle>
+            <DialogDescription>
+              Enter a custom four-character code for {resetTarget?.name}, or leave it blank and the server will generate one. Their old code will stop working.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="replacement-employee-code">Custom code (optional)</Label>
+            <Input
+              id="replacement-employee-code"
+              maxLength={4}
+              pattern="[A-Za-z0-9]{4}"
+              value={replacementCode}
+              onChange={(event) => setReplacementCode(event.target.value.toUpperCase())}
+              placeholder="Generate automatically"
+            />
+            <p className="text-xs text-muted-foreground">Use exactly four letters or numbers when entering a custom code.</p>
+          </div>
+          {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => { setResetTarget(null); setReplacementCode(""); }}>Cancel</Button>
+            <Button type="button" onClick={resetCode} disabled={reset.isPending || (replacementCode.length > 0 && replacementCode.length !== 4)}>
+              {reset.isPending ? "Saving..." : replacementCode ? "Set custom code" : "Generate code"}
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       {actionError && !open && <p className="text-sm text-destructive">{actionError}</p>}

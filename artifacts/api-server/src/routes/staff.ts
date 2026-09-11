@@ -1,7 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, asc, eq, sql, count } from "drizzle-orm";
-import { db, entityRecords, staffAccounts, organizations, organizationProperties } from "@workspace/db";
+import {
+  db,
+  deviceTokens,
+  entityRecords,
+  refreshSessions,
+  staffAccounts,
+  organizations,
+  organizationProperties,
+} from "@workspace/db";
 import { audit } from "../lib/audit";
 import {
   STAFF_POSITIONS,
@@ -26,6 +34,7 @@ function safe(
         canManage: canManageStaff(actor, staff),
         canResetCode: canManageStaff(actor, staff),
         canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
+         canDelete: actor.id !== staff.id && canManageStaff(actor, staff),
       }
     : {};
   if (includeCode) return data;
@@ -252,7 +261,13 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     res.status(403).json({ error: "Not allowed to manage this staff account" });
     return;
   }
-  const code = staffCode();
+  const requestedCode =
+    typeof req.body?.code === "string" ? req.body.code.trim().toUpperCase() : "";
+  if (requestedCode && !/^[A-Z0-9]{4}$/.test(requestedCode)) {
+    res.status(400).json({ error: "Code must be exactly 4 letters or numbers" });
+    return;
+  }
+  const code = requestedCode || staffCode();
   const [updated] = await db
     .update(staffAccounts)
     .set({
@@ -273,6 +288,43 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
   }
   await audit(actor, "staff.code_reset", `Reset code for ${updated.name}`, updated.id);
   res.json(safe(updated, true, actor));
+});
+
+router.delete("/v1/staff/:id", async (req, res) => {
+  const actor = actorFrom(res);
+  const [target] = await db
+    .select()
+    .from(staffAccounts)
+    .where(and(
+      eq(staffAccounts.id, req.params["id"]!),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    ))
+    .limit(1);
+  if (!target) {
+    res.status(404).json({ error: "Staff account not found" });
+    return;
+  }
+  if (target.id === actor.id) {
+    res.status(403).json({ error: "You cannot delete your own account" });
+    return;
+  }
+  if (!canManageStaff(actor, target)) {
+    res.status(403).json({ error: "Not allowed to delete this staff account" });
+    return;
+  }
+  await db.transaction(async (tx) => {
+    await tx.delete(refreshSessions).where(eq(refreshSessions.staffId, target.id));
+    await tx.delete(deviceTokens).where(and(
+      eq(deviceTokens.tenantId, actor.tenantId),
+      eq(deviceTokens.staffId, target.id),
+    ));
+    await tx.delete(staffAccounts).where(and(
+      eq(staffAccounts.id, target.id),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    ));
+  });
+  await audit(actor, "staff.deleted", `Permanently deleted ${target.name}`, target.id);
+  res.status(204).send();
 });
 
 router.post("/v1/staff/:id/revoke", async (req, res) => {
