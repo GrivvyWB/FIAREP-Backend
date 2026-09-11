@@ -1,0 +1,210 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Leave Management | FIAREP</title><link rel="stylesheet" href="styles.css"></head>
+<body class="appbody">
+<div class="app">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main">
+    <div class="appbar">
+      <button class="hamb" id="menuBtn">☰</button>
+      <div class="page-title" style="margin:0"><h1 style="font-size:22px">Leave Management</h1></div>
+      <div class="user"><span class="mini" data-user>John Smith</span><div class="avatar">J</div></div>
+    </div>
+    <div class="content">
+
+      <!-- Stats -->
+      <div class="stats" id="stats"></div>
+
+      <div class="dashgrid" style="margin-top:18px">
+        <!-- Calendar -->
+        <div class="panel">
+          <div class="panelhead">
+            <h3>Team Calendar</h3>
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn outline" id="prevM" style="padding:6px 12px">‹</button>
+              <b id="monthLbl" style="min-width:130px;text-align:center"></b>
+              <button class="btn outline" id="nextM" style="padding:6px 12px">›</button>
+            </div>
+          </div>
+          <div id="calendar"></div>
+          <p class="mini" style="margin-top:10px">★ = US holiday · solid dot = approved · faded = pending · click a day for details.</p>
+        </div>
+
+        <!-- Request form -->
+        <div class="panel">
+          <div class="panelhead"><h3>Request Time Off</h3></div>
+          <div class="field"><label>Employee</label><input id="f_emp" placeholder="Employee name"></div>
+          <div class="field"><label>Title / Trade</label><input id="f_title" placeholder="e.g. Plumber"></div>
+          <div class="field"><label>Development</label><input id="f_dev" placeholder="Development"></div>
+          <div class="field"><label>Supervisor</label><input id="f_sup" placeholder="Supervisor"></div>
+          <div class="field"><label>Leave Type</label><select id="f_type"></select></div>
+          <div class="field"><label>Start Date</label><input id="f_start" type="date"></div>
+          <div class="field"><label>End Date</label><input id="f_end" type="date"></div>
+          <div class="field"><label>Amount</label><select id="f_amt">
+            <option value="">Full day(s)</option>
+            <option value="2">Quarter day (2h)</option>
+            <option value="4">Half day (4h)</option>
+            <option value="6">Three-quarter day (6h)</option>
+            <option value="1">1 hour</option><option value="3">3 hours</option>
+            <option value="5">5 hours</option><option value="7">7 hours</option>
+          </select></div>
+          <div class="field"><label>Reason (optional)</label><input id="f_reason" placeholder="Notes"></div>
+          <button class="btn primary" id="submitBtn" style="width:100%">Submit Request</button>
+          <div class="authmsg" id="msg"></div>
+        </div>
+      </div>
+
+      <!-- Requests table -->
+      <div class="toolbar">
+        <input class="search" id="search" placeholder="Search employee, type, development">
+        <div style="display:flex;gap:6px;flex-wrap:wrap" id="statusFilters"></div>
+      </div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th>Amount</th><th>Development</th><th>Status</th><th>Action</th></tr></thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+<script>
+const LEAVE_TYPES=["Vacation","Sick","Childcare","Personal","LOA","Family Emergency","Jury Duty","Bereavement","Other"];
+const ALLOT={Vacation:20,Sick:10,Childcare:12,Personal:5,LOA:0,"Family Emergency":5,"Jury Duty":0,Bereavement:5,Other:0};
+const TYPE_COLOR={Vacation:"#1769e0",Sick:"#e64b45",Childcare:"#8e44ad",Personal:"#36b56b",LOA:"#68757d","Family Emergency":"#e67e22","Jury Duty":"#0891b2",Bereavement:"#334155",Other:"#999"};
+const KEY="fiarepLeave";
+let monthOffset=0, statusFilter="Pending", search="";
+
+function load(){try{return JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){return[]}}
+function save(a){localStorage.setItem(KEY,JSON.stringify(a))}
+function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function daysBetween(s,e){const a=new Date(s),b=new Date(e||s);const ms=b-a;if(isNaN(ms)||ms<0)return 1;return Math.round(ms/864e5)+1}
+function pad(n){return n<10?"0"+n:""+n}
+
+// US federal holidays (same set as the app)
+function nthWeekday(y,m,wd,n){const first=new Date(y,m,1).getDay();return 1+((wd-first+7)%7)+(n-1)*7}
+function lastWeekday(y,m,wd){const dim=new Date(y,m+1,0).getDate();const last=new Date(y,m,dim).getDay();return dim-((last-wd+7)%7)}
+function holiday(y,mo,d){
+  if(mo===0&&d===1)return"New Year's Day";
+  if(mo===0&&d===nthWeekday(y,0,1,3))return"Martin Luther King Jr. Day";
+  if(mo===1&&d===nthWeekday(y,1,1,3))return"Presidents' Day";
+  if(mo===4&&d===lastWeekday(y,4,1))return"Memorial Day";
+  if(mo===5&&d===19)return"Juneteenth";
+  if(mo===6&&d===4)return"Independence Day";
+  if(mo===8&&d===nthWeekday(y,8,1,1))return"Labor Day";
+  if(mo===9&&d===nthWeekday(y,9,1,2))return"Columbus / Indigenous Peoples Day";
+  if(mo===10&&d===11)return"Veterans Day";
+  if(mo===10&&d===nthWeekday(y,10,1,1)+1)return"Election Day";
+  if(mo===10&&d===nthWeekday(y,10,4,4))return"Thanksgiving";
+  if(mo===11&&d===25)return"Christmas Day";
+  return"";
+}
+
+function balances(name){
+  const mine=load().filter(r=>(r.employee||"").toLowerCase()===(name||"").toLowerCase());
+  const year=new Date().getFullYear();
+  return LEAVE_TYPES.map(t=>{
+    const allot=ALLOT[t];
+    const used=mine.filter(r=>r.type===t&&r.status==="Approved"&&(r.startDate||"").startsWith(""+year))
+      .reduce((s,r)=>s+(r.hours>0?r.hours/8:(r.approvedDays!=null?r.approvedDays:r.days)),0);
+    return{type:t,allot,used:Math.round(used*10)/10,remaining:allot>0?Math.round(Math.max(0,allot-used)*10)/10:-1};
+  });
+}
+
+function renderStats(){
+  const all=load();
+  const pending=all.filter(r=>r.status==="Pending").length;
+  const approved=all.filter(r=>r.status==="Approved").length;
+  const today=new Date();const iso=today.getFullYear()+"-"+pad(today.getMonth()+1)+"-"+pad(today.getDate());
+  const outToday=all.filter(r=>r.status==="Approved"&&(r.startDate||"")<=iso&&(r.endDate||r.startDate||"")>=iso).length;
+  document.getElementById("stats").innerHTML=[
+    ["Pending",pending],["Approved",approved],["Out today",outToday],["Total requests",all.length]
+  ].map(s=>`<div class="stat"><small>${s[0]}</small><strong>${s[1]}</strong></div>`).join("");
+}
+
+function renderCalendar(){
+  const all=load();const base=new Date();const view=new Date(base.getFullYear(),base.getMonth()+monthOffset,1);
+  const y=view.getFullYear(),mo=view.getMonth();
+  document.getElementById("monthLbl").textContent=view.toLocaleString(undefined,{month:"long",year:"numeric"});
+  const firstDow=new Date(y,mo,1).getDay();const dim=new Date(y,mo+1,0).getDate();
+  const iso=d=>y+"-"+pad(mo+1)+"-"+pad(d);
+  const todayISO=base.getFullYear()+"-"+pad(base.getMonth()+1)+"-"+pad(base.getDate());
+  const onDay=d=>{const day=iso(d);return all.filter(r=>r.status!=="Denied"&&r.status!=="Cancelled"&&(r.startDate||"")<=day&&(r.endDate||r.startDate||"")>=day)};
+  let html='<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">';
+  ["S","M","T","W","T","F","S"].forEach(d=>html+=`<div style="text-align:center;font-size:10px;font-weight:700;color:#aab2bd;padding:4px 0">${d}</div>`);
+  for(let i=0;i<firstDow;i++)html+="<div></div>";
+  for(let d=1;d<=dim;d++){
+    const list=onDay(d);const hol=holiday(y,mo,d);const isToday=iso(d)===todayISO;
+    const dots=list.slice(0,4).map(r=>`<span style="width:5px;height:5px;border-radius:3px;background:${TYPE_COLOR[r.type]||'#999'};opacity:${r.status==='Approved'?1:.4};display:inline-block;margin:0 1px"></span>`).join("");
+    html+=`<div onclick="dayInfo(${y},${mo},${d})" style="cursor:pointer;aspect-ratio:1;border-radius:8px;padding:3px;text-align:center;background:${hol?'#fdf6e3':(list.length?'#f7fafd':'transparent')};border:${isToday?'1.6px solid #f3c400':'0'}">
+      <div style="display:inline-flex;width:22px;height:22px;border-radius:11px;align-items:center;justify-content:center;background:${isToday?'#ffd21a':'transparent'};font-weight:${isToday?800:600};font-size:12px;color:${isToday?'#081117':(hol?'#B4741A':'#333')}">${d}</div>
+      ${hol?'<div style="font-size:8px;color:#B4741A;line-height:1">★</div>':''}
+      <div style="line-height:1">${dots}</div>
+    </div>`;
+  }
+  html+="</div>";
+  document.getElementById("calendar").innerHTML=html;
+}
+window.dayInfo=function(y,mo,d){
+  const all=load();const day=y+"-"+pad(mo+1)+"-"+pad(d);const hol=holiday(y,mo,d);
+  const list=all.filter(r=>r.status!=="Denied"&&r.status!=="Cancelled"&&(r.startDate||"")<=day&&(r.endDate||r.startDate||"")>=day);
+  let m=day+(hol?"  —  "+hol:"");
+  if(list.length===0)m+="\n\n"+(hol?"Holiday. No one out.":"No one out.");
+  else m+="\n\n"+list.map(r=>r.employee+" · "+r.type+(r.status==="Pending"?" (pending)":"")).join("\n");
+  alert(m);
+};
+
+function renderRows(){
+  const all=load();const q=search.trim().toLowerCase();
+  const rows=all.filter(r=>{
+    if(statusFilter!=="All"&&r.status!==statusFilter)return false;
+    if(q&&!((r.employee||"").toLowerCase().includes(q)||(r.type||"").toLowerCase().includes(q)||(r.development||"").toLowerCase().includes(q)))return false;
+    return true;
+  });
+  const amt=r=>r.hours>0?r.hours+"h":((r.approvedDays!=null?r.approvedDays:r.days)+"d");
+  const pill=s=>s==="Approved"?"green":s==="Denied"||s==="Cancelled"?"red":"yellow";
+  document.getElementById("rows").innerHTML=rows.length?rows.map(r=>`
+    <tr>
+      <td><b>${r.employee}</b><br><span class="mini">${r.title||""}</span></td>
+      <td><span style="color:${TYPE_COLOR[r.type]||'#333'};font-weight:800">${r.type}</span></td>
+      <td>${r.startDate}${r.endDate&&r.endDate!==r.startDate?" – "+r.endDate:""}</td>
+      <td>${amt(r)}</td>
+      <td>${r.development||"—"}</td>
+      <td><span class="pill ${pill(r.status)}">${r.status}</span></td>
+      <td>${r.status==="Pending"?`<button class="btn primary" style="padding:6px 10px" onclick="decide('${r.id}','Approved')">Approve</button> <button class="btn outline" style="padding:6px 10px" onclick="decide('${r.id}','Denied')">Deny</button>`:`<button class="btn ghost" style="padding:6px 10px;color:#e64b45" onclick="del('${r.id}')">Delete</button>`}</td>
+    </tr>`).join(""):`<tr><td colspan="7" class="mini" style="padding:24px;text-align:center">No leave requests.</td></tr>`;
+}
+window.decide=function(id,status){const a=load();const r=a.find(x=>x.id===id);if(r){r.status=status;if(status==="Approved")r.approvedDays=r.days;}save(a);renderAll();};
+window.del=function(id){if(!confirm("Delete this request?"))return;save(load().filter(x=>x.id!==id));renderAll();};
+
+function renderFilters(){
+  document.getElementById("statusFilters").innerHTML=["Pending","Approved","Denied","Cancelled","All"].map(s=>
+    `<button class="btn ${statusFilter===s?'primary':'outline'}" style="padding:8px 12px" onclick="setStatus('${s}')">${s}</button>`).join("");
+}
+window.setStatus=function(s){statusFilter=s;renderFilters();renderRows();};
+
+function renderAll(){renderStats();renderCalendar();renderRows();}
+
+document.addEventListener("DOMContentLoaded",()=>{
+  const sel=document.getElementById("f_type");LEAVE_TYPES.forEach(t=>{const o=document.createElement("option");o.value=t;o.textContent=t;sel.appendChild(o)});
+  renderFilters();renderAll();
+  document.getElementById("prevM").onclick=()=>{monthOffset--;renderCalendar()};
+  document.getElementById("nextM").onclick=()=>{monthOffset++;renderCalendar()};
+  document.getElementById("search").oninput=e=>{search=e.target.value;renderRows()};
+  document.getElementById("submitBtn").onclick=()=>{
+    const emp=document.getElementById("f_emp").value.trim();
+    const start=document.getElementById("f_start").value;
+    if(!emp){document.getElementById("msg").textContent="Enter the employee name.";return}
+    if(!start){document.getElementById("msg").textContent="Pick a start date.";return}
+    const end=document.getElementById("f_end").value||start;
+    const hours=document.getElementById("f_amt").value;
+    const req={id:uid(),employee:emp,title:document.getElementById("f_title").value.trim(),development:document.getElementById("f_dev").value.trim(),supervisor:document.getElementById("f_sup").value.trim(),type:document.getElementById("f_type").value,startDate:start,endDate:end,days:daysBetween(start,end),hours:hours?+hours:0,reason:document.getElementById("f_reason").value.trim(),status:"Pending",requestedAt:new Date().toISOString()};
+    save(load().concat(req));
+    document.getElementById("msg").textContent="✓ Request submitted.";
+    ["f_emp","f_title","f_dev","f_sup","f_start","f_end","f_reason"].forEach(id=>document.getElementById(id).value="");
+    document.getElementById("f_amt").value="";
+    renderAll();
+  };
+});
+</script>
+</body></html>
