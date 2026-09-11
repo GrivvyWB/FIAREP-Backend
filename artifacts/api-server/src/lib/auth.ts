@@ -6,7 +6,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { db, refreshSessions, staffAccounts, type StaffAccount } from "@workspace/db";
+import { db, refreshSessions, staffAccounts, organizations, type StaffAccount, type Organization } from "@workspace/db";
 
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_DAYS = 30;
@@ -20,6 +20,8 @@ export type Actor = {
   developments: string[];
   sessionVersion: number;
 };
+
+export type PlatformOwner = { name: string; typ: "platform_owner"; iat: number; exp: number };
 
 type AccessPayload = Actor & {
   exp: number;
@@ -43,6 +45,31 @@ function signature(input: string): string {
 
 function tokenHash(token: string): string {
   return createHash("sha256").update(token).digest("hex");
+}
+
+export async function evaluateLicense(tenantId: string): Promise<Organization | null> {
+  const [organization] = await db.select().from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  if (!organization && tenantId === "default") {
+    const [defaultOrganization] = await db.insert(organizations).values({
+      id: "default",
+      name: "Default Organization",
+      status: "active",
+      unrestricted: true,
+      features: {},
+    }).onConflictDoNothing().returning();
+    if (defaultOrganization) return defaultOrganization;
+    const [existingDefault] = await db.select().from(organizations).where(eq(organizations.id, "default")).limit(1);
+    return existingDefault ?? null;
+  }
+  return organization ?? null;
+}
+
+export function licenseAllows(organization: Organization | null, tenantId: string): boolean {
+  if (!organization) return tenantId === "default";
+  const now = new Date();
+  return organization.status === "active" &&
+    (organization.unrestricted || ((!organization.startsAt || organization.startsAt <= now) &&
+      (!organization.endsAt || organization.endsAt > now)));
 }
 
 export function actorFromStaff(staff: StaffAccount): Actor {
@@ -130,7 +157,7 @@ export async function rotateSession(refreshToken: string) {
     .from(staffAccounts)
     .where(eq(staffAccounts.id, session.staffId))
     .limit(1);
-  if (!staff || staff.status !== "approved") return null;
+  if (!staff || staff.status !== "approved" || !licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) return null;
 
   await db
     .update(refreshSessions)
@@ -165,5 +192,36 @@ export async function loadCurrentActor(payload: AccessPayload) {
   ) {
     return null;
   }
+  if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) return null;
   return { staff, actor: actorFromStaff(staff) };
+}
+
+export function signPlatformOwnerToken(): string {
+  const now = Math.floor(Date.now() / 1000);
+  const header = encode({ alg: "HS256", typ: "JWT" });
+  const payload = encode({ name: process.env["FIAREP_PLATFORM_OWNER_NAME"], iat: now, exp: now + 900, typ: "platform_owner" });
+  const input = `${header}.${payload}`;
+  return `${input}.${signature(input)}`;
+}
+
+export function verifyPlatformOwnerToken(token: string): PlatformOwner {
+  const parts = token.split(".");
+  if (parts.length !== 3) throw new Error("Malformed platform owner token");
+  const [header, payload, received] = parts as [string, string, string];
+  const expected = Buffer.from(signature(`${header}.${payload}`));
+  const actual = Buffer.from(received);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error("Invalid platform owner token");
+  const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as PlatformOwner;
+  if (parsed.typ !== "platform_owner" || parsed.exp <= Math.floor(Date.now() / 1000)) throw new Error("Expired platform owner token");
+  return parsed;
+}
+
+export function platformOwnerCredentialsMatch(name: string, code: string): boolean {
+  const expectedName = process.env["FIAREP_PLATFORM_OWNER_NAME"] ?? "";
+  const expectedCode = process.env["FIAREP_PLATFORM_OWNER_CODE"] ?? "";
+  const a = Buffer.from(name);
+  const b = Buffer.from(expectedName);
+  const c = Buffer.from(code);
+  const d = Buffer.from(expectedCode);
+  return a.length === b.length && c.length === d.length && timingSafeEqual(a, b) && timingSafeEqual(c, d);
 }

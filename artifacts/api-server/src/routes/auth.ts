@@ -6,6 +6,10 @@ import {
   issueSession,
   revokeRefreshToken,
   rotateSession,
+  licenseAllows,
+  evaluateLicense,
+  platformOwnerCredentialsMatch,
+  signPlatformOwnerToken,
 } from "../lib/auth";
 import { requireAuth } from "../middlewares/auth";
 
@@ -23,6 +27,10 @@ router.post("/v1/auth/bootstrap", async (req, res) => {
     typeof body["tenantId"] === "string" && body["tenantId"].trim()
       ? body["tenantId"].trim()
       : "default";
+  if (tenantId !== "default") {
+    res.status(403).json({ error: "Only the default organization may use public bootstrap" });
+    return;
+  }
   const name = typeof body["name"] === "string" ? body["name"].trim() : "";
   const code =
     typeof body["code"] === "string" ? body["code"].trim().toUpperCase() : "";
@@ -109,7 +117,20 @@ router.post("/v1/auth/login", async (req, res) => {
     res.status(401).json({ error: "Invalid staff name or code" });
     return;
   }
+  if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) {
+    res.status(403).json({ error: "Organization license is not active" });
+    return;
+  }
   res.json({ ...(await issueSession(staff)), staff: publicStaff(staff) });
+});
+
+router.post("/v1/platform/auth/login", (req, res) => {
+  const { name, code } = req.body as { name?: unknown; code?: unknown };
+  if (typeof name !== "string" || typeof code !== "string" || !platformOwnerCredentialsMatch(name, code)) {
+    res.status(401).json({ error: "Invalid platform owner credentials" });
+    return;
+  }
+  res.json({ accessToken: signPlatformOwnerToken(), expiresIn: 900 });
 });
 
 router.post("/v1/auth/refresh", async (req, res) => {

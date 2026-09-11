@@ -163,6 +163,17 @@ export const LoginResponse = zod.object({
 })
 
 
+export const PlatformOwnerLoginBody = zod.object({
+  "name": zod.string(),
+  "code": zod.string()
+})
+
+export const PlatformOwnerLoginResponse = zod.object({
+  "accessToken": zod.string(),
+  "expiresIn": zod.number().int()
+})
+
+
 /**
  * @summary Create the first administrator for an empty tenant
  */
@@ -247,6 +258,89 @@ export const GetCurrentStaffResponse = zod.object({
   "position": zod.string(),
   "status": zod.string(),
   "developments": zod.array(zod.string())
+})
+
+
+export const ListOrganizationsResponseItem = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.enum(['active', 'suspended', 'expired']),
+  "startsAt": zod.coerce.date().nullish(),
+  "endsAt": zod.coerce.date().nullish(),
+  "staffLimit": zod.number().int().nullish(),
+  "propertyLimit": zod.number().int().nullish(),
+  "features": zod.record(zod.string(), zod.unknown()),
+  "unrestricted": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}).and(zod.object({
+  "usage": zod.object({
+  "staff": zod.number().int(),
+  "properties": zod.number().int()
+})
+}))
+export const ListOrganizationsResponse = zod.array(ListOrganizationsResponseItem)
+
+
+export const createOrganizationBodyDirectorCodeMin = 4;
+export const createOrganizationBodyDirectorCodeMax = 4;
+
+
+
+export const CreateOrganizationBody = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.enum(['active', 'suspended', 'expired']).optional(),
+  "startsAt": zod.coerce.date().optional(),
+  "endsAt": zod.coerce.date().optional(),
+  "staffLimit": zod.number().int().nullish(),
+  "propertyLimit": zod.number().int().nullish(),
+  "features": zod.record(zod.string(), zod.unknown()).optional(),
+  "unrestricted": zod.boolean().optional(),
+  "directorName": zod.string().optional(),
+  "directorCode": zod.string().min(createOrganizationBodyDirectorCodeMin).max(createOrganizationBodyDirectorCodeMax).optional()
+})
+
+export const CreateOrganizationResponse = zod.object({
+
+}).passthrough()
+
+
+export const UpdateOrganizationParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateOrganizationBodyDirectorCodeMin = 4;
+export const updateOrganizationBodyDirectorCodeMax = 4;
+
+
+
+export const UpdateOrganizationBody = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.enum(['active', 'suspended', 'expired']).optional(),
+  "startsAt": zod.coerce.date().optional(),
+  "endsAt": zod.coerce.date().optional(),
+  "staffLimit": zod.number().int().nullish(),
+  "propertyLimit": zod.number().int().nullish(),
+  "features": zod.record(zod.string(), zod.unknown()).optional(),
+  "unrestricted": zod.boolean().optional(),
+  "directorName": zod.string().optional(),
+  "directorCode": zod.string().min(updateOrganizationBodyDirectorCodeMin).max(updateOrganizationBodyDirectorCodeMax).optional()
+})
+
+export const UpdateOrganizationResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "status": zod.enum(['active', 'suspended', 'expired']),
+  "startsAt": zod.coerce.date().nullish(),
+  "endsAt": zod.coerce.date().nullish(),
+  "staffLimit": zod.number().int().nullish(),
+  "propertyLimit": zod.number().int().nullish(),
+  "features": zod.record(zod.string(), zod.unknown()),
+  "unrestricted": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
 })
 
 

@@ -40,6 +40,25 @@ export const staffAccounts = pgTable(
   ],
 );
 
+export const organizations = pgTable(
+  "organizations",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    status: text("status").notNull().default("active"),
+    startsAt: timestamp("starts_at", { withTimezone: true }),
+    endsAt: timestamp("ends_at", { withTimezone: true }),
+    staffLimit: integer("staff_limit"),
+    propertyLimit: integer("property_limit"),
+    features: jsonb("features").$type<Record<string, unknown>>().notNull().default({}),
+    unrestricted: boolean("unrestricted").notNull().default(false),
+    ...timestamps,
+  },
+  (table) => [
+    index("organization_status_idx").on(table.status),
+  ],
+);
+
 export const refreshSessions = pgTable(
   "refresh_sessions",
   {
@@ -184,4 +203,5 @@ export const pushDeliveries = pgTable(
 );
 
 export type StaffAccount = typeof staffAccounts.$inferSelect;
+export type Organization = typeof organizations.$inferSelect;
 export type EntityRecord = typeof entityRecords.$inferSelect;

@@ -22,6 +22,7 @@ import type {
 import type {
   AuthResponse,
   BootstrapAdministratorBody,
+  CreateOrganization201,
   CreatePushSmokeTest202,
   DeleteEntityRecordBody,
   DeviceToken,
@@ -45,7 +46,12 @@ import type {
   LookupPublicVendorScopeParams,
   Notification,
   NycPropertyLookup,
+  Organization,
+  OrganizationInput,
+  OrganizationWithUsage,
   PerformEntityActionBody,
+  PlatformOwnerLogin200,
+  PlatformOwnerLoginBody,
   PublicVendorBidInput,
   PullSyncParams,
   PushDelivery,
@@ -389,6 +395,71 @@ export const useLogin = <TError = ErrorType<UnauthorizedResponse>,
         TContext
       > => {
       return useMutation(getLoginMutationOptions(options));
+    }
+
+export const getPlatformOwnerLoginUrl = () => {
+
+
+
+
+  return `/api/v1/auth/platform-owner/login`
+}
+
+export const platformOwnerLogin = async (platformOwnerLoginBody: PlatformOwnerLoginBody, options?: Parameters<typeof customFetch>[1]): Promise<PlatformOwnerLogin200> => {
+
+  return customFetch<PlatformOwnerLogin200>(getPlatformOwnerLoginUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(platformOwnerLoginBody)
+  }
+);}
+
+
+
+
+
+export const getPlatformOwnerLoginMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof platformOwnerLogin>>, TError,{data: BodyType<PlatformOwnerLoginBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof platformOwnerLogin>>, TError,{data: BodyType<PlatformOwnerLoginBody>}, TContext> => {
+
+const mutationKey = ['platformOwnerLogin'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof platformOwnerLogin>>, {data: BodyType<PlatformOwnerLoginBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  platformOwnerLogin(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PlatformOwnerLoginMutationResult = NonNullable<Awaited<ReturnType<typeof platformOwnerLogin>>>
+    export type PlatformOwnerLoginMutationBody = BodyType<PlatformOwnerLoginBody>
+    export type PlatformOwnerLoginMutationError = ErrorType<unknown>
+
+    export const usePlatformOwnerLogin = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof platformOwnerLogin>>, TError,{data: BodyType<PlatformOwnerLoginBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof platformOwnerLogin>>,
+        TError,
+        {data: BodyType<PlatformOwnerLoginBody>},
+        TContext
+      > => {
+      return useMutation(getPlatformOwnerLoginMutationOptions(options));
     }
 
 export const getBootstrapAdministratorUrl = () => {
@@ -745,6 +816,208 @@ export function useGetCurrentStaff<TData = Awaited<ReturnType<typeof getCurrentS
 
 
 
+
+export const getListOrganizationsUrl = () => {
+
+
+
+
+  return `/api/v1/platform/organizations`
+}
+
+export const listOrganizations = async ( options?: Parameters<typeof customFetch>[1]): Promise<OrganizationWithUsage[]> => {
+
+  return customFetch<OrganizationWithUsage[]>(getListOrganizationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListOrganizationsQueryKey = () => {
+    return [
+    `/api/v1/platform/organizations`
+    ] as const;
+    }
+
+
+export const getListOrganizationsQueryOptions = <TData = Awaited<ReturnType<typeof listOrganizations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOrganizations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListOrganizationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOrganizations>>> = ({ signal }) => listOrganizations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOrganizations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListOrganizationsQueryResult = NonNullable<Awaited<ReturnType<typeof listOrganizations>>>
+export type ListOrganizationsQueryError = ErrorType<unknown>
+
+
+
+export function useListOrganizations<TData = Awaited<ReturnType<typeof listOrganizations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOrganizations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListOrganizationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCreateOrganizationUrl = () => {
+
+
+
+
+  return `/api/v1/platform/organizations`
+}
+
+export const createOrganization = async (organizationInput: OrganizationInput, options?: Parameters<typeof customFetch>[1]): Promise<CreateOrganization201> => {
+
+  return customFetch<CreateOrganization201>(getCreateOrganizationUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(organizationInput)
+  }
+);}
+
+
+
+
+
+export const getCreateOrganizationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOrganization>>, TError,{data: BodyType<OrganizationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOrganization>>, TError,{data: BodyType<OrganizationInput>}, TContext> => {
+
+const mutationKey = ['createOrganization'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOrganization>>, {data: BodyType<OrganizationInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createOrganization(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof createOrganization>>>
+    export type CreateOrganizationMutationBody = BodyType<OrganizationInput>
+    export type CreateOrganizationMutationError = ErrorType<unknown>
+
+    export const useCreateOrganization = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOrganization>>, TError,{data: BodyType<OrganizationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createOrganization>>,
+        TError,
+        {data: BodyType<OrganizationInput>},
+        TContext
+      > => {
+      return useMutation(getCreateOrganizationMutationOptions(options));
+    }
+
+export const getUpdateOrganizationUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/platform/organizations/${id}`
+}
+
+export const updateOrganization = async (id: string,
+    organizationInput: OrganizationInput, options?: Parameters<typeof customFetch>[1]): Promise<Organization> => {
+
+  return customFetch<Organization>(getUpdateOrganizationUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(organizationInput)
+  }
+);}
+
+
+
+
+
+export const getUpdateOrganizationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOrganization>>, TError,{id: string;data: BodyType<OrganizationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateOrganization>>, TError,{id: string;data: BodyType<OrganizationInput>}, TContext> => {
+
+const mutationKey = ['updateOrganization'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateOrganization>>, {id: string;data: BodyType<OrganizationInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateOrganization(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateOrganizationMutationResult = NonNullable<Awaited<ReturnType<typeof updateOrganization>>>
+    export type UpdateOrganizationMutationBody = BodyType<OrganizationInput>
+    export type UpdateOrganizationMutationError = ErrorType<unknown>
+
+    export const useUpdateOrganization = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateOrganization>>, TError,{id: string;data: BodyType<OrganizationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateOrganization>>,
+        TError,
+        {id: string;data: BodyType<OrganizationInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateOrganizationMutationOptions(options));
+    }
 
 export const getListStaffUrl = (params?: ListStaffParams,) => {
   const normalizedParams = new URLSearchParams();

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
-import { db, entityRecords } from "@workspace/db";
+import { and, desc, eq, sql, count } from "drizzle-orm";
+import { db, entityRecords, organizations } from "@workspace/db";
 import { audit, notify } from "../lib/audit";
 import {
   ENTITIES,
@@ -203,6 +203,18 @@ router.post("/v1/:entity", async (req, res, next) => {
   if (!entityDevelopmentAllowed(actor, entity, development)) {
     res.status(403).json({ error: "Development access denied" });
     return;
+  }
+  if (entity === "properties" || entity === "projects") {
+    const [organization] = await db.select({ propertyLimit: organizations.propertyLimit })
+      .from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+    if (organization?.propertyLimit !== null && organization?.propertyLimit !== undefined) {
+      const [{ value }] = await db.select({ value: count() }).from(entityRecords)
+        .where(and(eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, entity), eq(entityRecords.deleted, false)));
+      if (Number(value) >= organization.propertyLimit) {
+        res.status(403).json({ error: "Organization property license limit reached" });
+        return;
+      }
+    }
   }
   const now = new Date();
   const createdState = withInitialWorkflowState(

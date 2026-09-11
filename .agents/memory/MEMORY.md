@@ -6,3 +6,4 @@
 - [FIAREP public access model](fiarep-public-access-model.md) — residents use address/complaint numbers; vendors use Procurement-issued scope codes, never staff accounts.
 - [FIAREP sync retries and login](fiarep-sync-retries-and-login.md) — entity creates must be idempotent, and successful auth must not depend on background sync succeeding.
 - [NYC property source resilience](nyc-property-source-resilience.md) — retry temporary source failures briefly, then return successful datasets with source-specific warnings.
+- [FIAREP organization licensing](fiarep-organization-licensing.md) — platform ownership is separate from tenant roles; customer access fails closed unless its license is active.

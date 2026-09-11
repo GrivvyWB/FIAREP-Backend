@@ -5,6 +5,69 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export type OrganizationStatus = typeof OrganizationStatus[keyof typeof OrganizationStatus];
+
+
+export const OrganizationStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  expired: 'expired',
+} as const;
+
+export type OrganizationFeatures = { [key: string]: unknown };
+
+export interface Organization {
+  id: string;
+  name: string;
+  status: OrganizationStatus;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  staffLimit?: number | null;
+  propertyLimit?: number | null;
+  features: OrganizationFeatures;
+  unrestricted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type OrganizationInputStatus = typeof OrganizationInputStatus[keyof typeof OrganizationInputStatus];
+
+
+export const OrganizationInputStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  expired: 'expired',
+} as const;
+
+export type OrganizationInputFeatures = { [key: string]: unknown };
+
+export interface OrganizationInput {
+  id: string;
+  name: string;
+  status?: OrganizationInputStatus;
+  startsAt?: string;
+  endsAt?: string;
+  staffLimit?: number | null;
+  propertyLimit?: number | null;
+  features?: OrganizationInputFeatures;
+  unrestricted?: boolean;
+  directorName?: string;
+  /**
+     * @minLength 4
+     * @maxLength 4
+     */
+  directorCode?: string;
+}
+
+export type OrganizationWithUsageUsage = {
+  staff: number;
+  properties: number;
+};
+
+export type OrganizationWithUsage = Organization & {
+  usage: OrganizationWithUsageUsage;
+};
+
 export interface PublicVendorBidInput {
   /** @minLength 1 */
   vendorName: string;
@@ -379,6 +442,16 @@ address: string;
 limit?: number;
 };
 
+export type PlatformOwnerLoginBody = {
+  name: string;
+  code: string;
+};
+
+export type PlatformOwnerLogin200 = {
+  accessToken: string;
+  expiresIn: number;
+};
+
 export type BootstrapAdministratorBody = {
   name: string;
   /**
@@ -402,6 +475,8 @@ export type RefreshSessionBody = {
 export type LogoutBody = {
   refreshToken: string;
 };
+
+export type CreateOrganization201 = { [key: string]: unknown };
 
 export type ListStaffParams = {
 status?: string;

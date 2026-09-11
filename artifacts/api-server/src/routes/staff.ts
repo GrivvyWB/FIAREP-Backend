@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
-import { and, asc, eq, sql } from "drizzle-orm";
-import { db, staffAccounts } from "@workspace/db";
+import { and, asc, eq, sql, count } from "drizzle-orm";
+import { db, staffAccounts, organizations } from "@workspace/db";
 import { audit } from "../lib/audit";
 import {
   STAFF_POSITIONS,
@@ -100,6 +100,14 @@ router.post("/v1/staff", async (req, res) => {
   if (!canIssue) {
     res.status(403).json({ error: "Not allowed to issue this account" });
     return;
+  }
+  const [organization] = await db.select().from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  if (organization?.staffLimit !== null && organization?.staffLimit !== undefined) {
+    const [{ value }] = await db.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, actor.tenantId));
+    if (Number(value) >= organization.staffLimit) {
+      res.status(403).json({ error: "Organization staff license limit reached" });
+      return;
+    }
   }
   const suppliedCode =
     typeof input["code"] === "string" ? input["code"].toUpperCase() : undefined;

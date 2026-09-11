@@ -10,11 +10,13 @@ import fileRouter from "./files";
 import aiRouter from "./ai";
 import propertyRouter from "./property";
 import publicAccessRouter from "./publicAccess";
+import organizationsRouter from "./organizations";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(organizationsRouter);
 router.use(publicAccessRouter);
 router.use(staffRouter);
 router.use(notificationRouter);

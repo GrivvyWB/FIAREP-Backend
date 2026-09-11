@@ -5,7 +5,9 @@ import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Route, Switch, useLocation, Router as WouterRouter } from 'wouter';
 import { AuthProvider, useAuth } from '@/hooks/use-auth';
+import { OwnerAuthProvider, useOwnerAuth } from '@/hooks/use-owner-auth';
 import { Shell } from '@/components/layout/shell';
+import { OwnerShell } from '@/components/layout/owner-shell';
 
 // Pages
 import NotFound from '@/pages/not-found';
@@ -30,6 +32,10 @@ import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
 import SharedData from '@/pages/shared-data';
 
+// Owner Pages
+import OwnerLogin from '@/pages/platform-owner/login';
+import OwnerDashboard from '@/pages/platform-owner/index';
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -50,7 +56,6 @@ function AppRouter() {
     }
   }, [isAuthenticated, isLoading, location, setLocation]);
 
-  // If login, don't wrap in Shell
   if (location === '/login') {
     return (
       <RoutedErrorBoundary>
@@ -98,9 +103,66 @@ function AppRouter() {
   );
 }
 
+function OwnerAppRouter() {
+  const [location, setLocation] = useLocation();
+  const { isAuthenticated, isLoading } = useOwnerAuth();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated && location !== '/platform-owner/login') {
+      sessionStorage.setItem('fiarep_owner_return_to', location);
+      setLocation('/platform-owner/login');
+    }
+  }, [isAuthenticated, isLoading, location, setLocation]);
+
+  if (location === '/platform-owner/login') {
+    return (
+      <RoutedErrorBoundary>
+        <OwnerLogin />
+      </RoutedErrorBoundary>
+    );
+  }
+
+  if (isLoading || !isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-slate-950 grid place-items-center">
+        <p className="text-sm text-slate-400">Loading Platform Control...</p>
+      </div>
+    );
+  }
+
+  return (
+    <OwnerShell>
+      <RoutedErrorBoundary>
+        <Switch>
+          <Route path="/platform-owner" component={OwnerDashboard} />
+          <Route component={NotFound} />
+        </Switch>
+      </RoutedErrorBoundary>
+    </OwnerShell>
+  );
+}
+
 function RoutedErrorBoundary({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   return <ErrorBoundary resetKey={location}>{children}</ErrorBoundary>;
+}
+
+function RootRouter() {
+  const [location] = useLocation();
+
+  if (location.startsWith("/platform-owner")) {
+    return (
+      <OwnerAuthProvider>
+        <OwnerAppRouter />
+      </OwnerAuthProvider>
+    );
+  }
+
+  return (
+    <AuthProvider>
+      <AppRouter />
+    </AuthProvider>
+  );
 }
 
 function App() {
@@ -108,9 +170,7 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, '')}>
-          <AuthProvider>
-            <AppRouter />
-          </AuthProvider>
+          <RootRouter />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
