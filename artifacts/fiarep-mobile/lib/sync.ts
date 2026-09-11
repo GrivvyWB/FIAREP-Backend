@@ -41,7 +41,6 @@ const TABLES: Array<{ table: string; entity: string; key: string; column?: 'stat
 const ROLE_ENTITIES: Record<string, Set<string>> = {
   administrator: new Set(TABLES.map((item) => item.entity)),
   management: new Set(TABLES.map((item) => item.entity)),
-  procurement: new Set(['projects', 'project-scopes', 'project-notes', 'project-reviews', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes', 'change-orders']),
   inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'priority-violations', 'route-assignments', 'global-settings']),
   worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests', 'global-settings']),
   vendor: new Set(['projects', 'project-scopes', 'project-notes', 'project-reviews', 'building-violations', 'route-assignments', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes']),

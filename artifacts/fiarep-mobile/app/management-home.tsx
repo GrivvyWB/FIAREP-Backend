@@ -68,7 +68,6 @@ export default function ManagementHome() {
       heading: 'Purchasing',
       color: '#B4741A',
       tiles: restricted ? [] : [
-        { label: 'Procurement', onPress: () => router.push('/procurement'), tone: 'solid' as Tone },
         { label: 'Change Orders', onPress: () => router.push('/change-orders'), tone: 'outline' as Tone },
         { label: 'Vendor Score', onPress: () => router.push('/contractor-scores'), tone: 'tint' as Tone },
         { label: 'Development Scores', onPress: () => router.push('/dev-scores'), tone: 'tint' as Tone },

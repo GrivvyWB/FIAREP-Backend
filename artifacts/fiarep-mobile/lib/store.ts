@@ -1,5 +1,6 @@
 import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
+import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
 import {
   bootstrapAdministrator as bootstrapAdministratorOnServer,
@@ -15,6 +16,10 @@ import {
   refreshSession,
   registerDeviceToken,
   submitPublicResidentReport,
+  requestPublicResidentPhotoUpload,
+  confirmPublicResidentPhoto,
+  listResidentReportPhotos,
+  requestResidentReportPhotoDownload,
   submitPublicVendorBid,
   unregisterDeviceToken,
   setAuthTokenGetter,
@@ -29,6 +34,7 @@ import { touchMeta, getDeviceId, newMeta } from './syncmeta';
 import { DEVELOPMENT_NAMES } from './developments.seed';
 import { ensureQueue, recoverLegacyQueue } from './queue';
 import { hydrateRemotePhotosFromDb } from './photoResolver';
+import { photoUri } from './photos';
 async function rotateActorCache(staff: Staff) {
   const d = await db();
   const fingerprint = `${staff.tenantId || ''}:${staff.id}:${[...(staff.developments || [])].sort().join('|')}`;
@@ -467,6 +473,7 @@ export type LocationCategory = typeof LOCATION_CATEGORIES[number];
 export type ResidentReport = {
   id: string;
   complaintNo?: string;      // friendly complaint number, e.g. RC-48213
+  statusToken?: string;
   residentName?: string;
   contact?: string;          // optional resident contact info
   location?: string;
@@ -485,6 +492,7 @@ export type ResidentReport = {
   clearedByMgmt?: boolean;  // management cleared it so the worker may remove it from My Jobs
   _meta?: any;
 };
+export type SavedResidentReport = { complaintNo: string; address: string; statusToken: string };
 
 async function ensureResidentTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS resident_reports (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
@@ -518,13 +526,81 @@ export async function createResidentReport(unit: string, address: string, descri
       createdAt: now,
     },
   });
-  const r = normalizeResidentReport({ ...(submitted.state as object), id: submitted.id, photos });
+  const remotePhotos: string[] = [];
+  const photoFailures: string[] = [];
+  for (const local of photos) {
+    try {
+      const uri = photoUri(local);
+      const info = await FileSystem.getInfoAsync(uri);
+      if (!info.exists || !("size" in info) || !info.size) throw new Error("Photo unavailable");
+      const name = local.split("/").pop() || "resident-photo.jpg";
+      const complaintNo = String((submitted.state as any).complaintNo ?? "");
+      const upload = await requestPublicResidentPhotoUpload(complaintNo, {
+        statusToken: submitted.statusToken,
+        address: address.trim(),
+        name,
+        size: info.size,
+        contentType: "image/jpeg",
+      });
+      const put = await FileSystem.uploadAsync(upload.uploadUrl, uri, {
+        httpMethod: "PUT", uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+        mimeType: "image/jpeg",
+      });
+      if (put.status < 200 || put.status >= 300) throw new Error(`Upload failed (${put.status})`);
+      const confirmed = await confirmPublicResidentPhoto(complaintNo, {
+        grantId: (upload as any).grantId || upload.file.id,
+        statusToken: submitted.statusToken,
+        address: address.trim(), objectPath: upload.file.objectPath,
+        name, size: info.size, contentType: "image/jpeg",
+      } as any);
+      remotePhotos.push(local);
+    } catch {
+      photoFailures.push(nameForResidentPhoto(local));
+    }
+  }
+   const r = normalizeResidentReport({ ...(submitted.state as object), id: submitted.id, photos: remotePhotos });
+   await saveResidentCredentials({
+     complaintNo: String((submitted.state as any).complaintNo ?? ""),
+     address: address.trim(),
+     statusToken: String(submitted.statusToken ?? ""),
+   });
   try {
     const d = await db();
     await ensureResidentTable(d);
     await d.runAsync('INSERT OR REPLACE INTO resident_reports (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
   } catch {}
+  if (photoFailures.length) (r as any).photoUploadFailures = photoFailures;
   return r;
+}
+
+export async function saveResidentCredentials(credentials: SavedResidentReport): Promise<void> {
+  if (!credentials.complaintNo || !credentials.statusToken) return;
+  await SecureStore.setItemAsync(`fiarep_resident_report_${credentials.complaintNo}`, JSON.stringify(credentials));
+  const d = await db();
+  const existing = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'saved_resident_reports');
+  let ids: string[] = [];
+  try { ids = existing?.value ? JSON.parse(existing.value) : []; } catch {}
+  if (!ids.includes(credentials.complaintNo)) ids.push(credentials.complaintNo);
+  await d.runAsync("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", 'saved_resident_reports', JSON.stringify(ids.slice(-25)));
+}
+
+export async function listSavedResidentReports(): Promise<SavedResidentReport[]> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'saved_resident_reports');
+  let ids: string[] = [];
+  try { ids = row?.value ? JSON.parse(row.value) : []; } catch {}
+  const values: SavedResidentReport[] = [];
+  for (const id of ids) {
+    try {
+      const raw = await SecureStore.getItemAsync(`fiarep_resident_report_${id}`);
+      if (raw) values.push(JSON.parse(raw) as SavedResidentReport);
+    } catch {}
+  }
+  return values;
+}
+
+function nameForResidentPhoto(value: string): string {
+  return value.split("/").pop() || "photo";
 }
 
 export async function createManagementReport(location: string, unit: string, address: string, description: string, photos: string[] = [], development: string = ''): Promise<ResidentReport> {
@@ -613,6 +689,18 @@ export async function listResidentReports(): Promise<ResidentReport[]> {
   return items.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
 }
 
+export async function listResidentReportPhotoUrls(reportId: string): Promise<string[]> {
+  const photos = await listResidentReportPhotos({ reportId });
+  const urls: string[] = [];
+  for (const photo of photos) {
+    try {
+      const result = await requestResidentReportPhotoDownload(photo.id);
+      urls.push(result.downloadUrl);
+    } catch {}
+  }
+  return urls;
+}
+
 export async function findReportByRef(detail: string): Promise<ResidentReport | null> {
   // Best-effort match of a notification detail like "Unit 2B \u00b7 Clinton" or "Building \u00b7 Clinton" to a report.
   const all = await listResidentReports();
@@ -641,9 +729,11 @@ export async function getResidentReport(id: string): Promise<ResidentReport | nu
   try { return normalizeResidentReport(JSON.parse(row.state)); } catch { return null; }
 }
 
-export async function findResidentReports(complaintNo: string, address: string): Promise<ResidentReport[]> {
-  const rows = await lookupPublicResidentReports(complaintNo.trim(), { address: address.trim() });
-  return rows.map((row) => normalizeResidentReport({ ...(row.state as object), id: row.id }));
+export async function findResidentReports(complaintNo: string, address: string, statusToken: string): Promise<ResidentReport[]> {
+  const result = await lookupPublicResidentReports(complaintNo.trim(), { address: address.trim(), statusToken });
+  const report = normalizeResidentReport({ ...result, photos: [], id: complaintNo });
+  await saveResidentCredentials({ complaintNo: complaintNo.trim(), address: address.trim(), statusToken });
+  return [report];
 }
 
 export async function updateResidentReportStatus(id: string, status: ResidentReport['status']): Promise<void> {
@@ -759,7 +849,7 @@ export async function setReportDevelopment(id: string, name: string): Promise<vo
 }
 
 
-export type AppMode = 'resident' | 'administrator' | 'management' | 'worker' | 'inspector' | 'vendor' | 'procurement' | 'emergency';
+export type AppMode = 'resident' | 'administrator' | 'management' | 'worker' | 'inspector' | 'vendor' | 'emergency';
 
 export async function getAppMode(): Promise<AppMode | null> {
   const d = await db();
@@ -771,6 +861,8 @@ export async function getAppMode(): Promise<AppMode | null> {
   if (v === 'inspector') return 'inspector';
   if (v === 'administrator') return 'administrator';
   if (v === 'management' || v === 'staff') return 'management'; // 'staff' migrated
+  if (v === 'vendor') return 'vendor';
+  if (v === 'emergency') return 'emergency';
   return null;
 }
 
@@ -798,7 +890,7 @@ export async function setStaffPin(pin: string): Promise<void> {
 }
 
 
-export type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'procurement' | 'resident' | 'vendor';
+export type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'resident' | 'vendor' | 'emergency';
 
 export async function getRolePin(role: StaffRole): Promise<string | null> {
   const d = await db();
@@ -1316,7 +1408,7 @@ export async function revokeStaffAccount(id: string): Promise<void> {
 }
 
 // Verify a login: name + code must match an APPROVED account for the given role.
-export async function verifyStaffLogin(name: string, code: string, role: StaffRole, expectedPosition?: string): Promise<boolean> {
+export async function verifyStaffLogin(name: string, code: string, role: StaffRole, expectedPosition?: string, organizationId?: string): Promise<boolean> {
   try {
     const preDb = await db();
     const priorIdentity = await preDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
@@ -1326,6 +1418,7 @@ export async function verifyStaffLogin(name: string, code: string, role: StaffRo
       name: name.trim(),
       code: code.trim(),
       role,
+      ...(organizationId?.trim() ? { organizationId: organizationId.trim() } : {}),
     });
     if (expectedPosition && session.staff.position !== expectedPosition) {
       await logoutOnServer({ refreshToken: session.refreshToken }).catch(() => undefined);
@@ -1556,7 +1649,7 @@ export async function getRememberedStaff(role: StaffRole): Promise<string | null
   return row ? row.value : null;
 }
 
-export async function clearRememberedStaff(role: StaffRole): Promise<void> {
+export async function clearRememberedStaff(role: StaffRole | 'procurement'): Promise<void> {
   const d = await db();
   await d.runAsync('DELETE FROM settings WHERE key = ?', 'remembered_' + role);
 }
@@ -3827,6 +3920,7 @@ export type EmergencyJob = {
   issue: string;
   photos: string[];
   assignedBy: string;
+  assignedUnitId?: string;
   assignedAt: string;
   status: 'assigned' | 'done';
   onMyWayAt?: string;
@@ -3853,6 +3947,7 @@ export async function createEmergencyJob(truck: string, development: string, add
     issue: (issue || '').trim(),
     photos: [],
     assignedBy: (a && a.name) || 'management',
+    assignedUnitId: (truck || '').trim().toLowerCase().replace(/\s+/g, ' '),
     assignedAt: new Date().toISOString(),
     status: 'assigned',
   };
@@ -3873,6 +3968,11 @@ export async function listEmergencyJobs(): Promise<EmergencyJob[]> {
 export async function listEmergencyJobsForTruck(truck: string): Promise<EmergencyJob[]> {
   const all = await listEmergencyJobs();
   const t = (truck || '').trim().toLowerCase();
+  const actor = await getCurrentActor().catch(() => null);
+  if (actor?.role === 'emergency') {
+    const identity = actor.name.trim().toLowerCase().replace(/\s+/g, ' ');
+    return all.filter(j => (j.assignedUnitId || '').trim().toLowerCase() === identity);
+  }
   return all.filter(j => (j.truck || '').trim().toLowerCase() === t);
 }
 
@@ -3896,6 +3996,7 @@ export async function setEmergencyProgress(id: string, stage: 'onMyWay' | 'start
   const next = { ...job };
   if (stage === 'onMyWay') next.onMyWayAt = now;
   if (stage === 'started') next.startedAt = now;
+  await performEntityAction('emergency-jobs', id, stage === 'onMyWay' ? 'on-my-way' : 'start', {});
   await _saveEmergencyJob(next);
   const label = stage === 'onMyWay' ? 'On my way' : 'Started';
   return next;
@@ -3916,6 +4017,7 @@ export async function completeEmergencyJob(id: string, note: string = ''): Promi
   if (!job) return null;
   const a = await getCurrentActor();
   const next: EmergencyJob = { ...job, status: 'done', completedAt: new Date().toISOString(), note: (note || '').trim() || job.note };
+  await performEntityAction('emergency-jobs', id, 'complete', { note: (note || '').trim() || undefined });
   await _saveEmergencyJob(next);
   await logAudit('emergency', job.truck, 'Emergency job completed', job.emId, job.id);
   return next;

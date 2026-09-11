@@ -1,9 +1,29 @@
-import { useListEntityRecords } from "@workspace/api-client-react";
+import { requestResidentReportPhotoDownload, useListEntityRecords, useListResidentReportPhotos } from "@workspace/api-client-react";
 import { FolderOpen, Search, Plus, Upload } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { useState } from "react";
 import { Link } from "wouter";
+
+function ReportPhotos({ reportId }: { reportId: string }) {
+  const { data: photos = [] } = useListResidentReportPhotos({ reportId });
+  const [urls, setUrls] = useState<Record<string, string>>({});
+  async function openPhoto(id: string) {
+    const result = await requestResidentReportPhotoDownload(id);
+    setUrls((current) => ({ ...current, [id]: result.downloadUrl }));
+    window.open(result.downloadUrl, "_blank", "noopener,noreferrer");
+  }
+  if (!photos.length) return null;
+  return (
+    <div className="flex flex-wrap gap-2 mt-2">
+      {photos.map((photo) => (
+        <Button key={photo.id} variant="outline" size="sm" onClick={() => openPhoto(photo.id)}>
+          {urls[photo.id] ? "Open photo" : `Photo ${photo.id.slice(0, 8)}`}
+        </Button>
+      ))}
+    </div>
+  );
+}
 
 export default function Reports() {
   const { data: reports, isLoading } = useListEntityRecords("resident-reports");
@@ -69,6 +89,7 @@ export default function Reports() {
                     <div className="text-xs text-muted-foreground block">
                       {new Date(item.createdAt).toLocaleDateString()}
                     </div>
+                   <ReportPhotos reportId={item.id} />
                   </div>
                 </div>
               ))}

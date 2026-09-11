@@ -96,19 +96,12 @@ router.post("/v1/staff", async (req, res) => {
       developmentsWithinScope(actor, developments)) ||
     (actor.role === "management" &&
       ((actor.position === "Regional Director" && role !== "administrator") ||
-        (["worker", "inspector"].includes(role) && isElevated(actor))));
+       (["worker", "inspector", "emergency"].includes(role) && isElevated(actor))));
   if (!canIssue) {
     res.status(403).json({ error: "Not allowed to issue this account" });
     return;
   }
-  const [organization] = await db.select().from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
-  if (organization?.staffLimit !== null && organization?.staffLimit !== undefined) {
-    const [{ value }] = await db.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, actor.tenantId));
-    if (Number(value) >= organization.staffLimit) {
-      res.status(403).json({ error: "Organization staff license limit reached" });
-      return;
-    }
-  }
+  const [organization] = await db.select({ staffLimit: organizations.staffLimit }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
   const suppliedCode =
     typeof input["code"] === "string" ? input["code"].toUpperCase() : undefined;
   if (suppliedCode) {
@@ -128,10 +121,16 @@ router.post("/v1/staff", async (req, res) => {
       return;
     }
   }
-  const now = new Date();
-  const [created] = await db
-    .insert(staffAccounts)
-    .values({
+  const created = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-limit:${actor.tenantId}`}))`);
+    if (organization?.staffLimit !== null && organization?.staffLimit !== undefined) {
+      const [{ value }] = await tx.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, actor.tenantId));
+      if (Number(value) >= organization.staffLimit) throw Object.assign(new Error("Organization staff license limit reached"), { status: 403 });
+    }
+    const now = new Date();
+    const [row] = await tx
+      .insert(staffAccounts)
+      .values({
       id: typeof input["id"] === "string" ? input["id"] : randomUUID(),
       tenantId: actor.tenantId,
       name,
@@ -149,8 +148,14 @@ router.post("/v1/staff", async (req, res) => {
       issuerName: actor.name,
       createdAt: now,
       updatedAt: now,
-    })
-    .returning();
+      })
+      .returning();
+    return row;
+  }).catch((error: any) => {
+    if (error?.status) { res.status(error.status).json({ error: error.message }); return null; }
+    throw error;
+  });
+  if (!created) return;
   await audit(actor, "staff.created", `Issued account for ${name}`, created?.id);
   res.status(201).json(safe(created!, true));
 });

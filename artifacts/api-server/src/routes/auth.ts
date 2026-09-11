@@ -9,9 +9,12 @@ import {
   licenseAllows,
   evaluateLicense,
   platformOwnerCredentialsMatch,
-  signPlatformOwnerToken,
+  issuePlatformOwnerSession,
+  rotatePlatformOwnerSession,
+  revokePlatformOwnerSession,
 } from "../lib/auth";
-import { requireAuth } from "../middlewares/auth";
+import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
+import { rateLimit } from "../lib/rateLimit";
 
 const router: IRouter = Router();
 
@@ -92,11 +95,12 @@ router.get("/v1/auth/bootstrap-status", async (_req, res) => {
   res.json({ hasAdministrator: Boolean(existing) });
 });
 
-router.post("/v1/auth/login", async (req, res) => {
-  const { name, code, role } = req.body as {
+router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => {
+  const { name, code, role, organizationId } = req.body as {
     name?: unknown;
     code?: unknown;
     role?: unknown;
+    organizationId?: unknown;
   };
   if (typeof name !== "string" || typeof code !== "string") {
     res.status(400).json({ error: "name and code are required" });
@@ -107,6 +111,8 @@ router.post("/v1/auth/login", async (req, res) => {
     eq(staffAccounts.code, code.trim().toUpperCase()),
     eq(staffAccounts.status, "approved"),
   ];
+  const tenantId = typeof organizationId === "string" && organizationId.trim() ? organizationId.trim() : "default";
+  conditions.push(eq(staffAccounts.tenantId, tenantId));
   if (typeof role === "string") conditions.push(eq(staffAccounts.role, role));
   const [staff] = await db
     .select()
@@ -124,13 +130,37 @@ router.post("/v1/auth/login", async (req, res) => {
   res.json({ ...(await issueSession(staff)), staff: publicStaff(staff) });
 });
 
-router.post("/v1/platform/auth/login", (req, res) => {
+router.post("/v1/platform/auth/login", rateLimit("platform-owner-login", 12), async (req, res) => {
   const { name, code } = req.body as { name?: unknown; code?: unknown };
   if (typeof name !== "string" || typeof code !== "string" || !platformOwnerCredentialsMatch(name, code)) {
     res.status(401).json({ error: "Invalid platform owner credentials" });
     return;
   }
-  res.json({ accessToken: signPlatformOwnerToken(), expiresIn: 900 });
+  const session = await issuePlatformOwnerSession(name.trim());
+  res.setHeader("Set-Cookie", `fiarep_owner_refresh=${encodeURIComponent(session.refreshToken)}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/platform/auth; Max-Age=2592000`);
+  res.json({ accessToken: session.accessToken, expiresIn: session.expiresIn, ownerName: session.ownerName });
+});
+
+router.post("/v1/platform/auth/refresh", async (req, res) => {
+  const cookie = String(req.headers.cookie ?? "").split(";").map((part) => part.trim()).find((part) => part.startsWith("fiarep_owner_refresh="));
+  const token = cookie ? decodeURIComponent(cookie.slice("fiarep_owner_refresh=".length)) : undefined;
+  if (typeof token !== "string" || !token) { res.status(400).json({ error: "refreshToken is required" }); return; }
+  const session = await rotatePlatformOwnerSession(token);
+  if (!session) { res.status(401).json({ error: "Invalid or expired platform owner refresh token" }); return; }
+  res.setHeader("Set-Cookie", `fiarep_owner_refresh=${encodeURIComponent(session.refreshToken)}; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/platform/auth; Max-Age=2592000`);
+  res.json({ accessToken: session.accessToken, expiresIn: session.expiresIn, ownerName: session.ownerName });
+});
+
+router.post("/v1/platform/auth/logout", async (req, res) => {
+  const cookie = String(req.headers.cookie ?? "").split(";").map((part) => part.trim()).find((part) => part.startsWith("fiarep_owner_refresh="));
+  const token = cookie ? decodeURIComponent(cookie.slice("fiarep_owner_refresh=".length)) : undefined;
+  if (typeof token === "string") await revokePlatformOwnerSession(token);
+  res.setHeader("Set-Cookie", "fiarep_owner_refresh=; HttpOnly; Secure; SameSite=Lax; Path=/api/v1/platform/auth; Max-Age=0");
+  res.status(204).send();
+});
+
+router.get("/v1/platform/auth/me", requirePlatformOwner, (req, res) => {
+  res.json(res.locals["platformOwner"]);
 });
 
 router.post("/v1/auth/refresh", async (req, res) => {

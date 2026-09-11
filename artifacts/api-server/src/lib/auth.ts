@@ -6,7 +6,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
-import { db, refreshSessions, staffAccounts, organizations, type StaffAccount, type Organization } from "@workspace/db";
+import { db, refreshSessions, platformOwnerSessions, staffAccounts, organizations, type StaffAccount, type Organization } from "@workspace/db";
 
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_DAYS = 30;
@@ -21,7 +21,7 @@ export type Actor = {
   sessionVersion: number;
 };
 
-export type PlatformOwner = { name: string; typ: "platform_owner"; iat: number; exp: number };
+export type PlatformOwner = { name: string; sessionId: string; typ: "platform_owner"; iat: number; exp: number };
 
 type AccessPayload = Actor & {
   exp: number;
@@ -37,6 +37,10 @@ function secret(): string {
 
 function encode(value: unknown): string {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
+}
+
+function decodeHeader(value: string): { alg?: unknown; typ?: unknown } {
+  return JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as { alg?: unknown; typ?: unknown };
 }
 
 function signature(input: string): string {
@@ -101,6 +105,8 @@ export function verifyAccessToken(token: string): AccessPayload {
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("Malformed access token");
   const [header, payload, received] = parts as [string, string, string];
+  const parsedHeader = decodeHeader(header);
+  if (parsedHeader.alg !== "HS256" || parsedHeader.typ !== "JWT") throw new Error("Invalid access token header");
   const input = `${header}.${payload}`;
   const expected = Buffer.from(signature(input));
   const actual = Buffer.from(received);
@@ -159,10 +165,12 @@ export async function rotateSession(refreshToken: string) {
     .limit(1);
   if (!staff || staff.status !== "approved" || !licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) return null;
 
-  await db
+  const [claimed] = await db
     .update(refreshSessions)
     .set({ revokedAt: now, updatedAt: now })
-    .where(eq(refreshSessions.id, session.id));
+    .where(and(eq(refreshSessions.id, session.id), isNull(refreshSessions.revokedAt)))
+    .returning();
+  if (!claimed) return null;
   return { staff, ...(await issueSession(staff)) };
 }
 
@@ -196,10 +204,10 @@ export async function loadCurrentActor(payload: AccessPayload) {
   return { staff, actor: actorFromStaff(staff) };
 }
 
-export function signPlatformOwnerToken(): string {
+export function signPlatformOwnerToken(sessionId: string, name: string): string {
   const now = Math.floor(Date.now() / 1000);
   const header = encode({ alg: "HS256", typ: "JWT" });
-  const payload = encode({ name: process.env["FIAREP_PLATFORM_OWNER_NAME"], iat: now, exp: now + 900, typ: "platform_owner" });
+  const payload = encode({ name, sessionId, iat: now, exp: now + 900, typ: "platform_owner" });
   const input = `${header}.${payload}`;
   return `${input}.${signature(input)}`;
 }
@@ -208,12 +216,62 @@ export function verifyPlatformOwnerToken(token: string): PlatformOwner {
   const parts = token.split(".");
   if (parts.length !== 3) throw new Error("Malformed platform owner token");
   const [header, payload, received] = parts as [string, string, string];
+  const parsedHeader = decodeHeader(header);
+  if (parsedHeader.alg !== "HS256" || parsedHeader.typ !== "JWT") throw new Error("Invalid platform owner token header");
   const expected = Buffer.from(signature(`${header}.${payload}`));
   const actual = Buffer.from(received);
   if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) throw new Error("Invalid platform owner token");
   const parsed = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as PlatformOwner;
   if (parsed.typ !== "platform_owner" || parsed.exp <= Math.floor(Date.now() / 1000)) throw new Error("Expired platform owner token");
   return parsed;
+}
+
+export async function issuePlatformOwnerSession(name: string) {
+  const refreshToken = randomBytes(48).toString("base64url");
+  const now = new Date();
+  const expiresAt = new Date(now.getTime() + REFRESH_TTL_DAYS * 24 * 60 * 60 * 1000);
+  const [session] = await db.insert(platformOwnerSessions).values({
+    id: randomUUID(), ownerName: name, tokenHash: tokenHash(refreshToken), expiresAt, createdAt: now, updatedAt: now,
+  }).returning();
+  if (!session) throw new Error("Unable to create owner session");
+  return { accessToken: signPlatformOwnerToken(session.id, name), refreshToken, expiresIn: ACCESS_TTL_SECONDS, ownerName: name };
+}
+
+export async function rotatePlatformOwnerSession(refreshToken: string) {
+  const now = new Date();
+  return db.transaction(async (tx) => {
+    const [session] = await tx.select().from(platformOwnerSessions).where(and(
+      eq(platformOwnerSessions.tokenHash, tokenHash(refreshToken)),
+      isNull(platformOwnerSessions.revokedAt),
+      gt(platformOwnerSessions.expiresAt, now),
+    )).limit(1);
+    if (!session) return null;
+    const [claimed] = await tx.update(platformOwnerSessions).set({ revokedAt: now, updatedAt: now })
+      .where(and(eq(platformOwnerSessions.id, session.id), isNull(platformOwnerSessions.revokedAt))).returning();
+    if (!claimed) return null;
+    const replacement = randomBytes(48).toString("base64url");
+    const [next] = await tx.insert(platformOwnerSessions).values({
+      id: randomUUID(), ownerName: session.ownerName, tokenHash: tokenHash(replacement),
+      expiresAt: session.expiresAt, createdAt: now, updatedAt: now,
+    }).returning();
+    if (!next) return null;
+    return { accessToken: signPlatformOwnerToken(next.id, session.ownerName), refreshToken: replacement, expiresIn: ACCESS_TTL_SECONDS, ownerName: session.ownerName };
+  });
+}
+
+export async function revokePlatformOwnerSession(refreshToken: string) {
+  await db.update(platformOwnerSessions).set({ revokedAt: new Date(), updatedAt: new Date() })
+    .where(eq(platformOwnerSessions.tokenHash, tokenHash(refreshToken)));
+}
+
+export async function loadPlatformOwnerSession(payload: PlatformOwner) {
+  const [session] = await db.select().from(platformOwnerSessions).where(and(
+    eq(platformOwnerSessions.id, payload.sessionId),
+    eq(platformOwnerSessions.ownerName, payload.name),
+    isNull(platformOwnerSessions.revokedAt),
+    gt(platformOwnerSessions.expiresAt, new Date()),
+  )).limit(1);
+  return session ?? null;
 }
 
 export function platformOwnerCredentialsMatch(name: string, code: string): boolean {

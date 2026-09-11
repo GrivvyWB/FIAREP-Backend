@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { setAuthTokenGetter, setBaseUrl, Staff, useLogin, useGetCurrentStaff, useRefreshSession, getGetCurrentStaffQueryKey } from "@workspace/api-client-react";
+import { setAuthTokenGetter, setAuthRefreshHandler, setBaseUrl, Staff, useLogin, useGetCurrentStaff, useRefreshSession, getGetCurrentStaffQueryKey } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 
 interface AuthContextType {
   staff: Staff | null;
   isLoading: boolean;
-  login: (name: string, code: string) => Promise<void>;
+  login: (name: string, code: string, organizationId?: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -19,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const loginMutation = useLogin();
   const refreshMutation = useRefreshSession();
+  let refreshInFlight: Promise<string | null> | null = null;
   
   const { refetch: fetchCurrentStaff } = useGetCurrentStaff({
     query: {
@@ -34,6 +35,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Register token getter for all customFetch calls
     setAuthTokenGetter(() => {
       return localStorage.getItem("fiarep_access_token");
+    });
+    setAuthRefreshHandler(() => {
+      if (refreshInFlight) return refreshInFlight;
+      refreshInFlight = (async () => {
+        const token = localStorage.getItem("fiarep_refresh_token");
+        if (!token) return null;
+        try {
+          const response = await fetch("/api/v1/auth/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken: token }) });
+          if (!response.ok) throw new Error("Staff session refresh failed");
+          const session = await response.json() as { accessToken: string; refreshToken: string };
+          localStorage.setItem("fiarep_access_token", session.accessToken);
+          localStorage.setItem("fiarep_refresh_token", session.refreshToken);
+          return session.accessToken;
+        } catch {
+          localStorage.removeItem("fiarep_access_token");
+          localStorage.removeItem("fiarep_refresh_token");
+          return null;
+        } finally { refreshInFlight = null; }
+      })();
+      return refreshInFlight;
     });
 
     const initAuth = async () => {
@@ -75,8 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, []);
 
-  const login = async (name: string, code: string) => {
-    const res = await loginMutation.mutateAsync({ data: { name, code } });
+  const login = async (name: string, code: string, organizationId?: string) => {
+    const res = await loginMutation.mutateAsync({ data: { name, code, ...(organizationId ? { organizationId } : {}) } });
     localStorage.setItem("fiarep_access_token", res.accessToken);
     localStorage.setItem("fiarep_refresh_token", res.refreshToken);
     setStaff(res.staff);

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, sql, count } from "drizzle-orm";
-import { db, entityRecords, organizations } from "@workspace/db";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { randomBytes, randomUUID } from "node:crypto";
+import { db, entityRecords, publicAccessCodes } from "@workspace/db";
 import { audit, notify } from "../lib/audit";
 import {
   ENTITIES,
@@ -68,6 +69,15 @@ function privateRecordAllowed(
   return true;
 }
 
+function emergencyRecordAllowed(actor: ReturnType<typeof actorFrom>, row: typeof entityRecords.$inferSelect): boolean {
+  if (actor.role !== "emergency") return true;
+  const state = row.state;
+  const normalizedActor = actor.name.trim().toLowerCase().replace(/\s+/g, " ");
+  return (row.entity === "emergency-jobs" || row.entity === "emergency-units") &&
+    [state["assignedTo"], state["assignedStaffId"], state["assignedUnitId"], state["unitId"], state["name"], state["unitName"]]
+      .some((value) => typeof value === "string" && (value === actor.id || value.trim().toLowerCase().replace(/\s+/g, " ") === normalizedActor));
+}
+
 function withGeneratedFields(
   entity: string,
   input: Record<string, unknown>,
@@ -123,6 +133,7 @@ router.get("/v1/:entity", async (req, res, next) => {
     rows
       .filter((row) => entityDevelopmentAllowed(actor, entity, row.development))
       .filter((row) => privateRecordAllowed(actor, row))
+      .filter((row) => emergencyRecordAllowed(actor, row))
       .filter((row) => !projectId || row.projectId === projectId)
       .filter(
         (row) =>
@@ -204,18 +215,6 @@ router.post("/v1/:entity", async (req, res, next) => {
     res.status(403).json({ error: "Development access denied" });
     return;
   }
-  if (entity === "properties" || entity === "projects") {
-    const [organization] = await db.select({ propertyLimit: organizations.propertyLimit })
-      .from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
-    if (organization?.propertyLimit !== null && organization?.propertyLimit !== undefined) {
-      const [{ value }] = await db.select({ value: count() }).from(entityRecords)
-        .where(and(eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, entity), eq(entityRecords.deleted, false)));
-      if (Number(value) >= organization.propertyLimit) {
-        res.status(403).json({ error: "Organization property license limit reached" });
-        return;
-      }
-    }
-  }
   const now = new Date();
   const createdState = withInitialWorkflowState(
     entity,
@@ -277,6 +276,7 @@ router.get("/v1/:entity/:id", async (req, res, next) => {
     !row ||
     !entityDevelopmentAllowed(actor, entity, row.development) ||
     !privateRecordAllowed(actor, row)
+    || !emergencyRecordAllowed(actor, row)
   ) {
     res.status(404).json({ error: "Record not found" });
     return;
@@ -328,6 +328,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     !current ||
     !entityDevelopmentAllowed(actor, entity, current.development) ||
     !privateRecordAllowed(actor, current)
+    || !emergencyRecordAllowed(actor, current)
   ) {
     res.status(404).json({ error: "Record not found" });
     return;
@@ -405,7 +406,7 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
       ),
     )
     .limit(1);
-  if (!current || !privateRecordAllowed(actor, current)) {
+  if (!current || !privateRecordAllowed(actor, current) || !emergencyRecordAllowed(actor, current)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -484,30 +485,77 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
   const persistedBody = { ...body };
   delete persistedBody["vendorRecipients"];
   const now = new Date();
-  const state = {
+  const state: Record<string, unknown> = {
     ...current.state,
     ...persistedBody,
     status: nextStatus,
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
   };
-  const [updated] = await db
-    .update(entityRecords)
-    .set({
-      state,
-      version: sql`${entityRecords.version} + 1`,
-      updatedAt: now,
-    })
-    .where(and(
-      eq(entityRecords.id, current.id),
-      eq(entityRecords.entity, entity),
-      eq(entityRecords.tenantId, actor.tenantId),
-      eq(entityRecords.deleted, false),
-      eq(entityRecords.version, current.version),
-    ))
-    .returning();
+  if (entity === "procurement" && action === "award" &&
+      (typeof state["vendor"] !== "string" || !String(state["vendor"]).trim())) {
+    res.status(400).json({ error: "An awarded procurement must name the winning vendor" });
+    return;
+  }
+  let updated: typeof entityRecords.$inferSelect | undefined;
+  const transitionAttempts = entity === "procurement" && action === "broadcast" ? 8 : 1;
+  for (let attempt = 0; attempt < transitionAttempts && !updated; attempt++) {
+    if (entity === "procurement" && action === "broadcast") {
+      state["trackingId"] = `RC-${randomBytes(4).readUInt32BE(0) % 90000 + 10000}`;
+    }
+    try {
+      updated = await db.transaction(async (tx) => {
+        if (entity === "procurement" && action === "broadcast") {
+          await tx.insert(publicAccessCodes).values({
+            id: randomUUID(),
+            kind: "vendor",
+            code: String(state["trackingId"]),
+            tenantId: actor.tenantId,
+            recordId: current.id,
+          });
+        }
+        const [row] = await tx
+          .update(entityRecords)
+          .set({
+            state,
+            version: sql`${entityRecords.version} + 1`,
+            updatedAt: now,
+          })
+          .where(and(
+            eq(entityRecords.id, current.id),
+            eq(entityRecords.entity, entity),
+            eq(entityRecords.tenantId, actor.tenantId),
+            eq(entityRecords.deleted, false),
+            eq(entityRecords.version, current.version),
+          ))
+          .returning();
+        if (!row) {
+          throw Object.assign(new Error("Concurrent update detected"), { status: 409 });
+        }
+        if (entity === "procurement" && !["bidding", "eligible", "eligible-awarded", "awarded"].includes(String(state["status"]))) {
+          await tx.delete(publicAccessCodes).where(and(
+            eq(publicAccessCodes.kind, "vendor"),
+            eq(publicAccessCodes.recordId, current.id),
+            eq(publicAccessCodes.tenantId, actor.tenantId),
+          ));
+        }
+        return row;
+      });
+    } catch (error: any) {
+      if (error?.status === 409) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      if (error?.code === "23505" && attempt + 1 < transitionAttempts) continue;
+      if (error?.code === "23505" && entity === "procurement" && action === "broadcast") {
+        res.status(503).json({ error: "Could not issue a vendor access code" });
+        return;
+      }
+      throw error;
+    }
+  }
   if (!updated) {
-    res.status(409).json({ error: "Concurrent update detected" });
+    res.status(503).json({ error: "Could not complete workflow transition" });
     return;
   }
   await audit(

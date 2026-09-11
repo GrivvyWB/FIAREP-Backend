@@ -59,6 +59,80 @@ export const organizations = pgTable(
   ],
 );
 
+export const organizationProperties = pgTable(
+  "organization_properties",
+  {
+    id: text("id").primaryKey(),
+    organizationId: text("organization_id").notNull(),
+    displayAddress: text("display_address").notNull(),
+    normalizedAddress: text("normalized_address").notNull(),
+    development: text("development"),
+    active: boolean("active").notNull().default(true),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("organization_property_address_unique").on(table.normalizedAddress),
+    index("organization_property_org_idx").on(table.organizationId),
+    index("organization_property_active_idx").on(table.active),
+  ],
+);
+
+export const publicAccessCodes = pgTable(
+  "public_access_codes",
+  {
+    id: text("id").primaryKey(),
+    kind: text("kind").notNull(),
+    code: text("code").notNull(),
+    tenantId: text("tenant_id").notNull(),
+    recordId: text("record_id").notNull(),
+    tokenHash: text("token_hash"),
+    propertyId: text("property_id"),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("public_access_code_unique").on(table.code),
+    index("public_access_tenant_record_idx").on(table.tenantId, table.recordId),
+  ],
+);
+
+export const residentReportPhotos = pgTable(
+  "resident_report_photos",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    reportId: text("report_id").notNull(),
+    objectPath: text("object_path").notNull(),
+    name: text("name").notNull(),
+    size: integer("size").notNull(),
+    contentType: text("content_type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    uniqueIndex("resident_report_photo_path_unique").on(table.objectPath),
+    index("resident_report_photo_report_idx").on(table.tenantId, table.reportId),
+  ],
+);
+
+export const residentPhotoUploadGrants = pgTable(
+  "resident_photo_upload_grants",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    reportId: text("report_id").notNull(),
+    objectPath: text("object_path").notNull(),
+    name: text("name").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    consumedAt: timestamp("consumed_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("resident_photo_grant_path_unique").on(table.objectPath),
+    index("resident_photo_grant_report_idx").on(table.tenantId, table.reportId),
+  ],
+);
+
 export const refreshSessions = pgTable(
   "refresh_sessions",
   {
@@ -72,6 +146,22 @@ export const refreshSessions = pgTable(
   (table) => [
     uniqueIndex("refresh_token_unique").on(table.tokenHash),
     index("refresh_staff_idx").on(table.staffId),
+  ],
+);
+
+export const platformOwnerSessions = pgTable(
+  "platform_owner_sessions",
+  {
+    id: text("id").primaryKey(),
+    ownerName: text("owner_name").notNull(),
+    tokenHash: text("token_hash").notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("platform_owner_token_unique").on(table.tokenHash),
+    index("platform_owner_session_expiry_idx").on(table.expiresAt),
   ],
 );
 
@@ -136,6 +226,23 @@ export const auditLog = pgTable(
   (table) => [
     index("audit_tenant_idx").on(table.tenantId),
     index("audit_at_idx").on(table.tenantId, table.at),
+  ],
+);
+
+export const platformLicenseAudit = pgTable(
+  "platform_license_audit",
+  {
+    id: text("id").primaryKey(),
+    ownerName: text("owner_name").notNull(),
+    action: text("action").notNull(),
+    organizationId: text("organization_id").notNull(),
+    before: jsonb("before").$type<Record<string, unknown> | null>(),
+    after: jsonb("after").$type<Record<string, unknown> | null>(),
+    at: timestamp("at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("platform_license_audit_org_idx").on(table.organizationId),
+    index("platform_license_audit_at_idx").on(table.at),
   ],
 );
 
@@ -204,4 +311,5 @@ export const pushDeliveries = pgTable(
 
 export type StaffAccount = typeof staffAccounts.$inferSelect;
 export type Organization = typeof organizations.$inferSelect;
+export type OrganizationProperty = typeof organizationProperties.$inferSelect;
 export type EntityRecord = typeof entityRecords.$inferSelect;

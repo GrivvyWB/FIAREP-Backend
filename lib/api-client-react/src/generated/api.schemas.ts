@@ -51,6 +51,28 @@ export interface OrganizationInput {
   propertyLimit?: number | null;
   features?: OrganizationInputFeatures;
   unrestricted?: boolean;
+}
+
+export type OrganizationUpdateStatus = typeof OrganizationUpdateStatus[keyof typeof OrganizationUpdateStatus];
+
+
+export const OrganizationUpdateStatus = {
+  active: 'active',
+  suspended: 'suspended',
+  expired: 'expired',
+} as const;
+
+export type OrganizationUpdateFeatures = { [key: string]: unknown };
+
+export interface OrganizationUpdate {
+  name?: string;
+  status?: OrganizationUpdateStatus;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  staffLimit?: number | null;
+  propertyLimit?: number | null;
+  features?: OrganizationUpdateFeatures;
+  unrestricted?: boolean;
   directorName?: string;
   /**
      * @minLength 4
@@ -68,12 +90,107 @@ export type OrganizationWithUsage = Organization & {
   usage: OrganizationWithUsageUsage;
 };
 
+export interface OrganizationProperty {
+  id: string;
+  organizationId: string;
+  displayAddress: string;
+  normalizedAddress: string;
+  /** @nullable */
+  development?: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface OrganizationPropertyInput {
+  displayAddress: string;
+  development?: string;
+  active?: boolean;
+}
+
 export interface PublicVendorBidInput {
   /** @minLength 1 */
   vendorName: string;
   /** @exclusiveMinimum 0 */
   amount: number;
   note?: string;
+}
+
+export type EntityInputState = { [key: string]: unknown };
+
+export interface EntityInput {
+  id: string;
+  projectId?: string;
+  development?: string;
+  state: EntityInputState;
+  /** @minimum 1 */
+  version?: number;
+}
+
+export type EntityRecord = EntityInput & {
+  entity: string;
+  deleted?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+};
+
+export type PublicResidentReportResponse = EntityRecord & {
+  statusToken: string;
+};
+
+export type PublicResidentReportStatusUpdatesItem = { [key: string]: unknown };
+
+export interface PublicResidentReportStatus {
+  complaintNo: string;
+  status: string;
+  description: string;
+  updates: PublicResidentReportStatusUpdatesItem[];
+  createdAt: string;
+}
+
+export type PublicResidentPhotoUploadInputContentType = typeof PublicResidentPhotoUploadInputContentType[keyof typeof PublicResidentPhotoUploadInputContentType];
+
+
+export const PublicResidentPhotoUploadInputContentType = {
+  'image/jpeg': 'image/jpeg',
+  'image/png': 'image/png',
+  'image/heic': 'image/heic',
+  'image/heif': 'image/heif',
+  'image/webp': 'image/webp',
+} as const;
+
+export interface PublicResidentPhotoUploadInput {
+  statusToken: string;
+  address: string;
+  name: string;
+  /**
+     * @minimum 1
+     * @maximum 10485760
+     */
+  size: number;
+  contentType: PublicResidentPhotoUploadInputContentType;
+}
+
+export interface PublicResidentPhotoConfirmInput {
+  grantId: string;
+  statusToken: string;
+  address: string;
+  objectPath: string;
+}
+
+export interface ResidentPhoto {
+  id: string;
+  contentType: string;
+}
+
+export interface ResidentPhotoMetadata {
+  id: string;
+  reportId: string;
+  name: string;
+  size: number;
+  contentType: string;
+  createdAt: string;
 }
 
 export interface NycProperty {
@@ -259,6 +376,8 @@ export interface LoginInput {
      */
   code: string;
   role?: string;
+  /** Required for non-default customer organizations */
+  organizationId?: string;
 }
 
 export interface Staff {
@@ -280,6 +399,31 @@ export interface AuthResponse {
   staff: Staff;
 }
 
+export interface RefreshTokenInput {
+  /** @minLength 1 */
+  refreshToken: string;
+}
+
+export interface PlatformOwnerSession {
+  accessToken: string;
+  expiresIn: number;
+  ownerName: string;
+}
+
+export type PlatformLicenseAuditBefore = { [key: string]: unknown } | null;
+
+export type PlatformLicenseAuditAfter = { [key: string]: unknown } | null;
+
+export interface PlatformLicenseAudit {
+  id: string;
+  ownerName: string;
+  action: string;
+  organizationId: string;
+  before?: PlatformLicenseAuditBefore;
+  after?: PlatformLicenseAuditAfter;
+  at: string;
+}
+
 export interface StaffInput {
   name: string;
   firstName?: string;
@@ -293,25 +437,6 @@ export interface StaffInput {
      */
   code?: string;
 }
-
-export type EntityInputState = { [key: string]: unknown };
-
-export interface EntityInput {
-  id: string;
-  projectId?: string;
-  development?: string;
-  state: EntityInputState;
-  /** @minimum 1 */
-  version?: number;
-}
-
-export type EntityRecord = EntityInput & {
-  entity: string;
-  deleted?: boolean;
-  createdAt: string;
-  updatedAt: string;
-  version: number;
-};
 
 export type EntityPatch = EntityInput & { [key: string]: unknown } & Required<Pick<EntityInput & { [key: string]: unknown }, 'version'>>;
 
@@ -369,6 +494,7 @@ export const FileKind = {
   'completion-photo': 'completion-photo',
   scan: 'scan',
   'procurement-scope': 'procurement-scope',
+  'resident-report-photo': 'resident-report-photo',
 } as const;
 
 export interface StoredFile {
@@ -449,7 +575,16 @@ export type PlatformOwnerLoginBody = {
 
 export type PlatformOwnerLogin200 = {
   accessToken: string;
+  ownerName: string;
   expiresIn: number;
+};
+
+export type GetPlatformOwner200 = {
+  name: string;
+  sessionId: string;
+  typ: string;
+  iat: number;
+  exp: number;
 };
 
 export type BootstrapAdministratorBody = {
@@ -478,6 +613,14 @@ export type LogoutBody = {
 
 export type CreateOrganization201 = { [key: string]: unknown };
 
+export type ListPlatformLicenseAuditParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
 export type ListStaffParams = {
 status?: string;
 };
@@ -490,10 +633,15 @@ status?: string;
 
 export type LookupPublicResidentReportsParams = {
 address: string;
+statusToken: string;
 };
 
 export type LookupPublicVendorScopeParams = {
 vendorName: string;
+};
+
+export type ListResidentReportPhotosParams = {
+reportId: string;
 };
 
 export type DeleteEntityRecordBody = {

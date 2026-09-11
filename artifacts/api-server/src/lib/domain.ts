@@ -9,6 +9,7 @@ export const STAFF_ROLES = new Set([
   "procurement",
   "vendor",
   "resident",
+  "emergency",
 ]);
 
 export const STAFF_POSITIONS = [
@@ -110,6 +111,10 @@ export function isElevated(actor: Actor): boolean {
 }
 
 export function canReadEntity(actor: Actor, entity: string): boolean {
+  if (actor.role === "emergency") return entity === "emergency-jobs" || entity === "emergency-units";
+  if (entity === "emergency-jobs" || entity === "emergency-units") {
+    return actor.role === "administrator" || actor.role === "management" || isBoroughDirector(actor);
+  }
   if (isBoroughDirector(actor)) return true;
   if (HIGH_RISK_ENTITIES.has(entity) && actor.role === "management") {
     return isElevated(actor);
@@ -148,6 +153,7 @@ export function entityDevelopmentAllowed(
 }
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
+  if (actor.role === "emergency") return false;
   if (isBoroughDirector(actor)) return true;
   if (entity === "global-settings") return false;
   if (entity === "emergency-units" || entity === "emergency-jobs") {
@@ -171,6 +177,7 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 }
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
+  if (actor.role === "emergency") return entity === "emergency-jobs";
   if (isBoroughDirector(actor)) return true;
   if (entity === "global-settings") return false;
   if (entity === "procurement" || entity === "procurement-bids") {
@@ -202,6 +209,9 @@ export function canPerformEntityAction(
     actor.role === "administrator" || actor.role === "management";
   const isFieldStaff =
     actor.role === "worker" || actor.role === "inspector";
+  if (actor.role === "emergency") {
+    return entity === "emergency-jobs" && ["on-my-way", "start", "complete"].includes(action);
+  }
 
   if (entity === "procurement") {
     if (action === "submit") {

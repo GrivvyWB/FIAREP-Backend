@@ -4,6 +4,8 @@ import {
   useUpdateOrganization, 
   OrganizationWithUsage, 
   getListOrganizationsQueryKey 
+  ,useListPlatformLicenseAudit
+  ,useListPlatformOrganizationProperties, useCreatePlatformOrganizationProperty, useUpdatePlatformOrganizationProperty, useDeletePlatformOrganizationProperty, getListPlatformOrganizationPropertiesQueryKey
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +35,7 @@ import { format, isValid } from "date-fns";
 
 export default function OwnerDashboard() {
   const { data: organizations, isLoading, error } = useListOrganizations();
+  const { data: auditHistory = [] } = useListPlatformLicenseAudit({ limit: 25 });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrg, setSelectedOrg] = useState<OrganizationWithUsage | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -40,6 +43,12 @@ export default function OwnerDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateMutation = useUpdateOrganization();
+  const [propertyOrg, setPropertyOrg] = useState<string | null>(null);
+  const [propertyAddress, setPropertyAddress] = useState("");
+  const { data: properties = [] } = useListPlatformOrganizationProperties(propertyOrg || "", { query: { enabled: !!propertyOrg, queryKey: getListPlatformOrganizationPropertiesQueryKey(propertyOrg || "") } });
+  const createProperty = useCreatePlatformOrganizationProperty();
+  const updateProperty = useUpdatePlatformOrganizationProperty();
+  const deleteProperty = useDeletePlatformOrganizationProperty();
 
   const filteredOrgs = useMemo(() => {
     if (!organizations) return [];
@@ -61,13 +70,18 @@ export default function OwnerDashboard() {
     setSelectedOrg(org);
     setIsDialogOpen(true);
   };
+  const saveProperty = async () => {
+    if (!propertyOrg || !propertyAddress.trim()) return;
+    await createProperty.mutateAsync({ organizationId: propertyOrg, data: { displayAddress: propertyAddress.trim(), active: true } });
+    setPropertyAddress("");
+    queryClient.invalidateQueries({ queryKey: getListPlatformOrganizationPropertiesQueryKey(propertyOrg) });
+  };
 
   const handleStatusChange = async (org: OrganizationWithUsage, newStatus: "active" | "suspended" | "expired") => {
     try {
       await updateMutation.mutateAsync({
         id: org.id,
         data: {
-          id: org.id,
           name: org.name,
           status: newStatus,
         }
@@ -217,6 +231,9 @@ export default function OwnerDashboard() {
                             <DropdownMenuItem onClick={() => handleEdit(org)}>
                               <Edit2 className="w-4 h-4 mr-2 text-slate-400" /> Edit Constraints
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => { setPropertyOrg(org.id); setPropertyAddress(""); }}>
+                              <Building2 className="w-4 h-4 mr-2 text-slate-400" /> Manage addresses
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             
                             {!isActive && (
@@ -253,6 +270,48 @@ export default function OwnerDashboard() {
         onOpenChange={setIsDialogOpen} 
         organization={selectedOrg} 
       />
+      {propertyOrg && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold text-slate-900">Licensed addresses · {propertyOrg}</h2>
+            <Button variant="ghost" onClick={() => setPropertyOrg(null)}>Close</Button>
+          </div>
+          <div className="flex gap-2 mt-3">
+            <Input value={propertyAddress} onChange={(e) => setPropertyAddress(e.target.value)} placeholder="123 Main Street" />
+            <Button onClick={saveProperty} disabled={createProperty.isPending}>Add</Button>
+          </div>
+          <div className="mt-3 space-y-2">
+            {properties.map((property) => (
+              <div key={property.id} className="flex items-center gap-2 border-b pb-2">
+                <span className="flex-1">{property.displayAddress}</span>
+                <Button variant="outline" size="sm" onClick={async () => {
+                  const next = window.prompt("Update address", property.displayAddress);
+                  if (next?.trim()) {
+                    await updateProperty.mutateAsync({ organizationId: propertyOrg, propertyId: property.id, data: { displayAddress: next.trim(), active: property.active } });
+                    queryClient.invalidateQueries({ queryKey: getListPlatformOrganizationPropertiesQueryKey(propertyOrg) });
+                  }
+                }}>Edit</Button>
+                <Button variant="destructive" size="sm" onClick={async () => {
+                  await deleteProperty.mutateAsync({ organizationId: propertyOrg, propertyId: property.id });
+                  queryClient.invalidateQueries({ queryKey: getListPlatformOrganizationPropertiesQueryKey(propertyOrg) });
+                }}>Delete</Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      <div className="bg-white rounded-xl border border-slate-200 p-5">
+        <h2 className="font-semibold text-slate-900">Recent license activity</h2>
+        <div className="mt-3 space-y-2 text-sm">
+          {auditHistory.slice(0, 8).map((entry) => (
+            <div key={entry.id} className="flex justify-between gap-4 border-b border-slate-100 pb-2">
+              <span><strong>{entry.action}</strong> · {entry.organizationId}</span>
+              <span className="text-slate-500">{entry.ownerName} · {new Date(entry.at).toLocaleString()}</span>
+            </div>
+          ))}
+          {!auditHistory.length && <p className="text-slate-500">No license activity recorded yet.</p>}
+        </div>
+      </div>
     </div>
   );
 }

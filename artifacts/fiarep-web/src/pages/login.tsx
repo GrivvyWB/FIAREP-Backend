@@ -24,6 +24,7 @@ const loginSchema = z.object({
     .string()
     .length(4, "Code must be exactly 4 characters")
     .regex(/^[a-zA-Z0-9]+$/, "Code can only contain letters and numbers"),
+  organizationId: z.string().optional(),
 });
 
 export default function Login() {
@@ -45,6 +46,7 @@ export default function Login() {
     defaultValues: {
       name: "",
       code: "",
+      organizationId: "",
     },
   });
 
@@ -55,7 +57,7 @@ export default function Login() {
   const onSubmit = async (values: z.infer<typeof loginSchema>) => {
     try {
       setIsSubmitting(true);
-      await login(values.name, values.code);
+      await login(values.name, values.code, values.organizationId?.trim() || undefined);
       const returnTo = sessionStorage.getItem("fiarep_return_to");
       sessionStorage.removeItem("fiarep_return_to");
       setLocation(returnTo?.startsWith("/") && returnTo !== "/login" ? returnTo : "/dashboard");
@@ -131,6 +133,17 @@ export default function Login() {
                         </InputOTP>
                       </div>
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="organizationId"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Organization ID (customer staff)</FormLabel>
+                    <FormControl><Input placeholder="Leave blank for default FIAREP" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

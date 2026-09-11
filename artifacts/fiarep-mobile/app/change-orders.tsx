@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, listChangeOrders, approveChangeOrderMgmt, approveChangeOrderProcurement, declineChangeOrder, resubmitChangeOrder, findScopeForChangeOrder, type ChangeOrder } from '../lib/store';
+import { getCurrentActor, listChangeOrders, approveChangeOrderMgmt, declineChangeOrder, resubmitChangeOrder, findScopeForChangeOrder, type ChangeOrder } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
@@ -44,14 +44,9 @@ export default function ChangeOrders() {
   useFocusEffect(load);
 
   const isMgmt = mode === 'management' || mode === 'administrator';
-  const isProcurement = mode === 'procurement';
 
   async function mgmtApprove(co: ChangeOrder) {
     try { await approveChangeOrderMgmt(co.id); load(); Alert.alert('Approved', 'Sent to procurement for cost approval.'); }
-    catch (e: any) { Alert.alert('Failed', e?.message ?? 'Error'); }
-  }
-  async function procApprove(co: ChangeOrder) {
-    try { await approveChangeOrderProcurement(co.id); load(); Alert.alert('Cost approved', 'The change work order is approved.'); }
     catch (e: any) { Alert.alert('Failed', e?.message ?? 'Error'); }
   }
   function openEdit(co: ChangeOrder) {
@@ -89,14 +84,13 @@ export default function ChangeOrders() {
       const renderCO = (co: ChangeOrder) => {
         const st = STATUS[co.status] || { label: co.status, color: '#666' };
         const canMgmt = isMgmt && co.status === 'submitted';
-        const canProc = isProcurement && co.status === 'mgmt_approved';
         return (
           <Pressable key={co.id} style={[ui.card, { gap: 6 }]} onPress={() => co.reportId && router.push('/report-detail?id=' + co.reportId)}>
             <View style={ui.line}><Text style={ui.lineK}>Job</Text><Text style={ui.lineV}>{co.reportRef}</Text></View>
             <View style={ui.line}><Text style={ui.lineK}>For</Text><Text style={ui.lineV}>{co.targetName || co.targetPosition}</Text></View>
             <Text style={{ fontSize: 14, color: '#333' }}>{co.description}</Text>
             <View style={ui.line}><Text style={[ui.lineK, { fontWeight: '700', color: '#000' }]}>Cost of change</Text><Text style={[ui.lineV, { fontWeight: '700' }]}>{money(co.cost)}</Text></View>
-            {(isMgmt || isProcurement) && (
+            {isMgmt && (
               <Pressable style={[ui.btnOutline, { marginTop: 2 }]} onPress={() => viewOriginalScope(co)}>
                 <Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>View original scope</Text>
               </Pressable>
@@ -139,12 +133,11 @@ export default function ChangeOrders() {
               </View>
             )}
 
-            {(canMgmt || canProc) && (
+            {canMgmt && (
               <>
                 <TextInput style={ui.input} value={reasons[co.id] || ''} onChangeText={(t) => setReasons((m) => ({ ...m, [co.id]: t }))} placeholder="Decline reason (optional)" />
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {canMgmt && <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => mgmtApprove(co)}><Text style={ui.btnText}>Approve & send to procurement</Text></Pressable>}
-                  {canProc && <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => procApprove(co)}><Text style={ui.btnText}>Approve cost</Text></Pressable>}
                   <Pressable style={[ui.btnOutline, { flex: 1, borderColor: '#c0392b' }]} onPress={() => decline(co)}><Text style={[ui.btnOutlineText, { color: '#c0392b' }]}>Decline</Text></Pressable>
                 </View>
               </>

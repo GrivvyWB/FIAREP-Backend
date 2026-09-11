@@ -6,7 +6,7 @@ import {
   getAppMode, setAppMode,
   verifyStaffLogin, hasAnyAdministrator, bootstrapAdministrator,
   setRememberedStaff, getRememberedStaff,
-  setCurrentActor, restoreServerSession,
+   setCurrentActor, restoreServerSession, logout, clearAppMode, clearRememberedStaff,
    type AppMode } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
@@ -15,7 +15,7 @@ type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
 export function useAppMode() { return useContext(ModeContext); }
 
-type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'procurement' | 'resident' | 'vendor';
+type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'resident' | 'vendor' | 'emergency';
 const CODE_LEN = 4;
 const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
 const ROLE_LABEL: Record<StaffRole, string> = {
@@ -23,16 +23,15 @@ const ROLE_LABEL: Record<StaffRole, string> = {
   management: 'Management',
   worker: 'Staff Member',
   inspector: 'CPM / Inspector',
-  procurement: 'Procurement',
   resident: 'Resident',
   vendor: 'Vendor',
+  emergency: 'Emergency Unit',
 };
 const roleLabel = (role: StaffRole) => ROLE_LABEL[role];
 
 const HOME_FOR_MODE: Record<AppMode, string> = {
   management: '/management-home',
   administrator: '/admin-home',
-  procurement: '/procurement-home',
   worker: '/worker-home',
   inspector: '/cpm-home',
   resident: '/resident-home',
@@ -55,6 +54,7 @@ function Screen({ children }: { children: React.ReactNode }) {
 function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: string; onUnlock: (overrideMode?: AppMode) => void; onCancel: () => void }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
+  const [organizationId, setOrganizationId] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [canBootstrap, setCanBootstrap] = useState(false);
@@ -75,7 +75,7 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
   async function doLogin() {
     setMsg(''); setBusy(true);
     try {
-      const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role, props.expectedPosition);
+      const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role, props.expectedPosition, organizationId);
       if (ok) {
         await setRememberedStaff(props.role, name.trim()).catch(() => undefined);
         props.onUnlock();
@@ -138,6 +138,12 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
         placeholder="Your name"
         autoCapitalize="words"
       />
+      {!bootstrapping && (
+        <>
+          <Text style={ui.label}>Organization ID (customer staff)</Text>
+          <TextInput style={ui.input} value={organizationId} onChangeText={setOrganizationId} placeholder="Leave blank for default FIAREP" autoCapitalize="none" />
+        </>
+      )}
 
       {!bootstrapping && (
         <>
@@ -166,9 +172,10 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
   );
 }
 
-function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
+function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?: string }) {
   const [gateFor, setGateFor] = useState<StaffRole | null>(null);
   const [boroughDirectorGate, setBoroughDirectorGate] = useState(false);
+  const [emergencyGate, setEmergencyGate] = useState(false);
   const pickStaffRole = async (role: StaffRole) => {
     const staff = await restoreServerSession();
     if (staff?.role === role) onPick(role as AppMode);
@@ -179,10 +186,10 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
     return (
       <StaffGate
         role={gateFor}
-        label={boroughDirectorGate ? 'Borough Director' : undefined}
+        label={boroughDirectorGate ? 'Borough Director' : emergencyGate ? 'Emergency Unit' : undefined}
         expectedPosition={boroughDirectorGate ? 'Borough Director' : undefined}
-        onUnlock={(override?: AppMode) => { const r = override || (gateFor as AppMode); setGateFor(null); onPick(r); }}
-        onCancel={() => { setGateFor(null); setBoroughDirectorGate(false); }}
+        onUnlock={(override?: AppMode) => { const r = override || (emergencyGate ? 'emergency' : gateFor as AppMode); setGateFor(null); setBoroughDirectorGate(false); setEmergencyGate(false); onPick(r); }}
+        onCancel={() => { setGateFor(null); setBoroughDirectorGate(false); setEmergencyGate(false); }}
       />
     );
   }
@@ -197,13 +204,14 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
       />
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Who's using this device?</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 12 }]}>Staff roles require an issued code.</Text>
+      {!!notice && <Text style={{ color: '#9a3412', textAlign: 'center', marginBottom: 8 }}>{notice}</Text>}
       <Pressable style={ui.btn} onPress={() => onPick('resident')}>
         <Text style={ui.btnText}>Resident</Text>
       </Pressable>
       <Pressable style={ui.btn} onPress={() => onPick('vendor')}>
         <Text style={ui.btnText}>Vendor</Text>
       </Pressable>
-      <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => onPick('emergency')}>
+       <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => { setEmergencyGate(true); setGateFor('emergency'); }}>
         <Text style={ui.btnText}>Emergency Unit</Text>
       </Pressable>
       <Pressable style={ui.btn} onPress={() => { setBoroughDirectorGate(true); setGateFor('management'); }}>
@@ -214,9 +222,6 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
       </Pressable>
        <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
         <Text style={ui.btnText}>Management  🔒</Text>
-      </Pressable>
-       <Pressable style={ui.btn} onPress={() => pickStaffRole('procurement')}>
-        <Text style={ui.btnText}>Procurement  🔒</Text>
       </Pressable>
       <Pressable style={ui.btn} onPress={() => pickStaffRole('worker')}>
         <Text style={ui.btnText}>Staff Member  🔒</Text>
@@ -268,7 +273,6 @@ function AdministratorStack() {
       <Stack.Screen name="hud-inspection" options={{ title: 'HUD Inspection' }} />
       <Stack.Screen name="hud-review" options={{ title: 'HUD Inspections' }} />
       <Stack.Screen name="hud-view" options={{ title: 'Inspection' }} />
-      <Stack.Screen name="procurement" options={{ title: 'Procurement' }} />
       <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
       <Stack.Screen name="violation-send" options={{ title: 'Send Violation' }} />
       <Stack.Screen name="assign-route" options={{ title: 'Assign a Route' }} />
@@ -306,21 +310,6 @@ function InspectorStack() {
   );
 }
 
-function ProcurementStack() {
-  return (
-    <Stack initialRouteName="procurement-home">
-      <Stack.Screen name="procurement-home" options={{ title: 'Procurement', headerBackVisible: false }} />
-      <Stack.Screen name="procurement" options={{ title: 'Procurement' }} />
-      <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
-      <Stack.Screen name="vendor-contacts" options={{ title: 'Vendor Contacts' }} />
-      <Stack.Screen name="contractor-scores" options={{ title: 'Vendor Score' }} />
-      <Stack.Screen name="dev-scores" options={{ title: 'Development Scores' }} />
-      <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
-      <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
-    </Stack>
-  );
-}
-
 function ManagementStack() {
   return (
     <Stack initialRouteName="management-home">
@@ -352,7 +341,6 @@ function ManagementStack() {
       <Stack.Screen name="contractor-scores" options={{ title: 'Contractor Scores' }} />
       <Stack.Screen name="hud-review" options={{ title: 'HUD Inspections' }} />
       <Stack.Screen name="hud-view" options={{ title: 'Inspection' }} />
-      <Stack.Screen name="procurement" options={{ title: 'Procurement' }} />
       <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
       <Stack.Screen name="violation-send" options={{ title: 'Send Violation' }} />
       <Stack.Screen name="scope-approvals" options={{ title: 'Scope Approvals' }} />
@@ -423,12 +411,21 @@ export default function Layout() {
   const router = useRouter();
   const [mode, setMode] = useState<AppMode | null>(null);
   const [booting, setBooting] = useState(true);
+  const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let mounted = true;
-    restoreServerSession().then((restored) => {
-      if (restored && mounted) {
-        const restoredMode = restored.role as AppMode;
+    restoreServerSession().then(async (restored) => {
+      if (restored && restored.role === 'procurement') {
+        await logout().catch(() => undefined);
+        await clearAppMode().catch(() => undefined);
+        await clearRememberedStaff('procurement').catch(() => undefined);
+        if (mounted) setNotice('The Procurement mobile role is no longer available. Choose another FIAREP role.');
+      } else if (restored && mounted && ['resident', 'administrator', 'management', 'worker', 'inspector', 'vendor', 'emergency'].includes(restored.role)) {
+        const savedMode = await getAppMode().catch(() => null);
+        const restoredMode = restored.role === 'emergency'
+          ? 'emergency'
+          : restored.role as AppMode;
         setMode(restoredMode);
       }
     }).catch(() => undefined).finally(() => {
@@ -463,7 +460,7 @@ export default function Layout() {
       </View>
     );
   } else if (mode === null) {
-    content = <ModePicker onPick={pick} />;
+    content = <ModePicker onPick={pick} notice={notice} />;
   } else if (mode === 'emergency') {
     content = <EmergencyStack />;
   } else if (mode === 'resident') {
@@ -476,8 +473,6 @@ export default function Layout() {
     content = <AdministratorStack />;
   } else if (mode === 'vendor') {
     content = <VendorStack />;
-  } else if (mode === 'procurement') {
-    content = <ProcurementStack />;
   } else {
     content = <ManagementStack />;
   }

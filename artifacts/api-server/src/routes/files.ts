@@ -3,6 +3,8 @@ import {
   RequestFileDownloadUrlBody,
   RequestFileUploadUrlBody,
 } from "@workspace/api-zod";
+import { db, residentReportPhotos } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import { audit } from "../lib/audit";
 import { FILE_KINDS, fileStorage, type FileKind } from "../lib/fileStorage";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -81,6 +83,12 @@ router.post("/v1/files/download-url", async (req, res) => {
     return;
   }
   const actor = actorFrom(res);
+  const [residentPhoto] = await db.select({ id: residentReportPhotos.id }).from(residentReportPhotos)
+    .where(eq(residentReportPhotos.objectPath, parsed.data.objectPath)).limit(1);
+  if (residentPhoto) {
+    res.status(403).json({ error: "Resident report photos require report-scoped access" });
+    return;
+  }
   try {
     const result = await fileStorage.createDownload(
       actor.tenantId,

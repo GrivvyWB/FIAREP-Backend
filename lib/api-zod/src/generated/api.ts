@@ -142,7 +142,8 @@ export const loginBodyCodeMax = 4;
 export const LoginBody = zod.object({
   "name": zod.string(),
   "code": zod.string().min(loginBodyCodeMin).max(loginBodyCodeMax),
-  "role": zod.string().optional()
+  "role": zod.string().optional(),
+  "organizationId": zod.string().optional().describe('Required for non-default customer organizations')
 })
 
 export const LoginResponse = zod.object({
@@ -170,7 +171,27 @@ export const PlatformOwnerLoginBody = zod.object({
 
 export const PlatformOwnerLoginResponse = zod.object({
   "accessToken": zod.string(),
+  "ownerName": zod.string(),
   "expiresIn": zod.number().int()
+})
+
+
+export const RefreshPlatformOwnerSessionResponse = zod.object({
+  "accessToken": zod.string(),
+  "expiresIn": zod.number().int(),
+  "ownerName": zod.string()
+})
+
+
+export const LogoutPlatformOwnerResponse = zod.void()
+
+
+export const GetPlatformOwnerResponse = zod.object({
+  "name": zod.string(),
+  "sessionId": zod.string(),
+  "typ": zod.string(),
+  "iat": zod.number().int(),
+  "exp": zod.number().int()
 })
 
 
@@ -282,11 +303,6 @@ export const ListOrganizationsResponseItem = zod.object({
 export const ListOrganizationsResponse = zod.array(ListOrganizationsResponseItem)
 
 
-export const createOrganizationBodyDirectorCodeMin = 4;
-export const createOrganizationBodyDirectorCodeMax = 4;
-
-
-
 export const CreateOrganizationBody = zod.object({
   "id": zod.string(),
   "name": zod.string(),
@@ -296,14 +312,33 @@ export const CreateOrganizationBody = zod.object({
   "staffLimit": zod.number().int().nullish(),
   "propertyLimit": zod.number().int().nullish(),
   "features": zod.record(zod.string(), zod.unknown()).optional(),
-  "unrestricted": zod.boolean().optional(),
-  "directorName": zod.string().optional(),
-  "directorCode": zod.string().min(createOrganizationBodyDirectorCodeMin).max(createOrganizationBodyDirectorCodeMax).optional()
+  "unrestricted": zod.boolean().optional()
 })
 
 export const CreateOrganizationResponse = zod.object({
 
 }).passthrough()
+
+
+export const listPlatformLicenseAuditQueryLimitDefault = 25;
+export const listPlatformLicenseAuditQueryLimitMax = 100;
+
+
+
+export const ListPlatformLicenseAuditQueryParams = zod.object({
+  "limit": zod.coerce.number().int().min(1).max(listPlatformLicenseAuditQueryLimitMax).default(listPlatformLicenseAuditQueryLimitDefault)
+})
+
+export const ListPlatformLicenseAuditResponseItem = zod.object({
+  "id": zod.string(),
+  "ownerName": zod.string(),
+  "action": zod.string(),
+  "organizationId": zod.string(),
+  "before": zod.record(zod.string(), zod.unknown()).nullish(),
+  "after": zod.record(zod.string(), zod.unknown()).nullish(),
+  "at": zod.coerce.date()
+})
+export const ListPlatformLicenseAuditResponse = zod.array(ListPlatformLicenseAuditResponseItem)
 
 
 export const UpdateOrganizationParams = zod.object({
@@ -316,11 +351,10 @@ export const updateOrganizationBodyDirectorCodeMax = 4;
 
 
 export const UpdateOrganizationBody = zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
+  "name": zod.string().optional(),
   "status": zod.enum(['active', 'suspended', 'expired']).optional(),
-  "startsAt": zod.coerce.date().optional(),
-  "endsAt": zod.coerce.date().optional(),
+  "startsAt": zod.coerce.date().nullish(),
+  "endsAt": zod.coerce.date().nullish(),
   "staffLimit": zod.number().int().nullish(),
   "propertyLimit": zod.number().int().nullish(),
   "features": zod.record(zod.string(), zod.unknown()).optional(),
@@ -342,6 +376,76 @@ export const UpdateOrganizationResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
+
+
+export const ListPlatformOrganizationPropertiesParams = zod.object({
+  "organizationId": zod.coerce.string()
+})
+
+export const ListPlatformOrganizationPropertiesResponseItem = zod.object({
+  "id": zod.string(),
+  "organizationId": zod.string(),
+  "displayAddress": zod.string(),
+  "normalizedAddress": zod.string(),
+  "development": zod.string().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+export const ListPlatformOrganizationPropertiesResponse = zod.array(ListPlatformOrganizationPropertiesResponseItem)
+
+
+export const CreatePlatformOrganizationPropertyParams = zod.object({
+  "organizationId": zod.coerce.string()
+})
+
+export const CreatePlatformOrganizationPropertyBody = zod.object({
+  "displayAddress": zod.string(),
+  "development": zod.string().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const CreatePlatformOrganizationPropertyResponse = zod.object({
+  "id": zod.string(),
+  "organizationId": zod.string(),
+  "displayAddress": zod.string(),
+  "normalizedAddress": zod.string(),
+  "development": zod.string().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const UpdatePlatformOrganizationPropertyParams = zod.object({
+  "organizationId": zod.coerce.string(),
+  "propertyId": zod.coerce.string()
+})
+
+export const UpdatePlatformOrganizationPropertyBody = zod.object({
+  "displayAddress": zod.string(),
+  "development": zod.string().optional(),
+  "active": zod.boolean().optional()
+})
+
+export const UpdatePlatformOrganizationPropertyResponse = zod.object({
+  "id": zod.string(),
+  "organizationId": zod.string(),
+  "displayAddress": zod.string(),
+  "normalizedAddress": zod.string(),
+  "development": zod.string().nullish(),
+  "active": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+export const DeletePlatformOrganizationPropertyParams = zod.object({
+  "organizationId": zod.coerce.string(),
+  "propertyId": zod.coerce.string()
+})
+
+export const DeletePlatformOrganizationPropertyResponse = zod.void()
 
 
 export const ListStaffQueryParams = zod.object({
@@ -478,6 +582,8 @@ export const SubmitPublicResidentReportResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "version": zod.number().int()
+})).and(zod.object({
+  "statusToken": zod.string()
 }))
 
 
@@ -486,26 +592,69 @@ export const LookupPublicResidentReportsParams = zod.object({
 })
 
 export const LookupPublicResidentReportsQueryParams = zod.object({
-  "address": zod.coerce.string()
+  "address": zod.coerce.string(),
+  "statusToken": zod.coerce.string()
+})
+
+export const LookupPublicResidentReportsResponse = zod.object({
+  "complaintNo": zod.string(),
+  "status": zod.string(),
+  "description": zod.string(),
+  "updates": zod.array(zod.record(zod.string(), zod.unknown())),
+  "createdAt": zod.string()
 })
 
 
+export const RequestPublicResidentPhotoUploadParams = zod.object({
+  "complaintNo": zod.coerce.string()
+})
+
+export const requestPublicResidentPhotoUploadBodySizeMax = 10485760;
 
 
-export const LookupPublicResidentReportsResponseItem = zod.object({
-  "id": zod.string(),
-  "projectId": zod.string().optional(),
-  "development": zod.string().optional(),
-  "state": zod.record(zod.string(), zod.unknown()),
-  "version": zod.number().int().min(1)
-}).and(zod.object({
-  "entity": zod.string(),
-  "deleted": zod.boolean().optional(),
+
+export const RequestPublicResidentPhotoUploadBody = zod.object({
+  "statusToken": zod.string(),
+  "address": zod.string(),
+  "name": zod.string(),
+  "size": zod.number().int().min(1).max(requestPublicResidentPhotoUploadBodySizeMax),
+  "contentType": zod.enum(['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp'])
+})
+
+export const requestPublicResidentPhotoUploadResponseFileSizeMax = 52428800;
+
+
+
+export const RequestPublicResidentPhotoUploadResponse = zod.object({
+  "uploadUrl": zod.string().url(),
+  "file": zod.object({
+  "id": zod.string().uuid(),
+  "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope', 'resident-report-photo']),
+  "name": zod.string(),
+  "size": zod.number().int().min(1).max(requestPublicResidentPhotoUploadResponseFileSizeMax),
+  "contentType": zod.string(),
+  "objectPath": zod.string(),
   "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date(),
-  "version": zod.number().int()
-}))
-export const LookupPublicResidentReportsResponse = zod.array(LookupPublicResidentReportsResponseItem)
+  "createdBy": zod.string()
+})
+})
+
+
+export const ConfirmPublicResidentPhotoParams = zod.object({
+  "complaintNo": zod.coerce.string()
+})
+
+export const ConfirmPublicResidentPhotoBody = zod.object({
+  "grantId": zod.string().uuid(),
+  "statusToken": zod.string(),
+  "address": zod.string(),
+  "objectPath": zod.string()
+})
+
+export const ConfirmPublicResidentPhotoResponse = zod.object({
+  "id": zod.string(),
+  "contentType": zod.string()
+})
 
 
 export const LookupPublicVendorScopeParams = zod.object({
@@ -532,6 +681,31 @@ export const LookupPublicVendorScopeResponse = zod.object({
   "updatedAt": zod.coerce.date(),
   "version": zod.number().int()
 }))
+
+
+export const ListResidentReportPhotosQueryParams = zod.object({
+  "reportId": zod.coerce.string()
+})
+
+export const ListResidentReportPhotosResponseItem = zod.object({
+  "id": zod.string(),
+  "reportId": zod.string(),
+  "name": zod.string(),
+  "size": zod.number().int(),
+  "contentType": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+export const ListResidentReportPhotosResponse = zod.array(ListResidentReportPhotosResponseItem)
+
+
+export const RequestResidentReportPhotoDownloadParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const RequestResidentReportPhotoDownloadResponse = zod.object({
+  "downloadUrl": zod.string().url(),
+  "expiresIn": zod.number().int()
+})
 
 
 export const SubmitPublicVendorBidParams = zod.object({
@@ -805,7 +979,7 @@ export const requestFileUploadUrlBodyContentTypeMax = 100;
 
 
 export const RequestFileUploadUrlBody = zod.object({
-  "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope']),
+  "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope', 'resident-report-photo']),
   "name": zod.string().min(1).max(requestFileUploadUrlBodyNameMax),
   "size": zod.number().int().min(1).max(requestFileUploadUrlBodySizeMax),
   "contentType": zod.string().min(1).max(requestFileUploadUrlBodyContentTypeMax)
@@ -819,7 +993,7 @@ export const RequestFileUploadUrlResponse = zod.object({
   "uploadUrl": zod.string().url(),
   "file": zod.object({
   "id": zod.string().uuid(),
-  "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope']),
+  "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope', 'resident-report-photo']),
   "name": zod.string(),
   "size": zod.number().int().min(1).max(requestFileUploadUrlResponseFileSizeMax),
   "contentType": zod.string(),

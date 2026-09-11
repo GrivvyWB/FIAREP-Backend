@@ -21,9 +21,9 @@ const ROLE_LABEL: Record<StaffRole, string> = {
   management: 'Management',
   worker: 'Worker',
   inspector: 'Inspection',
-  procurement: 'Procurement',
   resident: 'Resident',
   vendor: 'Vendor',
+  emergency: 'Emergency Unit',
 };
 
 const MGMT_TITLES = ['Property Manager', 'Superintendent', 'Regional Manager', 'Director', 'Other'] as const;
@@ -52,14 +52,14 @@ export default function StaffIssue() {
 
   const issuerName = mode === 'administrator' ? 'Administrator' : (isRegionalDirector ? 'Regional Director' : 'Management');
   const canIssueRoles: StaffRole[] =
-    mode === 'administrator' ? ['administrator', 'management', 'procurement'] :
-    isRegionalDirector ? ['management', 'procurement', 'worker', 'inspector'] :
+    mode === 'administrator' ? ['administrator', 'management'] :
+    isRegionalDirector ? ['management', 'worker', 'inspector'] :
     mode === 'management' ? ['worker', 'inspector'] : [];
 
   // Admin deletes anyone; Regional Director deletes everyone except admins.
   const canDeleteRoles: StaffRole[] =
-    mode === 'administrator' ? ['administrator', 'management', 'worker', 'inspector', 'procurement'] :
-    isRegionalDirector ? ['management', 'procurement', 'worker', 'inspector'] :
+    mode === 'administrator' ? ['administrator', 'management', 'worker', 'inspector'] :
+    isRegionalDirector ? ['management', 'worker', 'inspector'] :
     mode === 'management' ? ['worker', 'inspector'] : [];
 
   const managed = accounts.filter((a) => canDeleteRoles.includes(a.role) && a.status !== 'revoked');

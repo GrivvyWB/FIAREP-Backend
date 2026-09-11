@@ -11,7 +11,7 @@ const kindLabel: Record<string, string> = { scope: 'Scope', route: 'Route', viol
 
 export default function DevScores() {
   const { mode } = useAppMode();
-  const canDelete = mode === 'administrator' || mode === 'management' || mode === 'procurement';
+  const canDelete = mode === 'administrator' || mode === 'management';
   const [scores, setScores] = useState<DevelopmentScore[]>([]);
   const [selectedDev, setSelectedDev] = useState<string>('');
   const [picker, setPicker] = useState(false);

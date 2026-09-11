@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
-import { findResidentReports, type ResidentReport } from '../lib/store';
+import { findResidentReports, listSavedResidentReports, type ResidentReport, type SavedResidentReport } from '../lib/store';
 import AddressInput from '../components/AddressInput';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -29,17 +29,20 @@ export default function ResidentLookup() {
   const [complaintNo, setComplaintNo] = useState('');
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [address, setAddress] = useState('');
+  const [statusToken, setStatusToken] = useState('');
   const [results, setResults] = useState<ResidentReport[] | null>(null);
   const [searching, setSearching] = useState(false);
+  const [saved, setSaved] = useState<SavedResidentReport[]>([]);
+  useEffect(() => { listSavedResidentReports().then(setSaved).catch(() => undefined); }, []);
 
   async function onLookup() {
-    if (!complaintNo.trim() || !address.trim()) {
-      Alert.alert('Missing info', 'Enter your complaint number and building address.');
+    if (!complaintNo.trim() || !address.trim() || !statusToken.trim()) {
+      Alert.alert('Missing info', 'Enter your complaint number, building address, and status token.');
       return;
     }
     setSearching(true);
     try {
-      const found = await findResidentReports(complaintNo.trim(), address.trim());
+      const found = await findResidentReports(complaintNo.trim(), address.trim(), statusToken.trim());
       setResults(found);
     } catch (e: any) {
       Alert.alert('Lookup failed', e?.message ?? 'Could not look up reports.');
@@ -53,6 +56,23 @@ export default function ResidentLookup() {
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Check Report Status</Text>
       <Text style={ui.label}>Enter the complaint number you received and the same building address used on the complaint.</Text>
+      {saved.length > 0 && (
+        <View style={{ gap: 8, marginBottom: 8 }}>
+          <Text style={ui.label}>Saved reports</Text>
+          {saved.map((item) => (
+            <Pressable key={item.complaintNo} style={ui.btnOutline} onPress={() => {
+              setComplaintNo(item.complaintNo); setAddress(item.address); setStatusToken(item.statusToken);
+            }}>
+              <Text style={ui.btnOutlineText}>{item.complaintNo} · {item.address}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      <View>
+        <Text style={ui.label}>Status token</Text>
+        <TextInput style={ui.input} value={statusToken} onChangeText={setStatusToken} placeholder="Paste your private status token" autoCapitalize="none" />
+      </View>
 
       <View>
         <Text style={ui.label}>Complaint number</Text>

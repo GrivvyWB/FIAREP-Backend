@@ -21,6 +21,7 @@ import {
   type StaffAccount,
   type StaffPosition,
   clearResidentReportForStaff,
+  listResidentReportPhotoUrls,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useAppMode } from './_layout';
@@ -120,7 +121,13 @@ export default function Management() {
 
   const names = useMemo(() => listDevelopmentNames(), []);
   const load = useCallback(() => {
-    listResidentReports().then(setReports);
+    listResidentReports().then(async (items) => {
+      const hydrated = await Promise.all(items.map(async (item) => {
+        const urls = await listResidentReportPhotoUrls(item.id).catch(() => []);
+        return urls.length ? { ...item, photos: urls } : item;
+      }));
+      setReports(hydrated);
+    });
     getContractorScores().then((arr) => { const m: Record<string, number> = {}; for (const c of arr) m[c.name] = c.score; setScoreByName(m); });
     (async () => {
       const a = await getCurrentActor();

@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { db, auditLog, notifications } from "@workspace/db";
+import { db, auditLog, notifications, platformLicenseAudit } from "@workspace/db";
 import type { Actor } from "./auth";
 import { logger } from "./logger";
 import { deliverPushNotification } from "./push";
@@ -18,6 +18,22 @@ export async function audit(
     action,
     detail,
     reportId,
+  });
+}
+
+function safeSnapshot(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object") return null;
+  const output: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    if (!["code", "tokenHash", "sessionVersion"].includes(key)) output[key] = item;
+  }
+  return output;
+}
+
+export async function platformAudit(ownerName: string, action: string, organizationId: string, before: unknown, after: unknown) {
+  await db.insert(platformLicenseAudit).values({
+    id: randomUUID(), ownerName, action, organizationId,
+    before: safeSnapshot(before), after: safeSnapshot(after),
   });
 }
 

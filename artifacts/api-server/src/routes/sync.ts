@@ -10,6 +10,13 @@ import {
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
+function emergencyVisible(actor: ReturnType<typeof actorFrom>, row: typeof entityRecords.$inferSelect): boolean {
+  if (actor.role !== "emergency") return true;
+  const normalizedActor = actor.name.trim().toLowerCase().replace(/\s+/g, " ");
+  return (row.entity === "emergency-jobs" || row.entity === "emergency-units") &&
+    [row.state["assignedTo"], row.state["assignedStaffId"], row.state["assignedUnitId"], row.state["unitId"], row.state["name"], row.state["unitName"]]
+      .some((value) => typeof value === "string" && (value === actor.id || value.trim().toLowerCase().replace(/\s+/g, " ") === normalizedActor));
+}
 
 router.get("/v1/sync", requireAuth, async (req, res) => {
   const actor = actorFrom(res);
@@ -64,6 +71,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       .filter((row) =>
         entityDevelopmentAllowed(actor, row.entity, row.development),
       )
+        .filter((row) => emergencyVisible(actor, row))
       .map((row) => ({
       id: row.id,
       entity: row.entity,

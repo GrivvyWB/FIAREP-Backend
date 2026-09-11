@@ -124,7 +124,8 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
       };
 
       if (isEditing) {
-        await updateMutation.mutateAsync({ id: values.id, data: payload });
+        const { id: _immutableId, directorName: _directorName, directorCode: _directorCode, ...updates } = payload;
+        await updateMutation.mutateAsync({ id: values.id, data: updates });
         toast({ title: "Organization updated successfully." });
       } else {
         await createMutation.mutateAsync({ data: payload });

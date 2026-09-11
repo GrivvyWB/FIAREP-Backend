@@ -81,7 +81,8 @@ export default function ResidentScreen() {
     try {
       const effLoc = location === 'Other' ? (locationOther.trim() || 'Other') : location;
       const report = await createResidentReport(unit.trim(), address.trim(), description.trim(), photos, development.trim(), name.trim(), effLoc);
-      Alert.alert('Report submitted', `Your complaint number is ${report.complaintNo}. Save this number to check the status of your work.`, [
+      const failures = (report as any).photoUploadFailures as string[] | undefined;
+      Alert.alert('Report submitted', `Complaint number: ${report.complaintNo}\n\nStatus token: ${report.statusToken}\n\nSave both to check your status.${failures?.length ? `\n\n${failures.length} photo(s) could not be uploaded.` : ''}`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (e: any) {

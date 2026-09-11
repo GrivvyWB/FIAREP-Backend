@@ -10,6 +10,7 @@ export const FILE_KINDS = [
   "completion-photo",
   "scan",
   "procurement-scope",
+  "resident-report-photo",
 ] as const;
 
 export type FileKind = (typeof FILE_KINDS)[number];

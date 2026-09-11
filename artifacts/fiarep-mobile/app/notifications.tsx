@@ -19,8 +19,8 @@ export default function Notifications() {
     const msg = (n.message || '').toLowerCase();
     if (n.reportId && n.reportId.startsWith('hud:')) { router.push('/hud-view?id=' + n.reportId.slice(4)); return; }
     if (n.reportId && n.reportId.startsWith('proj:')) { router.push('/project/' + n.reportId.slice(5)); return; }
-    // Procurement / scope-flow notifications carry the procurement id (no prefix).
-    // Route them by content before the generic report fallthrough.
+    // Scope-flow notifications carry the procurement id (no prefix).
+    // Route supervisor/CPM actions without exposing the procurement worker UI.
     if (msg.includes('approved inspection') || msg.includes('work assignment') || msg.includes('build scope')) {
       const bv = n.reportId ? await getBuildingViolation(n.reportId) : null;
       const addr = bv ? String(bv.building || '') : '';
@@ -81,7 +81,8 @@ export default function Notifications() {
     if (msg.includes('returned for revision')) { router.push('/scope-submit' + (n.reportId ? '?openId=' + n.reportId : '')); return; }
     if (msg.includes('scope') || msg.includes('bid') || msg.includes('procurement') || msg.includes('vendor') || msg.includes('won') || msg.includes('job closed') || msg.includes('job open')) {
       if (mode === 'vendor') { router.push('/vendor-home'); return; }
-      router.push('/procurement'); return;
+      if (msg.includes('scope')) { router.push('/scope-submit'); return; }
+      return;
     }
     if (msg.includes('repair complete')) {
       const bv = n.reportId ? await getBuildingViolation(n.reportId) : null;

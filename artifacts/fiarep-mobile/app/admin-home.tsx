@@ -65,7 +65,6 @@ export default function AdminHome() {
       heading: 'Purchasing',
       color: '#B4741A',
       tiles: [
-        { label: 'Procurement', onPress: () => router.push('/procurement'), tone: 'solid' },
         { label: 'Change Orders', onPress: () => router.push('/change-orders'), tone: 'outline' },
         { label: 'Vendor Score', onPress: () => router.push('/contractor-scores'), tone: 'tint' },
         { label: 'Development Scores', onPress: () => router.push('/dev-scores'), tone: 'tint' },

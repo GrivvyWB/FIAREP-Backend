@@ -129,7 +129,7 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /v1/auth/platform-owner/login:
+  /v1/platform/auth/login:
     post:
       operationId: platformOwnerLogin
       tags: [platform-owner]
@@ -145,15 +145,52 @@ paths:
                 code: { type: string }
       responses:
         "200":
-          description: Platform owner bearer token
+          description: Platform owner session
           content:
             application/json:
               schema:
                 type: object
-                required: [accessToken, expiresIn]
+                required: [accessToken, expiresIn, ownerName]
                 properties:
                   accessToken: { type: string }
+                  ownerName: { type: string }
                   expiresIn: { type: integer }
+  /v1/platform/auth/refresh:
+    post:
+      operationId: refreshPlatformOwnerSession
+      tags: [platform-owner]
+      responses:
+        "200":
+          description: Rotated platform owner session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PlatformOwnerSession"
+  /v1/platform/auth/logout:
+    post:
+      operationId: logoutPlatformOwner
+      tags: [platform-owner]
+      responses:
+        "204": { description: Session revoked }
+  /v1/platform/auth/me:
+    get:
+      operationId: getPlatformOwner
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Current platform owner
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [name, sessionId, typ, iat, exp]
+                properties:
+                  name: { type: string }
+                  sessionId: { type: string }
+                  typ: { type: string }
+                  iat: { type: integer }
+                  exp: { type: integer }
   /v1/auth/bootstrap:
     post:
       operationId: bootstrapAdministrator
@@ -265,13 +302,28 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/OrganizationInput" }
+              schema: { $ref: "#/components/schemas/OrganizationInput" }
       responses:
         "201":
           description: Organization created
           content:
             application/json:
               schema: { type: object }
+  /v1/platform/license-audit:
+    get:
+      operationId: listPlatformLicenseAudit
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: limit, in: query, schema: { type: integer, minimum: 1, maximum: 100, default: 25 } }
+      responses:
+        "200":
+          description: Immutable platform license audit history
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/PlatformLicenseAudit" }
   /v1/platform/organizations/{id}:
     patch:
       operationId: updateOrganization
@@ -283,13 +335,66 @@ paths:
         required: true
         content:
           application/json:
-            schema: { $ref: "#/components/schemas/OrganizationInput" }
+            schema: { $ref: "#/components/schemas/OrganizationUpdate" }
       responses:
         "200":
           description: Organization updated
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Organization" }
+  /v1/platform/organizations/{organizationId}/properties:
+    parameters:
+      - { name: organizationId, in: path, required: true, schema: { type: string } }
+    get:
+      operationId: listPlatformOrganizationProperties
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Licensed properties owned by this organization
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/OrganizationProperty" } }
+    post:
+      operationId: createPlatformOrganizationProperty
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationPropertyInput" }
+      responses:
+        "201":
+          description: Licensed property created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationProperty" }
+  /v1/platform/organizations/{organizationId}/properties/{propertyId}:
+    parameters:
+      - { name: organizationId, in: path, required: true, schema: { type: string } }
+      - { name: propertyId, in: path, required: true, schema: { type: string } }
+    patch:
+      operationId: updatePlatformOrganizationProperty
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationPropertyInput" }
+      responses:
+        "200":
+          description: Licensed property updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationProperty" }
+    delete:
+      operationId: deletePlatformOrganizationProperty
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204": { description: Licensed property deleted }
   /v1/staff:
     get:
       operationId: listStaff
@@ -374,7 +479,7 @@ paths:
           description: Resident complaint submitted
           content:
             application/json:
-              schema: { $ref: "#/components/schemas/EntityRecord" }
+               schema: { $ref: "#/components/schemas/PublicResidentReportResponse" }
   /v1/public/resident-reports/{complaintNo}:
     get:
       operationId: lookupPublicResidentReports
@@ -382,14 +487,48 @@ paths:
       parameters:
         - { name: complaintNo, in: path, required: true, schema: { type: string } }
         - { name: address, in: query, required: true, schema: { type: string } }
+        - { name: statusToken, in: query, required: true, schema: { type: string } }
       responses:
         "200":
           description: Matching resident complaint
           content:
             application/json:
               schema:
-                type: array
-                items: { $ref: "#/components/schemas/EntityRecord" }
+                $ref: "#/components/schemas/PublicResidentReportStatus"
+  /v1/public/resident-reports/{complaintNo}/photos/upload-url:
+    post:
+      operationId: requestPublicResidentPhotoUpload
+      tags: [files]
+      parameters:
+        - { name: complaintNo, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublicResidentPhotoUploadInput" }
+      responses:
+        "200":
+          description: Presigned private upload URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileUploadUrlResponse" }
+  /v1/public/resident-reports/{complaintNo}/photos/confirm:
+    post:
+      operationId: confirmPublicResidentPhoto
+      tags: [files]
+      parameters:
+        - { name: complaintNo, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PublicResidentPhotoConfirmInput" }
+      responses:
+        "201":
+          description: Confirmed resident photo
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResidentPhoto" }
   /v1/public/vendor-scopes/{trackingId}:
     get:
       operationId: lookupPublicVendorScope
@@ -408,6 +547,32 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/resident-report-photos:
+    get:
+      operationId: listResidentReportPhotos
+      tags: [files]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: reportId, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Photos attached to a resident report
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: "#/components/schemas/ResidentPhotoMetadata" } }
+  /v1/resident-report-photos/{id}/download-url:
+    post:
+      operationId: requestResidentReportPhotoDownload
+      tags: [files]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Scoped private photo download URL
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FileDownloadUrlResponse" }
   /v1/public/vendor-scopes/{trackingId}/bids:
     post:
       operationId: submitPublicVendorBid
@@ -712,6 +877,17 @@ components:
         propertyLimit: { type: integer, nullable: true }
         features: { type: object, additionalProperties: true }
         unrestricted: { type: boolean }
+    OrganizationUpdate:
+      type: object
+      properties:
+        name: { type: string }
+        status: { type: string, enum: [active, suspended, expired] }
+        startsAt: { type: string, format: date-time, nullable: true }
+        endsAt: { type: string, format: date-time, nullable: true }
+        staffLimit: { type: integer, nullable: true }
+        propertyLimit: { type: integer, nullable: true }
+        features: { type: object, additionalProperties: true }
+        unrestricted: { type: boolean }
         directorName: { type: string }
         directorCode: { type: string, minLength: 4, maxLength: 4 }
     OrganizationWithUsage:
@@ -726,6 +902,25 @@ components:
               properties:
                 staff: { type: integer }
                 properties: { type: integer }
+    OrganizationProperty:
+      type: object
+      required: [id, organizationId, displayAddress, normalizedAddress, active, createdAt, updatedAt]
+      properties:
+        id: { type: string }
+        organizationId: { type: string }
+        displayAddress: { type: string }
+        normalizedAddress: { type: string }
+        development: { type: ["string", "null"] }
+        active: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+    OrganizationPropertyInput:
+      type: object
+      required: [displayAddress]
+      properties:
+        displayAddress: { type: string }
+        development: { type: string }
+        active: { type: boolean }
     PublicVendorBidInput:
       type: object
       additionalProperties: false
@@ -734,6 +929,55 @@ components:
         vendorName: { type: string, minLength: 1 }
         amount: { type: number, exclusiveMinimum: 0 }
         note: { type: string }
+    PublicResidentReportResponse:
+      allOf:
+        - $ref: "#/components/schemas/EntityRecord"
+        - type: object
+          required: [statusToken]
+          properties:
+            statusToken: { type: string }
+    PublicResidentReportStatus:
+      type: object
+      required: [complaintNo, status, description, updates, createdAt]
+      properties:
+        complaintNo: { type: string }
+        status: { type: string }
+        description: { type: string }
+        updates: { type: array, items: { type: object, additionalProperties: true } }
+        createdAt: { type: string }
+    PublicResidentPhotoUploadInput:
+      type: object
+      required: [statusToken, address, name, size, contentType]
+      properties:
+        statusToken: { type: string }
+        address: { type: string }
+        name: { type: string }
+        size: { type: integer, minimum: 1, maximum: 10485760 }
+        contentType: { type: string, enum: [image/jpeg, image/png, image/heic, image/heif, image/webp] }
+    PublicResidentPhotoConfirmInput:
+      type: object
+      required: [grantId, statusToken, address, objectPath]
+      properties:
+        grantId: { type: string, format: uuid }
+        statusToken: { type: string }
+        address: { type: string }
+        objectPath: { type: string }
+    ResidentPhoto:
+      type: object
+      required: [id, contentType]
+      properties:
+        id: { type: string }
+        contentType: { type: string }
+    ResidentPhotoMetadata:
+      type: object
+      required: [id, reportId, name, size, contentType, createdAt]
+      properties:
+        id: { type: string }
+        reportId: { type: string }
+        name: { type: string }
+        size: { type: integer }
+        contentType: { type: string }
+        createdAt: { type: string, format: date-time }
     NycProperty:
       type: object
       required: [query, formattedAddress, houseNumber, street, borough]
@@ -874,6 +1118,7 @@ components:
         name: { type: string }
         code: { type: string, minLength: 4, maxLength: 4 }
         role: { type: string }
+        organizationId: { type: string, description: Required for non-default customer organizations }
     AuthResponse:
       type: object
       required: [accessToken, refreshToken, staff]
@@ -882,6 +1127,30 @@ components:
         refreshToken: { type: string }
         expiresIn: { type: integer }
         staff: { $ref: "#/components/schemas/Staff" }
+    RefreshTokenInput:
+      type: object
+      additionalProperties: false
+      required: [refreshToken]
+      properties:
+        refreshToken: { type: string, minLength: 1 }
+    PlatformOwnerSession:
+      type: object
+      required: [accessToken, expiresIn, ownerName]
+      properties:
+        accessToken: { type: string }
+        expiresIn: { type: integer }
+        ownerName: { type: string }
+    PlatformLicenseAudit:
+      type: object
+      required: [id, ownerName, action, organizationId, at]
+      properties:
+        id: { type: string }
+        ownerName: { type: string }
+        action: { type: string }
+        organizationId: { type: string }
+        before: { type: object, nullable: true, additionalProperties: true }
+        after: { type: object, nullable: true, additionalProperties: true }
+        at: { type: string, format: date-time }
     Staff:
       type: object
       required: [id, tenantId, name, role, position, status, developments]
@@ -997,6 +1266,7 @@ components:
         - completion-photo
         - scan
         - procurement-scope
+        - resident-report-photo
     StoredFile:
       type: object
       required: [id, kind, name, size, contentType, objectPath, createdAt, createdBy]
