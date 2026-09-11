@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { listElevatorJobs, getElevator, type ElevatorJob } from '../lib/store';
 import { ELEVATOR_SECTIONS } from '../lib/elevator';
 import { photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -103,7 +104,7 @@ export default function ElevatorDashboard() {
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 4 }}>
                   {detail.photos.map((uri: string, i: number) => (
                     <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewer(uri)}>
-                      <Image source={{ uri: photoUri(uri) }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+                      <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
                     </TouchableOpacity>
                   ))}
                 </View>

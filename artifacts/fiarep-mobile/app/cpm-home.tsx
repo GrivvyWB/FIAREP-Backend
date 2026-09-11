@@ -1,7 +1,7 @@
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { clearAppMode, clearRememberedStaff, clearCurrentActor, unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
+import { clearAppMode, clearRememberedStaff, logout, unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
@@ -20,7 +20,7 @@ export default function CpmHome() {
   function onSwitchRole() {
     Alert.alert('Switch role?', 'Return to the role selection screen.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('inspector'); await clearCurrentActor(); await clearAppMode(); refresh(); } },
+      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('inspector'); await logout(); await clearAppMode(); refresh(); } },
     ]);
   }
 

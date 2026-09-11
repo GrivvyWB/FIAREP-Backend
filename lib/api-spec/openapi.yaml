@@ -150,6 +150,22 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthResponse"
+  /v1/auth/logout:
+    post:
+      operationId: logout
+      tags: [auth]
+      summary: Revoke a refresh-token session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken: { type: string }
+      responses:
+        "204": { description: Session revoked }
   /v1/auth/me:
     get:
       operationId: getCurrentStaff
@@ -257,7 +273,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/EntityInput"
+              $ref: "#/components/schemas/EntityPatch"
       responses:
         "200":
           description: Updated entity record
@@ -268,6 +284,15 @@ paths:
       operationId: deleteEntityRecord
       tags: [entities]
       security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 1 }
       responses:
         "204": { description: Record deleted }
   /v1/notifications:
@@ -320,6 +345,21 @@ paths:
               schema: { $ref: "#/components/schemas/DeviceToken" }
         "400":
           description: Invalid Expo push token
+    delete:
+      operationId: unregisterDeviceToken
+      tags: [system]
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [token]
+              properties:
+                token: { type: string }
+      responses:
+        "204": { description: Device token disabled }
   /v1/push-deliveries:
     get:
       operationId: listPushDeliveries
@@ -509,9 +549,10 @@ components:
         staff: { $ref: "#/components/schemas/Staff" }
     Staff:
       type: object
-      required: [id, name, role, position, status, developments]
+      required: [id, tenantId, name, role, position, status, developments]
       properties:
         id: { type: string }
+        tenantId: { type: string }
         name: { type: string }
         firstName: { type: string, nullable: true }
         lastName: { type: string, nullable: true }
@@ -554,6 +595,11 @@ components:
             createdAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }
             version: { type: integer }
+    EntityPatch:
+      allOf:
+        - $ref: "#/components/schemas/EntityInput"
+        - type: object
+          required: [version]
     Notification:
       type: object
       required: [id, target, message, read, at]

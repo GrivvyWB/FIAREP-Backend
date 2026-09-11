@@ -12,7 +12,7 @@ import { requireAuth } from "../middlewares/auth";
 const router: IRouter = Router();
 
 function publicStaff(staff: typeof staffAccounts.$inferSelect) {
-  const { code: _code, sessionVersion: _version, tenantId: _tenant, ...safe } =
+  const { code: _code, sessionVersion: _version, ...safe } =
     staff;
   return safe;
 }

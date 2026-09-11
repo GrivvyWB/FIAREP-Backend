@@ -1,24 +1,43 @@
 import * as SQLite from 'expo-sqlite';
+import * as SecureStore from 'expo-secure-store';
+import { Platform } from 'react-native';
 import {
   bootstrapAdministrator as bootstrapAdministratorOnServer,
-  createEntityRecord,
   getBootstrapStatus,
+  getCurrentStaff,
   login as loginOnServer,
-  pullSync,
+  logout as logoutOnServer,
+  refreshSession,
+  registerDeviceToken,
+  unregisterDeviceToken,
   setAuthTokenGetter,
+  setAuthRefreshHandler,
   setBaseUrl,
   type AuthResponse,
   type Staff,
-  updateEntityRecord,
 } from '@workspace/api-client-react';
 import type { Rates } from './takeoff';
 import type { LineItem } from './catalog';
 import { touchMeta, getDeviceId, newMeta } from './syncmeta';
 import { DEVELOPMENT_NAMES } from './developments.seed';
+import { ensureQueue, recoverLegacyQueue } from './queue';
+import { hydrateRemotePhotosFromDb } from './photoResolver';
+async function rotateActorCache(staff: Staff) {
+  const d = await db();
+  const fingerprint = `${staff.tenantId || ''}:${staff.id}:${[...(staff.developments || [])].sort().join('|')}`;
+  const prior = await d.getFirstAsync('SELECT value FROM settings WHERE key=?', 'cache_fingerprint') as { value: string } | null;
+  if (prior?.value && prior.value !== fingerprint) {
+    for (const table of ['projects','rooms','checklists','roofplans','inspections','cost_estimates','intakes','elevators','resident_reports','violations','building_violations','priority_violations','route_assignments','procurement','procurement_bids','vendor_contacts','vendor_quotes','change_orders','elevator_jobs','emergency_jobs','emergency_units','leave_requests']) {
+      try { await d.runAsync(`DELETE FROM ${table}`); } catch {}
+    }
+  }
+  await d.runAsync("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", 'cache_fingerprint', fingerprint);
+}
 
 const backendDomain = process.env.EXPO_PUBLIC_DOMAIN;
 setBaseUrl(backendDomain ? `https://${backendDomain}` : null);
 setAuthTokenGetter(() => getAccessToken());
+setAuthRefreshHandler(() => refreshAccessToken());
 
 async function withMeta(d: any, state: any): Promise<any> {
   const deviceId = await getDeviceId(d);
@@ -28,10 +47,23 @@ async function withMeta(d: any, state: any): Promise<any> {
 
 
 export type Project = { id: string; name: string; client: string; createdAt: string; rates?: Rates | null };
-export type Room = { id: string; projectId: string; name: string; unit?: string; lines: LineItem[]; photos?: string[]; walls2d?: { x1:number; y1:number; x2:number; y2:number }[]; scan?: any };
+export type Room = { id: string; projectId: string; name: string; unit?: string; lines: LineItem[]; photos?: string[]; walls2d?: { x1:number; y1:number; x2:number; y2:number }[]; scan?: any; remoteFiles?: any[] };
 
 let _db: SQLite.SQLiteDatabase | null = null;
-async function db() {
+let _refreshInFlight: Promise<string | null> | null = null;
+let _refreshing = false;
+export function tokenExpiryMs(token: string): number | null {
+  try {
+    const part = token.split('.')[1] || '';
+    const normalized = part.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((part.length + 3) % 4);
+    const payload = JSON.parse(typeof atob === 'function' ? atob(normalized) : '');
+    return typeof payload.exp === 'number' ? payload.exp * 1000 : null;
+  } catch { return null; }
+}
+export function isRoleAuthorized(staff: Pick<Staff, 'role'>, requested: string): boolean {
+  return staff.role === requested;
+}
+export async function db() {
   if (_db) return _db;
   _db = await SQLite.openDatabaseAsync('construction.db');
   await _db.execAsync(`
@@ -60,16 +92,54 @@ async function db() {
   } catch (e) { /* no rooms table yet */ }
   await _db.execAsync(`
     CREATE TABLE IF NOT EXISTS rooms (
-      id TEXT PRIMARY KEY NOT NULL, projectId TEXT NOT NULL, name TEXT NOT NULL, unit TEXT, lines TEXT NOT NULL, photos TEXT, walls2d TEXT
+      id TEXT PRIMARY KEY NOT NULL, projectId TEXT NOT NULL, name TEXT NOT NULL, unit TEXT, lines TEXT NOT NULL, photos TEXT, walls2d TEXT, remoteFiles TEXT
     );
   `);
   try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN unit TEXT'); } catch (e) {}
   try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN photos TEXT'); } catch (e) {}
   try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN walls2d TEXT'); } catch (e) {}
   try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN scan TEXT'); } catch (e) {}
+  try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN remoteFiles TEXT'); } catch (e) {}
   try { await _db.execAsync('ALTER TABLE projects ADD COLUMN rates TEXT'); } catch (e) { /* exists */ }
   try { await _db.execAsync('ALTER TABLE projects ADD COLUMN meta TEXT'); } catch (e) {}
   return _db;
+}
+async function queueMutation(entity: string, id: string, state: any, operation: 'upsert' | 'delete' = 'upsert', baseVersion?: number) {
+  const d = await db();
+  await ensureQueue(d);
+  const identityRow = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'session_identity');
+  let owner = 'legacy';
+  try { const i = identityRow ? JSON.parse(identityRow.value) : null; owner = `${i?.tenantId || 'default'}:${i?.staffId || ''}`; } catch {}
+  let version = baseVersion ?? (Number(state?._meta?.serverVersion || state?.meta?.serverVersion || state?.scan?._meta?.serverVersion || 0) || null);
+  if (!version && operation === 'delete') {
+    const tables: Record<string, string> = {
+      projects: 'projects', rooms: 'rooms', inspections: 'inspections',
+      'cost-estimates': 'cost_estimates', 'resident-reports': 'resident_reports',
+      violations: 'violations', 'building-violations': 'building_violations',
+      'priority-violations': 'priority_violations', 'elevator-jobs': 'elevator_jobs',
+      'emergency-jobs': 'emergency_jobs', 'emergency-units': 'emergency_units',
+      'leave-requests': 'leave_requests', procurement: 'procurement',
+      'procurement-bids': 'procurement_bids', 'vendor-contacts': 'vendor_contacts',
+      'vendor-quotes': 'vendor_quotes', 'change-orders': 'change_orders',
+      'route-assignments': 'route_assignments',
+    };
+    const table = tables[entity];
+    if (table) {
+      const valueColumn = table === 'projects' ? 'meta' : table === 'rooms' ? 'scan' : table === 'roofplans' ? 'data' : 'state';
+      const keyColumn = table === 'vendor_quotes' ? 'key' : table.includes('project') || ['inspections', 'cost_estimates', 'intakes', 'elevators', 'checklists', 'roofplans'].includes(table) ? 'projectId' : 'id';
+      const row = await d.getFirstAsync<any>(`SELECT ${valueColumn} AS value FROM ${table} WHERE ${keyColumn}=? LIMIT 1`, id).catch(() => null);
+      try {
+        const old = row?.value ? JSON.parse(row.value) : null;
+        version = Number(old?._meta?.serverVersion || old?.meta?.serverVersion || 0) || null;
+      } catch {}
+    }
+  }
+  await d.runAsync(
+    `INSERT INTO sync_queue(entity,id,state,operation,baseVersion,owner,status) VALUES(?,?,?,?,?,?,'pending')
+     ON CONFLICT(owner,entity,id) DO UPDATE SET state=excluded.state,operation=excluded.operation,
+     baseVersion=excluded.baseVersion,owner=excluded.owner,status='pending',error=NULL`,
+    entity, id, state == null ? null : JSON.stringify(state), operation, version, owner,
+  );
 }
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -82,120 +152,29 @@ export async function listProjects(): Promise<Project[]> {
   const rows = await d.getAllAsync<any>('SELECT * FROM projects ORDER BY createdAt DESC');
   return rows.map(rowToProject);
 }
-export async function createProject(name: string, client: string): Promise<Project> {
+export async function createProject(name: string, client: string, _meta: Record<string, any> = {}, development?: string): Promise<Project> {
   const d = await db();
   const meta = await newMeta(d);
   const actor = await getCurrentActor();
-  const metaWithOwner = { ...meta, ownerName: (actor.name || '').trim(), ownerRole: actor.role || 'inspector' };
+  const metaWithOwner = { ..._meta, ownerName: (actor.name || '').trim(), ownerRole: actor.role || 'inspector' };
+  const devRow = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'auth_developments');
+  let developments: string[] = [];
+  try {
+    developments = devRow?.value ? JSON.parse(devRow.value) : [];
+  } catch { developments = []; }
+  if (development) (metaWithOwner as any).development = development;
+  else if (developments.length === 1) (metaWithOwner as any).development = developments[0];
+  else if (developments.length > 1) throw new Error('Select a development for this project.');
   const p: Project = { id: uid(), name, client, createdAt: new Date().toISOString(), rates: null };
   await d.runAsync('INSERT INTO projects (id,name,client,createdAt,meta) VALUES (?,?,?,?,?)', p.id, p.name, p.client, p.createdAt, JSON.stringify(metaWithOwner));
-  await pushProject(d, p.id).catch(() => undefined);
+  await queueMutation('projects', p.id, { ...p, meta: metaWithOwner });
   return p;
 }
 
-async function pushProject(
-  d: SQLite.SQLiteDatabase,
-  projectId: string,
-): Promise<void> {
-  const row = await d.getFirstAsync<any>('SELECT * FROM projects WHERE id = ?', projectId);
-  if (!row) return;
-  const meta = row.meta ? JSON.parse(row.meta) : {};
-  const developmentsRow = await d.getFirstAsync<{ value: string }>(
-    'SELECT value FROM settings WHERE key = ?',
-    'auth_developments',
-  );
-  let developments: string[] = [];
-  try {
-    developments = developmentsRow?.value
-      ? JSON.parse(developmentsRow.value)
-      : [];
-  } catch {}
-  const development = developments.length === 1 ? developments[0] : undefined;
-  const state = {
-    name: row.name,
-    client: row.client || '',
-    rates: row.rates ? JSON.parse(row.rates) : null,
-    meta,
-  };
-  try {
-    await createEntityRecord('projects', { id: row.id, development, state });
-  } catch (error) {
-    if (
-      typeof error !== 'object' ||
-      error === null ||
-      !('status' in error) ||
-      (error as { status?: unknown }).status !== 409
-    ) {
-      throw error;
-    }
-    await updateEntityRecord('projects', row.id, { id: row.id, development, state });
-  }
-  await d.runAsync(
-    'UPDATE projects SET meta = ? WHERE id = ?',
-    JSON.stringify({ ...meta, syncStatus: 'synced' }),
-    row.id,
-  );
-}
-
-export async function syncProjects(): Promise<void> {
-  const d = await db();
-  const localRows = await d.getAllAsync<any>('SELECT id, meta FROM projects');
-  for (const row of localRows) {
-    let meta: any = {};
-    try { meta = row.meta ? JSON.parse(row.meta) : {}; } catch {}
-    if (meta.syncStatus !== 'synced') await pushProject(d, row.id);
-  }
-
-  const cursorRow = await d.getFirstAsync<{ value: string }>(
-    'SELECT value FROM settings WHERE key = ?',
-    'sync_projects_cursor',
-  );
-  const result = await pullSync({
-    since: cursorRow?.value || new Date(0).toISOString(),
-    entities: 'projects',
-  });
-  for (const record of result.records) {
-    if (record.entity !== 'projects') continue;
-    if (record.deleted) {
-      await d.runAsync('DELETE FROM rooms WHERE projectId = ?', record.id);
-      await d.runAsync('DELETE FROM projects WHERE id = ?', record.id);
-      continue;
-    }
-    const state = record.state as Record<string, any>;
-    const meta = {
-      ...(state.meta && typeof state.meta === 'object' ? state.meta : {}),
-      syncStatus: 'synced',
-      serverVersion: record.version,
-      updatedAt: record.updatedAt,
-    };
-    await d.runAsync(
-      `INSERT INTO projects (id,name,client,createdAt,rates,meta)
-       VALUES (?,?,?,?,?,?)
-       ON CONFLICT(id) DO UPDATE SET
-         name = excluded.name,
-         client = excluded.client,
-         createdAt = excluded.createdAt,
-         rates = excluded.rates,
-         meta = excluded.meta`,
-      record.id,
-      String(state.name || 'Untitled project'),
-      String(state.client || ''),
-      String(record.createdAt),
-      state.rates == null ? null : JSON.stringify(state.rates),
-      JSON.stringify(meta),
-    );
-  }
-  await d.runAsync(
-    'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-    'sync_projects_cursor',
-    result.cursor,
-  );
-}
-
 // Supervisor dispatches a job to an inspector: create project from address + assign (auto-notifies inspector).
-export async function dispatchJob(address: string, unit: string, inspectorName: string): Promise<Project> {
+export async function dispatchJob(address: string, unit: string, inspectorName: string, development?: string): Promise<Project> {
   const name = unit.trim() ? address.trim() + ' \u00b7 ' + unit.trim() : address.trim();
-  const proj = await createProject(name, '');
+  const proj = await createProject(name, '', {}, development);
   if (inspectorName.trim()) { await assignProjectInspector(proj.id, inspectorName.trim()); }
   return proj;
 }
@@ -262,6 +241,7 @@ export async function getProject(id: string): Promise<Project | null> {
 }
 export async function deleteProject(id: string): Promise<void> {
   const d = await db();
+  await queueMutation('projects', id, null, 'delete');
   await d.runAsync('DELETE FROM rooms WHERE projectId = ?', id);
   await d.runAsync('DELETE FROM projects WHERE id = ?', id);
 }
@@ -269,12 +249,12 @@ export async function deleteProject(id: string): Promise<void> {
 export async function listRooms(projectId: string): Promise<Room[]> {
   const d = await db();
   const rows = await d.getAllAsync<any>('SELECT * FROM rooms WHERE projectId = ? ORDER BY rowid ASC', projectId);
-  return rows.map((r:any) => ({ id: r.id, projectId: r.projectId, name: r.name, unit: r.unit || '', lines: JSON.parse(r.lines), photos: r.photos ? JSON.parse(r.photos) : [], walls2d: r.walls2d ? JSON.parse(r.walls2d) : [], scan: r.scan ? JSON.parse(r.scan) : null }));
+  return rows.map((r:any) => ({ id: r.id, projectId: r.projectId, name: r.name, unit: r.unit || '', lines: JSON.parse(r.lines), photos: r.photos ? JSON.parse(r.photos) : [], walls2d: r.walls2d ? JSON.parse(r.walls2d) : [], scan: r.scan ? JSON.parse(r.scan) : null, remoteFiles: r.remoteFiles ? JSON.parse(r.remoteFiles) : [] }));
 }
 export async function getRoom(id: string): Promise<Room | null> {
   const d = await db();
   const r = await d.getFirstAsync<any>('SELECT * FROM rooms WHERE id = ?', id);
-  return r ? { id: r.id, projectId: r.projectId, name: r.name, unit: r.unit || '', lines: JSON.parse(r.lines), photos: r.photos ? JSON.parse(r.photos) : [], walls2d: r.walls2d ? JSON.parse(r.walls2d) : [], scan: r.scan ? JSON.parse(r.scan) : null } : null;
+  return r ? { id: r.id, projectId: r.projectId, name: r.name, unit: r.unit || '', lines: JSON.parse(r.lines), photos: r.photos ? JSON.parse(r.photos) : [], walls2d: r.walls2d ? JSON.parse(r.walls2d) : [], scan: r.scan ? JSON.parse(r.scan) : null, remoteFiles: r.remoteFiles ? JSON.parse(r.remoteFiles) : [] } : null;
 }
 // Throws if a project is approved (locked). Called by every project-content mutator so that
 // no screen can edit an approved inspection, regardless of UI gating. Review reversal is exempt.
@@ -290,6 +270,20 @@ export async function addRoom(projectId: string, name: string, lines: LineItem[]
   await assertProjectUnlocked(projectId);
   const room: Room = { id: uid(), projectId, name, unit, lines, photos, walls2d, scan: scanWithMeta };
   await d.runAsync('INSERT INTO rooms (id,projectId,name,unit,lines,photos,walls2d,scan) VALUES (?,?,?,?,?,?,?,?)', room.id, projectId, name, unit, JSON.stringify(lines), JSON.stringify(photos), JSON.stringify(walls2d), JSON.stringify(scanWithMeta));
+  await queueMutation('rooms', room.id, { ...room, scan: scanWithMeta });
+  // Keep the local URI in photos for offline/PDF use, while opportunistically
+  // recording authenticated remote object metadata for the next sync.
+  if (photos.length) {
+    const { uploadPhoto } = await import('./photos');
+    const remoteFiles: any[] = [];
+    for (const photo of photos) {
+      try { remoteFiles.push({ ...(await uploadPhoto(photo, 'room-photo')), localUri: photo }); } catch { /* retry remains local */ }
+    }
+    if (remoteFiles.length) {
+      const updatedScan = { ...scanWithMeta, remoteFiles };
+      await d.runAsync('UPDATE rooms SET scan=?,remoteFiles=? WHERE id=?', JSON.stringify(updatedScan), JSON.stringify(remoteFiles), room.id);
+    }
+  }
   return room;
 }
 export async function updateRoom(id: string, name: string, lines: LineItem[], photos: string[] = [], walls2d: any[] = [], unit: string = '', scan: any = null): Promise<void> {
@@ -298,11 +292,14 @@ export async function updateRoom(id: string, name: string, lines: LineItem[], ph
   const prevMeta = (scan && scan._meta) ? scan._meta : undefined;
   const scanWithMeta = { ...(scan ?? {}), _meta: touchMeta(prevMeta, deviceId) };
   await d.runAsync('UPDATE rooms SET name = ?, unit = ?, lines = ?, photos = ?, walls2d = ?, scan = ? WHERE id = ?', name, unit, JSON.stringify(lines), JSON.stringify(photos), JSON.stringify(walls2d), JSON.stringify(scanWithMeta), id);
+  const updated = await getRoom(id);
+  if (updated) await queueMutation('rooms', id, updated);
 }
 export async function deleteRoom(id: string): Promise<void> {
   const d = await db();
   const row = await d.getFirstAsync<{ projectId: string }>('SELECT projectId FROM rooms WHERE id = ?', id);
   if (row?.projectId) await assertProjectUnlocked(row.projectId);
+  await queueMutation('rooms', id, null, 'delete');
   await d.runAsync('DELETE FROM rooms WHERE id = ?', id);
 }
 
@@ -310,6 +307,8 @@ export async function setProjectRates(projectId: string, rates: Rates | null): P
   await assertProjectUnlocked(projectId);
   const d = await db();
   await d.runAsync('UPDATE projects SET rates = ? WHERE id = ?', rates ? JSON.stringify(rates) : null, projectId);
+  const p = await getProject(projectId);
+  if (p) await queueMutation('projects', projectId, p);
 }
 export async function getGlobalRates(): Promise<Rates> {
   const d = await db();
@@ -332,6 +331,7 @@ export async function setChecklist(projectId: string, state: Record<string, { do
   await assertProjectUnlocked(projectId);
   const d = await db();
   await d.runAsync('INSERT INTO checklists (projectId,state) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET state = excluded.state', projectId, JSON.stringify(await withMeta(d, state)));
+  await queueMutation('checklists', projectId, await withMeta(d, state));
 }
 
 export async function getRoofPlan(projectId: string): Promise<any | null> {
@@ -342,7 +342,9 @@ export async function getRoofPlan(projectId: string): Promise<any | null> {
 export async function setRoofPlan(projectId: string, data: any): Promise<void> {
   await assertProjectUnlocked(projectId);
   const d = await db();
-  await d.runAsync('INSERT INTO roofplans (projectId,data) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET data = excluded.data', projectId, JSON.stringify(data));
+  const next = await withMeta(d, data);
+  await d.runAsync('INSERT INTO roofplans (projectId,data) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET data = excluded.data', projectId, JSON.stringify(next));
+  await queueMutation('roofplans', projectId, next);
 }
 
 export async function getInspection(projectId: string): Promise<any> {
@@ -355,7 +357,9 @@ export async function setInspection(projectId: string, state: any): Promise<void
   await assertProjectUnlocked(projectId);
   const d = await db();
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS inspections (projectId TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
-  await d.runAsync('INSERT INTO inspections (projectId,state) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET state = excluded.state', projectId, JSON.stringify(await withMeta(d, state)));
+  const next = await withMeta(d, state);
+  await d.runAsync('INSERT INTO inspections (projectId,state) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET state = excluded.state', projectId, JSON.stringify(next));
+  await queueMutation('inspections', projectId, next);
 }
 
 export async function getCostEstimate(projectId: string): Promise<any> {
@@ -368,7 +372,9 @@ export async function setCostEstimate(projectId: string, state: any): Promise<vo
   await assertProjectUnlocked(projectId);
   const d = await db();
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS cost_estimates (projectId TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
-  await d.runAsync('INSERT INTO cost_estimates (projectId,state) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET state = excluded.state', projectId, JSON.stringify(await withMeta(d, state)));
+  const next = await withMeta(d, state);
+  await d.runAsync('INSERT INTO cost_estimates (projectId,state) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET state = excluded.state', projectId, JSON.stringify(next));
+  await queueMutation('cost-estimates', projectId, next);
 }
 
 export async function getIntake(projectId: string): Promise<any> {
@@ -382,6 +388,7 @@ export async function setIntake(projectId: string, state: any): Promise<void> {
   const d = await db();
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS intakes (projectId TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
   await d.runAsync('INSERT INTO intakes (projectId,state) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET state = excluded.state', projectId, JSON.stringify(await withMeta(d, state)));
+  await queueMutation('intakes', projectId, await withMeta(d, state));
 }
 
 export async function getElevator(projectId: string): Promise<any> {
@@ -395,6 +402,7 @@ export async function setElevator(projectId: string, state: any): Promise<void> 
   const d = await db();
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS elevators (projectId TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
   await d.runAsync('INSERT INTO elevators (projectId,state) VALUES (?,?) ON CONFLICT(projectId) DO UPDATE SET state = excluded.state', projectId, JSON.stringify(await withMeta(d, state)));
+  await queueMutation('elevators', projectId, await withMeta(d, state));
 }
 
 // ---- Resident Reporting (isolated from inspection/repair) ----
@@ -468,6 +476,7 @@ export async function createResidentReport(unit: string, address: string, descri
     _meta: meta,
   };
   await d.runAsync('INSERT INTO resident_reports (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
+  await queueMutation('resident-reports', r.id, r);
   await logAudit('resident', residentName.trim(), 'Report submitted', 'Unit ' + unit.trim() + (development.trim() ? ' \u00b7 ' + development.trim() : ''), r.id);
   const _detail = 'Unit ' + unit.trim() + (development.trim() ? ' \u00b7 ' + development.trim() : '');
   if (development.trim()) {
@@ -506,6 +515,7 @@ export async function createManagementReport(location: string, unit: string, add
     _meta: meta,
   };
   await d.runAsync('INSERT INTO resident_reports (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
+  await queueMutation('resident-reports', r.id, r);
   const _a = await getCurrentActor();
   await logAudit(_a.role || 'management', _a.name, 'Report created', (location.trim() || unit.trim()) + (development.trim() ? ' \u00b7 ' + development.trim() : ''), r.id);
   return r;
@@ -533,6 +543,7 @@ export async function createAdminJobForManagement(location: string, unit: string
     _meta: meta,
   };
   await d.runAsync('INSERT INTO resident_reports (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
+  await queueMutation('resident-reports', r.id, r);
   await addNotification('management', 'New job from administrator', (location.trim() || unit.trim()) + (development.trim() ? ' \u00b7 ' + development.trim() : ''), r.id);
   await logAudit(a.role || 'administrator', a.name, 'Job sent to management', (location.trim() || unit.trim()) + (development.trim() ? ' \u00b7 ' + development.trim() : ''), r.id);
   return r;
@@ -799,18 +810,83 @@ export type StaffAccount = {
   status: StaffStatus;
   createdAt: string;
 };
+export type SessionIdentity = {
+  staffId: string; tenantId: string; role: string; position: string; developments: string[];
+};
+
+const webTokenKey = (kind: 'access' | 'refresh') => `fiarep.auth.${kind}`;
+function getWebToken(kind: 'access' | 'refresh'): string | null {
+  if (Platform.OS !== 'web') return null;
+  try { return globalThis.localStorage?.getItem(webTokenKey(kind)) || null; } catch { return null; }
+}
+function setWebToken(kind: 'access' | 'refresh', value: string): void {
+  if (Platform.OS !== 'web') return;
+  try { globalThis.localStorage?.setItem(webTokenKey(kind), value); } catch {}
+}
+function clearWebTokens(): void {
+  if (Platform.OS !== 'web') return;
+  try {
+    globalThis.localStorage?.removeItem(webTokenKey('access'));
+    globalThis.localStorage?.removeItem(webTokenKey('refresh'));
+  } catch {}
+}
 
 async function ensureStaffTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS staff_accounts (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
 }
 
 export async function getAccessToken(): Promise<string | null> {
+  const webToken = getWebToken('access');
+  if (webToken) return maybeRefresh(webToken);
+  const secureToken = await SecureStore.getItemAsync('fiarep.auth.access').catch(() => null);
+  if (secureToken) return maybeRefresh(secureToken);
   const d = await db();
   const row = await d.getFirstAsync<{ value: string }>(
     'SELECT value FROM settings WHERE key = ?',
     'auth_access_token',
   );
-  return row?.value || null;
+  const token = row?.value || null;
+  if (!token) return null;
+  return maybeRefresh(token);
+}
+
+async function maybeRefresh(token: string): Promise<string | null> {
+  if (_refreshing) return token;
+  // Access tokens are JWTs. Refresh just before expiry so generated-client
+  // requests never silently fall back to an unauthenticated session.
+  try {
+    const expiry = tokenExpiryMs(token);
+    if (expiry !== null && expiry < Date.now() + 30_000) {
+      return refreshAccessToken();
+    }
+  } catch { /* opaque token: let the server validate it */ }
+  return token;
+}
+
+export async function refreshAccessToken(): Promise<string | null> {
+  if (_refreshInFlight) return _refreshInFlight;
+  _refreshInFlight = (async () => {
+    const d = await db();
+    const row = await d.getFirstAsync<{ value: string }>(
+      'SELECT value FROM settings WHERE key = ?', 'auth_refresh_token',
+    );
+    const refreshToken = getWebToken('refresh')
+      || (await SecureStore.getItemAsync('fiarep.auth.refresh').catch(() => null))
+      || row?.value;
+    if (!refreshToken) return null;
+    try {
+      _refreshing = true;
+      const session = await refreshSession({ refreshToken });
+      await persistServerSession(session);
+      return session.accessToken;
+    } catch {
+      return null;
+    } finally {
+      _refreshing = false;
+      _refreshInFlight = null;
+    }
+  })();
+  return _refreshInFlight;
 }
 
 async function persistServerSession(
@@ -819,20 +895,39 @@ async function persistServerSession(
 ): Promise<void> {
   const d = await db();
   await ensureStaffTable(d);
+  setWebToken('access', session.accessToken);
+  setWebToken('refresh', session.refreshToken);
   await d.runAsync(
     'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     'auth_access_token',
     session.accessToken,
   );
+  const accessStored = Platform.OS !== 'web' && await SecureStore.setItemAsync(
+    'fiarep.auth.access',
+    session.accessToken,
+    { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY },
+  ).then(() => true).catch(() => false);
   await d.runAsync(
     'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     'auth_refresh_token',
     session.refreshToken,
   );
+  const refreshStored = Platform.OS !== 'web' && await SecureStore.setItemAsync(
+    'fiarep.auth.refresh',
+    session.refreshToken,
+    { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY },
+  ).then(() => true).catch(() => false);
+  if (accessStored) await d.runAsync('DELETE FROM settings WHERE key=?', 'auth_access_token');
+  if (refreshStored) await d.runAsync('DELETE FROM settings WHERE key=?', 'auth_refresh_token');
   await d.runAsync(
     'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
     'auth_developments',
     JSON.stringify(session.staff.developments),
+  );
+  await d.runAsync(
+    'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+    'session_identity',
+    JSON.stringify({ staffId: session.staff.id, tenantId: (session.staff as any).tenantId || 'default', role: session.staff.role, position: session.staff.position, developments: [...(session.staff.developments || [])].sort() }),
   );
   const staff = session.staff as Staff;
   const localAccount: StaffAccount = {
@@ -852,6 +947,12 @@ async function persistServerSession(
     localAccount.id,
     JSON.stringify(localAccount),
   );
+}
+
+export async function getSessionIdentity(): Promise<SessionIdentity | null> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'session_identity');
+  try { return row ? JSON.parse(row.value) as SessionIdentity : null; } catch { return null; }
 }
 
 export async function listStaffAccounts(status?: StaffStatus): Promise<StaffAccount[]> {
@@ -1098,13 +1199,23 @@ export async function revokeStaffAccount(id: string): Promise<void> {
 // Verify a login: name + code must match an APPROVED account for the given role.
 export async function verifyStaffLogin(name: string, code: string, role: StaffRole): Promise<boolean> {
   try {
+    const preDb = await db();
+    const priorIdentity = await preDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
+    let evidence: any;
+    try { evidence = priorIdentity?.value ? JSON.parse(priorIdentity.value) : undefined; } catch {}
     const session = await loginOnServer({
       name: name.trim(),
       code: code.trim(),
       role,
     });
+    await rotateActorCache(session.staff);
+    await recoverLegacyQueue(preDb, session.staff, evidence);
     await persistServerSession(session);
-    await syncProjects();
+    await setCurrentActor(session.staff.role, session.staff.name);
+    await hydrateRemotePhotosFromDb(preDb);
+    await registerPushToken().catch(() => undefined);
+    const { syncAllEntities } = await import('./sync');
+    await syncAllEntities();
     return true;
   } catch (error) {
     if (
@@ -1117,6 +1228,67 @@ export async function verifyStaffLogin(name: string, code: string, role: StaffRo
     }
     throw error;
   }
+}
+
+/** Restore the server-authoritative actor after an app restart. */
+export async function restoreServerSession(): Promise<Staff | null> {
+  const token = await getAccessToken();
+  if (!token) return null;
+  try {
+    const staff = await getCurrentStaff();
+    await rotateActorCache(staff);
+    const localDb = await db();
+    const priorIdentity = await localDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
+    let evidence: any;
+    try { evidence = priorIdentity?.value ? JSON.parse(priorIdentity.value) : undefined; } catch {}
+    await recoverLegacyQueue(localDb, staff, evidence);
+    await hydrateRemotePhotosFromDb(localDb);
+    await setCurrentActor(staff.role, staff.name);
+    const { syncAllEntities } = await import('./sync');
+    await syncAllEntities();
+    return staff;
+  } catch {
+    return null;
+  }
+}
+
+export async function registerPushToken(): Promise<void> {
+  const { registerForPush } = await import('./push');
+  const token = await registerForPush();
+  if (token) {
+    await registerDeviceToken({ token, platform: 'expo' });
+    const d = await db();
+    await d.runAsync('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'push_token', token);
+  }
+}
+
+export async function logout(): Promise<void> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?', 'auth_refresh_token',
+  );
+  const secureRefresh = await SecureStore.getItemAsync('fiarep.auth.refresh').catch(() => null);
+  const refreshToken = getWebToken('refresh') || secureRefresh || row?.value;
+  const push = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'push_token');
+  if (push?.value) await unregisterDeviceToken({ token: push.value }).catch(() => undefined);
+  // The API currently revokes refresh tokens but has no device-token DELETE
+  // contract. Revoke the session and clear all local authority state.
+  if (refreshToken) {
+    await logoutOnServer({ refreshToken }).catch(() => undefined);
+  }
+  for (const key of ['auth_access_token', 'auth_refresh_token', 'auth_developments']) {
+    await d.runAsync('DELETE FROM settings WHERE key = ?', key);
+  }
+  await d.runAsync('DELETE FROM settings WHERE key=?', 'push_token');
+  await d.runAsync('DELETE FROM settings WHERE key=?', 'session_identity');
+  await SecureStore.deleteItemAsync('fiarep.auth.access').catch(() => undefined);
+  await SecureStore.deleteItemAsync('fiarep.auth.refresh').catch(() => undefined);
+  clearWebTokens();
+  await d.runAsync("DELETE FROM settings WHERE key LIKE 'sync_%_cursor%'").catch(() => undefined);
+  for (const table of ['projects','rooms','checklists','roofplans','inspections','cost_estimates','intakes','elevators','resident_reports','violations','building_violations','priority_violations','route_assignments','procurement','procurement_bids','vendor_contacts','vendor_quotes','change_orders','elevator_jobs','emergency_jobs','emergency_units','leave_requests']) {
+    try { await d.runAsync(`DELETE FROM ${table}`); } catch {}
+  }
+  await clearCurrentActor();
 }
 
 
@@ -1183,8 +1355,12 @@ export async function bootstrapAdministrator(name: string): Promise<StaffAccount
     name: name.trim(),
     code,
   });
+  await rotateActorCache(session.staff);
   await persistServerSession(session, code);
-  await syncProjects();
+  await setCurrentActor(session.staff.role, session.staff.name);
+  await registerPushToken().catch(() => undefined);
+  const { syncAllEntities } = await import('./sync');
+  await syncAllEntities();
   const all = await listStaffAccounts('approved');
   const account = all.find((item) => item.id === session.staff.id);
   if (!account) throw new Error('Administrator session could not be saved.');
@@ -1496,6 +1672,8 @@ export async function createChangeOrder(reportId: string, reportRef: string, tar
     respondedAt: '',
   };
   await d.runAsync('INSERT INTO change_orders (id,state) VALUES (?,?)', co.id, JSON.stringify(co));
+  await queueMutation('change-orders', co.id, co);
+  await queueMutation('change-orders', co.id, co);
   // A change work order goes to management first for review, then to procurement.
   await addNotification('management', 'Change work order to review', co.reportRef + '  $' + co.cost + (co.description ? ' \u00b7 ' + co.description.slice(0, 40) : ''), co.id);
   await logAudit(co.createdByRole, co.createdByName, 'Change work order created', (co.targetName || co.targetPosition) + ' \u00b7 ' + co.reportRef);
@@ -1524,6 +1702,7 @@ async function _saveChangeOrder(co: ChangeOrder): Promise<void> {
   const d = await db();
   await ensureChangeTable(d);
   await d.runAsync('UPDATE change_orders SET state=? WHERE id=?', JSON.stringify(co), co.id);
+  await queueMutation('change-orders', co.id, co);
 }
 async function _getChangeOrder(id: string): Promise<ChangeOrder | null> {
   const all = await listChangeOrders();
@@ -1747,6 +1926,7 @@ export async function clearResidentReportForStaff(id: string): Promise<void> {
 export async function deleteResidentReport(id: string): Promise<void> {
   const d = await db();
   await ensureResidentTable(d);
+  await queueMutation('resident-reports', id, null, 'delete');
   await d.runAsync('DELETE FROM resident_reports WHERE id = ?', id);
   const a = await getCurrentActor();
   await logAudit(a.role || 'administrator', a.name, 'Report deleted', id);
@@ -1755,6 +1935,7 @@ export async function deleteResidentReport(id: string): Promise<void> {
 export async function deleteChangeOrder(id: string): Promise<void> {
   const d = await db();
   await ensureChangeTable(d);
+  await queueMutation('change-orders', id, null, 'delete');
   await d.runAsync('DELETE FROM change_orders WHERE id = ?', id);
   const a = await getCurrentActor();
   await logAudit(a.role || 'administrator', a.name, 'Change order deleted', id);
@@ -1878,6 +2059,7 @@ export async function createProcurementRequest(
     cpmNotes: (cpmNotes || '').trim() || undefined,
   };
   await d.runAsync('INSERT INTO procurement (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
+  await queueMutation('procurement', r.id, r);
   // Created as a draft only. Nothing is sent until the CPM taps Send, so the
   // quote can be built and a file attached first.
   return r;
@@ -2255,6 +2437,7 @@ export async function submitBid(trackingId: string, vendorName: string, amount: 
     submittedAt: new Date().toISOString(),
   };
   await d.runAsync('INSERT INTO procurement_bids (id,state) VALUES (?,?)', bid.id, JSON.stringify(bid));
+  await queueMutation('procurement-bids', bid.id, bid);
   const bidMsg = 'New bid on ' + req.trackingId;
   const bidDetail = (bid.vendorName || 'Vendor') + '  $' + bid.amount;
   // Procurement owns bids, so notify the procurement inbox for every submission.
@@ -2350,6 +2533,7 @@ export async function deleteProcurementRequest(id: string): Promise<void> {
       if (b.requestId === id) await d.runAsync('DELETE FROM procurement_bids WHERE id = ?', row.id);
     } catch (e) {}
   }
+  await queueMutation('procurement', id, null, 'delete');
   await d.runAsync('DELETE FROM procurement WHERE id = ?', id);
   // Clear notifications tied to this scope (by record id and by project ref) so
   // no stale "returned for revision" / "submitted" cards linger in any inbox.
@@ -2498,6 +2682,7 @@ export async function updateVendorContact(id: string, name: string, phone: strin
 export async function deleteVendorContact(id: string): Promise<void> {
   const d = await db();
   await ensureVendorContactsTable(d);
+  await queueMutation('vendor-contacts', id, null, 'delete');
   await d.runAsync('DELETE FROM vendor_contacts WHERE id = ?', id);
 }
 
@@ -2586,6 +2771,7 @@ export async function getViolationLookup(id: string): Promise<ViolationLookup | 
 export async function deleteViolationLookup(id: string): Promise<void> {
   const d = await db();
   await ensureViolationTable(d);
+  await queueMutation('violations', id, null, 'delete');
   await d.runAsync('DELETE FROM violations WHERE id = ?', id);
 }
 
@@ -2687,6 +2873,7 @@ export async function raisePriorityViolation(
     unrouted: routedTo.length === 0,
   };
   await d.runAsync('INSERT INTO priority_violations (id,state) VALUES (?,?)', v.id, JSON.stringify(v));
+  await queueMutation('priority-violations', v.id, v);
 
   const where = v.unit ? v.address + '  Unit ' + v.unit : v.address;
   const detail = where + (v.instruction ? '  ' + v.instruction : '');
@@ -2730,7 +2917,18 @@ export async function acknowledgePriorityViolation(id: string, by: string): Prom
       acknowledgedAt: new Date().toISOString(),
     };
     await d.runAsync('UPDATE priority_violations SET state = ? WHERE id = ?', JSON.stringify(next), id);
+    await queueMutation('priority-violations', id, next);
   } catch (e) {}
+}
+
+export async function deletePriorityViolation(id: string): Promise<void> {
+  const d = await db();
+  await ensurePriorityTable(d);
+  const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM priority_violations WHERE id=?', id);
+  let state: any = null;
+  try { state = row?.state ? JSON.parse(row.state) : null; } catch {}
+  await queueMutation('priority-violations', id, state, 'delete');
+  await d.runAsync('DELETE FROM priority_violations WHERE id=?', id);
 }
 
 // Outstanding priority items for one supervisor, for the inbox badge.
@@ -3009,6 +3207,7 @@ export async function listBuildingViolations(building: string, violationNo: stri
 export async function deleteBuildingViolation(id: string): Promise<void> {
   const d = await db();
   await ensureBuildingViolTable(d);
+  await queueMutation('building-violations', id, null, 'delete');
   await d.runAsync('DELETE FROM building_violations WHERE id = ?', id);
 }
 
@@ -3059,6 +3258,7 @@ export async function createRouteAssignment(inspector: string, addresses: string
     stops: addresses.map(addr => ({ id: uid(), address: addr, status: 'pending' as RouteStopStatus })),
   };
   await d.runAsync('INSERT INTO route_assignments (id,state) VALUES (?,?)', r.id, JSON.stringify(r));
+  await queueMutation('route-assignments', r.id, r);
   await addNotification(r.inspector, 'New route assigned', r.stops.length + ' stop' + (r.stops.length === 1 ? '' : 's'), r.id);
   return r;
 }
@@ -3094,6 +3294,7 @@ export async function setRouteStopStatus(assignmentId: string, stopId: string, s
   if (!r) return null;
   r.stops = r.stops.map(s => s.id === stopId ? { ...s, status } : s);
   await saveRouteAssignment(d, r);
+  await queueMutation('route-assignments', r.id, r);
   return r;
 }
 
@@ -3139,6 +3340,7 @@ export async function setVendorQuote(trackingId: string, vendorName: string, sta
     'INSERT INTO vendor_quotes (key,state) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET state = excluded.state',
     vendorQuoteKey(trackingId, vendorName), JSON.stringify(state),
   );
+  await queueMutation('vendor-quotes', vendorQuoteKey(trackingId, vendorName), state);
 }
 
 // Vendor submits their filled quote as a bid: sum the category costs and file a
@@ -3310,6 +3512,7 @@ export async function getDevelopmentScores(): Promise<DevelopmentScore[]> {
 export async function deleteRouteAssignment(id: string): Promise<void> {
   const d = await db();
   await ensureRouteTable(d);
+  await queueMutation('route-assignments', id, null, 'delete');
   await d.runAsync('DELETE FROM route_assignments WHERE id = ?', id);
 }
 
@@ -3374,6 +3577,7 @@ export async function createElevatorJob(address: string, unit: string, mechanic:
     status: 'assigned',
   };
   await d.runAsync('INSERT INTO elevator_jobs (id,state) VALUES (?,?)', job.id, JSON.stringify(job));
+  await queueMutation('elevator-jobs', job.id, job);
   if (job.mechanic) await addNotification(job.mechanic, 'Elevator job assigned', job.elId + ' \u00b7 ' + job.address + (job.issue ? ' \u00b7 ' + job.issue : ''), job.id);
   await logAudit(job.assignedBy, job.assignedBy, 'Elevator job assigned', job.elId + ' \u2192 ' + job.mechanic, job.id);
   return job;
@@ -3533,6 +3737,7 @@ export async function createEmergencyJob(truck: string, development: string, add
     status: 'assigned',
   };
   await d.runAsync('INSERT INTO emergency_jobs (id,state) VALUES (?,?)', job.id, JSON.stringify(job));
+  await queueMutation('emergency-jobs', job.id, job);
   await logAudit(job.assignedBy, job.assignedBy, 'Emergency unit assigned', job.emId + ' \u2192 ' + job.truck, job.id);
   return job;
 }
@@ -3560,6 +3765,7 @@ async function _saveEmergencyJob(job: EmergencyJob): Promise<void> {
   const d = await db();
   await ensureEmergencyTable(d);
   await d.runAsync('UPDATE emergency_jobs SET state=? WHERE id=?', JSON.stringify(job), job.id);
+  await queueMutation('emergency-jobs', job.id, job);
 }
 
 // Progress ping (onMyWay | started) -> notifies the assigning supervisor.
@@ -3619,6 +3825,7 @@ export async function createEmergencyUnit(name: string): Promise<EmergencyUnit> 
     createdAt: new Date().toISOString(),
   };
   await d.runAsync('INSERT INTO emergency_units (id,state) VALUES (?,?)', u.id, JSON.stringify(u));
+  await queueMutation('emergency-units', u.id, u);
   const a = await getCurrentActor();
   await logAudit(a.role || 'administrator', a.name || '', 'Emergency unit created', u.name + ' \u00b7 ' + u.code, u.id);
   return u;
@@ -3641,6 +3848,7 @@ export async function getEmergencyUnitByCode(code: string): Promise<EmergencyUni
 export async function deleteEmergencyUnit(id: string): Promise<void> {
   const d = await db();
   await ensureEmergencyUnitTable(d);
+  await queueMutation('emergency-units', id, null, 'delete');
   await d.runAsync('DELETE FROM emergency_units WHERE id = ?', id);
 }
 
@@ -3741,6 +3949,7 @@ export async function createLeaveRequest(input: {
     requestedAt: new Date().toISOString(),
   };
   await d.runAsync('INSERT INTO leave_requests (id,state) VALUES (?,?)', req.id, JSON.stringify(req));
+  await queueMutation('leave-requests', req.id, req);
   await addNotification('management', 'Leave request', req.employee + ' \u00b7 ' + req.type + ' \u00b7 ' + req.startDate + (req.endDate && req.endDate !== req.startDate ? ' \u2013 ' + req.endDate : '') + (req.development ? ' \u00b7 ' + req.development : ''), req.id);
   await logAudit((a && a.role) || 'management', (a && a.name) || '', 'Leave requested', req.employee + ' \u00b7 ' + req.type, req.id);
   return req;
@@ -3792,6 +4001,7 @@ export async function cancelLeaveRequest(id: string): Promise<void> {
 export async function deleteLeaveRequest(id: string): Promise<void> {
   const d = await db();
   await ensureLeaveTable(d);
+  await queueMutation('leave-requests', id, null, 'delete');
   await d.runAsync('DELETE FROM leave_requests WHERE id = ?', id);
 }
 

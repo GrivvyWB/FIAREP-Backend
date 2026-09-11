@@ -46,8 +46,8 @@
     "expo-router": "~57.0.7",
     "expo-sensors": "*",
     "expo-sharing": "*",
-    "expo-sqlite": "*",
     "expo-splash-screen": "~57.0.4",
+    "expo-sqlite": "*",
     "expo-status-bar": "~57.0.1",
     "expo-symbols": "~57.0.1",
     "expo-system-ui": "~57.0.1",
@@ -69,5 +69,8 @@
     "xlsx-js-style": "^1.2.0",
     "zod": "catalog:",
     "zod-validation-error": "^3.4.0"
+  },
+  "dependencies": {
+    "expo-secure-store": "~57.0.2"
   }
 }

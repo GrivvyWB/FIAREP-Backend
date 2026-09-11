@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, Pressable, ScrollView, Image, 
 import { useRouter } from 'expo-router';
 import { createManagementReport, LOCATION_CATEGORIES, listDevelopmentNames } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 import AddressInput from '../components/AddressInput';
@@ -90,7 +91,7 @@ export default function CreateReport() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
           {photos.map((uri, i) => (
             <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}>
-              <Image source={{ uri: photoUri(uri) }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+              <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
             </TouchableOpacity>
           ))}
         </View>

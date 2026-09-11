@@ -13,6 +13,7 @@ import {
   type StaffAccount,
 } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import { ui, ACCENT } from '../lib/ui';
 
 const STATUS_LABEL: Record<ResidentReport['status'], string> = {
@@ -174,7 +175,7 @@ export default function Worker() {
             {r.photos.length > 0 && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {r.photos.map((uri, i) => (
-                  <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><Image source={{ uri: photoUri(uri) }} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} /></Pressable>
+                  <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><RemotePhoto localUri={uri} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} /></Pressable>
                 ))}
               </View>
             )}
@@ -202,7 +203,7 @@ export default function Worker() {
             {s.length > 0 && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {s.map((uri, i) => (
-                  <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><Image source={{ uri: photoUri(uri) }} style={{ width: 56, height: 56, borderRadius: 6, backgroundColor: '#eee' }} /></Pressable>
+                  <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><RemotePhoto localUri={uri} style={{ width: 56, height: 56, borderRadius: 6, backgroundColor: '#eee' }} /></Pressable>
                 ))}
               </View>
             )}

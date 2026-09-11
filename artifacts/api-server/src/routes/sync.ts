@@ -27,12 +27,9 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
           .filter((item) => ENTITIES.has(item))
       : [...ENTITIES];
   const cursor = new Date();
-  if (requested.some((entity) => !canReadEntity(actor, entity))) {
-    res.status(403).json({ error: "This sync request includes a restricted module" });
-    return;
-  }
+  const readable = requested.filter((entity) => canReadEntity(actor, entity));
   const records =
-    requested.length === 0
+      readable.length === 0
       ? []
       : await db
           .select()
@@ -42,7 +39,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
               eq(entityRecords.tenantId, actor.tenantId),
               gt(entityRecords.updatedAt, since),
               lte(entityRecords.updatedAt, cursor),
-              inArray(entityRecords.entity, requested),
+        inArray(entityRecords.entity, readable),
             ),
           )
           .orderBy(asc(entityRecords.updatedAt), asc(entityRecords.id));

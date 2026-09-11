@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { takePhoto, pickPhoto, photoUri, photoBase64 } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import { classifyViolationPhoto, type ViolationClassification } from '../lib/aiVision';
 import { addBuildingViolation } from '../lib/store';
 import AddressInput from '../components/AddressInput';
@@ -69,7 +70,7 @@ export default function FiarepVision() {
 
       {!!photo && (
         <>
-          <Image source={{ uri: photoUri(photo) }} style={{ width: '100%', height: 260, borderRadius: 12, backgroundColor: '#111', marginTop: 12 }} resizeMode="contain" />
+          <RemotePhoto localUri={photo} style={{ width: '100%', height: 260, borderRadius: 12, backgroundColor: '#111', marginTop: 12 }} resizeMode="contain" />
           <Pressable style={[ui.btn, { marginTop: 12 }, busy && { opacity: 0.6 }]} onPress={analyze} disabled={busy}>
             {busy ? <ActivityIndicator color="#fff" /> : <Text style={ui.btnText}>Analyze Violation</Text>}
           </Pressable>

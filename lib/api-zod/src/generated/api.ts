@@ -74,6 +74,7 @@ export const LoginResponse = zod.object({
   "expiresIn": zod.number().int().optional(),
   "staff": zod.object({
   "id": zod.string(),
+  "tenantId": zod.string(),
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -107,6 +108,7 @@ export const BootstrapAdministratorResponse = zod.object({
   "expiresIn": zod.number().int().optional(),
   "staff": zod.object({
   "id": zod.string(),
+  "tenantId": zod.string(),
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -136,6 +138,7 @@ export const RefreshSessionResponse = zod.object({
   "expiresIn": zod.number().int().optional(),
   "staff": zod.object({
   "id": zod.string(),
+  "tenantId": zod.string(),
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -147,8 +150,19 @@ export const RefreshSessionResponse = zod.object({
 })
 
 
+/**
+ * @summary Revoke a refresh-token session
+ */
+export const LogoutBody = zod.object({
+  "refreshToken": zod.string()
+})
+
+export const LogoutResponse = zod.void()
+
+
 export const GetCurrentStaffResponse = zod.object({
   "id": zod.string(),
+  "tenantId": zod.string(),
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -165,6 +179,7 @@ export const ListStaffQueryParams = zod.object({
 
 export const ListStaffResponseItem = zod.object({
   "id": zod.string(),
+  "tenantId": zod.string(),
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -193,6 +208,7 @@ export const CreateStaffBody = zod.object({
 
 export const CreateStaffResponse = zod.object({
   "id": zod.string(),
+  "tenantId": zod.string(),
   "name": zod.string(),
   "firstName": zod.string().nullish(),
   "lastName": zod.string().nullish(),
@@ -301,8 +317,10 @@ export const UpdateEntityRecordBody = zod.object({
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
   "state": zod.record(zod.string(), zod.unknown()),
-  "version": zod.number().int().min(1).optional()
-})
+  "version": zod.number().int().min(1)
+}).and(zod.object({
+
+}).passthrough())
 
 
 
@@ -325,6 +343,13 @@ export const UpdateEntityRecordResponse = zod.object({
 export const DeleteEntityRecordParams = zod.object({
   "entity": zod.coerce.string(),
   "id": zod.coerce.string()
+})
+
+
+
+
+export const DeleteEntityRecordBody = zod.object({
+  "version": zod.number().int().min(1)
 })
 
 export const DeleteEntityRecordResponse = zod.void()
@@ -375,6 +400,13 @@ export const RegisterDeviceTokenResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
+
+
+export const UnregisterDeviceTokenBody = zod.object({
+  "token": zod.string()
+})
+
+export const UnregisterDeviceTokenResponse = zod.void()
 
 
 /**

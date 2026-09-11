@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOp
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getCurrentActor, listRoutedInspectionsFor, completeRoutedViolation, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, type BuildingViolation, type ResidentReport } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -118,7 +119,7 @@ export default function MyJobs() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {photos.map((uri, i) => (
                   <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}>
-                    <Image source={{ uri: photoUri(uri) }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+                    <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
                   </TouchableOpacity>
                 ))}
               </View>

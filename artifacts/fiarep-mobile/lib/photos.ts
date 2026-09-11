@@ -1,6 +1,7 @@
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system/legacy';
 import { captureGeo, type GeoStamp } from './geo';
+import { requestFileUploadUrl } from '@workspace/api-client-react';
 
 // Copy a picked/captured image into permanent app storage so it survives
 // app restarts (the picker returns a temporary URI that iOS later deletes).
@@ -34,6 +35,36 @@ export function photoUri(stored: string): string {
   if (!stored) return stored;
   if (stored.startsWith('file:') || stored.startsWith('/')) return stored;
   return FileSystem.documentDirectory + stored;
+}
+
+/**
+ * Upload a retained local photo through the authenticated presigned-url flow.
+ * The local file is deliberately never removed here; callers can safely keep
+ * it for offline viewing and retry failed uploads.
+ */
+export async function uploadPhoto(
+  stored: string,
+  kind: 'room-photo' | 'completion-photo' | 'inspection-evidence' = 'room-photo',
+): Promise<{ id: string; objectPath: string; name: string; contentType: string }> {
+  const uri = photoUri(stored);
+  const info = await FileSystem.getInfoAsync(uri);
+  if (!info.exists || !('size' in info) || !info.size) throw new Error('Photo file is unavailable.');
+  const name = stored.split('/').pop() || 'photo.jpg';
+  const requested = await requestFileUploadUrl({
+    kind,
+    name,
+    size: info.size,
+    contentType: 'image/jpeg',
+  });
+  const result = await FileSystem.uploadAsync(requested.uploadUrl, uri, {
+    httpMethod: 'PUT',
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    mimeType: 'image/jpeg',
+  });
+  if (result.status < 200 || result.status >= 300) {
+    throw new Error(`Photo upload failed (${result.status}).`);
+  }
+  return requested.file;
 }
 
 // Read a stored photo and return a data: URI (base64) for embedding in PDF/HTML.

@@ -1,14 +1,15 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import {
   getAppMode, setAppMode,
   verifyStaffLogin, hasAnyAdministrator, bootstrapAdministrator,
   setRememberedStaff, getRememberedStaff,
-  setCurrentActor,
-  type AppMode, getCurrentPosition } from '../lib/store';
+  setCurrentActor, restoreServerSession,
+   type AppMode } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
+import { syncAllEntities } from '../lib/sync';
 
 type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
@@ -58,17 +59,7 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
       const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role);
       if (ok) {
         await setRememberedStaff(props.role, name.trim());
-        await setCurrentActor(props.role, name.trim());
-        // Supervisors (position ending in 'Supervisor', or Superintendent) log
-        // in via Staff Member but land in the Management section.
-        try {
-          const pos = (await getCurrentPosition()) || '';
-          if (props.role === 'worker' && (/supervisor$/i.test(pos.trim()) || /superintendent/i.test(pos.trim()))) {
-            await setAppMode('management');
-            props.onUnlock('management');
-            return;
-          }
-        } catch (e) {}
+        await syncAllEntities();
         props.onUnlock();
       }
       else setMsg('No approved account matches that name and code.');
@@ -159,6 +150,11 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
 
 function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
   const [gateFor, setGateFor] = useState<StaffRole | null>(null);
+  const pickStaffRole = async (role: StaffRole) => {
+    const staff = await restoreServerSession();
+    if (staff?.role === role) onPick(role as AppMode);
+    else setGateFor(role);
+  };
 
   if (gateFor) {
     return (
@@ -183,19 +179,19 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
       <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => onPick('emergency')}>
         <Text style={ui.btnText}>Emergency Unit</Text>
       </Pressable>
-      <Pressable style={ui.btn} onPress={async () => { const rm = await getRememberedStaff('administrator'); if (rm) { await setCurrentActor('administrator', rm); onPick('administrator'); } else setGateFor('administrator'); }}>
+       <Pressable style={ui.btn} onPress={() => pickStaffRole('administrator')}>
         <Text style={ui.btnText}>Administrator  🔒</Text>
       </Pressable>
-      <Pressable style={ui.btn} onPress={async () => { const rm = await getRememberedStaff('management'); if (rm) { await setCurrentActor('management', rm); onPick('management'); } else setGateFor('management'); }}>
+       <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
         <Text style={ui.btnText}>Management  🔒</Text>
       </Pressable>
-      <Pressable style={ui.btn} onPress={async () => { const rm = await getRememberedStaff('procurement'); if (rm) { await setCurrentActor('procurement', rm); onPick('procurement'); } else setGateFor('procurement'); }}>
+       <Pressable style={ui.btn} onPress={() => pickStaffRole('procurement')}>
         <Text style={ui.btnText}>Procurement  🔒</Text>
       </Pressable>
-      <Pressable style={ui.btn} onPress={() => setGateFor('worker')}>
+      <Pressable style={ui.btn} onPress={() => pickStaffRole('worker')}>
         <Text style={ui.btnText}>Staff Member  🔒</Text>
       </Pressable>
-      <Pressable style={ui.btn} onPress={() => setGateFor('inspector')}>
+      <Pressable style={ui.btn} onPress={() => pickStaffRole('inspector')}>
         <Text style={ui.btnText}>CPM / Inspector  🔒</Text>
       </Pressable>
     </Screen>
@@ -401,7 +397,18 @@ export default function Layout() {
   // We do NOT auto-enter a saved role; the user picks each time. Remembered
   // staff codes are still kept, so picking a role won't require re-entering a code.
   useEffect(() => {
-    setBooting(false);
+    let mounted = true;
+    restoreServerSession().then((restored) => {
+      if (restored) return syncAllEntities();
+    }).catch(() => undefined).finally(() => {
+      if (mounted) setBooting(false);
+    });
+    const sub = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        syncAllEntities().catch(() => undefined);
+      }
+    });
+    return () => { mounted = false; sub.remove(); };
   }, []);
 
   const refresh = useCallback(() => { setMode(null); }, []);

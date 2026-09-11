@@ -1,6 +1,6 @@
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
-import { clearAppMode, clearRememberedStaff, clearCurrentActor } from '../lib/store';
+import { clearAppMode, clearRememberedStaff, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback, useLayoutEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -33,7 +33,7 @@ export default function AdminHome() {
   function onSwitchRole() {
     Alert.alert('Switch role?', 'Return to the role selection screen.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('administrator'); await clearCurrentActor(); await clearAppMode(); refresh(); } },
+      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('administrator'); await logout(); await clearAppMode(); refresh(); } },
     ]);
   }
 

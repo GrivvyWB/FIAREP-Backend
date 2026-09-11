@@ -5,6 +5,7 @@ import { getCurrentActor, listChangeOrders, approveChangeOrderMgmt, approveChang
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 
 function fmt(iso: string): string {
@@ -113,7 +114,7 @@ export default function ChangeOrders() {
                   <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                     {ePhotos.map((uri, i) => (
                       <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewer(uri)}>
-                        <Image source={{ uri: photoUri(uri) }} style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: '#eee' }} />
+                        <RemotePhoto localUri={uri} style={{ width: 56, height: 56, borderRadius: 8, backgroundColor: '#eee' }} />
                       </TouchableOpacity>
                     ))}
                   </View>
@@ -132,7 +133,7 @@ export default function ChangeOrders() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {co.photos.map((uri, i) => (
                   <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewer(uri)}>
-                    <Image source={{ uri: photoUri(uri) }} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} />
+                    <RemotePhoto localUri={uri} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} />
                   </TouchableOpacity>
                 ))}
               </View>

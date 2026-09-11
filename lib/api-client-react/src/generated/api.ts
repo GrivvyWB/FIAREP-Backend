@@ -23,8 +23,10 @@ import type {
   AuthResponse,
   BootstrapAdministratorBody,
   CreatePushSmokeTest202,
+  DeleteEntityRecordBody,
   DeviceToken,
   EntityInput,
+  EntityPatch,
   EntityRecord,
   Error,
   FileDownloadUrlRequest,
@@ -37,6 +39,7 @@ import type {
   ListPushDeliveriesParams,
   ListStaffParams,
   LoginInput,
+  LogoutBody,
   Notification,
   PullSyncParams,
   PushDelivery,
@@ -46,6 +49,7 @@ import type {
   StaffInput,
   SyncResponse,
   UnauthorizedResponse,
+  UnregisterDeviceTokenBody,
   ViolationClassification,
   ViolationClassificationRequest
 } from './api.schemas';
@@ -510,6 +514,77 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getRefreshSessionMutationOptions(options));
     }
 
+export const getLogoutUrl = () => {
+
+
+
+
+  return `/api/v1/auth/logout`
+}
+
+/**
+ * @summary Revoke a refresh-token session
+ */
+export const logout = async (logoutBody: LogoutBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getLogoutUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(logoutBody)
+  }
+);}
+
+
+
+
+
+export const getLogoutMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,{data: BodyType<LogoutBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,{data: BodyType<LogoutBody>}, TContext> => {
+
+const mutationKey = ['logout'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof logout>>, {data: BodyType<LogoutBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  logout(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LogoutMutationResult = NonNullable<Awaited<ReturnType<typeof logout>>>
+    export type LogoutMutationBody = BodyType<LogoutBody>
+    export type LogoutMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Revoke a refresh-token session
+ */
+export const useLogout = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof logout>>, TError,{data: BodyType<LogoutBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof logout>>,
+        TError,
+        {data: BodyType<LogoutBody>},
+        TContext
+      > => {
+      return useMutation(getLogoutMutationOptions(options));
+    }
+
 export const getGetCurrentStaffUrl = () => {
 
 
@@ -960,14 +1035,14 @@ export const getUpdateEntityRecordUrl = (entity: string,
 
 export const updateEntityRecord = async (entity: string,
     id: string,
-    entityInput: EntityInput, options?: Parameters<typeof customFetch>[1]): Promise<EntityRecord> => {
+    entityPatch: EntityPatch, options?: Parameters<typeof customFetch>[1]): Promise<EntityRecord> => {
 
   return customFetch<EntityRecord>(getUpdateEntityRecordUrl(entity,id),
   {
     ...options,
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
-    body: JSON.stringify(entityInput)
+    body: JSON.stringify(entityPatch)
   }
 );}
 
@@ -976,8 +1051,8 @@ export const updateEntityRecord = async (entity: string,
 
 
 export const getUpdateEntityRecordMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntityRecord>>, TError,{entity: string;id: string;data: BodyType<EntityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof updateEntityRecord>>, TError,{entity: string;id: string;data: BodyType<EntityInput>}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntityRecord>>, TError,{entity: string;id: string;data: BodyType<EntityPatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateEntityRecord>>, TError,{entity: string;id: string;data: BodyType<EntityPatch>}, TContext> => {
 
 const mutationKey = ['updateEntityRecord'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -989,7 +1064,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEntityRecord>>, {entity: string;id: string;data: BodyType<EntityInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateEntityRecord>>, {entity: string;id: string;data: BodyType<EntityPatch>}> = (props) => {
           const {entity,id,data} = props ?? {};
 
           return  updateEntityRecord(entity,id,data,requestOptions)
@@ -1003,15 +1078,15 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type UpdateEntityRecordMutationResult = NonNullable<Awaited<ReturnType<typeof updateEntityRecord>>>
-    export type UpdateEntityRecordMutationBody = BodyType<EntityInput>
+    export type UpdateEntityRecordMutationBody = BodyType<EntityPatch>
     export type UpdateEntityRecordMutationError = ErrorType<unknown>
 
     export const useUpdateEntityRecord = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntityRecord>>, TError,{entity: string;id: string;data: BodyType<EntityInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateEntityRecord>>, TError,{entity: string;id: string;data: BodyType<EntityPatch>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof updateEntityRecord>>,
         TError,
-        {entity: string;id: string;data: BodyType<EntityInput>},
+        {entity: string;id: string;data: BodyType<EntityPatch>},
         TContext
       > => {
       return useMutation(getUpdateEntityRecordMutationOptions(options));
@@ -1027,14 +1102,15 @@ export const getDeleteEntityRecordUrl = (entity: string,
 }
 
 export const deleteEntityRecord = async (entity: string,
-    id: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+    id: string,
+    deleteEntityRecordBody: DeleteEntityRecordBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
 
   return customFetch<void>(getDeleteEntityRecordUrl(entity,id),
   {
     ...options,
-    method: 'DELETE'
-
-
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deleteEntityRecordBody)
   }
 );}
 
@@ -1043,8 +1119,8 @@ export const deleteEntityRecord = async (entity: string,
 
 
 export const getDeleteEntityRecordMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEntityRecord>>, TError,{entity: string;id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteEntityRecord>>, TError,{entity: string;id: string}, TContext> => {
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEntityRecord>>, TError,{entity: string;id: string;data: BodyType<DeleteEntityRecordBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteEntityRecord>>, TError,{entity: string;id: string;data: BodyType<DeleteEntityRecordBody>}, TContext> => {
 
 const mutationKey = ['deleteEntityRecord'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
@@ -1056,10 +1132,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEntityRecord>>, {entity: string;id: string}> = (props) => {
-          const {entity,id} = props ?? {};
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteEntityRecord>>, {entity: string;id: string;data: BodyType<DeleteEntityRecordBody>}> = (props) => {
+          const {entity,id,data} = props ?? {};
 
-          return  deleteEntityRecord(entity,id,requestOptions)
+          return  deleteEntityRecord(entity,id,data,requestOptions)
         }
 
 
@@ -1070,15 +1146,15 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
   return  { mutationFn, ...mutationOptions }}
 
     export type DeleteEntityRecordMutationResult = NonNullable<Awaited<ReturnType<typeof deleteEntityRecord>>>
-
+    export type DeleteEntityRecordMutationBody = BodyType<DeleteEntityRecordBody>
     export type DeleteEntityRecordMutationError = ErrorType<unknown>
 
     export const useDeleteEntityRecord = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEntityRecord>>, TError,{entity: string;id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteEntityRecord>>, TError,{entity: string;id: string;data: BodyType<DeleteEntityRecordBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
         Awaited<ReturnType<typeof deleteEntityRecord>>,
         TError,
-        {entity: string;id: string},
+        {entity: string;id: string;data: BodyType<DeleteEntityRecordBody>},
         TContext
       > => {
       return useMutation(getDeleteEntityRecordMutationOptions(options));
@@ -1289,6 +1365,71 @@ export const useRegisterDeviceToken = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRegisterDeviceTokenMutationOptions(options));
+    }
+
+export const getUnregisterDeviceTokenUrl = () => {
+
+
+
+
+  return `/api/v1/devices/token`
+}
+
+export const unregisterDeviceToken = async (unregisterDeviceTokenBody: UnregisterDeviceTokenBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getUnregisterDeviceTokenUrl(),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(unregisterDeviceTokenBody)
+  }
+);}
+
+
+
+
+
+export const getUnregisterDeviceTokenMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unregisterDeviceToken>>, TError,{data: BodyType<UnregisterDeviceTokenBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unregisterDeviceToken>>, TError,{data: BodyType<UnregisterDeviceTokenBody>}, TContext> => {
+
+const mutationKey = ['unregisterDeviceToken'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unregisterDeviceToken>>, {data: BodyType<UnregisterDeviceTokenBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  unregisterDeviceToken(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnregisterDeviceTokenMutationResult = NonNullable<Awaited<ReturnType<typeof unregisterDeviceToken>>>
+    export type UnregisterDeviceTokenMutationBody = BodyType<UnregisterDeviceTokenBody>
+    export type UnregisterDeviceTokenMutationError = ErrorType<unknown>
+
+    export const useUnregisterDeviceToken = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unregisterDeviceToken>>, TError,{data: BodyType<UnregisterDeviceTokenBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unregisterDeviceToken>>,
+        TError,
+        {data: BodyType<UnregisterDeviceTokenBody>},
+        TContext
+      > => {
+      return useMutation(getUnregisterDeviceTokenMutationOptions(options));
     }
 
 export const getListPushDeliveriesUrl = (params?: ListPushDeliveriesParams,) => {

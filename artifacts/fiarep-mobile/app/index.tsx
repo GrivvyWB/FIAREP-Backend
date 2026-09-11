@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter, Redirect } from 'expo-router';
-import { listProjects, createProject, deleteProject, type Project, clearAppMode, listApprovedProjectIds } from '../lib/store';
+import { listProjects, createProject, deleteProject, type Project, clearAppMode, listApprovedProjectIds, getSessionIdentity } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 
@@ -18,17 +18,21 @@ export default function Projects() {
   const [name, setName] = useState('');
   const [client, setClient] = useState('');
   const [adding, setAdding] = useState(false);
+  const [developments, setDevelopments] = useState<string[]>([]);
+  const [development, setDevelopment] = useState('');
 
   const load = useCallback(() => {
     listProjects().then(setProjects);
     listApprovedProjectIds().then(setApproved);
+    getSessionIdentity().then((identity) => setDevelopments(identity?.developments || []));
   }, []);
   useFocusEffect(load);
 
   const onCreate = async () => {
     if (!name.trim()) { Alert.alert('Name required', 'Give the project a name.'); return; }
-    await createProject(name.trim(), client.trim());
-    setName(''); setClient(''); setAdding(false); load();
+    if (developments.length > 1 && !development) { Alert.alert('Development required', 'Select a development for this project.'); return; }
+    await createProject(name.trim(), client.trim(), {}, development || undefined);
+    setName(''); setClient(''); setDevelopment(''); setAdding(false); load();
   };
 
   return (
@@ -53,6 +57,9 @@ export default function Projects() {
             <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="123 Main St renovation" /></View>
           <View><Text style={ui.label}>Client (optional)</Text>
             <TextInput style={ui.input} value={client} onChangeText={setClient} placeholder="Jane Doe" /></View>
+          {developments.length > 1 && <View><Text style={ui.label}>Development</Text>
+            <View style={ui.row}>{developments.map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</View>
+          </View>}
           <View style={ui.row}>
             <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => setAdding(false)}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
             <Pressable style={[ui.btn, { flex: 1 }]} onPress={onCreate}><Text style={ui.btnText}>Create</Text></Pressable>

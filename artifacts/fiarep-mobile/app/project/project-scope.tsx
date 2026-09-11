@@ -9,6 +9,7 @@ import {
 } from '../../lib/vendorScope';
 import { ui, ACCENT } from '../../lib/ui';
 import { takePhoto, pickPhoto, photoUri } from '../../lib/photos';
+import RemotePhoto from '../../components/RemotePhoto';
 import PhotoViewer from '../../components/PhotoViewer';
 
 const money = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -206,7 +207,7 @@ export default function ProjectScope() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {coPhotos.map((uri, i) => (
             <TouchableOpacity key={`${uri}-${i}`} onPress={() => setCoViewer(uri)}>
-              <Image source={{ uri: photoUri(uri) }} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} />
+              <RemotePhoto localUri={uri} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} />
             </TouchableOpacity>
           ))}
         </View>

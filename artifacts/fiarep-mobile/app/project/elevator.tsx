@@ -6,6 +6,7 @@ import { ELEVATOR_SECTIONS, ELEV_CONDITIONS, EMPTY_ELEVATOR, type ElevatorState 
 import { buildElevatorHTML } from '../../lib/elevatorReport';
 import { ui, ACCENT } from '../../lib/ui';
 import { takePhoto, pickPhoto, photoUri } from '../../lib/photos';
+import RemotePhoto from '../../components/RemotePhoto';
 import PhotoViewer from '../../components/PhotoViewer';
 import { useAppMode } from '../_layout';
 import { captureGeo, geoLabel } from '../../lib/geo';
@@ -137,7 +138,7 @@ export default function Elevator() {
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
           {(s.photos || []).map((uri, i) => (
             <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewer(uri)}>
-              <Image source={{ uri: photoUri(uri) }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+              <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
             </TouchableOpacity>
           ))}
         </View>

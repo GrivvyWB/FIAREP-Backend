@@ -78,6 +78,7 @@ export interface LoginInput {
 
 export interface Staff {
   id: string;
+  tenantId: string;
   name: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -126,6 +127,8 @@ export type EntityRecord = EntityInput & {
   updatedAt: string;
   version: number;
 };
+
+export type EntityPatch = EntityInput & { [key: string]: unknown } & Required<Pick<EntityInput & { [key: string]: unknown }, 'version'>>;
 
 export interface Notification {
   id: string;
@@ -261,6 +264,10 @@ export type RefreshSessionBody = {
   refreshToken: string;
 };
 
+export type LogoutBody = {
+  refreshToken: string;
+};
+
 export type ListStaffParams = {
 status?: string;
 };
@@ -271,9 +278,18 @@ development?: string;
 status?: string;
 };
 
+export type DeleteEntityRecordBody = {
+  /** @minimum 1 */
+  version: number;
+};
+
 export type RegisterDeviceTokenBody = {
   token: string;
   platform?: string;
+};
+
+export type UnregisterDeviceTokenBody = {
+  token: string;
 };
 
 export type ListPushDeliveriesParams = {

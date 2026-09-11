@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { dispatchJob, listAssignableByTrade, sendViolationLookup, getCurrentActor, lookupComplaintOrViolation, createElevatorJob, type TradeGroup } from '../lib/store';
+import { dispatchJob, listAssignableByTrade, sendViolationLookup, getCurrentActor, getSessionIdentity, lookupComplaintOrViolation, createElevatorJob, type TradeGroup } from '../lib/store';
 import { ui } from '../lib/ui';
 import AddressInput from '../components/AddressInput';
 
@@ -18,14 +18,17 @@ export default function DispatchJob() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [assignable, setAssignable] = useState<TradeGroup[]>([]);
   const [openTrade, setOpenTrade] = useState<string | null>(null);
+  const [developments, setDevelopments] = useState<string[]>([]);
+  const [development, setDevelopment] = useState('');
 
-  useFocusEffect(useCallback(() => { listAssignableByTrade().then(setAssignable); }, []));
+  useFocusEffect(useCallback(() => { listAssignableByTrade().then(setAssignable); getSessionIdentity().then((i) => setDevelopments(i?.developments || [])); }, []));
 
   async function onAssign() {
     if (!address.trim()) { Alert.alert('Address required', 'Enter the job address.'); return; }
     if (!inspector.trim()) { Alert.alert('Assignee required', 'Pick who to assign.'); return; }
     if (!refNum.trim()) { Alert.alert('Complaint/Violation # required', 'Enter the resident complaint (RC-) or inspector violation number so the worker can pull it up.'); return; }
-    await dispatchJob(address.trim(), unit.trim(), inspector.trim());
+    if (developments.length > 1 && !development) { Alert.alert('Development required', 'Select a development.'); return; }
+    await dispatchJob(address.trim(), unit.trim(), inspector.trim(), development || undefined);
     // Send the assignee the complaint/violation number so they can look up the
     // details and make the repair (in-house, no vendor).
     const a = await getCurrentActor().catch(() => null);
@@ -72,6 +75,7 @@ export default function DispatchJob() {
       )}
 
       <Text style={[ui.label, { marginTop: 12 }]}>Job address</Text>
+      {developments.length > 1 && <View><Text style={ui.label}>Development</Text><View style={ui.row}>{developments.map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</View></View>}
       <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 55 Hall St" />
 
       <Text style={[ui.label, { marginTop: 12 }]}>Unit (optional)</Text>

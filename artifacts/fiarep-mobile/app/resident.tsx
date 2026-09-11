@@ -19,6 +19,7 @@ import { useRouter } from 'expo-router';
 import { createResidentReport, listDevelopmentNames, LOCATION_CATEGORIES } from '../lib/store';
 import AddressInput from '../components/AddressInput';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 
 export default function ResidentScreen() {
   const router = useRouter();
@@ -174,7 +175,7 @@ export default function ResidentScreen() {
         <View style={styles.photoGrid}>
           {photos.map((uri, idx) => (
             <View key={`${uri}-${idx}`} style={styles.thumbWrap}>
-              <TouchableOpacity onPress={() => setViewerUri(uri)}><Image source={{ uri: photoUri(uri) }} style={styles.thumb} /></TouchableOpacity>
+              <TouchableOpacity onPress={() => setViewerUri(uri)}><RemotePhoto localUri={uri} style={styles.thumb} /></TouchableOpacity>
               <TouchableOpacity
                 style={styles.removeBtn}
                 onPress={() => removePhoto(idx)}

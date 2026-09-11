@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Image, Pressable, ScrollView, Modal, Dimensions, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, Modal, Dimensions, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { listRooms, updateRoom, type Room } from '../../lib/store';
-import { photoUri } from '../../lib/photos';
+import RemotePhoto from '../../components/RemotePhoto';
 import { ui } from '../../lib/ui';
 
 export default function ProjectPhotos() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [rooms, setRooms] = useState<Room[]>([]);
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<{ localUri: string; remote?: any } | null>(null);
 
   const load = useCallback(() => {
     if (id) listRooms(id).then(setRooms);
@@ -17,12 +17,13 @@ export default function ProjectPhotos() {
 
   // group all room photos by unit/apartment
   const unitNames: string[] = [];
-  const photosByUnit: Record<string, { uri: string; room: string; roomId: string }[]> = {};
+  const photosByUnit: Record<string, { uri: string; remote?: any; room: string; roomId: string }[]> = {};
   rooms.forEach((r) => {
     const u = (r.unit && r.unit.trim()) ? r.unit.trim() : 'General';
     (r.photos ?? []).forEach((uri) => {
       if (!photosByUnit[u]) { photosByUnit[u] = []; unitNames.push(u); }
-      photosByUnit[u].push({ uri, room: r.name || 'Room', roomId: r.id });
+      const remote = ((r as any).remoteFiles || []).find((f: any) => f.localUri === uri);
+      photosByUnit[u].push({ uri, remote, room: r.name || 'Room', roomId: r.id });
     });
   });
 
@@ -55,8 +56,8 @@ export default function ProjectPhotos() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {photosByUnit[u].map((p, i) => (
               <View key={p.uri + i} style={{ width: 108 }}>
-                <Pressable onPress={() => setSelected(p.uri)}>
-                  <Image source={{ uri: photoUri(p.uri) }} style={{ width: 108, height: 108, borderRadius: 8 }} />
+                <Pressable onPress={() => setSelected({ localUri: p.uri, remote: p.remote })}>
+                  <RemotePhoto localUri={p.uri} remote={p.remote} style={{ width: 108, height: 108, borderRadius: 8 }} />
                 </Pressable>
                 <Pressable onPress={() => deletePhoto(p.roomId, p.uri)} style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#c0392b', width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700', lineHeight: 17 }}>×</Text>
@@ -70,7 +71,7 @@ export default function ProjectPhotos() {
       <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
         <Pressable onPress={() => setSelected(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' }}>
           {selected && (
-            <Image source={{ uri: photoUri(selected) }}
+            <RemotePhoto localUri={selected.localUri} remote={selected.remote}
               style={{ width: Dimensions.get('window').width, height: Dimensions.get('window').height * 0.8 }}
               resizeMode="contain" />
           )}

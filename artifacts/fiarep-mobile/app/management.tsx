@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import { useFocusEffect } from 'expo-router';
 import {
   listResidentReports,
@@ -291,7 +292,7 @@ export default function Management() {
           {r.photos.length > 0 && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {r.photos.map((uri, i) => (
-                <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><Image source={{ uri: photoUri(uri) }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} /></Pressable>
+                <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} /></Pressable>
               ))}
             </View>
           )}

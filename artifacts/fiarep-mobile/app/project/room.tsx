@@ -12,6 +12,7 @@ import { CATALOG, CATEGORIES, UNIT_LABEL, lineTotal, type LineItem, type Categor
 import { ui, money } from '../../lib/ui';
 import { useAppMode } from '../_layout';
 import { takePhoto, pickPhoto, takePhotoWithGeo, pickPhotoWithGeo, photoUri, photoBase64 } from '../../lib/photos';
+import RemotePhoto from '../../components/RemotePhoto';
 import { geoLabel } from '../../lib/geo';
 import { buildRoomHTML } from '../../lib/roomReport';
 import * as Print from 'expo-print';
@@ -396,7 +397,7 @@ export default function RoomEditor() {
           {photos.map(uri => (
             <View key={uri} style={{ width: 80 }}>
               <Pressable onPress={() => setPhotoView(uri)}>
-                <Image source={{ uri: photoUri(uri) }} style={{ width: 80, height: 80, borderRadius: 8 }} />
+                <RemotePhoto localUri={uri} style={{ width: 80, height: 80, borderRadius: 8 }} />
               </Pressable>
               <Pressable onPress={() => removePhoto(uri)} style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#c0392b', width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center' }}>
                 <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700', lineHeight: 16 }}>×</Text>
@@ -409,7 +410,7 @@ export default function RoomEditor() {
 
       <Modal visible={!!photoView} transparent animationType="fade" onRequestClose={() => setPhotoView(null)}>
         <Pressable onPress={() => setPhotoView(null)} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.92)', justifyContent: 'center', alignItems: 'center' }}>
-          {photoView && <Image source={{ uri: photoUri(photoView) }} style={{ width: Dimensions.get('window').width, height: Dimensions.get('window').height * 0.8 }} resizeMode="contain" />}
+          {photoView && <RemotePhoto localUri={photoView} style={{ width: Dimensions.get('window').width, height: Dimensions.get('window').height * 0.8 }} resizeMode="contain" />}
           {photoView && photoGeo[photoView] && (
             <Text style={{ position: 'absolute', bottom: 60, color: '#fff', fontSize: 13, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 }}>
               {geoLabel(photoGeo[photoView])}

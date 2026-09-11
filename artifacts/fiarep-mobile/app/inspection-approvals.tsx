@@ -3,6 +3,7 @@ import { View, Text, ScrollView, Pressable, Alert, Modal, Image, TouchableOpacit
 import { useFocusEffect } from 'expo-router';
 import { listLoggedInspections, listActiveInspections, clearInspectionForStaff, approveAndRouteViolation, listStaffAccounts, type BuildingViolation, type StaffAccount } from '../lib/store';
 import { photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -77,7 +78,7 @@ export default function InspectionApprovals() {
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 4 }}>
               {v.photos.map((uri, i) => (
                 <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewer(uri)}>
-                  <Image source={{ uri: photoUri(uri) }} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#eee' }} />
+                  <RemotePhoto localUri={uri} style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: '#eee' }} />
                 </TouchableOpacity>
               ))}
             </View>

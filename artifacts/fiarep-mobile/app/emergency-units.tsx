@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, Image, TouchableOpacity, 
 import { useFocusEffect } from 'expo-router';
 import { listEmergencyJobsForTruck, getEmergencyUnitByCode, setEmergencyProgress, addEmergencyPhoto, completeEmergencyJob, type EmergencyJob } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -103,7 +104,7 @@ export default function EmergencyUnits() {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {(j.photos || []).map((uri, i) => (
                   <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewer(uri)}>
-                    <Image source={{ uri: photoUri(uri) }} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} />
+                    <RemotePhoto localUri={uri} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} />
                   </TouchableOpacity>
                 ))}
               </View>

@@ -47,6 +47,18 @@ router.post("/v1/devices/token", async (req, res) => {
   res.status(201).json(saved);
 });
 
+router.delete("/v1/devices/token", async (req, res) => {
+  const actor = actorFrom(res);
+  const token = typeof req.body?.token === "string" ? req.body.token : "";
+  if (!token) { res.status(400).json({ error: "token is required" }); return; }
+  await db.delete(deviceTokens).where(and(
+    eq(deviceTokens.tenantId, actor.tenantId),
+    eq(deviceTokens.staffId, actor.id),
+    eq(deviceTokens.token, token),
+  ));
+  res.status(204).send();
+});
+
 router.get("/v1/settings/:key", async (req, res) => {
   const actor = actorFrom(res);
   const [row] = await db

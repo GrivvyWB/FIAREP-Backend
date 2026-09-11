@@ -1,7 +1,7 @@
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { clearAppMode, clearRememberedStaff, clearCurrentActor, unreadCount, getCurrentActor } from '../lib/store';
+import { clearAppMode, clearRememberedStaff, logout, unreadCount, getCurrentActor } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 
@@ -18,7 +18,7 @@ export default function ProcurementHome() {
   function onSwitchRole() {
     Alert.alert('Switch role?', 'Return to the role selection screen.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('procurement'); await clearCurrentActor(); await clearAppMode(); refresh(); } },
+      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('procurement'); await logout(); await clearAppMode(); refresh(); } },
     ]);
   }
 

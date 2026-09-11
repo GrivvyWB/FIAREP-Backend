@@ -145,12 +145,23 @@ router.post("/v1/:entity", async (req, res, next) => {
       : typeof rawState["development"] === "string"
         ? rawState["development"]
         : null;
+  if (!development && projectId) {
+    const [project] = await db.select({ development: entityRecords.development })
+      .from(entityRecords)
+      .where(and(eq(entityRecords.id, projectId), eq(entityRecords.entity, "projects"), eq(entityRecords.tenantId, actor.tenantId)))
+      .limit(1);
+    development = project?.development || null;
+  }
   if (
     entity === "projects" &&
     !development &&
     actor.developments.length === 1
   ) {
     development = actor.developments[0]!;
+  }
+  if (!development && !isBoroughDirector(actor)) {
+    res.status(403).json({ error: "A development is required for scoped records" });
+    return;
   }
   if (!entityDevelopmentAllowed(actor, entity, development)) {
     res.status(403).json({ error: "Development access denied" });
@@ -232,6 +243,11 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   const input = stateOf(req.body);
+  const expectedVersion = input?.["version"];
+  if (typeof expectedVersion !== "number") {
+    res.status(400).json({ error: "version is required" });
+    return;
+  }
   const patch = stateOf(input?.["state"]) ?? input;
   if (!patch) {
     res.status(400).json({ error: "A JSON update is required" });
@@ -267,11 +283,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
   }
-  const expectedVersion = input?.["version"];
-  if (
-    typeof expectedVersion === "number" &&
-    expectedVersion !== current.version
-  ) {
+  if (expectedVersion !== current.version) {
     res.status(409).json({
       error: "Concurrent update detected",
       current: outward(actor, current),
@@ -300,8 +312,18 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
       version: sql`${entityRecords.version} + 1`,
       updatedAt: now,
     })
-    .where(eq(entityRecords.id, current.id))
+    .where(and(
+      eq(entityRecords.id, current.id),
+      eq(entityRecords.entity, entity),
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.deleted, false),
+      eq(entityRecords.version, expectedVersion),
+    ))
     .returning();
+  if (!updated) {
+    res.status(409).json({ error: "Concurrent update detected" });
+    return;
+  }
   await audit(actor, `${entity}.updated`, `Updated ${entity} record`, current.id);
   res.json(outward(actor, updated!));
 });
@@ -466,14 +488,34 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(403).json({ error: "Management clearance is required" });
     return;
   }
-  await db
+  const expectedVersion = (req.body as { version?: unknown })?.version;
+  if (typeof expectedVersion !== "number") {
+    res.status(400).json({ error: "version is required" });
+    return;
+  }
+  if (expectedVersion !== current.version) {
+    res.status(409).json({ error: "Concurrent update detected", current: outward(actor, current) });
+    return;
+  }
+  const [deleted] = await db
     .update(entityRecords)
     .set({
       deleted: true,
       version: sql`${entityRecords.version} + 1`,
       updatedAt: new Date(),
     })
-    .where(eq(entityRecords.id, current.id));
+    .where(and(
+      eq(entityRecords.id, current.id),
+      eq(entityRecords.entity, entity),
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.deleted, false),
+      eq(entityRecords.version, expectedVersion),
+    ))
+    .returning();
+  if (!deleted) {
+    res.status(409).json({ error: "Concurrent update detected" });
+    return;
+  }
   await audit(actor, `${entity}.deleted`, `Deleted ${entity} record`, current.id);
   res.status(204).send();
 });

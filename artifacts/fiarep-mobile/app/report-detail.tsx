@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
 import { getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listElevatorJobsForMechanic, createElevatorJob } from '../lib/store';
 import { photoUri } from '../lib/photos';
+import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -118,7 +119,7 @@ export default function ReportDetail() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {r.photos.map((uri, i) => (
               <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}>
-                <Image source={{ uri: photoUri(uri) }} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+                <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
               </Pressable>
             ))}
           </View>
