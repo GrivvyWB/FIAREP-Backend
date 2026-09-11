@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomInt } from "node:crypto";
 import { and, count, eq, inArray, desc, isNull, sql } from "drizzle-orm";
 import { db, organizationProperties, organizations, staffAccounts, refreshSessions, platformLicenseAudit } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
@@ -8,6 +8,30 @@ import { platformAudit } from "../lib/audit";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
+
+export const ORGANIZATION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+export const ORGANIZATION_CODE_ATTEMPTS = 20;
+
+export function generateOrganizationCode(nextIndex = () => randomInt(ORGANIZATION_CODE_ALPHABET.length)): string {
+  let suffix = "";
+  for (let index = 0; index < 6; index += 1) {
+    suffix += ORGANIZATION_CODE_ALPHABET[nextIndex()];
+  }
+  return `ORG-${suffix}`;
+}
+
+/** Must be called inside the transaction that will create the organization. */
+export async function allocateOrganizationCode(tx: any): Promise<string> {
+  // Serialize allocation across all API workers while retaining the uniqueness check
+  // and insert in the same transaction.
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext('organization-code-allocation'))`);
+  for (let attempt = 0; attempt < ORGANIZATION_CODE_ATTEMPTS; attempt += 1) {
+    const candidate = generateOrganizationCode();
+    const [existing] = await tx.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, candidate)).limit(1);
+    if (!existing) return candidate;
+  }
+  throw Object.assign(new Error("Unable to allocate a unique organization code"), { status: 503 });
+}
 
 function propertyInput(body: Record<string, unknown>) {
   const displayAddress = typeof body.displayAddress === "string" ? body.displayAddress.trim() : "";
@@ -98,10 +122,13 @@ router.get("/v1/platform/license-audit", async (req, res) => {
 
 router.post("/v1/platform/organizations", async (req, res) => {
   const body = req.body as Record<string, unknown>;
-  const id = typeof body["id"] === "string" ? body["id"].trim() : "";
   const name = typeof body["name"] === "string" ? body["name"].trim() : "";
-  if (!id || !name || id === "default") {
-    res.status(400).json({ error: "A non-default id and name are required" });
+  if ("id" in body) {
+    res.status(400).json({ error: "Organization id is system-generated and cannot be supplied" });
+    return;
+  }
+  if (!name) {
+    res.status(400).json({ error: "Organization name is required" });
     return;
   }
   const status = body["status"] === "suspended" || body["status"] === "expired" || body["status"] === "active" ? body["status"] : "active";
@@ -120,24 +147,31 @@ router.post("/v1/platform/organizations", async (req, res) => {
       (propertyLimit !== null && (!Number.isInteger(propertyLimit) || (propertyLimit as number) < 0))) {
     res.status(400).json({ error: "Invalid license dates or limits" }); return;
   }
-  const [existing] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, id)).limit(1);
-  if (existing) { res.status(409).json({ error: "Organization already exists" }); return; }
   const features = typeof body["features"] === "object" && body["features"] !== null && !Array.isArray(body["features"]) ? body["features"] as Record<string, unknown> : {};
   const unrestricted = body["unrestricted"] === true;
-  const result = await db.transaction(async (tx) => {
-    const [created] = await tx.insert(organizations).values({ id, name, status, startsAt, endsAt, staffLimit: staffLimit as number | null, propertyLimit: propertyLimit as number | null, features, unrestricted }).returning();
-    let director;
-    if (directorCode) {
-      [director] = await tx.insert(staffAccounts).values({
-      id: randomUUID(), tenantId: id, name: directorName, code: directorCode,
-      role: "administrator", position: "Borough Director", status: "approved", developments: [], issuerName: "Platform owner",
-      }).returning();
+  try {
+    const result = await db.transaction(async (tx) => {
+      const id = await allocateOrganizationCode(tx);
+      const [created] = await tx.insert(organizations).values({ id, name, status, startsAt, endsAt, staffLimit: staffLimit as number | null, propertyLimit: propertyLimit as number | null, features, unrestricted }).returning();
+      let director;
+      if (directorCode) {
+        [director] = await tx.insert(staffAccounts).values({
+        id: randomUUID(), tenantId: id, name: directorName, code: directorCode,
+        role: "administrator", position: "Borough Director", status: "approved", developments: [], issuerName: "Platform owner",
+        }).returning();
+      }
+      return { organization: created, director };
+    });
+    const owner = res.locals["platformOwner"] as { name: string };
+    await platformAudit(owner.name, directorCode ? "organization.created_with_director" : "organization.created", result.organization.id, null, result.organization);
+    res.status(201).json({ organization: result.organization, ...(result.director ? { director: { id: result.director.id, name: result.director.name, tenantId: result.director.tenantId } } : {}) });
+  } catch (error: any) {
+    if (error?.status) {
+      res.status(error.status).json({ error: error.message });
+      return;
     }
-    return { organization: created, director };
-  });
-  const owner = res.locals["platformOwner"] as { name: string };
-  await platformAudit(owner.name, directorCode ? "organization.created_with_director" : "organization.created", id, null, result.organization);
-  res.status(201).json({ organization: result.organization, ...(result.director ? { director: { id: result.director.id, name: result.director.name, tenantId: result.director.tenantId } } : {}) });
+    throw error;
+  }
 });
 
 router.patch("/v1/platform/organizations/:id", async (req, res) => {

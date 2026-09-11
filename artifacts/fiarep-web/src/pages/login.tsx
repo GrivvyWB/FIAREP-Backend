@@ -143,8 +143,8 @@ export default function Login() {
                 name="organizationId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Organization ID (customer staff)</FormLabel>
-                    <FormControl><Input placeholder="Leave blank for default FIAREP" {...field} /></FormControl>
+                    <FormLabel>Organization Code (customer staff)</FormLabel>
+                    <FormControl><Input placeholder="e.g. ORG-AB23CD (leave blank for default FIAREP)" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

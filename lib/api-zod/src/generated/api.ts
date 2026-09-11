@@ -331,7 +331,7 @@ export const GetCurrentStaffResponse = zod.object({
 
 
 export const ListOrganizationsResponseItem = zod.object({
-  "id": zod.string(),
+  "id": zod.string().describe('System-generated organization code (ORG-XXXXXX) for new organizations; legacy organization IDs remain valid'),
   "name": zod.string(),
   "status": zod.enum(['active', 'suspended', 'expired']),
   "startsAt": zod.coerce.date().nullish(),
@@ -352,7 +352,6 @@ export const ListOrganizationsResponse = zod.array(ListOrganizationsResponseItem
 
 
 export const CreateOrganizationBody = zod.object({
-  "id": zod.string(),
   "name": zod.string(),
   "status": zod.enum(['active', 'suspended', 'expired']).optional(),
   "startsAt": zod.coerce.date().optional(),
@@ -364,8 +363,25 @@ export const CreateOrganizationBody = zod.object({
 })
 
 export const CreateOrganizationResponse = zod.object({
-
-}).passthrough()
+  "organization": zod.object({
+  "id": zod.string().describe('System-generated organization code (ORG-XXXXXX) for new organizations; legacy organization IDs remain valid'),
+  "name": zod.string(),
+  "status": zod.enum(['active', 'suspended', 'expired']),
+  "startsAt": zod.coerce.date().nullish(),
+  "endsAt": zod.coerce.date().nullish(),
+  "staffLimit": zod.number().int().nullish(),
+  "propertyLimit": zod.number().int().nullish(),
+  "features": zod.record(zod.string(), zod.unknown()),
+  "unrestricted": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+}),
+  "director": zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "tenantId": zod.string()
+}).optional()
+})
 
 
 export const listPlatformLicenseAuditQueryLimitDefault = 25;
@@ -412,7 +428,7 @@ export const UpdateOrganizationBody = zod.object({
 })
 
 export const UpdateOrganizationResponse = zod.object({
-  "id": zod.string(),
+  "id": zod.string().describe('System-generated organization code (ORG-XXXXXX) for new organizations; legacy organization IDs remain valid'),
   "name": zod.string(),
   "status": zod.enum(['active', 'suspended', 'expired']),
   "startsAt": zod.coerce.date().nullish(),

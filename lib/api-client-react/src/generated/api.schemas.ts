@@ -17,6 +17,7 @@ export const OrganizationStatus = {
 export type OrganizationFeatures = { [key: string]: unknown };
 
 export interface Organization {
+  /** System-generated organization code (ORG-XXXXXX) for new organizations; legacy organization IDs remain valid */
   id: string;
   name: string;
   status: OrganizationStatus;
@@ -42,7 +43,6 @@ export const OrganizationInputStatus = {
 export type OrganizationInputFeatures = { [key: string]: unknown };
 
 export interface OrganizationInput {
-  id: string;
   name: string;
   status?: OrganizationInputStatus;
   startsAt?: string;
@@ -89,6 +89,17 @@ export type OrganizationWithUsageUsage = {
 export type OrganizationWithUsage = Organization & {
   usage: OrganizationWithUsageUsage;
 };
+
+export type OrganizationCreateResponseDirector = {
+  id: string;
+  name: string;
+  tenantId: string;
+};
+
+export interface OrganizationCreateResponse {
+  organization: Organization;
+  director?: OrganizationCreateResponseDirector;
+}
 
 export interface OrganizationProperty {
   id: string;
@@ -725,8 +736,6 @@ export type RefreshSessionBody = {
 export type LogoutBody = {
   refreshToken: string;
 };
-
-export type CreateOrganization201 = { [key: string]: unknown };
 
 export type ListPlatformLicenseAuditParams = {
 /**

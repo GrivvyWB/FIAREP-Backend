@@ -328,7 +328,7 @@ paths:
           description: Organization created
           content:
             application/json:
-              schema: { type: object }
+              schema: { $ref: "#/components/schemas/OrganizationCreateResponse" }
   /v1/platform/license-audit:
     get:
       operationId: listPlatformLicenseAudit
@@ -925,7 +925,7 @@ components:
       type: object
       required: [id, name, status, unrestricted, features, createdAt, updatedAt]
       properties:
-        id: { type: string }
+        id: { type: string, description: System-generated organization code (ORG-XXXXXX) for new organizations; legacy organization IDs remain valid }
         name: { type: string }
         status: { type: string, enum: [active, suspended, expired] }
         startsAt: { type: string, format: date-time, nullable: true }
@@ -938,9 +938,9 @@ components:
         updatedAt: { type: string, format: date-time }
     OrganizationInput:
       type: object
-      required: [id, name]
+      additionalProperties: false
+      required: [name]
       properties:
-        id: { type: string }
         name: { type: string }
         status: { type: string, enum: [active, suspended, expired] }
         startsAt: { type: string, format: date-time }
@@ -974,6 +974,18 @@ components:
               properties:
                 staff: { type: integer }
                 properties: { type: integer }
+    OrganizationCreateResponse:
+      type: object
+      required: [organization]
+      properties:
+        organization: { $ref: "#/components/schemas/Organization" }
+        director:
+          type: object
+          required: [id, name, tenantId]
+          properties:
+            id: { type: string }
+            name: { type: string }
+            tenantId: { type: string }
     OrganizationProperty:
       type: object
       required: [id, organizationId, displayAddress, normalizedAddress, active, createdAt, updatedAt]

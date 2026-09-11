@@ -22,7 +22,6 @@ import type {
 import type {
   AuthResponse,
   BootstrapAdministratorBody,
-  CreateOrganization201,
   CreatePushSmokeTest202,
   DeleteEntityRecordBody,
   DeviceToken,
@@ -50,6 +49,7 @@ import type {
   Notification,
   NycPropertyLookup,
   Organization,
+  OrganizationCreateResponse,
   OrganizationInput,
   OrganizationProperty,
   OrganizationPropertyInput,
@@ -1184,9 +1184,9 @@ export const getCreateOrganizationUrl = () => {
   return `/api/v1/platform/organizations`
 }
 
-export const createOrganization = async (organizationInput: OrganizationInput, options?: Parameters<typeof customFetch>[1]): Promise<CreateOrganization201> => {
+export const createOrganization = async (organizationInput: OrganizationInput, options?: Parameters<typeof customFetch>[1]): Promise<OrganizationCreateResponse> => {
 
-  return customFetch<CreateOrganization201>(getCreateOrganizationUrl(),
+  return customFetch<OrganizationCreateResponse>(getCreateOrganizationUrl(),
   {
     ...options,
     method: 'POST',

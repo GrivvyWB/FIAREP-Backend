@@ -29,7 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users } from "lucide-react";
+import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy } from "lucide-react";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
 import { format, isValid } from "date-fns";
 
@@ -131,7 +131,7 @@ export default function OwnerDashboard() {
           <div className="relative flex-1 sm:w-64">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
             <Input 
-              placeholder="Search ID or Name..." 
+               placeholder="Search code or name..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9 bg-white border-slate-200"
@@ -156,7 +156,7 @@ export default function OwnerDashboard() {
             <Table>
               <TableHeader className="bg-slate-50 border-b border-slate-200">
                 <TableRow>
-                  <TableHead className="w-[150px] font-semibold text-slate-900">Tenant ID</TableHead>
+                   <TableHead className="w-[180px] font-semibold text-slate-900">Organization Code</TableHead>
                   <TableHead className="font-semibold text-slate-900">Organization Name</TableHead>
                   <TableHead className="font-semibold text-slate-900">Status</TableHead>
                   <TableHead className="font-semibold text-slate-900">License Dates</TableHead>
@@ -172,7 +172,14 @@ export default function OwnerDashboard() {
 
                   return (
                     <TableRow key={org.id} className="hover:bg-slate-50/50">
-                      <TableCell className="font-mono text-sm text-slate-600">{org.id}</TableCell>
+                       <TableCell className="font-mono text-sm text-slate-600">
+                         <div className="flex items-center gap-2">
+                           <span>{org.id}</span>
+                           <Button type="button" variant="ghost" size="icon" className="h-7 w-7" aria-label="Copy organization code" onClick={() => navigator.clipboard.writeText(org.id)}>
+                             <Copy className="h-3.5 w-3.5" />
+                           </Button>
+                         </div>
+                       </TableCell>
                       <TableCell>
                         <div className="font-semibold text-slate-900">{org.name}</div>
                         {org.unrestricted && (

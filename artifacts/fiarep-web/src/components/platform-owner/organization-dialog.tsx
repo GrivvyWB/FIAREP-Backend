@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Copy } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -33,7 +34,6 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
 const orgSchema = z.object({
-  id: z.string().min(2, "ID is required"),
   name: z.string().min(2, "Name is required"),
   status: z.enum(["active", "suspended", "expired"]).optional(),
   startsAt: z.string().optional().nullable(),
@@ -57,11 +57,14 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   const isEditing = !!organization;
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [generatedCode, setGeneratedCode] = useState("");
+  const [copySucceeded, setCopySucceeded] = useState(false);
+  const [copyError, setCopyError] = useState("");
+  const [acknowledged, setAcknowledged] = useState(false);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(orgSchema),
     defaultValues: {
-      id: "",
       name: "",
       status: "active",
       startsAt: "",
@@ -80,7 +83,6 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   useEffect(() => {
     if (organization && open) {
       form.reset({
-        id: organization.id,
         name: organization.name,
         status: organization.status as any,
         startsAt: organization.startsAt ? new Date(organization.startsAt).toISOString().slice(0, 16) : "",
@@ -92,8 +94,11 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         directorCode: "",
       });
     } else if (!open) {
+      setGeneratedCode("");
+      setCopySucceeded(false);
+      setCopyError("");
+      setAcknowledged(false);
       form.reset({
-        id: "",
         name: "",
         status: "active",
         startsAt: "",
@@ -110,7 +115,6 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   const onSubmit = async (values: FormValues) => {
     try {
       const payload = {
-        id: values.id,
         name: values.name,
         status: values.status as OrganizationInputStatus,
         startsAt: values.startsAt ? new Date(values.startsAt).toISOString() : undefined,
@@ -124,16 +128,20 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
       };
 
       if (isEditing) {
-        const { id: _immutableId, directorName: _directorName, directorCode: _directorCode, ...updates } = payload;
-        await updateMutation.mutateAsync({ id: values.id, data: updates });
+        const { directorName: _directorName, directorCode: _directorCode, ...updates } = payload;
+        await updateMutation.mutateAsync({ id: organization!.id, data: updates });
         toast({ title: "Organization updated successfully." });
       } else {
-        await createMutation.mutateAsync({ data: payload });
+        const result = await createMutation.mutateAsync({ data: payload });
+        setGeneratedCode(result.organization.id);
+        setCopySucceeded(false);
+        setCopyError("");
+        setAcknowledged(false);
         toast({ title: "Organization created successfully." });
       }
       
       queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
-      onOpenChange(false);
+      if (isEditing) onOpenChange(false);
     } catch (err: any) {
       toast({
         variant: "destructive",
@@ -144,9 +152,29 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   };
 
   const isLoading = createMutation.isPending || updateMutation.isPending;
+  const canCloseAfterCreation = !generatedCode || copySucceeded || acknowledged;
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen && !canCloseAfterCreation) return;
+    if (!nextOpen) {
+      setGeneratedCode("");
+      setCopySucceeded(false);
+      setCopyError("");
+      setAcknowledged(false);
+    }
+    onOpenChange(nextOpen);
+  };
+  const copyOrganizationCode = async () => {
+    try {
+      await navigator.clipboard.writeText(generatedCode);
+      setCopySucceeded(true);
+      setCopyError("");
+    } catch {
+      setCopyError("Copy failed. Use the acknowledgment below after saving the code manually.");
+    }
+  };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl bg-white border-slate-200">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-slate-900">
@@ -162,19 +190,13 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="id"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel className="text-slate-700 font-semibold">Tenant ID</FormLabel>
-                    <FormControl>
-                      <Input placeholder="e.g. nyc-hpd" {...field} disabled={isEditing} className="font-mono bg-slate-50" />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+              {isEditing && (
+                <FormItem>
+                  <FormLabel className="text-slate-700 font-semibold">Organization Code</FormLabel>
+                  <Input value={organization.id} readOnly className="font-mono bg-slate-50" />
+                  <FormDescription>System-generated code used by organization staff at sign-in.</FormDescription>
+                </FormItem>
+              )}
               <FormField
                 control={form.control}
                 name="name"
@@ -189,6 +211,23 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
                 )}
               />
             </div>
+            {generatedCode && (
+              <div className="rounded-lg border border-teal-200 bg-teal-50 p-4">
+                <FormLabel className="text-teal-900 font-semibold">Organization Code</FormLabel>
+                <div className="mt-2 flex gap-2">
+                  <Input value={generatedCode} readOnly className="font-mono bg-white" />
+                  <Button type="button" variant="outline" onClick={copyOrganizationCode}>
+                    <Copy className="mr-2 h-4 w-4" /> Copy
+                  </Button>
+                </div>
+                <FormDescription className="mt-2 text-teal-800">Save this code. Organization staff use it when signing in.</FormDescription>
+                {copySucceeded && <p role="status" className="mt-2 text-sm font-medium text-teal-800">Copied successfully.</p>}
+                {copyError && <p role="alert" className="mt-2 text-sm font-medium text-rose-700">{copyError}</p>}
+                <Button type="button" variant="link" className="mt-1 h-auto px-0 text-teal-800" onClick={() => setAcknowledged(true)}>
+                  I saved this code
+                </Button>
+              </div>
+            )}
 
             <div className="grid grid-cols-3 gap-4 p-4 bg-slate-50 rounded-lg border border-slate-100">
               <FormField
@@ -343,10 +382,10 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
             )}
 
             <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isLoading} className="bg-slate-900 text-white hover:bg-slate-800">
+              <Button type={generatedCode ? "button" : "submit"} onClick={generatedCode ? () => handleOpenChange(false) : undefined} disabled={isLoading} className="bg-slate-900 text-white hover:bg-slate-800">
                 {isLoading ? "Saving..." : isEditing ? "Save Changes" : "Create Tenant"}
               </Button>
             </div>
