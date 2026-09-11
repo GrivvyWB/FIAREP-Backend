@@ -143,7 +143,13 @@ export default function ResidentScreen() {
       </TouchableOpacity>
 
       <Text style={styles.label}>Building Address</Text>
-      <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 123 Main St" style={styles.input} />
+      <AddressInput
+        value={address}
+        onChangeText={setAddress}
+        placeholder="Type an address or use phone location"
+        style={styles.input}
+        useCurrentLocation
+      />
 
       <Text style={styles.label}>Description</Text>
       <TextInput

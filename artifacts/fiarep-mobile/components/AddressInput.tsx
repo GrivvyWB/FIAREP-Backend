@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
+import * as Location from 'expo-location';
 import { listAllAddresses, listAddressesForDevelopment } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -13,6 +14,7 @@ export default function AddressInput(props: {
   editable?: boolean;
   autoCapitalize?: any;
   development?: string;
+  useCurrentLocation?: boolean;
 }) {
   const [all, setAll] = useState<string[]>([]);
   const [focused, setFocused] = useState(false);
@@ -22,6 +24,37 @@ export default function AddressInput(props: {
     if (dev) { listAddressesForDevelopment(dev).then(setAll).catch(() => {}); }
     else { listAllAddresses().then(setAll).catch(() => {}); }
   }, [props.development]);
+
+  useEffect(() => {
+    if (!props.useCurrentLocation || props.value.trim()) return;
+    let cancelled = false;
+
+    const fillFromCurrentLocation = async () => {
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (permission.status !== 'granted' || cancelled || props.value.trim()) return;
+        const current = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+        const [place] = await Location.reverseGeocodeAsync(current.coords);
+        if (!place || cancelled || props.value.trim()) return;
+        const street = [place.streetNumber, place.street].filter(Boolean).join(' ');
+        const city = place.city || place.subregion || place.district;
+        const region = place.region;
+        const postalCode = place.postalCode;
+        const country = place.country;
+        const address = [street, city, region, postalCode, country].filter(Boolean).join(', ');
+        if (address) props.onChangeText(address);
+      } catch {
+        // Manual address entry remains available when location is unavailable.
+      }
+    };
+
+    void fillFromCurrentLocation();
+    return () => {
+      cancelled = true;
+    };
+  }, [props.useCurrentLocation]);
 
   const q = (props.value || '').trim().toLowerCase();
   const hasDev = !!(props.development || '').trim();

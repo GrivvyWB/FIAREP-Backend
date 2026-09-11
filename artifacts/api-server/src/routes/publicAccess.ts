@@ -47,8 +47,9 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     const org = await evaluateLicense(property.organizationId);
     if (licenseAllows(org, property.organizationId)) valid.push({ property, org });
   }
-  if (valid.length !== 1) { res.status(404).json({ error: "This address is not available for resident reports" }); return; }
-  const { property } = valid[0]!;
+  const property = valid.length === 1 ? valid[0]!.property : null;
+  const tenantId = property?.organizationId ?? "default";
+  const reportAddress = property?.displayAddress ?? address;
   const now = new Date();
   const id = typeof input.id === "string" && input.id.trim() ? input.id.trim() : randomUUID();
   let complaintNo = "";
@@ -59,8 +60,8 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       residentToken = token();
       try {
         await tx.insert(publicAccessCodes).values({
-          id: randomUUID(), kind: "resident", code: complaintNo, tenantId: property.organizationId,
-          recordId: id, tokenHash: hash(residentToken), propertyId: property.id,
+          id: randomUUID(), kind: "resident", code: complaintNo, tenantId,
+          recordId: id, tokenHash: hash(residentToken), propertyId: property?.id ?? null,
         });
         break;
       } catch (error: any) {
@@ -68,17 +69,18 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       }
     }
     const state = {
-      ...rawState, complaintNo, address: property.displayAddress, propertyId: property.id,
-      development: property.development, description, status: "submitted", photos: [],
+      ...rawState, complaintNo, address: reportAddress, propertyId: property?.id ?? null,
+      development: property?.development ?? (String(rawState.development ?? "").trim() || null),
+      description, status: "submitted", photos: [],
       updates: [{ status: "submitted", by: "resident", at: now.toISOString() }], createdAt: now.toISOString(),
     };
     const [row] = await tx.insert(entityRecords).values({
-      id, tenantId: property.organizationId, entity: "resident-reports", development: property.development,
+      id, tenantId, entity: "resident-reports", development: property?.development ?? (String(rawState.development ?? "").trim() || null),
       state, createdBy: "public-resident", createdAt: now, updatedAt: now,
     }).returning();
     await tx.insert(notifications).values([
-      { id: randomUUID(), tenantId: property.organizationId, target: "management", message: "New resident report", detail: `${property.displayAddress} · ${complaintNo}`, reportId: id },
-      { id: randomUUID(), tenantId: property.organizationId, target: "administrator", message: "New resident report", detail: `${property.displayAddress} · ${complaintNo}`, reportId: id },
+      { id: randomUUID(), tenantId, target: "management", message: "New resident report", detail: `${reportAddress} · ${complaintNo}`, reportId: id },
+      { id: randomUUID(), tenantId, target: "administrator", message: "New resident report", detail: `${reportAddress} · ${complaintNo}`, reportId: id },
     ]);
     return row;
   }).catch(() => null);
@@ -95,13 +97,11 @@ router.get("/v1/public/resident-reports/:complaintNo", async (req, res) => {
   if (!access || !access.tokenHash || hash(suppliedToken) !== access.tokenHash || !address) {
     res.status(404).json({ error: "Report not found" }); return;
   }
-  const [property] = access.propertyId ? await db.select().from(organizationProperties).where(eq(organizationProperties.id, access.propertyId)).limit(1) : [];
-  if (!property || normalize(property.displayAddress) !== address) { res.status(404).json({ error: "Report not found" }); return; }
   const [row] = await db.select().from(entityRecords).where(and(
     eq(entityRecords.id, access.recordId), eq(entityRecords.tenantId, access.tenantId),
     eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
   )).limit(1);
-  if (!row) { res.status(404).json({ error: "Report not found" }); return; }
+  if (!row || normalize(row.state["address"]) !== address) { res.status(404).json({ error: "Report not found" }); return; }
   const state = row.state;
   res.json({ complaintNo: state["complaintNo"], status: state["status"], description: state["description"], updates: state["updates"], createdAt: state["createdAt"] });
 });
@@ -113,9 +113,12 @@ async function residentAccess(complaintNo: string, statusToken: string, address:
     eq(publicAccessCodes.kind, "resident"), eq(publicAccessCodes.code, complaintNo.toUpperCase()),
   )).limit(1);
   if (!access || !access.tokenHash || hash(statusToken) !== access.tokenHash) return null;
-  const [property] = access.propertyId ? await db.select().from(organizationProperties).where(eq(organizationProperties.id, access.propertyId)).limit(1) : [];
-  if (!property || normalize(property.displayAddress) !== normalize(address)) return null;
-  return { access, property };
+  const [row] = await db.select({ state: entityRecords.state }).from(entityRecords).where(and(
+    eq(entityRecords.id, access.recordId), eq(entityRecords.tenantId, access.tenantId),
+    eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!row || normalize(row.state["address"]) !== normalize(address)) return null;
+  return { access };
 }
 
 router.post("/v1/public/resident-reports/:complaintNo/photos/upload-url", async (req, res) => {
