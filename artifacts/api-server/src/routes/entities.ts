@@ -10,6 +10,7 @@ import {
   canReadEntity,
   entityDevelopmentAllowed,
   generatedCode,
+  isBoroughDirector,
   recordId,
   stripPricing,
 } from "../lib/domain";
@@ -242,7 +243,11 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (entity === "procurement" && current.state["status"] === "closed") {
+  if (
+    entity === "procurement" &&
+    current.state["status"] === "closed" &&
+    !isBoroughDirector(actor)
+  ) {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
   }
@@ -258,6 +263,14 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   const updatedState = { ...current.state, ...patch };
+  const updatedDevelopment =
+    typeof updatedState["development"] === "string"
+      ? updatedState["development"]
+      : current.development;
+  if (!entityDevelopmentAllowed(actor, entity, updatedDevelopment)) {
+    res.status(403).json({ error: "Development access denied" });
+    return;
+  }
   const now = new Date();
   const [updated] = await db
     .update(entityRecords)
@@ -267,10 +280,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
         typeof updatedState["projectId"] === "string"
           ? updatedState["projectId"]
           : current.projectId,
-      development:
-        typeof updatedState["development"] === "string"
-          ? updatedState["development"]
-          : current.development,
+      development: updatedDevelopment,
       version: sql`${entityRecords.version} + 1`,
       updatedAt: now,
     })
@@ -304,7 +314,15 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (entity === "procurement" && current.state["status"] === "closed") {
+  if (!entityDevelopmentAllowed(actor, entity, current.development)) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  if (
+    entity === "procurement" &&
+    current.state["status"] === "closed" &&
+    !isBoroughDirector(actor)
+  ) {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
   }
@@ -352,7 +370,8 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
   if (
     entity === "procurement" &&
     procurementOnly.has(action) &&
-    actor.role !== "procurement"
+    actor.role !== "procurement" &&
+    !isBoroughDirector(actor)
   ) {
     res.status(403).json({ error: "Procurement access required" });
     return;
@@ -360,7 +379,8 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
   if (
     entity === "leave-requests" &&
     !["administrator", "management"].includes(actor.role) &&
-    action !== "cancel"
+    action !== "cancel" &&
+    !isBoroughDirector(actor)
   ) {
     res.status(403).json({ error: "Management access required" });
     return;
@@ -427,6 +447,10 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     )
     .limit(1);
   if (!current) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  if (!entityDevelopmentAllowed(actor, entity, current.development)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }

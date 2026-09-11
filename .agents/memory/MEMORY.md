@@ -1,1 +1,2 @@
 - [Node test lifecycle fixtures](node-test-lifecycle-fixtures.md) — use a real I/O handle, not only an unresolved promise or timer, when a fixture must remain alive.
+- [FIAREP authority hierarchy](fiarep-authority-hierarchy.md) — Borough Director has full override; Administrator permissions expand only when explicitly defined.

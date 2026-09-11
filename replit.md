@@ -50,7 +50,8 @@ Official logo asset: `attached_assets/logo-logo_1789085394103.webp`. Preserve th
 
 ## User preferences
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+- Treat Borough Director as FIAREP's highest authority with full override access.
+- Keep ordinary Administrator permissions limited to assigned developments and lower staff; add further Administrator capabilities only when the user defines them.
 
 ## Gotchas
 

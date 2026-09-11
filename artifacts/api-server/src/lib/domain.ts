@@ -97,14 +97,19 @@ const ELEVATED_POSITIONS = new Set([
   "Superintendent",
 ]);
 
+export function isBoroughDirector(actor: Actor): boolean {
+  return actor.position === "Borough Director";
+}
+
 export function isElevated(actor: Actor): boolean {
   return (
-    actor.role === "administrator" ||
+    isBoroughDirector(actor) ||
     (actor.role === "management" && ELEVATED_POSITIONS.has(actor.position))
   );
 }
 
 export function canReadEntity(actor: Actor, entity: string): boolean {
+  if (isBoroughDirector(actor)) return true;
   if (HIGH_RISK_ENTITIES.has(entity) && actor.role === "management") {
     return isElevated(actor);
   }
@@ -115,8 +120,11 @@ export function developmentAllowed(
   actor: Actor,
   development: string | null,
 ): boolean {
+  if (isBoroughDirector(actor)) return true;
+  if (actor.role === "administrator") {
+    return Boolean(development && actor.developments.includes(development));
+  }
   return (
-    actor.role === "administrator" ||
     actor.developments.length === 0 ||
     !development ||
     actor.developments.includes(development)
@@ -131,7 +139,6 @@ export function entityDevelopmentAllowed(
   if (
     entity === "projects" &&
     !development &&
-    actor.role !== "administrator" &&
     actor.developments.length > 0
   ) {
     return false;
@@ -140,6 +147,7 @@ export function entityDevelopmentAllowed(
 }
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
+  if (isBoroughDirector(actor)) return true;
   if (entity === "emergency-units" || entity === "emergency-jobs") {
     return (
       actor.role === "administrator" ||
@@ -158,6 +166,7 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 }
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
+  if (isBoroughDirector(actor)) return true;
   if (entity === "procurement" || entity === "procurement-bids") {
     return actor.role === "procurement";
   }
@@ -168,6 +177,7 @@ export function canDeleteEntity(
   actor: Actor,
   state: Record<string, unknown>,
 ): boolean {
+  if (isBoroughDirector(actor)) return true;
   if (actor.role === "worker" || actor.role === "inspector") {
     return state["clearedByMgmt"] === true;
   }

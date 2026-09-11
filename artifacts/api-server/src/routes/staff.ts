@@ -6,6 +6,7 @@ import { audit } from "../lib/audit";
 import {
   STAFF_POSITIONS,
   STAFF_ROLES,
+  isBoroughDirector,
   isElevated,
   staffCode,
 } from "../lib/domain";
@@ -19,6 +20,33 @@ function safe(staff: typeof staffAccounts.$inferSelect, includeCode = false) {
   if (includeCode) return data;
   const { code: _code, ...withoutCode } = data;
   return withoutCode;
+}
+
+function developmentsWithinScope(
+  actor: ReturnType<typeof actorFrom>,
+  values: string[],
+) {
+  return (
+    isBoroughDirector(actor) ||
+    (actor.developments.length > 0 &&
+      values.length > 0 &&
+      values.every((value) => actor.developments.includes(value)))
+  );
+}
+
+function canManageStaff(
+  actor: ReturnType<typeof actorFrom>,
+  target: Pick<
+    typeof staffAccounts.$inferSelect,
+    "role" | "position" | "developments"
+  >,
+) {
+  if (isBoroughDirector(actor)) return true;
+  if (actor.role !== "administrator") return false;
+  if (target.position === "Borough Director" || target.role === "administrator") {
+    return false;
+  }
+  return developmentsWithinScope(actor, target.developments);
 }
 
 router.get("/v1/staff", async (req, res) => {
@@ -47,6 +75,11 @@ router.post("/v1/staff", async (req, res) => {
   const role = typeof input["role"] === "string" ? input["role"] : "";
   const position =
     typeof input["position"] === "string" ? input["position"] : "";
+  const developments = Array.isArray(input["developments"])
+    ? input["developments"].filter(
+        (item): item is string => typeof item === "string",
+      )
+    : [];
   if (
     !name ||
     !STAFF_ROLES.has(role) ||
@@ -56,7 +89,11 @@ router.post("/v1/staff", async (req, res) => {
     return;
   }
   const canIssue =
-    actor.role === "administrator" ||
+    isBoroughDirector(actor) ||
+    (actor.role === "administrator" &&
+      role !== "administrator" &&
+      position !== "Borough Director" &&
+      developmentsWithinScope(actor, developments)) ||
     (actor.role === "management" &&
       ((actor.position === "Regional Director" && role !== "administrator") ||
         (["worker", "inspector"].includes(role) && isElevated(actor))));
@@ -83,11 +120,7 @@ router.post("/v1/staff", async (req, res) => {
           : staffCode(),
       status:
         typeof input["status"] === "string" ? input["status"] : "approved",
-      developments: Array.isArray(input["developments"])
-        ? input["developments"].filter(
-            (item): item is string => typeof item === "string",
-          )
-        : [],
+      developments,
       createdBy: actor.id,
       issuerName: actor.name,
       createdAt: now,
@@ -100,8 +133,22 @@ router.post("/v1/staff", async (req, res) => {
 
 router.post("/v1/staff/:id/reset-code", async (req, res) => {
   const actor = actorFrom(res);
-  if (!isElevated(actor)) {
-    res.status(403).json({ error: "Elevated management access required" });
+  const [target] = await db
+    .select()
+    .from(staffAccounts)
+    .where(
+      and(
+        eq(staffAccounts.id, req.params["id"]!),
+        eq(staffAccounts.tenantId, actor.tenantId),
+      ),
+    )
+    .limit(1);
+  if (!target) {
+    res.status(404).json({ error: "Staff account not found" });
+    return;
+  }
+  if (!canManageStaff(actor, target)) {
+    res.status(403).json({ error: "Not allowed to manage this staff account" });
     return;
   }
   const code = staffCode();
@@ -129,8 +176,22 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
 
 router.post("/v1/staff/:id/revoke", async (req, res) => {
   const actor = actorFrom(res);
-  if (!isElevated(actor)) {
-    res.status(403).json({ error: "Elevated management access required" });
+  const [target] = await db
+    .select()
+    .from(staffAccounts)
+    .where(
+      and(
+        eq(staffAccounts.id, req.params["id"]!),
+        eq(staffAccounts.tenantId, actor.tenantId),
+      ),
+    )
+    .limit(1);
+  if (!target) {
+    res.status(404).json({ error: "Staff account not found" });
+    return;
+  }
+  if (!canManageStaff(actor, target)) {
+    res.status(403).json({ error: "Not allowed to manage this staff account" });
     return;
   }
   const [updated] = await db
