@@ -36,13 +36,23 @@ export default function ResidentLookup() {
   useEffect(() => { listSavedResidentReports().then(setSaved).catch(() => undefined); }, []);
 
   async function onLookup() {
-    if (!complaintNo.trim() || !address.trim() || !statusToken.trim()) {
-      Alert.alert('Missing info', 'Enter your complaint number, building address, and status token.');
+    if (!complaintNo.trim() || !address.trim()) {
+      Alert.alert('Missing info', 'Enter your complaint number and building address.');
+      return;
+    }
+    const savedReport = saved.find(
+      (item) =>
+        item.complaintNo.trim().toUpperCase() === complaintNo.trim().toUpperCase() &&
+        item.address.trim().toLowerCase() === address.trim().toLowerCase(),
+    );
+    const privateToken = statusToken || savedReport?.statusToken || '';
+    if (!privateToken) {
+      Alert.alert('Report not saved', 'Select a report saved on this device to check its status.');
       return;
     }
     setSearching(true);
     try {
-      const found = await findResidentReports(complaintNo.trim(), address.trim(), statusToken.trim());
+      const found = await findResidentReports(complaintNo.trim(), address.trim(), privateToken);
       setResults(found);
     } catch (e: any) {
       Alert.alert('Lookup failed', e?.message ?? 'Could not look up reports.');
@@ -68,11 +78,6 @@ export default function ResidentLookup() {
           ))}
         </View>
       )}
-
-      <View>
-        <Text style={ui.label}>Status token</Text>
-        <TextInput style={ui.input} value={statusToken} onChangeText={setStatusToken} placeholder="Paste your private status token" autoCapitalize="none" />
-      </View>
 
       <View>
         <Text style={ui.label}>Complaint number</Text>
