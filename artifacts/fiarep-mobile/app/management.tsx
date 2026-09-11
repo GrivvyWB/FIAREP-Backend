@@ -292,9 +292,11 @@ export default function Management() {
             <Text style={ui.lineK}>Unit</Text>
             <Text style={ui.lineV}>{r.unit}</Text>
           </View>
-          <View style={ui.line}>
-            <Text style={ui.lineK}>Address</Text>
-            <Text style={ui.lineV}>{r.address}</Text>
+          <View style={[ui.line, { alignItems: 'flex-start', gap: 12 }]}>
+            <Text style={[ui.lineK, { width: 58, flexShrink: 0 }]}>Address</Text>
+            <Text style={[ui.lineV, { flex: 1, minWidth: 0, flexShrink: 1, textAlign: 'right', lineHeight: 20 }]}>
+              {r.address}
+            </Text>
           </View>
           <View style={ui.line}>
             <Text style={ui.lineK}>Development</Text>

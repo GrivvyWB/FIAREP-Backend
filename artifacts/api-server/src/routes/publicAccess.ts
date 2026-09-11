@@ -13,6 +13,7 @@ import {
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { evaluateLicense, licenseAllows } from "../lib/auth";
 import { fileStorage } from "../lib/fileStorage";
+import { deliverPushNotification } from "../lib/push";
 import { rateLimit } from "../lib/rateLimit";
 
 const router: IRouter = Router();
@@ -69,7 +70,7 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       }
     }
     const state = {
-      ...rawState, complaintNo, address: reportAddress, propertyId: property?.id ?? null,
+      ...rawState, id, complaintNo, address: reportAddress, propertyId: property?.id ?? null,
       development: property?.development ?? (String(rawState.development ?? "").trim() || null),
       description, status: "submitted", photos: [],
       updates: [{ status: "submitted", by: "resident", at: now.toISOString() }], createdAt: now.toISOString(),
@@ -78,14 +79,17 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       id, tenantId, entity: "resident-reports", development: property?.development ?? (String(rawState.development ?? "").trim() || null),
       state, createdBy: "public-resident", createdAt: now, updatedAt: now,
     }).returning();
-    await tx.insert(notifications).values([
+    const createdNotifications = await tx.insert(notifications).values([
       { id: randomUUID(), tenantId, target: "management", message: "New resident report", detail: `${reportAddress} · ${complaintNo}`, reportId: id },
       { id: randomUUID(), tenantId, target: "administrator", message: "New resident report", detail: `${reportAddress} · ${complaintNo}`, reportId: id },
-    ]);
-    return row;
+    ]).returning();
+    return { row, createdNotifications };
   }).catch(() => null);
   if (!created) { res.status(503).json({ error: "Could not issue a complaint code" }); return; }
-  res.status(201).json({ ...record(created!), statusToken: residentToken });
+  for (const notification of created.createdNotifications) {
+    void deliverPushNotification(notification).catch(() => undefined);
+  }
+  res.status(201).json({ ...record(created.row!), statusToken: residentToken });
 });
 
 router.get("/v1/public/resident-reports/:complaintNo", async (req, res) => {

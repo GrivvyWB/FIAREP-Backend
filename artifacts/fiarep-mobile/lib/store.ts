@@ -1471,6 +1471,7 @@ export async function restoreServerSession(): Promise<Staff | null> {
     await recoverLegacyQueue(localDb, staff, evidence);
     await hydrateRemotePhotosFromDb(localDb);
     await setCurrentActor(staff.role, staff.name);
+    await registerPushToken().catch(() => undefined);
     await syncApprovedLocalStaffToServer().catch(() => undefined);
     const { syncAllEntities } = await import('./sync');
     await syncAllEntities().catch(() => undefined);

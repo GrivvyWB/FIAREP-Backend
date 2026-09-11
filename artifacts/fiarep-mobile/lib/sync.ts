@@ -7,6 +7,7 @@ import {
 import { db, getAccessToken, getCurrentActor, getSessionIdentity } from './store';
 import { ensureQueue } from './queue';
 import { registerRemotePhotos } from './photoResolver';
+import { notifyLocal } from './push';
 
 // This is deliberately data-driven: adding a local state table only requires
 // adding its backend entity and key column here, not another sync algorithm.
@@ -238,7 +239,7 @@ async function applyRecord(d: any, record: any, owner: string) {
     await d.runAsync(`DELETE FROM ${mapping.table} WHERE ${mapping.key} = ?`, record.id);
     return;
   }
-  const state = { ...(record.state || {}) };
+  const state = { ...(record.state || {}), id: record.id };
   if (Array.isArray(state.remoteFiles)) registerRemotePhotos(state.remoteFiles);
   if (mapping.table === 'projects') {
     const projectMeta = { ...(state.meta || {}), serverVersion: record.version, syncStatus: 'synced', updatedAt: record.updatedAt };
@@ -296,6 +297,7 @@ export async function syncAllEntities(): Promise<void> {
     since: cursorRow?.value || new Date(0).toISOString(),
     entities: TABLES.filter((item) => (ROLE_ENTITIES[identity?.role || actor.role] || ROLE_ENTITIES.worker).has(item.entity)).map((item) => item.entity).join(','),
   });
+  const newNotifications: Array<{ message: string; detail?: string; reportId?: string }> = [];
   await d.withTransactionAsync(async () => {
     for (const record of result.records || []) {
       const pending = await d.getFirstAsync(
@@ -310,9 +312,41 @@ export async function syncAllEntities(): Promise<void> {
         );
       } else await applyRecord(d, record, owner);
     }
+    await d.execAsync('CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)');
+    for (const notification of result.notifications || []) {
+      const existing = await d.getFirstAsync<{ id: string }>(
+        'SELECT id FROM notifications WHERE id=?',
+        notification.id,
+      );
+      const localNotification = {
+        id: notification.id,
+        target: notification.target,
+        message: notification.message,
+        detail: notification.detail || '',
+        read: Boolean(notification.read),
+        at: notification.at || new Date().toISOString(),
+        reportId: notification.reportId || undefined,
+      };
+      await d.runAsync(
+        'INSERT INTO notifications(id,state) VALUES(?,?) ON CONFLICT(id) DO UPDATE SET state=excluded.state',
+        notification.id,
+        JSON.stringify(localNotification),
+      );
+      if (!existing) newNotifications.push(localNotification);
+    }
     await d.runAsync(
       `INSERT INTO settings(key,value) VALUES(?,?)
        ON CONFLICT(key) DO UPDATE SET value=excluded.value`, scope, result.cursor,
     );
   });
+  for (const notification of newNotifications) {
+    const urgent = /emergency|priority|elevator|resident report/i.test(
+      `${notification.message} ${notification.detail || ''}`,
+    );
+    await notifyLocal(
+      notification.message || 'FIAREP alert',
+      notification.detail || 'A new item needs your attention.',
+      urgent,
+    );
+  }
 }

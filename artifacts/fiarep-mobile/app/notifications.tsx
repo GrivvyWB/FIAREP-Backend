@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, listNotifications, markNotificationRead, findReportByRef, outstandingPriorityFor, acknowledgePriorityViolation, getViolationLookup, getBuildingViolation, getCurrentPosition, deleteNotification, clearEmergencyNotifications, type Notification, type PriorityViolation, listElevatorJobsForMechanic } from '../lib/store';
+import { getCurrentActor, listNotifications, markNotificationRead, findReportByRef, outstandingPriorityFor, acknowledgePriorityViolation, getViolationLookup, getBuildingViolation, getCurrentPosition, deleteNotification, type Notification, type PriorityViolation, listElevatorJobsForMechanic } from '../lib/store';
 import { Alert } from 'react-native';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
@@ -119,7 +119,6 @@ export default function Notifications() {
 
   const load = useCallback(() => {
     (async () => {
-      try { await clearEmergencyNotifications(); } catch (e) {}
       const actor = await getCurrentActor();
       try { setPosition(await getCurrentPosition()); } catch (e) { setPosition(''); }
       const targets: string[] = [];
@@ -152,8 +151,11 @@ export default function Notifications() {
   // Escalation by age of an UNANSWERED job (independent of read-state): 2 = urgent (>=5d), 1 = red (>=3d), 0 = normal.
   // Opening a card marks it read but does not mean the job was actioned, so read-state must NOT clear the alert.
   function escalation(n: Notification): number {
-    // Returned-for-revision always shows red so the CPM spots it immediately.
-    if ((n.message || '').toLowerCase().includes('returned for revision')) return 1;
+    const message = (n.message || '').toLowerCase();
+    // Operational alerts must be red immediately; age-based escalation is only
+    // for ordinary unread work.
+    if (/emergency|priority|new resident report|elevator down/.test(message)) return 2;
+    if (message.includes('returned for revision')) return 1;
     const d = daysSince(n.at);
     if (d >= 5) return 2;
     if (d >= 3) return 1;

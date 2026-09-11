@@ -7,3 +7,4 @@
 - [FIAREP sync retries and login](fiarep-sync-retries-and-login.md) — entity creates must be idempotent, and successful auth must not depend on background sync succeeding.
 - [NYC property source resilience](nyc-property-source-resilience.md) — retry temporary source failures briefly, then return successful datasets with source-specific warnings.
 - [FIAREP organization licensing](fiarep-organization-licensing.md) — platform ownership is separate from tenant roles; customer access fails closed unless its license is active.
+- [FIAREP alert delivery](fiarep-alert-delivery.md) — Resident and emergency alerts require inbox persistence, immediate red escalation, sound/badge, and native push when available.

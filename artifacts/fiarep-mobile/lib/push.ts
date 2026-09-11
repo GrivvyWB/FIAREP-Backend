@@ -10,6 +10,9 @@ function getNotifs(): any | null {
 function getDevice(): any | null {
   try { return require('expo-device'); } catch (e) { return null; }
 }
+function getConstants(): any | null {
+  try { return require('expo-constants').default; } catch (e) { return null; }
+}
 
 let handlerSet = false;
 function ensureHandler(N: any) {
@@ -53,15 +56,28 @@ export async function registerForPush(): Promise<string> {
     if (D && D.isDevice === false) return '';
     const granted = await requestNotificationPermission();
     if (!granted) return '';
-    const tok = await N.getExpoPushTokenAsync();
+    const C = getConstants();
+    const projectId = C?.easConfig?.projectId || C?.expoConfig?.extra?.eas?.projectId;
+    const tok = await N.getExpoPushTokenAsync(projectId ? { projectId } : undefined);
     return (tok && tok.data) || '';
   } catch (e) { return ''; }
 }
 
-export async function notifyLocal(title: string, body: string): Promise<void> {
+export async function notifyLocal(title: string, body: string, urgent: boolean = false): Promise<void> {
   const N = getNotifs();
   if (!N) return;
   try {
-    await N.scheduleNotificationAsync({ content: { title, body, sound: true }, trigger: null });
+    await requestNotificationPermission();
+    await N.scheduleNotificationAsync({
+      content: {
+        title,
+        body,
+        sound: 'default',
+        badge: 1,
+        color: urgent ? '#c0392b' : undefined,
+        interruptionLevel: urgent ? 'timeSensitive' : 'active',
+      },
+      trigger: null,
+    });
   } catch (e) {}
 }
