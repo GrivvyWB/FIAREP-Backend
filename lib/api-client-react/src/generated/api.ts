@@ -40,7 +40,9 @@ import type {
   ListStaffParams,
   LoginInput,
   LogoutBody,
+  LookupNycPropertyParams,
   Notification,
+  NycPropertyLookup,
   PullSyncParams,
   PushDelivery,
   RefreshSessionBody,
@@ -229,6 +231,90 @@ export const useClassifyViolation = <TError = ErrorType<Error | UnauthorizedResp
       > => {
       return useMutation(getClassifyViolationMutationOptions(options));
     }
+
+export const getLookupNycPropertyUrl = (params: LookupNycPropertyParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/property/nyc-lookup?${stringifiedParams}` : `/api/v1/property/nyc-lookup`
+}
+
+/**
+ * @summary Look up official NYC property, HPD, and DOB records by address
+ */
+export const lookupNycProperty = async (params: LookupNycPropertyParams, options?: Parameters<typeof customFetch>[1]): Promise<NycPropertyLookup> => {
+
+  return customFetch<NycPropertyLookup>(getLookupNycPropertyUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getLookupNycPropertyQueryKey = (params?: LookupNycPropertyParams,) => {
+    return [
+    `/api/v1/property/nyc-lookup`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getLookupNycPropertyQueryOptions = <TData = Awaited<ReturnType<typeof lookupNycProperty>>, TError = ErrorType<Error | UnauthorizedResponse>>(params: LookupNycPropertyParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupNycProperty>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getLookupNycPropertyQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupNycProperty>>> = ({ signal }) => lookupNycProperty(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof lookupNycProperty>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type LookupNycPropertyQueryResult = NonNullable<Awaited<ReturnType<typeof lookupNycProperty>>>
+export type LookupNycPropertyQueryError = ErrorType<Error | UnauthorizedResponse>
+
+
+/**
+ * @summary Look up official NYC property, HPD, and DOB records by address
+ */
+
+export function useLookupNycProperty<TData = Awaited<ReturnType<typeof lookupNycProperty>>, TError = ErrorType<Error | UnauthorizedResponse>>(
+ params: LookupNycPropertyParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupNycProperty>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getLookupNycPropertyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getLoginUrl = () => {
 

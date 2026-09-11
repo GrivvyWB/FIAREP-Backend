@@ -50,6 +50,22 @@ function outward(
   };
 }
 
+function privateRecordAllowed(
+  actor: ReturnType<typeof actorFrom>,
+  row: typeof entityRecords.$inferSelect,
+): boolean {
+  if (actor.role === "resident") {
+    return row.entity === "resident-reports" && row.createdBy === actor.id;
+  }
+  if (
+    actor.role === "vendor" &&
+    (row.entity === "procurement-bids" || row.entity === "vendor-quotes")
+  ) {
+    return row.createdBy === actor.id;
+  }
+  return true;
+}
+
 function withGeneratedFields(
   entity: string,
   input: Record<string, unknown>,
@@ -104,6 +120,7 @@ router.get("/v1/:entity", async (req, res, next) => {
   res.json(
     rows
       .filter((row) => entityDevelopmentAllowed(actor, entity, row.development))
+      .filter((row) => privateRecordAllowed(actor, row))
       .filter((row) => !projectId || row.projectId === projectId)
       .filter(
         (row) =>
@@ -242,7 +259,11 @@ router.get("/v1/:entity/:id", async (req, res, next) => {
       ),
     )
     .limit(1);
-  if (!row || !entityDevelopmentAllowed(actor, entity, row.development)) {
+  if (
+    !row ||
+    !entityDevelopmentAllowed(actor, entity, row.development) ||
+    !privateRecordAllowed(actor, row)
+  ) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -289,7 +310,11 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
       ),
     )
     .limit(1);
-  if (!current || !entityDevelopmentAllowed(actor, entity, current.development)) {
+  if (
+    !current ||
+    !entityDevelopmentAllowed(actor, entity, current.development) ||
+    !privateRecordAllowed(actor, current)
+  ) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -366,7 +391,7 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
       ),
     )
     .limit(1);
-  if (!current) {
+  if (!current || !privateRecordAllowed(actor, current)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -449,8 +474,18 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
       version: sql`${entityRecords.version} + 1`,
       updatedAt: now,
     })
-    .where(eq(entityRecords.id, current.id))
+    .where(and(
+      eq(entityRecords.id, current.id),
+      eq(entityRecords.entity, entity),
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.deleted, false),
+      eq(entityRecords.version, current.version),
+    ))
     .returning();
+  if (!updated) {
+    res.status(409).json({ error: "Concurrent update detected" });
+    return;
+  }
   await audit(
     actor,
     `${entity}.${action}`,

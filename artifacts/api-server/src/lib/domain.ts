@@ -157,7 +157,10 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
         ["Borough Director", "Regional Director"].includes(actor.position))
     );
   }
-  if (entity === "procurement-bids" || entity === "vendor-quotes") return true;
+  if (entity === "procurement-bids" || entity === "vendor-quotes") {
+    return actor.role === "vendor" || actor.role === "procurement";
+  }
+  if (entity === "resident-reports" && actor.role === "resident") return true;
   if (entity === "procurement") {
     return actor.role === "inspector" && actor.position === "CPM";
   }

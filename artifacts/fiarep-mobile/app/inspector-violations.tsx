@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { lookupNycProperty, type NycPropertyLookup } from '@workspace/api-client-react';
 import {
   addBuildingViolation,
   listBuildingViolations,
@@ -41,12 +42,30 @@ export default function InspectorViolations() {
   const [hazard, setHazard] = useState<HazardClass | null>(null);
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<BuildingViolation[]>([]);
+  const [lookupData, setLookupData] = useState<NycPropertyLookup | null>(null);
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupError, setLookupError] = useState<string>('');
 
   const load = useCallback(() => {
     if (building.trim()) listBuildingViolations(building, violationNo).then(setItems);
     else setItems([]);
   }, [building, violationNo]);
   useFocusEffect(load);
+
+  async function handleLookup() {
+    if (!building.trim()) return;
+    setLookupLoading(true);
+    setLookupError('');
+    setLookupData(null);
+    try {
+      const res = await lookupNycProperty({ address: building.trim(), limit: 25 });
+      setLookupData(res);
+    } catch (err: any) {
+      setLookupError(err?.message || 'Lookup failed.');
+    } finally {
+      setLookupLoading(false);
+    }
+  }
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -81,8 +100,80 @@ export default function InspectorViolations() {
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
       <Text style={ui.h}>Log Violations</Text>
       <Text style={ui.label}>Building the supervisor assigned</Text>
-      <TextInput style={ui.input} value={building} onChangeText={setBuilding} placeholder="Building / address" autoCapitalize="words" />
-      <Text style={[ui.label, { marginTop: 8 }]}>Violation number</Text>
+      <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+        <TextInput style={[ui.input, { flex: 1 }]} value={building} onChangeText={setBuilding} placeholder="Building / address" autoCapitalize="words" />
+        <Pressable style={building.trim() ? [ui.btn, { padding: 10 }] : [ui.btn, ui.btnMuted, { padding: 10 }]} onPress={handleLookup} disabled={!building.trim() || lookupLoading}>
+          <Text style={ui.btnText}>{lookupLoading ? 'Wait' : 'Lookup'}</Text>
+        </Pressable>
+      </View>
+      {!!lookupError && <Text style={{ color: '#c0392b', marginTop: 4, fontSize: 13 }}>{lookupError}</Text>}
+      {lookupData && (
+        <View style={[ui.card, { marginTop: 8, backgroundColor: '#f9f9f9', padding: 12 }]}>
+          <Text style={[ui.cardTitle, { marginBottom: 6 }]}>Official NYC Records</Text>
+          <View style={ui.line}>
+            <Text style={ui.lineK}>Address</Text>
+            <Text style={ui.lineV}>{lookupData.property.formattedAddress}</Text>
+          </View>
+          <View style={ui.line}>
+            <Text style={ui.lineK}>Boro / Blk / Lot</Text>
+            <Text style={ui.lineV}>{lookupData.property.borough} / {lookupData.property.block} / {lookupData.property.lot}</Text>
+          </View>
+          {!!lookupData.property.bin && (
+            <View style={ui.line}>
+              <Text style={ui.lineK}>BIN</Text>
+              <Text style={ui.lineV}>{lookupData.property.bin}</Text>
+            </View>
+          )}
+
+          {lookupData.warnings && lookupData.warnings.length > 0 && (
+            <View style={{ marginTop: 8, padding: 8, backgroundColor: '#fff3cd', borderRadius: 8 }}>
+              {lookupData.warnings.map((w, i) => (
+                <Text key={i} style={{ color: '#8a6d3b', fontSize: 13, fontWeight: '500' }}>Warning: {w}</Text>
+              ))}
+            </View>
+          )}
+
+          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>HPD Violations ({lookupData.summary.hpdViolations} total, {lookupData.summary.openHpdViolations} open)</Text>
+          {lookupData.hpdViolations.length === 0 ? <Text style={ui.listSub}>No HPD violations found.</Text> : lookupData.hpdViolations.map((v, i) => (
+            <View key={v.id || i} style={{ marginTop: 6, padding: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontWeight: '600', color: ACCENT }}>Class {v.class || '?'}</Text>
+                <Text style={{ color: v.status === 'Open' ? '#c0392b' : '#1E7D4F', fontWeight: '600' }}>{v.status}</Text>
+              </View>
+              <Text style={{ fontSize: 13, marginTop: 4 }}>{v.description}</Text>
+              {!!v.inspectionDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Inspected: {v.inspectionDate}</Text>}
+            </View>
+          ))}
+
+          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>DOB Violations ({lookupData.summary.dobViolations} total, {lookupData.summary.openDobViolations} open)</Text>
+          {lookupData.dobViolations.length === 0 ? <Text style={ui.listSub}>No DOB violations found.</Text> : lookupData.dobViolations.map((v, i) => (
+            <View key={v.id || i} style={{ marginTop: 6, padding: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontWeight: '600', color: ACCENT }}>{v.number || v.type}</Text>
+                <Text style={{ color: v.status === 'Open' ? '#c0392b' : '#1E7D4F', fontWeight: '600' }}>{v.status}</Text>
+              </View>
+              <Text style={{ fontSize: 13, marginTop: 4 }}>{v.description}</Text>
+              {!!v.issueDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Issued: {v.issueDate}</Text>}
+            </View>
+          ))}
+
+          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>HPD Complaints ({lookupData.summary.hpdComplaints} total)</Text>
+          {lookupData.hpdComplaints.length === 0 ? <Text style={ui.listSub}>No HPD complaints found.</Text> : lookupData.hpdComplaints.map((c, i) => (
+            <View key={c.id || i} style={{ marginTop: 6, padding: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0' }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Text style={{ fontWeight: '600', color: ACCENT, flex: 1 }} numberOfLines={1}>{c.majorCategory}</Text>
+                <Text style={{ color: c.status === 'Open' ? '#c0392b' : '#1E7D4F', fontWeight: '600', marginLeft: 8 }}>{c.status}</Text>
+              </View>
+              <Text style={{ fontSize: 13, marginTop: 4 }}>{c.description}</Text>
+              {!!c.receivedDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Received: {c.receivedDate}</Text>}
+            </View>
+          ))}
+
+          <Text style={[ui.listSub, { marginTop: 12, textAlign: 'center' }]}>Retrieved: {fmt(lookupData.retrievedAt)}</Text>
+        </View>
+      )}
+
+      <Text style={[ui.label, { marginTop: 12 }]}>Violation number</Text>
       <TextInput style={ui.input} value={violationNo} onChangeText={setViolationNo} placeholder="Number from supervisor" />
 
       <View style={[ui.card, { gap: 8, marginTop: 16 }]}>

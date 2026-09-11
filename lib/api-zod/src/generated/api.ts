@@ -55,6 +55,83 @@ export const ClassifyViolationResponse = zod.object({
 
 
 /**
+ * @summary Look up official NYC property, HPD, and DOB records by address
+ */
+export const lookupNycPropertyQueryAddressMin = 3;
+export const lookupNycPropertyQueryAddressMax = 200;
+
+export const lookupNycPropertyQueryLimitDefault = 25;
+export const lookupNycPropertyQueryLimitMax = 100;
+
+
+
+export const LookupNycPropertyQueryParams = zod.object({
+  "address": zod.coerce.string().min(lookupNycPropertyQueryAddressMin).max(lookupNycPropertyQueryAddressMax),
+  "limit": zod.coerce.number().int().min(1).max(lookupNycPropertyQueryLimitMax).default(lookupNycPropertyQueryLimitDefault)
+})
+
+export const LookupNycPropertyResponse = zod.object({
+  "property": zod.object({
+  "query": zod.string(),
+  "formattedAddress": zod.string(),
+  "houseNumber": zod.string(),
+  "street": zod.string(),
+  "borough": zod.string(),
+  "zip": zod.string().nullish(),
+  "bin": zod.string().nullish(),
+  "bbl": zod.string().nullish(),
+  "block": zod.string().nullish(),
+  "lot": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish()
+}),
+  "summary": zod.object({
+  "hpdViolations": zod.number().int(),
+  "openHpdViolations": zod.number().int(),
+  "dobViolations": zod.number().int(),
+  "openDobViolations": zod.number().int(),
+  "hpdComplaints": zod.number().int()
+}),
+  "hpdViolations": zod.array(zod.object({
+  "id": zod.string(),
+  "source": zod.enum(['HPD']),
+  "class": zod.string().nullish(),
+  "status": zod.string(),
+  "description": zod.string(),
+  "inspectionDate": zod.string().nullish(),
+  "apartment": zod.string().nullish(),
+  "story": zod.string().nullish(),
+  "orderNumber": zod.string().nullish()
+})),
+  "dobViolations": zod.array(zod.object({
+  "id": zod.string(),
+  "source": zod.enum(['DOB']),
+  "number": zod.string().nullish(),
+  "type": zod.string().nullish(),
+  "category": zod.string().nullish(),
+  "status": zod.string(),
+  "description": zod.string(),
+  "issueDate": zod.string().nullish(),
+  "dispositionDate": zod.string().nullish(),
+  "dispositionComments": zod.string().nullish(),
+  "ecbNumber": zod.string().nullish()
+})),
+  "hpdComplaints": zod.array(zod.object({
+  "id": zod.string(),
+  "source": zod.enum(['HPD']),
+  "status": zod.string(),
+  "description": zod.string(),
+  "receivedDate": zod.string().nullish(),
+  "apartment": zod.string().nullish(),
+  "majorCategory": zod.string().nullish(),
+  "minorCategory": zod.string().nullish()
+})),
+  "warnings": zod.array(zod.string()),
+  "retrievedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Staff login with issued code
  */
 export const loginBodyCodeMin = 4;

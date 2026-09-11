@@ -22,6 +22,8 @@ const ROLE_LABEL: Record<StaffRole, string> = {
   worker: 'Worker',
   inspector: 'Inspection',
   procurement: 'Procurement',
+  resident: 'Resident',
+  vendor: 'Vendor',
 };
 
 const MGMT_TITLES = ['Property Manager', 'Superintendent', 'Regional Manager', 'Director', 'Other'] as const;

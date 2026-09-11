@@ -811,7 +811,7 @@ export async function setStaffPin(pin: string): Promise<void> {
 }
 
 
-export type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'procurement';
+export type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'procurement' | 'resident' | 'vendor';
 
 export async function getRolePin(role: StaffRole): Promise<string | null> {
   const d = await db();

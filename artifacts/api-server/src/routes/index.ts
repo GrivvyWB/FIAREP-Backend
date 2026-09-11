@@ -8,6 +8,7 @@ import systemRouter from "./system";
 import entityRouter from "./entities";
 import fileRouter from "./files";
 import aiRouter from "./ai";
+import propertyRouter from "./property";
 
 const router: IRouter = Router();
 
@@ -20,5 +21,6 @@ router.use(systemRouter);
 router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);
+router.use(propertyRouter);
 
 export default router;

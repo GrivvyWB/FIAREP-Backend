@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -16,7 +16,7 @@ import {
 } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { useRouter } from 'expo-router';
-import { createResidentReport, listDevelopmentNames, LOCATION_CATEGORIES } from '../lib/store';
+import { createResidentReport, getCurrentActor, listDevelopmentNames, LOCATION_CATEGORIES } from '../lib/store';
 import AddressInput from '../components/AddressInput';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
@@ -39,6 +39,9 @@ export default function ResidentScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [query, setQuery] = useState('');
+  useEffect(() => {
+    getCurrentActor().then((actor) => setName(actor.name || '')).catch(() => undefined);
+  }, []);
 
   const names = useMemo(() => listDevelopmentNames(), []);
   const filtered = useMemo(() => {
@@ -107,8 +110,8 @@ export default function ResidentScreen() {
       <TextInput
         style={styles.input}
         value={name}
-        onChangeText={setName}
-        placeholder="e.g. John Smith"
+        editable={false}
+        placeholder="Authenticated resident"
         placeholderTextColor="#999"
         autoCapitalize="words"
       />

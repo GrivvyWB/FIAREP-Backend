@@ -15,7 +15,7 @@ type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
 export function useAppMode() { return useContext(ModeContext); }
 
-type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'procurement';
+type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'procurement' | 'resident' | 'vendor';
 const CODE_LEN = 4;
 const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
 const roleLabel = (r: StaffRole) =>
@@ -179,11 +179,11 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
       />
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Who's using this device?</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 12 }]}>Staff roles require an issued code.</Text>
-      <Pressable style={ui.btn} onPress={() => onPick('resident')}>
-        <Text style={ui.btnText}>Resident</Text>
+      <Pressable style={ui.btn} onPress={() => pickStaffRole('resident')}>
+        <Text style={ui.btnText}>Resident  🔒</Text>
       </Pressable>
-      <Pressable style={ui.btn} onPress={() => onPick('vendor')}>
-        <Text style={ui.btnText}>Vendor</Text>
+      <Pressable style={ui.btn} onPress={() => pickStaffRole('vendor')}>
+        <Text style={ui.btnText}>Vendor  🔒</Text>
       </Pressable>
       <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => onPick('emergency')}>
         <Text style={ui.btnText}>Emergency Unit</Text>

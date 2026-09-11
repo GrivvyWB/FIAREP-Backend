@@ -5,6 +5,120 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface NycProperty {
+  query: string;
+  formattedAddress: string;
+  houseNumber: string;
+  street: string;
+  borough: string;
+  /** @nullable */
+  zip?: string | null;
+  /** @nullable */
+  bin?: string | null;
+  /** @nullable */
+  bbl?: string | null;
+  /** @nullable */
+  block?: string | null;
+  /** @nullable */
+  lot?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+}
+
+export type NycHpdViolationSource = typeof NycHpdViolationSource[keyof typeof NycHpdViolationSource];
+
+
+export const NycHpdViolationSource = {
+  HPD: 'HPD',
+} as const;
+
+export interface NycHpdViolation {
+  id: string;
+  source: NycHpdViolationSource;
+  /** @nullable */
+  class?: string | null;
+  status: string;
+  description: string;
+  /** @nullable */
+  inspectionDate?: string | null;
+  /** @nullable */
+  apartment?: string | null;
+  /** @nullable */
+  story?: string | null;
+  /** @nullable */
+  orderNumber?: string | null;
+}
+
+export type NycDobViolationSource = typeof NycDobViolationSource[keyof typeof NycDobViolationSource];
+
+
+export const NycDobViolationSource = {
+  DOB: 'DOB',
+} as const;
+
+export interface NycDobViolation {
+  id: string;
+  source: NycDobViolationSource;
+  /** @nullable */
+  number?: string | null;
+  /** @nullable */
+  type?: string | null;
+  /** @nullable */
+  category?: string | null;
+  status: string;
+  description: string;
+  /** @nullable */
+  issueDate?: string | null;
+  /** @nullable */
+  dispositionDate?: string | null;
+  /** @nullable */
+  dispositionComments?: string | null;
+  /** @nullable */
+  ecbNumber?: string | null;
+}
+
+export type NycHpdComplaintSource = typeof NycHpdComplaintSource[keyof typeof NycHpdComplaintSource];
+
+
+export const NycHpdComplaintSource = {
+  HPD: 'HPD',
+} as const;
+
+export interface NycHpdComplaint {
+  id: string;
+  source: NycHpdComplaintSource;
+  status: string;
+  description: string;
+  /** @nullable */
+  receivedDate?: string | null;
+  /** @nullable */
+  apartment?: string | null;
+  /** @nullable */
+  majorCategory?: string | null;
+  /** @nullable */
+  minorCategory?: string | null;
+}
+
+export interface NycPropertyLookupSummary {
+  hpdViolations: number;
+  openHpdViolations: number;
+  dobViolations: number;
+  openDobViolations: number;
+  hpdComplaints: number;
+}
+
+export interface NycPropertyLookup {
+  property: NycProperty;
+  summary: NycPropertyLookupSummary;
+  hpdViolations: NycHpdViolation[];
+  dobViolations: NycDobViolation[];
+  hpdComplaints: NycHpdComplaint[];
+  warnings: string[];
+  retrievedAt: string;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -243,6 +357,19 @@ export interface Error {
  * Authentication required
  */
 export type UnauthorizedResponse = Error;
+
+export type LookupNycPropertyParams = {
+/**
+ * @minLength 3
+ * @maxLength 200
+ */
+address: string;
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
 
 export type BootstrapAdministratorBody = {
   name: string;

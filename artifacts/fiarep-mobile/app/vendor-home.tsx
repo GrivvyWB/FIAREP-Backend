@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
@@ -8,6 +8,8 @@ import {
   vendorStartProcurement,
   vendorCompleteProcurement,
   clearAppMode,
+  getCurrentActor,
+  logout,
   type ProcurementRequest,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
@@ -42,6 +44,9 @@ export default function VendorHome() {
   const [bidNote, setBidNote] = useState('');
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    getCurrentActor().then((actor) => setBidName(actor.name || '')).catch(() => undefined);
+  }, []);
 
   async function lookup() {
     const q = query.trim();
@@ -84,14 +89,9 @@ export default function VendorHome() {
 
   function openQuote() {
     if (!job) return;
-    Alert.prompt('Your company name', 'Enter your company name for this quote.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Continue', onPress: (nm?: string) => {
-        const v = (nm || '').trim();
-        if (!v) { Alert.alert('Name required', 'Enter your company name.'); return; }
-        router.push('/vendor-quote?trackingId=' + encodeURIComponent(job.trackingId) + '&vendor=' + encodeURIComponent(v) + '&address=' + encodeURIComponent(job.address || '') + '&scope=' + encodeURIComponent(job.scope || '') + '&projectId=' + encodeURIComponent(job.projectId || '') + '&jobId=' + encodeURIComponent(job.id || ''));
-      } },
-    ], 'plain-text', bidName || '');
+    const vendor = bidName.trim();
+    if (!vendor) { Alert.alert('Account required', 'Sign in again with your vendor account.'); return; }
+    router.push('/vendor-quote?trackingId=' + encodeURIComponent(job.trackingId) + '&vendor=' + encodeURIComponent(vendor) + '&address=' + encodeURIComponent(job.address || '') + '&scope=' + encodeURIComponent(job.scope || '') + '&projectId=' + encodeURIComponent(job.projectId || '') + '&jobId=' + encodeURIComponent(job.id || ''));
   }
   async function onBid() {
     if (!job) return;
@@ -103,7 +103,7 @@ export default function VendorHome() {
     try {
       const b = await submitBid(job.trackingId, nm, amt, bidNote.trim());
       if (b) {
-        setBidName(''); setBidAmount(''); setBidNote('');
+        setBidAmount(''); setBidNote('');
         Alert.alert('Bid submitted', 'Your bid of $' + amt + ' was sent to procurement.');
       } else {
         Alert.alert('Not found', 'Could not submit a bid for that job.');
@@ -113,11 +113,10 @@ export default function VendorHome() {
     }
   }
 
-  function onExit() {
-    Alert.alert('Exit?', 'Return to the role selection screen.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Exit', style: 'destructive', onPress: async () => { await clearAppMode(); refresh(); } },
-    ]);
+  async function onSignOut() {
+    await logout();
+    await clearAppMode();
+    refresh();
   }
 
   return (
@@ -216,8 +215,8 @@ export default function VendorHome() {
 
           {job.status === 'bidding' && (
             <View style={{ gap: 8, marginTop: 6 }}>
-              <Text style={ui.label}>Your name</Text>
-              <TextInput style={ui.input} value={bidName} onChangeText={setBidName} placeholder="Company or contact name" autoCapitalize="words" />
+              <Text style={ui.label}>Vendor account</Text>
+              <TextInput style={ui.input} value={bidName} editable={false} placeholder="Authenticated vendor" />
               <Text style={ui.label}>Your bid amount</Text>
               <TextInput style={ui.input} value={bidAmount} onChangeText={setBidAmount} placeholder="$" keyboardType="numeric" />
               <Text style={ui.label}>Note (optional)</Text>
@@ -237,8 +236,8 @@ export default function VendorHome() {
         </View>
       )}
 
-      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onExit}>
-        <Text style={ui.btnOutlineText}>Exit</Text>
+      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onSignOut}>
+        <Text style={ui.btnOutlineText}>Sign out</Text>
       </Pressable>
     </ScrollView>
     </KeyboardAvoidingView>
