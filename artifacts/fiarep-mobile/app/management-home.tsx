@@ -35,7 +35,11 @@ export default function ManagementHome() {
       heading: 'Inspections & Compliance',
       color: '#1E7D4F',
       tiles: [
-        ...(!restricted ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-review'), tone: 'solid' as Tone }, { label: 'Projects / Inspections', onPress: () => router.push('/'), tone: 'outline' as Tone }] : []),
+        ...(!restricted ? [
+          { label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone },
+          { label: 'Projects', onPress: () => router.push('/'), tone: 'outline' as Tone },
+          { label: 'HUD Inspections', onPress: () => router.push('/hud-review'), tone: 'outline' as Tone },
+        ] : []),
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' },
         { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' },
         { label: 'Assign Route', onPress: () => router.push('/assign-route'), tone: 'tint' },

@@ -1,12 +1,13 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useFocusEffect, useRouter, Redirect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter, Redirect } from 'expo-router';
 import { listProjects, createProject, deleteProject, type Project, listApprovedProjectIds, getSessionIdentity } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 
 export default function Projects() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ new?: string }>();
   const { mode } = useAppMode();
 
   // '/' (this Projects screen) is only for inspector & administrator.
@@ -27,6 +28,9 @@ export default function Projects() {
     getSessionIdentity().then((identity) => setDevelopments(identity?.developments || []));
   }, []);
   useFocusEffect(load);
+  useEffect(() => {
+    if (params.new === '1') setAdding(true);
+  }, [params.new]);
 
   const onCreate = async () => {
     if (!name.trim()) { Alert.alert('Name required', 'Give the project a name.'); return; }
