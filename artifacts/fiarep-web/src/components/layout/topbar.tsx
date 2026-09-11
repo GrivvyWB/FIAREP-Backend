@@ -28,7 +28,7 @@ export function Topbar({ onMenuClick }: { onMenuClick: () => void }) {
         <div className="text-[20px] font-extrabold tracking-[.3px] leading-tight">
           FIA<span className="text-[#F5B301]">REP</span>
           <small className="block text-[10.5px] font-medium text-muted-foreground tracking-normal">
-            Field Inspection and Repair Estimation Platform
+            Field Inspection, Repair, Estimation &amp; Property Operations Platform
           </small>
         </div>
       </div>
