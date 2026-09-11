@@ -163,7 +163,7 @@ export default function OwnerDashboard() {
                   <TableHead className="font-semibold text-slate-900">Organization Name</TableHead>
                   <TableHead className="font-semibold text-slate-900">Status</TableHead>
                   <TableHead className="font-semibold text-slate-900">License Dates</TableHead>
-                  <TableHead className="font-semibold text-slate-900 text-right">Usage (Staff / Props)</TableHead>
+                  <TableHead className="font-semibold text-slate-900 text-right">Usage (Staff / Developments)</TableHead>
                   <TableHead className="text-right w-[80px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -224,7 +224,7 @@ export default function OwnerDashboard() {
                           </div>
                           <div className="flex items-center gap-2">
                             <Building2 className="w-3 h-3 text-slate-400" />
-                            <span className="font-medium text-slate-700">{org.usage?.properties || 0}</span>
+                            <span className="font-medium text-slate-700">{org.usage?.developments || 0}</span>
                             <span className="text-slate-400 text-xs">/ {org.propertyLimit || '∞'}</span>
                           </div>
                         </div>

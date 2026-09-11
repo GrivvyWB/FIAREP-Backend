@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { randomUUID, randomInt } from "node:crypto";
 import { and, count, eq, inArray, desc, isNull, sql } from "drizzle-orm";
-import { db, organizationProperties, organizations, staffAccounts, refreshSessions, platformLicenseAudit } from "@workspace/db";
+import { db, entityRecords, organizationProperties, organizations, staffAccounts, refreshSessions, platformLicenseAudit } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
@@ -108,9 +108,55 @@ router.get("/v1/platform/organizations", async (_req, res) => {
   await evaluateLicense("default");
   const rows = await db.select().from(organizations);
   const result = await Promise.all(rows.map(async (org) => {
-    const [{ value: staffCount }] = await db.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, org.id));
-     const [{ value: propertyCount }] = await db.select({ value: count() }).from(organizationProperties).where(eq(organizationProperties.organizationId, org.id));
-    return { ...publicOrganization(org), usage: { staff: Number(staffCount), properties: Number(propertyCount) } };
+    const [staffRows, propertyRows, recordRows] = await Promise.all([
+      db.select({
+        id: staffAccounts.id,
+        developments: staffAccounts.developments,
+        createdAt: staffAccounts.createdAt,
+      }).from(staffAccounts).where(eq(staffAccounts.tenantId, org.id)),
+      db.select({
+        development: organizationProperties.development,
+        active: organizationProperties.active,
+        createdAt: organizationProperties.createdAt,
+      }).from(organizationProperties).where(eq(organizationProperties.organizationId, org.id)),
+      db.select({
+        entity: entityRecords.entity,
+        development: entityRecords.development,
+        createdAt: entityRecords.createdAt,
+      }).from(entityRecords).where(and(
+        eq(entityRecords.tenantId, org.id),
+        eq(entityRecords.deleted, false),
+      )),
+    ]);
+    const names = [...new Set([
+      ...staffRows.flatMap((row) => row.developments),
+      ...propertyRows.map((row) => row.development),
+      ...recordRows.map((row) => row.development),
+    ].filter((name): name is string => typeof name === "string" && name.trim().length > 0)
+      .map((name) => name.trim()))].sort((a, b) => a.localeCompare(b));
+    const developments = names.map((name) => {
+      const properties = propertyRows.filter((row) => row.development?.trim() === name);
+      const records = recordRows.filter((row) => row.development?.trim() === name);
+      const assignedStaff = staffRows.filter((row) => row.developments.some((value) => value.trim() === name));
+      const dates = [
+        ...properties.map((row) => row.createdAt),
+        ...records.map((row) => row.createdAt),
+        ...assignedStaff.map((row) => row.createdAt),
+      ];
+      return {
+        name,
+        active: properties.length === 0 || properties.some((row) => row.active),
+        staff: assignedStaff.length,
+        projects: records.filter((row) => row.entity === "projects").length,
+        records: records.length,
+        connectedAt: new Date(Math.min(...dates.map((date) => date.getTime()))).toISOString(),
+      };
+    });
+    return {
+      ...publicOrganization(org),
+      usage: { staff: staffRows.length, developments: developments.length },
+      developments,
+    };
   }));
   res.json(result);
 });

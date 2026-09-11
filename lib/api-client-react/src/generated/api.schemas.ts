@@ -83,11 +83,21 @@ export interface OrganizationUpdate {
 
 export type OrganizationWithUsageUsage = {
   staff: number;
-  properties: number;
+  developments: number;
 };
+
+export interface OrganizationDevelopmentUsage {
+  name: string;
+  active: boolean;
+  staff: number;
+  projects: number;
+  records: number;
+  connectedAt: string;
+}
 
 export type OrganizationWithUsage = Organization & {
   usage: OrganizationWithUsageUsage;
+  developments: OrganizationDevelopmentUsage[];
 };
 
 export type OrganizationCreateResponseDirector = {

@@ -1002,14 +1002,27 @@ components:
       allOf:
         - $ref: "#/components/schemas/Organization"
         - type: object
-          required: [usage]
+          required: [usage, developments]
           properties:
             usage:
               type: object
-              required: [staff, properties]
+              required: [staff, developments]
               properties:
                 staff: { type: integer }
-                properties: { type: integer }
+                developments: { type: integer }
+            developments:
+              type: array
+              items: { $ref: "#/components/schemas/OrganizationDevelopmentUsage" }
+    OrganizationDevelopmentUsage:
+      type: object
+      required: [name, active, staff, projects, records, connectedAt]
+      properties:
+        name: { type: string }
+        active: { type: boolean }
+        staff: { type: integer }
+        projects: { type: integer }
+        records: { type: integer }
+        connectedAt: { type: string, format: date-time }
     OrganizationCreateResponse:
       type: object
       required: [organization]

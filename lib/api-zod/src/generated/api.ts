@@ -350,8 +350,16 @@ export const ListOrganizationsResponseItem = zod.object({
 }).and(zod.object({
   "usage": zod.object({
   "staff": zod.number().int(),
-  "properties": zod.number().int()
-})
+  "developments": zod.number().int()
+}),
+  "developments": zod.array(zod.object({
+  "name": zod.string(),
+  "active": zod.boolean(),
+  "staff": zod.number().int(),
+  "projects": zod.number().int(),
+  "records": zod.number().int(),
+  "connectedAt": zod.coerce.date()
+}))
 }))
 export const ListOrganizationsResponse = zod.array(ListOrganizationsResponseItem)
 

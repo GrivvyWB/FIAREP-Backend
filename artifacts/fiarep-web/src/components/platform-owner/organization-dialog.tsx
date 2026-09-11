@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Copy } from "lucide-react";
+import { Building2, Copy } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -175,7 +175,7 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-2xl bg-white border-slate-200">
+      <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white border-slate-200">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-slate-900">
             {isEditing ? "Edit Organization" : "Register Organization"}
@@ -307,7 +307,7 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
                   name="propertyLimit"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel className="text-slate-700">Property Limit</FormLabel>
+                      <FormLabel className="text-slate-700">Development Limit</FormLabel>
                       <FormControl>
                         <Input 
                           type="number" 
@@ -344,6 +344,51 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
                 )}
               />
             </div>
+
+            {isEditing && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+                  <div>
+                    <h4 className="font-semibold text-slate-900">Connected Developments</h4>
+                    <p className="text-sm text-slate-500">Developments found in staff assignments and organization records.</p>
+                  </div>
+                  <span className="text-sm font-semibold text-slate-700">
+                    {organization.developments.length} / {organization.propertyLimit ?? "∞"}
+                  </span>
+                </div>
+                {organization.developments.length === 0 ? (
+                  <div className="rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
+                    No developments are connected to this organization yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {organization.developments.map((development) => (
+                      <div key={development.name} className="rounded-lg border border-slate-200 bg-white p-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3">
+                            <div className="mt-0.5 rounded-md bg-slate-100 p-2">
+                              <Building2 className="h-4 w-4 text-slate-600" />
+                            </div>
+                            <div>
+                              <div className="font-semibold text-slate-900">{development.name}</div>
+                              <div className="mt-1 text-xs text-slate-500">
+                                {development.staff} assigned staff · {development.projects} projects · {development.records} operational records
+                              </div>
+                              <div className="mt-1 text-xs text-slate-400">
+                                Connected {new Date(development.connectedAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${development.active ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"}`}>
+                            {development.active ? "Active" : "Inactive"}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {!isEditing && (
               <div className="space-y-4 pt-2">
