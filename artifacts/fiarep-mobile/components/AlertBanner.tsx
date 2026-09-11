@@ -9,19 +9,6 @@ export default function AlertBanner({ count }: { count: number }) {
   const pulse = useRef(new Animated.Value(1)).current;
   const prevCount = useRef(0);
 
-  async function playChime() {
-    try {
-      // expo-av is a native module (absent in Expo Go). Load it lazily so the app
-      // never crashes; if it's not present, just skip the sound.
-      let Audio: any;
-      try { Audio = require('expo-av').Audio; } catch (e) { return; }
-      if (!Audio) return;
-      const { sound } = await Audio.Sound.createAsync(require('../assets/alert.wav'));
-      await sound.playAsync();
-      setTimeout(() => { sound.unloadAsync().catch(() => {}); }, 1500);
-    } catch (e) {}
-  }
-
   useEffect(() => {
     if (count <= 0) return;
     const loop = Animated.loop(
@@ -31,7 +18,9 @@ export default function AlertBanner({ count }: { count: number }) {
       ])
     );
     // Buzz once when new alerts appear (count increased).
-    if (count > prevCount.current) { try { Vibration.vibrate(400); } catch (e) {} playChime(); }
+    if (count > prevCount.current) {
+      try { Vibration.vibrate(400); } catch (e) {}
+    }
     prevCount.current = count;
     loop.start();
     return () => loop.stop();
