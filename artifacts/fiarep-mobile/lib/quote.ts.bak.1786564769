@@ -1,0 +1,74 @@
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import type { Project, Room } from './store';
+import { computeTakeoff, DEFAULT_RATES, type Rates } from './takeoff';
+
+const esc = (s: string) =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+const money = (x: number) =>
+  '$' + x.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+export function quoteHTML(project: Project, rooms: Room[], rates: Rates = DEFAULT_RATES): string {
+  const per = rooms.map(r => ({ room: r, take: computeTakeoff(r.scan, rates) }));
+  const sum = per.reduce((a, { take }) => ({
+    sheets: a.sheets + take.sheets, floor: a.floor + take.floorAreaSqFt,
+    sheetCost: a.sheetCost + take.sheetCost, laborCost: a.laborCost + take.laborCost,
+    paintCost: a.paintCost + take.paintCost, floorCost: a.floorCost + take.floorCost,
+    total: a.total + take.total,
+  }), { sheets: 0, floor: 0, sheetCost: 0, laborCost: 0, paintCost: 0, floorCost: 0, total: 0 });
+
+  const date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+  const roomRows = per.map(({ room, take }) => `
+    <tr>
+      <td>${esc(room.name)}</td>
+      <td class="r">${Math.round(room.scan.lengthFt)}×${Math.round(room.scan.widthFt)}×${Math.round(room.scan.heightFt)} ft</td>
+      <td class="r">${Math.round(take.floorAreaSqFt)} ft²</td>
+      <td class="r">${take.sheets}</td>
+      <td class="r">${money(take.total)}</td>
+    </tr>`).join('');
+
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
+  <style>
+    * { font-family: -apple-system, Helvetica, Arial, sans-serif; }
+    body { color: #1a1a1a; padding: 40px; }
+    h1 { font-size: 24px; margin: 0 0 4px; }
+    .sub { color: #666; font-size: 14px; margin: 0 0 24px; }
+    .meta { display: flex; justify-content: space-between; font-size: 13px; color: #444; margin-bottom: 24px; }
+    table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+    th { text-align: left; font-size: 12px; text-transform: uppercase; color: #888; border-bottom: 2px solid #185FA5; padding: 8px 6px; }
+    td { padding: 8px 6px; font-size: 14px; border-bottom: 1px solid #eee; }
+    .r { text-align: right; }
+    .breakdown { width: 60%; margin-left: auto; font-size: 14px; }
+    .breakdown td { border: none; padding: 4px 6px; }
+    .total { font-size: 20px; font-weight: 600; color: #185FA5; border-top: 2px solid #185FA5; }
+    .foot { margin-top: 40px; font-size: 11px; color: #999; border-top: 1px solid #eee; padding-top: 12px; }
+  </style></head><body>
+    <h1>Estimate</h1>
+    <p class="sub">${esc(project.name)}</p>
+    <div class="meta">
+      <div>${project.client ? 'Prepared for: <strong>' + esc(project.client) + '</strong>' : ''}</div>
+      <div>Date: ${date}</div>
+    </div>
+    <table>
+      <thead><tr><th>Room</th><th class="r">Dimensions</th><th class="r">Floor</th><th class="r">Sheets</th><th class="r">Total</th></tr></thead>
+      <tbody>${roomRows}</tbody>
+    </table>
+    <table class="breakdown">
+      <tr><td>Drywall materials (${sum.sheets} sheets)</td><td class="r">${money(sum.sheetCost)}</td></tr>
+      <tr><td>Hang &amp; finish labor</td><td class="r">${money(sum.laborCost)}</td></tr>
+      <tr><td>Paint</td><td class="r">${money(sum.paintCost)}</td></tr>
+      <tr><td>Flooring</td><td class="r">${money(sum.floorCost)}</td></tr>
+      <tr class="total"><td>Total estimate</td><td class="r">${money(sum.total)}</td></tr>
+    </table>
+    <p class="foot">Estimate only. Final pricing subject to site conditions and measurement verification.
+    ${rooms.length} room${rooms.length === 1 ? '' : 's'} · ${Math.round(sum.floor)} ft² total floor area.</p>
+  </body></html>`;
+}
+
+export async function exportQuote(project: Project, rooms: Room[], rates: Rates = DEFAULT_RATES): Promise<void> {
+  const html = quoteHTML(project, rooms, rates);
+  const { uri } = await Print.printToFileAsync({ html });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Share estimate', UTI: 'com.adobe.pdf' });
+  }
+}

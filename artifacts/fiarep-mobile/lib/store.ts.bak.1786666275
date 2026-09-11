@@ -1,0 +1,106 @@
+import * as SQLite from 'expo-sqlite';
+import type { Rates } from './takeoff';
+import type { LineItem } from './catalog';
+
+export type Project = { id: string; name: string; client: string; createdAt: string; rates?: Rates | null };
+export type Room = { id: string; projectId: string; name: string; lines: LineItem[]; photos?: string[]; walls2d?: { x1:number; y1:number; x2:number; y2:number }[] };
+
+let _db: SQLite.SQLiteDatabase | null = null;
+async function db() {
+  if (_db) return _db;
+  _db = await SQLite.openDatabaseAsync('construction.db');
+  await _db.execAsync(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, client TEXT, createdAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL
+    );
+  `);
+  // One-time migration: the rooms table changed from a scan-based schema to a
+  // line-item schema. If an old rooms table exists without a 'lines' column,
+  // drop it once so the new schema is created clean.
+  try {
+    const cols = await _db.getAllAsync<{ name: string }>("PRAGMA table_info(rooms)");
+    const hasRooms = cols.length > 0;
+    const hasLines = cols.some(c => c.name === 'lines');
+    if (hasRooms && !hasLines) { await _db.execAsync('DROP TABLE rooms'); }
+  } catch (e) { /* no rooms table yet */ }
+  await _db.execAsync(`
+    CREATE TABLE IF NOT EXISTS rooms (
+      id TEXT PRIMARY KEY NOT NULL, projectId TEXT NOT NULL, name TEXT NOT NULL, lines TEXT NOT NULL, photos TEXT, walls2d TEXT
+    );
+  `);
+  try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN photos TEXT'); } catch (e) {}
+  try { await _db.execAsync('ALTER TABLE rooms ADD COLUMN walls2d TEXT'); } catch (e) {}
+  try { await _db.execAsync('ALTER TABLE projects ADD COLUMN rates TEXT'); } catch (e) { /* exists */ }
+  return _db;
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+function rowToProject(r: any): Project {
+  return { id: r.id, name: r.name, client: r.client, createdAt: r.createdAt, rates: r.rates ? JSON.parse(r.rates) : null };
+}
+
+export async function listProjects(): Promise<Project[]> {
+  const d = await db();
+  const rows = await d.getAllAsync<any>('SELECT * FROM projects ORDER BY createdAt DESC');
+  return rows.map(rowToProject);
+}
+export async function createProject(name: string, client: string): Promise<Project> {
+  const d = await db();
+  const p: Project = { id: uid(), name, client, createdAt: new Date().toISOString(), rates: null };
+  await d.runAsync('INSERT INTO projects (id,name,client,createdAt) VALUES (?,?,?,?)', p.id, p.name, p.client, p.createdAt);
+  return p;
+}
+export async function getProject(id: string): Promise<Project | null> {
+  const d = await db();
+  const r = await d.getFirstAsync<any>('SELECT * FROM projects WHERE id = ?', id);
+  return r ? rowToProject(r) : null;
+}
+export async function deleteProject(id: string): Promise<void> {
+  const d = await db();
+  await d.runAsync('DELETE FROM rooms WHERE projectId = ?', id);
+  await d.runAsync('DELETE FROM projects WHERE id = ?', id);
+}
+
+export async function listRooms(projectId: string): Promise<Room[]> {
+  const d = await db();
+  const rows = await d.getAllAsync<any>('SELECT * FROM rooms WHERE projectId = ? ORDER BY rowid ASC', projectId);
+  return rows.map((r:any) => ({ id: r.id, projectId: r.projectId, name: r.name, lines: JSON.parse(r.lines), photos: r.photos ? JSON.parse(r.photos) : [], walls2d: r.walls2d ? JSON.parse(r.walls2d) : [] }));
+}
+export async function getRoom(id: string): Promise<Room | null> {
+  const d = await db();
+  const r = await d.getFirstAsync<any>('SELECT * FROM rooms WHERE id = ?', id);
+  return r ? { id: r.id, projectId: r.projectId, name: r.name, lines: JSON.parse(r.lines), photos: r.photos ? JSON.parse(r.photos) : [], walls2d: r.walls2d ? JSON.parse(r.walls2d) : [] } : null;
+}
+export async function addRoom(projectId: string, name: string, lines: LineItem[], photos: string[] = [], walls2d: any[] = []): Promise<Room> {
+  const d = await db();
+  const room: Room = { id: uid(), projectId, name, lines, photos, walls2d };
+  await d.runAsync('INSERT INTO rooms (id,projectId,name,lines,photos,walls2d) VALUES (?,?,?,?,?,?)', room.id, projectId, name, JSON.stringify(lines), JSON.stringify(photos), JSON.stringify(walls2d));
+  return room;
+}
+export async function updateRoom(id: string, name: string, lines: LineItem[], photos: string[] = [], walls2d: any[] = []): Promise<void> {
+  const d = await db();
+  await d.runAsync('UPDATE rooms SET name = ?, lines = ?, photos = ?, walls2d = ? WHERE id = ?', name, JSON.stringify(lines), JSON.stringify(photos), JSON.stringify(walls2d), id);
+}
+export async function deleteRoom(id: string): Promise<void> {
+  const d = await db();
+  await d.runAsync('DELETE FROM rooms WHERE id = ?', id);
+}
+
+export async function setProjectRates(projectId: string, rates: Rates | null): Promise<void> {
+  const d = await db();
+  await d.runAsync('UPDATE projects SET rates = ? WHERE id = ?', rates ? JSON.stringify(rates) : null, projectId);
+}
+export async function getGlobalRates(): Promise<Rates> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', 'rates');
+  const { DEFAULT_RATES } = await import('./takeoff');
+  return row ? { ...DEFAULT_RATES, ...JSON.parse(row.value) } : DEFAULT_RATES;
+}
+export async function setGlobalRates(rates: Rates): Promise<void> {
+  const d = await db();
+  await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'rates', JSON.stringify(rates));
+}

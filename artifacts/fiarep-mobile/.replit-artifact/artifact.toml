@@ -1,0 +1,24 @@
+kind = "mobile"
+previewPath = "/fiarep-mobile/"
+title = "FIAREP Mobile"
+description = "The existing FIAREP field inspection and repair estimation mobile application, connected to the shared FIAREP backend."
+version = "1.0.0"
+id = "artifacts/fiarep-mobile"
+router = "expo-domain"
+
+[[services]]
+name = "expo"
+ensurePreviewReachable = "/status"
+paths = [ "/fiarep-mobile/" ]
+localPort = 22070
+
+[services.development]
+run = "pnpm --filter @workspace/fiarep-mobile run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fiarep-mobile", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/fiarep-mobile", "run", "serve" ]
+
+[services.env]
+PORT = "22070"
+BASE_PATH = "/fiarep-mobile/"

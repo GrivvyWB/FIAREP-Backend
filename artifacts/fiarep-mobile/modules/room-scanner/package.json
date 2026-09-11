@@ -1,0 +1,6 @@
+{
+  "name": "room-scanner",
+  "version": "1.0.0",
+  "description": "RoomPlan LiDAR room scanner",
+  "main": "src/index.ts"
+}

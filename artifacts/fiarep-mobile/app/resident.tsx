@@ -1,0 +1,300 @@
+import React, { useMemo, useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  Modal,
+  FlatList,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import PhotoViewer from '../components/PhotoViewer';
+import { useRouter } from 'expo-router';
+import { createResidentReport, listDevelopmentNames, LOCATION_CATEGORIES } from '../lib/store';
+import AddressInput from '../components/AddressInput';
+import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+
+export default function ResidentScreen() {
+  const router = useRouter();
+  const [name, setName] = useState('');
+  const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [location, setLocation] = useState('Apartment/Unit');
+  // Resident form: drop Cellar + Roof, rename 'Compactor Room' to 'Compactor'.
+  const RESIDENT_LOCATIONS = LOCATION_CATEGORIES
+    .filter((c) => c !== 'Cellar' && c !== 'Roof')
+    .map((c) => (c === 'Compactor Room' ? 'Compactor' : c));
+  const [locationOther, setLocationOther] = useState('');
+  const [unit, setUnit] = useState('');
+  const [address, setAddress] = useState('');
+  const [development, setDevelopment] = useState('');
+  const [description, setDescription] = useState('');
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [submitting, setSubmitting] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [query, setQuery] = useState('');
+
+  const names = useMemo(() => listDevelopmentNames(), []);
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? names.filter((n) => n.toLowerCase().includes(q)) : names;
+  }, [query, names]);
+
+  async function onTakePhoto() {
+    try {
+      const uri = await takePhoto();
+      if (uri) setPhotos((p) => [...p, uri]);
+    } catch (e: any) {
+      Alert.alert('Camera error', e?.message ?? 'Could not take photo.');
+    }
+  }
+
+  async function onPickPhoto() {
+    try {
+      const uri = await pickPhoto();
+      if (uri) setPhotos((p) => [...p, uri]);
+    } catch (e: any) {
+      Alert.alert('Photo error', e?.message ?? 'Could not pick photo.');
+    }
+  }
+
+  function removePhoto(idx: number) {
+    setPhotos((p) => p.filter((_, i) => i !== idx));
+  }
+
+  async function onSubmit() {
+    const needsUnit = (location || '').toLowerCase().includes('apartment') || (location || '').toLowerCase().includes('unit');
+    if (needsUnit && !unit.trim()) {
+      Alert.alert('Unit required', 'Please enter your unit or apartment number.');
+      return;
+    }
+    if (!development.trim()) {
+      Alert.alert('Development required', 'Please select your development.');
+      return;
+    }
+    if (!description.trim()) {
+      Alert.alert('Description required', 'Please describe the issue.');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const effLoc = location === 'Other' ? (locationOther.trim() || 'Other') : location;
+      await createResidentReport(unit.trim(), address.trim(), description.trim(), photos, development.trim(), name.trim(), effLoc);
+      Alert.alert('Report submitted', 'Your report has been sent to management.', [
+        { text: 'OK', onPress: () => router.back() },
+      ]);
+    } catch (e: any) {
+      Alert.alert('Submit failed', e?.message ?? 'Could not submit report.');
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+      <Text style={styles.title}>Report an Issue</Text>
+      <Text style={styles.subtitle}>
+        Submit a maintenance or building issue to management.
+      </Text>
+
+      <Text style={styles.label}>Your Name</Text>
+      <TextInput
+        style={styles.input}
+        value={name}
+        onChangeText={setName}
+        placeholder="e.g. John Smith"
+        placeholderTextColor="#999"
+        autoCapitalize="words"
+      />
+
+      <Text style={styles.label}>Location</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 }}>
+        {RESIDENT_LOCATIONS.map((c) => (
+          <TouchableOpacity
+            key={c}
+            style={{ borderWidth: 1, borderColor: location === c ? '#0a7ea4' : '#ddd', backgroundColor: location === c ? '#0a7ea4' : '#fafafa', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8 }}
+            onPress={() => setLocation(c)}
+          >
+            <Text style={{ color: location === c ? '#fff' : '#333', fontWeight: '600' }}>{c}</Text>
+          </TouchableOpacity>
+        ))}
+        {location === 'Other' && (
+          <TextInput value={locationOther} onChangeText={setLocationOther} placeholder="Type a location" placeholderTextColor="#999" style={styles.input} />
+        )}
+      </View>
+
+      <Text style={styles.label}>Unit / Apartment</Text>
+      <TextInput
+        style={styles.input}
+        value={unit}
+        onChangeText={setUnit}
+        placeholder="e.g. 4B"
+        placeholderTextColor="#999"
+        autoCapitalize="characters"
+      />
+
+      <Text style={styles.label}>Development</Text>
+      <TouchableOpacity style={styles.input} onPress={() => setPickerOpen(true)}>
+        <Text style={{ fontSize: 16, color: development ? '#111' : '#999' }}>
+          {development || 'Select development'}
+        </Text>
+      </TouchableOpacity>
+
+      <Text style={styles.label}>Building Address (optional)</Text>
+      <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 123 Main St" style={styles.input} />
+
+      <Text style={styles.label}>Description</Text>
+      <TextInput
+        style={[styles.input, styles.textArea]}
+        value={description}
+        onChangeText={setDescription}
+        placeholder="Describe the issue..."
+        placeholderTextColor="#999"
+        multiline
+        numberOfLines={5}
+        textAlignVertical="top"
+      />
+
+      <Text style={styles.label}>Photos</Text>
+      <View style={styles.photoRow}>
+        <TouchableOpacity style={styles.photoBtn} onPress={onTakePhoto}>
+          <Text style={styles.photoBtnText}>Take Photo</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.photoBtn} onPress={onPickPhoto}>
+          <Text style={styles.photoBtnText}>Choose Photo</Text>
+        </TouchableOpacity>
+      </View>
+
+      {photos.length > 0 && (
+        <View style={styles.photoGrid}>
+          {photos.map((uri, idx) => (
+            <View key={`${uri}-${idx}`} style={styles.thumbWrap}>
+              <TouchableOpacity onPress={() => setViewerUri(uri)}><Image source={{ uri: photoUri(uri) }} style={styles.thumb} /></TouchableOpacity>
+              <TouchableOpacity
+                style={styles.removeBtn}
+                onPress={() => removePhoto(idx)}
+              >
+                <Text style={styles.removeBtnText}>×</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <TouchableOpacity
+        style={[styles.submitBtn, submitting && styles.submitBtnDisabled]}
+        onPress={onSubmit}
+        disabled={submitting}
+      >
+        {submitting ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.submitBtnText}>Submit Report</Text>
+        )}
+      </TouchableOpacity>
+
+      <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
+        <View style={styles.modalWrap}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Select development</Text>
+            <TouchableOpacity onPress={() => setPickerOpen(false)}>
+              <Text style={styles.modalClose}>Close</Text>
+            </TouchableOpacity>
+          </View>
+          <TextInput
+            style={styles.input}
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search developments…"
+            placeholderTextColor="#999"
+            autoFocus
+          />
+          <FlatList
+            data={filtered}
+            keyExtractor={(n) => n}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={styles.devRow}
+                onPress={() => { setDevelopment(item); setPickerOpen(false); setQuery(''); }}
+              >
+                <Text style={styles.devRowText}>{item}</Text>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={<Text style={styles.emptyText}>No matches.</Text>}
+          />
+        </View>
+      </Modal>
+    <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
+    </ScrollView>
+    </KeyboardAvoidingView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#fff' },
+  content: { padding: 20, paddingBottom: 48 },
+  title: { fontSize: 24, fontWeight: '700', color: '#111', marginBottom: 4 },
+  subtitle: { fontSize: 14, color: '#666', marginBottom: 24 },
+  label: { fontSize: 14, fontWeight: '600', color: '#333', marginBottom: 6, marginTop: 8 },
+  input: {
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 16,
+    color: '#111',
+    backgroundColor: '#fafafa',
+    marginBottom: 12,
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  textArea: { minHeight: 120 },
+  photoRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  photoBtn: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: '#0a7ea4',
+    borderRadius: 8,
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  photoBtnText: { color: '#0a7ea4', fontWeight: '600', fontSize: 15 },
+  photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 },
+  thumbWrap: { position: 'relative' },
+  thumb: { width: 90, height: 90, borderRadius: 8, backgroundColor: '#eee' },
+  removeBtn: {
+    position: 'absolute',
+    top: -8,
+    right: -8,
+    backgroundColor: '#c00',
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  removeBtnText: { color: '#fff', fontSize: 18, fontWeight: '700', lineHeight: 20 },
+  submitBtn: {
+    backgroundColor: '#0a7ea4',
+    borderRadius: 8,
+    paddingVertical: 16,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  submitBtnDisabled: { opacity: 0.6 },
+  submitBtnText: { color: '#fff', fontSize: 17, fontWeight: '700' },
+  modalWrap: { flex: 1, padding: 20, backgroundColor: '#fff', paddingTop: 60 },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  modalTitle: { fontSize: 20, fontWeight: '700', color: '#111' },
+  modalClose: { fontSize: 16, color: '#0a7ea4', fontWeight: '600' },
+  devRow: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#eee' },
+  devRowText: { fontSize: 16, color: '#111' },
+  emptyText: { color: '#999', textAlign: 'center', marginTop: 30 },
+});

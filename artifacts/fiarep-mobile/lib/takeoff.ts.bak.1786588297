@@ -1,0 +1,46 @@
+export type Opening = { kind: 'window' | 'door' | 'opening'; widthFt: number; heightFt: number; areaSqFt: number };
+export type RoomScan = {
+  lengthFt: number; widthFt: number; heightFt: number;
+  floorAreaSqFt: number; wallGrossSqFt: number;
+  openings: Opening[]; openingAreaSqFt: number; wallNetSqFt: number;
+  confidence: 'high' | 'medium' | 'low'; capturedAt: string;
+};
+export type Rates = {
+  waste: number; sheetCost: number; laborPerSqFt: number;
+  paintPerSqFt: number; floorPerSqFt: number;
+};
+export const DEFAULT_RATES: Rates = {
+  waste: 1.12, sheetCost: 16, laborPerSqFt: 2.1, paintPerSqFt: 0.85, floorPerSqFt: 5.5,
+};
+export type Takeoff = {
+  wallNetSqFt: number; floorAreaSqFt: number; drywallAreaSqFt: number;
+  sheets: number; sheetCost: number; laborCost: number;
+  paintCost: number; floorCost: number; total: number;
+};
+export function computeTakeoff(scan: RoomScan, r: Rates = DEFAULT_RATES): Takeoff {
+  const wallNet = Math.max(0, scan.wallNetSqFt);
+  const floor = scan.floorAreaSqFt;
+  const drywallArea = wallNet + floor; // walls + ceiling
+  const sheets = Math.ceil((drywallArea * r.waste) / 32); // 4x8 = 32 sq ft
+  const sheetCost = sheets * r.sheetCost;
+  const laborCost = drywallArea * r.laborPerSqFt;
+  const paintCost = drywallArea * r.paintPerSqFt;
+  const floorCost = floor * r.floorPerSqFt;
+  const total = sheetCost + laborCost + paintCost + floorCost;
+  return { wallNetSqFt: wallNet, floorAreaSqFt: floor, drywallAreaSqFt: drywallArea,
+    sheets, sheetCost, laborCost, paintCost, floorCost, total };
+}
+export function manualScan(lengthFt: number, widthFt: number, heightFt: number, openingAreaSqFt = 0): RoomScan {
+  const perim = 2 * (lengthFt + widthFt);
+  const wallGross = perim * heightFt;
+  return {
+    lengthFt, widthFt, heightFt,
+    floorAreaSqFt: lengthFt * widthFt,
+    wallGrossSqFt: wallGross,
+    openings: [],
+    openingAreaSqFt,
+    wallNetSqFt: Math.max(0, wallGross - openingAreaSqFt),
+    confidence: 'low',
+    capturedAt: new Date().toISOString(),
+  };
+}

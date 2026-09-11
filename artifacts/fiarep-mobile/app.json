@@ -1,0 +1,69 @@
+{
+  "expo": {
+    "name": "FIAREP",
+    "slug": "construction-pm",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "deploymentTarget": "16.4",
+      "bundleIdentifier": "com.tmstni.construction-pm",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Take photos of rooms and areas for estimates.",
+        "NSPhotoLibraryUsageDescription": "Attach existing photos to estimates.",
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "Tag inspections and photos with their location for accurate field records."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#ffffff"
+      },
+      "edgeToEdgeEnabled": true,
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO"
+      ],
+      "package": "com.tmstni.constructionpm"
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-sqlite",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Attach existing photos to estimates.",
+          "cameraPermission": "Take photos of rooms and areas for estimates."
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "16.4"
+          }
+        }
+      ]
+    ],
+    "scheme": "constructionpm",
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "71885a4c-86b2-4365-97eb-1284b85a3218"
+      }
+    }
+  }
+}

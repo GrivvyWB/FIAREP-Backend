@@ -1,0 +1,62 @@
+export type Unit = 'each' | 'sqft' | 'lnft' | 'sq' | 'flat';
+export type Category =
+  | 'Drywall' | 'Electrical' | 'Plumbing' | 'Roofing'
+  | 'Doors' | 'HVAC' | 'Repair' | 'Other';
+
+export type LineItem = {
+  id: string;
+  category: Category;
+  description: string;
+  quantity: number;
+  unit: Unit;
+  unitPrice: number;
+};
+
+export const CATEGORIES: Category[] = ['Drywall', 'Electrical', 'Plumbing', 'Roofing', 'Doors', 'HVAC', 'Repair', 'Other'];
+
+export const UNIT_LABEL: Record<Unit, string> = {
+  each: 'each', sqft: 'sq ft', lnft: 'linear ft', sq: 'square', flat: 'flat',
+};
+
+export type Preset = { category: Category; description: string; unit: Unit; unitPrice: number };
+
+export const CATALOG: Preset[] = [
+  { category: 'Electrical', description: 'Rewire outlet', unit: 'each', unitPrice: 85 },
+  { category: 'Electrical', description: 'Install light fixture', unit: 'each', unitPrice: 120 },
+  { category: 'Electrical', description: 'Install ceiling fan', unit: 'each', unitPrice: 175 },
+  { category: 'Electrical', description: 'Run new circuit', unit: 'each', unitPrice: 300 },
+  { category: 'Electrical', description: 'Upgrade panel (200A)', unit: 'flat', unitPrice: 2200 },
+  { category: 'Electrical', description: 'Wiring run', unit: 'lnft', unitPrice: 6 },
+
+  { category: 'Plumbing', description: 'Copper pipe run', unit: 'lnft', unitPrice: 14 },
+  { category: 'Plumbing', description: 'PEX pipe run', unit: 'lnft', unitPrice: 6 },
+  { category: 'Plumbing', description: 'Install sink + faucet', unit: 'each', unitPrice: 350 },
+  { category: 'Plumbing', description: 'Install toilet', unit: 'each', unitPrice: 300 },
+  { category: 'Plumbing', description: 'Gas line run', unit: 'lnft', unitPrice: 20 },
+  { category: 'Plumbing', description: 'Water heater install', unit: 'flat', unitPrice: 1400 },
+
+  { category: 'Roofing', description: 'Asphalt shingle roofing', unit: 'sq', unitPrice: 450 },
+  { category: 'Roofing', description: 'Metal roofing', unit: 'sq', unitPrice: 900 },
+  { category: 'Roofing', description: 'Underlayment', unit: 'sq', unitPrice: 60 },
+  { category: 'Roofing', description: 'Tear-off existing roof', unit: 'sq', unitPrice: 120 },
+  { category: 'Roofing', description: 'Ridge vent', unit: 'lnft', unitPrice: 12 },
+
+  { category: 'Doors', description: 'Interior door (prehung)', unit: 'each', unitPrice: 350 },
+  { category: 'Doors', description: 'Exterior door', unit: 'each', unitPrice: 850 },
+  { category: 'Doors', description: 'Sliding glass door', unit: 'each', unitPrice: 1400 },
+
+  { category: 'HVAC', description: 'Install boiler', unit: 'flat', unitPrice: 6500 },
+  { category: 'HVAC', description: 'Furnace install', unit: 'flat', unitPrice: 4500 },
+  { category: 'HVAC', description: 'Mini-split unit', unit: 'each', unitPrice: 3200 },
+  { category: 'HVAC', description: 'Ductwork run', unit: 'lnft', unitPrice: 35 },
+  { category: 'HVAC', description: 'Radiator', unit: 'each', unitPrice: 600 },
+
+  { category: 'Repair', description: 'Drywall patch / section', unit: 'sqft', unitPrice: 4.5 },
+  { category: 'Repair', description: 'Wall repair (partial)', unit: 'sqft', unitPrice: 5 },
+  { category: 'Repair', description: 'Trim / molding', unit: 'lnft', unitPrice: 8 },
+  { category: 'Repair', description: 'Flooring patch', unit: 'sqft', unitPrice: 9 },
+
+  { category: 'Other', description: 'Custom line', unit: 'flat', unitPrice: 0 },
+];
+
+export const lineTotal = (l: LineItem): number => l.quantity * l.unitPrice;

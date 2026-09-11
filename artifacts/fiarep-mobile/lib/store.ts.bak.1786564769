@@ -1,0 +1,84 @@
+import * as SQLite from 'expo-sqlite';
+import type { RoomScan, Rates } from './takeoff';
+
+export type Project = { id: string; name: string; client: string; createdAt: string; rates?: Rates | null };
+export type Room = { id: string; projectId: string; name: string; scan: RoomScan };
+
+let _db: SQLite.SQLiteDatabase | null = null;
+async function db() {
+  if (_db) return _db;
+  _db = await SQLite.openDatabaseAsync('construction.db');
+  await _db.execAsync(`
+    PRAGMA journal_mode = WAL;
+    CREATE TABLE IF NOT EXISTS projects (
+      id TEXT PRIMARY KEY NOT NULL, name TEXT NOT NULL, client TEXT, createdAt TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS rooms (
+      id TEXT PRIMARY KEY NOT NULL, projectId TEXT NOT NULL, name TEXT NOT NULL, scan TEXT NOT NULL
+    );
+  `);
+  try { await _db.execAsync('ALTER TABLE projects ADD COLUMN rates TEXT'); } catch (e) { /* column exists */ }
+  return _db;
+}
+function rowToProject(r: any): Project {
+  return { id: r.id, name: r.name, client: r.client, createdAt: r.createdAt,
+    rates: r.rates ? JSON.parse(r.rates) : null };
+}
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+
+export async function listProjects(): Promise<Project[]> {
+  const d = await db();
+  const rows = await d.getAllAsync<any>('SELECT * FROM projects ORDER BY createdAt DESC');
+  return rows.map(rowToProject);
+}
+export async function createProject(name: string, client: string): Promise<Project> {
+  const d = await db();
+  const p: Project = { id: uid(), name, client, createdAt: new Date().toISOString() };
+  await d.runAsync('INSERT INTO projects (id,name,client,createdAt) VALUES (?,?,?,?)', p.id, p.name, p.client, p.createdAt);
+  return p;
+}
+export async function getProject(id: string): Promise<Project | null> {
+  const d = await db();
+  const r = await d.getFirstAsync<any>('SELECT * FROM projects WHERE id = ?', id);
+  return r ? rowToProject(r) : null;
+}
+export async function deleteProject(id: string): Promise<void> {
+  const d = await db();
+  await d.runAsync('DELETE FROM rooms WHERE projectId = ?', id);
+  await d.runAsync('DELETE FROM projects WHERE id = ?', id);
+}
+export async function listRooms(projectId: string): Promise<Room[]> {
+  const d = await db();
+  const rows = await d.getAllAsync<{ id: string; projectId: string; name: string; scan: string }>(
+    'SELECT * FROM rooms WHERE projectId = ? ORDER BY rowid ASC', projectId);
+  return rows.map(r => ({ id: r.id, projectId: r.projectId, name: r.name, scan: JSON.parse(r.scan) }));
+}
+export async function addRoom(projectId: string, name: string, scan: RoomScan): Promise<Room> {
+  const d = await db();
+  const room: Room = { id: uid(), projectId, name, scan };
+  await d.runAsync('INSERT INTO rooms (id,projectId,name,scan) VALUES (?,?,?,?)', room.id, projectId, name, JSON.stringify(scan));
+  return room;
+}
+export async function deleteRoom(id: string): Promise<void> {
+  const d = await db();
+  await d.runAsync('DELETE FROM rooms WHERE id = ?', id);
+}
+
+
+export async function setProjectRates(projectId: string, rates: Rates | null): Promise<void> {
+  const d = await db();
+  await d.runAsync('UPDATE projects SET rates = ? WHERE id = ?', rates ? JSON.stringify(rates) : null, projectId);
+}
+export async function getGlobalRates(): Promise<import('./takeoff').Rates> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', 'rates');
+  const { DEFAULT_RATES } = await import('./takeoff');
+  return row ? { ...DEFAULT_RATES, ...JSON.parse(row.value) } : DEFAULT_RATES;
+}
+export async function setGlobalRates(rates: import('./takeoff').Rates): Promise<void> {
+  const d = await db();
+  await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'rates', JSON.stringify(rates));
+}
