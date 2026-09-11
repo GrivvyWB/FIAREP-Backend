@@ -20,7 +20,32 @@ if (!apiUrl) {
 const tenantId = required("FIAREP_STAGING_TENANT_ID");
 const name = required("FIAREP_STAGING_STAFF_NAME");
 const code = required("FIAREP_STAGING_STAFF_CODE");
-const token = required("FIAREP_STAGING_EXPO_TOKEN");
+const tokenInput = required("FIAREP_STAGING_EXPO_TOKEN");
+const normalizeExpoToken = (input: string): string => {
+  let candidate = input;
+  try {
+    const parsed = JSON.parse(input) as unknown;
+    if (typeof parsed === "string") candidate = parsed;
+    if (
+      typeof parsed === "object" &&
+      parsed !== null &&
+      "data" in parsed &&
+      typeof parsed.data === "string"
+    ) {
+      candidate = parsed.data;
+    }
+  } catch {
+    // Plain token input is expected and needs no JSON parsing.
+  }
+  const match = candidate.match(/(?:Expo|Exponent)PushToken\[[^\]]+\]/);
+  if (!match) {
+    throw new Error(
+      "FIAREP_STAGING_EXPO_TOKEN must contain an ExpoPushToken[...] or ExponentPushToken[...] value",
+    );
+  }
+  return match[0];
+};
+const token = normalizeExpoToken(tokenInput);
 const role = process.env["FIAREP_STAGING_STAFF_ROLE"]?.trim();
 const timeoutMinutes = Number(
   process.env["FIAREP_STAGING_SMOKE_TIMEOUT_MINUTES"] ?? "25",
