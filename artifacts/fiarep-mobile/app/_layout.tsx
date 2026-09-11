@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState } from 'react-native';
+import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack } from 'expo-router';
 import {
@@ -168,6 +168,12 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
 
   return (
     <Screen>
+      <Image
+        source={require('../assets/field-inspection-logo.png')}
+        accessibilityLabel="FIAREP logo"
+        resizeMode="contain"
+        style={{ width: 132, height: 132, borderRadius: 24, alignSelf: 'center', marginBottom: 6 }}
+      />
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Who's using this device?</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 12 }]}>Staff roles require an issued code.</Text>
       <Pressable style={ui.btn} onPress={() => onPick('resident')}>
