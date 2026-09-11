@@ -74,7 +74,7 @@ export default function Login() {
     <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         <div className="flex justify-center mb-6">
-          <div className="font-bold text-4xl tracking-tight flex items-center gap-2">
+          <div className="font-bold text-4xl tracking-tight">
             FIA<span className="text-[#F5B301]">REP</span>
           </div>
         </div>
