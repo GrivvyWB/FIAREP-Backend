@@ -115,6 +115,9 @@ export default function Login() {
                         <InputOTP
                           maxLength={4}
                           pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
+                          inputMode="text"
+                          autoCapitalize="none"
+                          autoCorrect="off"
                           autoComplete="one-time-code"
                           {...field}
                           data-testid="input-otp-code"
