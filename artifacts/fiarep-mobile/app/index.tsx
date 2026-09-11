@@ -1,13 +1,13 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter, Redirect } from 'expo-router';
-import { listProjects, createProject, deleteProject, type Project, clearAppMode, listApprovedProjectIds, getSessionIdentity } from '../lib/store';
+import { listProjects, createProject, deleteProject, type Project, listApprovedProjectIds, getSessionIdentity } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 
 export default function Projects() {
   const router = useRouter();
-  const { mode, refresh } = useAppMode();
+  const { mode } = useAppMode();
 
   // '/' (this Projects screen) is only for inspector & administrator.
   // Any other role that lands here is redirected to their own home.
@@ -38,20 +38,20 @@ export default function Projects() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap}>
-      <Pressable style={ui.btnOutline} onPress={async () => { await clearAppMode(); refresh(); }}>
-        <Text style={ui.btnOutlineText}>Switch role</Text>
-      </Pressable>
       {mode !== 'administrator' && (
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/settings')}>
-        <Text style={ui.btnOutlineText}>Default rates</Text>
-      </Pressable>
-      )}
-      {mode !== 'administrator' && (!adding ? (
-        <Pressable style={ui.btn} onPress={() => setAdding(true)}>
-          <Text style={ui.btnText}>+ New project</Text>
-        </Pressable>
-      ) : (
         <View style={[ui.card, { gap: 10 }]}>
+          <Text style={ui.cardTitle}>Project tools</Text>
+          {!adding ? (
+            <View style={ui.row}>
+              <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => router.push('/settings')}>
+                <Text style={ui.btnOutlineText}>Default rates</Text>
+              </Pressable>
+              <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => setAdding(true)}>
+                <Text style={ui.btnText}>+ New project</Text>
+              </Pressable>
+            </View>
+          ) : (
+          <>
           <Text style={ui.cardTitle}>New project</Text>
           <View><Text style={ui.label}>Project name</Text>
             <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="123 Main St renovation" /></View>
@@ -64,8 +64,10 @@ export default function Projects() {
             <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => setAdding(false)}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
             <Pressable style={[ui.btn, { flex: 1 }]} onPress={onCreate}><Text style={ui.btnText}>Create</Text></Pressable>
           </View>
+          </>
+          )}
         </View>
-      ))}
+      )}
 
       {projects.length === 0 && <Text style={ui.empty}>No projects yet. Create one to start estimating.</Text>}
       {projects.map(p => {

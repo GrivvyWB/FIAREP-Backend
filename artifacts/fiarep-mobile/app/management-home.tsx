@@ -1,6 +1,6 @@
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
-import { clearAppMode, clearRememberedStaff, logout, getCurrentPosition } from '../lib/store';
+import { getCurrentPosition } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
@@ -14,7 +14,7 @@ type Section = { heading: string; color: string; tiles: Tile[] };
 
 export default function ManagementHome() {
   const router = useRouter();
-  const { mode, refresh } = useAppMode();
+  const { mode } = useAppMode();
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
   const _pos = (position || '').trim().toLowerCase();
@@ -29,13 +29,6 @@ export default function ManagementHome() {
   // gets a read-only Emergency Activity view for their development.
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('management'); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, []));
-
-  function onSwitchRole() {
-    Alert.alert('Switch role?', 'Return to the role selection screen.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Switch', style: 'destructive', onPress: async () => { await clearRememberedStaff('management'); await logout(); await clearAppMode(); refresh(); } },
-    ]);
-  }
 
   const sections: Section[] = [
     {
@@ -93,13 +86,12 @@ export default function ManagementHome() {
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
         ...(!restricted ? [{ label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' as Tone }, { label: 'Default rates', onPress: () => router.push('/settings'), tone: 'tint' as Tone }] : []),
-        { label: 'Switch role', onPress: onSwitchRole, tone: 'outline' },
       ],
     },
   ];
 
   const isSupervisor = /supervisor$/i.test((position || '').trim()) || /superintendent/i.test((position || '').trim());
-  const heading = isSupervisor ? position : 'Management';
+  const heading = position === 'Borough Director' ? 'Borough Director' : isSupervisor ? position : 'Management';
 
   return (
     <ScrollView contentContainerStyle={ui.wrap}>

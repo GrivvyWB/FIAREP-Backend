@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack } from 'expo-router';
+import { Stack, useRouter } from 'expo-router';
 import {
   getAppMode, setAppMode,
   verifyStaffLogin, hasAnyAdministrator, bootstrapAdministrator,
@@ -402,16 +402,30 @@ function VendorStack() {
 }
 
 export default function Layout() {
+  const router = useRouter();
   const [mode, setMode] = useState<AppMode | null>(null);
   const [booting, setBooting] = useState(true);
 
-  // On launch, always show the role picker first ("Who's using this device?").
-  // We do NOT auto-enter a saved role; the user picks each time. Remembered
-  // staff codes are still kept, so picking a role won't require re-entering a code.
+  const homeForMode = (nextMode: AppMode) => {
+    if (nextMode === 'management') return '/management-home';
+    if (nextMode === 'administrator') return '/admin-home';
+    if (nextMode === 'procurement') return '/procurement-home';
+    if (nextMode === 'worker') return '/worker-home';
+    if (nextMode === 'inspector') return '/cpm-home';
+    if (nextMode === 'resident') return '/resident-home';
+    if (nextMode === 'vendor') return '/vendor-home';
+    if (nextMode === 'emergency') return '/emergency-home';
+    return '/';
+  };
+
   useEffect(() => {
     let mounted = true;
     restoreServerSession().then((restored) => {
-      if (restored) return syncAllEntities();
+      if (restored && mounted) {
+        const restoredMode = restored.role as AppMode;
+        setMode(restoredMode);
+        setTimeout(() => router.replace(homeForMode(restoredMode)), 0);
+      }
     }).catch(() => undefined).finally(() => {
       if (mounted) setBooting(false);
     });
@@ -427,8 +441,8 @@ export default function Layout() {
 
   async function pick(m: AppMode) {
     await setAppMode(m);
-    setMode(null);
-    setTimeout(() => setMode(m), 0);
+    setMode(m);
+    setTimeout(() => router.replace(homeForMode(m)), 0);
   }
 
   let content;
