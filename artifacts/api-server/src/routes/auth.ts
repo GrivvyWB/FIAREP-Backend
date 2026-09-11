@@ -70,6 +70,20 @@ router.post("/v1/auth/bootstrap", async (req, res) => {
   });
 });
 
+router.get("/v1/auth/bootstrap-status", async (_req, res) => {
+  const [existing] = await db
+    .select({ id: staffAccounts.id })
+    .from(staffAccounts)
+    .where(
+      and(
+        eq(staffAccounts.tenantId, "default"),
+        eq(staffAccounts.role, "administrator"),
+      ),
+    )
+    .limit(1);
+  res.json({ hasAdministrator: Boolean(existing) });
+});
+
 router.post("/v1/auth/login", async (req, res) => {
   const { name, code, role } = req.body as {
     name?: unknown;

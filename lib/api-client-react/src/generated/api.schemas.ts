@@ -193,6 +193,10 @@ export type BootstrapAdministratorBody = {
   lastName?: string;
 };
 
+export type GetBootstrapStatus200 = {
+  hasAdministrator: boolean;
+};
+
 export type RefreshSessionBody = {
   refreshToken: string;
 };

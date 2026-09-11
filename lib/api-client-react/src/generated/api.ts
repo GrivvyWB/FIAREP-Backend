@@ -31,6 +31,7 @@ import type {
   FileDownloadUrlResponse,
   FileUploadUrlRequest,
   FileUploadUrlResponse,
+  GetBootstrapStatus200,
   HealthStatus,
   ListEntityRecordsParams,
   ListPushDeliveriesParams,
@@ -293,6 +294,83 @@ export const useBootstrapAdministrator = <TError = ErrorType<void>,
       > => {
       return useMutation(getBootstrapAdministratorMutationOptions(options));
     }
+
+export const getGetBootstrapStatusUrl = () => {
+
+
+
+
+  return `/api/v1/auth/bootstrap-status`
+}
+
+/**
+ * @summary Check whether the default tenant already has an administrator
+ */
+export const getBootstrapStatus = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetBootstrapStatus200> => {
+
+  return customFetch<GetBootstrapStatus200>(getGetBootstrapStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetBootstrapStatusQueryKey = () => {
+    return [
+    `/api/v1/auth/bootstrap-status`
+    ] as const;
+    }
+
+
+export const getGetBootstrapStatusQueryOptions = <TData = Awaited<ReturnType<typeof getBootstrapStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBootstrapStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetBootstrapStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getBootstrapStatus>>> = ({ signal }) => getBootstrapStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getBootstrapStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetBootstrapStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getBootstrapStatus>>>
+export type GetBootstrapStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Check whether the default tenant already has an administrator
+ */
+
+export function useGetBootstrapStatus<TData = Awaited<ReturnType<typeof getBootstrapStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getBootstrapStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetBootstrapStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getRefreshSessionUrl = () => {
 

@@ -78,6 +78,21 @@ paths:
                 $ref: "#/components/schemas/AuthResponse"
         "409":
           description: Administrator already exists
+  /v1/auth/bootstrap-status:
+    get:
+      operationId: getBootstrapStatus
+      tags: [auth]
+      summary: Check whether the default tenant already has an administrator
+      responses:
+        "200":
+          description: Bootstrap availability
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [hasAdministrator]
+                properties:
+                  hasAdministrator: { type: boolean }
   /v1/auth/refresh:
     post:
       operationId: refreshSession

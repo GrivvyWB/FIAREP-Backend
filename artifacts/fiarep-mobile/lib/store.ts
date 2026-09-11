@@ -1,8 +1,21 @@
 import * as SQLite from 'expo-sqlite';
+import {
+  bootstrapAdministrator as bootstrapAdministratorOnServer,
+  getBootstrapStatus,
+  login as loginOnServer,
+  setAuthTokenGetter,
+  setBaseUrl,
+  type AuthResponse,
+  type Staff,
+} from '@workspace/api-client-react';
 import type { Rates } from './takeoff';
 import type { LineItem } from './catalog';
 import { touchMeta, getDeviceId, newMeta } from './syncmeta';
 import { DEVELOPMENT_NAMES } from './developments.seed';
+
+const backendDomain = process.env.EXPO_PUBLIC_DOMAIN;
+setBaseUrl(backendDomain ? `https://${backendDomain}` : null);
+setAuthTokenGetter(() => getAccessToken());
 
 async function withMeta(d: any, state: any): Promise<any> {
   const deviceId = await getDeviceId(d);
@@ -688,6 +701,51 @@ async function ensureStaffTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS staff_accounts (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
 }
 
+async function getAccessToken(): Promise<string | null> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?',
+    'auth_access_token',
+  );
+  return row?.value || null;
+}
+
+async function persistServerSession(
+  session: AuthResponse,
+  issuedCode = '',
+): Promise<void> {
+  const d = await db();
+  await ensureStaffTable(d);
+  await d.runAsync(
+    'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    'auth_access_token',
+    session.accessToken,
+  );
+  await d.runAsync(
+    'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    'auth_refresh_token',
+    session.refreshToken,
+  );
+  const staff = session.staff as Staff;
+  const localAccount: StaffAccount = {
+    id: staff.id,
+    name: staff.name,
+    firstName: staff.firstName || undefined,
+    lastName: staff.lastName || undefined,
+    position: (staff.position || 'Other') as StaffPosition,
+    developments: staff.developments,
+    code: issuedCode,
+    role: staff.role as StaffRole,
+    status: staff.status as StaffStatus,
+    createdAt: new Date().toISOString(),
+  };
+  await d.runAsync(
+    'INSERT INTO staff_accounts (id,state) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET state = excluded.state',
+    localAccount.id,
+    JSON.stringify(localAccount),
+  );
+}
+
 export async function listStaffAccounts(status?: StaffStatus): Promise<StaffAccount[]> {
   const d = await db();
   await ensureStaffTable(d);
@@ -931,10 +989,25 @@ export async function revokeStaffAccount(id: string): Promise<void> {
 
 // Verify a login: name + code must match an APPROVED account for the given role.
 export async function verifyStaffLogin(name: string, code: string, role: StaffRole): Promise<boolean> {
-  const nm = name.trim().toLowerCase();
-  const cd = code.trim();
-  const all = await listStaffAccounts('approved');
-  return all.some(a => a.role === role && a.name.trim().toLowerCase() === nm && a.code.trim() === cd);
+  try {
+    const session = await loginOnServer({
+      name: name.trim(),
+      code: code.trim(),
+      role,
+    });
+    await persistServerSession(session);
+    return true;
+  } catch (error) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'status' in error &&
+      (error as { status?: unknown }).status === 401
+    ) {
+      return false;
+    }
+    throw error;
+  }
 }
 
 
@@ -948,8 +1021,8 @@ export function generateCode(): string {
 }
 
 export async function hasAnyAdministrator(): Promise<boolean> {
-  const all = await listStaffAccounts('approved');
-  return all.some(a => a.role === 'administrator');
+  const status = await getBootstrapStatus();
+  return status.hasAdministrator;
 }
 
 export async function issueStaffAccount(name: string, role: StaffRole, issuedBy: string): Promise<StaffAccount> {
@@ -996,7 +1069,16 @@ export async function issueStaffAccountFull(firstName: string, lastName: string,
 }
 
 export async function bootstrapAdministrator(name: string): Promise<StaffAccount> {
-  return issueStaffAccount(name, 'administrator', name.trim());
+  const code = generateCode();
+  const session = await bootstrapAdministratorOnServer({
+    name: name.trim(),
+    code,
+  });
+  await persistServerSession(session, code);
+  const all = await listStaffAccounts('approved');
+  const account = all.find((item) => item.id === session.staff.id);
+  if (!account) throw new Error('Administrator session could not be saved.');
+  return account;
 }
 
 export async function refuseStaffAccount(id: string): Promise<void> {

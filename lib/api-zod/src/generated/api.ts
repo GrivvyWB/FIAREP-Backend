@@ -80,6 +80,14 @@ export const BootstrapAdministratorResponse = zod.object({
 })
 
 
+/**
+ * @summary Check whether the default tenant already has an administrator
+ */
+export const GetBootstrapStatusResponse = zod.object({
+  "hasAdministrator": zod.boolean()
+})
+
+
 export const RefreshSessionBody = zod.object({
   "refreshToken": zod.string()
 })

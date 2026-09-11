@@ -43,7 +43,10 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
 
   useEffect(() => {
     if (props.role === 'administrator') {
-      hasAnyAdministrator().then((h) => { setCanBootstrap(!h); setReady(true); });
+      hasAnyAdministrator()
+        .then((h) => setCanBootstrap(!h))
+        .catch(() => setMsg('Could not reach the FIAREP backend. Try again.'))
+        .finally(() => setReady(true));
     } else {
       setReady(true);
     }
@@ -69,6 +72,8 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
         props.onUnlock();
       }
       else setMsg('No approved account matches that name and code.');
+    } catch {
+      setMsg('Could not reach the FIAREP backend. Try again.');
     } finally { setBusy(false); }
   }
 
@@ -80,6 +85,9 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
       await setCurrentActor('administrator', name.trim());
       // Show the generated code, then continue.
       setIssuedCode(acct.code);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '';
+      setMsg(message.includes('409') ? 'An administrator already exists. Log in instead.' : 'Could not create the administrator. Try again.');
     } finally { setBusy(false); }
   }
 
