@@ -36,7 +36,6 @@ export default function ManagementHome() {
       color: '#1E7D4F',
       tiles: [
         ...(!restricted ? [
-          { label: 'Projects', onPress: () => router.push('/'), tone: 'outline' as Tone },
           { label: 'HUD Inspections', onPress: () => router.push('/hud-review'), tone: 'outline' as Tone },
         ] : []),
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' },
