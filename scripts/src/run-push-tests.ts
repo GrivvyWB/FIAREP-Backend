@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
+import { createServer } from "node:net";
 import process from "node:process";
 
 const SCHEMA_PREFIX = "integration_test_";
@@ -22,6 +23,7 @@ process.env.TEST_DATABASE_SCHEMA = schema;
 const { pool } = await import("@workspace/db");
 const client = await pool.connect();
 let child: ReturnType<typeof spawn> | undefined;
+let preparationBarrier: ReturnType<typeof createServer> | undefined;
 let cleaned = false;
 
 function identifier(value: string): string {
@@ -32,11 +34,26 @@ async function cleanup(): Promise<void> {
   if (cleaned) return;
   cleaned = true;
   try {
+    preparationBarrier?.close();
     await client.query(`drop schema if exists ${identifier(schema)} cascade`);
   } finally {
     client.release();
     await pool.end().catch(() => undefined);
   }
+}
+
+async function pauseDuringPreparation(): Promise<void> {
+  if (!process.env.PUSH_TEST_PREPARATION_READY_FILE) return;
+
+  preparationBarrier = createServer();
+  await new Promise<void>((resolve, reject) => {
+    preparationBarrier?.once("error", reject);
+    preparationBarrier?.listen(0, "127.0.0.1", resolve);
+  });
+  writeFileSync(process.env.PUSH_TEST_PREPARATION_READY_FILE, schema);
+  await new Promise<void>((resolve) => {
+    preparationBarrier?.once("close", resolve);
+  });
 }
 
 async function stop(signal: NodeJS.Signals): Promise<void> {
@@ -64,6 +81,7 @@ try {
   }
 
   await client.query(`create schema ${identifier(schema)}`);
+  await pauseDuringPreparation();
   const tables = await client.query<{ tablename: string }>(
     `select tablename
        from pg_catalog.pg_tables

@@ -63,6 +63,22 @@ async function waitForProcessPid(
   throw new Error(`Timed out waiting for ${processDescription} to start.`);
 }
 
+async function waitForFile(
+  file: string,
+  description: string,
+): Promise<string> {
+  const deadline = Date.now() + 30_000;
+  while (Date.now() < deadline) {
+    try {
+      return await readFile(file, "utf8");
+    } catch {
+      // The launcher has not reached the requested lifecycle point yet.
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for ${description}.`);
+}
+
 function processExists(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -195,6 +211,81 @@ for (const [signal, expectedExitCode] of [
             process.kill(fixturePid, "SIGKILL");
           } catch {
             // The child already exited.
+          }
+        }
+        await rm(temporaryDirectory, { recursive: true, force: true });
+      }
+    },
+  );
+}
+
+for (const [signal, expectedExitCode] of [
+  ["SIGINT", 130],
+  ["SIGTERM", 143],
+] as const) {
+  test(
+    `${signal} during database preparation removes the partial schema without starting the child`,
+    { timeout: 60_000 },
+    async () => {
+      assert.ok(process.env.DATABASE_URL, "DATABASE_URL must be set");
+      const temporaryDirectory = await mkdtemp(
+        join(tmpdir(), "push-test-preparation-"),
+      );
+      const preparationReadyFile = join(temporaryDirectory, "preparation.ready");
+      const childPidFile = join(temporaryDirectory, "child.pid");
+      const fixturePidFile = join(temporaryDirectory, "fixture.pid");
+      const interruptedRun = runLauncher({
+        PUSH_TEST_PREPARATION_READY_FILE: preparationReadyFile,
+        PUSH_TEST_CHILD_PID_FILE: childPidFile,
+        PUSH_TEST_FIXTURE_PID_FILE: fixturePidFile,
+      });
+      const interruptedExit = waitForExit(interruptedRun);
+
+      try {
+        const partialSchema = await waitForFile(
+          preparationReadyFile,
+          "database preparation to pause",
+        );
+        assert.ok(
+          (await disposableSchemas()).includes(partialSchema),
+          "Preparation barrier was reached without a partial schema",
+        );
+        assert.ok(interruptedRun.pid, "Launcher did not receive a process ID");
+
+        interruptedRun.kill(signal);
+        const interruptedResult = await interruptedExit;
+
+        assert.equal(
+          interruptedResult.code,
+          expectedExitCode,
+          `Launcher failed during ${signal} preparation shutdown:\n${interruptedResult.output}`,
+        );
+        assert.equal(
+          processExists(interruptedRun.pid),
+          false,
+          "Launcher remained after preparation shutdown",
+        );
+        await assert.rejects(readFile(childPidFile, "utf8"), {
+          code: "ENOENT",
+        });
+        await assert.rejects(readFile(fixturePidFile, "utf8"), {
+          code: "ENOENT",
+        });
+        assert.ok(
+          !(await disposableSchemas()).includes(partialSchema),
+          "Partial schema remained after preparation shutdown",
+        );
+        assert.deepEqual(
+          await disposableSchemas(),
+          [],
+          "Integration-test schemas remained after preparation shutdown",
+        );
+      } finally {
+        if (interruptedRun.pid && processExists(interruptedRun.pid)) {
+          try {
+            process.kill(-interruptedRun.pid, "SIGKILL");
+          } catch {
+            // The process group already exited.
           }
         }
         await rm(temporaryDirectory, { recursive: true, force: true });
