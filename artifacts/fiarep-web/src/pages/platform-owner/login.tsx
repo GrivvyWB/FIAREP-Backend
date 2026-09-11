@@ -13,18 +13,13 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { REGEXP_ONLY_DIGITS_AND_CHARS } from "input-otp";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { ShieldAlert } from "lucide-react";
 
 const loginSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
-  code: z
-    .string()
-    .length(4, "Code must be exactly 4 characters")
-    .regex(/^[a-zA-Z0-9]+$/, "Code can only contain letters and numbers"),
+  code: z.string().min(1, "Access passphrase is required"),
 });
 
 export default function OwnerLogin() {
@@ -44,7 +39,7 @@ export default function OwnerLogin() {
   const form = useForm<z.infer<typeof loginSchema>>({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      name: "",
+      name: "FIAREP Platform Owner",
       code: "",
     },
   });
@@ -107,6 +102,7 @@ export default function OwnerLogin() {
                     <FormControl>
                       <Input 
                         placeholder="Owner Name" 
+                        autoComplete="username"
                         {...field} 
                         className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-rose-500" 
                         data-testid="input-owner-name" 
@@ -122,30 +118,16 @@ export default function OwnerLogin() {
                 name="code"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="text-slate-300">Clearance Code</FormLabel>
+                    <FormLabel className="text-slate-300">Access Passphrase</FormLabel>
                     <FormControl>
-                      <div className="flex justify-center">
-                        <InputOTP
-                          maxLength={4}
-                          pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
-                          inputMode="text"
-                          autoCapitalize="none"
-                          autoCorrect="off"
-                          autoComplete="one-time-code"
-                          {...field}
-                          data-testid="input-owner-code"
-                        >
-                          <InputOTPGroup className="gap-2">
-                            {[0, 1, 2, 3].map((index) => (
-                              <InputOTPSlot 
-                                key={index} 
-                                index={index} 
-                                className="w-14 h-16 text-2xl font-mono border-slate-800 bg-slate-950 text-white ring-offset-slate-950 data-[state=active]:ring-rose-500 rounded-md" 
-                              />
-                            ))}
-                          </InputOTPGroup>
-                        </InputOTP>
-                      </div>
+                      <Input
+                        type="password"
+                        autoComplete="current-password"
+                        placeholder="Enter your private passphrase"
+                        {...field}
+                        className="bg-slate-950 border-slate-800 text-white placeholder:text-slate-600 focus-visible:ring-rose-500"
+                        data-testid="input-owner-code"
+                      />
                     </FormControl>
                     <FormMessage className="text-rose-400" />
                   </FormItem>
@@ -158,7 +140,7 @@ export default function OwnerLogin() {
                 disabled={isSubmitting} 
                 data-testid="button-submit-owner-login"
               >
-                {isSubmitting ? "Authenticating..." : "Establish Uplink"}
+                {isSubmitting ? "Signing in..." : "Sign in"}
               </Button>
             </form>
           </Form>
