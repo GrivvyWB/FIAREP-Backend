@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, asc, eq, sql, count } from "drizzle-orm";
-import { db, staffAccounts, organizations, organizationProperties } from "@workspace/db";
+import { db, entityRecords, staffAccounts, organizations, organizationProperties } from "@workspace/db";
 import { audit } from "../lib/audit";
 import {
   STAFF_POSITIONS,
@@ -118,14 +118,31 @@ router.get("/v1/staff", async (req, res) => {
 
 router.get("/v1/staff/developments", async (_req, res) => {
   const actor = actorFrom(res);
-  const rows = await db
-    .select({ development: organizationProperties.development })
-    .from(organizationProperties)
-    .where(and(
-      eq(organizationProperties.organizationId, actor.tenantId),
-      eq(organizationProperties.active, true),
-    ));
-  res.json(scopedDevelopmentNames(rows.map((row) => row.development), actor));
+  const [propertyRows, staffRows, recordRows] = await Promise.all([
+    db
+      .select({ development: organizationProperties.development })
+      .from(organizationProperties)
+      .where(and(
+        eq(organizationProperties.organizationId, actor.tenantId),
+        eq(organizationProperties.active, true),
+      )),
+    db
+      .select({ developments: staffAccounts.developments })
+      .from(staffAccounts)
+      .where(eq(staffAccounts.tenantId, actor.tenantId)),
+    db
+      .select({ development: entityRecords.development })
+      .from(entityRecords)
+      .where(and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+      )),
+  ]);
+  res.json(scopedDevelopmentNames([
+    ...propertyRows.map((row) => row.development),
+    ...staffRows.flatMap((row) => row.developments),
+    ...recordRows.map((row) => row.development),
+  ], actor));
 });
 
 router.post("/v1/staff", async (req, res) => {

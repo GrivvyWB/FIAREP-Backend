@@ -40,7 +40,12 @@ export default function Team() {
   const { staff: actor } = useAuth();
   const queryClient = useQueryClient();
   const { data: staff, isLoading, error } = useListStaff();
-  const { data: availableDevelopments, isLoading: developmentsLoading, error: developmentsError } = useListStaffDevelopments();
+  const {
+    data: availableDevelopments,
+    isLoading: developmentsLoading,
+    error: developmentsError,
+    refetch: refetchDevelopments,
+  } = useListStaffDevelopments();
   const create = useCreateStaff();
   const reset = useResetStaffCode();
   const revoke = useRevokeStaff();
@@ -80,6 +85,7 @@ export default function Team() {
     await queryClient.invalidateQueries({ queryKey: getListStaffQueryKey() });
   }
   function openAddEmployee() {
+    void refetchDevelopments();
     setRole(roleOptions[0] ?? "worker");
     setPosition("Staff Worker");
     setName("");
