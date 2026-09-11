@@ -44,8 +44,18 @@ export function GenericEntityPage({
   icon: LucideIcon;
   workflow?: boolean;
 }) {
+  const isProcurement = entity === "procurement";
   const { data, isLoading } = useListEntityRecords(entity);
-  const { data: bidData } = useListEntityRecords("procurement-bids");
+  const { data: bidData } = useListEntityRecords(
+    "procurement-bids",
+    undefined,
+    {
+      query: {
+        queryKey: getListEntityRecordsQueryKey("procurement-bids"),
+        enabled: isProcurement,
+      },
+    },
+  );
   const createMutation = useCreateEntityRecord();
   const updateMutation = useUpdateEntityRecord();
   const deleteMutation = useDeleteEntityRecord();
@@ -72,7 +82,6 @@ export function GenericEntityPage({
     'emergency-jobs',
   ];
   const isProtected = protectedEntities.includes(entity);
-  const isProcurement = entity === "procurement";
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),

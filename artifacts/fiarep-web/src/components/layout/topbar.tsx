@@ -1,4 +1,5 @@
 import { Bell, ChevronDown, MoreHorizontal } from "lucide-react";
+import { getListNotificationsQueryKey, useListNotifications } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { Link } from "wouter";
 import {
@@ -10,6 +11,15 @@ import {
 
 export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onMenuClick: () => void }) {
   const { staff, logout } = useAuth();
+  const { data: notifications } = useListNotifications({
+    query: {
+      queryKey: getListNotificationsQueryKey(),
+      refetchInterval: 30_000,
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
+  const unreadCount = (notifications ?? []).filter((notification) => !notification.read).length;
   
   // Extract initials
   const getInitials = (name: string) => {
@@ -41,9 +51,11 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
       <div className="flex items-center gap-5 md:gap-[22px]">
         <Link href="/notifications" className="relative text-muted-foreground cursor-pointer hover:text-foreground transition-colors block">
           <Bell className="w-[22px] h-[22px]" />
-          <span className="absolute -top-1.5 -right-1.5 bg-[#F5B301] text-sidebar text-[10px] font-bold w-[17px] h-[17px] rounded-full grid place-items-center">
-            3
-          </span>
+          {unreadCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 bg-[#F5B301] text-sidebar text-[10px] font-bold min-w-[17px] h-[17px] px-1 rounded-full grid place-items-center">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
+          )}
         </Link>
         
         <DropdownMenu>
@@ -53,7 +65,7 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
             </div>
             <div className="hidden md:block leading-tight text-left">
               <b className="text-[13.5px] font-bold block">{staff?.name || "User"}</b>
-              <span className="text-[11.5px] text-muted-foreground block">{staff?.role || "Staff"}</span>
+              <span className="text-[11.5px] text-muted-foreground block capitalize">{staff?.role || "Staff"}</span>
             </div>
             <ChevronDown className="w-4 h-4 text-muted-foreground hidden md:block" />
           </DropdownMenuTrigger>

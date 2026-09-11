@@ -92,7 +92,7 @@ export default function Settings() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="bg-secondary/50 p-4 rounded-xl border border-border">
                 <div className="text-xs text-muted-foreground font-medium mb-1">Role</div>
-                <div className="font-semibold">{staff?.role || "-"}</div>
+                <div className="font-semibold capitalize">{staff?.role || "-"}</div>
               </div>
               <div className="bg-secondary/50 p-4 rounded-xl border border-border">
                 <div className="text-xs text-muted-foreground font-medium mb-1">Status</div>

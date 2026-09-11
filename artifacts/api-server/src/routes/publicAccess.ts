@@ -13,6 +13,7 @@ import {
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { evaluateLicense, licenseAllows } from "../lib/auth";
 import { fileStorage } from "../lib/fileStorage";
+import { isBoroughDirector } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { rateLimit } from "../lib/rateLimit";
 
@@ -184,7 +185,7 @@ router.post("/v1/public/resident-reports/:complaintNo/photos/confirm", async (re
 router.use("/v1/resident-report-photos", requireAuth);
 function canReadReport(actor: ReturnType<typeof actorFrom>, report: typeof entityRecords.$inferSelect): boolean {
   return ["administrator", "management", "inspector", "borough-director"].includes(actor.role.toLowerCase()) &&
-    (!report.development || actor.role.toLowerCase() === "borough-director" ||
+    (!report.development || isBoroughDirector(actor) ||
       actor.developments.some((d) => d.toLowerCase() === report.development!.toLowerCase()));
 }
 router.get("/v1/resident-report-photos", async (req, res) => {

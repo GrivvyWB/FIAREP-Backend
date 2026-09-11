@@ -15,6 +15,14 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
 
+const DEFAULT_RATES = {
+  waste: 1.12,
+  sheetCost: 16,
+  laborPerSqFt: 2.1,
+  paintPerSqFt: 0.85,
+  floorPerSqFt: 5.5,
+};
+
 router.post("/v1/devices/token", async (req, res) => {
   const actor = actorFrom(res);
   const body = req.body as Record<string, unknown>;
@@ -72,6 +80,10 @@ router.get("/v1/settings/:key", async (req, res) => {
     )
     .limit(1);
   if (!row) {
+    if (req.params["key"] === "default-rates") {
+      res.json({ key: "default-rates", value: DEFAULT_RATES, updatedAt: null });
+      return;
+    }
     res.status(404).json({ error: "Setting not found" });
     return;
   }
