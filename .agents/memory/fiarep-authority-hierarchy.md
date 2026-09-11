@@ -7,6 +7,8 @@ Borough Director is FIAREP's highest authority and has full override across modu
 
 Ordinary Administrators are limited to assigned developments and lower-authority staff. Do not infer or add further Administrator capabilities; define them incrementally as the user specifies them.
 
-**Why:** The user explicitly confirmed that Borough Director ranks above Administrator and wants to define Administrator capabilities over time.
+“Administrator” is the single sign-in entrance for supervision, management, and managerial staff. Their stored role and position still determine the workspace and authority they receive after authentication; the shared entrance must not flatten permission levels.
 
-**How to apply:** Make authorization position-aware. Check Borough Director first, then apply only explicitly established Administrator permissions and existing lower-role rules.
+**Why:** The user explicitly confirmed that these staff are all administrative positions at different levels, while Borough Director remains the highest authority.
+
+**How to apply:** Make authorization position-aware. Check Borough Director first, then apply only explicitly established Administrator permissions and existing lower-role rules. Route management-role accounts through the Administrator login entrance while preserving their actual role.

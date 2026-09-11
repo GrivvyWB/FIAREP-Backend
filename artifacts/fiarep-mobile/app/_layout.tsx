@@ -56,11 +56,11 @@ function StaffGate(props: { role: StaffRole; onUnlock: (overrideMode?: AppMode) 
   async function doLogin() {
     setMsg(''); setBusy(true);
     try {
-      const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role);
-      if (ok) {
-        await setRememberedStaff(props.role, name.trim());
+      const authenticatedRole = await verifyStaffLogin(name.trim(), normCode(code), props.role);
+      if (authenticatedRole) {
+        await setRememberedStaff(authenticatedRole, name.trim());
         await syncAllEntities();
-        props.onUnlock();
+        props.onUnlock(authenticatedRole as AppMode);
       }
       else setMsg('No approved account matches that name and code.');
     } catch {
@@ -152,7 +152,9 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
   const [gateFor, setGateFor] = useState<StaffRole | null>(null);
   const pickStaffRole = async (role: StaffRole) => {
     const staff = await restoreServerSession();
-    if (staff?.role === role) onPick(role as AppMode);
+    if (staff && (staff.role === role || (role === 'administrator' && staff.role === 'management'))) {
+      onPick(staff.role as AppMode);
+    }
     else setGateFor(role);
   };
 
@@ -187,9 +189,6 @@ function ModePicker({ onPick }: { onPick: (m: AppMode) => void }) {
       </Pressable>
        <Pressable style={ui.btn} onPress={() => pickStaffRole('administrator')}>
         <Text style={ui.btnText}>Administrator  🔒</Text>
-      </Pressable>
-       <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
-        <Text style={ui.btnText}>Management  🔒</Text>
       </Pressable>
        <Pressable style={ui.btn} onPress={() => pickStaffRole('procurement')}>
         <Text style={ui.btnText}>Procurement  🔒</Text>

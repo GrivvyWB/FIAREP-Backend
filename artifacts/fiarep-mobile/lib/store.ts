@@ -1197,17 +1197,26 @@ export async function revokeStaffAccount(id: string): Promise<void> {
 }
 
 // Verify a login: name + code must match an APPROVED account for the given role.
-export async function verifyStaffLogin(name: string, code: string, role: StaffRole): Promise<boolean> {
+export async function verifyStaffLogin(name: string, code: string, role: StaffRole): Promise<StaffRole | false> {
   try {
     const preDb = await db();
     const priorIdentity = await preDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
     let evidence: any;
     try { evidence = priorIdentity?.value ? JSON.parse(priorIdentity.value) : undefined; } catch {}
-    const session = await loginOnServer({
-      name: name.trim(),
-      code: code.trim(),
-      role,
-    });
+    let session: AuthResponse;
+    try {
+      session = await loginOnServer({ name: name.trim(), code: code.trim(), role });
+    } catch (error) {
+      const isUnauthorized = typeof error === 'object' && error !== null
+        && 'status' in error && (error as { status?: unknown }).status === 401;
+      if (role !== 'administrator' || !isUnauthorized) throw error;
+      const directorSession = await loginOnServer({
+        name: name.trim(),
+        code: code.trim(),
+        role: 'management',
+      });
+      session = directorSession;
+    }
     await rotateActorCache(session.staff);
     await recoverLegacyQueue(preDb, session.staff, evidence);
     await persistServerSession(session);
@@ -1216,7 +1225,7 @@ export async function verifyStaffLogin(name: string, code: string, role: StaffRo
     await registerPushToken().catch(() => undefined);
     const { syncAllEntities } = await import('./sync');
     await syncAllEntities();
-    return true;
+    return session.staff.role as StaffRole;
   } catch (error) {
     if (
       typeof error === 'object' &&
