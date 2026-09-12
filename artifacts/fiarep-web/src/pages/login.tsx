@@ -133,10 +133,10 @@ export default function Login() {
                           data-testid="input-otp-code"
                         >
                           <InputOTPGroup>
-                            <InputOTPSlot index={0} />
-                            <InputOTPSlot index={1} />
-                            <InputOTPSlot index={2} />
-                            <InputOTPSlot index={3} />
+                            <InputOTPSlot index={0} masked />
+                            <InputOTPSlot index={1} masked />
+                            <InputOTPSlot index={2} masked />
+                            <InputOTPSlot index={3} masked />
                           </InputOTPGroup>
                         </InputOTP>
                       </div>

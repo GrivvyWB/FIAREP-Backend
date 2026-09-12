@@ -13,6 +13,7 @@ export default function ProcurementLogin() {
   const [code, setCode] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const [showChallenge, setShowChallenge] = useState(true);
   const pendingRaw = sessionStorage.getItem("fiarep_procurement_verification_pending");
   let pending: { challengeCode: string; challengeToken: string } | null = null;
   try {
@@ -28,6 +29,11 @@ export default function ProcurementLogin() {
     }
     if (isAuthenticated && staff?.role === "procurement") setLocation("/procurement");
   }, [isAuthenticated, pending?.challengeCode, pending?.challengeToken, staff, setLocation]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setShowChallenge(false), 5_000);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -53,10 +59,24 @@ export default function ProcurementLogin() {
           <p className="mt-2 text-sm text-slate-400">Enter your Procurement credentials again, then type the verification number shown below.</p>
         </div>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" required className="bg-slate-800 border-slate-700" />
-        <Input value={code} onChange={(e) => setCode(e.target.value.slice(0, 4))} placeholder="Issued 4-character code" minLength={4} maxLength={4} required className="bg-slate-800 border-slate-700 uppercase" />
+        <Input
+          type="password"
+          value={code}
+          onChange={(e) => setCode(e.target.value.slice(0, 4))}
+          placeholder="Issued 4-character code"
+          autoComplete="off"
+          minLength={4}
+          maxLength={4}
+          required
+          className="bg-slate-800 border-slate-700 uppercase"
+        />
         <div className="rounded-lg border border-amber-400/40 bg-slate-800 p-4 text-center">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Verification number</p>
-          <p className="mt-2 text-3xl font-bold tracking-[0.35em] text-amber-400">{pending?.challengeCode}</p>
+          {showChallenge ? (
+            <p className="mt-2 text-3xl font-bold tracking-[0.35em] text-amber-400">{pending?.challengeCode}</p>
+          ) : (
+            <p className="mt-2 text-sm font-medium text-slate-500">Number hidden</p>
+          )}
         </div>
         <Input
           value={verificationCode}
