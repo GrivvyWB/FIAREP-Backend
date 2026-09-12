@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -388,6 +389,11 @@ export function GenericEntityPage({
               </DialogFooter>
             </form>
           </Form>
+          {editingRecord && (
+            <div className="mt-4 pt-4 border-t border-border">
+              <FieldEvidenceDisplay state={editingRecord.state as any} />
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

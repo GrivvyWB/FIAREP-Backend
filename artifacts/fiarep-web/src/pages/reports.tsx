@@ -20,6 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/staff-assignment";
+import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 
@@ -252,6 +253,7 @@ export default function Reports() {
                 <div className="grid grid-cols-2 gap-3 text-sm"><div><span className="text-muted-foreground">Status</span><p className="font-medium capitalize">{statusLabel(currentStatus)}</p></div><div><span className="text-muted-foreground">Development</span><p className="font-medium">{selected.development || "—"}</p></div><div><span className="text-muted-foreground">Complaint number</span><p className="font-medium">{String(state.complaintNo || "—")}</p></div><div><span className="text-muted-foreground">Address</span><p className="font-medium">{String(state.address || "—")}</p></div></div>
                  {!!String(state.description || "") && <div><p className="text-sm text-muted-foreground mb-1">Details</p><p className="text-sm whitespace-pre-wrap">{String(state.description)}</p></div>}
                 <div><p className="text-sm text-muted-foreground mb-2">Photos</p><Photos reportId={selected.id} /></div>
+                <FieldEvidenceDisplay state={state} reportId={selected.id} />
                  <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={String(state.assignedStaffId || "")} onChange={(e) => assign(selected, e.target.value)} disabled={action.isPending || assigning === selected.id}><option value="">Select staff member…</option>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <optgroup key={group.label} label={group.label}>{group.people.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}</optgroup>)}</select></div>
                 <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{currentStatus === "in_progress" && <Button onClick={() => perform(selected, "resolve")} disabled={action.isPending}>Resolve report</Button>}{currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}</div>
               </div></>;

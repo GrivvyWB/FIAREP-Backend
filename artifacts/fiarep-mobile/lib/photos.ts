@@ -3,6 +3,12 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { captureGeo, type GeoStamp } from './geo';
 import { requestFileUploadUrl } from '@workspace/api-client-react';
 
+export type PhotoEvidence = {
+  uri: string;
+  capturedAt: string;
+  geo: GeoStamp;
+};
+
 // Copy a picked/captured image into permanent app storage so it survives
 // app restarts (the picker returns a temporary URI that iOS later deletes).
 async function persist(uri: string): Promise<string> {
@@ -77,16 +83,16 @@ export async function photoBase64(stored: string): Promise<string | null> {
 }
 
 // Capture a photo AND its geo stamp together (for field chain-of-custody).
-export async function takePhotoWithGeo(): Promise<{ uri: string; geo: GeoStamp } | null> {
+export async function takePhotoWithGeo(): Promise<PhotoEvidence | null> {
   const uri = await takePhoto();
   if (!uri) return null;
   const geo = await captureGeo();
-  return { uri, geo };
+  return { uri, geo, capturedAt: geo.at };
 }
-export async function pickPhotoWithGeo(): Promise<{ uri: string; geo: GeoStamp } | null> {
+export async function pickPhotoWithGeo(): Promise<PhotoEvidence | null> {
   const uri = await pickPhoto();
   if (!uri) return null;
   const geo = await captureGeo();
-  return { uri, geo };
+  return { uri, geo, capturedAt: geo.at };
 }
 

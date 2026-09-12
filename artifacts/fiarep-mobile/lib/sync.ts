@@ -2,6 +2,7 @@ import {
   createEntityRecord,
   deleteEntityRecord,
   pullSync,
+  performEntityAction,
   updateEntityRecord,
 } from '@workspace/api-client-react';
 import { db, getAccessToken, getAlertsMuted, getCurrentActor, getSessionIdentity } from './store';
@@ -71,21 +72,28 @@ const WORKFLOW_FIELDS = new Set(['status', 'clearedByMgmt', 'submitAt', 'approve
 function writableState(entity: string, state: Record<string, any>) {
   const copy = { ...state };
   delete copy._meta;
+  delete copy._pendingWorkflowActions;
   if (['procurement', 'resident-reports', 'building-violations', 'leave-requests', 'elevator-jobs', 'emergency-jobs'].includes(entity)) {
     for (const key of WORKFLOW_FIELDS) delete copy[key];
   }
   return copy;
 }
 async function prepareUploadState(entity: string, state: Record<string, any>) {
-  if (!Array.isArray(state.photos) || !state.photos.length) return state;
+  const photos = Array.isArray(state.photos) ? state.photos : [];
+  const completionPhotos = Array.isArray(state.completionPhotos) ? state.completionPhotos : [];
+  const localPhotos = [...new Set([...photos, ...completionPhotos])];
+  if (!localPhotos.length) return state;
   const kind = entity === 'change-orders' || entity === 'emergency-jobs' || entity === 'elevator-jobs'
     ? 'completion-photo' : entity === 'inspections' || entity === 'building-violations'
       ? 'inspection-evidence' : 'room-photo';
   const { uploadPhoto } = await import('./photos');
   const remoteFiles = Array.isArray(state.remoteFiles) ? [...state.remoteFiles] : [];
-  for (const localUri of state.photos) {
+  for (const localUri of localPhotos) {
     if (remoteFiles.some((file: any) => file.localUri === localUri)) continue;
-    try { remoteFiles.push({ ...(await uploadPhoto(localUri, kind as any)), localUri }); } catch { /* retained for retry */ }
+    try {
+      const uploadKind = completionPhotos.includes(localUri) ? 'completion-photo' : kind;
+      remoteFiles.push({ ...(await uploadPhoto(localUri, uploadKind as any)), localUri });
+    } catch { /* retained for retry */ }
   }
   return remoteFiles.length ? { ...state, remoteFiles } : state;
 }
@@ -162,6 +170,9 @@ async function pushQueue(d: any) {
     try {
       const state = row.state ? JSON.parse(row.state) : {};
       const uploadedState = await prepareUploadState(row.entity, state);
+      const pendingActions = Array.isArray(uploadedState._pendingWorkflowActions)
+        ? uploadedState._pendingWorkflowActions
+        : [];
       if (uploadedState.remoteFiles) registerRemotePhotos(uploadedState.remoteFiles);
       if (PROJECT_KEYED.has(row.entity) && !uploadedState.projectId) uploadedState.projectId = row.id;
       const localMapping = TABLES.find((item) => item.entity === row.entity);
@@ -194,7 +205,11 @@ async function pushQueue(d: any) {
           if (error?.status !== 409 || !row.baseVersion) throw error;
           result = await updateEntityRecord(row.entity, row.id, input);
         }
+        for (const pending of pendingActions) {
+          result = await performEntityAction(row.entity, row.id, String(pending.action), pending.body || {});
+        }
       }
+      if (pendingActions.length) delete state._pendingWorkflowActions;
       const serverVersion = result?.version;
       if (serverVersion) {
         const authoritative = { ...(state.meta || {}), serverVersion, syncStatus: 'synced', updatedAt: result.updatedAt };

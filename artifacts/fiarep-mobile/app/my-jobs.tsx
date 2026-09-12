@@ -2,7 +2,8 @@ import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getCurrentActor, listRoutedInspectionsFor, completeRoutedViolation, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, type BuildingViolation, type ResidentReport } from '../lib/store';
-import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
+import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
@@ -18,7 +19,7 @@ export default function MyJobs() {
   const [resJobs, setResJobs] = useState<ResidentReport[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [note, setNote] = useState('');
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<PhotoEvidence[]>([]);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -41,10 +42,10 @@ export default function MyJobs() {
     setOpenId(v.id); setNote(''); setPhotos([]);
   }
   async function addTake() {
-    try { const uri = await takePhoto(); if (uri) setPhotos((p) => [...p, uri]); } catch (e: any) { Alert.alert('Camera', String(e && e.message ? e.message : e)); }
+    try { const photo = await takePhotoWithGeo(); if (photo) setPhotos((p) => [...p, photo]); } catch (e: any) { Alert.alert('Camera', String(e && e.message ? e.message : e)); }
   }
   async function addPick() {
-    try { const uri = await pickPhoto(); if (uri) setPhotos((p) => [...p, uri]); } catch (e: any) { Alert.alert('Photos', String(e && e.message ? e.message : e)); }
+    try { const photo = await pickPhotoWithGeo(); if (photo) setPhotos((p) => [...p, photo]); } catch (e: any) { Alert.alert('Photos', String(e && e.message ? e.message : e)); }
   }
   async function markDone(v: BuildingViolation) {
     if (!note.trim() && photos.length === 0) {
@@ -53,7 +54,8 @@ export default function MyJobs() {
     }
     setBusy(true);
     try {
-      await completeRoutedViolation(v.id, note.trim(), photos);
+      const completionGeo = await captureGeo();
+      await completeRoutedViolation(v.id, note.trim(), photos, completionGeo);
       setOpenId(null); setNote(''); setPhotos([]);
       load();
       Alert.alert('Marked complete', 'Management has been notified the repair is complete.');
@@ -117,9 +119,9 @@ export default function MyJobs() {
               <TextInput style={[ui.input, { minHeight: 60, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder="What was repaired" multiline />
               <Text style={ui.label}>Photos of the finished work</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                {photos.map((uri, i) => (
-                  <TouchableOpacity key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}>
-                    <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+                {photos.map((photo, i) => (
+                  <TouchableOpacity key={`${photo.uri}-${i}`} onPress={() => setViewerUri(photo.uri)}>
+                    <RemotePhoto localUri={photo.uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
                   </TouchableOpacity>
                 ))}
               </View>

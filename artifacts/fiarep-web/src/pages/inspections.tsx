@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { Plus, Search, Building2, MapPin, RefreshCw } from "lucide-react";
 import { useState } from "react";
+import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 
 type InspectionState = Record<string, unknown>;
 
@@ -187,13 +188,14 @@ export default function Inspections() {
                 <div><span className="text-muted-foreground">Updated</span><p>{new Date(detail.data.updatedAt).toLocaleString()}</p></div>
               </div>
               <div className="border-t border-border pt-3 space-y-2">
-                {Object.entries(selectedState).filter(([key]) => key !== "availableActions").map(([key, value]) => (
+                {Object.entries(selectedState).filter(([key]) => key !== "availableActions" && key !== "remoteFiles" && key !== "photoEvidence" && key !== "completionPhotoEvidence" && key !== "photos" && key !== "completionPhotos" && !key.includes("Geo") && !key.includes("At")).map(([key, value]) => (
                   <div key={key} className="flex justify-between gap-4 text-sm">
                     <span className="text-muted-foreground capitalize">{key.replace(/[A-Z]/g, letter => ` ${letter}`)}</span>
                     <span className="text-right break-all">{displayValue(value)}</span>
                   </div>
                 ))}
               </div>
+              <FieldEvidenceDisplay state={selectedState} />
               {action.isError && <p className="text-sm text-destructive">{messageFor(action.error)}</p>}
               {action.isSuccess && <p className="text-sm text-emerald-600">Workflow action completed.</p>}
             </div>

@@ -12,7 +12,8 @@ import {
   type ResidentReport,
   type StaffAccount,
 } from '../lib/store';
-import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
+import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
+import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -36,7 +37,7 @@ export default function Worker() {
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [reports, setReports] = useState<ResidentReport[]>([]);
   const [staff, setStaff] = useState<StaffAccount[]>([]);
-  const [staged, setStaged] = useState<Record<string, string[]>>({});
+  const [staged, setStaged] = useState<Record<string, PhotoEvidence[]>>({});
 
   const load = useCallback(() => {
     listResidentReports().then(setReports);
@@ -69,8 +70,8 @@ export default function Worker() {
 
   async function addPhoto(id: string, mode: 'take' | 'pick') {
     try {
-      const uri = mode === 'take' ? await takePhoto() : await pickPhoto();
-      if (uri) setStaged((m) => ({ ...m, [id]: [...(m[id] || []), uri] }));
+      const photo = mode === 'take' ? await takePhotoWithGeo() : await pickPhotoWithGeo();
+      if (photo) setStaged((m) => ({ ...m, [id]: [...(m[id] || []), photo] }));
     } catch (e: any) {
       Alert.alert('Photo error', e?.message ?? 'Could not add photo.');
     }
@@ -80,7 +81,8 @@ export default function Worker() {
     if (!myName) { Alert.alert('Name required', 'Enter your worker name first.'); return; }
     const photos = staged[r.id] || [];
     try {
-      await addResidentUpdate(r.id, status, note, myName, photos);
+      const geo = await captureGeo();
+      await addResidentUpdate(r.id, status, note, myName, photos, geo);
       setStaged((m) => ({ ...m, [r.id]: [] }));
       load();
     } catch (e: any) {
@@ -203,7 +205,7 @@ export default function Worker() {
             {s.length > 0 && (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {s.map((uri, i) => (
-                  <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><RemotePhoto localUri={uri} style={{ width: 56, height: 56, borderRadius: 6, backgroundColor: '#eee' }} /></Pressable>
+                  <Pressable key={`${uri.uri}-${i}`} onPress={() => setViewerUri(uri.uri)}><RemotePhoto localUri={uri.uri} style={{ width: 56, height: 56, borderRadius: 6, backgroundColor: '#eee' }} /></Pressable>
                 ))}
               </View>
             )}
