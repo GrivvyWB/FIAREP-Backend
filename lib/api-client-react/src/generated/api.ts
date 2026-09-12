@@ -61,6 +61,7 @@ import type {
   PlatformOwnerLoginBody,
   PlatformOwnerSession,
   ProcurementLoginInput,
+  ProcurementVerificationRequired,
   PublicResidentPhotoConfirmInput,
   PublicResidentPhotoUploadInput,
   PublicResidentReportResponse,
@@ -355,9 +356,9 @@ export const getLoginUrl = () => {
 /**
  * @summary Staff login with issued code
  */
-export const login = async (loginInput: LoginInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthResponse> => {
+export const login = async (loginInput: LoginInput, options?: Parameters<typeof customFetch>[1]): Promise<AuthResponse | ProcurementVerificationRequired> => {
 
-  return customFetch<AuthResponse>(getLoginUrl(),
+  return customFetch<AuthResponse | ProcurementVerificationRequired>(getLoginUrl(),
   {
     ...options,
     method: 'POST',

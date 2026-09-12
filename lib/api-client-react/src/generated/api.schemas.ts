@@ -493,6 +493,10 @@ export interface AuthResponse {
   staff: Staff;
 }
 
+export interface ProcurementVerificationRequired {
+  requiresProcurementVerification: true;
+}
+
 export interface RefreshTokenInput {
   /** @minLength 1 */
   refreshToken: string;

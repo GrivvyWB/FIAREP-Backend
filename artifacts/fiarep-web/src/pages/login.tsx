@@ -57,7 +57,12 @@ export default function Login() {
   const onSubmit = async (values: z.infer<typeof loginSchema>) => {
     try {
       setIsSubmitting(true);
-      await login(values.name, values.code, values.organizationId?.trim() || undefined);
+      const result = await login(values.name, values.code, values.organizationId?.trim() || undefined);
+      if (result === "procurement-verification") {
+        sessionStorage.setItem("fiarep_procurement_verification_pending", "true");
+        setLocation("/procurement/login");
+        return;
+      }
       const returnTo = sessionStorage.getItem("fiarep_return_to");
       sessionStorage.removeItem("fiarep_return_to");
       setLocation(returnTo?.startsWith("/") && returnTo !== "/login" ? returnTo : "/dashboard");

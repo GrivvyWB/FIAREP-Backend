@@ -15,6 +15,10 @@ export default function ProcurementLogin() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    if (!isAuthenticated && sessionStorage.getItem("fiarep_procurement_verification_pending") !== "true") {
+      setLocation("/login");
+      return;
+    }
     if (isAuthenticated && staff?.role === "procurement") setLocation("/procurement");
   }, [isAuthenticated, staff, setLocation]);
 
@@ -23,6 +27,7 @@ export default function ProcurementLogin() {
     setBusy(true);
     try {
       await procurementLogin(name, code.toUpperCase(), organizationId.trim());
+      sessionStorage.removeItem("fiarep_procurement_verification_pending");
       setLocation("/procurement");
     } catch (error: any) {
       toast({ variant: "destructive", title: "Procurement sign-in failed", description: error?.message || "Invalid credentials" });
@@ -43,7 +48,10 @@ export default function ProcurementLogin() {
         <Input value={code} onChange={(e) => setCode(e.target.value.slice(0, 4))} placeholder="Issued 4-character code" minLength={4} maxLength={4} required className="bg-slate-800 border-slate-700 uppercase" />
         <Input value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} placeholder="Organization ID" autoComplete="off" required className="bg-slate-800 border-slate-700" />
         <Button type="submit" disabled={busy} className="w-full">{busy ? "Signing in..." : "Sign in to Procurement"}</Button>
-        <button type="button" onClick={() => setLocation("/login")} className="w-full text-sm text-slate-400 hover:text-white">Return to staff sign-in</button>
+        <button type="button" onClick={() => {
+          sessionStorage.removeItem("fiarep_procurement_verification_pending");
+          setLocation("/login");
+        }} className="w-full text-sm text-slate-400 hover:text-white">Return to staff sign-in</button>
       </form>
     </div>
   );

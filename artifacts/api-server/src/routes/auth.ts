@@ -124,7 +124,11 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     return;
   }
   if (staff.role === "procurement") {
-    res.status(401).json({ error: "Invalid staff name or code" });
+    if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) {
+      res.status(403).json({ error: "Organization license is not active" });
+      return;
+    }
+    res.status(202).json({ requiresProcurementVerification: true });
     return;
   }
   if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) {

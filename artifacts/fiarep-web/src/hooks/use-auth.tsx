@@ -1,11 +1,11 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
-import { setAuthTokenGetter, setAuthRefreshHandler, setBaseUrl, Staff, useLogin, useGetCurrentStaff, useRefreshSession, getGetCurrentStaffQueryKey } from "@workspace/api-client-react";
+import { setAuthTokenGetter, setAuthRefreshHandler, setBaseUrl, Staff, useGetCurrentStaff, useRefreshSession, getGetCurrentStaffQueryKey } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
 
 interface AuthContextType {
   staff: Staff | null;
   isLoading: boolean;
-  login: (name: string, code: string, organizationId?: string) => Promise<void>;
+  login: (name: string, code: string, organizationId?: string) => Promise<"authenticated" | "procurement-verification">;
   procurementLogin: (name: string, code: string, organizationId: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
@@ -18,7 +18,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loginMutation = useLogin();
   const refreshMutation = useRefreshSession();
   let refreshInFlight: Promise<string | null> | null = null;
   
@@ -98,10 +97,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (name: string, code: string, organizationId?: string) => {
-    const res = await loginMutation.mutateAsync({ data: { name, code, ...(organizationId ? { organizationId } : {}) } });
-    localStorage.setItem("fiarep_access_token", res.accessToken);
-    localStorage.setItem("fiarep_refresh_token", res.refreshToken);
-    setStaff(res.staff);
+    const response = await fetch("/api/v1/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name, code, ...(organizationId ? { organizationId } : {}) }),
+    });
+    const payload = await response.json();
+    if (response.status === 202 && payload?.requiresProcurementVerification === true) {
+      return "procurement-verification";
+    }
+    if (!response.ok) throw new Error(payload?.error || "Invalid staff name or code");
+    localStorage.setItem("fiarep_access_token", payload.accessToken);
+    localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
+    setStaff(payload.staff);
+    return "authenticated";
   };
 
   const procurementLogin = async (name: string, code: string, organizationId: string) => {

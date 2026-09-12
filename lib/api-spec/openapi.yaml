@@ -127,6 +127,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AuthResponse"
+        "202":
+          description: Valid Procurement credentials; a separate Procurement verification is required
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProcurementVerificationRequired"
         "401":
           $ref: "#/components/responses/Unauthorized"
   /v1/auth/procurement/login:
@@ -1295,6 +1301,11 @@ components:
         refreshToken: { type: string }
         expiresIn: { type: integer }
         staff: { $ref: "#/components/schemas/Staff" }
+    ProcurementVerificationRequired:
+      type: object
+      required: [requiresProcurementVerification]
+      properties:
+        requiresProcurementVerification: { type: boolean, enum: [true] }
     RefreshTokenInput:
       type: object
       additionalProperties: false
