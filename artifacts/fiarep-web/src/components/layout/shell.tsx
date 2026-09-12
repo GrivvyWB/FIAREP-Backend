@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { useAuth } from "@/hooks/use-auth";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
+import { PageBackButton } from "./page-back-button";
 
 export function Shell({ children }: { children: React.ReactNode }) {
+  const [location] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
   );
@@ -28,6 +30,7 @@ export function Shell({ children }: { children: React.ReactNode }) {
       <div className="flex-1 min-w-0 flex flex-col">
         <Topbar sidebarOpen={sidebarOpen} onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 p-4 md:p-[28px_30px_40px]">
+          {location !== "/" && location !== "/dashboard" && <PageBackButton />}
           {children}
         </main>
       </div>
