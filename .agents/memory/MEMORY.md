@@ -14,3 +14,4 @@
 - [FIAREP field evidence sync](fiarep-field-evidence-sync.md) — workflow transitions and evidence uploads use separate authorized paths and must both replay after offline work.
 - [FIAREP scoring authority](fiarep-scoring-authority.md) — development, vendor, building, and residential scores share one tenant-scoped server formula and contract.
 - [FIAREP cross-device parity](fiarep-cross-device-parity.md) — mobile and web share server authority; sync cursors are separated by data stream, entity, identity scope, and role.
+- [FIAREP installation personas](fiarep-installation-personas.md) — each mobile installation is permanently Resident, Vendor, or Staff until the app is uninstalled.

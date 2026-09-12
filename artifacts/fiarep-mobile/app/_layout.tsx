@@ -5,9 +5,11 @@ import { Stack, useRouter } from 'expo-router';
 import {
   getAppMode, setAppMode,
   verifyStaffLogin, hasAnyAdministrator, bootstrapAdministrator,
-  setRememberedStaff, getRememberedStaff,
+  setRememberedStaff,
    setCurrentActor, restoreServerSession, logout, clearAppMode, clearRememberedStaff,
-   type AppMode } from '../lib/store';
+   getInstallationPersona, setInstallationPersona,
+   inferInstallationPersona,
+   type AppMode, type InstallationPersona } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
 
@@ -15,7 +17,7 @@ type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
 export function useAppMode() { return useContext(ModeContext); }
 
-type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'resident' | 'vendor' | 'emergency';
+type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'vendor' | 'emergency';
 const CODE_LEN = 4;
 const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
 const ROLE_LABEL: Record<StaffRole, string> = {
@@ -23,7 +25,6 @@ const ROLE_LABEL: Record<StaffRole, string> = {
   management: 'Management',
   worker: 'Staff Member',
   inspector: 'CPM / Inspector',
-  resident: 'Resident',
   vendor: 'Vendor',
   emergency: 'Emergency Unit',
 };
@@ -173,8 +174,31 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
   );
 }
 
-function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?: string }) {
-  const [gateFor, setGateFor] = useState<StaffRole | null>(null);
+function PersonaPicker({ onPick }: { onPick: (persona: InstallationPersona) => void }) {
+  return (
+    <Screen>
+      <Image
+        source={require('../assets/field-inspection-logo.png')}
+        accessibilityLabel="FIAREP logo"
+        resizeMode="contain"
+        style={{ width: 300, height: 150, alignSelf: 'center', marginBottom: 6 }}
+      />
+      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Who's using this device?</Text>
+      <Pressable style={ui.btn} onPress={() => onPick('resident')}>
+        <Text style={ui.btnText}>Resident</Text>
+      </Pressable>
+      <Pressable style={ui.btn} onPress={() => onPick('vendor')}>
+        <Text style={ui.btnText}>Vendor</Text>
+      </Pressable>
+      <Pressable style={ui.btn} onPress={() => onPick('staff')}>
+        <Text style={ui.btnText}>Staff</Text>
+      </Pressable>
+    </Screen>
+  );
+}
+
+function ModePicker({ persona, onPick, notice }: { persona: InstallationPersona; onPick: (m: AppMode) => void; notice?: string }) {
+  const [gateFor, setGateFor] = useState<StaffRole | null>(persona === 'vendor' ? 'vendor' : null);
   const [boroughDirectorGate, setBoroughDirectorGate] = useState(false);
   const [emergencyGate, setEmergencyGate] = useState(false);
   const pickStaffRole = async (role: StaffRole) => {
@@ -203,33 +227,36 @@ function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?:
         resizeMode="contain"
         style={{ width: 300, height: 150, alignSelf: 'center', marginBottom: 6 }}
       />
-      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Who's using this device?</Text>
-      <Text style={[ui.label, { textAlign: 'center', marginBottom: 12 }]}>Staff roles require an issued code.</Text>
+      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>
+        {persona === 'vendor' ? 'Vendor access' : 'Select a staff role'}
+      </Text>
       {!!notice && <Text style={{ color: '#9a3412', textAlign: 'center', marginBottom: 8 }}>{notice}</Text>}
-      <Pressable style={ui.btn} onPress={() => onPick('resident')}>
-        <Text style={ui.btnText}>Resident</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => onPick('vendor')}>
-        <Text style={ui.btnText}>Vendor</Text>
-      </Pressable>
-       <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => { setEmergencyGate(true); setGateFor('emergency'); }}>
-        <Text style={ui.btnText}>Emergency Unit</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => { setBoroughDirectorGate(true); setGateFor('management'); }}>
-        <Text style={ui.btnText}>Borough Director  🔒</Text>
-      </Pressable>
-       <Pressable style={ui.btn} onPress={() => pickStaffRole('administrator')}>
-        <Text style={ui.btnText}>Administrator  🔒</Text>
-      </Pressable>
-       <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
-        <Text style={ui.btnText}>Management  🔒</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => pickStaffRole('worker')}>
-        <Text style={ui.btnText}>Staff Member  🔒</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => pickStaffRole('inspector')}>
-        <Text style={ui.btnText}>CPM / Inspector  🔒</Text>
-      </Pressable>
+      {persona === 'vendor' ? (
+        <Pressable style={ui.btn} onPress={() => setGateFor('vendor')}>
+          <Text style={ui.btnText}>Vendor</Text>
+        </Pressable>
+      ) : (
+        <>
+          <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => { setEmergencyGate(true); setGateFor('emergency'); }}>
+            <Text style={ui.btnText}>Emergency Unit</Text>
+          </Pressable>
+          <Pressable style={ui.btn} onPress={() => { setBoroughDirectorGate(true); setGateFor('management'); }}>
+            <Text style={ui.btnText}>Borough Director  🔒</Text>
+          </Pressable>
+          <Pressable style={ui.btn} onPress={() => pickStaffRole('administrator')}>
+            <Text style={ui.btnText}>Administrator  🔒</Text>
+          </Pressable>
+          <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
+            <Text style={ui.btnText}>Management  🔒</Text>
+          </Pressable>
+          <Pressable style={ui.btn} onPress={() => pickStaffRole('worker')}>
+            <Text style={ui.btnText}>Staff Member  🔒</Text>
+          </Pressable>
+          <Pressable style={ui.btn} onPress={() => pickStaffRole('inspector')}>
+            <Text style={ui.btnText}>CPM / Inspector  🔒</Text>
+          </Pressable>
+        </>
+      )}
     </Screen>
   );
 }
@@ -407,26 +434,68 @@ function VendorStack() {
 export default function Layout() {
   const router = useRouter();
   const [mode, setMode] = useState<AppMode | null>(null);
+  const [persona, setPersona] = useState<InstallationPersona | null>(null);
   const [booting, setBooting] = useState(true);
   const [notice, setNotice] = useState('');
 
   useEffect(() => {
     let mounted = true;
-    restoreServerSession().then(async (restored) => {
-      if (restored && restored.role === 'procurement') {
-        await logout().catch(() => undefined);
-        await clearAppMode().catch(() => undefined);
-        await clearRememberedStaff('procurement').catch(() => undefined);
-        if (mounted) setNotice('The Procurement mobile role is no longer available. Choose another FIAREP role.');
-      } else if (restored && mounted && ['resident', 'administrator', 'management', 'worker', 'inspector', 'vendor', 'emergency'].includes(restored.role)) {
-        const savedMode = await getAppMode().catch(() => null);
-        const restoredMode = restored.role === 'emergency'
-          ? 'emergency'
-          : restored.role as AppMode;
-        await syncAllEntities().catch(() => undefined);
-        setMode(restoredMode);
+    (async () => {
+      const savedMode = await getAppMode().catch(() => null);
+      const savedPersona = await getInstallationPersona().catch(() => null);
+      const restored = await restoreServerSession().catch(() => null);
+      const inferred = inferInstallationPersona(savedMode, restored?.role);
+      const selected = savedPersona || inferred;
+
+      if (selected && !savedPersona) {
+        await setInstallationPersona(selected).catch(() => undefined);
       }
-    }).catch(() => undefined).finally(() => {
+
+      if (selected === 'resident') {
+        if (restored && restored.role !== 'resident') {
+          await logout().catch(() => undefined);
+          await clearAppMode().catch(() => undefined);
+          if (restored.role === 'procurement') await clearRememberedStaff('procurement').catch(() => undefined);
+        } else if (savedMode && savedMode !== 'resident') {
+          await clearAppMode().catch(() => undefined);
+        }
+        await setAppMode('resident').catch(() => undefined);
+        if (mounted) {
+          setPersona('resident');
+          setMode('resident');
+        }
+      } else if (selected === 'vendor') {
+        if (restored && restored.role !== 'vendor') {
+          await logout().catch(() => undefined);
+          await clearAppMode().catch(() => undefined);
+          if (restored.role === 'procurement') await clearRememberedStaff('procurement').catch(() => undefined);
+        } else if (restored?.role === 'vendor') {
+          await syncAllEntities().catch(() => undefined);
+          if (mounted) setMode('vendor');
+        } else {
+          await clearAppMode().catch(() => undefined);
+        }
+        if (mounted) setPersona('vendor');
+      } else if (selected === 'staff') {
+        if (restored?.role === 'resident' || restored?.role === 'vendor') {
+          await logout().catch(() => undefined);
+          await clearAppMode().catch(() => undefined);
+        } else if (restored && restored.role === 'procurement') {
+          await logout().catch(() => undefined);
+          await clearAppMode().catch(() => undefined);
+          await clearRememberedStaff('procurement').catch(() => undefined);
+          if (mounted) setNotice('The Procurement mobile role is no longer available. Choose another FIAREP role.');
+        } else if (restored && ['administrator', 'management', 'worker', 'inspector', 'emergency'].includes(restored.role)) {
+          await syncAllEntities().catch(() => undefined);
+          if (mounted) setMode(restored.role === 'emergency' ? 'emergency' : restored.role as AppMode);
+        } else {
+          await clearAppMode().catch(() => undefined);
+        }
+        if (mounted) setPersona('staff');
+      } else if (mounted) {
+        setPersona(null);
+      }
+    })().catch(() => undefined).finally(() => {
       if (mounted) setBooting(false);
     });
     const sub = AppState.addEventListener('change', (state) => {
@@ -445,9 +514,21 @@ export default function Layout() {
 
   const refresh = useCallback(() => { setMode(null); }, []);
 
+  async function pickPersona(next: InstallationPersona) {
+    const chosen = await setInstallationPersona(next);
+    if (chosen === 'resident') {
+      await setAppMode('resident').catch(() => undefined);
+      setMode('resident');
+    } else {
+      await clearAppMode().catch(() => undefined);
+      setMode(null);
+    }
+    setPersona(chosen);
+  }
+
   async function pick(m: AppMode) {
-    setMode(m);
     await setAppMode(m).catch(() => undefined);
+    setMode(m);
   }
 
   let content;
@@ -457,8 +538,10 @@ export default function Layout() {
         <ActivityIndicator size="large" color={ACCENT} />
       </View>
     );
+  } else if (persona === null) {
+    content = <PersonaPicker onPick={pickPersona} />;
   } else if (mode === null) {
-    content = <ModePicker onPick={pick} notice={notice} />;
+    content = <ModePicker key={persona} persona={persona} onPick={pick} notice={notice} />;
   } else if (mode === 'emergency') {
     content = <EmergencyStack />;
   } else if (mode === 'resident') {

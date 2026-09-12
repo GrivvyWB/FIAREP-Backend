@@ -1,13 +1,11 @@
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAppMode } from './_layout';
 import {
   getProcurementByTracking,
   submitBid,
   vendorStartProcurement,
   vendorCompleteProcurement,
-  clearAppMode,
   type ProcurementRequest,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
@@ -32,7 +30,6 @@ function fmt(iso?: string): string {
 }
 
 export default function VendorHome() {
-  const { refresh } = useAppMode();
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [job, setJob] = useState<ProcurementRequest | null>(null);
@@ -116,11 +113,6 @@ export default function VendorHome() {
     } finally {
       setBusy(false);
     }
-  }
-
-  async function onExit() {
-    await clearAppMode();
-    refresh();
   }
 
   return (
@@ -248,9 +240,6 @@ export default function VendorHome() {
         </View>
       )}
 
-      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onExit}>
-        <Text style={ui.btnOutlineText}>Exit</Text>
-      </Pressable>
     </ScrollView>
     </KeyboardAvoidingView>
   );

@@ -922,6 +922,48 @@ export async function setReportDevelopment(id: string, name: string): Promise<vo
 
 export type AppMode = 'resident' | 'administrator' | 'management' | 'worker' | 'inspector' | 'vendor' | 'emergency';
 
+export type InstallationPersona = 'resident' | 'vendor' | 'staff';
+
+/**
+ * Decide the installation persona for an installation that predates the
+ * persona setting.  Resident and vendor are deliberately checked before the
+ * generic staff case so a resumed resident/vendor session cannot be widened
+ * into the staff experience.
+ */
+export function inferInstallationPersona(
+  savedMode: AppMode | null | undefined,
+  sessionRole?: string | null,
+): InstallationPersona | null {
+  const evidence = [savedMode, sessionRole].filter((value): value is string => !!value);
+  if (evidence.includes('resident')) return 'resident';
+  if (evidence.includes('vendor')) return 'vendor';
+  if (evidence.length) return 'staff';
+  return null;
+}
+
+export async function getInstallationPersona(): Promise<InstallationPersona | null> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?',
+    'installation_persona',
+  );
+  if (row?.value === 'resident' || row?.value === 'vendor' || row?.value === 'staff') {
+    return row.value;
+  }
+  return null;
+}
+
+/** Set the persona exactly once.  A reinstall creates a new SQLite database. */
+export async function setInstallationPersona(persona: InstallationPersona): Promise<InstallationPersona> {
+  const d = await db();
+  await d.runAsync(
+    'INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO NOTHING',
+    'installation_persona',
+    persona,
+  );
+  return (await getInstallationPersona()) || persona;
+}
+
 export async function getAppMode(): Promise<AppMode | null> {
   const d = await db();
   const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', 'appMode');
@@ -939,6 +981,14 @@ export async function getAppMode(): Promise<AppMode | null> {
 
 export async function setAppMode(mode: AppMode): Promise<void> {
   const d = await db();
+  const persona = await getInstallationPersona();
+  if (
+    (persona === 'resident' && mode !== 'resident') ||
+    (persona === 'vendor' && mode !== 'vendor') ||
+    (persona === 'staff' && (mode === 'resident' || mode === 'vendor'))
+  ) {
+    throw new Error('This app installation is locked to its selected persona.');
+  }
   await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'appMode', mode);
 }
 
@@ -1502,6 +1552,14 @@ export async function revokeStaffAccount(id: string): Promise<void> {
 // Verify a login: name + code must match an APPROVED account for the given role.
 export async function verifyStaffLogin(name: string, code: string, role: StaffRole, expectedPosition?: string, organizationId?: string): Promise<boolean> {
   try {
+    const persona = await getInstallationPersona();
+    if (
+      (persona === 'resident' && role !== 'resident') ||
+      (persona === 'vendor' && role !== 'vendor') ||
+      (persona === 'staff' && (role === 'resident' || role === 'vendor'))
+    ) {
+      return false;
+    }
     const preDb = await db();
     const priorIdentity = await preDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
     let evidence: any;
@@ -1550,6 +1608,16 @@ export async function restoreServerSession(): Promise<Staff | null> {
   if (!token) return null;
   try {
     const staff = await getCurrentStaff();
+    const persona = await getInstallationPersona();
+    const incompatible =
+      (persona === 'resident' && staff.role !== 'resident') ||
+      (persona === 'vendor' && staff.role !== 'vendor') ||
+      (persona === 'staff' && (staff.role === 'resident' || staff.role === 'vendor'));
+    if (incompatible) {
+      await logout().catch(() => undefined);
+      await clearAppMode().catch(() => undefined);
+      return null;
+    }
     await rotateActorCache(staff);
     const localDb = await db();
     const priorIdentity = await localDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
