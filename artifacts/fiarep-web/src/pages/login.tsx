@@ -150,10 +150,10 @@ export default function Login() {
                 name="organizationId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Organization ID (first account only)</FormLabel>
+                    <FormLabel>Organization ID</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Only required for initial organization access"
+                        placeholder=""
                         autoComplete="off"
                         {...field}
                         data-testid="input-organization-id"
