@@ -31,7 +31,10 @@ function normalize(record: RecordItem, category: Category): CalendarItem | null 
   if (!start) return null;
   const end = parseDate(value(s, ["endDate", "finishDate"]), start.toISOString()) || start;
   const m = meta[category];
-  return { ...record, category, label: String(value(s, ["title", "name", "description", "reason", "issue"]) || `${category} record`), href: m.href, start, end };
+  const href = category === "Resident reports" || category === "Inspections"
+    ? `${m.href}?id=${encodeURIComponent(record.id)}`
+    : m.href;
+  return { ...record, category, label: String(value(s, ["title", "name", "description", "reason", "issue"]) || `${category} record`), href, start, end };
 }
 
 export default function Calendar() {
