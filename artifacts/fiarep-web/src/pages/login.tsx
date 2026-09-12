@@ -63,7 +63,7 @@ export default function Login() {
           challengeCode: result.challengeCode,
           challengeToken: result.challengeToken,
         }));
-        setLocation("/procurement/login");
+        window.location.assign("/procurement/login");
         return;
       }
       const returnTo = sessionStorage.getItem("fiarep_return_to");
