@@ -1,10 +1,10 @@
-import fiarepLogo from "@assets/logo-logo_1789085394103.webp";
+import fiarepLogo from "@assets/IMG_5441_1789172478516.PNG";
 
 export default function Fiarep() {
   return (
     <div className="grid-bg relative w-screen h-screen overflow-hidden font-body text-text">
-      <div className="absolute left-[5vw] top-[5vh] h-[9vw] w-[9vw] overflow-hidden bg-[#050505]">
-        <img src={fiarepLogo} crossOrigin="anonymous" alt="FIAREP logo" className="h-full w-full object-cover object-center" />
+      <div className="absolute left-[5vw] top-[4vh] h-[15vh] w-[28vw] overflow-hidden">
+        <img src={fiarepLogo} crossOrigin="anonymous" alt="FIAREP logo" className="h-full w-full object-contain object-left" />
       </div>
       <div className="absolute right-[5vw] top-[5vh] text-right">
         <div className="text-[1.5vw] font-bold uppercase tracking-[0.16em] text-primary">FIAREP</div>
