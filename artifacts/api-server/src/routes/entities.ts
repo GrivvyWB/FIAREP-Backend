@@ -37,6 +37,21 @@ function stateOf(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+function assignmentTargetAllowed(
+  actor: ReturnType<typeof actorFrom>,
+  target: typeof staffAccounts.$inferSelect,
+  development: string | null,
+) {
+  if (target.id === actor.id || target.position === "Borough Director") return false;
+  if (!["management", "worker", "inspector", "emergency"].includes(target.role)) return false;
+  if (development && !target.developments.includes(development)) return false;
+  if (isBoroughDirector(actor)) return true;
+  if (!target.developments.length ||
+      !target.developments.every((value) => actor.developments.includes(value))) return false;
+  if (target.role === "management") return actor.position === "Regional Director";
+  return ["worker", "inspector", "emergency"].includes(target.role);
+}
+
 function outward(
   actor: ReturnType<typeof actorFrom>,
   row: typeof entityRecords.$inferSelect,
@@ -499,6 +514,23 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     return;
   }
   const body = stateOf(req.body) ?? {};
+  if (entity === "resident-reports" && action === "assign") {
+    const assignedStaffId = typeof body["assignedStaffId"] === "string"
+      ? body["assignedStaffId"]
+      : "";
+    const [target] = assignedStaffId
+      ? await db.select().from(staffAccounts).where(and(
+          eq(staffAccounts.id, assignedStaffId),
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+        )).limit(1)
+      : [];
+    if (!target || !assignmentTargetAllowed(actor, target, current.development)) {
+      res.status(403).json({ error: "Select an operational staff member from your authorized group" });
+      return;
+    }
+    body["assignedTo"] = target.name;
+  }
   if (patchesWorkflowManagedFields(entity, body)) {
     res.status(403).json({
       error: "Workflow-managed fields are controlled by the selected action",

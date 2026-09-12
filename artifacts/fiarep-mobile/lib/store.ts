@@ -1174,8 +1174,13 @@ async function syncApprovedLocalStaffToServer(): Promise<void> {
 
 export async function listStaffByPosition(position?: string): Promise<StaffAccount[]> {
   const all = await listStaffAccounts('approved');
+  const identity = await getSessionIdentity();
   const staff = all.filter(a => a.role === 'worker' || a.role === 'inspector');
-  const out = position ? staff.filter(a => (a.position || '') === position) : staff;
+  const mine = new Set((identity?.developments || []).map(d => d.trim().toLowerCase()));
+  const scoped = identity?.position === 'Borough Director'
+    ? staff
+    : staff.filter(a => (a.developments || []).some(d => mine.has(d.trim().toLowerCase())));
+  const out = position ? scoped.filter(a => (a.position || '') === position) : scoped;
   return out.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
@@ -1185,11 +1190,16 @@ export async function listStaffByPosition(position?: string): Promise<StaffAccou
 export type TradeGroup = { position: string; people: StaffAccount[] };
 export async function listAssignableByTrade(): Promise<TradeGroup[]> {
   const all = await listStaffAccounts('approved');
+  const identity = await getSessionIdentity();
   const SUPERVISOR_TITLES = ['Property Manager', 'Superintendent', 'Regional Manager', 'Director'];
-  const eligible = all.filter(a =>
+  const operational = all.filter(a =>
     a.role === 'worker' || a.role === 'inspector' ||
     (a.role === 'management' && SUPERVISOR_TITLES.includes((a.position || '') as string))
   );
+  const mine = new Set((identity?.developments || []).map(d => d.trim().toLowerCase()));
+  const eligible = identity?.position === 'Borough Director'
+    ? operational
+    : operational.filter(a => (a.developments || []).some(d => mine.has(d.trim().toLowerCase())));
   const order = [...STAFF_POSITIONS];
   const groups: TradeGroup[] = [];
   for (const pos of order) {
