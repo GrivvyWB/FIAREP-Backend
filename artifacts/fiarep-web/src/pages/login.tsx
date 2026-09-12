@@ -58,8 +58,11 @@ export default function Login() {
     try {
       setIsSubmitting(true);
       const result = await login(values.name, values.code, values.organizationId?.trim() || undefined);
-      if (result === "procurement-verification") {
-        sessionStorage.setItem("fiarep_procurement_verification_pending", "true");
+      if (result.status === "procurement-verification") {
+        sessionStorage.setItem("fiarep_procurement_verification_pending", JSON.stringify({
+          challengeCode: result.challengeCode,
+          challengeToken: result.challengeToken,
+        }));
         setLocation("/procurement/login");
         return;
       }
@@ -147,10 +150,10 @@ export default function Login() {
                 name="organizationId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Organization ID</FormLabel>
+                    <FormLabel>Organization ID (first account only)</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="Organization ID"
+                        placeholder="Only required for initial organization access"
                         autoComplete="off"
                         {...field}
                         data-testid="input-organization-id"

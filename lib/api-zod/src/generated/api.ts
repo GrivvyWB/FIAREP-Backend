@@ -174,13 +174,15 @@ export const LoginResponse = zod.object({
 export const procurementLoginBodyCodeMin = 4;
 export const procurementLoginBodyCodeMax = 4;
 
+export const procurementLoginBodyChallengeCodeRegExp = new RegExp('^\\d{2}$');
 
 
 
 export const ProcurementLoginBody = zod.object({
   "name": zod.string(),
   "code": zod.string().min(procurementLoginBodyCodeMin).max(procurementLoginBodyCodeMax),
-  "organizationId": zod.string().min(1)
+  "challengeCode": zod.string().regex(procurementLoginBodyChallengeCodeRegExp),
+  "challengeToken": zod.string().min(1)
 })
 
 export const ProcurementLoginResponse = zod.object({

@@ -1288,11 +1288,12 @@ components:
         organizationId: { type: string, description: Required for non-default customer organizations }
     ProcurementLoginInput:
       type: object
-      required: [name, code, organizationId]
+      required: [name, code, challengeCode, challengeToken]
       properties:
         name: { type: string }
         code: { type: string, minLength: 4, maxLength: 4 }
-        organizationId: { type: string, minLength: 1 }
+        challengeCode: { type: string, pattern: '^\d{2}$' }
+        challengeToken: { type: string, minLength: 1 }
     AuthResponse:
       type: object
       required: [accessToken, refreshToken, staff]
@@ -1303,9 +1304,12 @@ components:
         staff: { $ref: "#/components/schemas/Staff" }
     ProcurementVerificationRequired:
       type: object
-      required: [requiresProcurementVerification]
+      required: [requiresProcurementVerification, challengeCode, challengeToken, expiresIn]
       properties:
         requiresProcurementVerification: { type: boolean, enum: [true] }
+        challengeCode: { type: string, pattern: '^\d{2}$' }
+        challengeToken: { type: string }
+        expiresIn: { type: integer }
     RefreshTokenInput:
       type: object
       additionalProperties: false

@@ -11,22 +11,30 @@ export default function ProcurementLogin() {
   const { toast } = useToast();
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
-  const [organizationId, setOrganizationId] = useState("");
+  const [verificationCode, setVerificationCode] = useState("");
   const [busy, setBusy] = useState(false);
+  const pendingRaw = sessionStorage.getItem("fiarep_procurement_verification_pending");
+  let pending: { challengeCode: string; challengeToken: string } | null = null;
+  try {
+    pending = pendingRaw ? JSON.parse(pendingRaw) : null;
+  } catch {
+    pending = null;
+  }
 
   useEffect(() => {
-    if (!isAuthenticated && sessionStorage.getItem("fiarep_procurement_verification_pending") !== "true") {
+    if (!isAuthenticated && !pending?.challengeCode && !pending?.challengeToken) {
       setLocation("/login");
       return;
     }
     if (isAuthenticated && staff?.role === "procurement") setLocation("/procurement");
-  }, [isAuthenticated, staff, setLocation]);
+  }, [isAuthenticated, pending?.challengeCode, pending?.challengeToken, staff, setLocation]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
     try {
-      await procurementLogin(name, code.toUpperCase(), organizationId.trim());
+      if (!pending) throw new Error("Procurement verification expired. Start again.");
+      await procurementLogin(name, code.toUpperCase(), verificationCode, pending.challengeToken);
       sessionStorage.removeItem("fiarep_procurement_verification_pending");
       setLocation("/procurement");
     } catch (error: any) {
@@ -42,11 +50,25 @@ export default function ProcurementLogin() {
         <div>
           <div className="text-sm font-bold tracking-widest text-amber-400">FIAREP PROCUREMENT</div>
           <h1 className="mt-2 text-2xl font-bold">Procurement sign-in</h1>
-          <p className="mt-2 text-sm text-slate-400">Use your approved Procurement account and organization code.</p>
+          <p className="mt-2 text-sm text-slate-400">Enter your Procurement credentials again, then type the verification number shown below.</p>
         </div>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" required className="bg-slate-800 border-slate-700" />
         <Input value={code} onChange={(e) => setCode(e.target.value.slice(0, 4))} placeholder="Issued 4-character code" minLength={4} maxLength={4} required className="bg-slate-800 border-slate-700 uppercase" />
-        <Input value={organizationId} onChange={(e) => setOrganizationId(e.target.value)} placeholder="Organization ID" autoComplete="off" required className="bg-slate-800 border-slate-700" />
+        <div className="rounded-lg border border-amber-400/40 bg-slate-800 p-4 text-center">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Verification number</p>
+          <p className="mt-2 text-3xl font-bold tracking-[0.35em] text-amber-400">{pending?.challengeCode}</p>
+        </div>
+        <Input
+          value={verificationCode}
+          onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 2))}
+          placeholder="Enter the 2-digit number"
+          inputMode="numeric"
+          pattern="[0-9]{2}"
+          minLength={2}
+          maxLength={2}
+          required
+          className="bg-slate-800 border-slate-700 text-center tracking-[0.35em]"
+        />
         <Button type="submit" disabled={busy} className="w-full">{busy ? "Signing in..." : "Sign in to Procurement"}</Button>
         <button type="button" onClick={() => {
           sessionStorage.removeItem("fiarep_procurement_verification_pending");

@@ -5,8 +5,11 @@ import { useLocation } from "wouter";
 interface AuthContextType {
   staff: Staff | null;
   isLoading: boolean;
-  login: (name: string, code: string, organizationId?: string) => Promise<"authenticated" | "procurement-verification">;
-  procurementLogin: (name: string, code: string, organizationId: string) => Promise<void>;
+  login: (name: string, code: string, organizationId?: string) => Promise<
+    { status: "authenticated" } |
+    { status: "procurement-verification"; challengeCode: string; challengeToken: string }
+  >;
+  procurementLogin: (name: string, code: string, challengeCode: string, challengeToken: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
 }
@@ -96,7 +99,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, []);
 
-  const login = async (name: string, code: string, organizationId?: string) => {
+  const login = async (
+    name: string,
+    code: string,
+    organizationId?: string,
+  ): Promise<
+    { status: "authenticated" } |
+    { status: "procurement-verification"; challengeCode: string; challengeToken: string }
+  > => {
     const response = await fetch("/api/v1/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -104,19 +114,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
     const payload = await response.json();
     if (response.status === 202 && payload?.requiresProcurementVerification === true) {
-      return "procurement-verification";
+      return {
+        status: "procurement-verification",
+        challengeCode: payload.challengeCode,
+        challengeToken: payload.challengeToken,
+      };
     }
     if (!response.ok) throw new Error(payload?.error || "Invalid staff name or code");
     localStorage.setItem("fiarep_access_token", payload.accessToken);
     localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
     setStaff(payload.staff);
-    return "authenticated";
+    return { status: "authenticated" };
   };
 
-  const procurementLogin = async (name: string, code: string, organizationId: string) => {
+  const procurementLogin = async (name: string, code: string, challengeCode: string, challengeToken: string) => {
     const response = await fetch("/api/v1/auth/procurement/login", {
       method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, code, organizationId }),
+      body: JSON.stringify({ name, code, challengeCode, challengeToken }),
     });
     const payload = await response.json();
     if (!response.ok) throw new Error(payload?.error || "Invalid procurement credentials");

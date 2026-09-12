@@ -2,6 +2,7 @@ import {
   createHash,
   createHmac,
   randomBytes,
+  randomInt,
   randomUUID,
   timingSafeEqual,
 } from "node:crypto";
@@ -27,6 +28,15 @@ type AccessPayload = Actor & {
   exp: number;
   iat: number;
   typ: "access";
+};
+
+type ProcurementChallengePayload = {
+  staffId: string;
+  tenantId: string;
+  challengeCode: string;
+  exp: number;
+  iat: number;
+  typ: "procurement_challenge";
 };
 
 function secret(): string {
@@ -99,6 +109,42 @@ export function signAccessToken(actor: Actor): string {
   } satisfies AccessPayload);
   const input = `${header}.${payload}`;
   return `${input}.${signature(input)}`;
+}
+
+export function issueProcurementChallenge(staff: StaffAccount) {
+  const now = Math.floor(Date.now() / 1000);
+  const challengeCode = randomInt(0, 100).toString().padStart(2, "0");
+  const payload: ProcurementChallengePayload = {
+    staffId: staff.id,
+    tenantId: staff.tenantId,
+    challengeCode,
+    iat: now,
+    exp: now + 5 * 60,
+    typ: "procurement_challenge",
+  };
+  const encodedPayload = encode(payload);
+  return {
+    challengeCode,
+    challengeToken: `${encodedPayload}.${signature(encodedPayload)}`,
+    expiresIn: 5 * 60,
+  };
+}
+
+export function verifyProcurementChallenge(token: string): ProcurementChallengePayload {
+  const [payload, received, ...extra] = token.split(".");
+  if (!payload || !received || extra.length) throw new Error("Malformed procurement challenge");
+  const expected = Buffer.from(signature(payload));
+  const actual = Buffer.from(received);
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual)) {
+    throw new Error("Invalid procurement challenge");
+  }
+  const parsed = JSON.parse(
+    Buffer.from(payload, "base64url").toString("utf8"),
+  ) as ProcurementChallengePayload;
+  if (parsed.typ !== "procurement_challenge" || parsed.exp <= Math.floor(Date.now() / 1000)) {
+    throw new Error("Expired procurement challenge");
+  }
+  return parsed;
 }
 
 export function verifyAccessToken(token: string): AccessPayload {

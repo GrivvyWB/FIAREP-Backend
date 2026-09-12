@@ -416,8 +416,10 @@ export interface ProcurementLoginInput {
      * @maxLength 4
      */
   code: string;
+  /** @pattern ^\d{2}$ */
+  challengeCode: string;
   /** @minLength 1 */
-  organizationId: string;
+  challengeToken: string;
 }
 
 export type StaffRole = typeof StaffRole[keyof typeof StaffRole];
@@ -495,6 +497,10 @@ export interface AuthResponse {
 
 export interface ProcurementVerificationRequired {
   requiresProcurementVerification: true;
+  /** @pattern ^\d{2}$ */
+  challengeCode: string;
+  challengeToken: string;
+  expiresIn: number;
 }
 
 export interface RefreshTokenInput {

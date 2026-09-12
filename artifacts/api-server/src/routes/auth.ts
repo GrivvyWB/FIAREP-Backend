@@ -12,6 +12,8 @@ import {
   issuePlatformOwnerSession,
   rotatePlatformOwnerSession,
   revokePlatformOwnerSession,
+  issueProcurementChallenge,
+  verifyProcurementChallenge,
 } from "../lib/auth";
 import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
@@ -111,24 +113,28 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     eq(staffAccounts.code, code.trim().toUpperCase()),
     eq(staffAccounts.status, "approved"),
   ];
-  const tenantId = typeof organizationId === "string" && organizationId.trim() ? organizationId.trim() : "default";
-  conditions.push(eq(staffAccounts.tenantId, tenantId));
+  const tenantId = typeof organizationId === "string" && organizationId.trim() ? organizationId.trim() : null;
+  if (tenantId) conditions.push(eq(staffAccounts.tenantId, tenantId));
   if (typeof role === "string") conditions.push(eq(staffAccounts.role, role));
-  const [staff] = await db
+  const matches = await db
     .select()
     .from(staffAccounts)
     .where(and(...conditions))
-    .limit(1);
-  if (!staff) {
+    .limit(2);
+  if (matches.length !== 1) {
     res.status(401).json({ error: "Invalid staff name or code" });
     return;
   }
+  const staff = matches[0]!;
   if (staff.role === "procurement") {
     if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) {
       res.status(403).json({ error: "Organization license is not active" });
       return;
     }
-    res.status(202).json({ requiresProcurementVerification: true });
+    res.status(202).json({
+      requiresProcurementVerification: true,
+      ...issueProcurementChallenge(staff),
+    });
     return;
   }
   if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) {
@@ -139,22 +145,34 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
 });
 
 router.post("/v1/auth/procurement/login", rateLimit("procurement-login", 12), async (req, res) => {
-  const { name, code, organizationId } = req.body as {
-    name?: unknown; code?: unknown; organizationId?: unknown;
+  const { name, code, challengeCode, challengeToken } = req.body as {
+    name?: unknown; code?: unknown; challengeCode?: unknown; challengeToken?: unknown;
   };
-  const tenantId = typeof organizationId === "string" && organizationId.trim()
-    ? organizationId.trim() : "default";
   if (typeof name !== "string" || typeof code !== "string" ||
-      !/^[A-HJ-NP-Z2-9]{4}$/i.test(code.trim())) {
-    res.status(400).json({ error: "name, organizationId, and a 4-character code are required" });
+      !/^[A-HJ-NP-Z2-9]{4}$/i.test(code.trim()) ||
+      typeof challengeCode !== "string" || !/^\d{2}$/.test(challengeCode) ||
+      typeof challengeToken !== "string") {
+    res.status(400).json({ error: "Procurement credentials and verification number are required" });
+    return;
+  }
+  let challenge;
+  try {
+    challenge = verifyProcurementChallenge(challengeToken);
+  } catch {
+    res.status(401).json({ error: "Invalid or expired procurement verification" });
+    return;
+  }
+  if (challenge.challengeCode !== challengeCode) {
+    res.status(401).json({ error: "Invalid or expired procurement verification" });
     return;
   }
   const [staff] = await db.select().from(staffAccounts).where(and(
+    eq(staffAccounts.id, challenge.staffId),
     sql`lower(${staffAccounts.name}) = lower(${name.trim()})`,
     eq(staffAccounts.code, code.trim().toUpperCase()),
     eq(staffAccounts.role, "procurement"),
     eq(staffAccounts.status, "approved"),
-    eq(staffAccounts.tenantId, tenantId),
+    eq(staffAccounts.tenantId, challenge.tenantId),
   )).limit(1);
   if (!staff) {
     res.status(401).json({ error: "Invalid procurement credentials" });
