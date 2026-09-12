@@ -15,7 +15,7 @@
     "ios": {
       "supportsTablet": true,
       "deploymentTarget": "16.4",
-      "bundleIdentifier": "com.tmstni.construction-pm",
+      "bundleIdentifier": "com.fiarep.app",
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos of rooms and areas for estimates.",
         "NSPhotoLibraryUsageDescription": "Attach existing photos to estimates.",
