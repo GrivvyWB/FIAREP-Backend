@@ -10,7 +10,7 @@ import {
 import { Search, Plus, Edit2, Trash2, LucideIcon, MapPin, AlignLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
@@ -37,12 +37,14 @@ export function GenericEntityPage({
   description, 
   icon: Icon,
   workflow = false,
+  headerAction,
 }: { 
   entity: string;
   title: string;
   description: string;
   icon: LucideIcon;
   workflow?: boolean;
+  headerAction?: ReactNode;
 }) {
   const isProcurement = entity === "procurement";
   const { data, isLoading } = useListEntityRecords(entity);
@@ -205,9 +207,9 @@ export function GenericEntityPage({
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
           <p className="text-muted-foreground text-sm">{description}</p>
         </div>
-        {!isProcurement && <Button onClick={handleOpenCreate} className="font-semibold gap-2" data-testid={`button-create-${entity}`}>
+        {headerAction ?? (!isProcurement && <Button onClick={handleOpenCreate} className="font-semibold gap-2" data-testid={`button-create-${entity}`}>
           <Plus className="w-4 h-4" /> New {title.replace(/s$/, '')}
-        </Button>}
+        </Button>)}
       </div>
 
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
