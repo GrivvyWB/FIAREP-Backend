@@ -3,7 +3,7 @@ import { randomUUID, randomInt } from "node:crypto";
 import { and, count, eq, inArray, desc, isNull, sql } from "drizzle-orm";
 import { db, entityRecords, organizationProperties, organizations, staffAccounts, refreshSessions, platformLicenseAudit } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
-import { evaluateLicense } from "../lib/auth";
+import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
 import {
   getTimeClockConfig,
@@ -107,7 +107,10 @@ router.delete("/v1/platform/organizations/:organizationId/properties/:propertyId
 });
 
 function publicOrganization(org: typeof organizations.$inferSelect) {
-  return org;
+  return {
+    ...org,
+    status: effectiveLicenseStatus(org),
+  };
 }
 
 router.get("/v1/platform/organizations", async (_req, res) => {

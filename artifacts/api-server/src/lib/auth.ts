@@ -78,12 +78,25 @@ export async function evaluateLicense(tenantId: string): Promise<Organization | 
   return organization ?? null;
 }
 
-export function licenseAllows(organization: Organization | null, tenantId: string): boolean {
+export function effectiveLicenseStatus(
+  organization: Organization,
+  now = new Date(),
+): Organization["status"] {
+  if (organization.status === "active" && organization.endsAt && organization.endsAt <= now) {
+    return "expired";
+  }
+  return organization.status;
+}
+
+export function licenseAllows(
+  organization: Organization | null,
+  tenantId: string,
+  now = new Date(),
+): boolean {
   if (!organization) return tenantId === "default";
-  const now = new Date();
-  return organization.status === "active" &&
-    (organization.unrestricted || ((!organization.startsAt || organization.startsAt <= now) &&
-      (!organization.endsAt || organization.endsAt > now)));
+  return effectiveLicenseStatus(organization, now) === "active" &&
+    (!organization.startsAt || organization.startsAt <= now) &&
+    (!organization.endsAt || organization.endsAt > now);
 }
 
 export function actorFromStaff(staff: StaffAccount): Actor {
