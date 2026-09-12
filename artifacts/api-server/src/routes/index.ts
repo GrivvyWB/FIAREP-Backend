@@ -12,6 +12,7 @@ import propertyRouter from "./property";
 import publicAccessRouter from "./publicAccess";
 import organizationsRouter from "./organizations";
 import scoresRouter from "./scores";
+import timeClockRouter from "./timeClock";
 
 const router: IRouter = Router();
 
@@ -28,5 +29,6 @@ router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);
 router.use(propertyRouter);
+router.use(timeClockRouter);
 
 export default router;

@@ -838,6 +838,47 @@ export interface Error {
   error: string;
 }
 
+export interface TimeClockConfig {
+  integrationEnabled: boolean;
+  externalAuthoritative: boolean;
+  mobileClockEnabled: boolean;
+  provider: string | null;
+}
+
+export interface TimeClockConfigUpdate {
+  integrationEnabled?: boolean;
+  mobileClockEnabled?: boolean;
+}
+
+export interface PlatformTimeClockConfig extends TimeClockConfig {
+  organizationId: string;
+}
+
+export type TimeClockDirection = 'in' | 'out';
+export type TimeClockSource = 'external' | 'fiarep-mobile';
+
+export interface TimeClockPunchInput {
+  direction: TimeClockDirection;
+  idempotencyKey: string;
+}
+
+export interface TimeClockPunch {
+  id: string;
+  direction: TimeClockDirection;
+  source: TimeClockSource;
+  punchAt: string;
+  recordedAt: string;
+  provider: string | null;
+  externalId: string | null;
+  readOnly: boolean;
+}
+
+export interface TimeClockStatus {
+  config: TimeClockConfig;
+  current: TimeClockPunch | null;
+  nextDirection: TimeClockDirection;
+}
+
 /**
  * Authentication required
  */

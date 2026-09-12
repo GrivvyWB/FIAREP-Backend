@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
+  check,
   index,
   integer,
   jsonb,
@@ -56,6 +58,47 @@ export const organizations = pgTable(
   },
   (table) => [
     index("organization_status_idx").on(table.status),
+  ],
+);
+
+/**
+ * Normalized, append-only time-clock punches.  External integrations and the
+ * FIAREP mobile clock both write the same shape so downstream consumers never
+ * need vendor-specific logic.  There is intentionally no update endpoint for
+ * this table: imported punches are authoritative and read-only to staff.
+ */
+export const timeClockPunches = pgTable(
+  "time_clock_punches",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    staffId: text("staff_id").notNull(),
+    source: text("source").$type<"external" | "fiarep-mobile">().notNull(),
+    direction: text("direction").$type<"in" | "out">().notNull(),
+    punchAt: timestamp("punch_at", { withTimezone: true }).notNull(),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }).defaultNow().notNull(),
+    provider: text("provider"),
+    externalId: text("external_id"),
+    idempotencyKey: text("idempotency_key").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    check("time_clock_punch_source_check", sql`${table.source} in ('external', 'fiarep-mobile')`),
+    check("time_clock_punch_direction_check", sql`${table.direction} in ('in', 'out')`),
+    check(
+      "time_clock_punch_origin_fields_check",
+      sql`(${table.source} = 'external' and ${table.provider} is not null and ${table.externalId} is not null)
+        or (${table.source} = 'fiarep-mobile' and ${table.provider} is null and ${table.externalId} is null)`,
+    ),
+    uniqueIndex("time_clock_punch_idempotency_unique").on(table.tenantId, table.idempotencyKey),
+    uniqueIndex("time_clock_punch_external_unique").on(
+      table.tenantId,
+      table.source,
+      table.provider,
+      table.externalId,
+    ),
+    index("time_clock_punch_staff_idx").on(table.tenantId, table.staffId, table.punchAt),
+    index("time_clock_punch_tenant_idx").on(table.tenantId, table.punchAt),
   ],
 );
 
@@ -346,3 +389,4 @@ export type StaffAccount = typeof staffAccounts.$inferSelect;
 export type Organization = typeof organizations.$inferSelect;
 export type OrganizationProperty = typeof organizationProperties.$inferSelect;
 export type EntityRecord = typeof entityRecords.$inferSelect;
+export type TimeClockPunch = typeof timeClockPunches.$inferSelect;

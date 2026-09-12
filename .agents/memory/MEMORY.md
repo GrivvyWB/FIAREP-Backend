@@ -17,3 +17,4 @@
 - [FIAREP access personas](fiarep-installation-personas.md) — mobile installations and website browsers stay locked to Resident, Vendor, or Staff access.
 - [FIAREP file ownership](fiarep-file-ownership.md) — private files require immutable record ownership; legacy claims must be unique and fail closed when ambiguous.
 - [FIAREP work assignments](fiarep-work-assignments.md) — operational actions require canonical staff IDs; only authorized supervisors may assign or repair legacy work.
+- [FIAREP time-clock authority](fiarep-time-clock-authority.md) — external clocks stay authoritative; mobile punching is organization-gated, actor-only, immutable, and server-timestamped.

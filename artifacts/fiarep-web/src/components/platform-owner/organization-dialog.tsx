@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus } from "@workspace/api-client-react";
+import { useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -61,6 +61,9 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   const [copySucceeded, setCopySucceeded] = useState(false);
   const [copyError, setCopyError] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
+  const [mobileClockEnabled, setMobileClockEnabled] = useState(false);
+  const [integrationEnabled, setIntegrationEnabled] = useState(false);
+  const [timeClockProvider, setTimeClockProvider] = useState<string | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(orgSchema),
@@ -79,6 +82,7 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
 
   const createMutation = useCreateOrganization();
   const updateMutation = useUpdateOrganization();
+  const updateTimeClockMutation = useUpdatePlatformOrganizationTimeClock();
 
   useEffect(() => {
     if (organization && open) {
@@ -93,6 +97,13 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         directorName: "",
         directorCode: "",
       });
+      const configured = organization.features?.timeClock;
+      const timeClock = configured && typeof configured === "object" && !Array.isArray(configured)
+        ? configured as Record<string, unknown>
+        : {};
+      setMobileClockEnabled(timeClock.mobileClockEnabled === true);
+      setIntegrationEnabled(false);
+      setTimeClockProvider(null);
     } else if (!open) {
       setGeneratedCode("");
       setCopySucceeded(false);
@@ -109,6 +120,9 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         directorName: "",
         directorCode: "",
       });
+      setMobileClockEnabled(false);
+      setIntegrationEnabled(false);
+      setTimeClockProvider(null);
     }
   }, [organization, open, form]);
 
@@ -124,12 +138,15 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         unrestricted: values.unrestricted,
         directorName: values.directorName || undefined,
         directorCode: values.directorCode || undefined,
-        features: {},
       };
 
       if (isEditing) {
         const { directorName: _directorName, directorCode: _directorCode, ...updates } = payload;
         await updateMutation.mutateAsync({ id: organization!.id, data: updates });
+        await updateTimeClockMutation.mutateAsync({
+          id: organization!.id,
+          data: { integrationEnabled: false, mobileClockEnabled },
+        });
         toast({ title: "Organization updated successfully." });
       } else {
         const result = await createMutation.mutateAsync({ data: payload });
@@ -151,7 +168,7 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
     }
   };
 
-  const isLoading = createMutation.isPending || updateMutation.isPending;
+  const isLoading = createMutation.isPending || updateMutation.isPending || updateTimeClockMutation.isPending;
   const canCloseAfterCreation = !generatedCode || copySucceeded || acknowledged;
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && !canCloseAfterCreation) return;
@@ -343,6 +360,20 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
                   </FormItem>
                 )}
               />
+              {isEditing && (
+                <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+                  <h4 className="font-semibold text-slate-900">Time Clock</h4>
+                  <div className="text-sm text-slate-600">Provider: {timeClockProvider || "Unconfigured"}</div>
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="text-slate-700">External integration enabled</FormLabel>
+                    <Switch checked={false} disabled aria-label="External time-clock integration unavailable" />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <FormLabel className="text-slate-700">FIAREP mobile clock enabled</FormLabel>
+                    <Switch checked={mobileClockEnabled} onCheckedChange={setMobileClockEnabled} />
+                  </div>
+                </div>
+              )}
             </div>
 
             {isEditing && (

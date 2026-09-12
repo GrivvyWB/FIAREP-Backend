@@ -1325,3 +1325,37 @@ export const RequestFileDownloadUrlResponse = zod.object({
   "downloadUrl": zod.string().url(),
   "expiresIn": zod.number().int()
 })
+
+export const TimeClockConfig = zod.object({
+  "integrationEnabled": zod.boolean(),
+  "externalAuthoritative": zod.boolean(),
+  "mobileClockEnabled": zod.boolean(),
+  "provider": zod.string().nullable()
+})
+
+export const TimeClockConfigUpdate = TimeClockConfig.pick({
+  "integrationEnabled": true,
+  "mobileClockEnabled": true
+}).partial()
+export const PlatformTimeClockConfig = TimeClockConfig.extend({
+  "organizationId": zod.string()
+})
+export const TimeClockPunchInput = zod.object({
+  "direction": zod.enum(['in', 'out']),
+  "idempotencyKey": zod.string().min(1).max(255)
+})
+export const TimeClockPunch = zod.object({
+  "id": zod.string(),
+  "direction": zod.enum(['in', 'out']),
+  "source": zod.enum(['external', 'fiarep-mobile']),
+  "punchAt": zod.coerce.date(),
+  "recordedAt": zod.coerce.date(),
+  "provider": zod.string().nullable(),
+  "externalId": zod.string().nullable(),
+  "readOnly": zod.boolean()
+})
+export const TimeClockStatus = zod.object({
+  "config": TimeClockConfig,
+  "current": TimeClockPunch.nullable(),
+  "nextDirection": zod.enum(['in', 'out'])
+})

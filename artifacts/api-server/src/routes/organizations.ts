@@ -5,6 +5,12 @@ import { db, entityRecords, organizationProperties, organizations, staffAccounts
 import { requirePlatformOwner } from "../middlewares/auth";
 import { evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
+import {
+  getTimeClockConfig,
+  mergeTimeClockConfig,
+  rejectUnimplementedExternalIntegration,
+  type TimeClockConfig,
+} from "../lib/timeClock";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
@@ -161,6 +167,64 @@ router.get("/v1/platform/organizations", async (_req, res) => {
   res.json(result);
 });
 
+router.get("/v1/platform/organizations/:id/time-clock", async (req, res) => {
+  const [organization] = await db.select({
+    id: organizations.id,
+    features: organizations.features,
+  }).from(organizations).where(eq(organizations.id, req.params.id!)).limit(1);
+  if (!organization) {
+    res.status(404).json({ error: "Organization not found" });
+    return;
+  }
+  res.json({ organizationId: organization.id, ...getTimeClockConfig(organization.features) });
+});
+
+router.patch("/v1/platform/organizations/:id/time-clock", async (req, res) => {
+  const id = req.params.id!;
+  const body = req.body as Record<string, unknown>;
+  const allowed = ["integrationEnabled", "mobileClockEnabled", "provider"];
+  if (Object.keys(body).some((key) => !allowed.includes(key))) {
+    res.status(400).json({ error: "Unknown time-clock configuration field" });
+    return;
+  }
+  for (const key of ["integrationEnabled", "mobileClockEnabled"]) {
+    if (key in body && typeof body[key] !== "boolean") {
+      res.status(400).json({ error: `${key} must be a boolean` });
+      return;
+    }
+  }
+  const integrationError = rejectUnimplementedExternalIntegration({
+    integrationEnabled: typeof body.integrationEnabled === "boolean" ? body.integrationEnabled : undefined,
+    provider: "provider" in body ? body.provider as string | null : undefined,
+  });
+  if (integrationError) {
+    res.status(400).json({ error: integrationError });
+    return;
+  }
+  const patch: Partial<TimeClockConfig> = {};
+  for (const key of allowed) {
+    if (key in body) (patch as Record<string, unknown>)[key] = body[key];
+  }
+  const updatedResult = await db.transaction(async (tx) => {
+    const [locked] = await tx.select().from(organizations).where(eq(organizations.id, id)).limit(1).for("update");
+    if (!locked) return null;
+    const features = mergeTimeClockConfig(locked.features, patch);
+    const [updated] = await tx.update(organizations).set({
+      features,
+      updatedAt: new Date(),
+    }).where(eq(organizations.id, id)).returning();
+    return { before: locked, organization: updated };
+  });
+  if (!updatedResult) {
+    res.status(404).json({ error: "Organization not found" });
+    return;
+  }
+  const { before, organization } = updatedResult;
+  const owner = res.locals["platformOwner"] as { name: string };
+  await platformAudit(owner.name, "organization.time_clock_updated", id, before, organization);
+  res.json({ organizationId: id, ...getTimeClockConfig(organization.features) });
+});
+
 router.get("/v1/platform/license-audit", async (req, res) => {
   const limit = Math.min(100, Math.max(1, Number(req.query["limit"]) || 25));
   res.json(await db.select().from(platformLicenseAudit).orderBy(desc(platformLicenseAudit.at)).limit(limit));
@@ -193,7 +257,8 @@ router.post("/v1/platform/organizations", async (req, res) => {
       (propertyLimit !== null && (!Number.isInteger(propertyLimit) || (propertyLimit as number) < 0))) {
     res.status(400).json({ error: "Invalid license dates or limits" }); return;
   }
-  const features = typeof body["features"] === "object" && body["features"] !== null && !Array.isArray(body["features"]) ? body["features"] as Record<string, unknown> : {};
+   const requestedFeatures = typeof body["features"] === "object" && body["features"] !== null && !Array.isArray(body["features"]) ? body["features"] as Record<string, unknown> : {};
+   const features = mergeTimeClockConfig(requestedFeatures, { integrationEnabled: false, provider: null });
   const unrestricted = body["unrestricted"] === true;
   try {
     const result = await db.transaction(async (tx) => {
@@ -236,7 +301,13 @@ router.patch("/v1/platform/organizations/:id", async (req, res) => {
   }
   for (const key of ["startsAt", "endsAt"] as const) if (key in body) { const value = body[key] == null ? null : new Date(String(body[key])); if (value && Number.isNaN(value.getTime())) { res.status(400).json({ error: "Invalid date" }); return; } updates[key] = value; }
   for (const key of ["staffLimit", "propertyLimit"] as const) if (key in body) { const value = body[key]; if (value !== null && (!Number.isInteger(value) || (value as number) < 0)) { res.status(400).json({ error: "Invalid limit" }); return; } updates[key] = value as number | null; }
-  if ("features" in body) { if (!body["features"] || typeof body["features"] !== "object" || Array.isArray(body["features"])) { res.status(400).json({ error: "Invalid features" }); return; } updates.features = body["features"] as Record<string, unknown>; }
+  if ("features" in body) {
+    if (!body["features"] || typeof body["features"] !== "object" || Array.isArray(body["features"])) {
+      res.status(400).json({ error: "Invalid features" });
+      return;
+    }
+    updates.features = mergeTimeClockConfig(body["features"], { integrationEnabled: false, provider: null });
+  }
   if ("unrestricted" in body) { if (typeof body["unrestricted"] !== "boolean") { res.status(400).json({ error: "Invalid unrestricted flag" }); return; } updates.unrestricted = body["unrestricted"]; }
   const effectiveStartsAt = "startsAt" in updates ? updates.startsAt : before.startsAt;
   const effectiveEndsAt = "endsAt" in updates ? updates.endsAt : before.endsAt;

@@ -32,6 +32,9 @@ export default function WorkerHome() {
       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs</Text>
       </Pressable>
+      <Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
+        <Text style={ui.btnOutlineText}>Attendance</Text>
+      </Pressable>
       <Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
         <Text style={ui.btnOutlineText}>Change Work Order</Text>
       </Pressable>

@@ -80,6 +80,11 @@ import type {
   StaffInput,
   StaffIssueResponse,
   SyncResponse,
+  TimeClockConfigUpdate,
+  TimeClockPunch,
+  TimeClockPunchInput,
+  TimeClockStatus,
+  PlatformTimeClockConfig,
   UnauthorizedResponse,
   UnregisterDeviceTokenBody,
   ViolationClassification,
@@ -3936,4 +3941,49 @@ export const useRequestFileDownloadUrl = <TError = ErrorType<Error>,
       > => {
       return useMutation(getRequestFileDownloadUrlMutationOptions(options));
     }
+
+export const getTimeClockStatus = async (options?: Parameters<typeof customFetch>[1]): Promise<TimeClockStatus> =>
+  customFetch<TimeClockStatus>('/api/v1/time-clock/status', { ...options, method: 'GET' });
+
+export const listTimeClockHistory = async (limit?: number, options?: Parameters<typeof customFetch>[1]): Promise<TimeClockPunch[]> => {
+  const query = limit == null ? '' : `?limit=${encodeURIComponent(limit)}`;
+  return customFetch<TimeClockPunch[]>(`/api/v1/time-clock/history${query}`, { ...options, method: 'GET' });
+};
+
+export const createTimeClockPunch = async (data: TimeClockPunchInput, options?: Parameters<typeof customFetch>[1]): Promise<TimeClockPunch> =>
+  customFetch<TimeClockPunch>('/api/v1/time-clock/punch', { ...options, method: 'POST', body: JSON.stringify(data) });
+
+export const getPlatformOrganizationTimeClock = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<PlatformTimeClockConfig> =>
+  customFetch<PlatformTimeClockConfig>(`/api/v1/platform/organizations/${encodeURIComponent(id)}/time-clock`, { ...options, method: 'GET' });
+
+export const updatePlatformOrganizationTimeClock = async (id: string, data: TimeClockConfigUpdate, options?: Parameters<typeof customFetch>[1]): Promise<PlatformTimeClockConfig> =>
+  customFetch<PlatformTimeClockConfig>(`/api/v1/platform/organizations/${encodeURIComponent(id)}/time-clock`, { ...options, method: 'PATCH', body: JSON.stringify(data) });
+
+export const useGetTimeClockStatus = <TData = Awaited<ReturnType<typeof getTimeClockStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getTimeClockStatus>>, TError, TData>, request?: Parameters<typeof customFetch>[1] },
+) => useQuery({ queryKey: ['getTimeClockStatus'], queryFn: ({ signal }) => getTimeClockStatus({ signal, ...options?.request }), ...options?.query });
+
+export const useListTimeClockHistory = <TData = Awaited<ReturnType<typeof listTimeClockHistory>>, TError = ErrorType<unknown>>(
+  limit?: number,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof listTimeClockHistory>>, TError, TData>, request?: Parameters<typeof customFetch>[1] },
+) => useQuery({ queryKey: ['listTimeClockHistory', limit], queryFn: ({ signal }) => listTimeClockHistory(limit, { signal, ...options?.request }), ...options?.query });
+
+export const useCreateTimeClockPunch = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof createTimeClockPunch>>, TError, { data: TimeClockPunchInput }, TContext>, request?: Parameters<typeof customFetch>[1] },
+) => useMutation({
+  ...options?.mutation,
+  mutationFn: (props: { data: TimeClockPunchInput }) => createTimeClockPunch(props.data, options?.request),
+});
+
+export const useGetPlatformOrganizationTimeClock = <TData = Awaited<ReturnType<typeof getPlatformOrganizationTimeClock>>, TError = ErrorType<unknown>>(
+  id: string,
+  options?: { query?: UseQueryOptions<Awaited<ReturnType<typeof getPlatformOrganizationTimeClock>>, TError, TData>, request?: Parameters<typeof customFetch>[1] },
+) => useQuery({ queryKey: ['getPlatformOrganizationTimeClock', id], queryFn: ({ signal }) => getPlatformOrganizationTimeClock(id, { signal, ...options?.request }), ...options?.query });
+
+export const useUpdatePlatformOrganizationTimeClock = <TError = ErrorType<unknown>, TContext = unknown>(
+  options?: { mutation?: UseMutationOptions<Awaited<ReturnType<typeof updatePlatformOrganizationTimeClock>>, TError, { id: string; data: TimeClockConfigUpdate }, TContext>, request?: Parameters<typeof customFetch>[1] },
+) => useMutation({
+  ...options?.mutation,
+  mutationFn: (props: { id: string; data: TimeClockConfigUpdate }) => updatePlatformOrganizationTimeClock(props.id, props.data, options?.request),
+});
 

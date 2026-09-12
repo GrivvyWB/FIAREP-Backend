@@ -60,6 +60,7 @@ export default function AdminHome() {
         { label: 'Truck Scores', onPress: () => router.push('/truck-scores'), tone: 'tint' },
         { label: 'Emergency Activity', onPress: () => router.push('/emergency-activity'), tone: 'tint' },
         { label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' },
+        { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' },
       ],
     },
     {

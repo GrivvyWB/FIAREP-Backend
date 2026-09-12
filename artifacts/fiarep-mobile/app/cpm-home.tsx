@@ -33,6 +33,7 @@ export default function CpmHome() {
         ...(position === 'Inspector' ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
+        { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone },
       ],
     },
     ...(position === 'CPM' ? [{

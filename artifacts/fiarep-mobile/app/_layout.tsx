@@ -254,6 +254,7 @@ function AdministratorStack() {
   return (
     <Stack initialRouteName="admin-home">
       <Stack.Screen name="admin-home" options={{ title: 'Administrator', headerBackVisible: false }} />
+      <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="admin-job" options={{ title: 'Add Job' }} />
@@ -299,6 +300,7 @@ function InspectorStack() {
   return (
     <Stack initialRouteName="cpm-home">
       <Stack.Screen name="cpm-home" options={{ title: 'CPM / Inspector', headerBackVisible: false }} />
+      <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'Log Violations' }} />
@@ -329,6 +331,7 @@ function ManagementStack() {
   return (
     <Stack initialRouteName="management-home">
       <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false }} />
+      <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
       <Stack.Screen name="index" options={{ title: 'Projects' }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
@@ -375,6 +378,7 @@ function WorkerStack() {
   return (
     <Stack initialRouteName="worker-home">
       <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false }} />
+      <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />

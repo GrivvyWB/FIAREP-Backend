@@ -64,6 +64,7 @@ export default function ManagementHome() {
         { label: 'Emergency Activity', onPress: () => router.push('/emergency-activity'), tone: 'tint' },
         { label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' },
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' },
+        { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' },
         ...(position === 'Elevator Supervisor' ? [{ label: 'Elevator Dashboard', onPress: () => router.push('/elevator-dashboard'), tone: 'tint' as Tone }] : []),
       ],
     },

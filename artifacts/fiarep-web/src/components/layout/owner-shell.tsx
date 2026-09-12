@@ -14,7 +14,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-xl font-bold tracking-tight cursor-pointer" onClick={() => setLocation("/platform-owner")}>
-              FIA<span className="text-[#F5B301]">REP</span>
+              <span>FIA<span className="text-[#F5B301]">REP</span></span>
             </div>
             <div className="h-5 w-px bg-slate-700" />
             <div className="flex items-center gap-2 text-sm font-medium text-slate-300 bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">

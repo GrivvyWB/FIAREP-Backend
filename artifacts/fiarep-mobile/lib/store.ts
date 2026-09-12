@@ -28,10 +28,16 @@ import {
   setAuthRefreshHandler,
   setBaseUrl,
   getScores as getScoresFromServer,
+  getTimeClockStatus,
+  listTimeClockHistory,
+  createTimeClockPunch,
   type AuthResponse,
   type Staff,
   type ScoresResponse as ApiScoresResponse,
+  type TimeClockStatus,
+  type TimeClockPunch,
 } from '@workspace/api-client-react';
+export type { TimeClockPunch, TimeClockStatus } from '@workspace/api-client-react';
 import type { Rates } from './takeoff';
 import type { LineItem } from './catalog';
 import { touchMeta, getDeviceId, newMeta } from './syncmeta';
@@ -51,6 +57,18 @@ export type { InstallationPersona };
 // Workflow screens use the generated server action directly; keep this
 // re-export alongside the rest of the store API.
 export { performEntityAction };
+
+export async function getAttendanceStatus(): Promise<TimeClockStatus> {
+  return getTimeClockStatus();
+}
+
+export async function getAttendanceHistory(limit = 50): Promise<TimeClockPunch[]> {
+  return listTimeClockHistory(limit);
+}
+
+export async function punchAttendance(direction: 'in' | 'out', idempotencyKey: string): Promise<TimeClockPunch> {
+  return createTimeClockPunch({ direction, idempotencyKey });
+}
 async function rotateActorCache(staff: Staff) {
   const d = await db();
   const fingerprint = `${staff.tenantId || ''}:${staff.id}:${[...(staff.developments || [])].sort().join('|')}`;
