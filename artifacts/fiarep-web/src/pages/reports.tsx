@@ -22,20 +22,68 @@ type Report = { id: string; development?: string | null; state?: Record<string, 
 function Photos({ reportId }: { reportId: string }) {
   const { data: photos = [], isLoading } = useListResidentReportPhotos({ reportId });
   const [busy, setBusy] = useState<string | null>(null);
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
+  const [previewError, setPreviewError] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!photos.length) {
+      setPhotoUrls({});
+      return;
+    }
+    Promise.all(
+      photos.map(async (photo) => {
+        try {
+          const result = await requestResidentReportPhotoDownload(photo.id);
+          return [photo.id, result.downloadUrl] as const;
+        } catch {
+          return [photo.id, ""] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setPhotoUrls(Object.fromEntries(entries));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [photos]);
+
   const open = async (id: string) => {
     setBusy(id);
     try {
-      const result = await requestResidentReportPhotoDownload(id);
-      window.open(result.downloadUrl, "_blank", "noopener,noreferrer");
+      const existingUrl = photoUrls[id];
+      const url = existingUrl || (await requestResidentReportPhotoDownload(id)).downloadUrl;
+      window.open(url, "_blank", "noopener,noreferrer");
     } finally { setBusy(null); }
   };
   if (isLoading) return <span className="text-xs text-muted-foreground">Loading photos…</span>;
   if (!photos.length) return <span className="text-xs text-muted-foreground">No photos attached</span>;
-  return <div className="flex flex-wrap gap-2">
+  return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
     {photos.map((photo) => (
-      <Button key={photo.id} variant="outline" size="sm" className="gap-1.5" onClick={() => open(photo.id)} disabled={busy === photo.id}>
-        <ImageIcon className="h-3.5 w-3.5" /> {busy === photo.id ? "Opening…" : (photo as any).name || `Photo ${photo.id.slice(0, 8)}`}
-      </Button>
+      <button
+        type="button"
+        key={photo.id}
+        className="overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        onClick={() => open(photo.id)}
+        disabled={busy === photo.id}
+      >
+        {photoUrls[photo.id] && !previewError[photo.id] ? (
+          <img
+            src={photoUrls[photo.id]}
+            alt={(photo as any).name || "Resident report photo"}
+            className="h-48 w-full bg-muted object-contain"
+            onError={() => setPreviewError((current) => ({ ...current, [photo.id]: true }))}
+          />
+        ) : (
+          <div className="grid h-48 place-items-center bg-muted text-muted-foreground">
+            <ImageIcon className="h-9 w-9 opacity-40" />
+          </div>
+        )}
+        <span className="flex items-center gap-2 px-3 py-2 text-sm font-medium">
+          <ImageIcon className="h-4 w-4" />
+          {busy === photo.id ? "Opening…" : (photo as any).name || `Photo ${photo.id.slice(0, 8)}`}
+        </span>
+      </button>
     ))}
   </div>;
 }
