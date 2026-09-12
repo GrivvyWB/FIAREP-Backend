@@ -17,7 +17,7 @@ type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
 export function useAppMode() { return useContext(ModeContext); }
 
-type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'vendor' | 'emergency';
+type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'emergency';
 const CODE_LEN = 4;
 const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
 const ROLE_LABEL: Record<StaffRole, string> = {
@@ -25,7 +25,6 @@ const ROLE_LABEL: Record<StaffRole, string> = {
   management: 'Management',
   worker: 'Staff Member',
   inspector: 'CPM / Inspector',
-  vendor: 'Vendor',
   emergency: 'Emergency Unit',
 };
 const roleLabel = (role: StaffRole) => ROLE_LABEL[role];
@@ -197,8 +196,8 @@ function PersonaPicker({ onPick }: { onPick: (persona: InstallationPersona) => v
   );
 }
 
-function ModePicker({ persona, onPick, notice }: { persona: InstallationPersona; onPick: (m: AppMode) => void; notice?: string }) {
-  const [gateFor, setGateFor] = useState<StaffRole | null>(persona === 'vendor' ? 'vendor' : null);
+function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?: string }) {
+  const [gateFor, setGateFor] = useState<StaffRole | null>(null);
   const [boroughDirectorGate, setBoroughDirectorGate] = useState(false);
   const [emergencyGate, setEmergencyGate] = useState(false);
   const pickStaffRole = async (role: StaffRole) => {
@@ -227,36 +226,26 @@ function ModePicker({ persona, onPick, notice }: { persona: InstallationPersona;
         resizeMode="contain"
         style={{ width: 300, height: 150, alignSelf: 'center', marginBottom: 6 }}
       />
-      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>
-        {persona === 'vendor' ? 'Vendor access' : 'Select a staff role'}
-      </Text>
+      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Select a staff role</Text>
       {!!notice && <Text style={{ color: '#9a3412', textAlign: 'center', marginBottom: 8 }}>{notice}</Text>}
-      {persona === 'vendor' ? (
-        <Pressable style={ui.btn} onPress={() => setGateFor('vendor')}>
-          <Text style={ui.btnText}>Vendor</Text>
-        </Pressable>
-      ) : (
-        <>
-          <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => { setEmergencyGate(true); setGateFor('emergency'); }}>
-            <Text style={ui.btnText}>Emergency Unit</Text>
-          </Pressable>
-          <Pressable style={ui.btn} onPress={() => { setBoroughDirectorGate(true); setGateFor('management'); }}>
-            <Text style={ui.btnText}>Borough Director  🔒</Text>
-          </Pressable>
-          <Pressable style={ui.btn} onPress={() => pickStaffRole('administrator')}>
-            <Text style={ui.btnText}>Administrator  🔒</Text>
-          </Pressable>
-          <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
-            <Text style={ui.btnText}>Management  🔒</Text>
-          </Pressable>
-          <Pressable style={ui.btn} onPress={() => pickStaffRole('worker')}>
-            <Text style={ui.btnText}>Staff Member  🔒</Text>
-          </Pressable>
-          <Pressable style={ui.btn} onPress={() => pickStaffRole('inspector')}>
-            <Text style={ui.btnText}>CPM / Inspector  🔒</Text>
-          </Pressable>
-        </>
-      )}
+      <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => { setEmergencyGate(true); setGateFor('emergency'); }}>
+        <Text style={ui.btnText}>Emergency Unit</Text>
+      </Pressable>
+      <Pressable style={ui.btn} onPress={() => { setBoroughDirectorGate(true); setGateFor('management'); }}>
+        <Text style={ui.btnText}>Borough Director  🔒</Text>
+      </Pressable>
+      <Pressable style={ui.btn} onPress={() => pickStaffRole('administrator')}>
+        <Text style={ui.btnText}>Administrator  🔒</Text>
+      </Pressable>
+      <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
+        <Text style={ui.btnText}>Management  🔒</Text>
+      </Pressable>
+      <Pressable style={ui.btn} onPress={() => pickStaffRole('worker')}>
+        <Text style={ui.btnText}>Staff Member  🔒</Text>
+      </Pressable>
+      <Pressable style={ui.btn} onPress={() => pickStaffRole('inspector')}>
+        <Text style={ui.btnText}>CPM / Inspector  🔒</Text>
+      </Pressable>
     </Screen>
   );
 }
@@ -465,17 +454,16 @@ export default function Layout() {
           setMode('resident');
         }
       } else if (selected === 'vendor') {
-        if (restored && restored.role !== 'vendor') {
+        if (restored) {
           await logout().catch(() => undefined);
           await clearAppMode().catch(() => undefined);
           if (restored.role === 'procurement') await clearRememberedStaff('procurement').catch(() => undefined);
-        } else if (restored?.role === 'vendor') {
-          await syncAllEntities().catch(() => undefined);
-          if (mounted) setMode('vendor');
-        } else {
-          await clearAppMode().catch(() => undefined);
         }
-        if (mounted) setPersona('vendor');
+        await setAppMode('vendor').catch(() => undefined);
+        if (mounted) {
+          setPersona('vendor');
+          setMode('vendor');
+        }
       } else if (selected === 'staff') {
         if (restored?.role === 'resident' || restored?.role === 'vendor') {
           await logout().catch(() => undefined);
@@ -516,9 +504,10 @@ export default function Layout() {
 
   async function pickPersona(next: InstallationPersona) {
     const chosen = await setInstallationPersona(next);
-    if (chosen === 'resident') {
-      await setAppMode('resident').catch(() => undefined);
-      setMode('resident');
+    if (chosen === 'resident' || chosen === 'vendor') {
+      const publicMode = chosen;
+      await setAppMode(publicMode).catch(() => undefined);
+      setMode(publicMode);
     } else {
       await clearAppMode().catch(() => undefined);
       setMode(null);
@@ -541,7 +530,7 @@ export default function Layout() {
   } else if (persona === null) {
     content = <PersonaPicker onPick={pickPersona} />;
   } else if (mode === null) {
-    content = <ModePicker key={persona} persona={persona} onPick={pick} notice={notice} />;
+    content = <ModePicker onPick={pick} notice={notice} />;
   } else if (mode === 'emergency') {
     content = <EmergencyStack />;
   } else if (mode === 'resident') {

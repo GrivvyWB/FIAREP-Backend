@@ -37,8 +37,13 @@ import ScopeReview from '@/pages/scope-review';
 import Scores from '@/pages/scores';
 
 // Owner Pages
+import Access from '@/pages/access';
+import PublicResident from '@/pages/public-resident';
+import PublicVendor from '@/pages/public-vendor';
 import OwnerLogin from '@/pages/platform-owner/login';
 import OwnerDashboard from '@/pages/platform-owner/index';
+import { getStoredPersona, setStoredPersona, evaluateAccess, Persona } from '@/lib/access-policy';
+import { useState } from 'react';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -54,18 +59,90 @@ const queryClient = new QueryClient({
 
 function AppRouter() {
   const [location, setLocation] = useLocation();
-  const { isAuthenticated, isLoading, staff } = useAuth();
+  const { isAuthenticated, isLoading, staff, logout } = useAuth();
+  const [isClearingAuth, setIsClearingAuth] = useState(false);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated && location !== '/login' && location !== '/procurement/login') {
-      sessionStorage.setItem('fiarep_return_to', location);
-      setLocation('/login');
-    } else if (!isLoading && isAuthenticated && staff?.role === "procurement" &&
-      location !== "/procurement" && !location.startsWith("/procurement/")) {
-      setLocation("/procurement");
-    }
-  }, [isAuthenticated, isLoading, location, setLocation, staff?.role]);
+    if (isLoading) return;
 
+    let currentPersona = getStoredPersona();
+    const evaluation = evaluateAccess(currentPersona, location, isAuthenticated);
+
+    if (evaluation.setPersona) {
+      setStoredPersona(evaluation.setPersona);
+      currentPersona = evaluation.setPersona;
+
+      const newEvaluation = evaluateAccess(currentPersona, location, isAuthenticated);
+      Object.assign(evaluation, newEvaluation);
+    }
+
+    if (evaluation.clearAuth && isAuthenticated) {
+      setIsClearingAuth(true);
+      logout();
+      setTimeout(() => setIsClearingAuth(false), 100);
+      return;
+    }
+
+    if (evaluation.redirect) {
+      setLocation(evaluation.redirect);
+      return;
+    }
+
+    if (currentPersona === 'staff') {
+      if (!isAuthenticated && location !== '/login' && location !== '/procurement/login') {
+        sessionStorage.setItem('fiarep_return_to', location);
+        setLocation('/login');
+      } else if (isAuthenticated && staff?.role === "procurement" &&
+        location !== "/procurement" && !location.startsWith("/procurement/")) {
+        setLocation("/procurement");
+      }
+    }
+  }, [isAuthenticated, isLoading, location, setLocation, staff?.role, logout]);
+
+  if (isLoading || isClearingAuth) {
+    return (
+      <div className="min-h-screen bg-background grid place-items-center">
+        <p className="text-sm text-muted-foreground">Loading FIAREP...</p>
+      </div>
+    );
+  }
+
+  const persona = getStoredPersona();
+
+  if (persona === 'resident') {
+    return (
+      <RoutedErrorBoundary>
+        <Switch>
+          <Route path="/resident" component={PublicResident} />
+          <Route component={NotFound} />
+        </Switch>
+      </RoutedErrorBoundary>
+    );
+  }
+
+  if (persona === 'vendor') {
+    return (
+      <RoutedErrorBoundary>
+        <Switch>
+          <Route path="/vendor" component={PublicVendor} />
+          <Route component={NotFound} />
+        </Switch>
+      </RoutedErrorBoundary>
+    );
+  }
+
+  if (!persona) {
+    return (
+      <RoutedErrorBoundary>
+        <Switch>
+          <Route path="/" component={Access} />
+          <Route component={NotFound} />
+        </Switch>
+      </RoutedErrorBoundary>
+    );
+  }
+
+  // Staff routes below
   if (location === '/login') {
     return (
       <RoutedErrorBoundary>
@@ -78,7 +155,7 @@ function AppRouter() {
     return <RoutedErrorBoundary><ProcurementLogin /></RoutedErrorBoundary>;
   }
 
-  if (isLoading || !isAuthenticated) {
+  if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-background grid place-items-center">
         <p className="text-sm text-muted-foreground">Loading FIAREP...</p>
