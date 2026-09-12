@@ -3,5 +3,5 @@
   {"id":"86c4b566-c03d-463a-a672-cbb2321f64ee","position":2,"filepath":"src/pages/slides/OnePlatform.tsx","title":"One platform for property operations","description":"The operational problem FIAREP replaces and the capabilities it connects.","speakerNotes":""},
   {"id":"6d08c058-cfec-42da-8bc5-b657d7db9c9e","position":3,"filepath":"src/pages/slides/Audiences.tsx","title":"Purpose-built for every audience","description":"Audience-specific experiences across mobile, management web, public access, and Platform Control.","speakerNotes":""},
   {"id":"6b51871c-0a20-4739-888a-10d28bed1050","position":4,"filepath":"src/pages/slides/Workflows.tsx","title":"Controlled workflows from intake to completion","description":"Procurement, Resident, field, and authority workflows.","speakerNotes":""},
-  {"id":"0f6b92b0-4b23-458a-b5f4-b7307f287214","position":5,"filepath":"src/pages/slides/Ready.tsx","title":"Built, verified, and ready to publish","description":"Technical foundation, verification status, and launch next step.","speakerNotes":""}
+  {"id":"0f6b92b0-4b23-458a-b5f4-b7307f287214","position":5,"filepath":"src/pages/slides/Ready.tsx","title":"Complete and operational","description":"Technical foundation, verified functionality, and operational platform status.","speakerNotes":""}
 ]
