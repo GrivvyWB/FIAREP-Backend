@@ -4,7 +4,7 @@ import {
   usePerformEntityAction,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -15,7 +15,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Search, Building2, MapPin, RefreshCw } from "lucide-react";
+import { ArrowLeft, Plus, Search, Building2, MapPin, RefreshCw } from "lucide-react";
 import { useState } from "react";
 
 type InspectionState = Record<string, unknown>;
@@ -35,6 +35,7 @@ function displayValue(value: unknown): string {
 
 export default function Inspections() {
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const { data: inspections, isLoading, isError, error, refetch } =
@@ -84,10 +85,22 @@ export default function Inspections() {
     action.mutate({ entity: "inspections", id: selectedId, action: workflowAction });
   };
 
+  const goBack = () => {
+    if (window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    navigate("/");
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
+          <Button variant="ghost" size="sm" className="-ml-2 mb-2 gap-2" onClick={goBack}>
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </Button>
           <h1 className="text-2xl font-bold tracking-tight">Inspections</h1>
           <p className="text-muted-foreground text-sm">Manage field assessments and records.</p>
         </div>
