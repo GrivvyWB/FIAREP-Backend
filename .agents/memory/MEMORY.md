@@ -10,3 +10,4 @@
 - [FIAREP alert delivery](fiarep-alert-delivery.md) — Resident and emergency alerts require inbox persistence, immediate red escalation, sound/badge, and native push when available.
 - [FIAREP website audience](fiarep-website-audience.md) — preserve the existing website theme; web is management-first while regular field staff use mobile.
 - [OpenAPI codegen and Vite](openapi-codegen-vite.md) — restart active Vite apps after shared client generation before treating transient HMR errors as product failures.
+- [Shared React Query bundling](shared-react-query-bundling.md) — dedupe React Query with React in Vite or production can split provider and hook contexts.
