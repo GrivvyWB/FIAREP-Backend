@@ -36,7 +36,9 @@ function displayValue(value: unknown): string {
 export default function Inspections() {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get("id"),
+  );
   const { data: inspections, isLoading, isError, error, refetch } =
     useListEntityRecords("inspections", undefined, {
       query: { queryKey: ["/api/v1/inspections"], refetchInterval: 30000, staleTime: 10000 },

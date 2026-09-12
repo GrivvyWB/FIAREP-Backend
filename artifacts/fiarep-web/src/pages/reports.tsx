@@ -11,7 +11,7 @@ import {
   AlertCircle, CheckCircle2, ChevronDown, FolderOpen, Image as ImageIcon,
   MapPin, Search, UserRound, X,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -55,6 +55,7 @@ export default function Reports() {
   const [development, setDevelopment] = useState("all");
   const [selected, setSelected] = useState<Report | null>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
+  const deepLinkHandled = useRef(false);
 
   const reports = (reportsQuery.data || []) as Report[];
   const developments = [...new Set(reports.map((r) => r.development).filter(Boolean) as string[])].sort();
@@ -68,6 +69,15 @@ export default function Reports() {
       (status === "all" || state.status === status) &&
       (development === "all" || report.development === development);
   });
+
+  useEffect(() => {
+    if (deepLinkHandled.current || reportsQuery.isLoading) return;
+    deepLinkHandled.current = true;
+    const reportId = new URLSearchParams(window.location.search).get("id");
+    if (!reportId) return;
+    const report = reports.find((item) => item.id === reportId);
+    if (report) setSelected(report);
+  }, [reports, reportsQuery.isLoading]);
 
   const perform = async (report: Report, actionName: string, body?: Record<string, unknown>) => {
     try {

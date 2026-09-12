@@ -69,8 +69,8 @@ export default function Dashboard() {
     { label: "Unread Notifications", value: unread, total: notifications.length, icon: Bell, query: notificationsQuery, href: "/notifications" },
   ];
   const activity = [
-    ...inspections.map((item) => ({ item, label: "Inspection", href: "/inspections", icon: ClipboardCheck })),
-    ...reports.map((item) => ({ item, label: "Resident report", href: "/reports", icon: FileSearch })),
+    ...inspections.map((item) => ({ item, label: "Inspection", href: `/inspections?id=${encodeURIComponent(item.id)}`, icon: ClipboardCheck })),
+    ...reports.map((item) => ({ item, label: "Resident report", href: `/reports?id=${encodeURIComponent(item.id)}`, icon: FileSearch })),
     ...emergencies.map((item) => ({ item, label: "Emergency", href: "/emergency", icon: AlertTriangle })),
     ...projects.map((item) => ({ item, label: "Project", href: "/projects", icon: FolderKanban })),
     ...leave.map((item) => ({ item, label: "Leave request", href: "/leave", icon: Plane })),
