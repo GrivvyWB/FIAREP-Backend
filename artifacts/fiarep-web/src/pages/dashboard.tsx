@@ -123,15 +123,29 @@ export default function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-[18px]">
-        <FeatureCard icon={ShieldCheck} title="Accurate Inspections" desc="Detailed field assessments" />
-        <FeatureCard icon={FileSearch} title="Resident Reports" desc="Resolve housing concerns" />
-        <FeatureCard icon={Wrench} title="Efficient Repairs" desc="Track and manage repairs" />
-        <FeatureCard icon={CalendarClock} title="Operational Control" desc="Keep teams coordinated" />
+        <FeatureCard icon={ShieldCheck} title="Accurate Inspections" desc="Detailed field assessments" href="/inspections" />
+        <FeatureCard icon={FileSearch} title="Resident Reports" desc="Resolve housing concerns" href="/reports" />
+        <FeatureCard icon={Wrench} title="Efficient Repairs" desc="Track and manage repairs" href="/repairs" />
+        <FeatureCard icon={CalendarClock} title="Operational Control" desc="Keep teams coordinated" href="/calendar" />
       </section>
     </div>
   );
 }
 
-function FeatureCard({ icon: Icon, title, desc }: { icon: typeof ShieldCheck; title: string; desc: string }) {
-  return <div className="bg-card rounded-[14px] shadow-sm border border-border p-5 flex items-center gap-3.5"><div className="w-[42px] h-[42px] rounded-[11px] shrink-0 bg-primary text-sidebar grid place-items-center"><Icon className="w-[21px] h-[21px]" /></div><div><b className="text-sm font-bold block">{title}</b><span className="text-[12.5px] text-muted-foreground">{desc}</span></div></div>;
+function FeatureCard({ icon: Icon, title, desc, href }: { icon: typeof ShieldCheck; title: string; desc: string; href: string }) {
+  return (
+    <Link
+      href={href}
+      aria-label={`${title}: ${desc}`}
+      className="group bg-card rounded-[14px] shadow-sm border border-border p-5 flex items-center gap-3.5 transition-all hover:border-primary/60 hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+    >
+      <div className="w-[42px] h-[42px] rounded-[11px] shrink-0 bg-primary text-sidebar grid place-items-center transition-transform group-hover:scale-105">
+        <Icon className="w-[21px] h-[21px]" />
+      </div>
+      <div>
+        <b className="text-sm font-bold block">{title}</b>
+        <span className="text-[12.5px] text-muted-foreground">{desc}</span>
+      </div>
+    </Link>
+  );
 }
