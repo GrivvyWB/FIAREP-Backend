@@ -72,6 +72,7 @@ import type {
   RegisterDeviceTokenBody,
   ResidentPhoto,
   ResidentPhotoMetadata,
+  ResidentPhotoUpdate,
   Staff,
   StaffCodeUpdate,
   StaffInput,
@@ -2728,6 +2729,72 @@ export function useListResidentReportPhotos<TData = Awaited<ReturnType<typeof li
 
 
 
+
+export const getUpdateResidentReportPhotoUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/resident-report-photos/${id}`
+}
+
+export const updateResidentReportPhoto = async (id: string,
+    residentPhotoUpdate: ResidentPhotoUpdate, options?: Parameters<typeof customFetch>[1]): Promise<ResidentPhotoMetadata> => {
+
+  return customFetch<ResidentPhotoMetadata>(getUpdateResidentReportPhotoUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(residentPhotoUpdate)
+  }
+);}
+
+
+
+
+
+export const getUpdateResidentReportPhotoMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateResidentReportPhoto>>, TError,{id: string;data: BodyType<ResidentPhotoUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateResidentReportPhoto>>, TError,{id: string;data: BodyType<ResidentPhotoUpdate>}, TContext> => {
+
+const mutationKey = ['updateResidentReportPhoto'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateResidentReportPhoto>>, {id: string;data: BodyType<ResidentPhotoUpdate>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateResidentReportPhoto(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateResidentReportPhotoMutationResult = NonNullable<Awaited<ReturnType<typeof updateResidentReportPhoto>>>
+    export type UpdateResidentReportPhotoMutationBody = BodyType<ResidentPhotoUpdate>
+    export type UpdateResidentReportPhotoMutationError = ErrorType<Error>
+
+    export const useUpdateResidentReportPhoto = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateResidentReportPhoto>>, TError,{id: string;data: BodyType<ResidentPhotoUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateResidentReportPhoto>>,
+        TError,
+        {id: string;data: BodyType<ResidentPhotoUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateResidentReportPhotoMutationOptions(options));
+    }
 
 export const getRequestResidentReportPhotoDownloadUrl = (id: string,) => {
 

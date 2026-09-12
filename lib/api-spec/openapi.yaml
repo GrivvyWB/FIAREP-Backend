@@ -668,6 +668,29 @@ paths:
           content:
             application/json:
               schema: { type: array, items: { $ref: "#/components/schemas/ResidentPhotoMetadata" } }
+  /v1/resident-report-photos/{id}:
+    patch:
+      operationId: updateResidentReportPhoto
+      tags: [files]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ResidentPhotoUpdate" }
+      responses:
+        "200":
+          description: Updated resident report photo metadata
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ResidentPhotoMetadata" }
+        "404":
+          description: Photo not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/resident-report-photos/{id}/download-url:
     post:
       operationId: requestResidentReportPhotoDownload
@@ -1111,6 +1134,11 @@ components:
         size: { type: integer }
         contentType: { type: string }
         createdAt: { type: string, format: date-time }
+    ResidentPhotoUpdate:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
     NycProperty:
       type: object
       required: [query, formattedAddress, houseNumber, street, borough]

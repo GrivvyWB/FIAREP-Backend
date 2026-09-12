@@ -214,6 +214,14 @@ export interface ResidentPhotoMetadata {
   createdAt: string;
 }
 
+export interface ResidentPhotoUpdate {
+  /**
+     * @minLength 1
+     * @maxLength 100
+     */
+  name: string;
+}
+
 export interface NycProperty {
   query: string;
   formattedAddress: string;

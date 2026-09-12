@@ -871,6 +871,28 @@ export const ListResidentReportPhotosResponseItem = zod.object({
 export const ListResidentReportPhotosResponse = zod.array(ListResidentReportPhotosResponseItem)
 
 
+export const UpdateResidentReportPhotoParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const updateResidentReportPhotoBodyNameMax = 100;
+
+
+
+export const UpdateResidentReportPhotoBody = zod.object({
+  "name": zod.string().min(1).max(updateResidentReportPhotoBodyNameMax)
+})
+
+export const UpdateResidentReportPhotoResponse = zod.object({
+  "id": zod.string(),
+  "reportId": zod.string(),
+  "name": zod.string(),
+  "size": zod.number().int(),
+  "contentType": zod.string(),
+  "createdAt": zod.coerce.date()
+})
+
+
 export const RequestResidentReportPhotoDownloadParams = zod.object({
   "id": zod.coerce.string()
 })

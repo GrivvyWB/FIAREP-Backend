@@ -1,10 +1,12 @@
 import {
   getListEntityRecordsQueryKey,
+  getListResidentReportPhotosQueryKey,
   requestResidentReportPhotoDownload,
   useListEntityRecords,
   useListResidentReportPhotos,
   useListStaff,
   usePerformEntityAction,
+  useUpdateResidentReportPhoto,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -20,10 +22,15 @@ import { useToast } from "@/hooks/use-toast";
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 
 function Photos({ reportId }: { reportId: string }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const { data: photos = [], isLoading } = useListResidentReportPhotos({ reportId });
+  const renamePhoto = useUpdateResidentReportPhoto();
   const [busy, setBusy] = useState<string | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [previewError, setPreviewError] = useState<Record<string, boolean>>({});
+  const [names, setNames] = useState<Record<string, string>>({});
+  const photoIds = photos.map((photo) => photo.id).join(",");
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +53,7 @@ function Photos({ reportId }: { reportId: string }) {
     return () => {
       cancelled = true;
     };
-  }, [photos]);
+  }, [photoIds]);
 
   const open = async (id: string) => {
     setBusy(id);
@@ -56,34 +63,64 @@ function Photos({ reportId }: { reportId: string }) {
       window.open(url, "_blank", "noopener,noreferrer");
     } finally { setBusy(null); }
   };
+  const saveName = async (id: string, currentName: string) => {
+    const name = (names[id] ?? currentName).trim();
+    if (!name) return;
+    try {
+      await renamePhoto.mutateAsync({ id, data: { name } });
+      await queryClient.invalidateQueries({ queryKey: getListResidentReportPhotosQueryKey({ reportId }) });
+      toast({ title: "Photo name saved" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Could not save photo name",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    }
+  };
   if (isLoading) return <span className="text-xs text-muted-foreground">Loading photos…</span>;
   if (!photos.length) return <span className="text-xs text-muted-foreground">No photos attached</span>;
   return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
     {photos.map((photo) => (
-      <button
-        type="button"
+      <div
         key={photo.id}
-        className="overflow-hidden rounded-xl border border-border bg-card text-left transition-colors hover:border-primary/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        onClick={() => open(photo.id)}
-        disabled={busy === photo.id}
+        className="overflow-hidden rounded-xl border border-border bg-card"
       >
-        {photoUrls[photo.id] && !previewError[photo.id] ? (
-          <img
-            src={photoUrls[photo.id]}
-            alt={(photo as any).name || "Resident report photo"}
-            className="h-48 w-full bg-muted object-contain"
-            onError={() => setPreviewError((current) => ({ ...current, [photo.id]: true }))}
-          />
-        ) : (
-          <div className="grid h-48 place-items-center bg-muted text-muted-foreground">
-            <ImageIcon className="h-9 w-9 opacity-40" />
+        <button type="button" className="block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" onClick={() => open(photo.id)} disabled={busy === photo.id}>
+          {photoUrls[photo.id] && !previewError[photo.id] ? (
+            <img
+              src={photoUrls[photo.id]}
+              alt={photo.name || "Report photo"}
+              className="h-48 w-full bg-muted object-contain"
+              onError={() => setPreviewError((current) => ({ ...current, [photo.id]: true }))}
+            />
+          ) : (
+            <div className="grid h-48 place-items-center bg-muted text-muted-foreground">
+              <ImageIcon className="h-9 w-9 opacity-40" />
+            </div>
+          )}
+        </button>
+        <div className="space-y-2 p-3">
+          <label className="text-xs font-medium text-muted-foreground" htmlFor={`photo-name-${photo.id}`}>Photo name</label>
+          <div className="flex gap-2">
+            <Input
+              id={`photo-name-${photo.id}`}
+              maxLength={100}
+              value={names[photo.id] ?? photo.name ?? "Report photo"}
+              onChange={(event) => setNames((current) => ({ ...current, [photo.id]: event.target.value }))}
+              onClick={(event) => event.stopPropagation()}
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={renamePhoto.isPending || !(names[photo.id] ?? photo.name).trim()}
+              onClick={() => saveName(photo.id, photo.name)}
+            >
+              {renamePhoto.isPending ? "Saving…" : "Save"}
+            </Button>
           </div>
-        )}
-        <span className="flex items-center gap-2 px-3 py-2 text-sm font-medium">
-          <ImageIcon className="h-4 w-4" />
-          {busy === photo.id ? "Opening…" : (photo as any).name || `Photo ${photo.id.slice(0, 8)}`}
-        </span>
-      </button>
+        </div>
+      </div>
     ))}
   </div>;
 }

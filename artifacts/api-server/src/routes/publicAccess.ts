@@ -16,6 +16,8 @@ import { fileStorage } from "../lib/fileStorage";
 import { isBoroughDirector } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { rateLimit } from "../lib/rateLimit";
+import { UpdateResidentReportPhotoBody } from "@workspace/api-zod";
+import { audit } from "../lib/audit";
 
 const router: IRouter = Router();
 router.use("/v1/public", rateLimit("public-access", 60));
@@ -207,6 +209,51 @@ router.get("/v1/resident-report-photos", async (req, res) => {
     eq(residentReportPhotos.tenantId, actor.tenantId), eq(residentReportPhotos.reportId, reportId),
   ));
   res.json(photos);
+});
+router.patch("/v1/resident-report-photos/:id", async (req, res) => {
+  const parsed = UpdateResidentReportPhotoBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Photo name must be between 1 and 100 characters" });
+    return;
+  }
+  const actor = actorFrom(res);
+  const [photo] = await db.select().from(residentReportPhotos).where(and(
+    eq(residentReportPhotos.id, req.params.id!),
+    eq(residentReportPhotos.tenantId, actor.tenantId),
+  )).limit(1);
+  if (!photo) { res.status(404).json({ error: "Photo not found" }); return; }
+  const [report] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, photo.reportId),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.entity, "resident-reports"),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!report || !canReadReport(actor, report)) {
+    res.status(404).json({ error: "Photo not found" });
+    return;
+  }
+  const name = parsed.data.name.trim();
+  if (!name) {
+    res.status(400).json({ error: "Photo name is required" });
+    return;
+  }
+  const [updated] = await db.update(residentReportPhotos)
+    .set({ name })
+    .where(and(
+      eq(residentReportPhotos.id, photo.id),
+      eq(residentReportPhotos.tenantId, actor.tenantId),
+    ))
+    .returning({
+      id: residentReportPhotos.id,
+      reportId: residentReportPhotos.reportId,
+      name: residentReportPhotos.name,
+      size: residentReportPhotos.size,
+      contentType: residentReportPhotos.contentType,
+      createdAt: residentReportPhotos.createdAt,
+    });
+  if (!updated) { res.status(404).json({ error: "Photo not found" }); return; }
+  await audit(actor, "resident-report-photo.renamed", `Renamed resident report photo to ${name}`, photo.id);
+  res.json(updated);
 });
 router.post("/v1/resident-report-photos/:id/download-url", async (req, res) => {
   const actor = actorFrom(res);
