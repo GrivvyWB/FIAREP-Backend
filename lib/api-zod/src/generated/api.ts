@@ -1226,15 +1226,22 @@ export const CreatePushSmokeTestResponse = zod.object({
 
 export const PullSyncQueryParams = zod.object({
   "since": zod.date().optional(),
+  "recordCursor": zod.date().optional(),
+  "notificationCursor": zod.date().optional(),
+  "recordCursors": zod.coerce.string().optional().describe('JSON object mapping entity names to ISO record cursors'),
   "entities": zod.coerce.string().optional()
 })
 
 
 
 
+
 export const PullSyncResponse = zod.object({
   "cursor": zod.coerce.date(),
-  "records": zod.array(zod.object({
+  "recordCursor": zod.coerce.date(),
+  "notificationCursor": zod.coerce.date(),
+  "recordCursors": zod.record(zod.string(), zod.coerce.date()),
+  "records": zod.array(zod.union([zod.object({
   "id": zod.string(),
   "projectId": zod.string().optional(),
   "development": zod.string().optional(),
@@ -1246,7 +1253,13 @@ export const PullSyncResponse = zod.object({
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date(),
   "version": zod.number().int()
-}))),
+})),zod.object({
+  "id": zod.string(),
+  "entity": zod.string(),
+  "deleted": zod.literal(true),
+  "version": zod.number().int().min(1),
+  "updatedAt": zod.coerce.date()
+})])),
   "notifications": zod.array(zod.object({
   "id": zod.string(),
   "target": zod.string(),

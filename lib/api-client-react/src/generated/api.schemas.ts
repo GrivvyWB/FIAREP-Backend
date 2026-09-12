@@ -608,6 +608,15 @@ export interface StaffCodeUpdate {
   code?: string;
 }
 
+export interface EntityTombstone {
+  id: string;
+  entity: string;
+  deleted: true;
+  /** @minimum 1 */
+  version: number;
+  updatedAt: string;
+}
+
 export type EntityPatch = EntityInput & { [key: string]: unknown } & Required<Pick<EntityInput & { [key: string]: unknown }, 'version'>>;
 
 export type ScoresResponseFormulaVersion = typeof ScoresResponseFormulaVersion[keyof typeof ScoresResponseFormulaVersion];
@@ -745,9 +754,14 @@ export interface PushDelivery {
   updatedAt: string;
 }
 
+export type SyncResponseRecordCursors = {[key: string]: string};
+
 export interface SyncResponse {
   cursor: string;
-  records: EntityRecord[];
+  recordCursor: string;
+  notificationCursor: string;
+  recordCursors: SyncResponseRecordCursors;
+  records: (EntityRecord | EntityTombstone)[];
   notifications: Notification[];
 }
 
@@ -935,6 +949,12 @@ export type CreatePushSmokeTest202 = {
 
 export type PullSyncParams = {
 since?: string;
+recordCursor?: string;
+notificationCursor?: string;
+/**
+ * JSON object mapping entity names to ISO record cursors
+ */
+recordCursors?: string;
 entities?: string;
 };
 

@@ -47,6 +47,9 @@ const ROLE_ENTITIES: Record<string, Set<string>> = {
   worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests', 'global-settings']),
   vendor: new Set(['projects', 'project-scopes', 'project-notes', 'project-reviews', 'building-violations', 'route-assignments', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes']),
   resident: new Set(['resident-reports']),
+  // Emergency devices only request the emergency tables. The server still
+  // applies assignment filtering to each returned record.
+  emergency: new Set(['emergency-units', 'emergency-jobs']),
 };
 const PROJECT_KEYED = new Set(['checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes']);
 function normalizeLocalState(mapping: any, state: any) {
@@ -255,6 +258,17 @@ async function applyRecord(d: any, record: any, owner: string) {
     return;
   }
   const state = { ...(record.state || {}), id: record.id };
+  // Keep the server version beside locally edited workflow records. Without
+  // this metadata, an edit to a pulled record is mistaken for a new record and
+  // cannot safely be retried through the versioned PATCH path.
+  if (mapping.table !== 'projects' && mapping.table !== 'rooms') {
+    state._meta = {
+      ...(state._meta || {}),
+      serverVersion: record.version,
+      syncStatus: 'synced',
+      updatedAt: record.updatedAt,
+    };
+  }
   if (Array.isArray(state.remoteFiles)) registerRemotePhotos(state.remoteFiles);
   if (mapping.table === 'projects') {
     const projectMeta = { ...(state.meta || {}), serverVersion: record.version, syncStatus: 'synced', updatedAt: record.updatedAt };
@@ -302,14 +316,32 @@ export async function syncAllEntities(): Promise<void> {
   const actor = await getCurrentActor();
   const identity = await getSessionIdentity();
   const owner = `${identity?.tenantId || 'default'}:${identity?.staffId || ''}`;
-  const scope = `sync_all_cursor:${identity?.tenantId || 'default'}:${identity?.staffId || actor.name}:${identity?.developments?.join('|') || ''}`;
+  const scope = `sync_all_cursor:${identity?.tenantId || 'default'}:${identity?.staffId || actor.name}:${identity?.role || actor.role}:${identity?.developments?.join('|') || ''}`;
+  const recordScope = `${scope}:record`;
+  const notificationScope = `${scope}:notification`;
+  const recordCursorsScope = `${scope}:records`;
   await discoverQueue(d);
   await pushQueue(d);
-  const cursorRow = await d.getFirstAsync<{ value: string }>(
-    'SELECT value FROM settings WHERE key=?', scope,
-  );
+  const [cursorRow, recordCursorRow, notificationCursorRow, recordCursorsRow] =
+    await Promise.all([
+      d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', scope),
+      d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', recordScope),
+      d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', notificationScope),
+      d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', recordCursorsScope),
+    ]);
+  let recordCursors: Record<string, string> = {};
+  try {
+    const parsed = recordCursorsRow?.value ? JSON.parse(recordCursorsRow.value) : {};
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) recordCursors = parsed;
+  } catch {
+    // A corrupt optional per-entity cursor should not prevent legacy sync.
+  }
+  const legacyCursor = cursorRow?.value || new Date(0).toISOString();
   const result = await pullSync({
-    since: cursorRow?.value || new Date(0).toISOString(),
+    since: legacyCursor,
+    recordCursor: recordCursorRow?.value || legacyCursor,
+    notificationCursor: notificationCursorRow?.value || legacyCursor,
+    recordCursors: JSON.stringify(recordCursors),
     entities: TABLES.filter((item) => (ROLE_ENTITIES[identity?.role || actor.role] || ROLE_ENTITIES.worker).has(item.entity)).map((item) => item.entity).join(','),
   });
   const newNotifications: Array<{ message: string; detail?: string; reportId?: string }> = [];
@@ -352,6 +384,24 @@ export async function syncAllEntities(): Promise<void> {
     await d.runAsync(
       `INSERT INTO settings(key,value) VALUES(?,?)
        ON CONFLICT(key) DO UPDATE SET value=excluded.value`, scope, result.cursor,
+    );
+    await d.runAsync(
+      `INSERT INTO settings(key,value) VALUES(?,?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      recordScope,
+      result.recordCursor || result.cursor,
+    );
+    await d.runAsync(
+      `INSERT INTO settings(key,value) VALUES(?,?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      notificationScope,
+      result.notificationCursor || result.cursor,
+    );
+    await d.runAsync(
+      `INSERT INTO settings(key,value) VALUES(?,?)
+       ON CONFLICT(key) DO UPDATE SET value=excluded.value`,
+      recordCursorsScope,
+      JSON.stringify(result.recordCursors || {}),
     );
   });
   const alertsMuted = await getAlertsMuted().catch(() => false);

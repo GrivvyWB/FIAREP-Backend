@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { setAuthTokenGetter, setAuthRefreshHandler, setBaseUrl, Staff, useGetCurrentStaff, useRefreshSession, getGetCurrentStaffQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 interface AuthContextType {
@@ -18,6 +19,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [staff, setStaff] = useState<Staff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -33,6 +35,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
+    // The same QueryClient is shared across sessions and the platform-owner
+    // console. Never let a previous identity's tenant data remain visible.
+    queryClient.clear();
     setBaseUrl("");
     
     // Register token getter for all customFetch calls
@@ -123,6 +128,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!response.ok) throw new Error(payload?.error || "Invalid staff name or code");
     localStorage.setItem("fiarep_access_token", payload.accessToken);
     localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
+    queryClient.clear();
     setStaff(payload.staff);
     return { status: "authenticated" };
   };
@@ -136,12 +142,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!response.ok) throw new Error(payload?.error || "Invalid procurement credentials");
     localStorage.setItem("fiarep_access_token", payload.accessToken);
     localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
+    queryClient.clear();
     setStaff(payload.staff);
   };
 
   const logout = () => {
     localStorage.removeItem("fiarep_access_token");
     localStorage.removeItem("fiarep_refresh_token");
+    queryClient.clear();
     setStaff(null);
     setLocation("/login");
   };

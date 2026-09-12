@@ -91,6 +91,7 @@ async function recipientsFor(
         eq(staffAccounts.status, "approved"),
         or(
           eq(staffAccounts.name, notification.target),
+          eq(staffAccounts.id, notification.target),
           eq(staffAccounts.role, notification.target),
         ),
       ),

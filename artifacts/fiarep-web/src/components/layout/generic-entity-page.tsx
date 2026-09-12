@@ -21,6 +21,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
+import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -48,7 +49,13 @@ export function GenericEntityPage({
   headerAction?: ReactNode;
 }) {
   const isProcurement = entity === "procurement";
-  const { data, isLoading } = useListEntityRecords(entity);
+  const { data, isLoading } = useListEntityRecords(entity, undefined, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey(entity),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
   const { data: bidData } = useListEntityRecords(
     "procurement-bids",
     undefined,
@@ -56,6 +63,8 @@ export function GenericEntityPage({
       query: {
         queryKey: getListEntityRecordsQueryKey("procurement-bids"),
         enabled: isProcurement,
+        staleTime: 15_000,
+        refetchOnMount: "always",
       },
     },
   );
@@ -156,7 +165,7 @@ export function GenericEntityPage({
         toast({ title: "Created successfully" });
       }
       
-      queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey(entity) });
+      await invalidateOperationalQueries(queryClient, entity, editingRecord?.id, isProcurement ? ["procurement-bids"] : []);
       setIsFormOpen(false);
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err?.message || "Failed to save." });
@@ -174,7 +183,7 @@ export function GenericEntityPage({
         data: { version: deletingRecord.version },
       });
       toast({ title: "Deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey(entity) });
+      await invalidateOperationalQueries(queryClient, entity, deletingRecordId, isProcurement ? ["procurement-bids"] : []);
     } catch (err: any) {
       toast({ variant: "destructive", title: "Error", description: err?.message || "Failed to delete." });
     } finally {
@@ -187,7 +196,7 @@ export function GenericEntityPage({
     try {
       if (action === "award" && !bid) throw new Error("Select an existing vendor bid before awarding.");
       await actionMutation.mutateAsync({ entity, id: record.id, action, data: action === "award" ? { vendor: bid.vendorName, bidAmount: bid.amount, bidNote: bid.note, bidId: bid.id } : undefined });
-      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey(entity) });
+      await invalidateOperationalQueries(queryClient, entity, record.id, isProcurement ? ["procurement-bids"] : []);
       toast({ title: `${action} completed` });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Workflow action failed", description: err?.message || "Action unavailable" });

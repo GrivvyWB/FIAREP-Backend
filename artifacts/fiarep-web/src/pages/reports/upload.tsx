@@ -2,13 +2,13 @@ import { useState, useRef } from "react";
 import { useLocation } from "wouter";
 import { useRequestFileUploadUrl, useCreateEntityRecord } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getListEntityRecordsQueryKey } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft, UploadCloud, File as FileIcon } from "lucide-react";
 import { Link } from "wouter";
+import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 export default function UploadReport() {
   const [, setLocation] = useLocation();
@@ -77,7 +77,7 @@ export default function UploadReport() {
       });
 
       toast({ title: "Success", description: "Report uploaded successfully." });
-      queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("resident-reports") });
+       await invalidateOperationalQueries(queryClient, "resident-reports", id);
       setLocation("/reports");
 
     } catch (err: any) {

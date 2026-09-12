@@ -1,20 +1,26 @@
 import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { useListEntityRecords, usePerformEntityAction } from "@workspace/api-client-react";
+import { getListEntityRecordsQueryKey, useListEntityRecords, usePerformEntityAction } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { getListEntityRecordsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 export default function ScopeReview() {
   const { staff } = useAuth();
   const [, setLocation] = useLocation();
   const allowed = staff?.role === "management" &&
     !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "");
-  const { data, isLoading } = useListEntityRecords("procurement", { status: "submitted" });
+  const { data, isLoading } = useListEntityRecords("procurement", { status: "submitted" }, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("procurement", { status: "submitted" }),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
   const action = usePerformEntityAction();
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -28,7 +34,7 @@ export default function ScopeReview() {
   async function decide(id: string, name: "approve" | "reject") {
     try {
       await action.mutateAsync({ entity: "procurement", id, action: name, data: notes[id] ? { note: notes[id] } : {} });
-      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("procurement") });
+      await invalidateOperationalQueries(queryClient, "procurement", id, ["procurement-bids"]);
       toast({
         title: name === "approve" ? "Scope approved" : "Scope returned",
         description: name === "approve" ? "The scope is ready for procurement." : "The scope was returned to CPM.",

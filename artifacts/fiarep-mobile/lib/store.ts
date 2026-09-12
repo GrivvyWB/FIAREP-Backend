@@ -758,6 +758,7 @@ export async function updateResidentReportStatus(id: string, status: ResidentRep
   const deviceId = await getDeviceId(d);
   const next = { ...r, status, _meta: touchMeta(r._meta, deviceId) };
   await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(next), id);
+  await queueMutation('resident-reports', id, next);
   const _a = await getCurrentActor();
   await logAudit(_a.role, _a.name, 'Report status changed', 'Unit ' + r.unit + ' \u2192 ' + status, id);
 }
@@ -829,6 +830,7 @@ export async function assignResidentReport(id: string, workerName: string): Prom
   const update: ResidentUpdate = { status: 'assigned', note: 'Assigned to ' + workerName.trim(), by: 'management', at: now };
   const next = { ...r, status: 'assigned' as const, assignedTo: workerName.trim(), updates: [...r.updates, update], _meta: touchMeta(r._meta, deviceId) };
   await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(next), id);
+  await queueMutation('resident-reports', id, next);
   const _a = await getCurrentActor();
   await logAudit(_a.role, _a.name, 'Report assigned', 'Unit ' + r.unit + ' \u2192 ' + workerName.trim(), id);
   await addNotification(workerName.trim(), 'New job assigned', 'Unit ' + r.unit + (r.development ? ' \u00b7 ' + r.development : ''), id);
@@ -914,6 +916,7 @@ export async function setReportDevelopment(id: string, name: string): Promise<vo
   const update: ResidentUpdate = { status: r.status, note: 'Tagged development: ' + name.trim(), by: 'management', at: now };
   const next = { ...r, development: name.trim(), updates: [...r.updates, update], _meta: touchMeta(r._meta, deviceId) };
   await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(next), id);
+  await queueMutation('resident-reports', id, next);
 }
 
 
@@ -2273,8 +2276,24 @@ export async function clearResidentReportForStaff(id: string): Promise<void> {
   if (!row) return;
   let r: ResidentReport;
   try { r = JSON.parse(row.state) as ResidentReport; } catch { return; }
-  const next = { ...r, clearedByMgmt: true };
+  const next = { ...r, clearedByMgmt: true, _meta: touchMeta(r._meta, await getDeviceId(d)) };
   await d.runAsync('UPDATE resident_reports SET state=? WHERE id=?', JSON.stringify(next), next.id);
+  // Clearing is a server-authorized workflow transition, not a generic
+  // entity write. Persist the local evidence first so an offline action is
+  // still visible and can be replayed once the record reaches the server.
+  await queueMutation('resident-reports', id, next);
+  const pending = { action: 'clear', body: {} };
+  try {
+    await performEntityAction('resident-reports', id, pending.action, pending.body);
+  } catch (error) {
+    const queued = {
+      ...next,
+      _pendingWorkflowActions: [...((r as any)._pendingWorkflowActions || []), pending],
+    };
+    await d.runAsync('UPDATE resident_reports SET state=? WHERE id=?', JSON.stringify(queued), id);
+    await queueMutation('resident-reports', id, queued);
+    throw error;
+  }
 }
 
 export async function deleteResidentReport(id: string): Promise<void> {
@@ -3342,6 +3361,7 @@ export async function startAssignment(reportId: string, by: string, deviceId: st
     _meta: touchMeta(r._meta, deviceId),
   };
   await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(next), next.id);
+  await queueMutation('resident-reports', reportId, next);
   return next;
 }
 
@@ -3453,6 +3473,7 @@ export async function addBuildingViolation(
     status: 'logged',
   };
   await d.runAsync('INSERT INTO building_violations (id,state) VALUES (?,?)', v.id, JSON.stringify(v));
+  await queueMutation('building-violations', v.id, v);
   // Auto-send to management for approval the moment the inspector saves it.
   await addNotification('management', 'Inspection logged \u2014 awaiting approval',
     v.building + '  \u00b7 ' + v.violationNo + '  (Class ' + v.hazardClass + ')', v.id);
@@ -3482,6 +3503,7 @@ export async function approveAndRouteViolation(id: string, toName: string, toPos
     routedAt: now,
   };
   await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(next), next.id);
+  await queueMutation('building-violations', id, next);
   const flag = next.hazardClass === 'C' ? '\u26a0\ufe0f Class C \u2014 ' : '';
   const msg = (next.routedToPosition || '').toLowerCase() === 'cpm' ? 'Approved inspection \u2014 build scope' : 'Approved inspection \u2014 work assignment';
   if (next.routedTo) {
@@ -3542,6 +3564,7 @@ export async function clearInspectionForStaff(id: string): Promise<void> {
   try { v = JSON.parse(row.state) as BuildingViolation; } catch { return; }
   const next = { ...v, clearedByMgmt: true };
   await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(next), next.id);
+  await queueMutation('building-violations', id, next);
 }
 
 // A staff worker (plumber/electrician/maintenance/etc.) marks a routed repair
@@ -4243,8 +4266,18 @@ export async function setEmergencyProgress(id: string, stage: 'onMyWay' | 'start
   const next = { ...job };
   if (stage === 'onMyWay') next.onMyWayAt = now;
   if (stage === 'started') next.startedAt = now;
-  await performEntityAction('emergency-jobs', id, stage === 'onMyWay' ? 'on-my-way' : 'start', {});
   await _saveEmergencyJob(next);
+  const pending = { action: stage === 'onMyWay' ? 'on-my-way' : 'start', body: {} };
+  try {
+    await performEntityAction('emergency-jobs', id, pending.action, pending.body);
+  } catch (error) {
+    const queued = {
+      ...next,
+      _pendingWorkflowActions: [...((job as any)._pendingWorkflowActions || []), pending],
+    };
+    await _saveEmergencyJob(queued as EmergencyJob);
+    throw error;
+  }
   const label = stage === 'onMyWay' ? 'On my way' : 'Started';
   return next;
 }
@@ -4264,8 +4297,21 @@ export async function completeEmergencyJob(id: string, note: string = ''): Promi
   if (!job) return null;
   const a = await getCurrentActor();
   const next: EmergencyJob = { ...job, status: 'done', completedAt: new Date().toISOString(), note: (note || '').trim() || job.note };
-  await performEntityAction('emergency-jobs', id, 'complete', { note: (note || '').trim() || undefined });
   await _saveEmergencyJob(next);
+  const pending = {
+    action: 'complete',
+    body: { note: (note || '').trim() || undefined },
+  };
+  try {
+    await performEntityAction('emergency-jobs', id, pending.action, pending.body);
+  } catch (error) {
+    const queued = {
+      ...next,
+      _pendingWorkflowActions: [...((job as any)._pendingWorkflowActions || []), pending],
+    };
+    await _saveEmergencyJob(queued as EmergencyJob);
+    throw error;
+  }
   await logAudit('emergency', job.truck, 'Emergency job completed', job.emId, job.id);
   return next;
 }
@@ -4447,6 +4493,7 @@ async function _saveLeave(req: LeaveRequest) {
   const d = await db();
   await ensureLeaveTable(d);
   await d.runAsync('UPDATE leave_requests SET state=? WHERE id=?', JSON.stringify(req), req.id);
+  await queueMutation('leave-requests', req.id, req);
 }
 
 export async function decideLeaveRequest(id: string, status: LeaveStatus, approvedDays?: number): Promise<LeaveRequest | null> {
@@ -4456,6 +4503,22 @@ export async function decideLeaveRequest(id: string, status: LeaveStatus, approv
   const next: LeaveRequest = { ...req, status, decidedBy: (a && a.name) || 'management', decidedAt: new Date().toISOString() };
   if (status === 'Approved') next.approvedDays = (approvedDays != null ? approvedDays : req.days);
   await _saveLeave(next);
+  const action = status === 'Approved' ? 'approve' : status === 'Denied' ? 'deny' : status === 'Cancelled' ? 'cancel' : '';
+  if (!action) throw new Error(`Unsupported leave status: ${status}`);
+  const pending = {
+    action,
+    body: status === 'Approved' && next.approvedDays != null ? { approvedDays: next.approvedDays } : {},
+  };
+  try {
+    await performEntityAction('leave-requests', id, pending.action, pending.body);
+  } catch (error) {
+    const queued = {
+      ...next,
+      _pendingWorkflowActions: [...((req as any)._pendingWorkflowActions || []), pending],
+    };
+    await _saveLeave(queued as LeaveRequest);
+    throw error;
+  }
   await addNotification(req.employee, 'Leave ' + status.toLowerCase(), req.type + ' \u00b7 ' + req.startDate + ' (' + status + ')', req.id);
   await logAudit((a && a.role) || 'management', (a && a.name) || '', 'Leave ' + status.toLowerCase(), req.employee + ' \u00b7 ' + req.type, req.id);
   return next;
@@ -4464,7 +4527,19 @@ export async function decideLeaveRequest(id: string, status: LeaveStatus, approv
 export async function cancelLeaveRequest(id: string): Promise<void> {
   const req = await getLeaveRequest(id);
   if (!req) return;
-  await _saveLeave({ ...req, status: 'Cancelled' });
+  const next = { ...req, status: 'Cancelled' as const };
+  await _saveLeave(next);
+  const pending = { action: 'cancel', body: {} };
+  try {
+    await performEntityAction('leave-requests', id, pending.action, pending.body);
+  } catch (error) {
+    const queued = {
+      ...next,
+      _pendingWorkflowActions: [...((req as any)._pendingWorkflowActions || []), pending],
+    };
+    await _saveLeave(queued as LeaveRequest);
+    throw error;
+  }
 }
 
 export async function deleteLeaveRequest(id: string): Promise<void> {

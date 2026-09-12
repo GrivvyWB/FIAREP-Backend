@@ -932,6 +932,9 @@ paths:
       security: [{ bearerAuth: [] }]
       parameters:
         - { name: since, in: query, schema: { type: string, format: date-time } }
+        - { name: recordCursor, in: query, schema: { type: string, format: date-time } }
+        - { name: notificationCursor, in: query, schema: { type: string, format: date-time } }
+        - { name: recordCursors, in: query, description: JSON object mapping entity names to ISO record cursors, schema: { type: string } }
         - { name: entities, in: query, schema: { type: string } }
       responses:
         "200":
@@ -1431,6 +1434,15 @@ components:
             createdAt: { type: string, format: date-time }
             updatedAt: { type: string, format: date-time }
             version: { type: integer }
+    EntityTombstone:
+      type: object
+      required: [id, entity, deleted, version, updatedAt]
+      properties:
+        id: { type: string }
+        entity: { type: string }
+        deleted: { type: boolean, const: true }
+        version: { type: integer, minimum: 1 }
+        updatedAt: { type: string, format: date-time }
     EntityPatch:
       allOf:
         - $ref: "#/components/schemas/EntityInput"
@@ -1541,12 +1553,20 @@ components:
         updatedAt: { type: string, format: date-time }
     SyncResponse:
       type: object
-      required: [cursor, records, notifications]
+      required: [cursor, recordCursor, notificationCursor, recordCursors, records, notifications]
       properties:
         cursor: { type: string, format: date-time }
+        recordCursor: { type: string, format: date-time }
+        notificationCursor: { type: string, format: date-time }
+        recordCursors:
+          type: object
+          additionalProperties: { type: string, format: date-time }
         records:
           type: array
-          items: { $ref: "#/components/schemas/EntityRecord" }
+          items:
+            oneOf:
+              - $ref: "#/components/schemas/EntityRecord"
+              - $ref: "#/components/schemas/EntityTombstone"
         notifications:
           type: array
           items: { $ref: "#/components/schemas/Notification" }

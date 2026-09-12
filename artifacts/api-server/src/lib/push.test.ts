@@ -359,3 +359,32 @@ test("notification creation triggers push delivery and logs no recipients", asyn
     await cleanup(tenantId);
   }
 });
+
+test("notification creation persists an unambiguous staff target by id", async () => {
+  const tenantId = tenant();
+  try {
+    const recipientId = await addStaff(tenantId, "Assigned Staff", "Worker");
+    const actor: Actor = {
+      id: randomUUID(),
+      tenantId,
+      name: "Administrator",
+      role: "administrator",
+      position: "Administrator",
+      developments: [],
+      sessionVersion: 1,
+    };
+
+    await notify(actor, "Assigned Staff", "Stable target");
+    const rows = await db
+      .select({ target: notifications.target })
+      .from(notifications)
+      .where(eq(notifications.tenantId, tenantId));
+    assert.deepEqual(rows, [{ target: recipientId }]);
+    await waitFor(async () => {
+      const deliveryRows = await deliveries(tenantId);
+      assert.equal(deliveryRows[0]?.status, "no_recipients");
+    });
+  } finally {
+    await cleanup(tenantId);
+  }
+});

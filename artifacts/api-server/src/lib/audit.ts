@@ -1,6 +1,14 @@
 import { randomUUID } from "node:crypto";
-import { db, auditLog, notifications, platformLicenseAudit } from "@workspace/db";
+import {
+  db,
+  auditLog,
+  notifications,
+  platformLicenseAudit,
+  staffAccounts,
+} from "@workspace/db";
+import { and, eq } from "drizzle-orm";
 import type { Actor } from "./auth";
+import { STAFF_ROLES } from "./domain";
 import { logger } from "./logger";
 import { deliverPushNotification } from "./push";
 
@@ -44,12 +52,45 @@ export async function notify(
   detail?: string,
   reportId?: string,
 ) {
+  // Keep role/name targets working for older producers, but persist a stable
+  // staff id whenever a target resolves to an approved account. This avoids
+  // notifications following a renamed staff member or being ambiguous when
+  // names are duplicated.
+  const [recipientById] = await db
+    .select({ id: staffAccounts.id })
+    .from(staffAccounts)
+    .where(
+      and(
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.status, "approved"),
+        eq(staffAccounts.id, target),
+      ),
+    )
+    .limit(1);
+  const isRoleTarget = [...STAFF_ROLES].some(
+    (role) => role.toLowerCase() === target.trim().toLowerCase(),
+  );
+  const recipientsByName = recipientById || isRoleTarget
+    ? []
+    : await db
+      .select({ id: staffAccounts.id })
+      .from(staffAccounts)
+      .where(
+        and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+          eq(staffAccounts.name, target),
+        ),
+      );
+  const stableTarget =
+    recipientById?.id ??
+    (recipientsByName.length === 1 ? recipientsByName[0]!.id : target);
   const [notification] = await db
     .insert(notifications)
     .values({
       id: randomUUID(),
       tenantId: actor.tenantId,
-      target,
+      target: stableTarget,
       message,
       detail,
       reportId,

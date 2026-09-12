@@ -5,7 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useCreateEntityRecord } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getListEntityRecordsQueryKey } from "@workspace/api-client-react";
 import {
   Form,
   FormControl,
@@ -20,6 +19,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
+import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 const schema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -60,7 +60,7 @@ export default function NewInspection() {
       });
       
       toast({ title: "Success", description: "Inspection created successfully." });
-      queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("inspections") });
+       await invalidateOperationalQueries(queryClient, "inspections", id);
       setLocation("/inspections");
     } catch (err: any) {
       toast({

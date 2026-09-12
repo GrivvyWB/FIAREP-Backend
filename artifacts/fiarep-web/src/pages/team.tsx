@@ -9,6 +9,7 @@ import {
   useRevokeStaff,
   useListStaffDevelopments,
   getListStaffQueryKey,
+  getListStaffDevelopmentsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2 } from "lucide-react";
@@ -24,6 +25,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
 import { groupTeamDirectoryStaff } from "@/lib/staff-assignment";
+import { invalidateStaffQueries } from "@/lib/query-invalidation";
 
 const positions = Object.values(StaffPosition);
 const allRoles = Object.values(StaffRole).filter((r) => r !== "resident");
@@ -41,13 +43,25 @@ function errorMessage(error: unknown) {
 export default function Team() {
   const { staff: actor } = useAuth();
   const queryClient = useQueryClient();
-  const { data: staff, isLoading, error } = useListStaff();
+  const { data: staff, isLoading, error } = useListStaff(undefined, {
+    query: {
+      queryKey: getListStaffQueryKey(),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
   const {
     data: availableDevelopments,
     isLoading: developmentsLoading,
     error: developmentsError,
     refetch: refetchDevelopments,
-  } = useListStaffDevelopments();
+  } = useListStaffDevelopments({
+    query: {
+      queryKey: getListStaffDevelopmentsQueryKey(),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
   const create = useCreateStaff();
   const reset = useResetStaffCode();
   const revoke = useRevokeStaff();
@@ -87,7 +101,7 @@ export default function Team() {
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   async function refresh() {
-    await queryClient.invalidateQueries({ queryKey: getListStaffQueryKey() });
+    await invalidateStaffQueries(queryClient);
   }
   function openAddEmployee() {
     void refetchDevelopments();

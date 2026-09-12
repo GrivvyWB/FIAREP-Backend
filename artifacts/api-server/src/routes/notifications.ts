@@ -15,6 +15,7 @@ router.get("/v1/notifications", async (_req, res) => {
       and(
         eq(notifications.tenantId, actor.tenantId),
         or(
+          eq(notifications.target, actor.id),
           eq(notifications.target, actor.name),
           eq(notifications.target, actor.role),
         ),
@@ -34,6 +35,7 @@ router.get("/v1/notifications/unread-count", async (_req, res) => {
         eq(notifications.tenantId, actor.tenantId),
         eq(notifications.read, false),
         or(
+          eq(notifications.target, actor.id),
           eq(notifications.target, actor.name),
           eq(notifications.target, actor.role),
         ),
@@ -51,7 +53,7 @@ router.post("/v1/notifications/:id/read", async (req, res) => {
       and(
         eq(notifications.id, req.params["id"]!),
         eq(notifications.tenantId, actor.tenantId),
-        inArray(notifications.target, [actor.name, actor.role]),
+        inArray(notifications.target, [actor.id, actor.name, actor.role]),
       ),
     )
     .returning();
@@ -70,7 +72,7 @@ router.post("/v1/notifications/read-all", async (_req, res) => {
     .where(
       and(
         eq(notifications.tenantId, actor.tenantId),
-        inArray(notifications.target, [actor.name, actor.role]),
+        inArray(notifications.target, [actor.id, actor.name, actor.role]),
       ),
     );
   res.status(204).send();

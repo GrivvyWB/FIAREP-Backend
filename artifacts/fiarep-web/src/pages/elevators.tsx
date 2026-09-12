@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { getListEntityRecordsQueryKey, useCreateEntityRecord, useListEntityRecords, useListStaff, usePerformEntityAction, useUpdateEntityRecord } from "@workspace/api-client-react";
+import { getListEntityRecordsQueryKey, getListStaffQueryKey, useCreateEntityRecord, useListEntityRecords, useListStaff, usePerformEntityAction, useUpdateEntityRecord } from "@workspace/api-client-react";
 import { ArrowUpToLine, CheckCircle2, Search, Wrench } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,6 +9,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/staff-assignment";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
+import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 type Job = { id: string; version: number; development?: string | null; state?: Record<string, unknown>; createdAt: string };
 
@@ -16,8 +17,21 @@ export default function Elevators() {
   const { staff } = useAuth();
   const { toast } = useToast();
   const client = useQueryClient();
-  const query = useListEntityRecords("elevator-jobs", undefined, { query: { queryKey: getListEntityRecordsQueryKey("elevator-jobs"), refetchInterval: 20_000 } });
-  const { data: staffList = [] } = useListStaff({ status: "approved" });
+  const query = useListEntityRecords("elevator-jobs", undefined, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("elevator-jobs"),
+      refetchInterval: 20_000,
+      staleTime: 10_000,
+      refetchOnMount: "always",
+    },
+  });
+  const { data: staffList = [] } = useListStaff({ status: "approved" }, {
+    query: {
+      queryKey: getListStaffQueryKey({ status: "approved" }),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
   const action = usePerformEntityAction();
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
@@ -30,18 +44,18 @@ export default function Elevators() {
   const assignableStaff = assignableOperationalStaff(staff, staffList, assignmentDevelopment);
   const assignmentGroups = groupStaffByTradeSections(assignableStaff);
   const filtered = jobs.filter((job) => { const s = job.state || {}; return [job.id, job.development, ...Object.values(s)].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase()); });
-  const refresh = () => client.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("elevator-jobs") });
+  const refresh = (id?: string) => invalidateOperationalQueries(client, "elevator-jobs", id);
   const save = async () => {
     try {
       const assigned = assignableStaff.find((person) => person.id === draft.assignedTo);
       const state = { ...draft, assignedStaffId: assigned?.id, assignedTo: assigned?.name || draft.assignedTo };
       if (editing) await update.mutateAsync({ entity: "elevator-jobs", id: editing.id, data: { id: editing.id, version: editing.version, state } });
       else await create.mutateAsync({ entity: "elevator-jobs", data: { id: crypto.randomUUID(), state, version: 1, development: staff?.developments?.[0] } });
-      await refresh(); setOpen(false); toast({ title: editing ? "Elevator job updated" : "Elevator job created" });
+       await refresh(editing?.id); setOpen(false); toast({ title: editing ? "Elevator job updated" : "Elevator job created" });
     } catch (error: any) { toast({ variant: "destructive", title: "Unable to save elevator job", description: error?.message || "Please try again." }); }
   };
   const run = async (job: Job, name: "on-my-way" | "start" | "complete") => {
-    try { await action.mutateAsync({ entity: "elevator-jobs", id: job.id, action: name }); await refresh(); toast({ title: `Job marked ${name.replaceAll("-", " ")}` }); }
+     try { await action.mutateAsync({ entity: "elevator-jobs", id: job.id, action: name }); await refresh(job.id); toast({ title: `Job marked ${name.replaceAll("-", " ")}` }); }
     catch (error: any) { toast({ variant: "destructive", title: "Workflow action failed", description: error?.message || "The server rejected this action." }); }
   };
   return <div className="space-y-6">

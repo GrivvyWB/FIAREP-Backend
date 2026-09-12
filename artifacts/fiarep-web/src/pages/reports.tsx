@@ -1,6 +1,7 @@
 import {
   getListEntityRecordsQueryKey,
   getListResidentReportPhotosQueryKey,
+  getListStaffQueryKey,
   requestResidentReportPhotoDownload,
   useListEntityRecords,
   useListResidentReportPhotos,
@@ -21,6 +22,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/staff-assignment";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
+import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 
@@ -72,6 +74,7 @@ function Photos({ reportId }: { reportId: string }) {
     try {
       await renamePhoto.mutateAsync({ id, data: { name } });
       await queryClient.invalidateQueries({ queryKey: getListResidentReportPhotosQueryKey({ reportId }) });
+      await invalidateOperationalQueries(queryClient, "resident-reports", reportId);
       toast({ title: "Photo name saved" });
     } catch (error) {
       toast({
@@ -136,8 +139,20 @@ export default function Reports() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { staff: actor } = useAuth();
-  const reportsQuery = useListEntityRecords("resident-reports");
-  const { data: staff = [] } = useListStaff({ status: "approved" });
+  const reportsQuery = useListEntityRecords("resident-reports", undefined, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("resident-reports"),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
+  const { data: staff = [] } = useListStaff({ status: "approved" }, {
+    query: {
+      queryKey: getListStaffQueryKey({ status: "approved" }),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
   const action = usePerformEntityAction();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -171,7 +186,7 @@ export default function Reports() {
   const perform = async (report: Report, actionName: string, body?: Record<string, unknown>) => {
     try {
       await action.mutateAsync({ entity: "resident-reports", id: report.id, action: actionName, data: body });
-      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("resident-reports") });
+       await invalidateOperationalQueries(queryClient, "resident-reports", report.id);
       setSelected(null);
       toast({ title: `Report ${actionName.replaceAll("-", " ")} completed` });
     } catch (error: any) {

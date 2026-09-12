@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useListEntityRecords } from "@workspace/api-client-react";
+import { getListEntityRecordsQueryKey, useListEntityRecords } from "@workspace/api-client-react";
 import { Database, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -37,7 +37,13 @@ function recordSummary(state: Record<string, unknown>) {
 export default function SharedData() {
   const [entity, setEntity] = useState<(typeof MODULES)[number][0]>("rooms");
   const [search, setSearch] = useState("");
-  const { data, isLoading, error } = useListEntityRecords(entity);
+  const { data, isLoading, error } = useListEntityRecords(entity, undefined, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey(entity),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
   const activeLabel = MODULES.find(([value]) => value === entity)?.[1] || entity;
   const records = (data || []).filter((record) => {
     const query = search.trim().toLowerCase();

@@ -43,7 +43,10 @@ import OwnerDashboard from '@/pages/platform-owner/index';
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      refetchOnWindowFocus: false,
+      // Staff can update records from the mobile app or another browser.
+      // Focus refetch is the inexpensive cross-device freshness path; the
+      // operational pages add short targeted intervals where appropriate.
+      refetchOnWindowFocus: true,
       retry: false,
     },
   },

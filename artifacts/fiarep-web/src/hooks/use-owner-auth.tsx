@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { setAuthTokenGetter, setAuthRefreshHandler, usePlatformOwnerLogin } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
 interface OwnerAuthContextType {
@@ -14,6 +15,7 @@ const OwnerAuthContext = createContext<OwnerAuthContextType | undefined>(undefin
 
 export function OwnerAuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
   const [ownerName, setOwnerName] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -21,6 +23,7 @@ export function OwnerAuthProvider({ children }: { children: ReactNode }) {
   let refreshInFlight: Promise<string | null> | null = null;
 
   useEffect(() => {
+    queryClient.clear();
     // When inside OwnerAuthProvider, we always provide the owner token
     setAuthTokenGetter(() => {
       return localStorage.getItem("fiarep_owner_access_token");
@@ -111,11 +114,13 @@ export function OwnerAuthProvider({ children }: { children: ReactNode }) {
     const res = await loginMutation.mutateAsync({ data: { name, code } });
     localStorage.setItem("fiarep_owner_access_token", res.accessToken);
     localStorage.setItem("fiarep_owner_name", res.ownerName ?? name);
+    queryClient.clear();
     setOwnerName(res.ownerName ?? name);
   };
 
   const logout = () => {
     localStorage.removeItem("fiarep_owner_access_token");
+    queryClient.clear();
     void fetch("/api/v1/platform/auth/logout", {
         method: "POST",
         credentials: "include",

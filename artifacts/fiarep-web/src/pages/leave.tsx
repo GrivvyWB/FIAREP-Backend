@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
+import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 type Row = { id: string; version: number; development?: string | null; state?: Record<string, unknown>; createdAt: string };
 
@@ -14,7 +15,14 @@ export default function Leave() {
   const { staff } = useAuth();
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const query = useListEntityRecords("leave-requests", undefined, { query: { queryKey: getListEntityRecordsQueryKey("leave-requests"), refetchInterval: 30_000 } });
+  const query = useListEntityRecords("leave-requests", undefined, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("leave-requests"),
+      refetchInterval: 30_000,
+      staleTime: 10_000,
+      refetchOnMount: "always",
+    },
+  });
   const action = usePerformEntityAction();
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
@@ -28,17 +36,17 @@ export default function Leave() {
     const s = row.state || {};
     return [row.id, row.development, s.employee, s.reason, s.status].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase());
   });
-  const refresh = () => queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("leave-requests") });
+  const refresh = (id?: string) => invalidateOperationalQueries(queryClient, "leave-requests", id);
   const save = async () => {
     try {
       const state = { ...draft, title: `${draft.employee || "Staff"} leave` };
       if (editing) await update.mutateAsync({ entity: "leave-requests", id: editing.id, data: { id: editing.id, version: editing.version, state } });
       else await create.mutateAsync({ entity: "leave-requests", data: { id: crypto.randomUUID(), state, version: 1, development: staff?.developments?.[0] } });
-      await refresh(); setOpen(false); toast({ title: editing ? "Leave request updated" : "Leave request submitted" });
+       await refresh(editing?.id); setOpen(false); toast({ title: editing ? "Leave request updated" : "Leave request submitted" });
     } catch (error: any) { toast({ variant: "destructive", title: "Unable to save leave request", description: error?.message || "Please try again." }); }
   };
   const decide = async (row: Row, name: "approve" | "deny") => {
-    try { await action.mutateAsync({ entity: "leave-requests", id: row.id, action: name }); await refresh(); toast({ title: `Leave request ${name}d` }); }
+     try { await action.mutateAsync({ entity: "leave-requests", id: row.id, action: name }); await refresh(row.id); toast({ title: `Leave request ${name}d` }); }
     catch (error: any) { toast({ variant: "destructive", title: "Workflow action failed", description: error?.message || "The server rejected this action." }); }
   };
   return <div className="space-y-6">

@@ -1,4 +1,6 @@
 import {
+  getGetEntityRecordQueryKey,
+  getListEntityRecordsQueryKey,
   useGetEntityRecord,
   useListEntityRecords,
   usePerformEntityAction,
@@ -18,6 +20,7 @@ import {
 import { Plus, Search, Building2, MapPin, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
+import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 type InspectionState = Record<string, unknown>;
 
@@ -42,25 +45,26 @@ export default function Inspections() {
   );
   const { data: inspections, isLoading, isError, error, refetch } =
     useListEntityRecords("inspections", undefined, {
-      query: { queryKey: ["/api/v1/inspections"], refetchInterval: 30000, staleTime: 10000 },
+      query: {
+        queryKey: getListEntityRecordsQueryKey("inspections"),
+        refetchInterval: 30000,
+        staleTime: 10000,
+        refetchOnMount: "always",
+      },
     });
   const detail = useGetEntityRecord("inspections", selectedId ?? "", {
     query: {
-      queryKey: ["/api/v1/inspections", selectedId],
+      queryKey: selectedId ? getGetEntityRecordQueryKey("inspections", selectedId) : getGetEntityRecordQueryKey("inspections", ""),
       enabled: Boolean(selectedId),
       refetchInterval: selectedId ? 30000 : false,
       staleTime: 10000,
+        refetchOnMount: "always",
     },
   });
   const action = usePerformEntityAction({
     mutation: {
       onSuccess: async (_, variables) => {
-        await Promise.all([
-          queryClient.invalidateQueries({ queryKey: ["/api/v1/inspections"] }),
-          queryClient.invalidateQueries({
-            queryKey: ["/api/v1/inspections", variables.id],
-          }),
-        ]);
+        await invalidateOperationalQueries(queryClient, "inspections", variables.id);
       },
     },
   });
