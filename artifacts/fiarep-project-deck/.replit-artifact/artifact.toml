@@ -1,0 +1,28 @@
+kind = "slides"
+previewPath = "/fiarep-project-deck/"
+title = "FIAREP Project Overview"
+description = "A concise Corporate Grid presentation covering FIAREP’s unified property operations platform, audience-specific experiences, controlled workflows, technical foundation, and launch readiness."
+version = "1.0.0"
+id = "artifacts/fiarep-project-deck"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/fiarep-project-deck/" ]
+localPort = 21512
+
+[services.development]
+run = "pnpm --filter @workspace/fiarep-project-deck run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/fiarep-project-deck", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/fiarep-project-deck/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21512"
+BASE_PATH = "/fiarep-project-deck/"
