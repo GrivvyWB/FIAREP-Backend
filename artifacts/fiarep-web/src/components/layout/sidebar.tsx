@@ -21,6 +21,7 @@ import {
   Database,
   MoreHorizontal,
   FileCog,
+  Target,
 } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
@@ -46,6 +47,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     ...((staff?.role === "management" || staff?.role === "administrator") ? [
       { name: "Emergency", href: "/emergency", icon: BellRing },
       { name: "Change Orders", href: "/change-orders", icon: FileCog },
+      { name: "Scores", href: "/scores", icon: Target },
     ] : []),
     { name: "Elevators", href: "/elevators", icon: ArrowUpToLine },
     { name: "Leave", href: "/leave", icon: Plane },

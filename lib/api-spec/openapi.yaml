@@ -19,6 +19,7 @@ tags:
   - name: files
   - name: ai
   - name: property
+  - name: scores
   - name: platform-owner
 paths:
   /healthz:
@@ -538,6 +539,27 @@ paths:
               schema: { $ref: "#/components/schemas/Staff" }
         "403":
           description: Not authorized to manage this account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /v1/scores:
+    get:
+      operationId: getScores
+      tags: [scores]
+      summary: FIAREP scores for the current tenant
+      description: Returns vendor, development, building, and residential scores calculated from authorized entity records.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: FIAREP scores
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScoresResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: Scores are restricted to administrators and management
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1414,6 +1436,66 @@ components:
         - $ref: "#/components/schemas/EntityInput"
         - type: object
           required: [version]
+    ScoresResponse:
+      type: object
+      required: [generatedAt, formulaVersion, developments, vendors, buildings, residential]
+      properties:
+        generatedAt: { type: string, format: date-time }
+        formulaVersion: { type: string, enum: [v1] }
+        developments:
+          type: array
+          items: { $ref: "#/components/schemas/DevelopmentScore" }
+        vendors:
+          type: array
+          items: { $ref: "#/components/schemas/VendorScore" }
+        buildings:
+          type: array
+          items: { $ref: "#/components/schemas/BuildingScore" }
+        residential:
+          type: array
+          items: { $ref: "#/components/schemas/ResidentialScore" }
+    VendorScore:
+      type: object
+      required: [vendor, score, completed, onTimeRate, deductions]
+      properties:
+        vendor: { type: string }
+        score: { type: integer, minimum: 0, maximum: 100 }
+        completed: { type: integer, minimum: 0 }
+        onTimeRate: { type: number, minimum: 0, maximum: 1 }
+        deductions: { type: integer, minimum: 0 }
+    DevelopmentScore:
+      type: object
+      required: [development, points, scorePercent, completed, open, overdue, sampleSize]
+      properties:
+        development: { type: string }
+        points: { type: integer }
+        scorePercent: { type: integer, minimum: 0, maximum: 100 }
+        completed: { type: integer, minimum: 0 }
+        open: { type: integer, minimum: 0 }
+        overdue: { type: integer, minimum: 0 }
+        sampleSize: { type: integer, minimum: 0 }
+    BuildingScore:
+      type: object
+      required: [building, score, total, resolved, open, overdue, resolutionRate]
+      properties:
+        building: { type: string }
+        score: { type: integer, minimum: 0, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        resolved: { type: integer, minimum: 0 }
+        open: { type: integer, minimum: 0 }
+        overdue: { type: integer, minimum: 0 }
+        resolutionRate: { type: number, minimum: 0, maximum: 1 }
+    ResidentialScore:
+      type: object
+      required: [address, score, total, resolved, open, overdue, resolutionRate]
+      properties:
+        address: { type: string }
+        score: { type: integer, minimum: 0, maximum: 100 }
+        total: { type: integer, minimum: 0 }
+        resolved: { type: integer, minimum: 0 }
+        open: { type: integer, minimum: 0 }
+        overdue: { type: integer, minimum: 0 }
+        resolutionRate: { type: number, minimum: 0, maximum: 1 }
     Notification:
       type: object
       required: [id, target, message, read, at]

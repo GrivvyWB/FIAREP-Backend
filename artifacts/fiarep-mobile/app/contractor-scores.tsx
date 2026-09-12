@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { getVendorScores, type VendorScore } from '../lib/store';
+import { getScores, type VendorScore } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 
 function scoreColor(score: number): string {
@@ -12,14 +12,21 @@ function scoreColor(score: number): string {
 
 export default function ContractorScores() {
   const [scores, setScores] = useState<VendorScore[]>([]);
+  const [isFallback, setIsFallback] = useState(false);
 
-  const load = useCallback(() => { getVendorScores().then(setScores); }, []);
+  const load = useCallback(() => {
+    getScores().then((snapshot) => {
+      setScores(snapshot.vendors);
+      setIsFallback(snapshot.isFallback);
+    });
+  }, []);
   useFocusEffect(load);
 
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Vendor Scores</Text>
-      <Text style={ui.label}>Based on closed jobs: work quality (60%), on-time within 14 days (25%), less a penalty for deductions.</Text>
+      <Text style={ui.label}>Based on closed jobs: 60% performance, 25% on-time within 14 days, minus 15% for the deduction rate.</Text>
+      {isFallback && <Text style={[ui.label, { color: '#9a3412' }]}>Server unavailable. Showing existing local vendor calculations.</Text>}
 
       {scores.length === 0 && <Text style={ui.empty}>No closed & rated vendor jobs yet.</Text>}
 

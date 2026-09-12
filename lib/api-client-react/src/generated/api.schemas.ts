@@ -610,6 +610,102 @@ export interface StaffCodeUpdate {
 
 export type EntityPatch = EntityInput & { [key: string]: unknown } & Required<Pick<EntityInput & { [key: string]: unknown }, 'version'>>;
 
+export type ScoresResponseFormulaVersion = typeof ScoresResponseFormulaVersion[keyof typeof ScoresResponseFormulaVersion];
+
+
+export const ScoresResponseFormulaVersion = {
+  v1: 'v1',
+} as const;
+
+export interface DevelopmentScore {
+  development: string;
+  points: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  scorePercent: number;
+  /** @minimum 0 */
+  completed: number;
+  /** @minimum 0 */
+  open: number;
+  /** @minimum 0 */
+  overdue: number;
+  /** @minimum 0 */
+  sampleSize: number;
+}
+
+export interface VendorScore {
+  vendor: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  score: number;
+  /** @minimum 0 */
+  completed: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  onTimeRate: number;
+  /** @minimum 0 */
+  deductions: number;
+}
+
+export interface BuildingScore {
+  building: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  score: number;
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 0 */
+  resolved: number;
+  /** @minimum 0 */
+  open: number;
+  /** @minimum 0 */
+  overdue: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  resolutionRate: number;
+}
+
+export interface ResidentialScore {
+  address: string;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  score: number;
+  /** @minimum 0 */
+  total: number;
+  /** @minimum 0 */
+  resolved: number;
+  /** @minimum 0 */
+  open: number;
+  /** @minimum 0 */
+  overdue: number;
+  /**
+     * @minimum 0
+     * @maximum 1
+     */
+  resolutionRate: number;
+}
+
+export interface ScoresResponse {
+  generatedAt: string;
+  formulaVersion: ScoresResponseFormulaVersion;
+  developments: DevelopmentScore[];
+  vendors: VendorScore[];
+  buildings: BuildingScore[];
+  residential: ResidentialScore[];
+}
+
 export interface Notification {
   id: string;
   target: string;

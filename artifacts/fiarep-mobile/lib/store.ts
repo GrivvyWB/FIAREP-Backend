@@ -27,8 +27,10 @@ import {
   setAuthTokenGetter,
   setAuthRefreshHandler,
   setBaseUrl,
+  getScores as getScoresFromServer,
   type AuthResponse,
   type Staff,
+  type ScoresResponse as ApiScoresResponse,
 } from '@workspace/api-client-react';
 import type { Rates } from './takeoff';
 import type { LineItem } from './catalog';
@@ -772,6 +774,7 @@ export async function rateAndResolveReport(id: string, rating: number, by: strin
   const update: ResidentUpdate = { status: 'resolved', note: 'Resolved \u00b7 rated ' + clamped + '/5', by, at: now };
   const next = { ...r, status: 'resolved' as const, rating: clamped, resolvedAt: now, updates: [...r.updates, update], _meta: touchMeta(r._meta, deviceId) };
   await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(next), id);
+  await queueMutation('resident-reports', id, next);
   const _a = await getCurrentActor();
   await logAudit(_a.role, _a.name, 'Report resolved & rated', 'Unit ' + r.unit + ' \u00b7 ' + clamped + '/5', id);
 }
@@ -2945,6 +2948,17 @@ export type VendorScore = {
   score: number;           // 0-100 composite
 };
 
+export type ScoresSnapshot = {
+  generatedAt?: string;
+  formulaVersion: 'v1';
+  developments: DevelopmentScore[];
+  vendors: VendorScore[];
+  buildings: ApiScoresResponse['buildings'];
+  residential: ApiScoresResponse['residential'];
+  /** True when the API could not be reached and existing local calculations are shown. */
+  isFallback: boolean;
+};
+
 // Vendor-only scoring, keyed by the awarded vendor name on closed procurement
 // jobs. Driven by good/fair/poor performance, on-time completion, and a penalty
 // for each job that was docked. Separate from the resident-report scores.
@@ -3796,6 +3810,8 @@ export type DevScoreItem = {
 export type DevelopmentScore = {
   development: string;
   score: number;
+  points?: number;
+  scorePercent?: number;
   completed: number;
   open: number;
   overdue: number;
@@ -3898,6 +3914,60 @@ export async function getDevelopmentScores(): Promise<DevelopmentScore[]> {
   return Object.values(buckets).sort((a, b) => b.score - a.score);
 }
 
+/**
+ * Read the shared, server-authoritative scoring contract. The local
+ * calculations are retained only as an outage fallback for the two score
+ * views that already had them; building and residential scores never invent
+ * local values.
+ */
+export async function getScores(): Promise<ScoresSnapshot> {
+  try {
+    const response = await getScoresFromServer();
+    return {
+      generatedAt: response.generatedAt,
+      formulaVersion: response.formulaVersion,
+      developments: response.developments.map((score) => ({
+        development: score.development,
+        score: score.scorePercent,
+        points: score.points,
+        scorePercent: score.scorePercent,
+        completed: score.completed,
+        open: score.open,
+        overdue: score.overdue,
+        items: [],
+      })),
+      vendors: response.vendors.map((score) => ({
+        name: score.vendor,
+        completed: score.completed,
+        onTimeRate: score.onTimeRate,
+        deductions: score.deductions,
+        score: score.score,
+      })),
+      buildings: response.buildings,
+      residential: response.residential,
+      isFallback: false,
+    };
+  } catch {
+    const [developments, vendors] = await Promise.all([
+      getDevelopmentScores(),
+      getVendorScores(),
+    ]);
+    return {
+      formulaVersion: 'v1',
+      developments: developments.map((score) => ({
+        ...score,
+        points: score.score,
+        scorePercent: Math.max(0, Math.min(100, 50 + score.score)),
+        score: Math.max(0, Math.min(100, 50 + score.score)),
+      })),
+      vendors,
+      buildings: [],
+      residential: [],
+      isFallback: true,
+    };
+  }
+}
+
 // Delete a route assignment (was missing — used by development score delete).
 export async function deleteRouteAssignment(id: string): Promise<void> {
   const d = await db();
@@ -3918,7 +3988,7 @@ export async function deleteDevelopmentScore(development: string): Promise<void>
   }
 }
 
-export async function deleteScoreItem(kind: 'scope' | 'route' | 'violation' | 'report', id: string): Promise<void> {
+export async function deleteScoreItem(kind: 'scope' | 'route' | 'violation' | 'report' | 'inspection', id: string): Promise<void> {
   if (kind === 'scope') return deleteProcurementRequest(id);
   if (kind === 'route') return deleteRouteAssignment(id);
   if (kind === 'violation') return deleteViolationLookup(id);

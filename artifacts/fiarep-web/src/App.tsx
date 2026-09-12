@@ -34,6 +34,7 @@ import Settings from '@/pages/settings';
 import SharedData from '@/pages/shared-data';
 import ProcurementLogin from '@/pages/procurement-login';
 import ScopeReview from '@/pages/scope-review';
+import Scores from '@/pages/scores';
 
 // Owner Pages
 import OwnerLogin from '@/pages/platform-owner/login';
@@ -115,6 +116,7 @@ function AppRouter() {
           <Route path="/procurement" component={Procurement} />
           <Route path="/emergency" component={ManagementRouteEmergency} />
           <Route path="/change-orders" component={ManagementRouteChangeOrders} />
+          <Route path="/scores" component={ManagementRouteScores} />
           <Route path="/elevators" component={Elevators} />
           <Route path="/leave" component={Leave} />
           <Route path="/notifications" component={Notifications} />
@@ -145,6 +147,10 @@ function ManagementRouteEmergency() {
 
 function ManagementRouteChangeOrders() {
   return <ManagementRoute><ChangeOrders /></ManagementRoute>;
+}
+
+function ManagementRouteScores() {
+  return <ManagementRoute><Scores /></ManagementRoute>;
 }
 
 function OwnerAppRouter() {

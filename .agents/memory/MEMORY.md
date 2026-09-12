@@ -12,3 +12,4 @@
 - [OpenAPI codegen and Vite](openapi-codegen-vite.md) — restart active Vite apps after shared client generation before treating transient HMR errors as product failures.
 - [Shared React Query bundling](shared-react-query-bundling.md) — dedupe React Query with React in Vite or production can split provider and hook contexts.
 - [FIAREP field evidence sync](fiarep-field-evidence-sync.md) — workflow transitions and evidence uploads use separate authorized paths and must both replay after offline work.
+- [FIAREP scoring authority](fiarep-scoring-authority.md) — development, vendor, building, and residential scores share one tenant-scoped server formula and contract.

@@ -669,6 +669,101 @@ export const RevokeStaffResponse = zod.object({
 })
 
 
+/**
+ * Returns vendor, development, building, and residential scores calculated from authorized entity records.
+ * @summary FIAREP scores for the current tenant
+ */
+export const getScoresResponseDevelopmentsItemScorePercentMin = 0;
+export const getScoresResponseDevelopmentsItemScorePercentMax = 100;
+
+export const getScoresResponseDevelopmentsItemCompletedMin = 0;
+
+export const getScoresResponseDevelopmentsItemOpenMin = 0;
+
+export const getScoresResponseDevelopmentsItemOverdueMin = 0;
+
+export const getScoresResponseDevelopmentsItemSampleSizeMin = 0;
+
+export const getScoresResponseVendorsItemScoreMin = 0;
+export const getScoresResponseVendorsItemScoreMax = 100;
+
+export const getScoresResponseVendorsItemCompletedMin = 0;
+
+export const getScoresResponseVendorsItemOnTimeRateMin = 0;
+export const getScoresResponseVendorsItemOnTimeRateMax = 1;
+
+export const getScoresResponseVendorsItemDeductionsMin = 0;
+
+export const getScoresResponseBuildingsItemScoreMin = 0;
+export const getScoresResponseBuildingsItemScoreMax = 100;
+
+export const getScoresResponseBuildingsItemTotalMin = 0;
+
+export const getScoresResponseBuildingsItemResolvedMin = 0;
+
+export const getScoresResponseBuildingsItemOpenMin = 0;
+
+export const getScoresResponseBuildingsItemOverdueMin = 0;
+
+export const getScoresResponseBuildingsItemResolutionRateMin = 0;
+export const getScoresResponseBuildingsItemResolutionRateMax = 1;
+
+export const getScoresResponseResidentialItemScoreMin = 0;
+export const getScoresResponseResidentialItemScoreMax = 100;
+
+export const getScoresResponseResidentialItemTotalMin = 0;
+
+export const getScoresResponseResidentialItemResolvedMin = 0;
+
+export const getScoresResponseResidentialItemOpenMin = 0;
+
+export const getScoresResponseResidentialItemOverdueMin = 0;
+
+export const getScoresResponseResidentialItemResolutionRateMin = 0;
+export const getScoresResponseResidentialItemResolutionRateMax = 1;
+
+
+
+export const GetScoresResponse = zod.object({
+  "generatedAt": zod.coerce.date(),
+  "formulaVersion": zod.enum(['v1']),
+  "developments": zod.array(zod.object({
+  "development": zod.string(),
+  "points": zod.number().int(),
+  "scorePercent": zod.number().int().min(getScoresResponseDevelopmentsItemScorePercentMin).max(getScoresResponseDevelopmentsItemScorePercentMax),
+  "completed": zod.number().int().min(getScoresResponseDevelopmentsItemCompletedMin),
+  "open": zod.number().int().min(getScoresResponseDevelopmentsItemOpenMin),
+  "overdue": zod.number().int().min(getScoresResponseDevelopmentsItemOverdueMin),
+  "sampleSize": zod.number().int().min(getScoresResponseDevelopmentsItemSampleSizeMin)
+})),
+  "vendors": zod.array(zod.object({
+  "vendor": zod.string(),
+  "score": zod.number().int().min(getScoresResponseVendorsItemScoreMin).max(getScoresResponseVendorsItemScoreMax),
+  "completed": zod.number().int().min(getScoresResponseVendorsItemCompletedMin),
+  "onTimeRate": zod.number().min(getScoresResponseVendorsItemOnTimeRateMin).max(getScoresResponseVendorsItemOnTimeRateMax),
+  "deductions": zod.number().int().min(getScoresResponseVendorsItemDeductionsMin)
+})),
+  "buildings": zod.array(zod.object({
+  "building": zod.string(),
+  "score": zod.number().int().min(getScoresResponseBuildingsItemScoreMin).max(getScoresResponseBuildingsItemScoreMax),
+  "total": zod.number().int().min(getScoresResponseBuildingsItemTotalMin),
+  "resolved": zod.number().int().min(getScoresResponseBuildingsItemResolvedMin),
+  "open": zod.number().int().min(getScoresResponseBuildingsItemOpenMin),
+  "overdue": zod.number().int().min(getScoresResponseBuildingsItemOverdueMin),
+  "resolutionRate": zod.number().min(getScoresResponseBuildingsItemResolutionRateMin).max(getScoresResponseBuildingsItemResolutionRateMax)
+})),
+  "residential": zod.array(zod.object({
+  "address": zod.string(),
+  "score": zod.number().int().min(getScoresResponseResidentialItemScoreMin).max(getScoresResponseResidentialItemScoreMax),
+  "total": zod.number().int().min(getScoresResponseResidentialItemTotalMin),
+  "resolved": zod.number().int().min(getScoresResponseResidentialItemResolvedMin),
+  "open": zod.number().int().min(getScoresResponseResidentialItemOpenMin),
+  "overdue": zod.number().int().min(getScoresResponseResidentialItemOverdueMin),
+  "resolutionRate": zod.number().min(getScoresResponseResidentialItemResolutionRateMin).max(getScoresResponseResidentialItemResolutionRateMax)
+}))
+})
+
+
 export const ListEntityRecordsParams = zod.object({
   "entity": zod.coerce.string()
 })

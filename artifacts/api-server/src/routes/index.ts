@@ -11,6 +11,7 @@ import aiRouter from "./ai";
 import propertyRouter from "./property";
 import publicAccessRouter from "./publicAccess";
 import organizationsRouter from "./organizations";
+import scoresRouter from "./scores";
 
 const router: IRouter = Router();
 
@@ -22,6 +23,7 @@ router.use(staffRouter);
 router.use(notificationRouter);
 router.use(syncRouter);
 router.use(systemRouter);
+router.use(scoresRouter);
 router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);

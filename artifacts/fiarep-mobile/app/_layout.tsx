@@ -253,6 +253,7 @@ function AdministratorStack() {
       <Stack.Screen name="leave-dashboard" options={{ title: 'Leave Calendar' }} />
       <Stack.Screen name="contractor-scores" options={{ title: 'Contractor Scores' }} />
       <Stack.Screen name="dev-scores" options={{ title: 'Development Scores' }} />
+      <Stack.Screen name="property-scores" options={{ title: 'Building & Residential Scores' }} />
       <Stack.Screen name="management" options={{ title: 'Resident Reports' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
       <Stack.Screen name="resident" options={{ title: 'Report an Issue' }} />
@@ -335,6 +336,7 @@ function ManagementStack() {
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
       <Stack.Screen name="dev-scores" options={{ title: 'Development Scores' }} />
       <Stack.Screen name="contractor-scores" options={{ title: 'Contractor Scores' }} />
+      <Stack.Screen name="property-scores" options={{ title: 'Building & Residential Scores' }} />
       <Stack.Screen name="hud-review" options={{ title: 'HUD Inspections' }} />
       <Stack.Screen name="hud-view" options={{ title: 'Inspection' }} />
       <Stack.Screen name="violation-send" options={{ title: 'Send Violation' }} />

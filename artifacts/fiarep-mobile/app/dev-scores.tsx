@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, Modal } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { getDevelopmentScores, deleteScoreItem, type DevelopmentScore } from '../lib/store';
+import { getScores, deleteScoreItem, type DevelopmentScore } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useAppMode } from './_layout';
 
@@ -15,8 +15,15 @@ export default function DevScores() {
   const [scores, setScores] = useState<DevelopmentScore[]>([]);
   const [selectedDev, setSelectedDev] = useState<string>('');
   const [picker, setPicker] = useState(false);
+  const [isFallback, setIsFallback] = useState(false);
 
-  const load = useCallback(() => { getDevelopmentScores().then((all) => { setScores(all); setSelectedDev((cur) => cur || (all[0] ? all[0].development : '')); }); }, []);
+  const load = useCallback(() => {
+    getScores().then((snapshot) => {
+      setScores(snapshot.developments);
+      setIsFallback(snapshot.isFallback);
+      setSelectedDev((cur) => cur || (snapshot.developments[0] ? snapshot.developments[0].development : ''));
+    });
+  }, []);
   useFocusEffect(load);
 
   function del(it: any) {
@@ -29,7 +36,8 @@ export default function DevScores() {
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Development Scores</Text>
-      <Text style={ui.label}>+10 completed, -5 open, -10 overdue (open 14+ days). Pick a development to view its page.</Text>
+      <Text style={ui.label}>Score = 50 + points: completed +10, open -5, overdue -10 (open 14+ days). Pick a development to view its page.</Text>
+      {isFallback && <Text style={[ui.label, { color: '#9a3412' }]}>Server unavailable. Showing existing local development calculations.</Text>}
 
       {scores.length === 0 && <Text style={[ui.empty, { marginTop: 20 }]}>No scored work yet.</Text>}
 
@@ -51,7 +59,7 @@ export default function DevScores() {
           <View>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 18, fontWeight: '700', flex: 1 }}>{d.development}</Text>
-              <Text style={{ fontSize: 22, fontWeight: '800', color: scoreColor(d.score) }}>{d.score > 0 ? '+' : ''}{d.score}</Text>
+              <Text style={{ fontSize: 22, fontWeight: '800', color: scoreColor(d.scorePercent ?? d.score) }}>{d.scorePercent ?? d.score}%</Text>
             </View>
             <View style={{ flexDirection: 'row', gap: 12, marginTop: 2 }}>
               <Text style={{ fontSize: 12, color: '#1a8f4c' }}>{d.completed} done</Text>
@@ -62,7 +70,7 @@ export default function DevScores() {
 
           {(
             <View style={{ borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 6, gap: 6 }}>
-              {d.items.length === 0 ? (
+              {!d.items || d.items.length === 0 ? (
                 <Text style={ui.listSub}>No items.</Text>
               ) : d.items.map((it, i) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
@@ -94,7 +102,7 @@ export default function DevScores() {
               {scores.map((d) => (
                 <Pressable key={d.development} onPress={() => { setSelectedDev(d.development); setPicker(false); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee', flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 15 }}>{d.development}</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '700', color: scoreColor(d.score) }}>{d.score > 0 ? '+' : ''}{d.score}</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: scoreColor(d.scorePercent ?? d.score) }}>{d.scorePercent ?? d.score}%</Text>
                 </Pressable>
               ))}
             </ScrollView>

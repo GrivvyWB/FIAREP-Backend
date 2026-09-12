@@ -75,6 +75,7 @@ export default function ManagementHome() {
         { label: 'Change Orders', onPress: () => router.push('/change-orders'), tone: 'outline' as Tone },
         { label: 'Vendor Score', onPress: () => router.push('/contractor-scores'), tone: 'tint' as Tone },
         { label: 'Development Scores', onPress: () => router.push('/dev-scores'), tone: 'tint' as Tone },
+        { label: 'Building & Residential Scores', onPress: () => router.push('/property-scores'), tone: 'tint' as Tone },
       ],
     },
     {

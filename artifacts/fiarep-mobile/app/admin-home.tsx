@@ -69,6 +69,7 @@ export default function AdminHome() {
         { label: 'Change Orders', onPress: () => router.push('/change-orders'), tone: 'outline' },
         { label: 'Vendor Score', onPress: () => router.push('/contractor-scores'), tone: 'tint' },
         { label: 'Development Scores', onPress: () => router.push('/dev-scores'), tone: 'tint' },
+        { label: 'Building & Residential Scores', onPress: () => router.push('/property-scores'), tone: 'tint' },
       ],
     },
     {

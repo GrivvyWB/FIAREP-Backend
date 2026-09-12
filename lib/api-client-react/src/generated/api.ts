@@ -74,6 +74,7 @@ import type {
   ResidentPhoto,
   ResidentPhotoMetadata,
   ResidentPhotoUpdate,
+  ScoresResponse,
   Staff,
   StaffCodeUpdate,
   StaffInput,
@@ -2140,6 +2141,84 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getRevokeStaffMutationOptions(options));
     }
+
+export const getGetScoresUrl = () => {
+
+
+
+
+  return `/api/v1/scores`
+}
+
+/**
+ * Returns vendor, development, building, and residential scores calculated from authorized entity records.
+ * @summary FIAREP scores for the current tenant
+ */
+export const getScores = async ( options?: Parameters<typeof customFetch>[1]): Promise<ScoresResponse> => {
+
+  return customFetch<ScoresResponse>(getGetScoresUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetScoresQueryKey = () => {
+    return [
+    `/api/v1/scores`
+    ] as const;
+    }
+
+
+export const getGetScoresQueryOptions = <TData = Awaited<ReturnType<typeof getScores>>, TError = ErrorType<UnauthorizedResponse | Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScores>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetScoresQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getScores>>> = ({ signal }) => getScores({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getScores>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetScoresQueryResult = NonNullable<Awaited<ReturnType<typeof getScores>>>
+export type GetScoresQueryError = ErrorType<UnauthorizedResponse | Error>
+
+
+/**
+ * @summary FIAREP scores for the current tenant
+ */
+
+export function useGetScores<TData = Awaited<ReturnType<typeof getScores>>, TError = ErrorType<UnauthorizedResponse | Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getScores>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetScoresQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getListEntityRecordsUrl = (entity: string,
     params?: ListEntityRecordsParams,) => {
