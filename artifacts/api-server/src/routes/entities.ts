@@ -37,6 +37,14 @@ function stateOf(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
+const TRADE_SUPERVISOR_POSITIONS = new Set([
+  "Plumber Supervisor",
+  "Electric Supervisor",
+  "Elevator Supervisor",
+  "Painter Supervisor",
+  "Carpenter Supervisor",
+]);
+
 function assignmentTargetAllowed(
   actor: ReturnType<typeof actorFrom>,
   target: typeof staffAccounts.$inferSelect,
@@ -48,7 +56,10 @@ function assignmentTargetAllowed(
   if (isBoroughDirector(actor)) return true;
   if (!target.developments.length ||
       !target.developments.every((value) => actor.developments.includes(value))) return false;
-  if (target.role === "management") return actor.position === "Regional Director";
+  if (target.role === "management") {
+    return actor.position === "Regional Director" ||
+      TRADE_SUPERVISOR_POSITIONS.has(target.position);
+  }
   return ["worker", "inspector", "emergency"].includes(target.role);
 }
 

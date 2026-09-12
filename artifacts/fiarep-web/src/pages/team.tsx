@@ -23,6 +23,7 @@ import { useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
+import { groupTeamDirectoryStaff } from "@/lib/staff-assignment";
 
 const positions = Object.values(StaffPosition);
 const allRoles = Object.values(StaffRole).filter((r) => r !== "resident");
@@ -164,6 +165,7 @@ export default function Team() {
     member.position === "Borough Director" ? 0 : member.role === "administrator" ? 1 :
     member.role === "management" ? 2 : member.role === "procurement" ? 3 : 4;
   const sorted = filtered?.sort((a, b) => authorityOrder(a) - authorityOrder(b) || a.name.localeCompare(b.name));
+  const teamGroups = groupTeamDirectoryStaff(sorted || []);
 
   return (
     <div className="space-y-6">
@@ -181,7 +183,7 @@ export default function Team() {
           {isLoading ? <div className="p-8 text-center text-muted-foreground">Loading team...</div> :
             error ? <div className="p-8 text-center text-destructive">{errorMessage(error)}</div> :
             sorted?.length === 0 ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">No team members found</h3></div> :
-            <div className="grid gap-3">{sorted?.map((member) => <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
+            <div className="space-y-6">{teamGroups.map((group) => <section key={group.label} className="space-y-3"><div className="border-b border-border pb-2"><h3 className="font-bold">{group.label}</h3><p className="text-xs text-muted-foreground">{group.people.length} team member{group.people.length === 1 ? "" : "s"}</p></div><div className="grid gap-3">{group.people.map((member) => <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white grid place-items-center font-bold text-sm shrink-0">{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
               <div className="flex-1 min-w-0"><h4 className="font-bold truncate">{member.name}</h4><div className="text-sm text-muted-foreground">{member.position}</div><div className="text-xs text-muted-foreground">{member.developments.join(", ") || "All assigned developments"}</div></div>
               <div className="text-right shrink-0"><div className="text-[13px] font-semibold bg-secondary px-2.5 py-1 rounded-full inline-block">{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
@@ -191,7 +193,7 @@ export default function Team() {
                   {member.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
                 </div>}
               </div>
-            </div>)}</div>}
+            </div>)}</div></section>)}</div>}
         </div>
       </div>
       <Dialog open={open} onOpenChange={(v) => !v && closeForm()}>

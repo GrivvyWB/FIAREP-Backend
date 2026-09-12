@@ -912,7 +912,7 @@ export async function setRolePin(role: StaffRole, pin: string): Promise<void> {
 
 export type StaffStatus = 'pending' | 'approved' | 'revoked';
 
-export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other'] as const;
+export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other'] as const;
 export type StaffPosition = typeof STAFF_POSITIONS[number];
 
 export type StaffAccount = {
@@ -1191,7 +1191,7 @@ export type TradeGroup = { position: string; people: StaffAccount[] };
 export async function listAssignableByTrade(): Promise<TradeGroup[]> {
   const all = await listStaffAccounts('approved');
   const identity = await getSessionIdentity();
-  const SUPERVISOR_TITLES = ['Property Manager', 'Superintendent', 'Regional Manager', 'Director'];
+  const SUPERVISOR_TITLES = ['Property Manager', 'Superintendent', 'Regional Manager', 'Director', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor'];
   const operational = all.filter(a =>
     a.role === 'worker' || a.role === 'inspector' ||
     (a.role === 'management' && SUPERVISOR_TITLES.includes((a.position || '') as string))
@@ -1200,12 +1200,23 @@ export async function listAssignableByTrade(): Promise<TradeGroup[]> {
   const eligible = identity?.position === 'Borough Director'
     ? operational
     : operational.filter(a => (a.developments || []).some(d => mine.has(d.trim().toLowerCase())));
-  const order = [...STAFF_POSITIONS];
+  const sectionForPosition: Record<string, string> = {
+    'Plumber Supervisor': 'Plumber',
+    'Electric Supervisor': 'Electrician',
+    'Elevator Supervisor': 'Elevator Service',
+    'Painter Supervisor': 'Painter',
+    'Carpenter Supervisor': 'Carpenter',
+  };
+  const order = [...STAFF_POSITIONS].filter(position => !sectionForPosition[position]);
   const groups: TradeGroup[] = [];
   for (const pos of order) {
     const people = eligible
-      .filter(a => (a.position || 'Other') === pos)
-      .sort((x, y) => (x.name || '').localeCompare(y.name || ''));
+      .filter(a => (sectionForPosition[a.position || ''] || a.position || 'Other') === pos)
+      .sort((x, y) => {
+        const xSupervisor = sectionForPosition[x.position || ''] ? 0 : 1;
+        const ySupervisor = sectionForPosition[y.position || ''] ? 0 : 1;
+        return xSupervisor - ySupervisor || (x.name || '').localeCompare(y.name || '');
+      });
     if (people.length) groups.push({ position: pos, people });
   }
   // Anyone with an unrecognized/blank position lands under a trailing "Other" group.
