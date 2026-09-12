@@ -4,6 +4,10 @@ import { createServer } from "node:net";
 
 test("process lifecycle fixture", async () => {
   if (process.env.PUSH_TEST_FIXTURE_HANG === "1") {
+    if (process.env.PUSH_TEST_FIXTURE_IGNORE_SIGNALS === "1") {
+      process.on("SIGINT", () => undefined);
+      process.on("SIGTERM", () => undefined);
+    }
     const server = createServer();
     await new Promise<void>((resolve, reject) => {
       server.once("error", reject);

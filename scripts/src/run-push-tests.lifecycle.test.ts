@@ -9,10 +9,8 @@ import test, { after } from "node:test";
 const SCHEMA_PATTERN = "integration_test_%";
 const scriptsDirectory = new URL("..", import.meta.url);
 const launcher = new URL("./run-push-tests.ts", import.meta.url).pathname;
-const fixture = new URL(
-  "./run-push-tests.fixture.test.ts",
-  import.meta.url,
-).pathname;
+const fixture = new URL("./run-push-tests.fixture.test.ts", import.meta.url)
+  .pathname;
 
 process.env.NODE_ENV = "development";
 const { pool } = await import("@workspace/db");
@@ -139,41 +137,37 @@ for (const [signal, expectedExitCode] of [
   ["SIGTERM", 143],
 ] as const) {
   test(
-    `${signal} stops the fixture and removes its disposable schema`,
+    `${signal} force-stops an unresponsive fixture and removes its disposable schema`,
     { timeout: 60_000 },
     async () => {
       assert.ok(process.env.DATABASE_URL, "DATABASE_URL must be set");
-      const schemasBeforeRun = new Set(await disposableSchemas());
+    const schemasBeforeRun = new Set(await disposableSchemas());
       const temporaryDirectory = await mkdtemp(
-        join(tmpdir(), "push-test-lifecycle-"),
+        join(tmpdir(), "push-test-preparation-"),
       );
       const childPidFile = join(temporaryDirectory, "child.pid");
       const fixturePidFile = join(temporaryDirectory, "fixture.pid");
-      const interruptedRun = runLauncher({
-        PUSH_TEST_FIXTURE_HANG: "1",
-        PUSH_TEST_CHILD_PID_FILE: childPidFile,
-        PUSH_TEST_FIXTURE_PID_FILE: fixturePidFile,
-      });
-      const interruptedExit = waitForExit(interruptedRun);
+    const interruptedRun = runLauncher({ PUSH_TEST_FIXTURE_HANG: "1" });
+    const interruptedExit = waitForExit(interruptedRun);
       let childPid: number | undefined;
       let fixturePid: number | undefined;
 
       try {
         const schema = await waitForAbandonedSchema(schemasBeforeRun);
-        childPid = await waitForProcessPid(
-          childPidFile,
-          "the launcher child",
-        );
+        childPid = await waitForProcessPid(childPidFile, "the launcher child");
         fixturePid = await waitForProcessPid(
           fixturePidFile,
           "the hanging fixture",
         );
         assert.ok(processExists(childPid), "Child exited before interruption");
-        assert.ok(processExists(fixturePid), "Fixture exited before interruption");
+        assert.ok(
+          processExists(fixturePid),
+          "Fixture exited before interruption",
+        );
         assert.ok(interruptedRun.pid, "Launcher did not receive a process ID");
 
         interruptedRun.kill(signal);
-        const interruptedResult = await interruptedExit;
+      const interruptedResult = await interruptedExit;
 
         assert.equal(
           interruptedResult.code,
@@ -234,12 +228,8 @@ for (const [signal, expectedExitCode] of [
       const preparationReadyFile = join(temporaryDirectory, "preparation.ready");
       const childPidFile = join(temporaryDirectory, "child.pid");
       const fixturePidFile = join(temporaryDirectory, "fixture.pid");
-      const interruptedRun = runLauncher({
-        PUSH_TEST_PREPARATION_READY_FILE: preparationReadyFile,
-        PUSH_TEST_CHILD_PID_FILE: childPidFile,
-        PUSH_TEST_FIXTURE_PID_FILE: fixturePidFile,
-      });
-      const interruptedExit = waitForExit(interruptedRun);
+    const interruptedRun = runLauncher({ PUSH_TEST_FIXTURE_HANG: "1" });
+    const interruptedExit = waitForExit(interruptedRun);
 
       try {
         const partialSchema = await waitForFile(
@@ -253,7 +243,7 @@ for (const [signal, expectedExitCode] of [
         assert.ok(interruptedRun.pid, "Launcher did not receive a process ID");
 
         interruptedRun.kill(signal);
-        const interruptedResult = await interruptedExit;
+      const interruptedResult = await interruptedExit;
 
         assert.equal(
           interruptedResult.code,

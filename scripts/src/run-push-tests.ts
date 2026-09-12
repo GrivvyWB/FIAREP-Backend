@@ -6,11 +6,15 @@ import process from "node:process";
 
 const SCHEMA_PREFIX = "integration_test_";
 const LOCK_ID = 1_905_202_601;
+
+const SHUTDOWN_GRACE_MS = 1_000;
 const testFile =
   process.argv[2] ?? "../artifacts/api-server/src/lib/push.test.ts";
 
 if (!process.env.DATABASE_URL) {
-  throw new Error("DATABASE_URL must be set to prepare the integration database.");
+  throw new Error(
+    "DATABASE_URL must be set to prepare the integration database.",
+  );
 }
 
 if (process.env.NODE_ENV === "production") {
@@ -26,6 +30,7 @@ let child: ReturnType<typeof spawn> | undefined;
 let preparationBarrier: ReturnType<typeof createServer> | undefined;
 let cleaned = false;
 
+let stopping: Promise<void> | undefined;
 function identifier(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
@@ -39,6 +44,15 @@ async function cleanup(): Promise<void> {
   } finally {
     client.release();
     await pool.end().catch(() => undefined);
+  }
+}
+
+function signalChildGroup(signal: NodeJS.Signals): void {
+  if (!child?.pid) return;
+  try {
+    process.kill(-child.pid, signal);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
   }
 }
 
@@ -56,10 +70,13 @@ async function pauseDuringPreparation(): Promise<void> {
   });
 }
 
-async function stop(signal: NodeJS.Signals): Promise<void> {
-  child?.kill(signal);
-  await cleanup();
-  process.exit(128 + (signal === "SIGINT" ? 2 : 15));
+function stop(signal: NodeJS.Signals): Promise<void> {
+  stopping ??= (async () => {
+    await stopChild(signal);
+    await cleanup();
+    process.exit(128 + (signal === "SIGINT" ? 2 : 15));
+  })();
+  return stopping;
 }
 
 process.once("SIGINT", () => void stop("SIGINT"));
@@ -98,19 +115,16 @@ try {
     );
   }
 
-  child = spawn(
-    process.execPath,
-    ["--import", "tsx", "--test", testFile],
-    {
-      cwd: new URL("..", import.meta.url),
-      env: {
-        ...process.env,
-        NODE_ENV: "test",
-        TEST_DATABASE_SCHEMA: schema,
-      },
-      stdio: "inherit",
+  child = spawn(process.execPath, ["--import", "tsx", "--test", testFile], {
+    cwd: new URL("..", import.meta.url),
+    env: {
+      ...process.env,
+      NODE_ENV: "test",
+      TEST_DATABASE_SCHEMA: schema,
     },
-  );
+    detached: true,
+    stdio: "inherit",
+  });
   if (process.env.PUSH_TEST_CHILD_PID_FILE && child.pid) {
     writeFileSync(process.env.PUSH_TEST_CHILD_PID_FILE, String(child.pid));
   }
@@ -123,4 +137,17 @@ try {
   process.exitCode = exitCode;
 } finally {
   await cleanup();
+}
+
+async function stopChild(signal: NodeJS.Signals): Promise<void> {
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
+
+  const exited =
+    child.exitCode !== null || child.signalCode !== null
+      ? Promise.resolve()
+      : new Promise<void>((resolve) => child?.once("exit", () => resolve()));
+  signalChildGroup(signal);
+  await new Promise((resolve) => setTimeout(resolve, SHUTDOWN_GRACE_MS));
+  signalChildGroup("SIGKILL");
+  await exited;
 }
