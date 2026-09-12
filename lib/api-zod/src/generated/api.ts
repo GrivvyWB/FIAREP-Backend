@@ -1287,7 +1287,9 @@ export const RequestFileUploadUrlBody = zod.object({
   "kind": zod.enum(['room-photo', 'inspection-evidence', 'completion-photo', 'scan', 'procurement-scope', 'resident-report-photo']),
   "name": zod.string().min(1).max(requestFileUploadUrlBodyNameMax),
   "size": zod.number().int().min(1).max(requestFileUploadUrlBodySizeMax),
-  "contentType": zod.string().min(1).max(requestFileUploadUrlBodyContentTypeMax)
+  "contentType": zod.string().min(1).max(requestFileUploadUrlBodyContentTypeMax),
+  "entity": zod.string().min(1).max(100),
+  "recordId": zod.string().min(1).max(255)
 })
 
 export const requestFileUploadUrlResponseFileSizeMax = 52428800;

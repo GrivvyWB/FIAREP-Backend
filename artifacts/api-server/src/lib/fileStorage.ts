@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import type { Actor } from "./auth";
+import { canReadEntityRecord } from "./domain";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 const UPLOAD_TTL_SECONDS = 15 * 60;
@@ -27,6 +29,85 @@ export type StoredFileEnvelope = {
 };
 
 type SignedMethod = "GET" | "PUT";
+
+export type FileOwnershipRecord = {
+  tenantId: string;
+  objectPath: string;
+  entity: string;
+  recordId: string;
+};
+
+export type FileOwnerRecord = {
+  tenantId: string;
+  entity: string;
+  id: string;
+  deleted: boolean;
+  development: string | null;
+  state: Record<string, unknown>;
+  createdBy: string | null;
+};
+
+/** Legacy records are consulted only while claiming an unowned path. */
+export function stateReferencesObjectPath(
+  value: unknown,
+  objectPath: string,
+  seen = new Set<object>(),
+): boolean {
+  if (!value || typeof value !== "object") return false;
+  if (seen.has(value)) return false;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    return value.some((item) => stateReferencesObjectPath(item, objectPath, seen));
+  }
+  const record = value as Record<string, unknown>;
+  if (record["objectPath"] === objectPath) return true;
+  return Object.values(record).some((item) =>
+    stateReferencesObjectPath(item, objectPath, seen),
+  );
+}
+
+export function legacyFileOwnerCandidates(
+  records: FileOwnerRecord[],
+  objectPath: string,
+): FileOwnerRecord[] {
+  return records.filter((record) => stateReferencesObjectPath(record.state, objectPath));
+}
+
+export function isSafeTenantObjectPath(
+  tenantId: string,
+  objectPath: string,
+): boolean {
+  const prefix = `/objects/tenants/${safeSegment(tenantId)}/`;
+  let decodedPath = objectPath;
+  try {
+    decodedPath = decodeURIComponent(objectPath);
+  } catch {
+    return false;
+  }
+  return objectPath.startsWith(prefix) &&
+    !objectPath.includes("..") &&
+    !objectPath.includes("\\") &&
+    !decodedPath.includes("..") &&
+    !decodedPath.includes("\\");
+}
+
+/**
+ * Authorizes the immutable ownership row against the exact current owner
+ * record. No mutable JSON file references participate in this decision.
+ */
+export function canReadOwnedFile(
+  actor: Actor,
+  requestedObjectPath: string,
+  ownership: FileOwnershipRecord,
+  owner: FileOwnerRecord,
+): boolean {
+  return ownership.tenantId === actor.tenantId &&
+    ownership.objectPath === requestedObjectPath &&
+    ownership.entity === owner.entity &&
+    ownership.recordId === owner.id &&
+    owner.tenantId === actor.tenantId &&
+    canReadEntityRecord(actor, owner);
+}
 
 function privateObjectDir(): string {
   const value = process.env["PRIVATE_OBJECT_DIR"]?.replace(/\/+$/, "");
@@ -78,8 +159,7 @@ async function signObjectUrl(
 
 export class ReplitFileStorage {
   private fullPath(tenantId: string, objectPath: string): string {
-    const prefix = `/objects/tenants/${safeSegment(tenantId)}/`;
-    if (!objectPath.startsWith(prefix) || objectPath.includes("..")) {
+    if (!isSafeTenantObjectPath(tenantId, objectPath)) {
       throw new Error("File does not belong to this tenant");
     }
     return `${privateObjectDir()}/${objectPath.slice("/objects/".length)}`;

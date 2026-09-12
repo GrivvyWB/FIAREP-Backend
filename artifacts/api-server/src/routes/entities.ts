@@ -5,7 +5,9 @@ import { db, entityRecords, publicAccessCodes, staffAccounts } from "@workspace/
 import { audit, notify } from "../lib/audit";
 import {
   ENTITIES,
+  canAssignStaff,
   canCreateEntity,
+  canPerformAssignedWorkflowAction,
   canDeleteEntity,
   canMutateEntity,
   canPerformEntityAction,
@@ -13,6 +15,7 @@ import {
   entityDevelopmentAllowed,
   generatedCode,
   isBoroughDirector,
+  isAssignmentAuthority,
   isValidEntityTransition,
   patchesWorkflowManagedFields,
   recordId,
@@ -37,30 +40,107 @@ function stateOf(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-const TRADE_SUPERVISOR_POSITIONS = new Set([
-  "Plumber Supervisor",
-  "Electric Supervisor",
-  "Elevator Supervisor",
-  "Painter Supervisor",
-  "Carpenter Supervisor",
+const ASSIGNMENT_FIELDS = new Set([
+  "assignedStaffId",
+  "assignedUnitId",
+  "assignedTo",
+  "assignedStaffName",
+  "assignedToName",
 ]);
 
-function assignmentTargetAllowed(
+function containsAssignmentFields(state: Record<string, unknown>): boolean {
+  return Object.entries(state).some(([key, value]) =>
+    ASSIGNMENT_FIELDS.has(key) &&
+    value !== undefined &&
+    (typeof value !== "string" || value.trim().length > 0),
+  );
+}
+
+function hasAssignmentFields(state: Record<string, unknown>): boolean {
+  return Object.keys(state).some((key) => ASSIGNMENT_FIELDS.has(key));
+}
+
+async function canonicalizeAssignment(
   actor: ReturnType<typeof actorFrom>,
-  target: typeof staffAccounts.$inferSelect,
+  entity: string,
+  state: Record<string, unknown>,
   development: string | null,
-) {
-  if (target.id === actor.id || target.position === "Borough Director") return false;
-  if (!["management", "worker", "inspector", "emergency"].includes(target.role)) return false;
-  if (development && !target.developments.includes(development)) return false;
-  if (isBoroughDirector(actor)) return true;
-  if (!target.developments.length ||
-      !target.developments.every((value) => actor.developments.includes(value))) return false;
-  if (target.role === "management") {
-    return actor.position === "Regional Director" ||
-      TRADE_SUPERVISOR_POSITIONS.has(target.position);
+): Promise<{ state: Record<string, unknown> | null; error?: string }> {
+  if (!["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
+    .includes(entity) &&
+    containsAssignmentFields(state) &&
+    !isAssignmentAuthority(actor)) {
+    return {
+      state: null,
+      error: "Only authorized supervisors may assign staff",
+    };
   }
-  return ["worker", "inspector", "emergency"].includes(target.role);
+  if (
+    !["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
+      .includes(entity) ||
+    !containsAssignmentFields(state)
+  ) {
+    return { state };
+  }
+  const rawId = state["assignedStaffId"];
+  if (typeof rawId !== "string" || !rawId.trim()) {
+    return {
+      state: null,
+      error: "Assignments must use an approved canonical staff id",
+    };
+  }
+  const [target] = await db
+    .select()
+    .from(staffAccounts)
+    .where(and(
+      eq(staffAccounts.id, rawId.trim()),
+      eq(staffAccounts.tenantId, actor.tenantId),
+      eq(staffAccounts.status, "approved"),
+    ))
+    .limit(1);
+  if (!target || !canAssignStaff(actor, target, development)) {
+    return {
+      state: null,
+      error: "Select an operational staff member from your authorized group",
+    };
+  }
+  if (entity === "emergency-jobs") {
+    const rawUnitId = state["assignedUnitId"];
+    if (
+      rawUnitId !== undefined &&
+      (typeof rawUnitId !== "string" || !rawUnitId.trim())
+    ) {
+      return {
+        state: null,
+        error: "Emergency assignments must use an approved canonical unit id",
+      };
+    }
+    if (typeof rawUnitId === "string" && rawUnitId.trim()) {
+      const [unit] = await db
+        .select({ id: entityRecords.id })
+        .from(entityRecords)
+        .where(and(
+          eq(entityRecords.id, rawUnitId.trim()),
+          eq(entityRecords.entity, "emergency-units"),
+          eq(entityRecords.tenantId, actor.tenantId),
+          eq(entityRecords.deleted, false),
+        ))
+        .limit(1);
+      if (!unit) {
+        return {
+          state: null,
+          error: "Select an existing emergency unit",
+        };
+      }
+    }
+  }
+  return {
+    state: {
+      ...state,
+      assignedStaffId: target.id,
+      assignedTo: target.name,
+    },
+  };
 }
 
 function outward(
@@ -258,11 +338,22 @@ router.post("/v1/:entity", async (req, res, next) => {
       ? { ...rawState, requesterStaffId: actor.id }
       : rawState,
   );
+  const canonicalCreated = await canonicalizeAssignment(
+    actor,
+    entity,
+    createdState,
+    development,
+  );
+  if (!canonicalCreated.state) {
+    res.status(403).json({ error: canonicalCreated.error });
+    return;
+  }
+  const persistedCreatedState = canonicalCreated.state;
   if (entity === "procurement") {
     // Preserve a server-derived notification target; clients must not be able
     // to impersonate another CPM in workflow routing.
-    createdState["cpmName"] = actor.name;
-    createdState["cpmId"] = actor.id;
+    persistedCreatedState["cpmName"] = actor.name;
+    persistedCreatedState["cpmId"] = actor.id;
   }
   const [created] = await db
     .insert(entityRecords)
@@ -272,7 +363,7 @@ router.post("/v1/:entity", async (req, res, next) => {
       entity,
       projectId,
       development,
-      state: withGeneratedFields(entity, createdState),
+      state: withGeneratedFields(entity, persistedCreatedState),
       createdBy: actor.id,
       createdAt: now,
       updatedAt: now,
@@ -355,6 +446,16 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     });
     return;
   }
+  if (
+    hasAssignmentFields(patch) &&
+    actor.role !== "management" &&
+    actor.role !== "administrator"
+  ) {
+    res.status(403).json({
+      error: "Only authorized supervisors may change an assignment",
+    });
+    return;
+  }
   const [current] = await db
     .select()
     .from(entityRecords)
@@ -397,7 +498,17 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     });
     return;
   }
-  const updatedState = { ...current.state, ...patch };
+  const canonicalPatch = await canonicalizeAssignment(
+    actor,
+    entity,
+    patch,
+    current.development,
+  );
+  if (!canonicalPatch.state) {
+    res.status(403).json({ error: canonicalPatch.error });
+    return;
+  }
+  const updatedState = { ...current.state, ...canonicalPatch.state };
   const updatedDevelopment =
     typeof updatedState["development"] === "string"
       ? updatedState["development"]
@@ -509,6 +620,26 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     res.status(400).json({ error: "Unsupported workflow action" });
     return;
   }
+  const body = stateOf(req.body) ?? {};
+  if (
+    hasAssignmentFields(body) &&
+    !(
+      entity === "resident-reports" &&
+      action === "assign" &&
+      Object.keys(body)
+        .filter((key) => ASSIGNMENT_FIELDS.has(key))
+        .every((key) => key === "assignedStaffId" || key === "assignedTo")
+    )
+  ) {
+    res.status(403).json({
+      error: "Assignments must be changed through the dedicated assignment action",
+    });
+    return;
+  }
+  if (!canPerformAssignedWorkflowAction(actor, entity, action, current.state)) {
+    res.status(403).json({ error: "This workflow action is restricted to the assigned staff member" });
+    return;
+  }
   if (!canPerformEntityAction(actor, entity, action, current.state)) {
     res.status(403).json({ error: "Not allowed to perform this workflow action" });
     return;
@@ -524,7 +655,6 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     });
     return;
   }
-  const body = stateOf(req.body) ?? {};
   if (entity === "resident-reports" && action === "assign") {
     const assignedStaffId = typeof body["assignedStaffId"] === "string"
       ? body["assignedStaffId"]
@@ -536,11 +666,14 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
           eq(staffAccounts.status, "approved"),
         )).limit(1)
       : [];
-    if (!target || !assignmentTargetAllowed(actor, target, current.development)) {
+    if (!target || !canAssignStaff(actor, target, current.development)) {
       res.status(403).json({ error: "Select an operational staff member from your authorized group" });
       return;
     }
+    body["assignedStaffId"] = target.id;
     body["assignedTo"] = target.name;
+    delete body["assignedStaffName"];
+    delete body["assignedToName"];
   }
   if (patchesWorkflowManagedFields(entity, body)) {
     res.status(403).json({

@@ -65,7 +65,7 @@ export default function Notifications() {
       // Elevator mechanic: open Elevator Services keyed to their elevator job.
       if (pos === 'elevator service') {
         const act = await getCurrentActor();
-        const jobs = await listElevatorJobsForMechanic((act && act.name) || '').catch(() => []);
+        const jobs = await listElevatorJobsForMechanic((act && act.name) || '', act?.id).catch(() => []);
         const match = jobs.find((j) => (j.address || '').trim().toLowerCase() === (v ? (v.address || '') : '').trim().toLowerCase()) || jobs[0];
         if (match) buttons.push({ text: 'Open Elevator Services', onPress: () => router.push('/project/elevator?projectId=' + encodeURIComponent(match.id)) });
       }

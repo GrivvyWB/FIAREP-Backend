@@ -1,16 +1,24 @@
 import { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { createEmergencyJob, listDevelopmentNames, listEmergencyUnits, type EmergencyUnit } from '../lib/store';
+import { createEmergencyJob, listDevelopmentNames, listEmergencyUnits, listEmergencyStaff, type EmergencyUnit, type StaffAccount } from '../lib/store';
 import AddressInput from '../components/AddressInput';
 import { ui, ACCENT } from '../lib/ui';
 
 export default function AssignEmergency() {
   const router = useRouter();
   const [truck, setTruck] = useState('');
+  const [truckId, setTruckId] = useState('');
   const [units, setUnits] = useState<EmergencyUnit[]>([]);
+  const [operators, setOperators] = useState<StaffAccount[]>([]);
+  const [operator, setOperator] = useState('');
+  const [operatorId, setOperatorId] = useState('');
   const [truckPicker, setTruckPicker] = useState(false);
-  useFocusEffect(useCallback(() => { listEmergencyUnits().then(setUnits); }, []));
+  const [operatorPicker, setOperatorPicker] = useState(false);
+  useFocusEffect(useCallback(() => {
+    listEmergencyUnits().then(setUnits);
+    listEmergencyStaff().then(setOperators);
+  }, []));
   const [development, setDevelopment] = useState('');
   const [address, setAddress] = useState('');
   const [location, setLocation] = useState('');
@@ -23,12 +31,13 @@ export default function AssignEmergency() {
   const devs = devQuery.trim() ? allDevs.filter((d) => d.toLowerCase().startsWith(devQuery.trim().toLowerCase())) : allDevs;
 
   async function onAssign() {
-    if (!truck.trim()) { Alert.alert('Truck required', 'Pick a registered truck.'); return; }
+    if (!truck.trim() || !truckId) { Alert.alert('Truck required', 'Pick a registered truck.'); return; }
+    if (!operatorId) { Alert.alert('Emergency staff required', 'Pick the canonical emergency staff member assigned to this unit.'); return; }
     if (!development.trim() && !address.trim()) { Alert.alert('Location required', 'Pick a development or enter an address.'); return; }
     if (!issue.trim()) { Alert.alert('Issue required', 'Describe the emergency.'); return; }
     setBusy(true);
     try {
-      const job = await createEmergencyJob(truck.trim(), development.trim(), address.trim(), issue.trim(), location.trim());
+      const job = await createEmergencyJob(truck.trim(), development.trim(), address.trim(), issue.trim(), location.trim(), truckId, operatorId);
       Alert.alert('Emergency assigned', truck.trim() + ' has been assigned ' + job.emId + '.', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (e: any) { Alert.alert('Failed', e?.message ?? 'Could not assign.'); }
     finally { setBusy(false); }
@@ -43,6 +52,10 @@ export default function AssignEmergency() {
       <Text style={[ui.label, { marginTop: 10 }]}>Emergency unit / truck</Text>
       <Pressable style={ui.input} onPress={() => setTruckPicker(true)}>
         <Text style={{ color: truck ? '#000' : '#999' }}>{truck || 'Pick a registered truck'}</Text>
+      </Pressable>
+      <Text style={[ui.label, { marginTop: 12 }]}>Assigned emergency staff</Text>
+      <Pressable style={ui.input} onPress={() => setOperatorPicker(true)}>
+        <Text style={{ color: operator ? '#000' : '#999' }}>{operator || 'Pick canonical emergency staff'}</Text>
       </Pressable>
 
       <Text style={[ui.label, { marginTop: 12 }]}>Development</Text>
@@ -71,13 +84,31 @@ export default function AssignEmergency() {
             <ScrollView>
               {units.length === 0 && <Text style={[ui.listSub, { padding: 16 }]}>No trucks registered. Register one in Manage Trucks first.</Text>}
               {units.map((u) => (
-                <Pressable key={u.id} onPress={() => { setTruck(u.name); setTruckPicker(false); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee', flexDirection: 'row', justifyContent: 'space-between' }}>
+                <Pressable key={u.id} onPress={() => { setTruck(u.name); setTruckId(u.id); setTruckPicker(false); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee', flexDirection: 'row', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 15 }}>{u.name}</Text>
                   <Text style={{ fontSize: 13, color: ACCENT }}>{u.code}</Text>
                 </Pressable>
               ))}
             </ScrollView>
             <Pressable onPress={() => setTruckPicker(false)} style={{ padding: 16 }}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Cancel</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={operatorPicker} transparent animationType="slide" onRequestClose={() => setOperatorPicker(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
+            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>Pick emergency staff</Text>
+            <ScrollView>
+              {operators.length === 0 && <Text style={[ui.listSub, { padding: 16 }]}>No approved emergency staff accounts.</Text>}
+              {operators.map((a) => (
+                <Pressable key={a.id} onPress={() => { setOperator(a.name); setOperatorId(a.id); setOperatorPicker(false); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee' }}>
+                  <Text style={{ fontSize: 15 }}>{a.name}</Text>
+                  <Text style={{ fontSize: 13, color: '#666' }}>{a.position || 'Emergency staff'}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable onPress={() => setOperatorPicker(false)} style={{ padding: 16 }}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Cancel</Text></Pressable>
           </View>
         </View>
       </Modal>

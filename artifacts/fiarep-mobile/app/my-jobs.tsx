@@ -25,15 +25,15 @@ export default function MyJobs() {
 
   const load = useCallback(() => {
     getCurrentActor().then(async (a) => {
-      const nm = (a && a.name) || '';
-      if (!nm) return;
-      setJobs(await listRoutedInspectionsFor(nm));
+       const nm = (a && a.name) || '';
+       if (!nm || !a?.id) return;
+       setJobs(await listRoutedInspectionsFor(nm));
       // Lenient development filter: show jobs in my assigned developments PLUS
       // any untagged job (no development) so nothing assigned to me vanishes.
       const myDevs = (await developmentsForStaff(a.name || '').catch(() => [])).map((d) => (d || '').trim().toLowerCase()).filter(Boolean);
       const inMyDevs = (dev?: string) => { const d = (dev || '').trim().toLowerCase(); return !d || myDevs.length === 0 || myDevs.includes(d); };
       const all = await listResidentReports();
-      setResJobs(all.filter((r) => r.status !== 'resolved' && (r.assignedTo || '').trim().toLowerCase() === nm.toLowerCase() && inMyDevs(r.development)));
+       setResJobs(all.filter((r) => r.status !== 'resolved' && r.assignedStaffId === a.id && inMyDevs(r.development)));
     });
   }, []);
   useFocusEffect(load);

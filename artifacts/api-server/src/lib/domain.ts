@@ -190,6 +190,81 @@ export function entityDevelopmentAllowed(
   return developmentAllowed(actor, development);
 }
 
+type EntityRecordAuthorizationState = {
+  entity: string;
+  development: string | null;
+  state: Record<string, unknown>;
+  createdBy: string | null;
+  deleted: boolean;
+};
+
+function privateRecordAllowed(
+  actor: Actor,
+  row: EntityRecordAuthorizationState,
+): boolean {
+  if (actor.role === "resident") {
+    return row.entity === "resident-reports" && row.createdBy === actor.id;
+  }
+  if (
+    actor.role === "vendor" &&
+    (row.entity === "procurement-bids" || row.entity === "vendor-quotes")
+  ) {
+    return row.createdBy === actor.id;
+  }
+  return true;
+}
+
+function emergencyRecordAllowed(
+  actor: Actor,
+  row: EntityRecordAuthorizationState,
+): boolean {
+  if (actor.role !== "emergency") return true;
+  const normalizedActor = actor.name.trim().toLowerCase().replace(/\s+/g, " ");
+  return (row.entity === "emergency-jobs" || row.entity === "emergency-units") &&
+    [
+      row.state["assignedTo"],
+      row.state["assignedStaffId"],
+      row.state["assignedUnitId"],
+      row.state["unitId"],
+      row.state["name"],
+      row.state["unitName"],
+    ].some(
+      (value) =>
+        typeof value === "string" &&
+        (value === actor.id ||
+          value.trim().toLowerCase().replace(/\s+/g, " ") === normalizedActor),
+    );
+}
+
+/**
+ * The complete record-level read boundary. File authorization uses this
+ * predicate rather than only checking the tenant or entity name, so objects
+ * cannot become a cross-development side channel.
+ */
+export function canReadEntityRecord(
+  actor: Actor,
+  row: EntityRecordAuthorizationState,
+): boolean {
+  return !row.deleted &&
+    canReadEntity(actor, row.entity) &&
+    entityDevelopmentAllowed(actor, row.entity, row.development) &&
+    privateRecordAllowed(actor, row) &&
+    procurementRecordAllowed(actor, row) &&
+    emergencyRecordAllowed(actor, row);
+}
+
+/**
+ * Uploads are attached to an existing record before an object URL is signed.
+ * Mutability is intentional here: a read-only role must not be able to attach
+ * arbitrary new objects to a record it can merely see.
+ */
+export function canUploadToEntityRecord(
+  actor: Actor,
+  row: EntityRecordAuthorizationState,
+): boolean {
+  return canReadEntityRecord(actor, row) && canMutateEntity(actor, row.entity);
+}
+
 export function canCreateEntity(actor: Actor, entity: string): boolean {
   if (actor.role === "emergency") return false;
   if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
@@ -243,6 +318,129 @@ export function canDeleteEntity(
   return actor.role === "administrator" || actor.role === "management";
 }
 
+const ASSIGNABLE_STAFF_ROLES = new Set([
+  "management",
+  "worker",
+  "inspector",
+  "emergency",
+]);
+
+const TRADE_SUPERVISOR_POSITIONS = new Set([
+  "Plumber Supervisor",
+  "Electric Supervisor",
+  "Elevator Supervisor",
+  "Painter Supervisor",
+  "Carpenter Supervisor",
+]);
+
+/**
+ * Assignment authority is intentionally narrower than generic mutation
+ * authority.  Field staff can edit their own non-workflow data, but cannot
+ * introduce an arbitrary assignee while creating or editing a job.
+ */
+export function isAssignmentAuthority(actor: Actor): boolean {
+  return actor.role === "management" ||
+    actor.role === "administrator" ||
+    isBoroughDirector(actor);
+}
+
+export function canAssignStaff(
+  actor: Actor,
+  target: {
+    id: string;
+    role: string;
+    position: string | null;
+    developments: string[];
+  },
+  development: string | null,
+): boolean {
+  if (!isAssignmentAuthority(actor)) return false;
+  if (target.id === actor.id || target.position === "Borough Director") return false;
+  if (!ASSIGNABLE_STAFF_ROLES.has(target.role)) return false;
+  if (development && !target.developments.includes(development)) return false;
+  if (isBoroughDirector(actor)) return true;
+  if (
+    !target.developments.length ||
+    !target.developments.every((value) => actor.developments.includes(value))
+  ) {
+    return false;
+  }
+  if (target.role === "management") {
+    return actor.position === "Regional Director" ||
+      TRADE_SUPERVISOR_POSITIONS.has(target.position ?? "");
+  }
+  return ["worker", "inspector", "emergency"].includes(target.role);
+}
+
+/**
+ * Assignment identity is deliberately separate from the display name.  Older
+ * records may only have assignedTo (or another mutable label); those records
+ * remain readable, but cannot establish ownership for an operational worker.
+ */
+export type NormalizedAssignment = {
+  assignedStaffId: string | null;
+  hasLegacyAssignment: boolean;
+};
+
+export function normalizeAssignment(
+  state: Record<string, unknown>,
+): NormalizedAssignment {
+  const assignedStaffId =
+    typeof state["assignedStaffId"] === "string" &&
+    state["assignedStaffId"].trim()
+      ? state["assignedStaffId"].trim()
+      : null;
+  const hasLegacyAssignment =
+    assignedStaffId === null &&
+    ["assignedTo", "assignedStaffName", "assignedToName"].some(
+      (key) => typeof state[key] === "string" && state[key].trim().length > 0,
+    );
+  return { assignedStaffId, hasLegacyAssignment };
+}
+
+const ASSIGNMENT_REQUIRED_ACTIONS = new Set([
+  "start",
+  "on-my-way",
+  "progress",
+  "complete",
+]);
+
+/**
+ * Operational actions are ownership-bound.  Supervisors can override a
+ * canonical assignment, but procurement is intentionally never a supervisor
+ * for operational work.  Name-only legacy records fail closed for workers,
+ * inspectors, and emergency staff because a display name is not an identity.
+ */
+export function canPerformAssignedWorkflowAction(
+  actor: Actor,
+  entity: string,
+  action: string,
+  state: Record<string, unknown>,
+): boolean {
+  if (!ASSIGNMENT_REQUIRED_ACTIONS.has(action)) return true;
+  if (
+    ![
+      "resident-reports",
+      "building-violations",
+      "elevator-jobs",
+      "emergency-jobs",
+    ].includes(entity)
+  ) {
+    return true;
+  }
+  if (
+    actor.role === "management" ||
+    actor.role === "administrator"
+  ) {
+    return true;
+  }
+  if (!["worker", "inspector", "emergency"].includes(actor.role)) {
+    return false;
+  }
+  const assignment = normalizeAssignment(state);
+  return assignment.assignedStaffId === actor.id;
+}
+
 export function canPerformEntityAction(
   actor: Actor,
   entity: string,
@@ -252,10 +450,14 @@ export function canPerformEntityAction(
   if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
 
   const isManagement = isOrdinaryManagement(actor);
+  const isSupervisor =
+    actor.role === "management" || actor.role === "administrator";
   const isFieldStaff =
     actor.role === "worker" || actor.role === "inspector";
   if (actor.role === "emergency") {
-    return entity === "emergency-jobs" && ["on-my-way", "start", "complete"].includes(action);
+    return entity === "emergency-jobs" &&
+      ["on-my-way", "start", "complete"].includes(action) &&
+      canPerformAssignedWorkflowAction(actor, entity, action, state);
   }
 
   if (entity === "procurement") {
@@ -275,14 +477,18 @@ export function canPerformEntityAction(
 
   if (entity === "resident-reports") {
     if (action === "assign" || action === "resolve" || action === "clear") {
-      return isManagement;
+      return action === "assign" ? isAssignmentAuthority(actor) : isManagement;
     }
-    return action === "start" && isFieldStaff;
+     return action === "start" &&
+       (isFieldStaff || isSupervisor) &&
+       canPerformAssignedWorkflowAction(actor, entity, action, state);
   }
 
   if (entity === "building-violations") {
     if (["approve", "route", "clear"].includes(action)) return isManagement;
-    return action === "complete" && isFieldStaff;
+    return action === "complete" &&
+      (isFieldStaff || isSupervisor) &&
+      canPerformAssignedWorkflowAction(actor, entity, action, state);
   }
 
   if (entity === "leave-requests") {
@@ -294,7 +500,8 @@ export function canPerformEntityAction(
   if (entity === "elevator-jobs" || entity === "emergency-jobs") {
     return (
       ["on-my-way", "start", "complete"].includes(action) &&
-      (isManagement || isFieldStaff)
+      (isSupervisor || isFieldStaff) &&
+      canPerformAssignedWorkflowAction(actor, entity, action, state)
     );
   }
 
@@ -335,6 +542,9 @@ const WORKFLOW_MANAGED_FIELDS = new Set([
   "resolvedAt",
   "completedAt",
   "cancelledAt",
+  "completed",
+  "completionStatus",
+  "completionDate",
 ]);
 
 export function patchesWorkflowManagedFields(

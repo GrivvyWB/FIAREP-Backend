@@ -177,7 +177,9 @@ export default function Management() {
     const name = (workerNames[r.id] || '').trim();
     if (!name) { Alert.alert('Staff member name required', 'Enter a staff member name to assign.'); return; }
     try {
-      await assignResidentReport(r.id, name);
+      const selected = staffList.find((staff) => staff.name.trim().toLowerCase() === name.toLowerCase());
+      if (!selected) throw new Error('Choose an approved staff member from the assignment list.');
+      await assignResidentReport(r.id, selected.id, selected.name);
       setWorkerNames((m) => ({ ...m, [r.id]: '' }));
       load();
     } catch (e: any) { Alert.alert('Assign failed', e?.message ?? 'Could not assign.'); }
@@ -191,7 +193,7 @@ export default function Management() {
   async function assignStaff(a: StaffAccount) {
     if (!assignFor) return;
     try {
-      await assignResidentReport(assignFor, a.name);
+      await assignResidentReport(assignFor, a.id, a.name);
       setAssignFor(null); setAssignPos(null); setStaffList([]);
       load();
     } catch (e: any) { Alert.alert('Assign failed', e?.message ?? 'Could not assign.'); }

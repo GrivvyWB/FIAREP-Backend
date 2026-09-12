@@ -51,6 +51,7 @@ export function photoUri(stored: string): string {
 export async function uploadPhoto(
   stored: string,
   kind: 'room-photo' | 'completion-photo' | 'inspection-evidence' = 'room-photo',
+  owner: { entity: string; recordId: string },
 ): Promise<{ id: string; objectPath: string; name: string; contentType: string }> {
   const uri = photoUri(stored);
   const info = await FileSystem.getInfoAsync(uri);
@@ -61,6 +62,8 @@ export async function uploadPhoto(
     name,
     size: info.size,
     contentType: 'image/jpeg',
+    entity: owner.entity,
+    recordId: owner.recordId,
   });
   const result = await FileSystem.uploadAsync(requested.uploadUrl, uri, {
     httpMethod: 'PUT',

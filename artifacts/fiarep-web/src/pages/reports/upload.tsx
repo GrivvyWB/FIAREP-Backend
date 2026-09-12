@@ -1,7 +1,8 @@
 import { useState, useRef } from "react";
 import { useLocation } from "wouter";
-import { useRequestFileUploadUrl, useCreateEntityRecord } from "@workspace/api-client-react";
+import { useRequestFileUploadUrl, useCreateEntityRecord, useUpdateEntityRecord, useListEntityRecords } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,14 +14,28 @@ import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 export default function UploadReport() {
   const [, setLocation] = useLocation();
   const { toast } = useToast();
+  const { staff } = useAuth();
   const queryClient = useQueryClient();
   const getUploadUrl = useRequestFileUploadUrl();
   const createRecord = useCreateEntityRecord();
+  const updateRecord = useUpdateEntityRecord();
+  const projects = useListEntityRecords("projects");
   
   const [file, setFile] = useState<File | null>(null);
   const [title, setTitle] = useState("");
+  const [development, setDevelopment] = useState(
+    staff?.developments?.length === 1 ? staff.developments[0]! : "",
+  );
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const developments = [
+    ...new Set([
+      ...(staff?.developments ?? []),
+      ...((projects.data ?? [])
+        .map((project) => project.development)
+        .filter((value): value is string => !!value)),
+    ]),
+  ].sort();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
@@ -37,18 +52,38 @@ export default function UploadReport() {
 
     try {
       setIsUploading(true);
-      
-      // 1. Get presigned upload URL
+
+      const id = crypto.randomUUID();
+      if (!development) {
+        throw new Error("Select an authorized development.");
+      }
+
+      // 1. Create the authorized owner record before requesting file access.
+      const created = await createRecord.mutateAsync({
+        entity: "resident-reports",
+        data: {
+          id,
+          state: {
+            title: title || file.name,
+          },
+          development,
+          version: 1,
+        }
+      });
+
+      // 2. Get a presigned upload URL bound to that record.
       const { uploadUrl, file: storedFile } = await getUploadUrl.mutateAsync({
         data: {
           kind: "inspection-evidence",
           name: file.name,
           size: file.size,
           contentType: file.type || "application/octet-stream",
+          entity: "resident-reports",
+          recordId: id,
         }
       });
 
-      // 2. Upload file directly to S3 (raw fetch to avoid auth interceptors)
+      // 3. Upload file directly to storage.
       const uploadRes = await fetch(uploadUrl, {
         method: "PUT",
         body: file,
@@ -61,18 +96,17 @@ export default function UploadReport() {
         throw new Error("Failed to upload file to storage.");
       }
 
-      // 3. Create report entity
-      const id = crypto.randomUUID();
-      await createRecord.mutateAsync({
+      // 4. Attach the uploaded object to its authorized owner record.
+      await updateRecord.mutateAsync({
         entity: "resident-reports",
+        id,
         data: {
           id,
           state: {
-            title: title || file.name,
             fileId: storedFile.id,
-            status: "uploaded",
+            remoteFiles: [storedFile],
           },
-          version: 1,
+          version: created.version,
         }
       });
 
@@ -117,6 +151,21 @@ export default function UploadReport() {
               required
               data-testid="input-report-title"
             />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Development</Label>
+            <select
+              className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm"
+              value={development}
+              onChange={(event) => setDevelopment(event.target.value)}
+              required
+            >
+              <option value="" disabled />
+              {developments.map((value) => (
+                <option key={value} value={value}>{value}</option>
+              ))}
+            </select>
           </div>
 
           <div className="space-y-2">

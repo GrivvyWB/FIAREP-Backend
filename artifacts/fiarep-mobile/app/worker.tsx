@@ -9,6 +9,7 @@ import {
   assignmentIdleDays,
   addResidentUpdate,
   listStaffAccounts,
+  getCurrentActor,
   type ResidentReport,
   type StaffAccount,
 } from '../lib/store';
@@ -34,6 +35,7 @@ function fmt(iso: string): string {
 
 export default function Worker() {
   const [name, setName] = useState('');
+  const [actorId, setActorId] = useState('');
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [reports, setReports] = useState<ResidentReport[]>([]);
   const [staff, setStaff] = useState<StaffAccount[]>([]);
@@ -42,6 +44,12 @@ export default function Worker() {
   const load = useCallback(() => {
     listResidentReports().then(setReports);
     listStaffAccounts('approved').then(setStaff).catch(() => {});
+    getCurrentActor().then((actor) => {
+      if (actor?.id) {
+        setActorId(actor.id);
+        setName(actor.name || '');
+      }
+    }).catch(() => {});
   }, []);
   useFocusEffect(load);
 
@@ -58,12 +66,12 @@ export default function Worker() {
     if (names.some((n) => n.toLowerCase() === q)) return [] as string[];
     return names.filter((n) => n.toLowerCase().includes(q)).slice(0, 8);
   })();
-  const jobs = myName
+  const jobs = actorId
     ? sortByUrgency(
         reports.filter(
           (r) =>
             r.status !== 'resolved' &&
-            (r.assignedTo || '').trim().toLowerCase() === myName.toLowerCase()
+            r.assignedStaffId === actorId
         )
       )
     : [];

@@ -7,11 +7,17 @@ import {
   canMutateEntity,
   canDeleteEntity,
   canPerformEntityAction,
+  canPerformAssignedWorkflowAction,
+  canAssignStaff,
+  isAssignmentAuthority,
+  normalizeAssignment,
   entityDevelopmentAllowed,
   isValidEntityTransition,
   patchesWorkflowManagedFields,
   withInitialWorkflowState,
   procurementRecordAllowed,
+  canReadEntityRecord,
+  canUploadToEntityRecord,
 } from "./domain";
 
 function actor(overrides: Partial<Actor> = {}): Actor {
@@ -55,6 +61,66 @@ test("ordinary administrators are limited to assigned developments", () => {
     false,
   );
   assert.equal(entityDevelopmentAllowed(administrator, "projects", null), false);
+});
+
+test("file record access follows development and role boundaries", () => {
+  const record = (overrides: Partial<Parameters<typeof canReadEntityRecord>[1]> = {}) => ({
+    entity: "rooms",
+    development: "Development A",
+    state: {},
+    createdBy: "staff-1",
+    deleted: false,
+    ...overrides,
+  });
+  assert.equal(canReadEntityRecord(actor(), record()), true);
+  assert.equal(
+    canReadEntityRecord(actor(), record({ development: "Development B" })),
+    false,
+  );
+  assert.equal(
+    canReadEntityRecord(
+      actor({ role: "administrator", position: "Administrator" }),
+      record({ development: "Development B" }),
+    ),
+    false,
+  );
+  assert.equal(
+    canReadEntityRecord(
+      actor({ role: "administrator", position: "Borough Director", developments: [] }),
+      record({ development: "Development B" }),
+    ),
+    true,
+  );
+});
+
+test("procurement file access remains isolated from administrator and Borough Director roles", () => {
+  const procurement = {
+    entity: "procurement",
+    development: "Development A",
+    state: { status: "submitted" },
+    createdBy: "cpm-1",
+    deleted: false,
+  };
+  assert.equal(canReadEntityRecord(actor(), procurement), true);
+  assert.equal(
+    canReadEntityRecord(
+      actor({ role: "administrator", position: "Administrator" }),
+      procurement,
+    ),
+    false,
+  );
+  assert.equal(
+    canReadEntityRecord(
+      actor({ role: "administrator", position: "Borough Director", developments: [] }),
+      procurement,
+    ),
+    false,
+  );
+  assert.equal(
+    canUploadToEntityRecord(actor(), procurement),
+    false,
+    "ordinary management can read a submitted scope but cannot attach procurement files",
+  );
 });
 
 test("Borough Director cannot access procurement records", () => {
@@ -107,7 +173,9 @@ test("workflow actions require their explicit management or specialist role", ()
     false,
   );
   assert.equal(
-    canPerformEntityAction(worker, "building-violations", "complete", {}),
+    canPerformEntityAction(worker, "building-violations", "complete", {
+      assignedStaffId: worker.id,
+    }),
     true,
   );
   assert.equal(
@@ -176,6 +244,170 @@ test("legacy name-only leave requests do not grant cancellation ownership", () =
   );
 });
 
+test("operational actions require canonical assignment ownership", () => {
+  const worker = actor({
+    id: "worker-1",
+    role: "worker",
+    position: "Maintenance Worker",
+  });
+  const otherWorker = actor({
+    id: "worker-2",
+    role: "worker",
+    position: "Maintenance Worker",
+  });
+  for (const entity of [
+    "building-violations",
+    "resident-reports",
+    "elevator-jobs",
+    "emergency-jobs",
+  ]) {
+    const action = entity === "building-violations" ? "complete" : "start";
+    assert.equal(
+      canPerformAssignedWorkflowAction(worker, entity, action, {
+        assignedStaffId: worker.id,
+      }),
+      true,
+    );
+    assert.equal(
+      canPerformAssignedWorkflowAction(otherWorker, entity, action, {
+        assignedStaffId: worker.id,
+      }),
+      false,
+    );
+  }
+});
+
+test("assignment normalization prefers canonical ids over mutable labels", () => {
+  assert.deepEqual(
+    normalizeAssignment({
+      assignedStaffId: "staff-1",
+      assignedTo: "Someone Else",
+    }),
+    { assignedStaffId: "staff-1", hasLegacyAssignment: false },
+  );
+  assert.deepEqual(
+    normalizeAssignment({ assignedTo: "Taylor Smith" }),
+    { assignedStaffId: null, hasLegacyAssignment: true },
+  );
+});
+
+test("legacy name-only operational assignments fail closed", () => {
+  const worker = actor({
+    id: "worker-1",
+    name: "Taylor Smith",
+    role: "worker",
+    position: "Maintenance Worker",
+  });
+  assert.equal(
+    canPerformEntityAction(worker, "building-violations", "complete", {
+      assignedTo: "Taylor Smith",
+    }),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(worker, "elevator-jobs", "start", {
+      assignedTo: "Taylor Smith",
+    }),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(
+      actor({ role: "emergency", id: "emergency-1", name: "Taylor Smith" }),
+      "emergency-jobs",
+      "complete",
+      { assignedTo: "Taylor Smith" },
+    ),
+    false,
+  );
+});
+
+test("supervisors may override operational assignments, but procurement may not", () => {
+  const manager = actor();
+  const admin = actor({ role: "administrator", position: "Administrator" });
+  const director = actor({
+    role: "administrator",
+    position: "Borough Director",
+    developments: [],
+  });
+  const state = { assignedStaffId: "someone-else" };
+  assert.equal(
+    canPerformEntityAction(manager, "building-violations", "complete", state),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(admin, "elevator-jobs", "complete", state),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(director, "emergency-jobs", "complete", state),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(
+      actor({ role: "procurement", position: "Procurement" }),
+      "elevator-jobs",
+      "complete",
+      state,
+    ),
+    false,
+  );
+});
+
+test("only assignment authorities may introduce canonical assignees", () => {
+  const worker = actor({ role: "worker", position: "Maintenance Worker" });
+  const inspector = actor({ role: "inspector", position: "Inspector" });
+  const emergency = actor({ role: "emergency", position: "Other" });
+  const manager = actor();
+  const target = {
+    id: "worker-2",
+    role: "worker",
+    position: "Maintenance Worker",
+    developments: ["Development A"],
+  };
+  assert.equal(isAssignmentAuthority(worker), false);
+  assert.equal(isAssignmentAuthority(inspector), false);
+  assert.equal(isAssignmentAuthority(emergency), false);
+  assert.equal(isAssignmentAuthority(manager), true);
+  assert.equal(canAssignStaff(worker, target, "Development A"), false);
+  assert.equal(canAssignStaff(inspector, target, "Development A"), false);
+  assert.equal(canAssignStaff(emergency, target, "Development A"), false);
+  assert.equal(canAssignStaff(manager, target, "Development A"), true);
+});
+
+test("canonical emergency and elevator assignments authorize only their staff id", () => {
+  const emergency = actor({
+    id: "emergency-1",
+    role: "emergency",
+    position: "Other",
+  });
+  const inspector = actor({
+    id: "inspector-1",
+    role: "inspector",
+    position: "Elevator Service",
+  });
+  const other = actor({ id: "other-worker", role: "worker", position: "Maintenance Worker" });
+  for (const entity of ["emergency-jobs", "elevator-jobs"]) {
+    assert.equal(
+      canPerformEntityAction(emergency, entity, "complete", {
+        assignedStaffId: emergency.id,
+      }),
+      entity === "emergency-jobs",
+    );
+    assert.equal(
+      canPerformEntityAction(inspector, entity, "complete", {
+        assignedStaffId: inspector.id,
+      }),
+      true,
+    );
+    assert.equal(
+      canPerformEntityAction(other, entity, "complete", {
+        assignedStaffId: emergency.id,
+      }),
+      false,
+    );
+  }
+});
+
 test("generic patches cannot bypass protected workflow actions", () => {
   assert.equal(
     patchesWorkflowManagedFields("building-violations", {
@@ -204,6 +436,16 @@ test("generic patches cannot bypass protected workflow actions", () => {
       notes: "Updated notes",
     }),
     false,
+  );
+});
+
+test("assignment fields are distinct from ordinary editable record fields", () => {
+  assert.equal(
+    patchesWorkflowManagedFields("building-violations", {
+      assignedStaffId: "worker-2",
+    }),
+    false,
+    "the route applies the stricter supervisor-only assignment policy",
   );
 });
 

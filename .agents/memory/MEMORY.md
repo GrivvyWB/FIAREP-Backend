@@ -15,3 +15,5 @@
 - [FIAREP scoring authority](fiarep-scoring-authority.md) — development, vendor, building, and residential scores share one tenant-scoped server formula and contract.
 - [FIAREP cross-device parity](fiarep-cross-device-parity.md) — mobile and web share server authority; sync cursors are separated by data stream, entity, identity scope, and role.
 - [FIAREP access personas](fiarep-installation-personas.md) — mobile installations and website browsers stay locked to Resident, Vendor, or Staff access.
+- [FIAREP file ownership](fiarep-file-ownership.md) — private files require immutable record ownership; legacy claims must be unique and fail closed when ambiguous.
+- [FIAREP work assignments](fiarep-work-assignments.md) — operational actions require canonical staff IDs; only authorized supervisors may assign or repair legacy work.

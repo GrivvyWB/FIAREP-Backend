@@ -14,6 +14,7 @@ export default function DispatchJob() {
   const [problem, setProblem] = useState('');
   const [lookupMsg, setLookupMsg] = useState('');
   const [inspector, setInspector] = useState('');
+  const [inspectorId, setInspectorId] = useState('');
   const [assigneePos, setAssigneePos] = useState('');
   const [pickerOpen, setPickerOpen] = useState(false);
   const [assignable, setAssignable] = useState<TradeGroup[]>([]);
@@ -35,7 +36,7 @@ export default function DispatchJob() {
     await sendViolationLookup(refNum.trim(), address.trim(), inspector.trim(), (a && a.name) || 'management', unit.trim(), problem.trim());
     // Elevator Service mechanic -> also create an Elevator Job with an EL- id.
     if (assigneePos === 'Elevator Service') {
-      await createElevatorJob(address.trim(), unit.trim(), inspector.trim(), refNum.trim(), problem.trim());
+      await createElevatorJob(address.trim(), unit.trim(), inspector.trim(), refNum.trim(), problem.trim(), inspectorId);
     }
     Alert.alert('Job assigned', inspector + ' has been notified with ' + refNum.trim() + '.', [{ text: 'OK', onPress: () => router.back() }]);
   }
@@ -108,7 +109,7 @@ export default function DispatchJob() {
                     <Text style={{ fontSize: 15, color: '#666' }}>{expanded ? '−' : '+'}  {item.people.length}</Text>
                   </Pressable>
                   {expanded && item.people.map((a) => (
-                    <Pressable key={a.id} style={{ paddingVertical: 12, paddingLeft: 16, borderTopWidth: 1, borderTopColor: '#f2f2f2' }} onPress={() => { setInspector(a.name); setAssigneePos(item.position); setPickerOpen(false); }}>
+                    <Pressable key={a.id} style={{ paddingVertical: 12, paddingLeft: 16, borderTopWidth: 1, borderTopColor: '#f2f2f2' }} onPress={() => { setInspector(a.name); setInspectorId(a.id); setAssigneePos(item.position); setPickerOpen(false); }}>
                       <Text style={{ fontSize: 16 }}>{a.name}</Text>
                       <Text style={{ fontSize: 13, color: '#666' }}>{a.position || (a.role === 'inspector' ? 'Inspector' : a.role)}</Text>
                     </Pressable>

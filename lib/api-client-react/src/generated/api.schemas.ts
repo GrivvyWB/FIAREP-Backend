@@ -809,6 +809,14 @@ export interface FileUploadUrlRequest {
      * @maxLength 100
      */
   contentType: string;
+  /**
+   * Entity record that will own the uploaded object
+   */
+  entity: string;
+  /**
+   * ID of the authorized entity record that will own the uploaded object
+   */
+  recordId: string;
 }
 
 export interface FileUploadUrlResponse {

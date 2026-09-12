@@ -133,6 +133,39 @@ export const residentPhotoUploadGrants = pgTable(
   ],
 );
 
+/**
+ * Immutable ownership metadata for private object-storage files. The
+ * entity's JSON state may be edited by clients, so it is never used as the
+ * source of truth for file authorization.
+ */
+export const fileOwnership = pgTable(
+  "file_ownership",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    objectPath: text("object_path").notNull(),
+    entity: text("entity").notNull(),
+    recordId: text("record_id").notNull(),
+    createdBy: text("created_by").notNull(),
+    kind: text("kind").notNull(),
+    name: text("name").notNull(),
+    contentType: text("content_type").notNull(),
+    size: integer("size").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("file_ownership_tenant_path_unique").on(
+      table.tenantId,
+      table.objectPath,
+    ),
+    index("file_ownership_record_idx").on(
+      table.tenantId,
+      table.entity,
+      table.recordId,
+    ),
+  ],
+);
+
 export const refreshSessions = pgTable(
   "refresh_sessions",
   {

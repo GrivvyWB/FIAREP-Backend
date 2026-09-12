@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Image } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listElevatorJobsForMechanic, createElevatorJob } from '../lib/store';
+import { getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listElevatorJobsForMechanic } from '../lib/store';
 import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
@@ -96,13 +96,16 @@ export default function ReportDetail() {
             onPress={async () => {
               const act = await getCurrentActor();
               const me = (act && act.name) || '';
-              const jobs = await listElevatorJobsForMechanic(me).catch(() => []);
+              const jobs = await listElevatorJobsForMechanic(me, act?.id).catch(() => []);
               let match = jobs.find((j) => (j.address || '').trim().toLowerCase() === (r.address || '').trim().toLowerCase());
-              // No EL- job yet (e.g. assigned via a resident report) — create one now.
-              if (!match) {
-                match = await createElevatorJob(r.address || '', r.unit || '', me, r.complaintNo || '', r.description || '').catch(() => null) as any;
+              if (match) {
+                router.push('/project/elevator?projectId=' + encodeURIComponent(match.id));
+              } else {
+                Alert.alert(
+                  'Elevator job not dispatched',
+                  'This report has no supervisor-dispatched elevator job. Authorized management must assign the job before Elevator Service can begin work.',
+                );
               }
-              if (match) router.push('/project/elevator?projectId=' + encodeURIComponent(match.id));
             }}
           >
             <Text style={ui.btnText}>Open Elevator Services</Text>

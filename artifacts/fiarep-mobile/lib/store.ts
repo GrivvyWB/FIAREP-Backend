@@ -329,19 +329,8 @@ export async function addRoom(projectId: string, name: string, lines: LineItem[]
   const room: Room = { id: uid(), projectId, name, unit, lines, photos, walls2d, scan: scanWithMeta };
   await d.runAsync('INSERT INTO rooms (id,projectId,name,unit,lines,photos,walls2d,scan) VALUES (?,?,?,?,?,?,?,?)', room.id, projectId, name, unit, JSON.stringify(lines), JSON.stringify(photos), JSON.stringify(walls2d), JSON.stringify(scanWithMeta));
   await queueMutation('rooms', room.id, { ...room, scan: scanWithMeta });
-  // Keep the local URI in photos for offline/PDF use, while opportunistically
-  // recording authenticated remote object metadata for the next sync.
-  if (photos.length) {
-    const { uploadPhoto } = await import('./photos');
-    const remoteFiles: any[] = [];
-    for (const photo of photos) {
-      try { remoteFiles.push({ ...(await uploadPhoto(photo, 'room-photo')), localUri: photo }); } catch { /* retry remains local */ }
-    }
-    if (remoteFiles.length) {
-      const updatedScan = { ...scanWithMeta, remoteFiles };
-      await d.runAsync('UPDATE rooms SET scan=?,remoteFiles=? WHERE id=?', JSON.stringify(updatedScan), JSON.stringify(remoteFiles), room.id);
-    }
-  }
+  // Uploads are performed by sync after the server-side room record exists,
+  // which lets the API bind each object to an authorized entity record.
   return room;
 }
 export async function updateRoom(id: string, name: string, lines: LineItem[], photos: string[] = [], walls2d: any[] = [], unit: string = '', scan: any = null): Promise<void> {
@@ -501,6 +490,7 @@ export type ResidentReport = {
   description: string;
   photos: string[];
   status: 'submitted' | 'assigned' | 'in_progress' | 'resolved';
+  assignedStaffId?: string;
   assignedTo?: string;
   development?: string;
   updates: ResidentUpdate[];
@@ -514,6 +504,15 @@ export type ResidentReport = {
   clearedByMgmt?: boolean;  // management cleared it so the worker may remove it from My Jobs
   _meta?: any;
 };
+
+export function canonicalAssignmentPayload(
+  assignedStaffId: string,
+): { assignedStaffId: string } {
+  const id = assignedStaffId.trim();
+  if (!id) throw new Error('A canonical staff id is required for assignment.');
+  return { assignedStaffId: id };
+}
+
 export type SavedResidentReport = { complaintNo: string; address: string; statusToken: string };
 
 async function ensureResidentTable(d: any) {
@@ -524,6 +523,7 @@ function normalizeResidentReport(r: any): ResidentReport {
   return {
     ...r,
     address: r.address ?? '',
+    assignedStaffId: r.assignedStaffId,
     assignedTo: r.assignedTo,
     updates: Array.isArray(r.updates) ? r.updates : [],
   } as ResidentReport;
@@ -828,20 +828,47 @@ export async function getContractorScores(withinDays: number = 7): Promise<Contr
 }
 
 
-export async function assignResidentReport(id: string, workerName: string): Promise<void> {
+export async function assignResidentReport(
+  id: string,
+  assignedStaffId: string,
+  workerName: string,
+): Promise<void> {
   const d = await db();
   const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM resident_reports WHERE id = ?', id);
   if (!row) return;
   const r = normalizeResidentReport(JSON.parse(row.state));
+  const assignmentBody = canonicalAssignmentPayload(assignedStaffId);
+  const displayName = workerName.trim();
   const deviceId = await getDeviceId(d);
   const now = new Date().toISOString();
-  const update: ResidentUpdate = { status: 'assigned', note: 'Assigned to ' + workerName.trim(), by: 'management', at: now };
-  const next = { ...r, status: 'assigned' as const, assignedTo: workerName.trim(), updates: [...r.updates, update], _meta: touchMeta(r._meta, deviceId) };
+  const update: ResidentUpdate = { status: 'assigned', note: 'Assigned to ' + displayName, by: 'management', at: now };
+  const next = {
+    ...r,
+    status: 'assigned' as const,
+    assignedStaffId: assignmentBody.assignedStaffId,
+    assignedTo: displayName,
+    updates: [...r.updates, update],
+    _meta: touchMeta(r._meta, deviceId),
+    _pendingWorkflowActions: [
+      ...((r as any)._pendingWorkflowActions || []),
+      { action: 'assign', body: assignmentBody },
+    ],
+  };
   await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(next), id);
   await queueMutation('resident-reports', id, next);
+  try {
+    await performEntityAction('resident-reports', id, 'assign', {
+      assignedStaffId: assignmentBody.assignedStaffId,
+    });
+    const synced = { ...next, _pendingWorkflowActions: undefined };
+    await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(synced), id);
+    await queueMutation('resident-reports', id, synced);
+  } catch {
+    // Keep the action queued for the next authenticated sync.
+  }
   const _a = await getCurrentActor();
-  await logAudit(_a.role, _a.name, 'Report assigned', 'Unit ' + r.unit + ' \u2192 ' + workerName.trim(), id);
-  await addNotification(workerName.trim(), 'New job assigned', 'Unit ' + r.unit + (r.development ? ' \u00b7 ' + r.development : ''), id);
+  await logAudit(_a.role, _a.name, 'Report assigned', 'Unit ' + r.unit + ' \u2192 ' + displayName, id);
+  await addNotification(displayName, 'New job assigned', 'Unit ' + r.unit + (r.development ? ' \u00b7 ' + r.development : ''), id);
 }
 
 export async function addResidentUpdate(
@@ -1282,6 +1309,18 @@ export async function listStaffByPosition(position?: string): Promise<StaffAccou
     : staff.filter(a => (a.developments || []).some(d => mine.has(d.trim().toLowerCase())));
   const out = position ? scoped.filter(a => (a.position || '') === position) : scoped;
   return out.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+}
+
+export async function listEmergencyStaff(): Promise<StaffAccount[]> {
+  const all = await listStaffAccounts('approved');
+  const identity = await getSessionIdentity();
+  const mine = new Set((identity?.developments || []).map((d) => d.trim().toLowerCase()));
+  const scoped = identity?.position === 'Borough Director'
+    ? all
+    : all.filter((a) => !mine.size || (a.developments || []).some((d) => mine.has(d.trim().toLowerCase())));
+  return scoped
+    .filter((a) => a.role === 'emergency')
+    .sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 
 // People who can be sent out to inspect a project: inspectors + management with a supervisor title.
@@ -1892,11 +1931,17 @@ export async function setCurrentActor(role: string, name: string): Promise<void>
   await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'actor_name', (name || '').trim());
 }
 
-export async function getCurrentActor(): Promise<{ role: string; name: string }> {
+export async function getCurrentActor(): Promise<{ id?: string; role: string; name: string }> {
   const d = await db();
   const r = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', 'actor_role');
   const n = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', 'actor_name');
-  return { role: r ? r.value : '', name: n ? n.value : '' };
+  const identity = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', 'session_identity');
+  let id: string | undefined;
+  try {
+    const parsed = identity?.value ? JSON.parse(identity.value) : null;
+    id = typeof parsed?.staffId === 'string' ? parsed.staffId : undefined;
+  } catch {}
+  return { id, role: r ? r.value : '', name: n ? n.value : '' };
 }
 
 export async function clearCurrentActor(): Promise<void> {
@@ -4075,7 +4120,8 @@ export type ElevatorJob = {
   elId: string;          // EL-XXXXX
   address: string;
   unit: string;
-  mechanic: string;      // assigned mechanic's name
+  assignedStaffId: string;
+  mechanic: string;      // assigned mechanic's display name
   refNum: string;        // originating complaint/violation number
   issue: string;
   assignedBy: string;
@@ -4090,15 +4136,25 @@ async function ensureElevatorJobTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS elevator_jobs (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
 }
 
-export async function createElevatorJob(address: string, unit: string, mechanic: string, refNum: string, issue: string): Promise<ElevatorJob> {
+export async function createElevatorJob(
+  address: string,
+  unit: string,
+  mechanic: string,
+  refNum: string,
+  issue: string,
+  assignedStaffId?: string,
+): Promise<ElevatorJob> {
   const d = await db();
   await ensureElevatorJobTable(d);
   const a = await getCurrentActor();
+  const assignmentBody = canonicalAssignmentPayload(assignedStaffId || '');
+  const canonicalStaffId = assignmentBody.assignedStaffId;
   const job: ElevatorJob = {
     id: uid(),
     elId: 'EL-' + Math.floor(10000 + Math.random() * 90000),
     address: (address || '').trim(),
     unit: (unit || '').trim(),
+    assignedStaffId: canonicalStaffId,
     mechanic: (mechanic || '').trim(),
     refNum: (refNum || '').trim(),
     issue: (issue || '').trim(),
@@ -4121,10 +4177,28 @@ export async function listElevatorJobs(): Promise<ElevatorJob[]> {
   return items.sort((a, b) => (b.assignedAt || '').localeCompare(a.assignedAt || ''));
 }
 
-export async function listElevatorJobsForMechanic(name: string): Promise<ElevatorJob[]> {
+export async function listElevatorJobsForMechanic(name: string, assignedStaffId?: string): Promise<ElevatorJob[]> {
   const all = await listElevatorJobs();
   const nm = (name || '').trim().toLowerCase();
-  return all.filter(j => (j.mechanic || '').trim().toLowerCase() === nm);
+  const id = (assignedStaffId || '').trim();
+  const actor = await getCurrentActor().catch(() => null);
+  if (
+    actor &&
+    ['worker', 'inspector', 'emergency'].includes(actor.role) &&
+    !id
+  ) {
+    return [];
+  }
+  return id
+    ? all.filter(j => j.assignedStaffId === id)
+    : all.filter(j => (j.mechanic || '').trim().toLowerCase() === nm);
+}
+
+async function _saveElevatorJob(job: ElevatorJob): Promise<void> {
+  const d = await db();
+  await ensureElevatorJobTable(d);
+  await d.runAsync('UPDATE elevator_jobs SET state=? WHERE id=?', JSON.stringify(job), job.id);
+  await queueMutation('elevator-jobs', job.id, job);
 }
 
 // Stamp a progress stage on the elevator job (onMyWay | started) and ping
@@ -4141,6 +4215,16 @@ export async function setElevatorProgress(id: string, stage: 'onMyWay' | 'starte
   if (stage === 'onMyWay') next.onMyWayAt = now;
   if (stage === 'started') next.startedAt = now;
   await d.runAsync('UPDATE elevator_jobs SET state=? WHERE id=?', JSON.stringify(next), next.id);
+  const pending = { action: stage === 'onMyWay' ? 'on-my-way' : 'start', body: {} };
+  try {
+    await performEntityAction('elevator-jobs', id, pending.action, pending.body);
+  } catch {
+    const queued = {
+      ...next,
+      _pendingWorkflowActions: [...((job as any)._pendingWorkflowActions || []), pending],
+    };
+    await _saveElevatorJob(queued as ElevatorJob);
+  }
   const a = await getCurrentActor();
   const who = (a && a.name) || job.mechanic;
   const label = stage === 'onMyWay' ? 'On my way' : 'Started job';
@@ -4163,6 +4247,16 @@ export async function completeElevatorJob(id: string): Promise<ElevatorJob | nul
   const a = await getCurrentActor();
   const next: ElevatorJob = { ...job, status: 'done', completedAt: new Date().toISOString() };
   await d.runAsync('UPDATE elevator_jobs SET state=? WHERE id=?', JSON.stringify(next), next.id);
+  const pending = { action: 'complete', body: {} };
+  try {
+    await performEntityAction('elevator-jobs', id, pending.action, pending.body);
+  } catch {
+    const queued = {
+      ...next,
+      _pendingWorkflowActions: [...((job as any)._pendingWorkflowActions || []), pending],
+    };
+    await _saveElevatorJob(queued as ElevatorJob);
+  }
   const detail = next.elId + '  \u00b7 ' + next.address + '  \u00b7 by ' + ((a && a.name) || next.mechanic);
   await addNotification('management', 'Elevator job completed', detail, next.id);
   await addNotification('Elevator Supervisor', 'Elevator job completed', detail, next.id);
@@ -4237,6 +4331,7 @@ export type EmergencyJob = {
   issue: string;
   photos: string[];
   assignedBy: string;
+  assignedStaffId: string;
   assignedUnitId?: string;
   assignedAt: string;
   status: 'assigned' | 'done';
@@ -4250,10 +4345,19 @@ async function ensureEmergencyTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS emergency_jobs (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
 }
 
-export async function createEmergencyJob(truck: string, development: string, address: string, issue: string, location: string = ''): Promise<EmergencyJob> {
+export async function createEmergencyJob(
+  truck: string,
+  development: string,
+  address: string,
+  issue: string,
+  location: string = '',
+  assignedUnitId = '',
+  assignedStaffId = '',
+): Promise<EmergencyJob> {
   const d = await db();
   await ensureEmergencyTable(d);
   const a = await getCurrentActor();
+  const assignmentBody = canonicalAssignmentPayload(assignedStaffId);
   const job: EmergencyJob = {
     id: uid(),
     emId: 'EM-' + Math.floor(10000 + Math.random() * 90000),
@@ -4264,7 +4368,8 @@ export async function createEmergencyJob(truck: string, development: string, add
     issue: (issue || '').trim(),
     photos: [],
     assignedBy: (a && a.name) || 'management',
-    assignedUnitId: (truck || '').trim().toLowerCase().replace(/\s+/g, ' '),
+    assignedStaffId: assignmentBody.assignedStaffId,
+    assignedUnitId: assignedUnitId.trim() || undefined,
     assignedAt: new Date().toISOString(),
     status: 'assigned',
   };
@@ -4287,8 +4392,7 @@ export async function listEmergencyJobsForTruck(truck: string): Promise<Emergenc
   const t = (truck || '').trim().toLowerCase();
   const actor = await getCurrentActor().catch(() => null);
   if (actor?.role === 'emergency') {
-    const identity = actor.name.trim().toLowerCase().replace(/\s+/g, ' ');
-    return all.filter(j => (j.assignedUnitId || '').trim().toLowerCase() === identity);
+    return all.filter(j => j.assignedStaffId === actor.id);
   }
   return all.filter(j => (j.truck || '').trim().toLowerCase() === t);
 }

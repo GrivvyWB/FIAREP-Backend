@@ -81,7 +81,11 @@ function writableState(entity: string, state: Record<string, any>) {
   }
   return copy;
 }
-async function prepareUploadState(entity: string, state: Record<string, any>) {
+async function prepareUploadState(
+  entity: string,
+  recordId: string,
+  state: Record<string, any>,
+) {
   const photos = Array.isArray(state.photos) ? state.photos : [];
   const completionPhotos = Array.isArray(state.completionPhotos) ? state.completionPhotos : [];
   const localPhotos = [...new Set([...photos, ...completionPhotos])];
@@ -95,7 +99,13 @@ async function prepareUploadState(entity: string, state: Record<string, any>) {
     if (remoteFiles.some((file: any) => file.localUri === localUri)) continue;
     try {
       const uploadKind = completionPhotos.includes(localUri) ? 'completion-photo' : kind;
-      remoteFiles.push({ ...(await uploadPhoto(localUri, uploadKind as any)), localUri });
+      remoteFiles.push({
+        ...(await uploadPhoto(localUri, uploadKind as any, {
+          entity,
+          recordId,
+        })),
+        localUri,
+      });
     } catch { /* retained for retry */ }
   }
   return remoteFiles.length ? { ...state, remoteFiles } : state;
@@ -172,26 +182,16 @@ async function pushQueue(d: any) {
   for (const row of rows) {
     try {
       const state = row.state ? JSON.parse(row.state) : {};
-      const uploadedState = await prepareUploadState(row.entity, state);
-      const pendingActions = Array.isArray(uploadedState._pendingWorkflowActions)
-        ? uploadedState._pendingWorkflowActions
+      const pendingActions = Array.isArray(state._pendingWorkflowActions)
+        ? state._pendingWorkflowActions
         : [];
-      if (uploadedState.remoteFiles) registerRemotePhotos(uploadedState.remoteFiles);
-      if (PROJECT_KEYED.has(row.entity) && !uploadedState.projectId) uploadedState.projectId = row.id;
+      if (PROJECT_KEYED.has(row.entity) && !state.projectId) state.projectId = row.id;
       const localMapping = TABLES.find((item) => item.entity === row.entity);
-      if (localMapping && uploadedState.remoteFiles) {
-        if (localMapping.table === 'rooms') {
-          await d.runAsync('UPDATE rooms SET remoteFiles=? WHERE id=?', JSON.stringify(uploadedState.remoteFiles), row.id);
-        } else if (localMapping.table !== 'projects') {
-          await d.runAsync(`UPDATE ${localMapping.table} SET ${localMapping.column || 'state'}=? WHERE ${localMapping.key}=?`, JSON.stringify(uploadedState), row.id);
-        }
-        await d.runAsync('UPDATE sync_queue SET state=? WHERE owner=? AND entity=? AND id=?', JSON.stringify(uploadedState), row.owner, row.entity, row.id);
-      }
       const input: any = {
         id: row.id,
-        state: writableState(row.entity, uploadedState),
-        ...(uploadedState.projectId ? { projectId: uploadedState.projectId } : {}),
-        ...((uploadedState.development || uploadedState.meta?.development) ? { development: uploadedState.development || uploadedState.meta.development } : {}),
+        state: writableState(row.entity, state),
+        ...(state.projectId ? { projectId: state.projectId } : {}),
+        ...((state.development || state.meta?.development) ? { development: state.development || state.meta.development } : {}),
       };
       if (row.baseVersion) input.version = row.baseVersion;
       let result: any;
@@ -207,6 +207,30 @@ async function pushQueue(d: any) {
           // PATCH that could overwrite another device's work.
           if (error?.status !== 409 || !row.baseVersion) throw error;
           result = await updateEntityRecord(row.entity, row.id, input);
+        }
+        // A new record must exist before an object URL can be issued. This
+        // also binds retries for existing records to the same authorization
+        // boundary used by the API.
+        const uploadedState = await prepareUploadState(row.entity, row.id, state);
+        if (uploadedState.remoteFiles) {
+          registerRemotePhotos(uploadedState.remoteFiles);
+          if (localMapping) {
+            if (localMapping.table === 'rooms') {
+              await d.runAsync('UPDATE rooms SET remoteFiles=? WHERE id=?', JSON.stringify(uploadedState.remoteFiles), row.id);
+            } else if (localMapping.table !== 'projects') {
+              await d.runAsync(`UPDATE ${localMapping.table} SET ${localMapping.column || 'state'}=? WHERE ${localMapping.key}=?`, JSON.stringify(uploadedState), row.id);
+            }
+            await d.runAsync('UPDATE sync_queue SET state=? WHERE owner=? AND entity=? AND id=?', JSON.stringify(uploadedState), row.owner, row.entity, row.id);
+          }
+          result = await updateEntityRecord(row.entity, row.id, {
+            id: row.id,
+            state: writableState(row.entity, uploadedState),
+            ...(uploadedState.projectId ? { projectId: uploadedState.projectId } : {}),
+            ...(uploadedState.development || uploadedState.meta?.development
+              ? { development: uploadedState.development || uploadedState.meta.development }
+              : {}),
+            version: result.version,
+          });
         }
         for (const pending of pendingActions) {
           result = await performEntityAction(row.entity, row.id, String(pending.action), pending.body || {});
