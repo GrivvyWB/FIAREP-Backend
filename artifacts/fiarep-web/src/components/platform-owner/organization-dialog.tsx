@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useIssueOrganizationDirectorCode } from "@workspace/api-client-react";
+import { useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -84,7 +84,7 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   const createMutation = useCreateOrganization();
   const updateMutation = useUpdateOrganization();
   const updateTimeClockMutation = useUpdatePlatformOrganizationTimeClock();
-  const issueAdministratorCodeMutation = useIssueOrganizationDirectorCode();
+  const issueAdministratorCodeMutation = useCreateOrganizationAdministrator();
 
   useEffect(() => {
     if (organization && open) {

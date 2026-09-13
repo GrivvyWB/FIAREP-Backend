@@ -22,6 +22,7 @@ import type {
 import type {
   AuthResponse,
   BootstrapAdministratorBody,
+  CreateOrganizationAdministratorBody,
   CreatePushSmokeTest202,
   DeleteEntityRecordBody,
   DeviceToken,
@@ -1526,6 +1527,72 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
         TContext
       > => {
       return useMutation(getIssueOrganizationDirectorCodeMutationOptions(options));
+    }
+
+export const getCreateOrganizationAdministratorUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/platform/organizations/${id}/administrators`
+}
+
+export const createOrganizationAdministrator = async (id: string,
+    createOrganizationAdministratorBody: CreateOrganizationAdministratorBody, options?: Parameters<typeof customFetch>[1]): Promise<OrganizationDirectorCredentials> => {
+
+  return customFetch<OrganizationDirectorCredentials>(getCreateOrganizationAdministratorUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createOrganizationAdministratorBody)
+  }
+);}
+
+
+
+
+
+export const getCreateOrganizationAdministratorMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOrganizationAdministrator>>, TError,{id: string;data: BodyType<CreateOrganizationAdministratorBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createOrganizationAdministrator>>, TError,{id: string;data: BodyType<CreateOrganizationAdministratorBody>}, TContext> => {
+
+const mutationKey = ['createOrganizationAdministrator'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOrganizationAdministrator>>, {id: string;data: BodyType<CreateOrganizationAdministratorBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  createOrganizationAdministrator(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateOrganizationAdministratorMutationResult = NonNullable<Awaited<ReturnType<typeof createOrganizationAdministrator>>>
+    export type CreateOrganizationAdministratorMutationBody = BodyType<CreateOrganizationAdministratorBody>
+    export type CreateOrganizationAdministratorMutationError = ErrorType<void>
+
+    export const useCreateOrganizationAdministrator = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOrganizationAdministrator>>, TError,{id: string;data: BodyType<CreateOrganizationAdministratorBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createOrganizationAdministrator>>,
+        TError,
+        {id: string;data: BodyType<CreateOrganizationAdministratorBody>},
+        TContext
+      > => {
+      return useMutation(getCreateOrganizationAdministratorMutationOptions(options));
     }
 
 export const getGetPlatformOrganizationTimeClockUrl = (id: string,) => {

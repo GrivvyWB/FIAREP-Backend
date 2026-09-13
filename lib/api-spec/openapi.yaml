@@ -413,6 +413,33 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OrganizationDirectorCredentials" }
+  /v1/platform/organizations/{id}/administrators:
+    post:
+      operationId: createOrganizationAdministrator
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1 }
+      responses:
+        "201":
+          description: Additional organization administrator created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationDirectorCredentials" }
+        "403":
+          description: Organization staff license limit reached
+        "409":
+          description: An account with that name already exists
   /v1/platform/organizations/{id}/time-clock:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }

@@ -531,6 +531,30 @@ export const IssueOrganizationDirectorCodeResponse = zod.object({
 })
 
 
+export const CreateOrganizationAdministratorParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+
+
+export const CreateOrganizationAdministratorBody = zod.object({
+  "name": zod.string().min(1)
+})
+
+export const createOrganizationAdministratorResponseCodeMin = 4;
+export const createOrganizationAdministratorResponseCodeMax = 4;
+
+
+
+export const CreateOrganizationAdministratorResponse = zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "tenantId": zod.string(),
+  "code": zod.string().min(createOrganizationAdministratorResponseCodeMin).max(createOrganizationAdministratorResponseCodeMax)
+})
+
+
 export const GetPlatformOrganizationTimeClockParams = zod.object({
   "id": zod.coerce.string()
 })

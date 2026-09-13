@@ -985,6 +985,11 @@ export type IssueOrganizationDirectorCodeBody = {
   name: string;
 };
 
+export type CreateOrganizationAdministratorBody = {
+  /** @minLength 1 */
+  name: string;
+};
+
 export type ListTimeClockHistoryParams = {
 /**
  * @minimum 1

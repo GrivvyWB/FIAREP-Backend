@@ -197,10 +197,17 @@ router.patch("/v1/platform/organizations/:id/time-clock", async (req, res) => {
       return;
     }
   }
-  const integrationError = rejectUnimplementedExternalIntegration({
-    integrationEnabled: typeof body.integrationEnabled === "boolean" ? body.integrationEnabled : undefined,
-    provider: "provider" in body ? body.provider as string | null : undefined,
-  });
+  const externalIntegrationPatch: {
+    integrationEnabled?: boolean;
+    provider?: string | null;
+  } = {};
+  if (typeof body.integrationEnabled === "boolean") {
+    externalIntegrationPatch.integrationEnabled = body.integrationEnabled;
+  }
+  if ("provider" in body) {
+    externalIntegrationPatch.provider = body.provider as string | null;
+  }
+  const integrationError = rejectUnimplementedExternalIntegration(externalIntegrationPatch);
   if (integrationError) {
     res.status(400).json({ error: integrationError });
     return;
@@ -371,6 +378,62 @@ router.post("/v1/platform/organizations/:id/director-code", async (req, res) => 
       result.account,
     );
     res.status(result.created ? 201 : 200).json({
+      id: result.account.id,
+      name: result.account.name,
+      tenantId: result.account.tenantId,
+      code: result.code,
+    });
+  } catch (error: any) {
+    if (error?.status) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.post("/v1/platform/organizations/:id/administrators", async (req, res) => {
+  const organizationId = req.params.id!;
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name) {
+    res.status(400).json({ error: "Administrator name is required" });
+    return;
+  }
+  const owner = res.locals["platformOwner"] as { name: string };
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-limit:${organizationId}`}))`);
+      const [organization] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+      if (!organization) throw Object.assign(new Error("Organization not found"), { status: 404 });
+      const sameNameAccounts = await tx.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+        eq(staffAccounts.tenantId, organizationId),
+        sql`lower(${staffAccounts.name}) = lower(${name})`,
+      )).limit(1);
+      if (sameNameAccounts.length > 0) {
+        throw Object.assign(new Error("An account with that name already exists"), { status: 409 });
+      }
+      if (organization.staffLimit !== null) {
+        const [{ value }] = await tx.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, organizationId));
+        if (Number(value) >= organization.staffLimit) {
+          throw Object.assign(new Error("Organization staff license limit reached"), { status: 403 });
+        }
+      }
+      const code = await allocateStaffCode(tx, organizationId, name);
+      const [account] = await tx.insert(staffAccounts).values({
+        id: randomUUID(),
+        tenantId: organizationId,
+        name,
+        code,
+        role: "administrator",
+        position: "Director",
+        status: "approved",
+        developments: [],
+        issuerName: owner.name,
+      }).returning();
+      return { account, code };
+    });
+    await platformAudit(owner.name, "organization.administrator_created", organizationId, null, result.account);
+    res.status(201).json({
       id: result.account.id,
       name: result.account.name,
       tenantId: result.account.tenantId,
