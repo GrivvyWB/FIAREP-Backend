@@ -414,12 +414,12 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
                   <h4 className="font-semibold text-slate-900">Time Clock</h4>
                   <div className="text-sm text-slate-600">Provider: {timeClockProvider || "Unconfigured"}</div>
                   <div className="flex items-center justify-between">
-                    <FormLabel className="text-slate-700">External integration enabled</FormLabel>
-                    <Switch checked={false} disabled aria-label="External time-clock integration unavailable" />
+                    <label htmlFor="external-time-clock" className="text-sm font-medium text-slate-700">External integration enabled</label>
+                    <Switch id="external-time-clock" checked={false} disabled aria-label="External time-clock integration unavailable" />
                   </div>
                   <div className="flex items-center justify-between">
-                    <FormLabel className="text-slate-700">FIAREP mobile clock enabled</FormLabel>
-                    <Switch checked={mobileClockEnabled} onCheckedChange={setMobileClockEnabled} />
+                    <label htmlFor="mobile-time-clock" className="text-sm font-medium text-slate-700">FIAREP mobile clock enabled</label>
+                    <Switch id="mobile-time-clock" checked={mobileClockEnabled} onCheckedChange={setMobileClockEnabled} />
                   </div>
                 </div>
               )}
