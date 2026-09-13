@@ -1,4 +1,5 @@
 export * from "./generated/api";
+export { customFetch } from "./custom-fetch";
 export * from "./generated/api.schemas";
 export * from "./nycha-developments";
 export * from "./lm-developments";

@@ -13,9 +13,29 @@ import {
 } from "../lib/timeClock";
 import { allocateStaffCode } from "../lib/staffCodes";
 import { addConfiguredDevelopmentName, getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
+import { researchOrganization } from "../lib/organizationResearch";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
+
+router.post("/v1/platform/organizations/research", async (req, res) => {
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (name.length < 2 || name.length > 160) {
+    res.status(400).json({ error: "Organization name is required" });
+    return;
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    res.status(503).json({ error: "Organization research is unavailable" });
+    return;
+  }
+  try {
+    res.json(await researchOrganization(name, apiKey));
+  } catch (error) {
+    req.log.warn({ err: error, organizationName: name }, "Organization research failed");
+    res.status(503).json({ error: "Organization research is temporarily unavailable" });
+  }
+});
 
 export const ORGANIZATION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const ORGANIZATION_CODE_ATTEMPTS = 20;

@@ -21,7 +21,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { Building2, ChevronDown, Copy, Plus, Trash2 } from "lucide-react";
+import { Building2, ChevronDown, Copy, Loader2, Plus, Search, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { LM_DEVELOPMENT_NAMES, NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator, useListPlatformOrganizationProperties, getListPlatformOrganizationPropertiesQueryKey } from "@workspace/api-client-react";
+import { customFetch, LM_DEVELOPMENT_NAMES, NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator, useListPlatformOrganizationProperties, getListPlatformOrganizationPropertiesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -47,6 +47,14 @@ const orgSchema = z.object({
 });
 
 type FormValues = z.infer<typeof orgSchema>;
+
+interface OrganizationResearchResult {
+  organizationName: string;
+  officialWebsite: string | null;
+  organizationType: string | null;
+  developments: string[];
+  sources: string[];
+}
 
 function organizationCatalog(name: string): readonly string[] | null {
   const normalized = name.trim().toLowerCase();
@@ -83,6 +91,8 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   const [configuredDevelopments, setConfiguredDevelopments] = useState<string[]>([]);
   const [developmentName, setDevelopmentName] = useState("");
   const [developmentsOpen, setDevelopmentsOpen] = useState(true);
+  const [isResearching, setIsResearching] = useState(false);
+  const [researchSources, setResearchSources] = useState<string[]>([]);
   const autoPopulatedCatalog = useRef<readonly string[] | null>(null);
 
   const form = useForm<FormValues>({
@@ -148,6 +158,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       );
       setDevelopmentName("");
       setDevelopmentsOpen(true);
+      setResearchSources([]);
     } else if (open) {
       form.reset({
         name: preset === "nycha" ? "NYCHA" : "",
@@ -166,6 +177,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       setConfiguredDevelopments(preset === "nycha" ? [...NYCHA_DEVELOPMENT_NAMES] : []);
       setDevelopmentName("");
       setDevelopmentsOpen(true);
+      setResearchSources([]);
     } else {
       setGeneratedCode("");
       setGeneratedStaffCode("");
@@ -191,6 +203,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       setConfiguredDevelopments([]);
       setDevelopmentName("");
       setDevelopmentsOpen(true);
+      setResearchSources([]);
     }
   }, [organization, open, form, preset]);
 
@@ -337,6 +350,42 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
     }
   };
 
+  const researchOrganizationName = async () => {
+    const name = currentOrganizationName.trim();
+    if (name.length < 2 || isResearching) return;
+    const builtInCatalog = organizationCatalog(name);
+    if (builtInCatalog) {
+      setConfiguredDevelopments([...builtInCatalog].sort((a, b) => a.localeCompare(b)));
+      setDevelopmentsOpen(true);
+      return;
+    }
+    setIsResearching(true);
+    try {
+      const result = await customFetch<OrganizationResearchResult>("/api/v1/platform/organizations/research", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (result.organizationType) form.setValue("organizationType", result.organizationType, { shouldDirty: true });
+      setResearchSources([...new Set([result.officialWebsite, ...result.sources].filter((source): source is string => Boolean(source)))]);
+      if (result.developments.length > 0) {
+        setConfiguredDevelopments(result.developments);
+        setDevelopmentsOpen(true);
+        toast({ title: `${result.developments.length} developments found.` });
+      } else {
+        toast({ title: "No published developments found." });
+      }
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Organization research failed",
+        description: error?.message || "The organization could not be researched.",
+      });
+    } finally {
+      setIsResearching(false);
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white border-slate-200">
@@ -368,7 +417,12 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                   <FormItem>
                     <FormLabel className="text-slate-700 font-semibold">Organization Name</FormLabel>
                     <FormControl>
-                      <Input placeholder="NYC Housing Preservation & Development" {...field} />
+                      <div className="flex gap-2">
+                        <Input placeholder="NYC Housing Preservation & Development" {...field} />
+                        <Button type="button" variant="outline" size="icon" onClick={researchOrganizationName} disabled={field.value.trim().length < 2 || isResearching} aria-label="Research organization">
+                          {isResearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                        </Button>
+                      </div>
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -566,6 +620,15 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                     </Button>
                   </CollapsibleTrigger>
                   <CollapsibleContent className="space-y-3 pt-3">
+                    {researchSources.length > 0 && (
+                      <div className="flex flex-wrap gap-x-3 gap-y-1">
+                        {researchSources.map((source) => (
+                          <a key={source} href={source} target="_blank" rel="noreferrer" className="text-sm text-blue-700 underline">
+                            {new URL(source).hostname.replace(/^www\./, "")}
+                          </a>
+                        ))}
+                      </div>
+                    )}
                     <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     aria-label="Development name"
