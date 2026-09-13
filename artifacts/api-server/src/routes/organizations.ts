@@ -524,28 +524,27 @@ router.delete("/v1/platform/organizations/:id", async (req, res): Promise<void> 
     const [organization] = await tx.select().from(organizations).where(eq(organizations.id, id)).limit(1);
     if (!organization) return null;
 
-    const [{ value: staffCount }] = await tx.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, id));
-    const [{ value: propertyCount }] = await tx.select({ value: count() }).from(organizationProperties).where(eq(organizationProperties.organizationId, id));
-    if (Number(staffCount) > 0 || Number(propertyCount) > 0) {
-      throw Object.assign(new Error("Remove all staff and registered properties before deleting this organization"), { status: 409 });
-    }
-
+    await tx.execute(sql`delete from refresh_sessions where staff_id in (select id from staff_accounts where tenant_id = ${id})`);
+    await tx.execute(sql`delete from time_clock_punches where tenant_id = ${id}`);
+    await tx.execute(sql`delete from public_access_codes where tenant_id = ${id}`);
+    await tx.execute(sql`delete from resident_report_photos where tenant_id = ${id}`);
+    await tx.execute(sql`delete from resident_photo_upload_grants where tenant_id = ${id}`);
+    await tx.execute(sql`delete from file_ownership where tenant_id = ${id}`);
+    await tx.execute(sql`delete from entity_records where tenant_id = ${id}`);
+    await tx.execute(sql`delete from notifications where tenant_id = ${id}`);
+    await tx.execute(sql`delete from audit_log where tenant_id = ${id}`);
+    await tx.execute(sql`delete from settings where tenant_id = ${id}`);
+    await tx.execute(sql`delete from device_tokens where tenant_id = ${id}`);
+    await tx.delete(organizationProperties).where(eq(organizationProperties.organizationId, id));
+    await tx.delete(staffAccounts).where(eq(staffAccounts.tenantId, id));
     await tx.delete(organizations).where(eq(organizations.id, id));
     return organization;
-  }).catch((error: any) => {
-    if (error?.status === 409) return error;
-    throw error;
   });
 
   if (!deleted) {
     res.status(404).json({ error: "Organization not found" });
     return;
   }
-  if (deleted instanceof Error) {
-    res.status(409).json({ error: deleted.message });
-    return;
-  }
-
   const owner = res.locals["platformOwner"] as { name: string };
   await platformAudit(owner.name, "organization.deleted", id, deleted, null);
   res.status(204).send();
