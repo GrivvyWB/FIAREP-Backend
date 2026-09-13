@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator } from "@workspace/api-client-react";
+import { NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator, useListPlatformOrganizationProperties, getListPlatformOrganizationPropertiesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -90,6 +90,15 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   const updateMutation = useUpdateOrganization();
   const updateTimeClockMutation = useUpdatePlatformOrganizationTimeClock();
   const issueAdministratorCodeMutation = useCreateOrganizationAdministrator();
+  const { data: organizationProperties = [] } = useListPlatformOrganizationProperties(
+    organization?.id ?? "",
+    {
+      query: {
+        queryKey: getListPlatformOrganizationPropertiesQueryKey(organization?.id ?? ""),
+        enabled: open && isEditing,
+      },
+    },
+  );
 
   useEffect(() => {
     if (organization && open) {
@@ -538,6 +547,9 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                   <div className="max-h-64 space-y-2 overflow-y-auto">
                     {configuredDevelopments.map((name) => {
                       const development = organization?.developments.find((value) => value.name === name);
+                      const properties = organizationProperties.filter(
+                        (property) => property.development?.trim().toLowerCase() === name.trim().toLowerCase(),
+                      );
                       return (
                       <div key={name} className="rounded-lg border border-slate-200 bg-white p-3">
                         <div className="flex items-start justify-between gap-3">
@@ -550,6 +562,14 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                               {development && <div className="mt-1 text-xs text-slate-500">
                                 {development.staff} assigned staff · {development.projects} projects · {development.records} operational records
                               </div>}
+                               <div className="mt-2 text-xs font-semibold text-slate-600">
+                                 Properties {properties.length}
+                               </div>
+                               {properties.map((property) => (
+                                 <div key={property.id} className="mt-1 text-sm text-slate-700">
+                                   {property.displayAddress}
+                                 </div>
+                               ))}
                             </div>
                           </div>
                           <Button
