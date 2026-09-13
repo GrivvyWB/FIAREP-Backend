@@ -52,6 +52,7 @@ Official logo asset: `attached_assets/logo-logo_1789085394103.webp`. Preserve th
 
 - Treat Borough Director as FIAREP's highest authority with full override access.
 - Keep ordinary Administrator permissions limited to assigned developments and lower staff; add further Administrator capabilities only when the user defines them.
+- Staff access codes must be four characters and may be numeric or uppercase alphanumeric, such as `6734` or `Y48R`.
 
 ## Gotchas
 
