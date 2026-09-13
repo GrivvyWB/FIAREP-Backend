@@ -410,7 +410,11 @@ router.patch("/v1/platform/organizations/:id", async (req, res) => {
   }
   if ("unrestricted" in body) { if (typeof body["unrestricted"] !== "boolean") { res.status(400).json({ error: "Invalid unrestricted flag" }); return; } updates.unrestricted = body["unrestricted"]; }
   const effectiveStartsAt = "startsAt" in updates ? updates.startsAt : before.startsAt;
-  const effectiveEndsAt = "endsAt" in updates ? updates.endsAt : before.endsAt;
+  let effectiveEndsAt = "endsAt" in updates ? updates.endsAt : before.endsAt;
+  if (updates.status === "active" && effectiveEndsAt && effectiveEndsAt <= new Date()) {
+    updates.endsAt = null;
+    effectiveEndsAt = null;
+  }
   if (effectiveStartsAt && effectiveEndsAt && effectiveStartsAt >= effectiveEndsAt) { res.status(400).json({ error: "Start date must precede end date" }); return; }
   const [org] = await db.update(organizations).set({ ...updates, updatedAt: new Date() }).where(eq(organizations.id, id)).returning();
   if (!org) { res.status(404).json({ error: "Organization not found" }); return; }

@@ -67,11 +67,17 @@ export default function OwnerDashboard() {
   };
   const handleStatusChange = async (org: OrganizationWithUsage, newStatus: "active" | "suspended" | "expired") => {
     try {
+      const expiredEndDate =
+        newStatus === "active" &&
+        org.endsAt &&
+        isValid(new Date(org.endsAt)) &&
+        new Date(org.endsAt) <= new Date();
       await updateMutation.mutateAsync({
         id: org.id,
         data: {
           name: org.name,
           status: newStatus,
+          ...(org.status === "expired" || expiredEndDate ? { endsAt: null } : {}),
         }
       });
       toast({
