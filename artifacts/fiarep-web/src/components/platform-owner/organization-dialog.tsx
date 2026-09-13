@@ -35,6 +35,7 @@ import { useToast } from "@/hooks/use-toast";
 
 const orgSchema = z.object({
   name: z.string().min(2, "Name is required"),
+  organizationType: z.string().optional(),
   status: z.enum(["active", "suspended", "expired"]).optional(),
   startsAt: z.string().optional().nullable(),
   endsAt: z.string().optional().nullable(),
@@ -74,6 +75,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
     resolver: zodResolver(orgSchema),
     defaultValues: {
       name: "",
+      organizationType: "",
       status: "active",
       startsAt: "",
       endsAt: "",
@@ -93,6 +95,9 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
     if (organization && open) {
       form.reset({
         name: organization.name,
+        organizationType: typeof organization.features?.organizationType === "string"
+          ? organization.features.organizationType
+          : "",
         status: organization.status as any,
         startsAt: organization.startsAt ? new Date(organization.startsAt).toISOString().slice(0, 16) : "",
         endsAt: organization.endsAt ? new Date(organization.endsAt).toISOString().slice(0, 16) : "",
@@ -118,6 +123,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
     } else if (open) {
       form.reset({
         name: preset === "nycha" ? "NYCHA" : "",
+        organizationType: preset === "nycha" ? "Public Housing Authority" : "",
         status: "active",
         startsAt: "",
         endsAt: "",
@@ -141,6 +147,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       setAcknowledged(false);
       form.reset({
         name: "",
+        organizationType: "",
         status: "active",
         startsAt: "",
         endsAt: "",
@@ -174,6 +181,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         directorName: values.directorName || undefined,
         features: {
           ...(organization?.features ?? {}),
+          organizationType: values.organizationType?.trim() || "",
           configuredDevelopments,
         },
       };
@@ -310,6 +318,19 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                     <FormLabel className="text-slate-700 font-semibold">Organization Name</FormLabel>
                     <FormControl>
                       <Input placeholder="NYC Housing Preservation & Development" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="organizationType"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-slate-700 font-semibold">Organization Type</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -473,6 +494,16 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
             </div>
 
             <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3 rounded-lg border border-slate-200 bg-slate-50 p-4">
+                  <div>
+                    <div className="text-sm font-medium text-slate-600">Portfolio</div>
+                    <div className="mt-1 text-xl font-semibold text-slate-900">{configuredDevelopments.length}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-slate-600">Developments</div>
+                    <div className="mt-1 text-xl font-semibold text-slate-900">{configuredDevelopments.length}</div>
+                  </div>
+                </div>
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
                   <h4 className="font-semibold text-slate-900">Developments</h4>
                   <span className="text-sm font-semibold text-slate-700">

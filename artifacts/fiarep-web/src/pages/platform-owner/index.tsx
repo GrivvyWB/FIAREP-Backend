@@ -4,8 +4,9 @@ import {
   useUpdateOrganization, 
   useDeleteOrganization,
   OrganizationWithUsage, 
-  getListOrganizationsQueryKey 
-   ,useListPlatformLicenseAudit
+  getListOrganizationsQueryKey,
+  NYCHA_DEVELOPMENT_NAMES,
+  useListPlatformLicenseAudit,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -209,14 +210,27 @@ export default function OwnerDashboard() {
           <CollapsibleContent>
             <div className="grid gap-2 border-t border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-3">
               <Button type="button" variant="outline" className="justify-start" onClick={handleNychaFolder}>
-                NYCHA
+                <span className="flex min-w-0 flex-col items-start">
+                  <span>NYCHA</span>
+                  <span className="text-xs font-normal text-slate-500">Public Housing Authority · {NYCHA_DEVELOPMENT_NAMES.length} developments</span>
+                </span>
               </Button>
               {organizations
                 ?.filter((org) => org.id !== "default" && org.name.trim().toLowerCase() !== "nycha")
                 .sort((a, b) => a.name.localeCompare(b.name))
                 .map((org) => (
-                  <Button key={org.id} type="button" variant="outline" className="justify-start" onClick={() => handleEdit(org)}>
-                    {org.name}
+                  <Button key={org.id} type="button" variant="outline" className="h-auto justify-start py-3" onClick={() => handleEdit(org)}>
+                    <span className="flex min-w-0 flex-col items-start">
+                      <span>{org.name}</span>
+                      <span className="text-xs font-normal text-slate-500">
+                        {typeof org.features?.organizationType === "string" && org.features.organizationType
+                          ? `${org.features.organizationType} · `
+                          : ""}
+                        {Array.isArray(org.features?.configuredDevelopments)
+                          ? org.features.configuredDevelopments.length
+                          : org.developments.length} developments
+                      </span>
+                    </span>
                   </Button>
                 ))}
             </div>
