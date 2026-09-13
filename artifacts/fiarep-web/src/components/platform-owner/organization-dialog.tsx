@@ -47,6 +47,17 @@ const orgSchema = z.object({
 
 type FormValues = z.infer<typeof orgSchema>;
 
+function organizationCatalog(name: string): readonly string[] | null {
+  const normalized = name.trim().toLowerCase();
+  if (normalized === "nycha" || normalized === "new york city housing authority") {
+    return NYCHA_DEVELOPMENT_NAMES;
+  }
+  if (normalized === "l+m" || normalized.includes("l+m development partners")) {
+    return LM_DEVELOPMENT_NAMES;
+  }
+  return null;
+}
+
 interface OrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -123,8 +134,11 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       setIntegrationEnabled(false);
       setTimeClockProvider(null);
       const configuredDevelopmentValues = organization.features?.configuredDevelopments;
+      const matchedCatalog = organizationCatalog(organization.name);
       setConfiguredDevelopments(
-        Array.isArray(configuredDevelopmentValues)
+        matchedCatalog
+          ? [...matchedCatalog]
+          : Array.isArray(configuredDevelopmentValues)
           ? configuredDevelopmentValues.filter((value): value is string => typeof value === "string")
           : organization.developments.filter((value) => value.active).map((value) => value.name),
       );
@@ -240,9 +254,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   };
 
   const addNychaDevelopments = () => {
-    setConfiguredDevelopments((current) =>
-      [...new Set([...current, ...NYCHA_DEVELOPMENT_NAMES])].sort((a, b) => a.localeCompare(b)),
-    );
+    setConfiguredDevelopments([...NYCHA_DEVELOPMENT_NAMES].sort((a, b) => a.localeCompare(b)));
   };
 
   const addLmDevelopments = () => {
@@ -250,6 +262,10 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   };
 
   const isLoading = createMutation.isPending || updateMutation.isPending || updateTimeClockMutation.isPending;
+  const currentOrganizationName = form.watch("name");
+  const matchedOrganizationCatalog = organizationCatalog(currentOrganizationName);
+  const isNychaOrganization = matchedOrganizationCatalog === NYCHA_DEVELOPMENT_NAMES;
+  const isLmOrganization = matchedOrganizationCatalog === LM_DEVELOPMENT_NAMES;
   const canCloseAfterCreation = !generatedCode || copySucceeded || acknowledged;
   const handleOpenChange = (nextOpen: boolean) => {
     if (!nextOpen && !canCloseAfterCreation) return;
@@ -539,12 +555,16 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                     <Plus className="mr-2 h-4 w-4" />
                     Add
                   </Button>
-                  <Button type="button" variant="outline" onClick={addNychaDevelopments}>
-                    NYCHA
-                  </Button>
-                   <Button type="button" variant="outline" onClick={addLmDevelopments}>
-                     L+M
-                   </Button>
+                   {isNychaOrganization && (
+                     <Button type="button" variant="outline" onClick={addNychaDevelopments}>
+                       NYCHA
+                     </Button>
+                   )}
+                   {isLmOrganization && (
+                     <Button type="button" variant="outline" onClick={addLmDevelopments}>
+                       L+M
+                     </Button>
+                   )}
                 </div>
                 {configuredDevelopments.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
