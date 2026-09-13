@@ -20,7 +20,8 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Building2, Copy, Plus, Trash2 } from "lucide-react";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Building2, ChevronDown, Copy, Plus, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -81,6 +82,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   const [timeClockProvider, setTimeClockProvider] = useState<string | null>(null);
   const [configuredDevelopments, setConfiguredDevelopments] = useState<string[]>([]);
   const [developmentName, setDevelopmentName] = useState("");
+  const [developmentsOpen, setDevelopmentsOpen] = useState(true);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(orgSchema),
@@ -143,6 +145,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
           : organization.developments.filter((value) => value.active).map((value) => value.name),
       );
       setDevelopmentName("");
+      setDevelopmentsOpen(true);
     } else if (open) {
       form.reset({
         name: preset === "nycha" ? "NYCHA" : "",
@@ -160,6 +163,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       setTimeClockProvider(null);
       setConfiguredDevelopments(preset === "nycha" ? [...NYCHA_DEVELOPMENT_NAMES] : []);
       setDevelopmentName("");
+      setDevelopmentsOpen(true);
     } else {
       setGeneratedCode("");
       setGeneratedStaffCode("");
@@ -184,6 +188,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       setTimeClockProvider(null);
       setConfiguredDevelopments([]);
       setDevelopmentName("");
+      setDevelopmentsOpen(true);
     }
   }, [organization, open, form, preset]);
 
@@ -533,13 +538,18 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                     <div className="mt-1 text-xl font-semibold text-slate-900">{configuredDevelopments.length}</div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <h4 className="font-semibold text-slate-900">Developments</h4>
-                  <span className="text-sm font-semibold text-slate-700">
-                    {configuredDevelopments.length}
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2 sm:flex-row">
+                <Collapsible open={developmentsOpen} onOpenChange={setDevelopmentsOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button type="button" variant="ghost" className="h-auto w-full justify-between rounded-none border-b border-slate-100 px-0 pb-2 pt-0 hover:bg-transparent">
+                      <span className="font-semibold text-slate-900">Developments</span>
+                      <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
+                        {configuredDevelopments.length}
+                        <ChevronDown className={`h-4 w-4 transition-transform ${developmentsOpen ? "rotate-180" : ""}`} />
+                      </span>
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="space-y-3 pt-3">
+                    <div className="flex flex-col gap-2 sm:flex-row">
                   <Input
                     aria-label="Development name"
                     value={developmentName}
@@ -565,8 +575,8 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                        L+M
                      </Button>
                    )}
-                </div>
-                {configuredDevelopments.length === 0 ? (
+                    </div>
+                    {configuredDevelopments.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
                     No developments added.
                   </div>
@@ -613,6 +623,8 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                     )})}
                   </div>
                 )}
+                  </CollapsibleContent>
+                </Collapsible>
             </div>
 
             {!isEditing && (
