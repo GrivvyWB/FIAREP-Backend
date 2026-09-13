@@ -18,6 +18,7 @@ import {
   isElevated,
 } from "../lib/domain";
 import { allocateStaffCode } from "../lib/staffCodes";
+import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -127,7 +128,7 @@ router.get("/v1/staff", async (req, res) => {
 
 router.get("/v1/staff/developments", async (_req, res) => {
   const actor = actorFrom(res);
-  const [propertyRows, staffRows, recordRows] = await Promise.all([
+  const [propertyRows, staffRows, recordRows, organizationRows] = await Promise.all([
     db
       .select({ development: organizationProperties.development })
       .from(organizationProperties)
@@ -146,7 +147,17 @@ router.get("/v1/staff/developments", async (_req, res) => {
         eq(entityRecords.tenantId, actor.tenantId),
         eq(entityRecords.deleted, false),
       )),
+    db
+      .select({ features: organizations.features })
+      .from(organizations)
+      .where(eq(organizations.id, actor.tenantId))
+      .limit(1),
   ]);
+  const configured = getConfiguredDevelopmentNames(organizationRows[0]?.features);
+  if (configured !== null) {
+    res.json(scopedDevelopmentNames(configured, actor));
+    return;
+  }
   res.json(scopedDevelopmentNames([
     ...propertyRows.map((row) => row.development),
     ...staffRows.flatMap((row) => row.developments),
@@ -162,9 +173,9 @@ router.post("/v1/staff", async (req, res) => {
   const position =
     typeof input["position"] === "string" ? input["position"] : "";
   const developments = Array.isArray(input["developments"])
-    ? input["developments"].filter(
+    ? [...new Set(input["developments"].filter(
         (item): item is string => typeof item === "string",
-      )
+      ).map((item) => item.trim()).filter(Boolean))]
     : [];
   const clientRequestId =
     typeof input["clientRequestId"] === "string" ? input["clientRequestId"].trim() : "";
@@ -185,7 +196,18 @@ router.post("/v1/staff", async (req, res) => {
     res.status(403).json({ error: "Not allowed to issue this account" });
     return;
   }
-  const [organization] = await db.select({ staffLimit: organizations.staffLimit }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  const [organization] = await db.select({
+    staffLimit: organizations.staffLimit,
+    features: organizations.features,
+  }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  const configuredDevelopments = getConfiguredDevelopmentNames(organization?.features);
+  if (configuredDevelopments !== null) {
+    const allowedDevelopments = new Set(configuredDevelopments);
+    if (developments.some((development) => !allowedDevelopments.has(development))) {
+      res.status(400).json({ error: "Assigned developments must be configured by Platform Control" });
+      return;
+    }
+  }
   if ("code" in input) {
     res.status(400).json({ error: "Staff codes are generated automatically" });
     return;

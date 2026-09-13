@@ -12,6 +12,7 @@ import {
   type TimeClockConfig,
 } from "../lib/timeClock";
 import { allocateStaffCode } from "../lib/staffCodes";
+import { addConfiguredDevelopmentName, getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
@@ -67,6 +68,12 @@ router.post("/v1/platform/organizations/:organizationId/properties", async (req,
       const [{ value }] = await tx.select({ value: count() }).from(organizationProperties).where(eq(organizationProperties.organizationId, organizationId));
       if (org.propertyLimit !== null && Number(value) >= org.propertyLimit) throw Object.assign(new Error("Organization property license limit reached"), { status: 403 });
       const [created] = await tx.insert(organizationProperties).values({ id: randomUUID(), organizationId, ...input }).returning();
+      if (input.development) {
+        await tx.update(organizations).set({
+          features: addConfiguredDevelopmentName(org.features, input.development),
+          updatedAt: new Date(),
+        }).where(eq(organizations.id, organizationId));
+      }
       return created;
     });
     const owner = res.locals["platformOwner"] as { name: string };
@@ -87,6 +94,15 @@ router.patch("/v1/platform/organizations/:organizationId/properties/:propertyId"
     const body = req.body as Record<string, unknown>;
     const input = "displayAddress" in body || "development" in body || "active" in body ? propertyInput({ ...before, ...body }) : {};
     const [updated] = await db.update(organizationProperties).set({ ...input, updatedAt: new Date() }).where(and(eq(organizationProperties.id, before.id), eq(organizationProperties.organizationId, organizationId))).returning();
+    if (updated?.development) {
+      const [organization] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+      if (organization) {
+        await db.update(organizations).set({
+          features: addConfiguredDevelopmentName(organization.features, updated.development),
+          updatedAt: new Date(),
+        }).where(eq(organizations.id, organizationId));
+      }
+    }
     const owner = res.locals["platformOwner"] as { name: string };
     await platformAudit(owner.name, "property.updated", organizationId, before, updated);
     res.json(updated);
@@ -138,7 +154,9 @@ router.get("/v1/platform/organizations", async (_req, res) => {
         eq(entityRecords.deleted, false),
       )),
     ]);
+    const configuredNames = getConfiguredDevelopmentNames(org.features);
     const names = [...new Set([
+      ...(configuredNames ?? []),
       ...staffRows.flatMap((row) => row.developments),
       ...propertyRows.map((row) => row.development),
       ...recordRows.map((row) => row.development),
@@ -155,11 +173,15 @@ router.get("/v1/platform/organizations", async (_req, res) => {
       ];
       return {
         name,
-        active: properties.length === 0 || properties.some((row) => row.active),
+        active: configuredNames !== null
+          ? configuredNames.includes(name)
+          : properties.length === 0 || properties.some((row) => row.active),
         staff: assignedStaff.length,
         projects: records.filter((row) => row.entity === "projects").length,
         records: records.length,
-        connectedAt: new Date(Math.min(...dates.map((date) => date.getTime()))).toISOString(),
+        connectedAt: dates.length > 0
+          ? new Date(Math.min(...dates.map((date) => date.getTime()))).toISOString()
+          : org.updatedAt.toISOString(),
       };
     });
     return {

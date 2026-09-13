@@ -29,6 +29,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   Dialog,
   DialogContent,
@@ -36,7 +37,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy, X } from "lucide-react";
+import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy, X, ChevronDown, FolderOpen } from "lucide-react";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
 import { format, isValid } from "date-fns";
 
@@ -46,6 +47,8 @@ export default function OwnerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrg, setSelectedOrg] = useState<OrganizationWithUsage | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [organizationFoldersOpen, setOrganizationFoldersOpen] = useState(false);
+  const [organizationPreset, setOrganizationPreset] = useState<"nycha" | null>(null);
   const [restoreOrg, setRestoreOrg] = useState<OrganizationWithUsage | null>(null);
   const [restoreEndDate, setRestoreEndDate] = useState("");
 
@@ -67,11 +70,24 @@ export default function OwnerDashboard() {
 
   const handleCreate = () => {
     setSelectedOrg(null);
+    setOrganizationPreset(null);
     setIsDialogOpen(true);
   };
 
   const handleEdit = (org: OrganizationWithUsage) => {
     setSelectedOrg(org);
+    setOrganizationPreset(null);
+    setIsDialogOpen(true);
+  };
+
+  const handleNychaFolder = () => {
+    const nycha = organizations?.find((org) => org.name.trim().toLowerCase() === "nycha");
+    if (nycha) {
+      handleEdit(nycha);
+      return;
+    }
+    setSelectedOrg(null);
+    setOrganizationPreset("nycha");
     setIsDialogOpen(true);
   };
   const handleStatusChange = async (
@@ -178,6 +194,35 @@ export default function OwnerDashboard() {
           </Button>
         </div>
       </div>
+
+      <Collapsible open={organizationFoldersOpen} onOpenChange={setOrganizationFoldersOpen}>
+        <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <CollapsibleTrigger asChild>
+            <Button type="button" variant="ghost" className="h-auto w-full justify-between rounded-none px-5 py-4">
+              <span className="flex items-center gap-2 font-semibold text-slate-900">
+                <FolderOpen className="h-4 w-4 text-slate-500" />
+                Organization folders
+              </span>
+              <ChevronDown className={`h-4 w-4 text-slate-500 transition-transform ${organizationFoldersOpen ? "rotate-180" : ""}`} />
+            </Button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <div className="grid gap-2 border-t border-slate-200 p-4 sm:grid-cols-2 lg:grid-cols-3">
+              <Button type="button" variant="outline" className="justify-start" onClick={handleNychaFolder}>
+                NYCHA
+              </Button>
+              {organizations
+                ?.filter((org) => org.id !== "default" && org.name.trim().toLowerCase() !== "nycha")
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((org) => (
+                  <Button key={org.id} type="button" variant="outline" className="justify-start" onClick={() => handleEdit(org)}>
+                    {org.name}
+                  </Button>
+                ))}
+            </div>
+          </CollapsibleContent>
+        </div>
+      </Collapsible>
 
       <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         {filteredOrgs.length === 0 ? (
@@ -326,7 +371,8 @@ export default function OwnerDashboard() {
       <OrganizationDialog 
         open={isDialogOpen} 
         onOpenChange={setIsDialogOpen} 
-        organization={selectedOrg} 
+        organization={selectedOrg}
+        preset={organizationPreset}
       />
       <Dialog open={Boolean(restoreOrg)} onOpenChange={(open) => {
         if (!open) {

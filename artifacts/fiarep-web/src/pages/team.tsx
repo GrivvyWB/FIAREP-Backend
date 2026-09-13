@@ -121,7 +121,7 @@ export default function Team() {
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setActionError("");
-    if (actor?.position !== "Borough Director" && developments.length === 0) {
+    if (position !== "Borough Director" && developments.length === 0) {
       setActionError("Select at least one assigned development.");
       return;
     }

@@ -18,3 +18,4 @@
 - [FIAREP file ownership](fiarep-file-ownership.md) — private files require immutable record ownership; legacy claims must be unique and fail closed when ambiguous.
 - [FIAREP work assignments](fiarep-work-assignments.md) — operational actions require canonical staff IDs; only authorized supervisors may assign or repair legacy work.
 - [FIAREP time-clock authority](fiarep-time-clock-authority.md) — external clocks stay authoritative; mobile punching is organization-gated, actor-only, immutable, and server-timestamped.
+- [FIAREP development catalog](fiarep-development-catalog.md) — Platform Control owns each tenant’s assignment list; NYCHA may load the shared catalog.

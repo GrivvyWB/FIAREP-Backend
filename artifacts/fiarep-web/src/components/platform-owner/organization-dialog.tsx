@@ -20,7 +20,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Building2, Copy } from "lucide-react";
+import { Building2, Copy, Plus, Trash2 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import {
   Select,
@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator } from "@workspace/api-client-react";
+import { NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -50,9 +50,10 @@ interface OrganizationDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   organization?: OrganizationWithUsage | null;
+  preset?: "nycha" | null;
 }
 
-export function OrganizationDialog({ open, onOpenChange, organization }: OrganizationDialogProps) {
+export function OrganizationDialog({ open, onOpenChange, organization, preset }: OrganizationDialogProps) {
   const isEditing = !!organization;
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -66,6 +67,8 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   const [mobileClockEnabled, setMobileClockEnabled] = useState(false);
   const [integrationEnabled, setIntegrationEnabled] = useState(false);
   const [timeClockProvider, setTimeClockProvider] = useState<string | null>(null);
+  const [configuredDevelopments, setConfiguredDevelopments] = useState<string[]>([]);
+  const [developmentName, setDevelopmentName] = useState("");
 
   const form = useForm<FormValues>({
     resolver: zodResolver(orgSchema),
@@ -105,7 +108,30 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
       setMobileClockEnabled(timeClock.mobileClockEnabled === true);
       setIntegrationEnabled(false);
       setTimeClockProvider(null);
-    } else if (!open) {
+      const configuredDevelopmentValues = organization.features?.configuredDevelopments;
+      setConfiguredDevelopments(
+        Array.isArray(configuredDevelopmentValues)
+          ? configuredDevelopmentValues.filter((value): value is string => typeof value === "string")
+          : organization.developments.filter((value) => value.active).map((value) => value.name),
+      );
+      setDevelopmentName("");
+    } else if (open) {
+      form.reset({
+        name: preset === "nycha" ? "NYCHA" : "",
+        status: "active",
+        startsAt: "",
+        endsAt: "",
+        staffLimit: null,
+        propertyLimit: null,
+        unrestricted: false,
+        directorName: "",
+      });
+      setMobileClockEnabled(false);
+      setIntegrationEnabled(false);
+      setTimeClockProvider(null);
+      setConfiguredDevelopments(preset === "nycha" ? [...NYCHA_DEVELOPMENT_NAMES] : []);
+      setDevelopmentName("");
+    } else {
       setGeneratedCode("");
       setGeneratedStaffCode("");
       setIssuedAdministratorName("");
@@ -126,8 +152,10 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
       setMobileClockEnabled(false);
       setIntegrationEnabled(false);
       setTimeClockProvider(null);
+      setConfiguredDevelopments([]);
+      setDevelopmentName("");
     }
-  }, [organization, open, form]);
+  }, [organization, open, form, preset]);
 
   const onSubmit = async (values: FormValues) => {
     if (!isEditing && !values.directorName?.trim()) {
@@ -144,6 +172,10 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         propertyLimit: values.propertyLimit || null,
         unrestricted: values.unrestricted,
         directorName: values.directorName || undefined,
+        features: {
+          ...(organization?.features ?? {}),
+          configuredDevelopments,
+        },
       };
 
       if (isEditing) {
@@ -179,6 +211,21 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         description: err.message || "Failed to save organization.",
       });
     }
+  };
+
+  const addDevelopment = () => {
+    const name = developmentName.trim();
+    if (!name) return;
+    setConfiguredDevelopments((current) =>
+      [...new Set([...current, name])].sort((a, b) => a.localeCompare(b)),
+    );
+    setDevelopmentName("");
+  };
+
+  const addNychaDevelopments = () => {
+    setConfiguredDevelopments((current) =>
+      [...new Set([...current, ...NYCHA_DEVELOPMENT_NAMES])].sort((a, b) => a.localeCompare(b)),
+    );
   };
 
   const isLoading = createMutation.isPending || updateMutation.isPending || updateTimeClockMutation.isPending;
@@ -425,50 +472,70 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
               )}
             </div>
 
-            {isEditing && (
-              <div className="space-y-3">
+            <div className="space-y-3">
                 <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-                  <div>
-                    <h4 className="font-semibold text-slate-900">Connected Developments</h4>
-                    <p className="text-sm text-slate-500">Developments found in staff assignments and organization records.</p>
-                  </div>
+                  <h4 className="font-semibold text-slate-900">Developments</h4>
                   <span className="text-sm font-semibold text-slate-700">
-                    {organization.developments.length} / {organization.propertyLimit ?? "∞"}
+                    {configuredDevelopments.length}
                   </span>
                 </div>
-                {organization.developments.length === 0 ? (
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    aria-label="Development name"
+                    value={developmentName}
+                    onChange={(event) => setDevelopmentName(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        addDevelopment();
+                      }
+                    }}
+                  />
+                  <Button type="button" variant="outline" onClick={addDevelopment} disabled={!developmentName.trim()}>
+                    <Plus className="mr-2 h-4 w-4" />
+                    Add
+                  </Button>
+                  <Button type="button" variant="outline" onClick={addNychaDevelopments}>
+                    NYCHA
+                  </Button>
+                </div>
+                {configuredDevelopments.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
-                    No developments are connected to this organization yet.
+                    No developments added.
                   </div>
                 ) : (
-                  <div className="space-y-2">
-                    {organization.developments.map((development) => (
-                      <div key={development.name} className="rounded-lg border border-slate-200 bg-white p-3">
+                  <div className="max-h-64 space-y-2 overflow-y-auto">
+                    {configuredDevelopments.map((name) => {
+                      const development = organization?.developments.find((value) => value.name === name);
+                      return (
+                      <div key={name} className="rounded-lg border border-slate-200 bg-white p-3">
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex items-start gap-3">
                             <div className="mt-0.5 rounded-md bg-slate-100 p-2">
                               <Building2 className="h-4 w-4 text-slate-600" />
                             </div>
                             <div>
-                              <div className="font-semibold text-slate-900">{development.name}</div>
-                              <div className="mt-1 text-xs text-slate-500">
+                              <div className="font-semibold text-slate-900">{name}</div>
+                              {development && <div className="mt-1 text-xs text-slate-500">
                                 {development.staff} assigned staff · {development.projects} projects · {development.records} operational records
-                              </div>
-                              <div className="mt-1 text-xs text-slate-400">
-                                Connected {new Date(development.connectedAt).toLocaleDateString()}
-                              </div>
+                              </div>}
                             </div>
                           </div>
-                          <span className={`rounded-full px-2 py-1 text-xs font-medium ${development.active ? "bg-teal-50 text-teal-700" : "bg-slate-100 text-slate-500"}`}>
-                            {development.active ? "Active" : "Inactive"}
-                          </span>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setConfiguredDevelopments((current) => current.filter((value) => value !== name))}
+                            aria-label={`Remove ${name}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
                         </div>
                       </div>
-                    ))}
+                    )})}
                   </div>
                 )}
-              </div>
-            )}
+            </div>
 
             {!isEditing && (
               <div className="space-y-4 pt-2">
