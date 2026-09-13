@@ -82,7 +82,10 @@ export default function OwnerDashboard() {
   };
 
   const handleNychaFolder = () => {
-    const nycha = organizations?.find((org) => org.name.trim().toLowerCase() === "nycha");
+    const nycha = organizations?.find((org) => {
+      const normalized = org.name.trim().toLowerCase();
+      return normalized.includes("nycha") || normalized.includes("new york city housing authority");
+    });
     if (nycha) {
       handleEdit(nycha);
       return;

@@ -50,7 +50,7 @@ type FormValues = z.infer<typeof orgSchema>;
 
 function organizationCatalog(name: string): readonly string[] | null {
   const normalized = name.trim().toLowerCase();
-  if (normalized === "nycha" || normalized === "new york city housing authority") {
+  if (normalized.includes("nycha") || normalized.includes("new york city housing authority")) {
     return NYCHA_DEVELOPMENT_NAMES;
   }
   if (normalized === "l+m" || normalized.includes("l+m development partners")) {
