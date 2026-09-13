@@ -42,6 +42,7 @@ import PublicResident from '@/pages/public-resident';
 import PublicVendor from '@/pages/public-vendor';
 import OwnerLogin from '@/pages/platform-owner/login';
 import OwnerDashboard from '@/pages/platform-owner/index';
+import OwnerModules from '@/pages/platform-owner/modules';
 import { getStoredPersona, setStoredPersona, evaluateAccess, Persona } from '@/lib/access-policy';
 import { useState } from 'react';
 
@@ -264,6 +265,7 @@ function OwnerAppRouter() {
     <OwnerShell>
       <RoutedErrorBoundary>
         <Switch>
+          <Route path="/platform-owner/modules" component={OwnerModules} />
           <Route path="/platform-owner" component={OwnerDashboard} />
           <Route component={NotFound} />
         </Switch>
