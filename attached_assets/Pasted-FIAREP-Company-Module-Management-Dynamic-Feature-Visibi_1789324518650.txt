@@ -1,0 +1,485 @@
+FIAREP Company Module Management & Dynamic Feature Visibility System
+Overview
+
+FIAREP will implement a Company Module Management System that allows each company to control which sections, features, and tabs are available within its platform instance. Rather than forcing every company to use every available feature, FIAREP will function as a configurable platform where modules can be enabled or disabled based on each company's operational needs.
+
+This approach creates a cleaner user experience, reduces unnecessary complexity, improves usability, and allows FIAREP to serve multiple business models without requiring separate software versions.
+
+Business Problem
+
+Not every company uses the same operational processes.
+
+Examples:
+
+Company A
+
+Uses:
+
+Properties
+Inspections
+Violations
+Reports
+
+Does Not Use:
+
+Inspectors
+Contractors
+Work Orders
+Inventory
+Company B
+
+Uses:
+
+Properties
+Contractors
+Inspectors
+Work Orders
+Reports
+
+Does Not Use:
+
+Violations
+Current Challenge
+
+If every module remains visible:
+
+Users see tabs they never use
+Navigation becomes cluttered
+Training becomes more difficult
+Companies become confused by irrelevant features
+Administrative workload increases
+Proposed Solution
+
+Create a Company Module Visibility System that allows administrators to turn modules on or off.
+
+When a module is disabled:
+
+The tab disappears
+Navigation links disappear
+Dashboard widgets disappear
+Related forms disappear
+Search results exclude that module
+API access is blocked
+The system behaves as though the module does not exist
+
+When re-enabled:
+
+Existing data reappears
+User permissions are restored
+Historical records remain intact
+
+No information is deleted.
+
+System Architecture
+Plain Text
+1
+Super Admin
+2
+│
+3
+▼
+4
+Company Account
+5
+│
+6
+▼
+7
+Enabled Modules
+8
+│
+9
+├── Properties
+10
+├── Inspections
+11
+├── Violations
+12
+├── Inspectors
+13
+├── Contractors
+14
+├── Work Orders
+15
+├── Inventory
+16
+├── Bidding
+17
+├── Reports
+18
+└── Compliance
+19
+│
+20
+▼
+21
+Generate Dynamic Company Interface
+Show more lines
+Company Configuration Settings
+Company Settings
+Enabled Modules
+Plain Text
+1
+☑ Properties
+2
+ 
+3
+☑ Inspections
+4
+ 
+5
+☑ Violations
+6
+ 
+7
+☐ Inspectors
+8
+ 
+9
+☐ Contractors
+10
+ 
+11
+☐ Inventory
+12
+ 
+13
+☐ Work Orders
+14
+ 
+15
+☐ Bidding
+16
+ 
+17
+☑ Reports
+18
+ 
+19
+☑ Compliance
+20
+``
+Show more lines
+Dynamic Navigation Generation
+Example Company A
+
+Enabled:
+
+Plain Text
+1
+Properties
+2
+Inspections
+3
+Violations
+4
+Reports
+Show more lines
+
+Navigation Displays:
+
+Plain Text
+1
+Home
+2
+ 
+3
+Properties
+4
+ 
+5
+Inspections
+6
+ 
+7
+Violations
+8
+ 
+9
+Reports
+10
+ 
+11
+Settings
+Show more lines
+Example Company B
+
+Enabled:
+
+Plain Text
+1
+Properties
+2
+Inspectors
+3
+Contractors
+4
+Work Orders
+5
+Reports
+Show more lines
+
+Navigation Displays:
+
+Plain Text
+1
+Home
+2
+ 
+3
+Properties
+4
+ 
+5
+Inspectors
+6
+ 
+7
+Contractors
+8
+ 
+9
+Work Orders
+10
+ 
+11
+Reports
+12
+ 
+13
+Settings
+Show more lines
+Administrative Benefits
+Cleaner Experience
+
+Users only see what applies to their workflow.
+
+Faster Training
+
+Employees learn fewer screens.
+
+Reduced Support Requests
+
+Less confusion about unused modules.
+
+Easier Expansion
+
+New modules can be added without affecting existing customers.
+
+SaaS Scalability
+
+Different subscription plans can unlock different modules.
+
+Example FIAREP Modules
+Property Management
+
+Features:
+
+Properties
+Buildings
+Units
+Asset Tracking
+Inspection Management
+
+Features:
+
+Inspections
+Inspection Templates
+Inspection Reports
+Inspection Photos
+Inspector Management
+
+Features:
+
+Inspectors
+Assignments
+Inspector Scheduling
+Certifications
+Violation Management
+
+Features:
+
+Violations
+Notice Tracking
+Corrective Actions
+Resolution Monitoring
+Contractor Management
+
+Features:
+
+Contractor Database
+Contractor Assignments
+Contracts
+Performance Tracking
+Work Order Management
+
+Features:
+
+Work Orders
+Service Requests
+Status Tracking
+Completion Verification
+Inventory Management
+
+Features:
+
+Inventory Items
+Supply Tracking
+Equipment Tracking
+Asset Management
+Bidding Management
+
+Features:
+
+Bid Requests
+Bid Evaluation
+Vendor Comparisons
+Contract Awards
+Reporting System
+
+Features:
+
+Executive Reports
+Inspection Reports
+Compliance Reports
+Financial Summaries
+Database Structure
+Companies
+SQL
+1
+CREATE TABLE companies (
+2
+id UUID PRIMARY KEY,
+3
+company_name VARCHAR(255)
+4
+);
+Show more lines
+Modules
+SQL
+1
+CREATE TABLE modules (
+2
+id UUID PRIMARY KEY,
+3
+module_name VARCHAR(255),
+4
+description TEXT
+5
+);
+Show more lines
+Company Modules
+SQL
+1
+CREATE TABLE company_modules (
+2
+company_id UUID,
+3
+module_id UUID,
+4
+enabled BOOLEAN DEFAULT TRUE,
+5
+PRIMARY KEY(company_id, module_id)
+6
+);
+Show more lines
+Example Database Records
+Company	Module	EnabledABC Realty	Inspections	Yes
+ABC Realty	Violations	Yes
+ABC Realty	Contractors	No
+ABC Realty	Work Orders	No
+XYZ Housing	Contractors	Yes
+XYZ Housing	Work Orders	Yes
+XYZ Housing	Violations	No
+Security Requirements
+
+Visibility alone is not security.
+
+The system must perform validation at multiple levels.
+
+User Interface Layer
+
+Hide disabled tabs.
+
+API Layer
+
+Block requests to disabled modules.
+
+Database Layer
+
+Prevent unauthorized access to disabled features.
+
+Backend Validation
+
+Verify module availability before processing requests.
+
+Future Enhancements
+Subscription Packages
+Basic
+Plain Text
+1
+Properties
+2
+ 
+3
+Reports
+Show more lines
+Professional
+Plain Text
+1
+Properties
+2
+ 
+3
+Inspections
+4
+ 
+5
+Violations
+6
+ 
+7
+Reports
+Show more lines
+Enterprise
+Plain Text
+1
+Properties
+2
+ 
+3
+Inspections
+4
+ 
+5
+Violations
+6
+ 
+7
+Inspectors
+8
+ 
+9
+Contractors
+10
+ 
+11
+Work Orders
+12
+ 
+13
+Inventory
+14
+ 
+15
+Reports
+16
+ 
+17
+Compliance
+Show more lines
+FIAREP Vision
+
+The FIAREP platform will function as a modular enterprise solution where every company receives a customized experience based on its operational requirements. Administrators will be able to activate or deactivate modules at any time, allowing organizations to scale the platform as their business grows.
+
+The result is a cleaner interface, improved usability, simplified training, stronger security controls, and a highly flexible SaaS architecture capable of serving property management firms, inspection companies, compliance organizations, contractors, housing authorities, and enterprise clients from a single FIAREP platform.
