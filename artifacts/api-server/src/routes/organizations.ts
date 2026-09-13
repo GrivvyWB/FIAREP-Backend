@@ -11,6 +11,7 @@ import {
   rejectUnimplementedExternalIntegration,
   type TimeClockConfig,
 } from "../lib/timeClock";
+import { allocateStaffCode } from "../lib/staffCodes";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
@@ -245,10 +246,13 @@ router.post("/v1/platform/organizations", async (req, res) => {
     return;
   }
   const status = body["status"] === "suspended" || body["status"] === "expired" || body["status"] === "active" ? body["status"] : "active";
-  const directorCode = typeof body["directorCode"] === "string" ? body["directorCode"].trim().toUpperCase() : "";
   const directorName = typeof body["directorName"] === "string" ? body["directorName"].trim() : "";
-  if (directorCode && (!/^[A-HJ-NP-Z2-9]{4}$/.test(directorCode) || !directorName)) {
-    res.status(400).json({ error: "directorName and a valid 4-character directorCode are required" });
+  if ("directorCode" in body) {
+    res.status(400).json({ error: "Director codes are generated automatically" });
+    return;
+  }
+  if (!directorName) {
+    res.status(400).json({ error: "Director name is required" });
     return;
   }
   const startsAt = body["startsAt"] == null ? null : new Date(String(body["startsAt"]));
@@ -260,6 +264,10 @@ router.post("/v1/platform/organizations", async (req, res) => {
       (propertyLimit !== null && (!Number.isInteger(propertyLimit) || (propertyLimit as number) < 0))) {
     res.status(400).json({ error: "Invalid license dates or limits" }); return;
   }
+  if (staffLimit !== null && (staffLimit as number) < 1) {
+    res.status(400).json({ error: "Staff limit must allow the initial administrator" });
+    return;
+  }
    const requestedFeatures = typeof body["features"] === "object" && body["features"] !== null && !Array.isArray(body["features"]) ? body["features"] as Record<string, unknown> : {};
    const features = mergeTimeClockConfig(requestedFeatures, { integrationEnabled: false, provider: null });
   const unrestricted = body["unrestricted"] === true;
@@ -267,18 +275,107 @@ router.post("/v1/platform/organizations", async (req, res) => {
     const result = await db.transaction(async (tx) => {
       const id = await allocateOrganizationCode(tx);
       const [created] = await tx.insert(organizations).values({ id, name, status, startsAt, endsAt, staffLimit: staffLimit as number | null, propertyLimit: propertyLimit as number | null, features, unrestricted }).returning();
-      let director;
-      if (directorCode) {
-        [director] = await tx.insert(staffAccounts).values({
-        id: randomUUID(), tenantId: id, name: directorName, code: directorCode,
+      const generatedDirectorCode = await allocateStaffCode(tx, id, directorName);
+      const [director] = await tx.insert(staffAccounts).values({
+        id: randomUUID(), tenantId: id, name: directorName, code: generatedDirectorCode,
         role: "administrator", position: "Borough Director", status: "approved", developments: [], issuerName: "Platform owner",
-        }).returning();
-      }
-      return { organization: created, director };
+      }).returning();
+      return { organization: created, director, generatedDirectorCode };
     });
     const owner = res.locals["platformOwner"] as { name: string };
-    await platformAudit(owner.name, directorCode ? "organization.created_with_director" : "organization.created", result.organization.id, null, result.organization);
-    res.status(201).json({ organization: result.organization, ...(result.director ? { director: { id: result.director.id, name: result.director.name, tenantId: result.director.tenantId } } : {}) });
+    await platformAudit(owner.name, "organization.created_with_director", result.organization.id, null, result.organization);
+    res.status(201).json({
+      organization: result.organization,
+      director: {
+        id: result.director.id,
+        name: result.director.name,
+        tenantId: result.director.tenantId,
+        code: result.generatedDirectorCode,
+      },
+    });
+  } catch (error: any) {
+    if (error?.status) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+    throw error;
+  }
+});
+
+router.post("/v1/platform/organizations/:id/director-code", async (req, res) => {
+  const organizationId = req.params.id!;
+  const name = typeof req.body?.name === "string" ? req.body.name.trim() : "";
+  if (!name) {
+    res.status(400).json({ error: "Administrator name is required" });
+    return;
+  }
+  const owner = res.locals["platformOwner"] as { name: string };
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-limit:${organizationId}`}))`);
+      const [organization] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+      if (!organization) throw Object.assign(new Error("Organization not found"), { status: 404 });
+      const directors = await tx.select().from(staffAccounts).where(and(
+        eq(staffAccounts.tenantId, organizationId),
+        eq(staffAccounts.role, "administrator"),
+        eq(staffAccounts.position, "Borough Director"),
+      )).limit(2);
+      if (directors.length > 1) {
+        throw Object.assign(new Error("Multiple Borough Director accounts require staff-account repair"), { status: 409 });
+      }
+      const existingDirector = directors[0];
+      if (existingDirector && existingDirector.name.trim().toLowerCase() !== name.toLowerCase()) {
+        throw Object.assign(new Error("Use the existing Borough Director name to reset this code"), { status: 409 });
+      }
+      const code = await allocateStaffCode(tx, organizationId, name);
+      if (existingDirector) {
+        const [updated] = await tx.update(staffAccounts).set({
+          code,
+          status: "approved",
+          sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
+          updatedAt: new Date(),
+        }).where(eq(staffAccounts.id, existingDirector.id)).returning();
+        return { account: updated, code, created: false };
+      }
+      const sameNameAccounts = await tx.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+        eq(staffAccounts.tenantId, organizationId),
+        sql`lower(${staffAccounts.name}) = lower(${name})`,
+      )).limit(1);
+      if (sameNameAccounts.length > 0) {
+        throw Object.assign(new Error("That name belongs to a non-director staff account"), { status: 409 });
+      }
+      if (organization.staffLimit !== null) {
+        const [{ value }] = await tx.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, organizationId));
+        if (Number(value) >= organization.staffLimit) {
+          throw Object.assign(new Error("Organization staff license limit reached"), { status: 403 });
+        }
+      }
+      const [account] = await tx.insert(staffAccounts).values({
+        id: randomUUID(),
+        tenantId: organizationId,
+        name,
+        code,
+        role: "administrator",
+        position: "Borough Director",
+        status: "approved",
+        developments: [],
+        issuerName: owner.name,
+      }).returning();
+      return { account, code, created: true };
+    });
+    await platformAudit(
+      owner.name,
+      result.created ? "organization.director_created" : "organization.director_code_reset",
+      organizationId,
+      null,
+      result.account,
+    );
+    res.status(result.created ? 201 : 200).json({
+      id: result.account.id,
+      name: result.account.name,
+      tenantId: result.account.tenantId,
+      code: result.code,
+    });
   } catch (error: any) {
     if (error?.status) {
       res.status(error.status).json({ error: error.message });

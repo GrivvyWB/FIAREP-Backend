@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
 
 type ModuleDefinition = {
   id: string;
@@ -74,6 +75,7 @@ export default function OwnerModules() {
   const [organizationId, setOrganizationId] = useState("");
   const [modules, setModules] = useState<Record<string, boolean>>({});
   const [dirty, setDirty] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const selectableOrganizations = useMemo(
     () => organizations.filter((organization) => organization.id !== "default"),
@@ -245,7 +247,7 @@ export default function OwnerModules() {
                       <PreviewLink key={module.id} icon={module.icon} label={module.name} />
                     ))}
                     <div className="mt-3 border-t border-white/10 pt-3">
-                      <PreviewLink icon={Settings} label="Settings" />
+                      <PreviewLink icon={Settings} label="Settings" onClick={() => setSettingsOpen(true)} />
                     </div>
                   </div>
                   <div className="border-t border-white/10 px-4 py-3 text-[10px] text-slate-400">
@@ -255,6 +257,11 @@ export default function OwnerModules() {
               </div>
             </section>
           </div>
+          <OrganizationDialog
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            organization={organization}
+          />
         </>
       )}
     </div>
@@ -270,11 +277,20 @@ function Metric({ label, value, mono = false }: { label: string; value: string; 
   );
 }
 
-function PreviewLink({ icon: Icon, label, active = false }: { icon: LucideIcon; label: string; active?: boolean }) {
+function PreviewLink({ icon: Icon, label, active = false, onClick }: { icon: LucideIcon; label: string; active?: boolean; onClick?: () => void }) {
+  const className = `flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-xs font-medium ${
+    active ? "bg-[#185FA5] text-white" : "text-slate-300"
+  } ${onClick ? "hover:bg-white/10 hover:text-white" : ""}`;
+  if (onClick) {
+    return (
+      <button type="button" className={className} onClick={onClick}>
+        <Icon className="h-4 w-4" />
+        {label}
+      </button>
+    );
+  }
   return (
-    <div className={`flex items-center gap-3 rounded-md px-3 py-2 text-xs font-medium ${
-      active ? "bg-[#185FA5] text-white" : "text-slate-300"
-    }`}>
+    <div className={className}>
       <Icon className="h-4 w-4" />
       {label}
     </div>

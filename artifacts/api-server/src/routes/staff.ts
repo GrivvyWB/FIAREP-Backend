@@ -16,8 +16,8 @@ import {
   STAFF_ROLES,
   isBoroughDirector,
   isElevated,
-  staffCode,
 } from "../lib/domain";
+import { allocateStaffCode } from "../lib/staffCodes";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -166,6 +166,12 @@ router.post("/v1/staff", async (req, res) => {
         (item): item is string => typeof item === "string",
       )
     : [];
+  const clientRequestId =
+    typeof input["clientRequestId"] === "string" ? input["clientRequestId"].trim() : "";
+  if (clientRequestId && !/^[a-zA-Z0-9_-]{8,100}$/.test(clientRequestId)) {
+    res.status(400).json({ error: "Invalid staff issuance request id" });
+    return;
+  }
   if (
     !name ||
     !STAFF_ROLES.has(role) ||
@@ -180,31 +186,19 @@ router.post("/v1/staff", async (req, res) => {
     return;
   }
   const [organization] = await db.select({ staffLimit: organizations.staffLimit }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
-  const suppliedCode =
-    typeof input["code"] === "string" ? input["code"].toUpperCase() : undefined;
-  if (suppliedCode && !/^[A-Z0-9]{4}$/.test(suppliedCode)) {
-    res.status(400).json({ error: "Code must be exactly 4 letters or numbers" });
+  if ("code" in input) {
+    res.status(400).json({ error: "Staff codes are generated automatically" });
     return;
-  }
-  if (suppliedCode) {
-    const [existing] = await db
-      .select()
-      .from(staffAccounts)
-      .where(
-        and(
-          eq(staffAccounts.tenantId, actor.tenantId),
-          sql`lower(${staffAccounts.name}) = lower(${name})`,
-          eq(staffAccounts.code, suppliedCode),
-        ),
-      )
-      .limit(1);
-      if (existing) {
-       res.json(safe(existing, true, actor));
-      return;
-    }
   }
   const created = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-limit:${actor.tenantId}`}))`);
+    if (clientRequestId) {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-create:${actor.tenantId}:${clientRequestId}`}))`);
+      const [existing] = await tx.select().from(staffAccounts).where(eq(staffAccounts.id, clientRequestId)).limit(1);
+      if (existing) {
+        throw Object.assign(new Error("Staff issuance request has already been completed"), { status: 409 });
+      }
+    }
     if (organization?.staffLimit !== null && organization?.staffLimit !== undefined) {
       const [{ value }] = await tx.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, actor.tenantId));
       if (Number(value) >= organization.staffLimit) throw Object.assign(new Error("Organization staff license limit reached"), { status: 403 });
@@ -213,7 +207,7 @@ router.post("/v1/staff", async (req, res) => {
     const [row] = await tx
       .insert(staffAccounts)
       .values({
-       id: randomUUID(),
+       id: clientRequestId || randomUUID(),
       tenantId: actor.tenantId,
       name,
       firstName:
@@ -222,7 +216,7 @@ router.post("/v1/staff", async (req, res) => {
         typeof input["lastName"] === "string" ? input["lastName"] : null,
       role,
       position,
-      code: suppliedCode ?? staffCode(),
+      code: await allocateStaffCode(tx, actor.tenantId, name),
        status: "approved",
       developments,
       createdBy: actor.id,
@@ -231,14 +225,14 @@ router.post("/v1/staff", async (req, res) => {
       updatedAt: now,
       })
       .returning();
-    return row;
+    return { row, inserted: true };
   }).catch((error: any) => {
     if (error?.status) { res.status(error.status).json({ error: error.message }); return null; }
     throw error;
   });
   if (!created) return;
-  await audit(actor, "staff.created", `Issued account for ${name}`, created?.id);
-  res.status(201).json(safe(created!, true, actor));
+  await audit(actor, "staff.created", `Issued account for ${name}`, created.row.id);
+  res.status(201).json(safe(created.row, true, actor));
 });
 
 router.post("/v1/staff/:id/reset-code", async (req, res) => {
@@ -261,27 +255,29 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     res.status(403).json({ error: "Not allowed to manage this staff account" });
     return;
   }
-  const requestedCode =
-    typeof req.body?.code === "string" ? req.body.code.trim().toUpperCase() : "";
-  if (requestedCode && !/^[A-Z0-9]{4}$/.test(requestedCode)) {
-    res.status(400).json({ error: "Code must be exactly 4 letters or numbers" });
+  if (req.body && "code" in req.body) {
+    res.status(400).json({ error: "Staff codes are generated automatically" });
     return;
   }
-  const code = requestedCode || staffCode();
-  const [updated] = await db
-    .update(staffAccounts)
-    .set({
-      code,
-      sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(
-      and(
-        eq(staffAccounts.id, req.params["id"]!),
-        eq(staffAccounts.tenantId, actor.tenantId),
-      ),
-    )
-    .returning();
+  const updatedResult = await db.transaction(async (tx) => {
+    const code = await allocateStaffCode(tx, actor.tenantId, target.name);
+    const [updated] = await tx
+      .update(staffAccounts)
+      .set({
+        code,
+        sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(staffAccounts.id, req.params["id"]!),
+          eq(staffAccounts.tenantId, actor.tenantId),
+        ),
+      )
+      .returning();
+    return { updated, code };
+  });
+  const { updated } = updatedResult;
   if (!updated) {
     res.status(404).json({ error: "Staff account not found" });
     return;

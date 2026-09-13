@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock } from "@workspace/api-client-react";
+import { useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useIssueOrganizationDirectorCode } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -42,7 +42,6 @@ const orgSchema = z.object({
   propertyLimit: z.number().nullable().optional(),
   unrestricted: z.boolean().default(false),
   directorName: z.string().optional(),
-  directorCode: z.string().length(4, "Must be exactly 4 chars").regex(/^[a-zA-Z0-9]+$/, "Letters and numbers only").optional().or(z.literal("")),
 });
 
 type FormValues = z.infer<typeof orgSchema>;
@@ -58,6 +57,9 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [generatedCode, setGeneratedCode] = useState("");
+  const [generatedStaffCode, setGeneratedStaffCode] = useState("");
+  const [issuedAdministratorName, setIssuedAdministratorName] = useState("");
+  const [administratorName, setAdministratorName] = useState("");
   const [copySucceeded, setCopySucceeded] = useState(false);
   const [copyError, setCopyError] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
@@ -76,13 +78,13 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
       propertyLimit: null,
       unrestricted: false,
       directorName: "",
-      directorCode: "",
     },
   });
 
   const createMutation = useCreateOrganization();
   const updateMutation = useUpdateOrganization();
   const updateTimeClockMutation = useUpdatePlatformOrganizationTimeClock();
+  const issueAdministratorCodeMutation = useIssueOrganizationDirectorCode();
 
   useEffect(() => {
     if (organization && open) {
@@ -95,7 +97,6 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         propertyLimit: organization.propertyLimit,
         unrestricted: organization.unrestricted,
         directorName: "",
-        directorCode: "",
       });
       const configured = organization.features?.timeClock;
       const timeClock = configured && typeof configured === "object" && !Array.isArray(configured)
@@ -106,6 +107,9 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
       setTimeClockProvider(null);
     } else if (!open) {
       setGeneratedCode("");
+      setGeneratedStaffCode("");
+      setIssuedAdministratorName("");
+      setAdministratorName("");
       setCopySucceeded(false);
       setCopyError("");
       setAcknowledged(false);
@@ -118,7 +122,6 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         propertyLimit: null,
         unrestricted: false,
         directorName: "",
-        directorCode: "",
       });
       setMobileClockEnabled(false);
       setIntegrationEnabled(false);
@@ -127,6 +130,10 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   }, [organization, open, form]);
 
   const onSubmit = async (values: FormValues) => {
+    if (!isEditing && !values.directorName?.trim()) {
+      form.setError("directorName", { message: "Director name is required" });
+      return;
+    }
     try {
       const payload = {
         name: values.name,
@@ -137,11 +144,10 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         propertyLimit: values.propertyLimit || null,
         unrestricted: values.unrestricted,
         directorName: values.directorName || undefined,
-        directorCode: values.directorCode || undefined,
       };
 
       if (isEditing) {
-        const { directorName: _directorName, directorCode: _directorCode, ...updates } = payload;
+        const { directorName: _directorName, ...updates } = payload;
         await updateMutation.mutateAsync({ id: organization!.id, data: updates });
         await updateTimeClockMutation.mutateAsync({
           id: organization!.id,
@@ -149,8 +155,15 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
         });
         toast({ title: "Organization updated successfully." });
       } else {
-        const result = await createMutation.mutateAsync({ data: payload });
+        const result = await createMutation.mutateAsync({
+          data: {
+            ...payload,
+            directorName: values.directorName!.trim(),
+          },
+        });
         setGeneratedCode(result.organization.id);
+        setGeneratedStaffCode(result.director?.code || "");
+        setIssuedAdministratorName(result.director?.name || values.directorName || "");
         setCopySucceeded(false);
         setCopyError("");
         setAcknowledged(false);
@@ -174,6 +187,8 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
     if (!nextOpen && !canCloseAfterCreation) return;
     if (!nextOpen) {
       setGeneratedCode("");
+      setGeneratedStaffCode("");
+      setIssuedAdministratorName("");
       setCopySucceeded(false);
       setCopyError("");
       setAcknowledged(false);
@@ -182,11 +197,37 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
   };
   const copyOrganizationCode = async () => {
     try {
-      await navigator.clipboard.writeText(generatedCode);
+      await navigator.clipboard.writeText(
+        generatedStaffCode
+          ? `Organization Code: ${generatedCode}\nName: ${issuedAdministratorName}\n4-Digit Code: ${generatedStaffCode}`
+          : generatedCode,
+      );
       setCopySucceeded(true);
       setCopyError("");
     } catch {
       setCopyError("Copy failed. Use the acknowledgment below after saving the code manually.");
+    }
+  };
+
+  const issueAdministratorCode = async () => {
+    if (!organization || !administratorName.trim()) return;
+    try {
+      const result = await issueAdministratorCodeMutation.mutateAsync({
+        id: organization.id,
+        data: { name: administratorName.trim() },
+      });
+      setGeneratedCode(organization.id);
+      setGeneratedStaffCode(result.code);
+      setIssuedAdministratorName(result.name || administratorName.trim());
+      setCopySucceeded(false);
+      setAcknowledged(false);
+      toast({ title: "Administrator code generated." });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Code generation failed",
+        description: error?.message || "Administrator code could not be generated.",
+      });
     }
   };
 
@@ -200,7 +241,7 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
           <DialogDescription className="text-slate-500">
             {isEditing 
               ? "Update platform licensing and limits for this organization." 
-              : "Provision a new tenant environment and optional initial administrator."}
+              : "Provision a new tenant environment and initial administrator."}
           </DialogDescription>
         </DialogHeader>
 
@@ -230,14 +271,22 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
             </div>
             {generatedCode && (
               <div className="rounded-lg border border-teal-200 bg-teal-50 p-4">
-                <label htmlFor="generated-organization-code" className="text-sm font-semibold text-teal-900">Organization Code</label>
-                <div className="mt-2 flex gap-2">
-                  <Input id="generated-organization-code" value={generatedCode} readOnly className="font-mono bg-white" />
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label htmlFor="generated-organization-code" className="text-sm font-semibold text-teal-900">Organization Code</label>
+                    <Input id="generated-organization-code" value={generatedCode} readOnly className="mt-2 font-mono bg-white" />
+                  </div>
+                  <div>
+                    <label htmlFor="generated-staff-code" className="text-sm font-semibold text-teal-900">4-Digit Code</label>
+                    <Input id="generated-staff-code" value={generatedStaffCode} readOnly className="mt-2 font-mono bg-white tracking-[0.3em]" />
+                  </div>
+                </div>
+                <div className="mt-3 flex gap-2">
                   <Button type="button" variant="outline" onClick={copyOrganizationCode}>
-                    <Copy className="mr-2 h-4 w-4" /> Copy
+                    <Copy className="mr-2 h-4 w-4" /> Copy Login
                   </Button>
                 </div>
-                <p className="mt-2 text-sm text-teal-800">Save this code. Organization staff use it when signing in.</p>
+                <p className="mt-2 text-sm text-teal-800">{issuedAdministratorName}</p>
                 {copySucceeded && <p role="status" className="mt-2 text-sm font-medium text-teal-800">Copied successfully.</p>}
                 {copyError && <p role="alert" className="mt-2 text-sm font-medium text-rose-700">{copyError}</p>}
                 <Button type="button" variant="link" className="mt-1 h-auto px-0 text-teal-800" onClick={() => setAcknowledged(true)}>
@@ -424,7 +473,7 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
             {!isEditing && (
               <div className="space-y-4 pt-2">
                 <h4 className="font-semibold text-slate-900 border-b border-slate-100 pb-2">Initial Setup</h4>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   <FormField
                     control={form.control}
                     name="directorName"
@@ -434,25 +483,36 @@ export function OrganizationDialog({ open, onOpenChange, organization }: Organiz
                         <FormControl>
                           <Input placeholder="e.g. Jane Doe" {...field} />
                         </FormControl>
-                        <FormDescription>Creates the first administrative user.</FormDescription>
+                        <FormDescription>The four-digit code is generated automatically.</FormDescription>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
-                  <FormField
-                    control={form.control}
-                    name="directorCode"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel className="text-slate-700">Director Code</FormLabel>
-                        <FormControl>
-                          <Input placeholder="4-char code" {...field} maxLength={4} className="uppercase font-mono" />
-                        </FormControl>
-                        <FormDescription>Access code for the director to login.</FormDescription>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                </div>
+              </div>
+            )}
+
+            {isEditing && (
+              <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
+                <h4 className="font-semibold text-slate-900">Administrator Login</h4>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex-1 space-y-2">
+                    <label htmlFor="organization-administrator-name" className="text-sm font-medium text-slate-700">Administrator Name</label>
+                    <Input
+                      id="organization-administrator-name"
+                      value={administratorName}
+                      onChange={(event) => setAdministratorName(event.target.value)}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={issueAdministratorCode}
+                    disabled={!administratorName.trim() || issueAdministratorCodeMutation.isPending}
+                    className="sm:self-end"
+                  >
+                    {issueAdministratorCodeMutation.isPending ? "Generating..." : "Generate 4-Digit Code"}
+                  </Button>
                 </div>
               </div>
             )}

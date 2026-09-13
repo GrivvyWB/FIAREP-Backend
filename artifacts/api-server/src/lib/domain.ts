@@ -668,8 +668,5 @@ export function recordId(input: unknown): string {
 }
 
 export function staffCode(): string {
-  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  return Array.from({ length: 4 }, () => alphabet[randomInt(alphabet.length)]).join(
-    "",
-  );
+  return randomInt(1000, 10000).toString();
 }

@@ -18,6 +18,7 @@ import {
   procurementRecordAllowed,
   canReadEntityRecord,
   canUploadToEntityRecord,
+  staffCode,
 } from "./domain";
 
 function actor(overrides: Partial<Actor> = {}): Actor {
@@ -32,6 +33,12 @@ function actor(overrides: Partial<Actor> = {}): Actor {
     ...overrides,
   };
 }
+
+test("staff access codes are generated as four digits", () => {
+  for (let attempt = 0; attempt < 100; attempt += 1) {
+    assert.match(staffCode(), /^\d{4}$/);
+  }
+});
 
 test("project visibility is limited to an actor's developments", () => {
   const staff = actor();

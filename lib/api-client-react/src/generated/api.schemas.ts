@@ -51,6 +51,8 @@ export interface OrganizationInput {
   propertyLimit?: number | null;
   features?: OrganizationInputFeatures;
   unrestricted?: boolean;
+  /** @minLength 1 */
+  directorName: string;
 }
 
 export type OrganizationUpdateStatus = typeof OrganizationUpdateStatus[keyof typeof OrganizationUpdateStatus];
@@ -73,12 +75,80 @@ export interface OrganizationUpdate {
   propertyLimit?: number | null;
   features?: OrganizationUpdateFeatures;
   unrestricted?: boolean;
-  directorName?: string;
+}
+
+export interface TimeClockConfig {
+  integrationEnabled: boolean;
+  externalAuthoritative: boolean;
+  mobileClockEnabled: boolean;
+  provider: string | null;
+}
+
+export interface TimeClockConfigUpdate {
+  integrationEnabled?: boolean;
+  mobileClockEnabled?: boolean;
+}
+
+export type PlatformTimeClockConfig = TimeClockConfig & {
+  organizationId: string;
+};
+
+export type TimeClockPunchInputDirection = typeof TimeClockPunchInputDirection[keyof typeof TimeClockPunchInputDirection];
+
+
+export const TimeClockPunchInputDirection = {
+  in: 'in',
+  out: 'out',
+} as const;
+
+export interface TimeClockPunchInput {
+  direction: TimeClockPunchInputDirection;
   /**
-     * @minLength 4
-     * @maxLength 4
+     * @minLength 1
+     * @maxLength 255
      */
-  directorCode?: string;
+  idempotencyKey: string;
+}
+
+export type TimeClockPunchDirection = typeof TimeClockPunchDirection[keyof typeof TimeClockPunchDirection];
+
+
+export const TimeClockPunchDirection = {
+  in: 'in',
+  out: 'out',
+} as const;
+
+export type TimeClockPunchSource = typeof TimeClockPunchSource[keyof typeof TimeClockPunchSource];
+
+
+export const TimeClockPunchSource = {
+  external: 'external',
+  'fiarep-mobile': 'fiarep-mobile',
+} as const;
+
+export interface TimeClockPunch {
+  id: string;
+  direction: TimeClockPunchDirection;
+  source: TimeClockPunchSource;
+  punchAt: string;
+  recordedAt: string;
+  provider: string | null;
+  externalId: string | null;
+  readOnly: boolean;
+}
+
+export type TimeClockStatusNextDirection = typeof TimeClockStatusNextDirection[keyof typeof TimeClockStatusNextDirection];
+
+
+export const TimeClockStatusNextDirection = {
+  in: 'in',
+  out: 'out',
+} as const;
+
+export interface TimeClockStatus {
+  config: TimeClockConfig;
+  current: TimeClockPunch | null;
+  nextDirection: TimeClockStatusNextDirection;
 }
 
 export type OrganizationWithUsageUsage = {
@@ -100,15 +170,20 @@ export type OrganizationWithUsage = Organization & {
   developments: OrganizationDevelopmentUsage[];
 };
 
-export type OrganizationCreateResponseDirector = {
+export interface OrganizationDirectorCredentials {
   id: string;
   name: string;
   tenantId: string;
-};
+  /**
+     * @minLength 4
+     * @maxLength 4
+     */
+  code: string;
+}
 
 export interface OrganizationCreateResponse {
   organization: Organization;
-  director?: OrganizationCreateResponseDirector;
+  director?: OrganizationDirectorCredentials;
 }
 
 export interface OrganizationProperty {
@@ -482,6 +557,12 @@ export interface Staff {
   position: StaffPosition;
   status: string;
   developments: string[];
+  /**
+     * @minLength 8
+     * @maxLength 100
+     * @pattern ^[a-zA-Z0-9_-]+$
+     */
+  clientRequestId?: string;
   canManage?: boolean;
   canResetCode?: boolean;
   canRevoke?: boolean;
@@ -592,21 +673,9 @@ export interface StaffInput {
   role: StaffInputRole;
   position: StaffInputPosition;
   developments?: string[];
-  /**
-     * @minLength 4
-     * @maxLength 4
-     */
-  code?: string;
 }
 
-export interface StaffCodeUpdate {
-  /**
-     * @minLength 4
-     * @maxLength 4
-     * @pattern ^[A-Z0-9]{4}$
-     */
-  code?: string;
-}
+export interface StaffCodeUpdate { [key: string]: unknown }
 
 export interface EntityTombstone {
   id: string;
@@ -810,12 +879,16 @@ export interface FileUploadUrlRequest {
      */
   contentType: string;
   /**
-   * Entity record that will own the uploaded object
-   */
+     * Entity record that will own the uploaded object
+     * @minLength 1
+     * @maxLength 100
+     */
   entity: string;
   /**
-   * ID of the authorized entity record that will own the uploaded object
-   */
+     * ID of the authorized entity record that will own the uploaded object
+     * @minLength 1
+     * @maxLength 255
+     */
   recordId: string;
 }
 
@@ -836,47 +909,6 @@ export interface FileDownloadUrlResponse {
 
 export interface Error {
   error: string;
-}
-
-export interface TimeClockConfig {
-  integrationEnabled: boolean;
-  externalAuthoritative: boolean;
-  mobileClockEnabled: boolean;
-  provider: string | null;
-}
-
-export interface TimeClockConfigUpdate {
-  integrationEnabled?: boolean;
-  mobileClockEnabled?: boolean;
-}
-
-export interface PlatformTimeClockConfig extends TimeClockConfig {
-  organizationId: string;
-}
-
-export type TimeClockDirection = 'in' | 'out';
-export type TimeClockSource = 'external' | 'fiarep-mobile';
-
-export interface TimeClockPunchInput {
-  direction: TimeClockDirection;
-  idempotencyKey: string;
-}
-
-export interface TimeClockPunch {
-  id: string;
-  direction: TimeClockDirection;
-  source: TimeClockSource;
-  punchAt: string;
-  recordedAt: string;
-  provider: string | null;
-  externalId: string | null;
-  readOnly: boolean;
-}
-
-export interface TimeClockStatus {
-  config: TimeClockConfig;
-  current: TimeClockPunch | null;
-  nextDirection: TimeClockDirection;
 }
 
 /**
@@ -941,6 +973,19 @@ export type LogoutBody = {
 };
 
 export type ListPlatformLicenseAuditParams = {
+/**
+ * @minimum 1
+ * @maximum 100
+ */
+limit?: number;
+};
+
+export type IssueOrganizationDirectorCodeBody = {
+  /** @minLength 1 */
+  name: string;
+};
+
+export type ListTimeClockHistoryParams = {
 /**
  * @minimum 1
  * @maximum 100

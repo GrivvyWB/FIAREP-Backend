@@ -63,7 +63,7 @@ export async function getAttendanceStatus(): Promise<TimeClockStatus> {
 }
 
 export async function getAttendanceHistory(limit = 50): Promise<TimeClockPunch[]> {
-  return listTimeClockHistory(limit);
+  return listTimeClockHistory({ limit });
 }
 
 export async function punchAttendance(direction: 'in' | 'out', idempotencyKey: string): Promise<TimeClockPunch> {
@@ -1071,6 +1071,7 @@ export type StaffAccount = {
   role: StaffRole;
   status: StaffStatus;
   createdAt: string;
+  serverSynced?: boolean;
 };
 export type SessionIdentity = {
   staffId: string; tenantId: string; role: string; position: string; developments: string[];
@@ -1203,6 +1204,7 @@ async function persistServerSession(
     role: staff.role as StaffRole,
     status: staff.status as StaffStatus,
     createdAt: new Date().toISOString(),
+    serverSynced: true,
   };
   await d.runAsync(
     'INSERT INTO staff_accounts (id,state) VALUES (?,?) ON CONFLICT(id) DO UPDATE SET state = excluded.state',
@@ -1220,12 +1222,13 @@ export async function getSessionIdentity(): Promise<SessionIdentity | null> {
 export async function listStaffAccounts(status?: StaffStatus): Promise<StaffAccount[]> {
   const d = await db();
   await ensureStaffTable(d);
-  await syncApprovedLocalStaffToServer().catch(() => undefined);
   const localItems = await readLocalStaffAccounts(d);
   let items = localItems;
   if (await getAccessToken()) {
     try {
-      const remote = await listStaff();
+      let remote = await listStaff();
+      const createdRemoteAccounts = await syncApprovedLocalStaffToServer(remote);
+      if (createdRemoteAccounts) remote = await listStaff();
       const localById = new Map(localItems.map((item) => [item.id, item]));
       const localByName = new Map(localItems.map((item) => [item.name.trim().toLowerCase(), item]));
       const hydrated = remote.map((staff) => {
@@ -1241,6 +1244,7 @@ export async function listStaffAccounts(status?: StaffStatus): Promise<StaffAcco
           role: staff.role as StaffRole,
           status: staff.status as StaffStatus,
           createdAt: prior?.createdAt || new Date().toISOString(),
+          serverSynced: true,
         };
       });
       const remoteIds = new Set(hydrated.map((item) => item.id));
@@ -1285,7 +1289,7 @@ async function createServerStaffAccount(account: StaffAccount): Promise<StaffAcc
     role: account.role,
     position,
     developments: account.developments || [],
-    code: account.code.trim().toUpperCase(),
+    clientRequestId: account.id,
   } as any);
   return {
     ...account,
@@ -1298,23 +1302,57 @@ async function createServerStaffAccount(account: StaffAccount): Promise<StaffAcc
     role: remote.role as StaffRole,
     status: remote.status as StaffStatus,
     code: ((remote as any).code as string | undefined) || account.code,
+    serverSynced: true,
   };
 }
 
-async function syncApprovedLocalStaffToServer(): Promise<void> {
-  if (!(await getAccessToken())) return;
+let staffSyncInFlight: Promise<boolean> | null = null;
+
+async function syncApprovedLocalStaffToServer(remoteAccounts: Staff[]): Promise<boolean> {
+  if (staffSyncInFlight) return staffSyncInFlight;
+  staffSyncInFlight = syncApprovedLocalStaffToServerOnce(remoteAccounts);
+  try {
+    return await staffSyncInFlight;
+  } finally {
+    staffSyncInFlight = null;
+  }
+}
+
+async function syncApprovedLocalStaffToServerOnce(remoteAccounts: Staff[]): Promise<boolean> {
+  if (!(await getAccessToken())) return false;
   const d = await db();
   await ensureStaffTable(d);
   const local = await readLocalStaffAccounts(d);
-  for (const account of local.filter((item) => item.status === 'approved' && item.code)) {
+  const remoteById = new Map(remoteAccounts.map((item) => [item.id, item]));
+  const remoteByName = new Map(remoteAccounts.map((item) => [item.name.trim().toLowerCase(), item]));
+  let created = false;
+  for (const account of local) {
+    const matchingRemote = remoteById.get(account.id);
+    if (matchingRemote) {
+      if (matchingRemote.id !== account.id) await d.runAsync('DELETE FROM staff_accounts WHERE id=?', account.id);
+      await saveLocalStaffAccount(d, {
+        ...account,
+        id: matchingRemote.id,
+        name: matchingRemote.name,
+        serverSynced: true,
+      });
+      continue;
+    }
+    if (remoteByName.has(account.name.trim().toLowerCase()) && account.serverSynced !== false) {
+      console.warn(`Skipped legacy staff migration for duplicate name: ${account.name}`);
+      continue;
+    }
+    if (account.status !== 'approved' || !account.code || account.serverSynced === true) continue;
     try {
       const synced = await createServerStaffAccount(account);
       if (synced.id !== account.id) await d.runAsync('DELETE FROM staff_accounts WHERE id=?', account.id);
       await saveLocalStaffAccount(d, synced);
+      created = true;
     } catch {
       // Accounts outside the signed-in manager's authority stay local.
     }
   }
+  return created;
 }
 
 export async function listStaffByPosition(position?: string): Promise<StaffAccount[]> {
@@ -1407,7 +1445,7 @@ export async function requestStaffAccount(name: string, code: string, role: Staf
   const d = await db();
   await ensureStaffTable(d);
   const nm = name.trim();
-  const cd = code.trim();
+  void code;
   let status: StaffStatus = 'pending';
   if (role === 'management') {
     const bootstrap = !(await hasApprovedManagement());
@@ -1416,10 +1454,11 @@ export async function requestStaffAccount(name: string, code: string, role: Staf
   const acct: StaffAccount = {
     id: uid(),
     name: nm,
-    code: cd,
+    code: generateCode(),
     role,
     status,
     createdAt: new Date().toISOString(),
+    serverSynced: false,
   };
   await d.runAsync('INSERT INTO staff_accounts (id,state) VALUES (?,?)', acct.id, JSON.stringify(acct));
   return acct;
@@ -1576,6 +1615,7 @@ export async function addBulkPendingEmployees(parsed: ParsedEmployee[], role: St
       role,
       status: 'pending',
       createdAt: new Date().toISOString(),
+      serverSynced: false,
     };
     await d.runAsync('INSERT INTO staff_accounts (id,state) VALUES (?,?)', acct.id, JSON.stringify(acct));
     created++;
@@ -1663,7 +1703,7 @@ export async function restoreServerSession(): Promise<Staff | null> {
     await hydrateRemotePhotosFromDb(localDb);
     await setCurrentActor(staff.role, staff.name);
     await registerPushToken().catch(() => undefined);
-    await syncApprovedLocalStaffToServer().catch(() => undefined);
+    await listStaff().then(syncApprovedLocalStaffToServer).catch(() => undefined);
     const { syncAllEntities } = await import('./sync');
     await syncAllEntities().catch(() => undefined);
     return staff;
@@ -1751,10 +1791,7 @@ export async function logout(): Promise<void> {
 // ---- Top-down issuance model ----
 
 export function generateCode(): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let out = '';
-  for (let i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
-  return out;
+  return String(Math.floor(1000 + Math.random() * 9000));
 }
 
 export async function hasAnyAdministrator(): Promise<boolean> {

@@ -41,7 +41,7 @@ router.post("/v1/auth/bootstrap", async (req, res) => {
     typeof body["code"] === "string" ? body["code"].trim().toUpperCase() : "";
   if (!name || !/^[A-HJ-NP-Z2-9]{4}$/.test(code)) {
     res.status(400).json({
-      error: "name and a 4-character code without 0/O/1/I are required",
+      error: "Name and a valid 4-digit access code are required",
     });
     return;
   }

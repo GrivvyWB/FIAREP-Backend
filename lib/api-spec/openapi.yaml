@@ -385,6 +385,34 @@ paths:
           description: Organization not found
         "409":
           description: Organization still has staff or registered properties
+  /v1/platform/organizations/{id}/director-code:
+    post:
+      operationId: issueOrganizationDirectorCode
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [name]
+              properties:
+                name: { type: string, minLength: 1 }
+      responses:
+        "200":
+          description: Existing administrator code reset
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationDirectorCredentials" }
+        "201":
+          description: Initial administrator created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationDirectorCredentials" }
   /v1/platform/organizations/{id}/time-clock:
     parameters:
       - { name: id, in: path, required: true, schema: { type: string } }
@@ -1119,7 +1147,7 @@ components:
     OrganizationInput:
       type: object
       additionalProperties: false
-      required: [name]
+      required: [name, directorName]
       properties:
         name: { type: string }
         status: { type: string, enum: [active, suspended, expired] }
@@ -1129,6 +1157,7 @@ components:
         propertyLimit: { type: integer, nullable: true }
         features: { type: object, additionalProperties: true }
         unrestricted: { type: boolean }
+        directorName: { type: string, minLength: 1 }
     OrganizationUpdate:
       type: object
       properties:
@@ -1140,8 +1169,6 @@ components:
         propertyLimit: { type: integer, nullable: true }
         features: { type: object, additionalProperties: true }
         unrestricted: { type: boolean }
-        directorName: { type: string }
-        directorCode: { type: string, minLength: 4, maxLength: 4 }
     TimeClockConfig:
       type: object
       required: [integrationEnabled, externalAuthoritative, mobileClockEnabled, provider]
@@ -1222,12 +1249,15 @@ components:
       properties:
         organization: { $ref: "#/components/schemas/Organization" }
         director:
-          type: object
-          required: [id, name, tenantId]
-          properties:
-            id: { type: string }
-            name: { type: string }
-            tenantId: { type: string }
+          $ref: "#/components/schemas/OrganizationDirectorCredentials"
+    OrganizationDirectorCredentials:
+      type: object
+      required: [id, name, tenantId, code]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        tenantId: { type: string }
+        code: { type: string, minLength: 4, maxLength: 4 }
     OrganizationProperty:
       type: object
       required: [id, organizationId, displayAddress, normalizedAddress, active, createdAt, updatedAt]
@@ -1517,6 +1547,11 @@ components:
         developments:
           type: array
           items: { type: string }
+        clientRequestId:
+          type: string
+          minLength: 8
+          maxLength: 100
+          pattern: "^[a-zA-Z0-9_-]+$"
         canManage: { type: boolean }
         canResetCode: { type: boolean }
         canRevoke: { type: boolean }
@@ -1530,6 +1565,7 @@ components:
             code: { type: string, minLength: 4, maxLength: 4 }
     StaffInput:
       type: object
+      additionalProperties: false
       required: [name, role, position]
       properties:
         name: { type: string }
@@ -1544,15 +1580,10 @@ components:
         developments:
           type: array
           items: { type: string }
-        code: { type: string, minLength: 4, maxLength: 4 }
     StaffCodeUpdate:
       type: object
-      properties:
-        code:
-          type: string
-          minLength: 4
-          maxLength: 4
-          pattern: "^[A-Z0-9]{4}$"
+      additionalProperties: false
+      properties: {}
     EntityInput:
       type: object
       required: [id, state]
