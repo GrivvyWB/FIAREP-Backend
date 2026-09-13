@@ -48,7 +48,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (refreshInFlight) return refreshInFlight;
       refreshInFlight = (async () => {
         const token = localStorage.getItem("fiarep_refresh_token");
-        if (!token) return null;
+        if (!token) {
+          localStorage.removeItem("fiarep_access_token");
+          queryClient.clear();
+          setStaff(null);
+          return null;
+        }
         try {
           const response = await fetch("/api/v1/auth/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken: token }) });
           if (!response.ok) throw new Error("Staff session refresh failed");
@@ -59,6 +64,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         } catch {
           localStorage.removeItem("fiarep_access_token");
           localStorage.removeItem("fiarep_refresh_token");
+          queryClient.clear();
+          setStaff(null);
           return null;
         } finally { refreshInFlight = null; }
       })();

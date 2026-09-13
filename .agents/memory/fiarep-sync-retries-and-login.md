@@ -11,6 +11,8 @@ Shared entity creation must be idempotent for a retry by the same authenticated 
 
 Successful authentication must be persisted before optional local cache recovery, push registration, or synchronization. Failures in those follow-up steps must not turn a valid login into a user-visible authentication failure.
 
-**Why:** Login and session restoration can otherwise report a backend error even after the server issued a valid session, locking the user on the login screen because an unrelated queued mutation or local cache operation failed.
+When staff refresh fails or no refresh credential remains, clear both stored credentials and the in-memory staff identity. Protected screens must return to sign-in rather than continuing to render tenant queries that can only return 401.
 
-**How to apply:** Keep credential validation and session persistence in the critical path; run cache maintenance and sync as recoverable post-authentication work.
+**Why:** Login and session restoration can otherwise report a backend error even after the server issued a valid session, locking the user on the login screen because an unrelated queued mutation or local cache operation failed. Clearing only browser storage leaves React believing the user is authenticated and exposes misleading data-loading errors.
+
+**How to apply:** Keep credential validation and session persistence in the critical path; run cache maintenance and sync as recoverable post-authentication work. On terminal refresh failure, clear user-scoped query caches and in-memory identity together with stored tokens so the access router redirects immediately.
