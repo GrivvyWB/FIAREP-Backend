@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -83,6 +83,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   const [configuredDevelopments, setConfiguredDevelopments] = useState<string[]>([]);
   const [developmentName, setDevelopmentName] = useState("");
   const [developmentsOpen, setDevelopmentsOpen] = useState(true);
+  const autoPopulatedCatalog = useRef<readonly string[] | null>(null);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(orgSchema),
@@ -98,6 +99,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       directorName: "",
     },
   });
+  const currentOrganizationName = form.watch("name");
 
   const createMutation = useCreateOrganization();
   const updateMutation = useUpdateOrganization();
@@ -192,6 +194,22 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
     }
   }, [organization, open, form, preset]);
 
+  useEffect(() => {
+    if (!open) {
+      autoPopulatedCatalog.current = null;
+      return;
+    }
+    const catalog = organizationCatalog(currentOrganizationName);
+    if (!catalog) {
+      autoPopulatedCatalog.current = null;
+      return;
+    }
+    if (autoPopulatedCatalog.current === catalog) return;
+    autoPopulatedCatalog.current = catalog;
+    setConfiguredDevelopments([...catalog].sort((a, b) => a.localeCompare(b)));
+    setDevelopmentsOpen(true);
+  }, [currentOrganizationName, open]);
+
   const onSubmit = async (values: FormValues) => {
     if (!isEditing && !values.directorName?.trim()) {
       form.setError("directorName", { message: "Director name is required" });
@@ -267,7 +285,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   };
 
   const isLoading = createMutation.isPending || updateMutation.isPending || updateTimeClockMutation.isPending;
-  const currentOrganizationName = form.watch("name");
   const matchedOrganizationCatalog = organizationCatalog(currentOrganizationName);
   const isNychaOrganization = matchedOrganizationCatalog === NYCHA_DEVELOPMENT_NAMES;
   const isLmOrganization = matchedOrganizationCatalog === LM_DEVELOPMENT_NAMES;

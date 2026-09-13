@@ -1,0 +1,268 @@
+For FIAREP, you can implement an Organization Auto-Populate Search feature. When a user selects or types an organization name such as NYCHA, all developments associated with that organization are automatically added to the client's property list.
+
+Feature Flow
+User enters organization name.
+System searches Organizations database.
+Matching organization is found.
+All linked developments are retrieved.
+Developments are automatically attached to the client profile.
+User can remove individual developments if needed.
+Example Database Structure
+SQL
+1
+Organizations
+2
+-------------
+3
+id
+4
+name
+5
+ 
+6
+Developments
+7
+------------
+8
+id
+9
+organization_id
+10
+development_name
+11
+address
+12
+borough
+13
+``
+Show more lines
+Example Data
+JSON
+1
+{
+2
+"organization": "NYCHA",
+3
+"developments": [
+4
+"Queensbridge Houses",
+5
+"Polo Grounds Towers",
+6
+"Wagner Houses",
+7
+"Red Hook Houses",
+8
+"Amsterdam Houses",
+9
+"Marcy Houses"
+10
+]
+11
+}
+Show more lines
+React Native Search Component
+1
+const [organizationSearch, setOrganizationSearch] = useState('');
+2
+const [selectedDevelopments, setSelectedDevelopments] = useState([]);
+3
+ 
+4
+const organizations = [
+5
+{
+6
+name: 'NYCHA',
+7
+developments: [
+8
+'Queensbridge Houses',
+9
+'Polo Grounds Towers',
+10
+'Wagner Houses',
+11
+'Red Hook Houses',
+12
+'Amsterdam Houses'
+13
+]
+14
+},
+15
+{
+16
+name: 'Related Companies',
+17
+developments: [
+18
+'Hudson Yards',
+19
+'Time Warner Center'
+20
+]
+21
+}
+22
+];
+23
+ 
+24
+const handleOrganizationSelect = (name) => {
+25
+const org = organizations.find(
+26
+x => x.name.toLowerCase() === name.toLowerCase()
+27
+);
+28
+ 
+29
+if (org) {
+30
+setSelectedDevelopments(org.developments);
+31
+}
+32
+};
+Show more lines
+Viewing the content has been disabled for your protection
+Use the latest Microsoft Edge to enable secure access.
+Search Box UI
+1
+<View>
+2
+<TextInput
+3
+placeholder="Search Organization"
+4
+value={organizationSearch}
+5
+onChangeText={(text) => {
+6
+setOrganizationSearch(text);
+7
+handleOrganizationSelect(text);
+8
+}}
+9
+style={{
+10
+borderWidth: 1,
+11
+borderColor: '#ccc',
+12
+padding: 12,
+13
+borderRadius: 8
+14
+}}
+15
+/>
+16
+ 
+17
+<Text style={{marginTop: 15, fontWeight: 'bold'}}>
+18
+Associated Developments
+19
+</Text>
+20
+ 
+21
+{selectedDevelopments.map((dev, index) => (
+22
+<View
+23
+key={index}
+24
+style={{
+25
+padding: 10,
+26
+marginVertical: 5,
+27
+backgroundColor: '#f5f5f5',
+28
+borderRadius: 8
+29
+}}
+30
+>
+31
+<Text>{dev}</Text>
+32
+</View>
+33
+))}
+34
+</View>
+Show more lines
+Viewing the content has been disabled for your protection
+Use the latest Microsoft Edge to enable secure access.
+FIAREP Enterprise Enhancement
+
+Add an Organizations table containing:
+
+JSON
+1
+{
+2
+"NYCHA": [
+3
+"Queensbridge Houses",
+4
+"Red Hook Houses",
+5
+"Marcy Houses",
+6
+"Wagner Houses",
+7
+"Polo Grounds Towers"
+8
+],
+9
+"Phipps Houses": [
+10
+"Webster Houses",
+11
+"Phipps Plaza South"
+12
+],
+13
+"Related Companies": [
+14
+"Hudson Yards",
+15
+"Time Warner Center"
+16
+]
+17
+}
+Show more lines
+
+When a client is created:
+
+JavaScript
+1
+createClient({
+2
+clientName: "NYCHA",
+3
+organizationType: "Public Housing Authority",
+4
+developments: org.developments
+5
+});
+Show more lines
+
+Result:
+
+✅ Type NYCHA
+ ✅ System finds NYCHA organization
+ ✅ Automatically loads all NYCHA developments
+ ✅ Adds every development to the client's portfolio
+ ✅ Future additions to NYCHA developments automatically become available for selection
+
+This gives FIAREP a true Organization → Development Relationship Management System, where users only need to enter the organization name once and all associated properties and developments populate automatically.
