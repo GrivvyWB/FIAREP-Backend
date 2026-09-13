@@ -29,7 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator, useListPlatformOrganizationProperties, getListPlatformOrganizationPropertiesQueryKey } from "@workspace/api-client-react";
+import { LM_DEVELOPMENT_NAMES, NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator, useListPlatformOrganizationProperties, getListPlatformOrganizationPropertiesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -243,6 +243,10 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
     setConfiguredDevelopments((current) =>
       [...new Set([...current, ...NYCHA_DEVELOPMENT_NAMES])].sort((a, b) => a.localeCompare(b)),
     );
+  };
+
+  const addLmDevelopments = () => {
+    setConfiguredDevelopments([...LM_DEVELOPMENT_NAMES].sort((a, b) => a.localeCompare(b)));
   };
 
   const isLoading = createMutation.isPending || updateMutation.isPending || updateTimeClockMutation.isPending;
@@ -538,6 +542,9 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                   <Button type="button" variant="outline" onClick={addNychaDevelopments}>
                     NYCHA
                   </Button>
+                   <Button type="button" variant="outline" onClick={addLmDevelopments}>
+                     L+M
+                   </Button>
                 </div>
                 {configuredDevelopments.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-slate-200 p-5 text-center text-sm text-slate-500">
