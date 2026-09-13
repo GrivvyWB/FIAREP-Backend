@@ -29,6 +29,13 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy, X } from "lucide-react";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
 import { format, isValid } from "date-fns";
@@ -39,6 +46,8 @@ export default function OwnerDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedOrg, setSelectedOrg] = useState<OrganizationWithUsage | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [restoreOrg, setRestoreOrg] = useState<OrganizationWithUsage | null>(null);
+  const [restoreEndDate, setRestoreEndDate] = useState("");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -65,19 +74,18 @@ export default function OwnerDashboard() {
     setSelectedOrg(org);
     setIsDialogOpen(true);
   };
-  const handleStatusChange = async (org: OrganizationWithUsage, newStatus: "active" | "suspended" | "expired") => {
+  const handleStatusChange = async (
+    org: OrganizationWithUsage,
+    newStatus: "active" | "suspended" | "expired",
+    endDate?: string,
+  ) => {
     try {
-      const expiredEndDate =
-        newStatus === "active" &&
-        org.endsAt &&
-        isValid(new Date(org.endsAt)) &&
-        new Date(org.endsAt) <= new Date();
       await updateMutation.mutateAsync({
         id: org.id,
         data: {
           name: org.name,
           status: newStatus,
-          ...(org.status === "expired" || expiredEndDate ? { endsAt: null } : {}),
+          ...(endDate ? { endsAt: endDate } : {}),
         }
       });
       toast({
@@ -85,12 +93,30 @@ export default function OwnerDashboard() {
         description: `Organization ${org.name} is now ${newStatus}.`,
       });
       queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+      return true;
     } catch (err: any) {
       toast({
         variant: "destructive",
         title: "Update Failed",
         description: err.message || "Could not update status.",
       });
+      return false;
+    }
+  };
+
+  const handleRestore = async () => {
+    if (!restoreOrg || !restoreEndDate) return;
+    const endDate = new Date(`${restoreEndDate}T23:59:59.999`);
+    if (!isValid(endDate) || endDate <= new Date()) {
+      toast({
+        variant: "destructive",
+        title: "Invalid End Date",
+      });
+      return;
+    }
+    if (await handleStatusChange(restoreOrg, "active", endDate.toISOString())) {
+      setRestoreOrg(null);
+      setRestoreEndDate("");
     }
   };
 
@@ -251,7 +277,10 @@ export default function OwnerDashboard() {
                             <DropdownMenuSeparator />
                             
                             {!isActive && (
-                              <DropdownMenuItem onClick={() => handleStatusChange(org, "active")}>
+                               <DropdownMenuItem onClick={() => {
+                                 setRestoreOrg(org);
+                                 setRestoreEndDate("");
+                               }}>
                                 <Play className="w-4 h-4 mr-2 text-teal-500" /> Restore / Activate
                               </DropdownMenuItem>
                             )}
@@ -299,6 +328,37 @@ export default function OwnerDashboard() {
         onOpenChange={setIsDialogOpen} 
         organization={selectedOrg} 
       />
+      <Dialog open={Boolean(restoreOrg)} onOpenChange={(open) => {
+        if (!open) {
+          setRestoreOrg(null);
+          setRestoreEndDate("");
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Select End Date</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <label htmlFor="restore-end-date" className="text-sm font-medium text-slate-700">End Date</label>
+            <Input
+              id="restore-end-date"
+              type="date"
+              min={format(new Date(), "yyyy-MM-dd")}
+              value={restoreEndDate}
+              onChange={(event) => setRestoreEndDate(event.target.value)}
+            />
+          </div>
+          <DialogFooter>
+            <Button
+              type="button"
+              onClick={handleRestore}
+              disabled={!restoreEndDate || updateMutation.isPending}
+            >
+              Restore / Activate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <div className="bg-white rounded-xl border border-slate-200 p-5">
         <h2 className="font-semibold text-slate-900">Recent license activity</h2>
         <div className="mt-3 space-y-2 text-sm">
