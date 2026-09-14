@@ -152,7 +152,7 @@ export default function Notifications() {
                   >
                     {notification.reportId ? (
                       <Link
-                        href={pendingEmployee ? "/team" : "/reports"}
+                        href={pendingEmployee ? `/team?staffId=${encodeURIComponent(notification.reportId)}` : "/reports"}
                         className="flex min-w-0 flex-1 items-start gap-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => {
                           if (!notification.read && !pendingEmployee) void handleMarkRead(notification.id);

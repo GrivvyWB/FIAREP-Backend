@@ -32,6 +32,7 @@ export const staffAccounts = pgTable(
     developments: jsonb("developments").$type<string[]>().notNull().default([]),
     createdBy: text("created_by"),
     issuerName: text("issuer_name"),
+    hrNotes: text("hr_notes"),
     sessionVersion: integer("session_version").notNull().default(1),
     requestedAt: timestamp("requested_at", { withTimezone: true }),
     ...timestamps,

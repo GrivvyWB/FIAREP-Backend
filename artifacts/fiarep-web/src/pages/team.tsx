@@ -21,7 +21,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -95,6 +95,8 @@ export default function Team() {
   const [search, setSearch] = useState("");
   const [directoryDevelopment, setDirectoryDevelopment] = useState("");
   const [directoryStaffId, setDirectoryStaffId] = useState("");
+  const [hrNotes, setHrNotes] = useState("");
+  const [notesSaving, setNotesSaving] = useState(false);
   const [open, setOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"single" | "bulk">("single");
   const [name, setName] = useState("");
@@ -132,18 +134,34 @@ export default function Team() {
 
   const developmentStaff = staff?.filter((member) =>
     member.role !== "human_resources" &&
-    Boolean(directoryDevelopment) &&
-    member.developments.includes(directoryDevelopment)
+    (!directoryDevelopment || member.developments.includes(directoryDevelopment))
   ).sort((a, b) => a.name.localeCompare(b.name));
   const filtered = staff?.filter((member) => {
     if (actor?.role === "human_resources") {
       if (member.role === "human_resources") return false;
-      if (!directoryDevelopment || !member.developments.includes(directoryDevelopment)) return false;
       if (!directoryStaffId || member.id !== directoryStaffId) return false;
+      if (directoryDevelopment && !member.developments.includes(directoryDevelopment)) return false;
     }
     const q = search.toLowerCase();
     return !q || [member.name, member.role, member.position].some((v) => v.toLowerCase().includes(q));
   }).sort((a, b) => a.name.localeCompare(b.name));
+
+  useEffect(() => {
+    if (actor?.role !== "human_resources" || !staff?.length) return;
+    const staffId = new URLSearchParams(window.location.search).get("staffId");
+    if (!staffId) return;
+    const member = staff.find((candidate) => candidate.id === staffId && candidate.role !== "human_resources");
+    if (!member) return;
+    setDirectoryStaffId(member.id);
+    setDirectoryDevelopment(member.developments[0] || "");
+  }, [actor?.role, staff]);
+
+  useEffect(() => {
+    const member = staff?.find((candidate) => candidate.id === directoryStaffId) as
+      | (NonNullable<typeof staff>[number] & { hrNotes?: string | null })
+      | undefined;
+    setHrNotes(member?.hrNotes || "");
+  }, [directoryStaffId, staff]);
 
   async function refresh() {
     await invalidateStaffQueries(queryClient);
@@ -328,6 +346,30 @@ export default function Team() {
     if (!target) return;
     if (await deleteAccount(target.id, target.name)) setSearch("");
   }
+  async function saveHrNotes() {
+    if (!directoryStaffId) return;
+    setNotesSaving(true);
+    setActionError("");
+    try {
+      const response = await fetch(`/api/v1/staff/${encodeURIComponent(directoryStaffId)}/hr-notes`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}`,
+        },
+        body: JSON.stringify({ notes: hrNotes }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || "Unable to save notes.");
+      }
+      await refresh();
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setNotesSaving(false);
+    }
+  }
   const teamGroups = groupTeamDirectoryStaff(sorted || []);
   const memberCard = (member: NonNullable<typeof staff>[number]) => (
     <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
@@ -403,7 +445,14 @@ export default function Team() {
             {(availableDevelopments || []).map((development) => <option key={development} value={development}>{development}</option>)}
           </select>}
           <div className="flex max-w-xl gap-2">
-            {actor?.role === "human_resources" ? <select aria-label="Select staff member" className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryStaffId} onChange={(event) => setDirectoryStaffId(event.target.value)}>
+            {actor?.role === "human_resources" ? <select aria-label="Select staff member" className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryStaffId} onChange={(event) => {
+              const staffId = event.target.value;
+              setDirectoryStaffId(staffId);
+              if (!directoryDevelopment) {
+                const selectedMember = (staff || []).find((member) => member.id === staffId);
+                if (selectedMember?.developments[0]) setDirectoryDevelopment(selectedMember.developments[0]);
+              }
+            }}>
               <option value="">Select staff member</option>
               {(developmentStaff || []).map((member) => <option key={member.id} value={member.id}>{member.name} — {member.position}</option>)}
             </select> : <div className="relative flex-1">
@@ -416,7 +465,7 @@ export default function Team() {
         <div className="p-4">
           {isLoading ? <div className="p-8 text-center text-muted-foreground">Loading team...</div> :
             error ? <div className="p-8 text-center text-destructive">{errorMessage(error)}</div> :
-            actor?.role === "human_resources" && !directoryDevelopment ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">Select a development</h3></div> :
+            actor?.role === "human_resources" && !directoryDevelopment && !directoryStaffId ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">Select a development</h3></div> :
             actor?.role === "human_resources" && !directoryStaffId ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">Select a staff member</h3></div> :
             sorted?.length === 0 ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">No team members found</h3></div> :
             actor?.role === "human_resources" ?
@@ -426,7 +475,14 @@ export default function Team() {
                     <div><h3 className="font-bold">{directoryDevelopment}</h3><p className="text-xs text-muted-foreground">{sorted?.length || 0} staff member{sorted?.length === 1 ? "" : "s"}</p></div>
                     <ChevronDown className="h-5 w-5 shrink-0" />
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="grid gap-3 pt-3">{(sorted || []).map(memberCard)}</CollapsibleContent>
+                  <CollapsibleContent className="grid gap-3 pt-3">
+                    {(sorted || []).map(memberCard)}
+                    <div className="space-y-2 rounded-xl border border-border p-4">
+                      <Label htmlFor="hr-notes">HR notes</Label>
+                      <textarea id="hr-notes" className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={hrNotes} onChange={(event) => setHrNotes(event.target.value)} />
+                      <Button type="button" onClick={saveHrNotes} disabled={notesSaving}>{notesSaving ? "Saving..." : "Save notes"}</Button>
+                    </div>
+                  </CollapsibleContent>
                 </Collapsible>
               </div> :
               <div className="space-y-6">{teamGroups.map((group) => <section key={group.label} className="space-y-3"><div className="border-b border-border pb-2"><h3 className="font-bold">{group.label}</h3><p className="text-xs text-muted-foreground">{group.people.length} team member{group.people.length === 1 ? "" : "s"}</p></div><div className="grid gap-3">{group.people.map(memberCard)}</div></section>)}</div>}

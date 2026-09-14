@@ -368,6 +368,41 @@ router.post("/v1/staff/:id/approve", async (req, res) => {
   res.json(safe(updatedResult.updated, true, actor));
 });
 
+router.put("/v1/staff/:id/hr-notes", async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.role !== "human_resources") {
+    res.status(403).json({ error: "Only Human Resources may update employee notes" });
+    return;
+  }
+  const [target] = await db
+    .select()
+    .from(staffAccounts)
+    .where(and(
+      eq(staffAccounts.id, req.params["id"]!),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    ))
+    .limit(1);
+  if (!target || !canManageStaff(actor, target)) {
+    res.status(404).json({ error: "Employee not found" });
+    return;
+  }
+  const notes = typeof req.body?.notes === "string" ? req.body.notes.trim() : "";
+  const [updated] = await db
+    .update(staffAccounts)
+    .set({ hrNotes: notes || null, updatedAt: new Date() })
+    .where(and(
+      eq(staffAccounts.id, req.params["id"]!),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    ))
+    .returning();
+  if (!updated) {
+    res.status(404).json({ error: "Employee not found" });
+    return;
+  }
+  await audit(actor, "staff.hr_notes_updated", `Updated HR notes for ${updated.name}`, updated.id);
+  res.json(safe(updated, false, actor));
+});
+
 router.post("/v1/staff/:id/reset-code", async (req, res) => {
   const actor = actorFrom(res);
   const [target] = await db
