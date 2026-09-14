@@ -12,7 +12,7 @@ import { useSubmitPublicResidentReport, useLookupPublicResidentReports, getLooku
 import { ArrowLeft } from 'lucide-react';
 
 const reportSchema = z.object({
-  address: z.string().min(1, 'Address is required'),
+  development: z.string().min(1, 'Development is required'),
   unit: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
   reporterName: z.string().optional(),
@@ -22,12 +22,11 @@ const reportSchema = z.object({
 
 const lookupSchema = z.object({
   complaintNo: z.string().min(1, 'Complaint number is required'),
-  address: z.string().min(1, 'Address is required'),
 });
 
 export default function PublicResident() {
   const [view, setView] = useState<'options' | 'submit' | 'lookup'>('options');
-  const [lookupData, setLookupData] = useState<{ complaintNo: string, address: string } | null>(null);
+  const [lookupData, setLookupData] = useState<{ complaintNo: string } | null>(null);
   
   const { toast } = useToast();
   
@@ -35,8 +34,7 @@ export default function PublicResident() {
   
   const { data: statusResult, isLoading: isLookingUp, error: lookupError } = useLookupPublicResidentReports(
     lookupData?.complaintNo || '',
-    { address: lookupData?.address || '' },
-    { query: { enabled: !!lookupData, retry: false, queryKey: getLookupPublicResidentReportsQueryKey(lookupData?.complaintNo || '', { address: lookupData?.address || '' }) } }
+    { query: { enabled: !!lookupData, retry: false, queryKey: getLookupPublicResidentReportsQueryKey(lookupData?.complaintNo || '') } }
   );
 
   useEffect(() => {
@@ -47,14 +45,13 @@ export default function PublicResident() {
   
   const reportForm = useForm<z.infer<typeof reportSchema>>({
     resolver: zodResolver(reportSchema),
-    defaultValues: { address: '', unit: '', description: '', reporterName: '', reporterPhone: '', reporterEmail: '' },
+    defaultValues: { development: '', unit: '', description: '', reporterName: '', reporterPhone: '', reporterEmail: '' },
   });
 
   const lookupForm = useForm<z.infer<typeof lookupSchema>>({
     resolver: zodResolver(lookupSchema),
     defaultValues: { 
       complaintNo: sessionStorage.getItem('fiarep_resident_complaint') || '', 
-      address: sessionStorage.getItem('fiarep_resident_address') || '',
     },
   });
 
@@ -69,7 +66,6 @@ export default function PublicResident() {
         const returnedComplaintNo = (res.state as any)?.complaintNo || res.id;
         
         sessionStorage.setItem('fiarep_resident_complaint', returnedComplaintNo);
-        sessionStorage.setItem('fiarep_resident_address', values.address);
         sessionStorage.setItem('fiarep_resident_token', res.statusToken);
         
         toast({
@@ -78,7 +74,6 @@ export default function PublicResident() {
         });
         
         lookupForm.setValue('complaintNo', returnedComplaintNo);
-        lookupForm.setValue('address', values.address);
         setView('options');
         reportForm.reset();
       },
@@ -132,13 +127,6 @@ export default function PublicResident() {
                         <FormMessage />
                       </FormItem>
                     )} />
-                    <FormField control={lookupForm.control} name="address" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Address</FormLabel>
-                        <FormControl><Input {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
                     <Button type="submit" className="w-full" disabled={isLookingUp}>
                       {isLookingUp ? 'Checking...' : 'Check Status'}
                     </Button>
@@ -162,9 +150,9 @@ export default function PublicResident() {
             <CardContent>
               <Form {...reportForm}>
                 <form onSubmit={reportForm.handleSubmit(onReportSubmit)} className="space-y-4">
-                  <FormField control={reportForm.control} name="address" render={({ field }) => (
+                  <FormField control={reportForm.control} name="development" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Address</FormLabel>
+                      <FormLabel>Development</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>

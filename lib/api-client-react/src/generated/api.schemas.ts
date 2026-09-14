@@ -1074,10 +1074,6 @@ development?: string;
 status?: string;
 };
 
-export type LookupPublicResidentReportsParams = {
-address: string;
-};
-
 export type LookupPublicVendorScopeParams = {
 vendorName: string;
 };

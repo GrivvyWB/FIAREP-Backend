@@ -47,7 +47,6 @@ import type {
   LoginInput,
   LogoutBody,
   LookupNycPropertyParams,
-  LookupPublicResidentReportsParams,
   LookupPublicVendorScopeParams,
   Notification,
   NycPropertyLookup,
@@ -2940,26 +2939,17 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getSubmitPublicResidentReportMutationOptions(options));
     }
 
-export const getLookupPublicResidentReportsUrl = (complaintNo: string,
-    params: LookupPublicResidentReportsParams,) => {
-  const normalizedParams = new URLSearchParams();
+export const getLookupPublicResidentReportsUrl = (complaintNo: string,) => {
 
-  Object.entries(params || {}).forEach(([key, value]) => {
 
-    if (value !== undefined) {
-      normalizedParams.append(key, value === null ? 'null' : String(value))
-    }
-  });
 
-  const stringifiedParams = normalizedParams.toString();
 
-  return stringifiedParams.length > 0 ? `/api/v1/public/resident-reports/${complaintNo}?${stringifiedParams}` : `/api/v1/public/resident-reports/${complaintNo}`
+  return `/api/v1/public/resident-reports/${complaintNo}`
 }
 
-export const lookupPublicResidentReports = async (complaintNo: string,
-    params: LookupPublicResidentReportsParams, options?: Parameters<typeof customFetch>[1]): Promise<PublicResidentReportStatus> => {
+export const lookupPublicResidentReports = async (complaintNo: string, options?: Parameters<typeof customFetch>[1]): Promise<PublicResidentReportStatus> => {
 
-  return customFetch<PublicResidentReportStatus>(getLookupPublicResidentReportsUrl(complaintNo,params),
+  return customFetch<PublicResidentReportStatus>(getLookupPublicResidentReportsUrl(complaintNo),
   {
     ...options,
     method: 'GET'
@@ -2972,25 +2962,23 @@ export const lookupPublicResidentReports = async (complaintNo: string,
 
 
 
-export const getLookupPublicResidentReportsQueryKey = (complaintNo: string,
-    params?: LookupPublicResidentReportsParams,) => {
+export const getLookupPublicResidentReportsQueryKey = (complaintNo: string,) => {
     return [
-    `/api/v1/public/resident-reports/${complaintNo}`, ...(params ? [params] : [])
+    `/api/v1/public/resident-reports/${complaintNo}`
     ] as const;
     }
 
 
-export const getLookupPublicResidentReportsQueryOptions = <TData = Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError = ErrorType<unknown>>(complaintNo: string,
-    params: LookupPublicResidentReportsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getLookupPublicResidentReportsQueryOptions = <TData = Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError = ErrorType<unknown>>(complaintNo: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getLookupPublicResidentReportsQueryKey(complaintNo,params);
+  const queryKey =  queryOptions?.queryKey ?? getLookupPublicResidentReportsQueryKey(complaintNo);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupPublicResidentReports>>> = ({ signal }) => lookupPublicResidentReports(complaintNo,params, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupPublicResidentReports>>> = ({ signal }) => lookupPublicResidentReports(complaintNo, { signal, ...requestOptions });
 
 
 
@@ -3005,12 +2993,11 @@ export type LookupPublicResidentReportsQueryError = ErrorType<unknown>
 
 
 export function useLookupPublicResidentReports<TData = Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError = ErrorType<unknown>>(
- complaintNo: string,
-    params: LookupPublicResidentReportsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+ complaintNo: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupPublicResidentReports>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getLookupPublicResidentReportsQueryOptions(complaintNo,params,options)
+  const queryOptions = getLookupPublicResidentReportsQueryOptions(complaintNo,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

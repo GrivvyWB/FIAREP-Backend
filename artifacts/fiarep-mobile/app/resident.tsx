@@ -1,23 +1,19 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
   ScrollView,
-  Image,
   StyleSheet,
   Alert,
   ActivityIndicator,
-  Modal,
-  FlatList,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { useRouter } from 'expo-router';
-import { createResidentReport, listDevelopmentNames, LOCATION_CATEGORIES } from '../lib/store';
-import AddressInput from '../components/AddressInput';
+import { createResidentReport, LOCATION_CATEGORIES } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 
@@ -32,19 +28,10 @@ export default function ResidentScreen() {
     .map((c) => (c === 'Compactor Room' ? 'Compactor' : c));
   const [locationOther, setLocationOther] = useState('');
   const [unit, setUnit] = useState('');
-  const [address, setAddress] = useState('');
   const [development, setDevelopment] = useState('');
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [query, setQuery] = useState('');
-
-  const names = useMemo(() => listDevelopmentNames(), []);
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? names.filter((n) => n.toLowerCase().includes(q)) : names;
-  }, [query, names]);
 
   async function onTakePhoto() {
     try {
@@ -69,8 +56,8 @@ export default function ResidentScreen() {
   }
 
   async function onSubmit() {
-    if (!address.trim()) {
-      Alert.alert('Address required', 'Please enter your building address.');
+    if (!development.trim()) {
+      Alert.alert('Development required', 'Please enter your development.');
       return;
     }
     if (!description.trim()) {
@@ -80,7 +67,7 @@ export default function ResidentScreen() {
     setSubmitting(true);
     try {
       const effLoc = location === 'Other' ? (locationOther.trim() || 'Other') : location;
-      const report = await createResidentReport(unit.trim(), address.trim(), description.trim(), photos, development.trim(), name.trim(), effLoc);
+      const report = await createResidentReport(unit.trim(), development.trim(), description.trim(), photos, name.trim(), effLoc);
       const failures = (report as any).photoUploadFailures as string[] | undefined;
       Alert.alert('Report submitted', `Complaint number: ${report.complaintNo}\n\nThis report is saved on this device for status checks.${failures?.length ? `\n\n${failures.length} photo(s) could not be uploaded.` : ''}`, [
         { text: 'OK', onPress: () => router.back() },
@@ -135,20 +122,12 @@ export default function ResidentScreen() {
         autoCapitalize="characters"
       />
 
-      <Text style={styles.label}>Development (optional)</Text>
-      <TouchableOpacity style={styles.input} onPress={() => setPickerOpen(true)}>
-        <Text style={{ fontSize: 16, color: development ? '#111' : '#999' }}>
-          {development || 'Select development'}
-        </Text>
-      </TouchableOpacity>
-
-      <Text style={styles.label}>Building Address</Text>
-      <AddressInput
-        value={address}
-        onChangeText={setAddress}
-        placeholder="Type an address or use phone location"
+      <Text style={styles.label}>Development</Text>
+      <TextInput
+        value={development}
+        onChangeText={setDevelopment}
         style={styles.input}
-        useCurrentLocation
+        autoCapitalize="words"
       />
 
       <Text style={styles.label}>Description</Text>
@@ -201,38 +180,6 @@ export default function ResidentScreen() {
         )}
       </TouchableOpacity>
 
-      <Modal visible={pickerOpen} animationType="slide" onRequestClose={() => setPickerOpen(false)}>
-        <View style={styles.modalWrap}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Select development</Text>
-            <TouchableOpacity onPress={() => setPickerOpen(false)}>
-              <Text style={styles.modalClose}>Close</Text>
-            </TouchableOpacity>
-          </View>
-          <TextInput
-            style={styles.input}
-            value={query}
-            onChangeText={setQuery}
-            placeholder="Search developments…"
-            placeholderTextColor="#999"
-            autoFocus
-          />
-          <FlatList
-            data={filtered}
-            keyExtractor={(n) => n}
-            keyboardShouldPersistTaps="handled"
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.devRow}
-                onPress={() => { setDevelopment(item); setPickerOpen(false); setQuery(''); }}
-              >
-                <Text style={styles.devRowText}>{item}</Text>
-              </TouchableOpacity>
-            )}
-            ListEmptyComponent={<Text style={styles.emptyText}>No matches.</Text>}
-          />
-        </View>
-      </Modal>
     <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
     </ScrollView>
     </KeyboardAvoidingView>

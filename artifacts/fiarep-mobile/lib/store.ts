@@ -533,7 +533,7 @@ export function canonicalAssignmentPayload(
   return { assignedStaffId: id };
 }
 
-export type SavedResidentReport = { complaintNo: string; address: string; statusToken: string };
+export type SavedResidentReport = { complaintNo: string; development?: string; address?: string; statusToken: string };
 
 async function ensureResidentTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS resident_reports (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
@@ -549,7 +549,7 @@ function normalizeResidentReport(r: any): ResidentReport {
   } as ResidentReport;
 }
 
-export async function createResidentReport(unit: string, address: string, description: string, photos: string[] = [], development: string = '', residentName: string = '', location: string = '', contact: string = ''): Promise<ResidentReport> {
+export async function createResidentReport(unit: string, development: string, description: string, photos: string[] = [], residentName: string = '', location: string = '', contact: string = ''): Promise<ResidentReport> {
   const now = new Date().toISOString();
   const submitted = await submitPublicResidentReport({
     id: uid(),
@@ -559,7 +559,7 @@ export async function createResidentReport(unit: string, address: string, descri
       contact: contact.trim() || undefined,
       location: location.trim(),
       unit: unit.trim(),
-      address: address.trim(),
+      address: '',
       development: development.trim(),
       description: description.trim(),
       photos: [],
@@ -579,7 +579,7 @@ export async function createResidentReport(unit: string, address: string, descri
       const complaintNo = String((submitted.state as any).complaintNo ?? "");
       const upload = await requestPublicResidentPhotoUpload(complaintNo, {
         statusToken: submitted.statusToken,
-        address: address.trim(),
+        address: '',
         name,
         size: info.size,
         contentType: "image/jpeg",
@@ -592,7 +592,7 @@ export async function createResidentReport(unit: string, address: string, descri
       const confirmed = await confirmPublicResidentPhoto(complaintNo, {
         grantId: (upload as any).grantId || upload.file.id,
         statusToken: submitted.statusToken,
-        address: address.trim(), objectPath: upload.file.objectPath,
+        address: '', objectPath: upload.file.objectPath,
         name, size: info.size, contentType: "image/jpeg",
       } as any);
       remotePhotos.push(local);
@@ -603,7 +603,7 @@ export async function createResidentReport(unit: string, address: string, descri
    const r = normalizeResidentReport({ ...(submitted.state as object), id: submitted.id, photos: remotePhotos });
    await saveResidentCredentials({
      complaintNo: String((submitted.state as any).complaintNo ?? ""),
-     address: address.trim(),
+      development: development.trim(),
      statusToken: String(submitted.statusToken ?? ""),
    });
   try {
@@ -771,11 +771,11 @@ export async function getResidentReport(id: string): Promise<ResidentReport | nu
   try { return normalizeResidentReport(JSON.parse(row.state)); } catch { return null; }
 }
 
-export async function findResidentReports(complaintNo: string, address: string, statusToken: string): Promise<ResidentReport[]> {
-  const result = await lookupPublicResidentReports(complaintNo.trim(), { address: address.trim() });
+export async function findResidentReports(complaintNo: string, statusToken: string): Promise<ResidentReport[]> {
+  const result = await lookupPublicResidentReports(complaintNo.trim());
   const report = normalizeResidentReport({ ...result, photos: [], id: complaintNo });
   if (statusToken) {
-    await saveResidentCredentials({ complaintNo: complaintNo.trim(), address: address.trim(), statusToken });
+    await saveResidentCredentials({ complaintNo: complaintNo.trim(), statusToken });
   }
   return [report];
 }

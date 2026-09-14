@@ -4,7 +4,6 @@ import PhotoViewer from '../components/PhotoViewer';
 import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import { findResidentReports, listSavedResidentReports, type ResidentReport, type SavedResidentReport } from '../lib/store';
-import AddressInput from '../components/AddressInput';
 import { ui, ACCENT } from '../lib/ui';
 
 const STATUS_LABEL: Record<ResidentReport['status'], string> = {
@@ -28,25 +27,22 @@ function fmt(iso: string): string {
 export default function ResidentLookup() {
   const [complaintNo, setComplaintNo] = useState('');
   const [viewerUri, setViewerUri] = useState<string | null>(null);
-  const [address, setAddress] = useState('');
   const [results, setResults] = useState<ResidentReport[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [saved, setSaved] = useState<SavedResidentReport[]>([]);
   useEffect(() => { listSavedResidentReports().then(setSaved).catch(() => undefined); }, []);
 
   async function onLookup() {
-    if (!complaintNo.trim() || !address.trim()) {
-      Alert.alert('Missing info', 'Enter your complaint number and building address.');
+    if (!complaintNo.trim()) {
+      Alert.alert('Missing info', 'Enter your complaint number.');
       return;
     }
     const savedReport = saved.find(
-      (item) =>
-        item.complaintNo.trim().toUpperCase() === complaintNo.trim().toUpperCase() &&
-        item.address.trim().toLowerCase() === address.trim().toLowerCase(),
+      (item) => item.complaintNo.trim().toUpperCase() === complaintNo.trim().toUpperCase(),
     );
     setSearching(true);
     try {
-      const found = await findResidentReports(complaintNo.trim(), address.trim(), savedReport?.statusToken || '');
+      const found = await findResidentReports(complaintNo.trim(), savedReport?.statusToken || '');
       setResults(found);
     } catch (e: any) {
       Alert.alert('Lookup failed', e?.message ?? 'Could not look up reports.');
@@ -59,15 +55,14 @@ export default function ResidentLookup() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Check Report Status</Text>
-      <Text style={ui.label}>Enter the complaint number you received and the same building address used on the complaint.</Text>
       {saved.length > 0 && (
         <View style={{ gap: 8, marginBottom: 8 }}>
           <Text style={ui.label}>Saved reports</Text>
           {saved.map((item) => (
             <Pressable key={item.complaintNo} style={ui.btnOutline} onPress={() => {
-              setComplaintNo(item.complaintNo); setAddress(item.address);
+               setComplaintNo(item.complaintNo);
             }}>
-              <Text style={ui.btnOutlineText}>{item.complaintNo} · {item.address}</Text>
+              <Text style={ui.btnOutlineText}>{item.complaintNo}</Text>
             </Pressable>
           ))}
         </View>
@@ -84,17 +79,12 @@ export default function ResidentLookup() {
         />
       </View>
 
-      <View>
-        <Text style={ui.label}>Building address</Text>
-        <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 123 Main St" style={ui.input} />
-      </View>
-
       <Pressable style={ui.btn} onPress={onLookup} disabled={searching}>
         <Text style={ui.btnText}>{searching ? 'Looking up…' : 'Look Up'}</Text>
       </Pressable>
 
       {results !== null && results.length === 0 && (
-        <Text style={ui.empty}>No report matched that complaint number and address.</Text>
+        <Text style={ui.empty}>No report matched that complaint number.</Text>
       )}
 
       {results !== null && results.map((r) => (

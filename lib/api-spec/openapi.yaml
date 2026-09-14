@@ -757,7 +757,6 @@ paths:
       tags: [entities]
       parameters:
         - { name: complaintNo, in: path, required: true, schema: { type: string } }
-        - { name: address, in: query, required: true, schema: { type: string } }
       responses:
         "200":
           description: Matching resident complaint

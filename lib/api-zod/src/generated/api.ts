@@ -1010,10 +1010,6 @@ export const LookupPublicResidentReportsParams = zod.object({
   "complaintNo": zod.coerce.string()
 })
 
-export const LookupPublicResidentReportsQueryParams = zod.object({
-  "address": zod.coerce.string()
-})
-
 export const LookupPublicResidentReportsResponse = zod.object({
   "complaintNo": zod.string(),
   "status": zod.string(),

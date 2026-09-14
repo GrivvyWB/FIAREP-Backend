@@ -44,12 +44,18 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   const input = req.body && typeof req.body === "object" ? req.body : {};
   const rawState = input.state && typeof input.state === "object" ? input.state : {};
   const address = String(rawState.address ?? "").trim();
+  const requestedDevelopment = String(rawState.development ?? "").trim();
   const normalizedAddress = normalize(address);
   const description = String(rawState.description ?? "").trim();
-  if (!address || !description) { res.status(400).json({ error: "Address and complaint description are required" }); return; }
-  const properties = await db.select().from(organizationProperties).where(and(
-    eq(organizationProperties.normalizedAddress, normalizedAddress), eq(organizationProperties.active, true),
-  ));
+  if (!requestedDevelopment || !description) {
+    res.status(400).json({ error: "Development and complaint description are required" });
+    return;
+  }
+  const properties = address
+    ? await db.select().from(organizationProperties).where(and(
+      eq(organizationProperties.normalizedAddress, normalizedAddress), eq(organizationProperties.active, true),
+    ))
+    : [];
   const valid = [];
   for (const property of properties) {
     const org = await evaluateLicense(property.organizationId);
@@ -57,7 +63,7 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   }
   const property = valid.length === 1 ? valid[0]!.property : null;
   let nychaAddress: Awaited<ReturnType<typeof lookupNychaResidentialAddress>> = null;
-  if (!property) {
+  if (!property && address) {
     try {
       nychaAddress = await lookupNychaResidentialAddress(address);
     } catch (error) {
@@ -88,7 +94,7 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   const reportDevelopment =
     property?.development ??
     nychaAddress?.development ??
-    (String(rawState.development ?? "").trim() || null);
+    requestedDevelopment;
   const now = new Date();
   const id = typeof input.id === "string" && input.id.trim() ? input.id.trim() : randomUUID();
   let complaintNo = "";
@@ -118,8 +124,8 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       state, createdBy: "public-resident", createdAt: now, updatedAt: now,
     }).returning();
     const createdNotifications = await tx.insert(notifications).values([
-      { id: randomUUID(), tenantId, target: "management", message: "New resident report", detail: `${reportAddress} · ${complaintNo}`, reportId: id },
-      { id: randomUUID(), tenantId, target: "administrator", message: "New resident report", detail: `${reportAddress} · ${complaintNo}`, reportId: id },
+      { id: randomUUID(), tenantId, target: "management", message: "New resident report", detail: `${reportDevelopment} · ${complaintNo}`, reportId: id },
+      { id: randomUUID(), tenantId, target: "administrator", message: "New resident report", detail: `${reportDevelopment} · ${complaintNo}`, reportId: id },
     ]).returning();
     return { row, createdNotifications };
   }).catch(() => null);
@@ -131,18 +137,17 @@ router.post("/v1/public/resident-reports", async (req, res) => {
 });
 
 router.get("/v1/public/resident-reports/:complaintNo", async (req, res) => {
-  const address = normalize(req.query.address);
   const [access] = await db.select().from(publicAccessCodes).where(and(
     eq(publicAccessCodes.kind, "resident"), eq(publicAccessCodes.code, req.params.complaintNo!.toUpperCase()),
   )).limit(1);
-  if (!access || !address) {
+  if (!access) {
     res.status(404).json({ error: "Report not found" }); return;
   }
   const [row] = await db.select().from(entityRecords).where(and(
     eq(entityRecords.id, access.recordId), eq(entityRecords.tenantId, access.tenantId),
     eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
   )).limit(1);
-  if (!row || normalize(row.state["address"]) !== address) { res.status(404).json({ error: "Report not found" }); return; }
+  if (!row) { res.status(404).json({ error: "Report not found" }); return; }
   const state = row.state;
   res.json({ complaintNo: state["complaintNo"], status: state["status"], description: state["description"], updates: state["updates"], createdAt: state["createdAt"] });
 });
