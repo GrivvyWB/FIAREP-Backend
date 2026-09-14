@@ -134,6 +134,8 @@ export const NYCHA_DEVELOPMENT_NAMES = [
   "Queensbridge North",
   "Queensbridge South",
   "Ravenswood",
+  "Red Hook East",
+  "Red Hook West",
   "Rehab Program (Taft Rehabs)",
   "Richmond Terrace",
   "Riis",
