@@ -20,6 +20,12 @@ export default function ManageRequests() {
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setOpen((m) => ({ ...m, [k]: !m[k] }));
+  const groupedNotifs = Object.values(notifs.reduce<Record<string, { notification: Notification; ids: string[] }>>((groups, notification) => {
+    const key = `${(notification.message || '').trim().toLowerCase()}|${(notification.reportId || notification.detail || '').trim().toLowerCase()}`;
+    if (groups[key]) groups[key].ids.push(notification.id);
+    else groups[key] = { notification, ids: [notification.id] };
+    return groups;
+  }, {}));
 
   const load = useCallback(() => {
     listResidentReports().then(setReports);
@@ -76,15 +82,15 @@ export default function ManageRequests() {
 
       <Pressable onPress={() => toggle('notifs')} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, backgroundColor: '#f2f7fb', borderRadius: 10, padding: 12 }}>
         <Text style={{ fontSize: 16, fontWeight: '700', color: ACCENT }}>{open['notifs'] ? '\u2013' : '+'}  Inbox Notifications</Text>
-        <Text style={{ fontSize: 13, color: '#667085' }}>{notifs.length}</Text>
+        <Text style={{ fontSize: 13, color: '#667085' }}>{groupedNotifs.length}</Text>
       </Pressable>
-      {open['notifs'] && notifs.length === 0 && <Text style={ui.empty}>None.</Text>}
-      {open['notifs'] && notifs.map((n) => (
-        <View key={n.id} style={[ui.card, { gap: 4 }]}>
+      {open['notifs'] && groupedNotifs.length === 0 && <Text style={ui.empty}>None.</Text>}
+      {open['notifs'] && groupedNotifs.map(({ notification: n, ids }) => (
+        <View key={`${n.reportId || n.detail || n.id}:${n.message}`} style={[ui.card, { gap: 4 }]}>
           <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{n.message}</Text>
           <Text style={{ fontSize: 13, color: '#666' }}>To: {n.target}{n.detail ? ' \u00b7 ' + n.detail : ''}</Text>
           <Text style={{ fontSize: 12, color: '#999' }}>{fmt(n.at)}</Text>
-          <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => confirmDelete('notification', () => deleteNotification(n.id))}>
+          <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => confirmDelete('notification', () => Promise.all(ids.map(deleteNotification)).then(() => undefined))}>
             <Text style={[ui.btnOutlineText, { color: '#c0392b' }]}>Delete</Text>
           </Pressable>
         </View>

@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, listNotifications, markNotificationRead, findReportByRef, outstandingPriorityFor, acknowledgePriorityViolation, getViolationLookup, getBuildingViolation, getCurrentPosition, deleteNotification, type Notification, type PriorityViolation, listElevatorJobsForMechanic } from '../lib/store';
+import { getCurrentActor, listNotifications, markNotificationRead, findReportByRef, getResidentReport, outstandingPriorityFor, acknowledgePriorityViolation, getViolationLookup, getBuildingViolation, getCurrentPosition, deleteNotification, type Notification, type PriorityViolation, listElevatorJobsForMechanic } from '../lib/store';
+import { syncAllEntities } from '../lib/sync';
 import { Alert } from 'react-native';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
@@ -17,6 +18,19 @@ export default function Notifications() {
   async function openFor(n: Notification) {
     await markNotificationRead(n.id);
     const msg = (n.message || '').toLowerCase();
+    if (msg.includes('new resident report') && n.reportId) {
+      let report = await getResidentReport(n.reportId);
+      if (!report) {
+        await syncAllEntities().catch(() => undefined);
+        report = await getResidentReport(n.reportId);
+      }
+      if (report) {
+        router.push('/report-detail?id=' + encodeURIComponent(report.id));
+      } else {
+        Alert.alert('Report unavailable', 'This report could not be loaded. Please try again.');
+      }
+      return;
+    }
     if (n.reportId && n.reportId.startsWith('hud:')) { router.push('/hud-view?id=' + n.reportId.slice(4)); return; }
     if (n.reportId && n.reportId.startsWith('proj:')) { router.push('/project/' + n.reportId.slice(5)); return; }
     // Scope-flow notifications carry the procurement id (no prefix).
@@ -125,10 +139,18 @@ export default function Notifications() {
       if (mode) targets.push(mode);
       if (actor.name) targets.push(actor.name);
       const seen: Record<string, boolean> = {};
+      const seenWork: Record<string, boolean> = {};
       const all: Notification[] = [];
       for (const t of targets) {
         const list = await listNotifications(t);
-        for (const n of list) { if (!seen[n.id]) { seen[n.id] = true; all.push(n); } }
+        for (const n of list) {
+          if (seen[n.id]) continue;
+          seen[n.id] = true;
+          const workKey = `${(n.message || '').trim().toLowerCase()}|${(n.reportId || n.detail || '').trim().toLowerCase()}`;
+          if (seenWork[workKey]) continue;
+          seenWork[workKey] = true;
+          all.push(n);
+        }
       }
       all.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
       setItems(all);
