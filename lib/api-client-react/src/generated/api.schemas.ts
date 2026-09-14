@@ -611,12 +611,6 @@ export interface Staff {
   position: StaffPosition;
   status: string;
   developments: string[];
-  /**
-     * @minLength 8
-     * @maxLength 100
-     * @pattern ^[a-zA-Z0-9_-]+$
-     */
-  clientRequestId?: string;
   canManage?: boolean;
   canResetCode?: boolean;
   canRevoke?: boolean;
@@ -739,6 +733,12 @@ export interface StaffInput {
   role: StaffInputRole;
   position: StaffInputPosition;
   developments?: string[];
+  /**
+     * @minLength 8
+     * @maxLength 100
+     * @pattern ^[a-zA-Z0-9_-]+$
+     */
+  clientRequestId?: string;
 }
 
 export interface StaffCodeUpdate { [key: string]: unknown }

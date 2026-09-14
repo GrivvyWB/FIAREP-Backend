@@ -12,7 +12,7 @@ import {
   getListStaffDevelopmentsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2, ChevronDown } from "lucide-react";
+import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2, ChevronDown, Upload, Download } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -38,6 +38,30 @@ const roleLabels: Record<string, string> = {
 function errorMessage(error: unknown) {
   const e = error as { data?: { error?: string }; message?: string } | undefined;
   return e?.data?.error || e?.message || "The request could not be completed.";
+}
+
+function namesFromFile(contents: string) {
+  return [...new Set(contents
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((line) => {
+      const value = line.trim();
+      if (value.startsWith('"')) {
+        const end = value.indexOf('"', 1);
+        return end > 0 ? value.slice(1, end).replace(/""/g, '"').trim() : value.replace(/^"|"$/g, "").trim();
+      }
+      return value.includes(",") ? value.split(",")[0]!.trim() : value;
+    })
+    .filter((value) => value && !["name", "employee name", "employee"].includes(value.toLowerCase())))];
+}
+
+function roleForPosition(position: string) {
+  if (position === "CPM" || position === "Inspector") return "inspector";
+  if (
+    position.includes("Supervisor") ||
+    ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager", "Superintendent", "Assistant Superintendent", "Housing Assistant", "Director"].includes(position)
+  ) return "management";
+  return "worker";
 }
 
 export default function Team() {
@@ -68,6 +92,7 @@ export default function Team() {
   const deleteStaff = useDeleteStaff();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [createMode, setCreateMode] = useState<"single" | "bulk">("single");
   const [name, setName] = useState("");
   const [role, setRole] = useState<string>("worker");
   const [position, setPosition] = useState<string>("Staff Worker");
@@ -76,6 +101,10 @@ export default function Team() {
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
   const [issuedRole, setIssuedRole] = useState<string>("");
   const [issuedEmployee, setIssuedEmployee] = useState<string>("");
+  const [bulkNames, setBulkNames] = useState<string[]>([]);
+  const [bulkFileName, setBulkFileName] = useState("");
+  const [bulkResults, setBulkResults] = useState<Array<{ name: string; code?: string; error?: string }>>([]);
+  const [bulkCreating, setBulkCreating] = useState(false);
   const [actionError, setActionError] = useState("");
   const [resetTarget, setResetTarget] = useState<{ id: string; name: string; role: string } | null>(null);
 
@@ -106,7 +135,8 @@ export default function Team() {
   }
   function openAddEmployee() {
     void refetchDevelopments();
-    setRole(roleOptions[0] ?? "worker");
+    setCreateMode("single");
+    setRole(roleOptions.includes("worker") ? "worker" : (roleOptions[0] ?? "worker"));
     setPosition("Staff Worker");
     setName("");
     setDevelopments([]);
@@ -114,13 +144,18 @@ export default function Team() {
     setIssuedCode(null);
     setIssuedRole("");
     setIssuedEmployee("");
+    setBulkNames([]);
+    setBulkFileName("");
+    setBulkResults([]);
+    setBulkCreating(false);
     setActionError("");
     setOpen(true);
   }
   function closeForm() {
-    setOpen(false); setName(""); setRole(roleOptions[0] ?? "worker"); setPosition("Staff Worker");
+    setOpen(false); setName(""); setRole(roleOptions.includes("worker") ? "worker" : (roleOptions[0] ?? "worker")); setPosition("Staff Worker");
     setDevelopments([]); setDevelopmentsOpen(false);
     setIssuedCode(null); setIssuedRole(""); setIssuedEmployee(""); setActionError("");
+    setCreateMode("single"); setBulkNames([]); setBulkFileName(""); setBulkResults([]); setBulkCreating(false);
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setActionError("");
@@ -138,6 +173,74 @@ export default function Team() {
       });
       setIssuedCode(result.code); setIssuedRole(role); setIssuedEmployee(name.trim()); await refresh();
     } catch (e) { setActionError(errorMessage(e)); }
+  }
+  async function uploadEmployeeList(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const parsed = namesFromFile(await file.text());
+    setBulkFileName(file.name);
+    setBulkNames(parsed);
+    setBulkResults([]);
+    setActionError(parsed.length ? "" : "The employee list does not contain any names.");
+  }
+  async function submitBulk(event: React.FormEvent) {
+    event.preventDefault();
+    setActionError("");
+    if (!bulkNames.length) {
+      setActionError("Upload an employee list.");
+      return;
+    }
+    if (["Regional Director", "Assistant Regional Director", "Property Manager", "Superintendent", "Assistant Superintendent"].includes(position) && developments.length === 0) {
+      setActionError("Select at least one assigned development.");
+      return;
+    }
+    setBulkCreating(true);
+    const results: Array<{ name: string; code?: string; error?: string }> = [];
+    for (const employeeName of bulkNames) {
+      try {
+        const result = await create.mutateAsync({
+          data: {
+            name: employeeName,
+            role: role as typeof StaffInputRole[keyof typeof StaffInputRole],
+            position: position as typeof StaffPosition[keyof typeof StaffPosition],
+            developments,
+            clientRequestId: crypto.randomUUID(),
+          },
+        });
+        results.push({ name: employeeName, code: result.code });
+      } catch (error) {
+        results.push({ name: employeeName, error: errorMessage(error) });
+      }
+      setBulkResults([...results]);
+    }
+    setBulkCreating(false);
+    await refresh();
+  }
+  function downloadBulkResults() {
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const rows = [
+      ["Name", "Role", "Position", "Access Code", "Result"],
+      ...bulkResults.map((result) => [
+        result.name,
+        roleLabels[role] || role,
+        position,
+        result.code || "",
+        result.error || "Created",
+      ]),
+    ];
+    const blob = new Blob([rows.map((row) => row.map(escapeCsv).join(",")).join("\n")], { type: "text/csv;charset=utf-8" });
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `${position.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-employee-codes.csv`;
+    link.click();
+    URL.revokeObjectURL(href);
+  }
+  function selectPosition(nextPosition: string) {
+    setPosition(nextPosition);
+    const nextRole = roleForPosition(nextPosition);
+    if (roleOptions.includes(nextRole)) setRole(nextRole);
   }
   async function resetCode() {
     if (!resetTarget) return;
@@ -177,6 +280,35 @@ export default function Team() {
     member.role === "management" ? 2 : member.role === "procurement" ? 3 : 4;
   const sorted = filtered?.sort((a, b) => authorityOrder(a) - authorityOrder(b) || a.name.localeCompare(b.name));
   const teamGroups = groupTeamDirectoryStaff(sorted || []);
+  const developmentSelector = (
+    <div className="space-y-2">
+      <Label id="employee-developments-label">Assigned developments</Label>
+      <Collapsible open={developmentsOpen} onOpenChange={setDevelopmentsOpen}>
+        <CollapsibleTrigger asChild>
+          <Button type="button" variant="outline" className="w-full justify-between" aria-labelledby="employee-developments-label">
+            Select assigned developments ({developments.length} selected)
+          </Button>
+        </CollapsibleTrigger>
+        <CollapsibleContent className="rounded-md border p-3 mt-2 space-y-3">
+          {developmentsLoading ? <p className="text-sm text-muted-foreground">Loading developments...</p> :
+            developmentsError ? <p className="text-sm text-destructive">{errorMessage(developmentsError)}</p> :
+            !availableDevelopments?.length ? <p className="text-sm text-muted-foreground">No active developments available.</p> :
+            <>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="secondary" onClick={() => setDevelopments(availableDevelopments)}>Select all</Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setDevelopments([])}>Clear</Button>
+              </div>
+              <div className="max-h-40 overflow-y-auto space-y-2" role="group" aria-label="Available developments">
+                {availableDevelopments.map((development) => <label key={development} className="flex items-center gap-2 text-sm">
+                  <Checkbox checked={developments.includes(development)} onCheckedChange={(checked) => setDevelopments((current) => checked ? [...new Set([...current, development])] : current.filter((item) => item !== development))} />
+                  <span>{development}</span>
+                </label>)}
+              </div>
+            </>}
+        </CollapsibleContent>
+      </Collapsible>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -226,38 +358,49 @@ export default function Team() {
       <Dialog open={open} onOpenChange={(v) => !v && closeForm()}>
         <DialogContent><DialogHeader><DialogTitle>{issuedCode ? "One-time access code" : "Add Employee"}</DialogTitle><DialogDescription>{issuedCode ? `Replacement credentials for ${issuedEmployee}.` : "Issue a staff account. The access code is shown only once."}</DialogDescription></DialogHeader>
           {issuedCode ? <div className="space-y-4"><div className="rounded-md bg-muted p-4 text-center"><p className="text-sm font-medium">{issuedRole && issuedRole !== "reset" ? `${roleLabels[issuedRole] || issuedRole} credentials` : "Replacement credentials"}</p><p className="text-3xl font-bold tracking-[0.4em] my-2">{issuedCode}</p><Button variant="outline" onClick={copyCode}><Copy className="mr-2 h-4 w-4" />Copy code</Button></div><p className="text-sm text-destructive">Give this code securely to {issuedEmployee || "the employee"}. It will not be displayed again. {issuedRole === "procurement" && "Procurement employees sign in at /procurement/login."}</p><DialogFooter><Button onClick={closeForm}>Done</Button></DialogFooter></div> :
-            <form onSubmit={submit} className="space-y-4"><div><Label htmlFor="employee-name">Name</Label><Input id="employee-name" required value={name} onChange={(e) => setName(e.target.value)} /></div>
-              <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => setRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
-              <div><Label htmlFor="employee-position">Position</Label><select id="employee-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => setPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
-              <div className="space-y-2">
-                <Label id="employee-developments-label">Assigned developments</Label>
-                <Collapsible open={developmentsOpen} onOpenChange={setDevelopmentsOpen}>
-                  <CollapsibleTrigger asChild>
-                    <Button type="button" variant="outline" className="w-full justify-between" aria-labelledby="employee-developments-label">
-                      Select assigned developments ({developments.length} selected)
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="rounded-md border p-3 mt-2 space-y-3">
-                    {developmentsLoading ? <p className="text-sm text-muted-foreground">Loading developments...</p> :
-                      developmentsError ? <p className="text-sm text-destructive">{errorMessage(developmentsError)}</p> :
-                      !availableDevelopments?.length ? <p className="text-sm text-muted-foreground">No active developments available.</p> :
-                      <>
-                        <div className="flex gap-2">
-                          <Button type="button" size="sm" variant="secondary" onClick={() => setDevelopments(availableDevelopments)}>Select all</Button>
-                          <Button type="button" size="sm" variant="ghost" onClick={() => setDevelopments([])}>Clear</Button>
-                        </div>
-                        <div className="max-h-40 overflow-y-auto space-y-2" role="group" aria-label="Available developments">
-                          {availableDevelopments.map((development) => <label key={development} className="flex items-center gap-2 text-sm">
-                            <Checkbox checked={developments.includes(development)} onCheckedChange={(checked) => setDevelopments((current) => checked ? [...new Set([...current, development])] : current.filter((item) => item !== development))} />
-                            <span>{development}</span>
-                          </label>)}
-                        </div>
-                      </>}
-                  </CollapsibleContent>
-                </Collapsible>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-2">
+                <Button type="button" variant={createMode === "single" ? "default" : "outline"} onClick={() => setCreateMode("single")}>One employee</Button>
+                <Button type="button" variant={createMode === "bulk" ? "default" : "outline"} onClick={() => setCreateMode("bulk")}>Employee list</Button>
               </div>
-              {actionError && <p className="text-sm text-destructive">{actionError}</p>}<DialogFooter><Button type="button" variant="outline" onClick={closeForm}>Cancel</Button><Button type="submit" disabled={create.isPending}>{create.isPending ? "Creating..." : "Create employee"}</Button></DialogFooter>
-            </form>}
+              {createMode === "single" ? (
+                <form onSubmit={submit} className="space-y-4">
+                  <div><Label htmlFor="employee-name">Name</Label><Input id="employee-name" required value={name} onChange={(e) => setName(e.target.value)} /></div>
+                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => setRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-position">Position</Label><select id="employee-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+                  {developmentSelector}
+                  {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+                  <DialogFooter><Button type="button" variant="outline" onClick={closeForm}>Cancel</Button><Button type="submit" disabled={create.isPending}>{create.isPending ? "Creating..." : "Create employee"}</Button></DialogFooter>
+                </form>
+              ) : bulkResults.length > 0 && !bulkCreating ? (
+                <div className="space-y-4">
+                  <div className="max-h-72 overflow-y-auto rounded-md border">
+                    {bulkResults.map((result) => <div key={result.name} className="flex items-center justify-between gap-4 border-b p-3 last:border-b-0">
+                      <span className="font-medium">{result.name}</span>
+                      <span className={result.error ? "text-sm text-destructive" : "font-mono font-bold"}>{result.error || result.code}</span>
+                    </div>)}
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={downloadBulkResults}><Download className="mr-2 h-4 w-4" />Download results</Button>
+                    <Button type="button" onClick={closeForm}>Done</Button>
+                  </DialogFooter>
+                </div>
+              ) : (
+                <form onSubmit={submitBulk} className="space-y-4">
+                  <div><Label htmlFor="employee-list-role">Role</Label><select id="employee-list-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => setRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-list-position">Position</Label><select id="employee-list-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+                  {developmentSelector}
+                  <div className="space-y-2">
+                    <Label htmlFor="employee-list">Employee list</Label>
+                    <Input id="employee-list" type="file" accept=".csv,.txt,text/csv,text/plain" onChange={uploadEmployeeList} disabled={bulkCreating} />
+                    {bulkFileName && <p className="text-sm text-muted-foreground">{bulkFileName} · {bulkNames.length} employees</p>}
+                  </div>
+                  {bulkCreating && <p className="text-sm">Creating {bulkResults.length + 1} of {bulkNames.length}...</p>}
+                  {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+                  <DialogFooter><Button type="button" variant="outline" onClick={closeForm} disabled={bulkCreating}>Cancel</Button><Button type="submit" disabled={bulkCreating || !bulkNames.length}><Upload className="mr-2 h-4 w-4" />{bulkCreating ? "Creating..." : "Create employees"}</Button></DialogFooter>
+                </form>
+              )}
+            </div>}
         </DialogContent>
       </Dialog>
       <Dialog open={Boolean(resetTarget)} onOpenChange={(value) => { if (!value) setResetTarget(null); }}>

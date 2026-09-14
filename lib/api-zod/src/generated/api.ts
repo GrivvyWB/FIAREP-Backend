@@ -146,13 +146,6 @@ export const LoginBody = zod.object({
   "organizationId": zod.string().optional().describe('Required for non-default customer organizations')
 })
 
-export const loginResponseStaffClientRequestIdMin = 8;
-export const loginResponseStaffClientRequestIdMax = 100;
-
-
-export const loginResponseStaffClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
-
-
 export const LoginResponse = zod.object({
   "accessToken": zod.string(),
   "refreshToken": zod.string(),
@@ -167,7 +160,6 @@ export const LoginResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(loginResponseStaffClientRequestIdMin).max(loginResponseStaffClientRequestIdMax).regex(loginResponseStaffClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -193,13 +185,6 @@ export const ProcurementLoginBody = zod.object({
   "challengeToken": zod.string().min(1)
 })
 
-export const procurementLoginResponseStaffClientRequestIdMin = 8;
-export const procurementLoginResponseStaffClientRequestIdMax = 100;
-
-
-export const procurementLoginResponseStaffClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
-
-
 export const ProcurementLoginResponse = zod.object({
   "accessToken": zod.string(),
   "refreshToken": zod.string(),
@@ -214,7 +199,6 @@ export const ProcurementLoginResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(procurementLoginResponseStaffClientRequestIdMin).max(procurementLoginResponseStaffClientRequestIdMax).regex(procurementLoginResponseStaffClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -270,13 +254,6 @@ export const BootstrapAdministratorBody = zod.object({
   "lastName": zod.string().optional()
 })
 
-export const bootstrapAdministratorResponseStaffClientRequestIdMin = 8;
-export const bootstrapAdministratorResponseStaffClientRequestIdMax = 100;
-
-
-export const bootstrapAdministratorResponseStaffClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
-
-
 export const BootstrapAdministratorResponse = zod.object({
   "accessToken": zod.string(),
   "refreshToken": zod.string(),
@@ -291,7 +268,6 @@ export const BootstrapAdministratorResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(bootstrapAdministratorResponseStaffClientRequestIdMin).max(bootstrapAdministratorResponseStaffClientRequestIdMax).regex(bootstrapAdministratorResponseStaffClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -312,13 +288,6 @@ export const RefreshSessionBody = zod.object({
   "refreshToken": zod.string()
 })
 
-export const refreshSessionResponseStaffClientRequestIdMin = 8;
-export const refreshSessionResponseStaffClientRequestIdMax = 100;
-
-
-export const refreshSessionResponseStaffClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
-
-
 export const RefreshSessionResponse = zod.object({
   "accessToken": zod.string(),
   "refreshToken": zod.string(),
@@ -333,7 +302,6 @@ export const RefreshSessionResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(refreshSessionResponseStaffClientRequestIdMin).max(refreshSessionResponseStaffClientRequestIdMax).regex(refreshSessionResponseStaffClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -352,13 +320,6 @@ export const LogoutBody = zod.object({
 export const LogoutResponse = zod.void()
 
 
-export const getCurrentStaffResponseClientRequestIdMin = 8;
-export const getCurrentStaffResponseClientRequestIdMax = 100;
-
-
-export const getCurrentStaffResponseClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
-
-
 export const GetCurrentStaffResponse = zod.object({
   "id": zod.string(),
   "tenantId": zod.string(),
@@ -369,7 +330,6 @@ export const GetCurrentStaffResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(getCurrentStaffResponseClientRequestIdMin).max(getCurrentStaffResponseClientRequestIdMax).regex(getCurrentStaffResponseClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -732,13 +692,6 @@ export const ListStaffQueryParams = zod.object({
   "status": zod.coerce.string().optional()
 })
 
-export const listStaffResponseClientRequestIdMin = 8;
-export const listStaffResponseClientRequestIdMax = 100;
-
-
-export const listStaffResponseClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
-
-
 export const ListStaffResponseItem = zod.object({
   "id": zod.string(),
   "tenantId": zod.string(),
@@ -749,7 +702,6 @@ export const ListStaffResponseItem = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(listStaffResponseClientRequestIdMin).max(listStaffResponseClientRequestIdMax).regex(listStaffResponseClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -758,20 +710,23 @@ export const ListStaffResponseItem = zod.object({
 export const ListStaffResponse = zod.array(ListStaffResponseItem)
 
 
+export const createStaffBodyClientRequestIdMin = 8;
+export const createStaffBodyClientRequestIdMax = 100;
+
+
+export const createStaffBodyClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
+
+
 export const CreateStaffBody = zod.object({
   "name": zod.string(),
   "firstName": zod.string().optional(),
   "lastName": zod.string().optional(),
   "role": zod.enum(['administrator', 'human_resources', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'emergency']),
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
-  "developments": zod.array(zod.string()).optional()
+  "developments": zod.array(zod.string()).optional(),
+  "clientRequestId": zod.string().min(createStaffBodyClientRequestIdMin).max(createStaffBodyClientRequestIdMax).regex(createStaffBodyClientRequestIdRegExp).optional()
 })
 
-export const createStaffResponseOneClientRequestIdMin = 8;
-export const createStaffResponseOneClientRequestIdMax = 100;
-
-
-export const createStaffResponseOneClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
 export const createStaffResponseTwoCodeMin = 4;
 export const createStaffResponseTwoCodeMax = 4;
 
@@ -787,7 +742,6 @@ export const CreateStaffResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(createStaffResponseOneClientRequestIdMin).max(createStaffResponseOneClientRequestIdMax).regex(createStaffResponseOneClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -812,11 +766,6 @@ export const ResetStaffCodeBody = zod.object({
 
 })
 
-export const resetStaffCodeResponseOneClientRequestIdMin = 8;
-export const resetStaffCodeResponseOneClientRequestIdMax = 100;
-
-
-export const resetStaffCodeResponseOneClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
 export const resetStaffCodeResponseTwoCodeMin = 4;
 export const resetStaffCodeResponseTwoCodeMax = 4;
 
@@ -832,7 +781,6 @@ export const ResetStaffCodeResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(resetStaffCodeResponseOneClientRequestIdMin).max(resetStaffCodeResponseOneClientRequestIdMax).regex(resetStaffCodeResponseOneClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -853,13 +801,6 @@ export const RevokeStaffParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const revokeStaffResponseClientRequestIdMin = 8;
-export const revokeStaffResponseClientRequestIdMax = 100;
-
-
-export const revokeStaffResponseClientRequestIdRegExp = new RegExp('^[a-zA-Z0-9_-]+$');
-
-
 export const RevokeStaffResponse = zod.object({
   "id": zod.string(),
   "tenantId": zod.string(),
@@ -870,7 +811,6 @@ export const RevokeStaffResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
-  "clientRequestId": zod.string().min(revokeStaffResponseClientRequestIdMin).max(revokeStaffResponseClientRequestIdMax).regex(revokeStaffResponseClientRequestIdRegExp).optional(),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
