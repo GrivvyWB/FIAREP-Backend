@@ -9,7 +9,7 @@ export type StaffModule =
   | "leave" | "notifications" | "settings" | "shared-data";
 
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
-const ELEVATOR_POSITIONS = new Set(["Elevator Service", "Elevator Supervisor"]);
+const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "elevators", "shared-data"]);
 
 /** One client-side policy shared by navigation, routes, and data surfaces.
  * The API remains the final authority; this prevents unauthorized UI from
@@ -21,6 +21,7 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
       module === "notifications" || module === "settings";
   }
   if (staff.role === "procurement") return module === "procurement";
+  if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
   if (module === "scope-review") {
     return staff.role === "management" &&
       !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "");
@@ -30,18 +31,16 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
     return true;
   }
   if (module === "dashboard" || module === "calendar" || module === "leave" ||
-      module === "notifications" || module === "settings" || module === "shared-data") return true;
+      module === "notifications" || module === "settings") return true;
   if (staff.role === "inspector") {
     if (module === "violations" || module === "inspections" || module === "inspection-create" ||
         module === "reports" || module === "report-upload" || module === "repairs" ||
         module === "projects" || module === "estimates") return true;
     if (module === "scope-writing") return staff.position === "CPM";
-    if (module === "elevators") return staff.position === "CPM";
     return false;
   }
   if (staff.role === "worker") {
     if (module === "repairs" || module === "projects" || module === "reports") return true;
-    if (module === "elevators") return ELEVATOR_POSITIONS.has(staff.position || "");
     return false;
   }
   if (staff.role === "emergency") return module === "emergency";

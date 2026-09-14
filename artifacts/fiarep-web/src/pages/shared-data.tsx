@@ -5,7 +5,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
 const MODULES = [
-  ["rooms", "Rooms"],
   ["checklists", "Checklists"],
   ["roofplans", "Roof Plans & Scans"],
   ["project-scopes", "Project Scopes"],
@@ -35,7 +34,7 @@ function recordSummary(state: Record<string, unknown>) {
 }
 
 export default function SharedData() {
-  const [entity, setEntity] = useState<(typeof MODULES)[number][0]>("rooms");
+  const [entity, setEntity] = useState<(typeof MODULES)[number][0]>("checklists");
   const [search, setSearch] = useState("");
   const { data, isLoading, error } = useListEntityRecords(entity, undefined, {
     query: {
