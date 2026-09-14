@@ -8,7 +8,6 @@ import {
   listResidentReports,
   assignResidentReport,
   updateResidentReportStatus,
-  rateAndResolveReport,
   getContractorScores,
   setReportDevelopment,
   listDevelopmentNames,
@@ -21,6 +20,8 @@ import {
   type StaffAccount,
   type StaffPosition,
   clearResidentReportForStaff,
+  deleteResidentReport,
+  getCurrentPosition,
   listResidentReportPhotoUrls,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
@@ -135,7 +136,7 @@ export default function Management() {
   const [assignPos, setAssignPos] = useState<StaffPosition | null>(null);
   const [staffList, setStaffList] = useState<StaffAccount[]>([]);
   const [cwoFor, setCwoFor] = useState<ResidentReport | null>(null);
-  const [rateFor, setRateFor] = useState<ResidentReport | null>(null);
+  const [currentPosition, setCurrentPosition] = useState('');
   const [scoreByName, setScoreByName] = useState<Record<string, number>>({});
   const [cwoPos, setCwoPos] = useState<string>('');
   const [cwoName, setCwoName] = useState<string>('');
@@ -157,6 +158,7 @@ export default function Management() {
       const a = await getCurrentActor();
       if (a.name) setMyDevs(await developmentsForManager(a.name));
       else setMyDevs([]);
+      setCurrentPosition(await getCurrentPosition());
     })();
   }, []);
   useFocusEffect(useCallback(() => {
@@ -247,16 +249,28 @@ export default function Management() {
     } catch (e: any) { Alert.alert('Failed', e?.message ?? 'Could not create change order.'); }
   }
 
-  function onResolve(r: ResidentReport) {
-    setRateFor(r);
+  async function onResolve(r: ResidentReport) {
+    try { await updateResidentReportStatus(r.id, 'resolved'); load(); }
+    catch (e: any) { Alert.alert('Update failed', e?.message ?? 'Could not update.'); }
   }
 
-  async function submitRating(stars: number) {
-    const r = rateFor;
-    setRateFor(null);
-    if (!r) return;
-    try { await rateAndResolveReport(r.id, stars); load(); }
-    catch (e: any) { Alert.alert('Update failed', e?.message ?? 'Could not update.'); }
+  function confirmDelete(r: ResidentReport) {
+    Alert.alert(
+      'Delete resident report',
+      'Permanently delete this resident report? This cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            void deleteResidentReport(r.id)
+              .then(load)
+              .catch((e: any) => Alert.alert('Delete failed', e?.message ?? 'Could not delete.'));
+          },
+        },
+      ],
+    );
   }
 
   async function onPickDevelopment(name: string) {
@@ -383,6 +397,11 @@ export default function Management() {
                 <Pressable style={ui.btnOutline} onPress={() => { setCwoFor(r); setCwoPos(''); setCwoName(''); setCwoDesc(''); setCwoStaff([]); }}>
                   <Text style={ui.btnOutlineText}>Request Change</Text>
                 </Pressable>
+                {(mode === 'administrator' || ['Borough Director', 'Regional Director'].includes(currentPosition)) && (
+                  <Pressable style={[ui.btnOutline, { borderColor: '#c0392b' }]} onPress={() => confirmDelete(r)}>
+                    <Text style={{ color: '#c0392b', fontWeight: '600', textAlign: 'center' }}>Delete</Text>
+                  </Pressable>
+                )}
               </>
             ) : (
               <Text style={{ fontSize: 13, color: '#999', fontStyle: 'italic', paddingVertical: 6 }}>
@@ -496,25 +515,6 @@ export default function Management() {
             <Text style={ui.btnText}>Send Change Order</Text>
           </Pressable>
         </ScrollView>
-      </Modal>
-          <Modal visible={!!rateFor} transparent animationType="fade" onRequestClose={() => setRateFor(null)}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', padding: 24 }}>
-          <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, gap: 12 }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', textAlign: 'center' }}>Rate this job</Text>
-            <Text style={{ fontSize: 13, color: '#666', textAlign: 'center' }}>How well was it completed?</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8, marginVertical: 8 }}>
-              {[1, 2, 3, 4, 5].map((n) => (
-                <Pressable key={n} onPress={() => submitRating(n)} style={{ padding: 6 }}>
-                  <Text style={{ fontSize: 34 }}>\u2b50</Text>
-                  <Text style={{ fontSize: 11, textAlign: 'center', color: '#666' }}>{n}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <Pressable style={ui.btnOutline} onPress={() => setRateFor(null)}>
-              <Text style={ui.btnOutlineText}>Cancel</Text>
-            </Pressable>
-          </View>
-        </View>
       </Modal>
     </ScrollView>
     </KeyboardAvoidingView>
