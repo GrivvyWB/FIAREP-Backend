@@ -22,7 +22,7 @@ const loginSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   code: z
     .string()
-    .length(4, "Code must be exactly 4 digits")
+    .length(4, "Code must be exactly 4 characters")
     .regex(/^[a-zA-Z0-9]+$/, "Code can only contain letters and numbers"),
   organizationId: z.string().optional(),
 });
@@ -125,8 +125,8 @@ export default function Login() {
                         <InputOTP
                           maxLength={4}
                           pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
-                          inputMode="numeric"
-                          autoCapitalize="none"
+                           inputMode="text"
+                           autoCapitalize="characters"
                           autoCorrect="off"
                           autoComplete="one-time-code"
                           {...field}

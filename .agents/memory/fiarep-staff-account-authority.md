@@ -5,7 +5,7 @@ description: Authority and persistence rules for staff issuance, approval, and l
 
 Approved staff accounts must be persisted to the shared backend before they are considered usable. Local SQLite may cache staff and hold pending imports, but it must not be the authority for login eligibility.
 
-Staff access codes are four-character credentials, either numeric or uppercase alphanumeric (for example, 6734 or Y48R), generated only by the server and shown once to the authorized issuer. Organizations and staff must never choose their own codes, and idempotent retries must never reveal an existing code.
+Staff access codes are four-character credentials, either numeric or uppercase alphanumeric (for example, 6734 or Y48R), generated only by the server and shown once to the authorized issuer. Organizations and staff must never choose their own codes, and idempotent retries must never reveal an existing code. Every staff-code input must accept letters and numbers and must open a text/alphanumeric keyboard, never a numeric-only keypad.
 
 **Why:** Mobile issuance and approval previously updated only one device's SQLite database while login queried the shared server, so apparently approved users could not authenticate.
 
