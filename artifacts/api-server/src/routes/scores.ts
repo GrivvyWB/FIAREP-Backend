@@ -11,6 +11,7 @@ import {
   calculateVendorScores,
   type ScoringRecord,
 } from "../lib/scoring";
+import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
 
 const router: IRouter = Router();
 const SCORE_ENTITIES = [
@@ -29,7 +30,7 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
     return;
   }
 
-  const rows = await db
+  const storedRows = await db
     .select()
     .from(entityRecords)
     .where(and(
@@ -37,6 +38,7 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
       eq(entityRecords.deleted, false),
       inArray(entityRecords.entity, [...SCORE_ENTITIES]),
     ));
+  const rows = await Promise.all(storedRows.map(repairLegacyResidentDevelopment));
 
   const records: ScoringRecord[] = rows
     .filter((row) => {

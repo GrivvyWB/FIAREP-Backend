@@ -7,6 +7,7 @@ import {
 } from "@workspace/db";
 import type { Actor } from "./auth";
 import { canReadEntityRecord, isBoroughDirector } from "./domain";
+import { repairLegacyResidentDevelopment } from "./legacyResidentDevelopment";
 
 type NotificationRow = typeof notifications.$inferSelect;
 
@@ -26,7 +27,7 @@ export async function visibleNotificationsFor(
   ];
   if (!reportIds.length) return rows;
 
-  const records = await db
+  const storedRecords = await db
     .select()
     .from(entityRecords)
     .where(
@@ -35,6 +36,9 @@ export async function visibleNotificationsFor(
         inArray(entityRecords.id, reportIds),
       ),
     );
+  const records = await Promise.all(
+    storedRecords.map(repairLegacyResidentDevelopment),
+  );
   const byId = new Map(records.map((record) => [record.id, record]));
 
   return rows.filter((notification) => {

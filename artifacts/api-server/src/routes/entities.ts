@@ -29,6 +29,7 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
 import { emailReleasedScope } from "../lib/vendorEmail";
 import { logger } from "../lib/logger";
+import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -207,7 +208,7 @@ router.get("/v1/:entity", async (req, res, next) => {
     res.status(403).json({ error: "This module is restricted for your role" });
     return;
   }
-  const rows = await db
+  const storedRows = await db
     .select()
     .from(entityRecords)
     .where(
@@ -218,6 +219,9 @@ router.get("/v1/:entity", async (req, res, next) => {
       ),
     )
     .orderBy(desc(entityRecords.updatedAt));
+  const rows = entity === "resident-reports"
+    ? await Promise.all(storedRows.map(repairLegacyResidentDevelopment))
+    : storedRows;
   const projectId =
     typeof req.query["projectId"] === "string" ? req.query["projectId"] : null;
   const development =
@@ -441,7 +445,7 @@ router.get("/v1/:entity/:id", async (req, res, next) => {
     res.status(403).json({ error: "This module is restricted for your role" });
     return;
   }
-  const [row] = await db
+  const [storedRow] = await db
     .select()
     .from(entityRecords)
     .where(
@@ -453,6 +457,9 @@ router.get("/v1/:entity/:id", async (req, res, next) => {
       ),
     )
     .limit(1);
+  const row = storedRow && entity === "resident-reports"
+    ? await repairLegacyResidentDevelopment(storedRow)
+    : storedRow;
   if (
     !row ||
     !canReadEntityRecord(actor, row)
