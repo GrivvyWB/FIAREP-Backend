@@ -100,6 +100,56 @@ test("file record access follows development and role boundaries", () => {
   );
 });
 
+test("ordinary staff can read only operational records assigned to their canonical staff id", () => {
+  const worker = actor({
+    id: "worker-1",
+    role: "worker",
+    position: "Maintenance Worker",
+  });
+  const report = (state: Record<string, unknown>) => ({
+    entity: "resident-reports",
+    development: "Development A",
+    state,
+    createdBy: "resident-1",
+    deleted: false,
+  });
+  assert.equal(
+    canReadEntityRecord(worker, report({ assignedStaffId: "worker-1", assignedTo: "Roy P" })),
+    true,
+  );
+  assert.equal(
+    canReadEntityRecord(worker, report({ assignedStaffId: "worker-2", assignedTo: "Roy P" })),
+    false,
+  );
+  assert.equal(
+    canReadEntityRecord(worker, report({ assignedTo: "Roy P" })),
+    false,
+    "a display-name match must not grant access",
+  );
+  assert.equal(
+    canReadEntityRecord(actor(), report({})),
+    true,
+    "management retains operational oversight",
+  );
+});
+
+test("ordinary staff can read only their own leave requests", () => {
+  const worker = actor({
+    id: "worker-1",
+    role: "worker",
+    position: "Maintenance Worker",
+  });
+  const leave = (createdBy: string) => ({
+    entity: "leave-requests",
+    development: "Development A",
+    state: {},
+    createdBy,
+    deleted: false,
+  });
+  assert.equal(canReadEntityRecord(worker, leave("worker-1")), true);
+  assert.equal(canReadEntityRecord(worker, leave("worker-2")), false);
+});
+
 test("procurement file access remains isolated from administrator and Borough Director roles", () => {
   const procurement = {
     entity: "procurement",

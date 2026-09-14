@@ -12,6 +12,7 @@ import {
   canMutateEntity,
   canPerformEntityAction,
   canReadEntity,
+  canReadEntityRecord,
   entityDevelopmentAllowed,
   generatedCode,
   isBoroughDirector,
@@ -160,31 +161,6 @@ function outward(
   };
 }
 
-function privateRecordAllowed(
-  actor: ReturnType<typeof actorFrom>,
-  row: typeof entityRecords.$inferSelect,
-): boolean {
-  if (actor.role === "resident") {
-    return row.entity === "resident-reports" && row.createdBy === actor.id;
-  }
-  if (
-    actor.role === "vendor" &&
-    (row.entity === "procurement-bids" || row.entity === "vendor-quotes")
-  ) {
-    return row.createdBy === actor.id;
-  }
-  return true;
-}
-
-function emergencyRecordAllowed(actor: ReturnType<typeof actorFrom>, row: typeof entityRecords.$inferSelect): boolean {
-  if (actor.role !== "emergency") return true;
-  const state = row.state;
-  const normalizedActor = actor.name.trim().toLowerCase().replace(/\s+/g, " ");
-  return (row.entity === "emergency-jobs" || row.entity === "emergency-units") &&
-    [state["assignedTo"], state["assignedStaffId"], state["assignedUnitId"], state["unitId"], state["name"], state["unitName"]]
-      .some((value) => typeof value === "string" && (value === actor.id || value.trim().toLowerCase().replace(/\s+/g, " ") === normalizedActor));
-}
-
 function withGeneratedFields(
   entity: string,
   input: Record<string, unknown>,
@@ -238,10 +214,7 @@ router.get("/v1/:entity", async (req, res, next) => {
     typeof req.query["status"] === "string" ? req.query["status"] : null;
   res.json(
     rows
-      .filter((row) => entityDevelopmentAllowed(actor, entity, row.development))
-      .filter((row) => privateRecordAllowed(actor, row))
-      .filter((row) => procurementRecordAllowed(actor, row))
-      .filter((row) => emergencyRecordAllowed(actor, row))
+      .filter((row) => canReadEntityRecord(actor, row))
       .filter((row) => !projectId || row.projectId === projectId)
       .filter(
         (row) =>
@@ -407,10 +380,7 @@ router.get("/v1/:entity/:id", async (req, res, next) => {
     .limit(1);
   if (
     !row ||
-    !entityDevelopmentAllowed(actor, entity, row.development) ||
-    !privateRecordAllowed(actor, row)
-    || !procurementRecordAllowed(actor, row)
-    || !emergencyRecordAllowed(actor, row)
+    !canReadEntityRecord(actor, row)
   ) {
     res.status(404).json({ error: "Record not found" });
     return;
@@ -470,10 +440,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     .limit(1);
   if (
     !current ||
-    !entityDevelopmentAllowed(actor, entity, current.development) ||
-    !privateRecordAllowed(actor, current)
-    || !procurementRecordAllowed(actor, current)
-    || !emergencyRecordAllowed(actor, current)
+    !canReadEntityRecord(actor, current)
   ) {
     res.status(404).json({ error: "Record not found" });
     return;
@@ -566,15 +533,7 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
       ),
     )
     .limit(1);
-  if (!current || !privateRecordAllowed(actor, current) || !emergencyRecordAllowed(actor, current)) {
-    res.status(404).json({ error: "Record not found" });
-    return;
-  }
-  if (!procurementRecordAllowed(actor, current)) {
-    res.status(404).json({ error: "Record not found" });
-    return;
-  }
-  if (!entityDevelopmentAllowed(actor, entity, current.development)) {
+  if (!current || !canReadEntityRecord(actor, current)) {
     res.status(404).json({ error: "Record not found" });
     return;
   }
@@ -886,7 +845,7 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (!canReadEntity(actor, entity) || !procurementRecordAllowed(actor, current) ||
+  if (!canReadEntityRecord(actor, current) ||
       !canDeleteEntity(actor, entity, current.state)) {
     res.status(403).json({ error: "Not allowed to delete this record" });
     return;
@@ -899,10 +858,6 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
   }
   if (entity === "procurement" && current.state["status"] === "closed") {
     res.status(409).json({ error: "Closed procurement records are immutable" });
-    return;
-  }
-  if (!entityDevelopmentAllowed(actor, entity, current.development)) {
-    res.status(404).json({ error: "Record not found" });
     return;
   }
   const expectedVersion = (req.body as { version?: unknown })?.version;

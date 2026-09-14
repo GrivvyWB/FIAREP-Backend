@@ -236,6 +236,37 @@ function emergencyRecordAllowed(
     );
 }
 
+const STAFF_ASSIGNMENT_SCOPED_ENTITIES = new Set([
+  "projects",
+  "project-scopes",
+  "inspections",
+  "resident-reports",
+  "violations",
+  "building-violations",
+  "priority-violations",
+  "route-assignments",
+  "change-orders",
+  "elevator-jobs",
+  "emergency-jobs",
+]);
+
+function staffAssignmentRecordAllowed(
+  actor: Actor,
+  row: EntityRecordAuthorizationState,
+): boolean {
+  if (!["worker", "inspector"].includes(actor.role)) return true;
+  if (
+    actor.role === "inspector" &&
+    actor.position === "CPM" &&
+    row.entity === "procurement"
+  ) {
+    return true;
+  }
+  if (row.entity === "leave-requests") return row.createdBy === actor.id;
+  if (!STAFF_ASSIGNMENT_SCOPED_ENTITIES.has(row.entity)) return true;
+  return normalizeAssignment(row.state).assignedStaffId === actor.id;
+}
+
 /**
  * The complete record-level read boundary. File authorization uses this
  * predicate rather than only checking the tenant or entity name, so objects
@@ -250,7 +281,8 @@ export function canReadEntityRecord(
     entityDevelopmentAllowed(actor, row.entity, row.development) &&
     privateRecordAllowed(actor, row) &&
     procurementRecordAllowed(actor, row) &&
-    emergencyRecordAllowed(actor, row);
+    emergencyRecordAllowed(actor, row) &&
+    staffAssignmentRecordAllowed(actor, row);
 }
 
 /**
@@ -375,7 +407,7 @@ export function canAssignStaff(
 /**
  * Assignment identity is deliberately separate from the display name.  Older
  * records may only have assignedTo (or another mutable label); those records
- * remain readable, but cannot establish ownership for an operational worker.
+ * fail closed for ordinary staff because they cannot establish ownership.
  */
 export type NormalizedAssignment = {
   assignedStaffId: string | null;
