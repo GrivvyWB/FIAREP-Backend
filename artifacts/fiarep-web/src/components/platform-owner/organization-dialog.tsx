@@ -48,6 +48,12 @@ const orgSchema = z.object({
 
 type FormValues = z.infer<typeof orgSchema>;
 
+function localDateTimeValue(value: string | Date): string {
+  const date = value instanceof Date ? value : new Date(value);
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return local.toISOString().slice(0, 16);
+}
+
 interface OrganizationResearchResult {
   organizationName: string;
   officialWebsite: string | null;
@@ -133,8 +139,8 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
           ? organization.features.organizationType
           : "",
         status: organization.status as any,
-        startsAt: organization.startsAt ? new Date(organization.startsAt).toISOString().slice(0, 16) : "",
-        endsAt: organization.endsAt ? new Date(organization.endsAt).toISOString().slice(0, 16) : "",
+        startsAt: organization.startsAt ? localDateTimeValue(organization.startsAt) : "",
+        endsAt: organization.endsAt ? localDateTimeValue(organization.endsAt) : "",
         staffLimit: organization.staffLimit,
         propertyLimit: organization.propertyLimit,
         unrestricted: organization.unrestricted,

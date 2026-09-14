@@ -82,8 +82,17 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
         props.onUnlock();
       }
       else setMsg('No approved account matches that name and code.');
-    } catch {
-      setMsg('Could not reach the FIAREP backend. Try again.');
+    } catch (error) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'status' in error &&
+        (error as { status?: unknown }).status === 403
+      ) {
+        setMsg('Organization license is not active.');
+      } else {
+        setMsg('Could not reach the FIAREP backend. Try again.');
+      }
     } finally { setBusy(false); }
   }
 
@@ -142,7 +151,7 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
       {!bootstrapping && (
         <>
           <Text style={ui.label}>Organization ID (customer staff)</Text>
-          <TextInput style={ui.input} value={organizationId} onChangeText={setOrganizationId} placeholder="Leave blank for default FIAREP" autoCapitalize="none" />
+          <TextInput style={ui.input} value={organizationId} onChangeText={setOrganizationId} autoCapitalize="none" />
         </>
       )}
 
