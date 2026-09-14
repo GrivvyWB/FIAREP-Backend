@@ -13,6 +13,7 @@ import { ArrowLeft } from 'lucide-react';
 
 const reportSchema = z.object({
   development: z.string().min(1, 'Development is required'),
+  address: z.string().optional(),
   unit: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
   reporterName: z.string().optional(),
@@ -45,7 +46,7 @@ export default function PublicResident() {
   
   const reportForm = useForm<z.infer<typeof reportSchema>>({
     resolver: zodResolver(reportSchema),
-    defaultValues: { development: '', unit: '', description: '', reporterName: '', reporterPhone: '', reporterEmail: '' },
+    defaultValues: { development: '', address: '', unit: '', description: '', reporterName: '', reporterPhone: '', reporterEmail: '' },
   });
 
   const lookupForm = useForm<z.infer<typeof lookupSchema>>({
@@ -157,6 +158,13 @@ export default function PublicResident() {
                       <FormMessage />
                     </FormItem>
                   )} />
+                   <FormField control={reportForm.control} name="address" render={({ field }) => (
+                     <FormItem>
+                       <FormLabel>Address (Optional)</FormLabel>
+                       <FormControl><Input {...field} /></FormControl>
+                       <FormMessage />
+                     </FormItem>
+                   )} />
                   <FormField control={reportForm.control} name="unit" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Unit (Optional)</FormLabel>
