@@ -94,6 +94,7 @@ export default function Team() {
   const deleteStaff = useDeleteStaff();
   const [search, setSearch] = useState("");
   const [directoryDevelopment, setDirectoryDevelopment] = useState("");
+  const [directoryStaffId, setDirectoryStaffId] = useState("");
   const [open, setOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"single" | "bulk">("single");
   const [name, setName] = useState("");
@@ -129,10 +130,16 @@ export default function Team() {
   }, [actor]);
   const canIssue = roleOptions.length > 0;
 
+  const developmentStaff = staff?.filter((member) =>
+    member.role !== "human_resources" &&
+    Boolean(directoryDevelopment) &&
+    member.developments.includes(directoryDevelopment)
+  ).sort((a, b) => a.name.localeCompare(b.name));
   const filtered = staff?.filter((member) => {
     if (actor?.role === "human_resources") {
       if (member.role === "human_resources") return false;
       if (!directoryDevelopment || !member.developments.includes(directoryDevelopment)) return false;
+      if (!directoryStaffId || member.id !== directoryStaffId) return false;
     }
     const q = search.toLowerCase();
     return !q || [member.name, member.role, member.position].some((v) => v.toLowerCase().includes(q));
@@ -311,9 +318,11 @@ export default function Team() {
     member.position === "Borough Director" ? 0 : member.role === "administrator" ? 1 :
     member.role === "management" ? 2 : member.role === "procurement" ? 3 : 4;
   const sorted = filtered?.sort((a, b) => authorityOrder(a) - authorityOrder(b) || a.name.localeCompare(b.name));
-  const exactSearchMatches = (staff || []).filter(
-    (member) => member.name.trim().toLowerCase() === search.trim().toLowerCase(),
-  );
+  const exactSearchMatches = actor?.role === "human_resources"
+    ? (staff || []).filter((member) => member.id === directoryStaffId)
+    : (staff || []).filter(
+        (member) => member.name.trim().toLowerCase() === search.trim().toLowerCase(),
+      );
   async function deleteSearchedEmployee() {
     const target = exactSearchMatches.length === 1 ? exactSearchMatches[0] : undefined;
     if (!target) return;
@@ -389,15 +398,18 @@ export default function Team() {
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
         <div className="p-4 border-b border-border space-y-3">
-          {actor?.role === "human_resources" && <select aria-label="Select development" className="w-full max-w-xl rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryDevelopment} onChange={(event) => { setDirectoryDevelopment(event.target.value); setSearch(""); }}>
+          {actor?.role === "human_resources" && <select aria-label="Select development" className="w-full max-w-xl rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryDevelopment} onChange={(event) => { setDirectoryDevelopment(event.target.value); setDirectoryStaffId(""); setSearch(""); }}>
             <option value="">Select development</option>
             {(availableDevelopments || []).map((development) => <option key={development} value={development}>{development}</option>)}
           </select>}
           <div className="flex max-w-xl gap-2">
-            <div className="relative flex-1">
+            {actor?.role === "human_resources" ? <select aria-label="Select staff member" className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryStaffId} onChange={(event) => setDirectoryStaffId(event.target.value)} disabled={!directoryDevelopment}>
+              <option value="">Select staff member</option>
+              {(developmentStaff || []).map((member) => <option key={member.id} value={member.id}>{member.name} — {member.position}</option>)}
+            </select> : <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input aria-label="Search team members" placeholder="Search team members..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>
+            </div>}
             {actor?.role === "human_resources" && <Button type="button" variant="destructive" onClick={deleteSearchedEmployee} disabled={exactSearchMatches.length !== 1 || deleteStaff.isPending}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>}
           </div>
         </div>
@@ -405,6 +417,7 @@ export default function Team() {
           {isLoading ? <div className="p-8 text-center text-muted-foreground">Loading team...</div> :
             error ? <div className="p-8 text-center text-destructive">{errorMessage(error)}</div> :
             actor?.role === "human_resources" && !directoryDevelopment ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">Select a development</h3></div> :
+            actor?.role === "human_resources" && !directoryStaffId ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">Select a staff member</h3></div> :
             sorted?.length === 0 ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">No team members found</h3></div> :
             actor?.role === "human_resources" ?
               <div className="space-y-3">
