@@ -10,6 +10,32 @@ import { useToast } from "@/hooks/use-toast";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
 type Row = { id: string; version: number; development?: string | null; state?: Record<string, unknown>; createdAt: string };
+type LeaveDraft = {
+  employee: string;
+  type: string;
+  startDate: string;
+  endDate: string;
+  amount: string;
+  reason: string;
+};
+
+const emptyDraft = (employee = ""): LeaveDraft => ({
+  employee,
+  type: "Vacation",
+  startDate: "",
+  endDate: "",
+  amount: "full",
+  reason: "",
+});
+
+function requestedDays(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T00:00:00`);
+  const end = new Date(`${endDate || startDate}T00:00:00`);
+  const difference = end.getTime() - start.getTime();
+  return Number.isFinite(difference) && difference >= 0
+    ? Math.floor(difference / 86_400_000) + 1
+    : 1;
+}
 
 export default function Leave() {
   const { staff } = useAuth();
@@ -29,7 +55,7 @@ export default function Leave() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState<Row | null>(null);
-  const [draft, setDraft] = useState({ employee: "", startDate: "", endDate: "", reason: "" });
+  const [draft, setDraft] = useState<LeaveDraft>(emptyDraft());
   const rows = (query.data || []) as Row[];
   const canReview = staff?.role === "management";
   const filtered = rows.filter((row) => {
@@ -39,7 +65,18 @@ export default function Leave() {
   const refresh = (id?: string) => invalidateOperationalQueries(queryClient, "leave-requests", id);
   const save = async () => {
     try {
-      const state = { ...draft, title: `${draft.employee || "Staff"} leave` };
+      const hours = draft.amount === "full" ? undefined : Number(draft.amount);
+      const state = {
+        ...(editing?.state || {}),
+        employee: draft.employee,
+        type: draft.type,
+        startDate: draft.startDate,
+        endDate: draft.endDate || draft.startDate,
+        days: requestedDays(draft.startDate, draft.endDate),
+        hours,
+        reason: draft.reason,
+        title: `${draft.employee || "Staff"} leave`,
+      };
       if (editing) await update.mutateAsync({ entity: "leave-requests", id: editing.id, data: { id: editing.id, version: editing.version, state } });
       else await create.mutateAsync({ entity: "leave-requests", data: { id: crypto.randomUUID(), state, version: 1, development: staff?.developments?.[0] } });
        await refresh(editing?.id); setOpen(false); toast({ title: editing ? "Leave request updated" : "Leave request submitted" });
@@ -50,13 +87,13 @@ export default function Leave() {
     catch (error: any) { toast({ variant: "destructive", title: "Workflow action failed", description: error?.message || "The server rejected this action." }); }
   };
   return <div className="space-y-6">
-    <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight">Leave Requests</h1><p className="text-sm text-muted-foreground">Review staff leave requests and their current approval status.</p></div><Button onClick={() => { setEditing(null); setDraft({ employee: staff?.name || "", startDate: "", endDate: "", reason: "" }); setOpen(true); }}>New leave request</Button></div>
+    <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight">Leave Requests</h1><p className="text-sm text-muted-foreground">Review staff leave requests and their current approval status.</p></div><Button onClick={() => { setEditing(null); setDraft(emptyDraft(staff?.name || "")); setOpen(true); }}>New leave request</Button></div>
     <div className="rounded-[14px] border border-border bg-card shadow-sm"><div className="border-b border-border p-4"><div className="relative max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Search employee, reason, status…" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div><div className="p-4">
       {query.isLoading && <div className="p-10 text-center text-muted-foreground">Loading leave requests…</div>}
       {query.isError && <div className="p-10 text-center text-destructive">Unable to load leave requests. <Button variant="outline" onClick={() => query.refetch()}>Retry</Button></div>}
       {!query.isLoading && !query.isError && !filtered.length && <div className="p-12 text-center text-muted-foreground"><CalendarDays className="mx-auto mb-3 h-10 w-10 opacity-30" />{rows.length ? "No requests match your search." : "No leave requests yet."}</div>}
-      <div className="grid gap-3">{filtered.map((row) => { const s = row.state || {}; const status = String(s.status || "Pending"); return <div key={row.id} className="rounded-xl border border-border p-4"><div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-secondary"><Plane className="h-5 w-5" /></div><div className="min-w-0 flex-1"><h3 className="font-semibold">{String(s.employee || s.title || "Staff leave request")}</h3><p className="text-sm text-muted-foreground">{String(s.startDate || "—")} – {String(s.endDate || "—")} · {row.development || "All developments"}</p>{Boolean(s.reason) && <p className="mt-1 text-sm">{String(s.reason)}</p>}</div><span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{status}</span></div><div className="mt-3 flex justify-end gap-2">{status === "Pending" && canReview && <><Button size="sm" onClick={() => decide(row, "approve")} disabled={action.isPending}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button><Button size="sm" variant="outline" onClick={() => decide(row, "deny")} disabled={action.isPending}><X className="mr-1 h-3.5 w-3.5" />Deny</Button></>}{(status === "Pending" || s.requesterStaffId === staff?.id) && <Button size="sm" variant="ghost" onClick={() => { setEditing(row); setDraft({ employee: String(s.employee || ""), startDate: String(s.startDate || ""), endDate: String(s.endDate || ""), reason: String(s.reason || "") }); setOpen(true); }}>Edit details</Button>}</div></div>; })}</div>
+      <div className="grid gap-3">{filtered.map((row) => { const s = row.state || {}; const status = String(s.status || "Pending"); return <div key={row.id} className="rounded-xl border border-border p-4"><div className="flex items-start gap-3"><div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-secondary"><Plane className="h-5 w-5" /></div><div className="min-w-0 flex-1"><h3 className="font-semibold">{String(s.employee || s.title || "Staff leave request")}</h3><p className="text-sm text-muted-foreground">{String(s.startDate || "—")} – {String(s.endDate || "—")} · {row.development || "All developments"}</p>{Boolean(s.reason) && <p className="mt-1 text-sm">{String(s.reason)}</p>}</div><span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold text-primary">{status}</span></div><div className="mt-3 flex justify-end gap-2">{status === "Pending" && canReview && <><Button size="sm" onClick={() => decide(row, "approve")} disabled={action.isPending}><Check className="mr-1 h-3.5 w-3.5" />Approve</Button><Button size="sm" variant="outline" onClick={() => decide(row, "deny")} disabled={action.isPending}><X className="mr-1 h-3.5 w-3.5" />Deny</Button></>}{(status === "Pending" || s.requesterStaffId === staff?.id) && <Button size="sm" variant="ghost" onClick={() => { setEditing(row); setDraft({ employee: String(s.employee || ""), type: String(s.type || "Vacation"), startDate: String(s.startDate || ""), endDate: String(s.endDate || ""), amount: Number(s.hours) > 0 ? String(s.hours) : "full", reason: String(s.reason || "") }); setOpen(true); }}>Edit details</Button>}</div></div>; })}</div>
     </div></div>
-    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{editing ? "Edit leave request" : "New leave request"}</DialogTitle></DialogHeader><div className="space-y-3"><Input placeholder="Employee name" value={draft.employee} onChange={(e) => setDraft({ ...draft, employee: e.target.value })} /><div className="grid grid-cols-2 gap-2"><Input type="date" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value })} /><Input type="date" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} /></div><Input placeholder="Reason (optional)" value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} /><Button className="w-full" onClick={save} disabled={create.isPending || update.isPending}>{create.isPending || update.isPending ? "Saving…" : "Save request"}</Button></div></DialogContent></Dialog>
+    <Dialog open={open} onOpenChange={setOpen}><DialogContent><DialogHeader><DialogTitle>{editing ? "Edit leave request" : "New leave request"}</DialogTitle></DialogHeader><div className="space-y-3"><label className="block space-y-1"><span className="text-sm font-medium">Employee</span><Input value={draft.employee} onChange={(e) => setDraft({ ...draft, employee: e.target.value })} /></label><label className="block space-y-1"><span className="text-sm font-medium">Leave type</span><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value })}><option>Vacation</option><option>Sick</option><option>Personal</option><option>Bereavement</option><option>Other</option></select></label><div className="grid grid-cols-2 gap-2"><label className="block space-y-1"><span className="text-sm font-medium">Start date</span><Input type="date" value={draft.startDate} onChange={(e) => setDraft({ ...draft, startDate: e.target.value })} /></label><label className="block space-y-1"><span className="text-sm font-medium">End date</span><Input type="date" value={draft.endDate} onChange={(e) => setDraft({ ...draft, endDate: e.target.value })} /></label></div><label className="block space-y-1"><span className="text-sm font-medium">Amount of time</span><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={draft.amount} onChange={(e) => setDraft({ ...draft, amount: e.target.value })}><option value="full">Full day(s)</option>{[1, 2, 3, 4, 5, 6, 7].map((hour) => <option key={hour} value={hour}>{hour} hour{hour === 1 ? "" : "s"}</option>)}</select></label><label className="block space-y-1"><span className="text-sm font-medium">Reason (Optional)</span><Input value={draft.reason} onChange={(e) => setDraft({ ...draft, reason: e.target.value })} /></label><Button className="w-full" onClick={save} disabled={create.isPending || update.isPending || !draft.employee || !draft.startDate}>{create.isPending || update.isPending ? "Saving…" : "Save request"}</Button></div></DialogContent></Dialog>
   </div>;
 }
