@@ -431,6 +431,43 @@ test("staff can cancel only their own leave request", () => {
   );
 });
 
+test("management and supervisors can decide leave while ordinary staff and HR cannot", () => {
+  const canApprove = [
+    actor({ role: "management", position: "Property Manager" }),
+    actor({ role: "management", position: "Superintendent" }),
+    actor({ role: "administrator", position: "Administrator" }),
+    actor({ role: "worker", position: "Plumber Supervisor" }),
+  ];
+  for (const approver of canApprove) {
+    assert.equal(
+      canPerformEntityAction(approver, "leave-requests", "approve", {}),
+      true,
+    );
+    assert.equal(
+      canPerformEntityAction(approver, "leave-requests", "deny", {}),
+      true,
+    );
+  }
+  assert.equal(
+    canPerformEntityAction(
+      actor({ role: "worker", position: "Maintenance Worker" }),
+      "leave-requests",
+      "approve",
+      {},
+    ),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(
+      actor({ role: "human_resources", position: "Human Resources" }),
+      "leave-requests",
+      "approve",
+      {},
+    ),
+    false,
+  );
+});
+
 test("legacy name-only leave requests do not grant cancellation ownership", () => {
   const worker = actor({
     id: "worker-1",

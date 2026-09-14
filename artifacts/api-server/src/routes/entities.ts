@@ -17,6 +17,7 @@ import {
   generatedCode,
   isBoroughDirector,
   isAssignmentAuthority,
+  isLeaveApprovalAuthority,
   isValidEntityTransition,
   patchesWorkflowManagedFields,
   recordId,
@@ -25,6 +26,7 @@ import {
   procurementRecordAllowed,
 } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
+import type { Actor } from "../lib/auth";
 import { emailReleasedScope } from "../lib/vendorEmail";
 import { logger } from "../lib/logger";
 
@@ -323,6 +325,25 @@ router.post("/v1/:entity", async (req, res, next) => {
       ? { ...rawState, requesterStaffId: actor.id }
       : rawState,
   );
+  if (entity === "leave-requests") {
+    delete createdState["employeeStaffId"];
+    const employeeName = typeof createdState["employee"] === "string"
+      ? createdState["employee"].trim()
+      : "";
+    if (employeeName) {
+      const employeeMatches = await db.select({ id: staffAccounts.id })
+        .from(staffAccounts)
+        .where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+          sql`lower(${staffAccounts.name}) = lower(${employeeName})`,
+        ))
+        .limit(2);
+      if (employeeMatches.length === 1) {
+        createdState["employeeStaffId"] = employeeMatches[0]!.id;
+      }
+    }
+  }
   if (
     actor.role === "inspector" &&
     ["violations", "building-violations", "priority-violations", "route-assignments"]
@@ -375,6 +396,36 @@ router.post("/v1/:entity", async (req, res, next) => {
       typeof rawState["building"] === "string" ? rawState["building"] : undefined,
       id,
     );
+  } else if (entity === "leave-requests") {
+    const reviewers = await db.select().from(staffAccounts).where(and(
+      eq(staffAccounts.tenantId, actor.tenantId),
+      eq(staffAccounts.status, "approved"),
+    ));
+    for (const reviewer of reviewers) {
+      const reviewerActor: Actor = {
+        id: reviewer.id,
+        tenantId: reviewer.tenantId,
+        name: reviewer.name,
+        role: reviewer.role as Actor["role"],
+        position: reviewer.position,
+        developments: reviewer.developments,
+        sessionVersion: reviewer.sessionVersion,
+      };
+      if (
+        isLeaveApprovalAuthority(reviewerActor) &&
+        entityDevelopmentAllowed(reviewerActor, entity, development)
+      ) {
+        await notify(
+          actor,
+          reviewer.id,
+          "Leave request",
+          typeof persistedCreatedState["employee"] === "string"
+            ? persistedCreatedState["employee"]
+            : undefined,
+          id,
+        );
+      }
+    }
   }
   res.status(201).json(outward(actor, created!));
 });
@@ -812,7 +863,27 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
   }
   let target = "";
   if (entity === "leave-requests") {
-    target = String(current.state["employee"] ?? "");
+    target = typeof current.state["employeeStaffId"] === "string"
+      ? current.state["employeeStaffId"]
+      : "";
+    if (!target) {
+      const employeeName = typeof current.state["employee"] === "string"
+        ? current.state["employee"].trim()
+        : "";
+      const employeeMatches = employeeName
+        ? await db.select({ id: staffAccounts.id })
+          .from(staffAccounts)
+          .where(and(
+            eq(staffAccounts.tenantId, actor.tenantId),
+            eq(staffAccounts.status, "approved"),
+            sql`lower(${staffAccounts.name}) = lower(${employeeName})`,
+          ))
+          .limit(2)
+        : [];
+      target = employeeMatches.length === 1
+        ? employeeMatches[0]!.id
+        : String(current.state["requesterStaffId"] ?? current.createdBy ?? "");
+    }
   } else if (entity === "procurement") {
     // Every procurement notification follows the canonical workflow.  Never
     // honor a client supplied target.

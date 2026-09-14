@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { listLeaveRequests, decideLeaveRequest, cancelLeaveRequest, deleteLeaveRequest, listDevelopmentNames, getCurrentPosition, type LeaveRequest, type LeaveStatus } from '../lib/store';
+import { listLeaveRequests, decideLeaveRequest, deleteLeaveRequest, listDevelopmentNames, getCurrentActor, getCurrentPosition, type LeaveRequest, type LeaveStatus } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 
 const TYPE_COLOR: Record<string, string> = {
@@ -59,7 +59,12 @@ export default function LeaveDashboard() {
   const [query, setQuery] = useState('');
 
   const [myPosition, setMyPosition] = useState('');
-  const load = useCallback(() => { listLeaveRequests().then(setAll); getCurrentPosition().then(setMyPosition).catch(() => {}); }, []);
+  const [myRole, setMyRole] = useState('');
+  const load = useCallback(() => {
+    listLeaveRequests().then(setAll);
+    getCurrentPosition().then(setMyPosition).catch(() => {});
+    getCurrentActor().then((actor) => setMyRole(actor?.role || '')).catch(() => {});
+  }, []);
   useFocusEffect(load);
 
   const devs = listDevelopmentNames();
@@ -68,6 +73,15 @@ export default function LeaveDashboard() {
   // A Borough Director only reviews management-tier leave; lower staff are hidden.
   const MGMT_TIER = ['borough director', 'regional director', 'property manager', 'assistant property manager', 'superintendent', 'assistant superintendent'];
   const isBoroughDir = (myPosition || '').trim().toLowerCase() === 'borough director';
+  const APPROVER_TITLES = [
+    'property manager', 'assistant property manager', 'superintendent',
+    'assistant superintendent', 'regional director', 'borough director',
+    'plumber supervisor', 'electric supervisor', 'elevator supervisor',
+    'painter supervisor', 'carpenter supervisor',
+  ];
+  const canDecide = myRole === 'management' ||
+    myRole === 'administrator' ||
+    APPROVER_TITLES.includes((myPosition || '').trim().toLowerCase());
   const filtered = all.filter((r) => {
     if (isBoroughDir && !MGMT_TIER.includes((r.title || '').trim().toLowerCase())) return false;
     if (devFilter && (r.development || '').trim().toLowerCase() !== devFilter.trim().toLowerCase()) return false;
@@ -84,8 +98,16 @@ export default function LeaveDashboard() {
   }
 
   async function decide(r: LeaveRequest, status: LeaveStatus) {
-    await decideLeaveRequest(r.id, status);
-    load();
+    try {
+      await decideLeaveRequest(r.id, status);
+      load();
+    } catch (error) {
+      Alert.alert(
+        'Could not update leave',
+        error instanceof Error ? error.message : 'The leave request was not changed.',
+      );
+      load();
+    }
   }
   function confirmDelete(r: LeaveRequest) {
     Alert.alert('Delete request?', r.employee + ' \u00b7 ' + r.type + ' \u00b7 ' + r.startDate, [
@@ -195,13 +217,13 @@ export default function LeaveDashboard() {
             {conflicts > 0 && <Text style={{ color: '#c0392b', fontWeight: '700', fontSize: 12 }}>⚠️ Overlaps {conflicts} other approved leave in this development</Text>}
             <Text style={ui.listSub}>Requested by {r.requestedBy}{r.decidedBy ? '  \u00b7  decided by ' + r.decidedBy : ''}</Text>
 
-            {r.status === 'Pending' && (
+            {r.status === 'Pending' && canDecide && (
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
                 <Pressable style={[ui.btn, { flex: 1, backgroundColor: '#16a34a' }]} onPress={() => decide(r, 'Approved')}><Text style={ui.btnText}>Approve</Text></Pressable>
                 <Pressable style={[ui.btnOutline, { flex: 1, borderColor: '#c0392b' }]} onPress={() => decide(r, 'Denied')}><Text style={{ color: '#c0392b', fontWeight: '600', textAlign: 'center' }}>Deny</Text></Pressable>
               </View>
             )}
-            <Pressable onPress={() => confirmDelete(r)} hitSlop={8}><Text style={{ color: '#c0392b', fontSize: 12, fontWeight: '600', marginTop: 2 }}>Delete</Text></Pressable>
+            {canDecide && <Pressable onPress={() => confirmDelete(r)} hitSlop={8}><Text style={{ color: '#c0392b', fontSize: 12, fontWeight: '600', marginTop: 2 }}>Delete</Text></Pressable>}
           </View>
         );
       })}

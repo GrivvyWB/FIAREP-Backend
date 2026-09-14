@@ -4692,7 +4692,6 @@ export async function createLeaveRequest(input: {
   };
   await d.runAsync('INSERT INTO leave_requests (id,state) VALUES (?,?)', req.id, JSON.stringify(req));
   await queueMutation('leave-requests', req.id, req);
-  await addNotification('management', 'Leave request', req.employee + ' \u00b7 ' + req.type + ' \u00b7 ' + req.startDate + (req.endDate && req.endDate !== req.startDate ? ' \u2013 ' + req.endDate : '') + (req.development ? ' \u00b7 ' + req.development : ''), req.id);
   await logAudit((a && a.role) || 'management', (a && a.name) || '', 'Leave requested', req.employee + ' \u00b7 ' + req.type, req.id);
   return req;
 }
@@ -4727,25 +4726,35 @@ export async function decideLeaveRequest(id: string, status: LeaveStatus, approv
   const req = await getLeaveRequest(id);
   if (!req) return null;
   const a = await getCurrentActor();
-  const next: LeaveRequest = { ...req, status, decidedBy: (a && a.name) || 'management', decidedAt: new Date().toISOString() };
-  if (status === 'Approved') next.approvedDays = (approvedDays != null ? approvedDays : req.days);
-  await _saveLeave(next);
   const action = status === 'Approved' ? 'approve' : status === 'Denied' ? 'deny' : status === 'Cancelled' ? 'cancel' : '';
   if (!action) throw new Error(`Unsupported leave status: ${status}`);
   const pending = {
     action,
-    body: status === 'Approved' && next.approvedDays != null ? { approvedDays: next.approvedDays } : {},
+    body: status === 'Approved' ? { approvedDays: approvedDays != null ? approvedDays : req.days } : {},
   };
+  let result;
   try {
-    await performEntityAction('leave-requests', id, pending.action, pending.body);
+    result = await performEntityAction('leave-requests', id, pending.action, pending.body);
   } catch (error) {
     const queued = {
-      ...next,
+      ...req,
       _pendingWorkflowActions: [...((req as any)._pendingWorkflowActions || []), pending],
     };
     await _saveLeave(queued as LeaveRequest);
     throw error;
   }
+  const next: LeaveRequest = {
+    ...req,
+    ...((result.state || {}) as Partial<LeaveRequest>),
+    id,
+    status,
+    decidedBy: (a && a.name) || 'management',
+    decidedAt: result.updatedAt || new Date().toISOString(),
+  };
+  if (status === 'Approved' && next.approvedDays == null) {
+    next.approvedDays = approvedDays != null ? approvedDays : req.days;
+  }
+  await _saveLeave(next);
   await addNotification(req.employee, 'Leave ' + status.toLowerCase(), req.type + ' \u00b7 ' + req.startDate + ' (' + status + ')', req.id);
   await logAudit((a && a.role) || 'management', (a && a.name) || '', 'Leave ' + status.toLowerCase(), req.employee + ' \u00b7 ' + req.type, req.id);
   return next;

@@ -452,6 +452,23 @@ const TRADE_SUPERVISOR_POSITIONS = new Set([
   "Carpenter Supervisor",
 ]);
 
+const LEAVE_APPROVER_POSITIONS = new Set([
+  "Property Manager",
+  "Assistant Property Manager",
+  "Superintendent",
+  "Assistant Superintendent",
+  "Regional Director",
+  ...TRADE_SUPERVISOR_POSITIONS,
+]);
+
+export function isLeaveApprovalAuthority(
+  actor: Pick<Actor, "role" | "position">,
+): boolean {
+  return actor.role === "management" ||
+    actor.role === "administrator" ||
+    LEAVE_APPROVER_POSITIONS.has(actor.position ?? "");
+}
+
 /**
  * Assignment authority is intentionally narrower than generic mutation
  * authority.  Field staff can edit their own non-workflow data, but cannot
@@ -618,7 +635,9 @@ export function canPerformEntityAction(
   }
 
   if (entity === "leave-requests") {
-    if (action === "approve" || action === "deny") return isManagement;
+    if (action === "approve" || action === "deny") {
+      return isLeaveApprovalAuthority(actor);
+    }
     if (action !== "cancel") return false;
     return state["requesterStaffId"] === actor.id;
   }
