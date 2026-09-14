@@ -9,7 +9,8 @@ export type StaffModule =
   | "leave" | "notifications" | "settings" | "shared-data";
 
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
-const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "elevators", "shared-data"]);
+const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "shared-data"]);
+const ELEVATOR_POSITIONS = new Set(["Elevator Supervisor", "Elevator Service"]);
 
 /** One client-side policy shared by navigation, routes, and data surfaces.
  * The API remains the final authority; this prevents unauthorized UI from
@@ -22,6 +23,9 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
   }
   if (staff.role === "procurement") return module === "procurement";
   if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
+  if (module === "elevators") {
+    return staff.role === "administrator" || ELEVATOR_POSITIONS.has(staff.position || "");
+  }
   if (module === "scope-review") {
     return staff.role === "management" &&
       !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "");
