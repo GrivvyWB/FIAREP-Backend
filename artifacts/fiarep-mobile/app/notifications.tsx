@@ -92,11 +92,19 @@ export default function Notifications() {
       Alert.alert(n.message, body, buttons);
       return;
     }
-    if (msg.includes('scope submitted')) { return; }
+    if (msg === 'leave request' || msg.includes('leave requests') || msg.startsWith('leave ')) {
+      if (mode === 'management' || mode === 'administrator') {
+        router.push('/leave-dashboard');
+      } else {
+        router.push('/leave-request');
+      }
+      return;
+    }
     if (msg.includes('returned for revision')) { router.push('/scope-submit' + (n.reportId ? '?openId=' + n.reportId : '')); return; }
     if (msg.includes('scope') || msg.includes('bid') || msg.includes('procurement') || msg.includes('vendor') || msg.includes('won') || msg.includes('job closed') || msg.includes('job open')) {
       if (mode === 'vendor') { router.push('/vendor-home'); return; }
       if (msg.includes('scope')) { router.push('/scope-submit'); return; }
+      if (msg.includes('bid') && n.reportId) { router.push('/scope-review?id=' + encodeURIComponent(n.reportId)); return; }
       return;
     }
     if (msg.includes('repair complete')) {
@@ -113,12 +121,12 @@ export default function Notifications() {
       }
       return;
     }
-    if (msg.includes('inspection logged') || msg.includes('awaiting approval')) { router.push('/inspection-approvals'); return; }
+    if (msg.includes('inspection logged') || msg.includes('awaiting approval') || msg.includes('awaiting review')) { router.push('/inspection-approvals'); return; }
     if (msg.includes('change work order') || msg.includes('change order')) { router.push('/change-orders'); return; }
     if (msg.includes('elevator update') || msg.includes('elevator job')) { router.push('/elevator-dashboard'); return; }
     if (msg.includes('emergency update') || msg.includes('emergency job') || msg.includes('emergency unit')) { router.push('/emergency-units'); return; }
-    if (msg.includes('emergency update') || msg.includes('emergency job') || msg.includes('emergency unit')) { router.push('/emergency-units'); return; }
-    if (msg.includes('emergency update') || msg.includes('emergency job') || msg.includes('emergency unit')) { router.push('/emergency-units'); return; }
+    if (msg.includes('new job assigned')) { router.push('/my-jobs'); return; }
+    if (msg.includes('new route assigned')) { router.push('/worker'); return; }
     if (n.reportId) { router.push('/report-detail?id=' + n.reportId); return; }
     // Fallback for older notifications without a stored reportId: match by detail text.
     if (msg.includes('report') || msg.includes('job')) {
