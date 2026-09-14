@@ -19,6 +19,7 @@ import { fileStorage } from "../lib/fileStorage";
 import { isBoroughDirector } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { rateLimit } from "../lib/rateLimit";
+import { lookupNychaResidentialAddress } from "../lib/nycProperty";
 import { UpdateResidentReportPhotoBody } from "@workspace/api-zod";
 import { audit } from "../lib/audit";
 
@@ -55,6 +56,17 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     if (licenseAllows(org, property.organizationId)) valid.push({ property, org });
   }
   const property = valid.length === 1 ? valid[0]!.property : null;
+  let nychaAddress: Awaited<ReturnType<typeof lookupNychaResidentialAddress>> = null;
+  if (!property) {
+    try {
+      nychaAddress = await lookupNychaResidentialAddress(address);
+    } catch (error) {
+      req.log.warn(
+        { error: error instanceof Error ? error.message : String(error) },
+        "NYCHA address lookup failed",
+      );
+    }
+  }
   let tenantId = property?.organizationId ?? "default";
   if (!property) {
     const customerOrganizations = await db
@@ -73,6 +85,10 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     }
   }
   const reportAddress = property?.displayAddress ?? address;
+  const reportDevelopment =
+    property?.development ??
+    nychaAddress?.development ??
+    (String(rawState.development ?? "").trim() || null);
   const now = new Date();
   const id = typeof input.id === "string" && input.id.trim() ? input.id.trim() : randomUUID();
   let complaintNo = "";
@@ -93,12 +109,12 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     }
     const state = {
       ...rawState, id, complaintNo, address: reportAddress, propertyId: property?.id ?? null,
-      development: property?.development ?? (String(rawState.development ?? "").trim() || null),
+      development: reportDevelopment,
       description, status: "submitted", photos: [],
       updates: [{ status: "submitted", by: "resident", at: now.toISOString() }], createdAt: now.toISOString(),
     };
     const [row] = await tx.insert(entityRecords).values({
-      id, tenantId, entity: "resident-reports", development: property?.development ?? (String(rawState.development ?? "").trim() || null),
+      id, tenantId, entity: "resident-reports", development: reportDevelopment,
       state, createdBy: "public-resident", createdAt: now, updatedAt: now,
     }).returning();
     const createdNotifications = await tx.insert(notifications).values([

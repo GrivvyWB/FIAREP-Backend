@@ -5,6 +5,7 @@ const SOCRATA_BASE = "https://data.cityofnewyork.us/resource";
 const HPD_VIOLATIONS = "wvxf-dwi5";
 const DOB_VIOLATIONS = "3h2n-5cm9";
 const HPD_COMPLAINTS = "ygpa-z7cr";
+const NYCHA_RESIDENTIAL_ADDRESSES = "3ub5-4ph8";
 
 function text(value: unknown): string | null {
   if (value == null) return null;
@@ -44,6 +45,57 @@ function escapeSoql(value: string): string {
   return value.replaceAll("'", "''").toUpperCase();
 }
 
+async function geocodeNycAddress(address: string) {
+  const geoUrl = new URL(GEOSEARCH_URL);
+  geoUrl.searchParams.set("text", `${address.trim()}, New York, NY`);
+  geoUrl.searchParams.set("size", "5");
+  const geocoded = (await fetchJson(geoUrl.toString())) as {
+    features?: Array<{
+      geometry?: { coordinates?: number[] };
+      properties?: JsonRecord & { addendum?: { pad?: JsonRecord } };
+    }>;
+  };
+  return geocoded.features?.find((candidate) => {
+    const props = candidate.properties;
+    return props?.housenumber && props?.street && props?.borough;
+  }) ?? null;
+}
+
+function developmentName(value: string): string {
+  return value
+    .toLocaleLowerCase("en-US")
+    .replace(/(^|[\s(/–—-])([a-z])/g, (_match, boundary: string, letter: string) =>
+      `${boundary}${letter.toLocaleUpperCase("en-US")}`,
+    );
+}
+
+export async function lookupNychaResidentialAddress(address: string) {
+  const feature = await geocodeNycAddress(address);
+  if (!feature?.properties) return null;
+  const props = feature.properties;
+  const pad = props.addendum?.pad || {};
+  const bin = safeIdentifier(text(pad["bin"]));
+  const houseNumber = text(props["housenumber"]) || "";
+  const street = text(props["street"]) || "";
+  const where = bin
+    ? `bin=${bin}`
+    : `upper(house)='${escapeSoql(houseNumber)}' AND upper(street)='${escapeSoql(street)}'`;
+  const rows = (await fetchJson(
+    socrataUrl(NYCHA_RESIDENTIAL_ADDRESSES, where, "development ASC", 5),
+  )) as JsonRecord[];
+  const row = Array.isArray(rows) ? rows[0] : undefined;
+  const officialDevelopment = text(row?.["development"]);
+  if (!row || !officialDevelopment) return null;
+  return {
+    development: developmentName(officialDevelopment),
+    address: text(row["address"]),
+    city: text(row["city"]),
+    state: text(row["state"]),
+    zip: text(row["zip_code"]),
+    bin: text(row["bin"]),
+  };
+}
+
 function normalizeDobDate(value: unknown): string | null {
   const raw = text(value);
   if (!raw) return null;
@@ -57,19 +109,7 @@ function normalizeDobDate(value: unknown): string | null {
 }
 
 export async function lookupNycPropertyData(address: string, limit: number) {
-  const geoUrl = new URL(GEOSEARCH_URL);
-  geoUrl.searchParams.set("text", `${address.trim()}, New York, NY`);
-  geoUrl.searchParams.set("size", "5");
-  const geocoded = (await fetchJson(geoUrl.toString())) as {
-    features?: Array<{
-      geometry?: { coordinates?: number[] };
-      properties?: JsonRecord & { addendum?: { pad?: JsonRecord } };
-    }>;
-  };
-  const feature = geocoded.features?.find((candidate) => {
-    const props = candidate.properties;
-    return props?.housenumber && props?.street && props?.borough;
-  });
+  const feature = await geocodeNycAddress(address);
   if (!feature?.properties) return null;
 
   const props = feature.properties;
