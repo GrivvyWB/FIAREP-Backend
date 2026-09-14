@@ -403,7 +403,7 @@ export default function Team() {
             {(availableDevelopments || []).map((development) => <option key={development} value={development}>{development}</option>)}
           </select>}
           <div className="flex max-w-xl gap-2">
-            {actor?.role === "human_resources" ? <select aria-label="Select staff member" className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryStaffId} onChange={(event) => setDirectoryStaffId(event.target.value)} disabled={!directoryDevelopment}>
+            {actor?.role === "human_resources" ? <select aria-label="Select staff member" className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryStaffId} onChange={(event) => setDirectoryStaffId(event.target.value)}>
               <option value="">Select staff member</option>
               {(developmentStaff || []).map((member) => <option key={member.id} value={member.id}>{member.name} — {member.position}</option>)}
             </select> : <div className="relative flex-1">
