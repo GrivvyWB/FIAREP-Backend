@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { hasModuleAccess } from "@/lib/access-policy";
 import { 
   LayoutDashboard, 
   ClipboardCheck, 
@@ -32,28 +33,29 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
   };
 
   const navItems = [
-    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-    { name: "Inspections", href: "/inspections", icon: ClipboardCheck },
-    { name: "Estimates", href: "/estimates", icon: FileText },
-    { name: "Repairs", href: "/repairs", icon: Wrench },
-    { name: "Projects", href: "/projects", icon: Briefcase },
-    { name: "Reports", href: "/reports", icon: FolderOpen },
-    { name: "Calendar", href: "/calendar", icon: CalendarDays },
-    { name: "Clients", href: "/clients", icon: Users },
-    { name: "Team", href: "/team", icon: UsersRound },
-    { name: "Violations", href: "/violations", icon: AlertTriangle },
-    ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart }] : []),
-    ...(staff?.role === "management" && !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "") ? [{ name: "Scope Review", href: "/scope-review", icon: ClipboardCheck }] : []),
+    { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" as const },
+    { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },
+    { name: "Estimates", href: "/estimates", icon: FileText, module: "estimates" as const },
+    { name: "Repairs", href: "/repairs", icon: Wrench, module: "repairs" as const },
+    { name: "Projects", href: "/projects", icon: Briefcase, module: "projects" as const },
+    { name: "Reports", href: "/reports", icon: FolderOpen, module: "reports" as const },
+    { name: "Calendar", href: "/calendar", icon: CalendarDays, module: "calendar" as const },
+    { name: "Clients", href: "/clients", icon: Users, module: "clients" as const },
+    { name: "Team", href: "/team", icon: UsersRound, module: "team" as const },
+    { name: "Violations", href: "/violations", icon: AlertTriangle, module: "violations" as const },
+    ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart, module: "procurement" as const }] : []),
+    ...(hasModuleAccess(staff, "scope-review") ? [{ name: "Scope Review", href: "/scope-review", icon: ClipboardCheck, module: "scope-review" as const }] : []),
+    ...(hasModuleAccess(staff, "scope-writing") ? [{ name: "Scope Writing", href: "/scope-writing", icon: ClipboardCheck, module: "scope-writing" as const }] : []),
     ...((staff?.role === "management" || staff?.role === "administrator") ? [
-      { name: "Emergency", href: "/emergency", icon: BellRing },
-      { name: "Change Orders", href: "/change-orders", icon: FileCog },
-      { name: "Scores", href: "/scores", icon: Target },
+      { name: "Emergency", href: "/emergency", icon: BellRing, module: "emergency" as const },
+      { name: "Change Orders", href: "/change-orders", icon: FileCog, module: "change-orders" as const },
+      { name: "Scores", href: "/scores", icon: Target, module: "scores" as const },
     ] : []),
-    { name: "Elevators", href: "/elevators", icon: ArrowUpToLine },
-    { name: "Leave", href: "/leave", icon: Plane },
-    { name: "Shared Data", href: "/shared-data", icon: Database },
-    { name: "Settings", href: "/settings", icon: Settings },
-  ];
+    { name: "Elevators", href: "/elevators", icon: ArrowUpToLine, module: "elevators" as const },
+    { name: "Leave", href: "/leave", icon: Plane, module: "leave" as const },
+    { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },
+    { name: "Settings", href: "/settings", icon: Settings, module: "settings" as const },
+  ].filter((item) => hasModuleAccess(staff, item.module));
 
   return (
     <>
@@ -104,18 +106,18 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
 
         <div className="m-[8px_16px_18px] p-[16px] bg-[#12161d] border border-sidebar-border rounded-xl shrink-0">
           <h4 className="text-[11px] tracking-[.6px] text-[#8b94a1] mb-3 font-semibold uppercase">QUICK ACTION</h4>
-          <Link href="/inspections/new" onClick={closeOnMobile}>
+          {hasModuleAccess(staff, "inspection-create") && <Link href="/inspections/new" onClick={closeOnMobile}>
             <div className="w-full border-none cursor-pointer p-[11px] rounded-[9px] text-[13.5px] font-semibold flex items-center justify-center gap-2 mb-2 bg-primary text-sidebar hover:bg-[#F5B301] transition-colors">
               <Plus className="w-4 h-4" />
               New Inspection
             </div>
-          </Link>
-          <Link href="/reports/upload" onClick={closeOnMobile}>
+          </Link>}
+          {hasModuleAccess(staff, "report-upload") && <Link href="/reports/upload" onClick={closeOnMobile}>
             <div className="w-full border border-[#2a323e] cursor-pointer p-[11px] rounded-[9px] text-[13.5px] font-semibold flex items-center justify-center gap-2 bg-transparent text-[#cfd6df] hover:bg-[#1a212b] transition-colors">
               <Upload className="w-4 h-4" />
               Upload Report
             </div>
-          </Link>
+          </Link>}
         </div>
 
         <div className="p-[16px_22px_20px] text-[11px] text-[#5c6572] border-t border-sidebar-border shrink-0">

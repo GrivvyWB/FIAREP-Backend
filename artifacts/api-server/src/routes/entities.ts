@@ -48,6 +48,15 @@ const ASSIGNMENT_FIELDS = new Set([
   "assignedStaffName",
   "assignedToName",
 ]);
+const ASSIGNMENT_SCOPED_ENTITIES = [
+  "resident-reports",
+  "violations",
+  "building-violations",
+  "priority-violations",
+  "route-assignments",
+  "elevator-jobs",
+  "emergency-jobs",
+];
 
 function containsAssignmentFields(state: Record<string, unknown>): boolean {
   return Object.entries(state).some(([key, value]) =>
@@ -67,8 +76,7 @@ async function canonicalizeAssignment(
   state: Record<string, unknown>,
   development: string | null,
 ): Promise<{ state: Record<string, unknown> | null; error?: string }> {
-  if (!["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
-    .includes(entity) &&
+  if (!ASSIGNMENT_SCOPED_ENTITIES.includes(entity) &&
     containsAssignmentFields(state) &&
     !isAssignmentAuthority(actor)) {
     return {
@@ -77,8 +85,7 @@ async function canonicalizeAssignment(
     };
   }
   if (
-    !["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
-      .includes(entity) ||
+    !ASSIGNMENT_SCOPED_ENTITIES.includes(entity) ||
     !containsAssignmentFields(state)
   ) {
     return { state };
@@ -99,7 +106,12 @@ async function canonicalizeAssignment(
       eq(staffAccounts.status, "approved"),
     ))
     .limit(1);
-  if (!target || !canAssignStaff(actor, target, development)) {
+  const inspectorSelfAssignment =
+    actor.role === "inspector" &&
+    ["violations", "building-violations", "priority-violations", "route-assignments"]
+      .includes(entity) &&
+    target?.id === actor.id;
+  if (!target || (!canAssignStaff(actor, target, development) && !inspectorSelfAssignment)) {
     return {
       state: null,
       error: "Select an operational staff member from your authorized group",
@@ -305,12 +317,24 @@ router.post("/v1/:entity", async (req, res, next) => {
     return;
   }
   const now = new Date();
-  const createdState = withInitialWorkflowState(
+  let createdState = withInitialWorkflowState(
     entity,
     entity === "leave-requests"
       ? { ...rawState, requesterStaffId: actor.id }
       : rawState,
   );
+  if (
+    actor.role === "inspector" &&
+    ["violations", "building-violations", "priority-violations", "route-assignments"]
+      .includes(entity) &&
+    !containsAssignmentFields(createdState)
+  ) {
+    createdState = {
+      ...createdState,
+      assignedStaffId: actor.id,
+      assignedTo: actor.name,
+    };
+  }
   const canonicalCreated = await canonicalizeAssignment(
     actor,
     entity,
@@ -559,20 +583,33 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
       start: "in_progress",
       resolve: "resolved",
       clear: "resolved",
+      complete: "done",
+      "approve-work": "work_approved",
     },
     "building-violations": {
       approve: "approved",
       route: "routed",
       complete: "done",
       clear: "done",
+      "approve-work": "work_approved",
     },
     "leave-requests": {
       approve: "Approved",
       deny: "Denied",
       cancel: "Cancelled",
     },
-    "elevator-jobs": { "on-my-way": "assigned", start: "assigned", complete: "done" },
-    "emergency-jobs": { "on-my-way": "assigned", start: "assigned", complete: "done" },
+    "elevator-jobs": {
+      "on-my-way": "assigned",
+      start: "in_progress",
+      complete: "done",
+      "approve-work": "work_approved",
+    },
+    "emergency-jobs": {
+      "on-my-way": "assigned",
+      start: "in_progress",
+      complete: "done",
+      "approve-work": "work_approved",
+    },
   };
   const nextStatus = transitions[entity]?.[action];
   if (!nextStatus) {

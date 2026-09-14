@@ -358,6 +358,7 @@ export default function Violations() {
           title="Internal Violations"
           description="Manage recorded building violations within the FIAREP system."
           icon={AlertTriangle}
+           workflow
         />
       </section>
     </div>

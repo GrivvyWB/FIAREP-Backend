@@ -34,6 +34,7 @@ import Settings from '@/pages/settings';
 import SharedData from '@/pages/shared-data';
 import ProcurementLogin from '@/pages/procurement-login';
 import ScopeReview from '@/pages/scope-review';
+import ScopeWriting from '@/pages/scope-writing';
 import Scores from '@/pages/scores';
 
 // Owner Pages
@@ -43,7 +44,7 @@ import PublicVendor from '@/pages/public-vendor';
 import OwnerLogin from '@/pages/platform-owner/login';
 import OwnerDashboard from '@/pages/platform-owner/index';
 import OwnerModules from '@/pages/platform-owner/modules';
-import { getStoredPersona, setStoredPersona, evaluateAccess, Persona } from '@/lib/access-policy';
+import { getStoredPersona, setStoredPersona, evaluateAccess, Persona, hasModuleAccess, type StaffModule } from '@/lib/access-policy';
 import { useState } from 'react';
 
 const queryClient = new QueryClient({
@@ -180,35 +181,67 @@ function AppRouter() {
     <Shell>
       <RoutedErrorBoundary>
         <Switch>
-          <Route path="/" component={Dashboard} />
-          <Route path="/dashboard" component={Dashboard} />
-          <Route path="/inspections" component={Inspections} />
-          <Route path="/inspections/new" component={NewInspection} />
-          <Route path="/estimates" component={Estimates} />
-          <Route path="/repairs" component={Repairs} />
-          <Route path="/projects" component={Projects} />
-          <Route path="/reports" component={Reports} />
-          <Route path="/reports/upload" component={UploadReport} />
-          <Route path="/calendar" component={Calendar} />
-          <Route path="/clients" component={Clients} />
-          <Route path="/team" component={Team} />
-          <Route path="/violations" component={Violations} />
-          <Route path="/scope-review" component={ScopeReview} />
+          <Route path="/" component={DashboardRoute} />
+          <Route path="/dashboard" component={DashboardRoute} />
+          <Route path="/inspections" component={InspectionsRoute} />
+          <Route path="/inspections/new" component={NewInspectionRoute} />
+          <Route path="/estimates" component={EstimatesRoute} />
+          <Route path="/repairs" component={RepairsRoute} />
+          <Route path="/projects" component={ProjectsRoute} />
+          <Route path="/reports" component={ReportsRoute} />
+          <Route path="/reports/upload" component={UploadReportRoute} />
+          <Route path="/calendar" component={CalendarRoute} />
+          <Route path="/clients" component={ClientsRoute} />
+          <Route path="/team" component={TeamRoute} />
+          <Route path="/violations" component={ViolationsRoute} />
+          <Route path="/scope-review" component={ScopeReviewRoute} />
+          <Route path="/scope-writing" component={ScopeWritingRoute} />
           <Route path="/procurement" component={Procurement} />
-          <Route path="/emergency" component={ManagementRouteEmergency} />
+          <Route path="/emergency" component={EmergencyRoute} />
           <Route path="/change-orders" component={ManagementRouteChangeOrders} />
           <Route path="/scores" component={ManagementRouteScores} />
-          <Route path="/elevators" component={Elevators} />
-          <Route path="/leave" component={Leave} />
-          <Route path="/notifications" component={Notifications} />
-          <Route path="/settings" component={Settings} />
-          <Route path="/shared-data" component={SharedData} />
+          <Route path="/elevators" component={ElevatorsRoute} />
+          <Route path="/leave" component={LeaveRoute} />
+          <Route path="/notifications" component={NotificationsRoute} />
+          <Route path="/settings" component={SettingsRoute} />
+          <Route path="/shared-data" component={SharedDataRoute} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
     </Shell>
   );
 }
+
+function ModuleRoute({ module, children }: { module: StaffModule; children: ReactNode }) {
+  const [, setLocation] = useLocation();
+  const { staff } = useAuth();
+  const allowed = hasModuleAccess(staff, module);
+  useEffect(() => {
+    if (!allowed) setLocation(staff?.role === "procurement" ? "/procurement" : "/dashboard");
+  }, [allowed, setLocation, staff?.role]);
+  return allowed ? <>{children}</> : null;
+}
+
+const DashboardRoute = () => <ModuleRoute module="dashboard"><Dashboard /></ModuleRoute>;
+const InspectionsRoute = () => <ModuleRoute module="inspections"><Inspections /></ModuleRoute>;
+const NewInspectionRoute = () => <ModuleRoute module="inspection-create"><NewInspection /></ModuleRoute>;
+const EstimatesRoute = () => <ModuleRoute module="estimates"><Estimates /></ModuleRoute>;
+const RepairsRoute = () => <ModuleRoute module="repairs"><Repairs /></ModuleRoute>;
+const ProjectsRoute = () => <ModuleRoute module="projects"><Projects /></ModuleRoute>;
+const ReportsRoute = () => <ModuleRoute module="reports"><Reports /></ModuleRoute>;
+const UploadReportRoute = () => <ModuleRoute module="report-upload"><UploadReport /></ModuleRoute>;
+const CalendarRoute = () => <ModuleRoute module="calendar"><Calendar /></ModuleRoute>;
+const ClientsRoute = () => <ModuleRoute module="clients"><Clients /></ModuleRoute>;
+const TeamRoute = () => <ModuleRoute module="team"><Team /></ModuleRoute>;
+const ViolationsRoute = () => <ModuleRoute module="violations"><Violations /></ModuleRoute>;
+const ScopeReviewRoute = () => <ModuleRoute module="scope-review"><ScopeReview /></ModuleRoute>;
+const ScopeWritingRoute = () => <ModuleRoute module="scope-writing"><ScopeWriting /></ModuleRoute>;
+const EmergencyRoute = () => <ModuleRoute module="emergency"><Emergency /></ModuleRoute>;
+const ElevatorsRoute = () => <ModuleRoute module="elevators"><Elevators /></ModuleRoute>;
+const LeaveRoute = () => <ModuleRoute module="leave"><Leave /></ModuleRoute>;
+const NotificationsRoute = () => <ModuleRoute module="notifications"><Notifications /></ModuleRoute>;
+const SettingsRoute = () => <ModuleRoute module="settings"><Settings /></ModuleRoute>;
+const SharedDataRoute = () => <ModuleRoute module="shared-data"><SharedData /></ModuleRoute>;
 
 function ManagementRoute({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
@@ -220,10 +253,6 @@ function ManagementRoute({ children }: { children: ReactNode }) {
   }, [allowed, setLocation, staff?.role]);
 
   return allowed ? <>{children}</> : null;
-}
-
-function ManagementRouteEmergency() {
-  return <ManagementRoute><Emergency /></ManagementRoute>;
 }
 
 function ManagementRouteChangeOrders() {

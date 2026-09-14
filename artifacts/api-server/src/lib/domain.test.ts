@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Actor } from "./auth";
 import {
   canReadEntity,
+  canBrowseStaffDirectory,
   canCreateEntity,
   canMutateEntity,
   canDeleteEntity,
@@ -243,6 +244,62 @@ test("restricted management roles cannot synchronize procurement records", () =>
   assert.equal(canReadEntity(actor({ position: "Regional Director" }), "procurement"), false);
 });
 
+test("elevator modules are limited to elevator field positions", () => {
+  const worker = actor({ role: "worker", position: "Maintenance Worker" });
+  const elevatorService = actor({ role: "worker", position: "Elevator Service" });
+  const elevatorSupervisor = actor({ role: "worker", position: "Elevator Supervisor" });
+  const cpm = actor({ role: "inspector", position: "CPM" });
+  for (const entity of ["elevators", "elevator-jobs"]) {
+    assert.equal(canReadEntity(worker, entity), false);
+    assert.equal(canCreateEntity(worker, entity), false);
+    assert.equal(canMutateEntity(worker, entity), false);
+    assert.equal(canReadEntity(elevatorService, entity), true);
+    assert.equal(canReadEntity(elevatorSupervisor, entity), true);
+    assert.equal(canReadEntity(cpm, entity), true);
+  }
+});
+
+test("violation modules are restricted to inspectors and supervisors", () => {
+  const worker = actor({ role: "worker", position: "Maintenance Worker" });
+  const inspector = actor({ role: "inspector", position: "Inspector" });
+  for (const entity of [
+    "violations",
+    "building-violations",
+    "priority-violations",
+    "route-assignments",
+  ]) {
+    assert.equal(canReadEntity(worker, entity), false);
+    assert.equal(canCreateEntity(worker, entity), false);
+    assert.equal(canMutateEntity(worker, entity), false);
+    assert.equal(canReadEntity(inspector, entity), true);
+    assert.equal(canCreateEntity(inspector, entity), true);
+    assert.equal(canMutateEntity(inspector, entity), true);
+  }
+  const record = {
+    entity: "violations",
+    development: "Development A",
+    state: { assignedStaffId: inspector.id },
+    createdBy: inspector.id,
+    deleted: false,
+  };
+  assert.equal(canReadEntityRecord(inspector, record), true);
+  assert.equal(
+    canReadEntityRecord(inspector, { ...record, state: { assignedStaffId: "other" } }),
+    false,
+  );
+});
+
+test("staff directory visibility is reserved for supervisors", () => {
+  assert.equal(canBrowseStaffDirectory(actor({ role: "worker" })), false);
+  assert.equal(canBrowseStaffDirectory(actor({ role: "inspector" })), false);
+  assert.equal(canBrowseStaffDirectory(actor({ role: "management" })), true);
+  assert.equal(canBrowseStaffDirectory(actor({ role: "administrator" })), true);
+  assert.equal(
+    canBrowseStaffDirectory(actor({ role: "administrator", position: "Borough Director" })),
+    true,
+  );
+});
+
 test("workflow actions require their explicit management or specialist role", () => {
   const manager = actor();
   const worker = actor({ role: "worker", position: "Maintenance Worker" });
@@ -277,6 +334,55 @@ test("workflow actions require their explicit management or specialist role", ()
   );
   assert.equal(
     canPerformEntityAction(procurement, "procurement", "submit", {}),
+    false,
+  );
+});
+
+test("approve-work completes assigned staff work only for supervisors", () => {
+  const manager = actor({ role: "management" });
+  const administrator = actor({ role: "administrator", position: "Administrator" });
+  const director = actor({
+    role: "administrator",
+    position: "Borough Director",
+    developments: [],
+  });
+  const worker = actor({ role: "worker", position: "Maintenance Worker" });
+  const states: Record<string, Record<string, unknown>> = {
+    "resident-reports": { status: "resolved" },
+    "building-violations": { status: "done" },
+    "elevator-jobs": { status: "done" },
+    "emergency-jobs": { status: "done" },
+  };
+  for (const [entity, state] of Object.entries(states)) {
+    assert.equal(canPerformEntityAction(manager, entity, "approve-work", state), true);
+    assert.equal(canPerformEntityAction(administrator, entity, "approve-work", state), true);
+    assert.equal(canPerformEntityAction(director, entity, "approve-work", state), true);
+    assert.equal(canPerformEntityAction(worker, entity, "approve-work", state), false);
+  }
+  assert.equal(
+    isValidEntityTransition("resident-reports", "approve-work", { status: "in_progress" }),
+    false,
+  );
+  assert.equal(
+    isValidEntityTransition("resident-reports", "approve-work", { status: "resolved" }),
+    true,
+  );
+  assert.equal(
+    isValidEntityTransition("resident-reports", "complete", { status: "in_progress" }),
+    true,
+  );
+  assert.equal(
+    canPerformEntityAction(worker, "resident-reports", "complete", {
+      assignedStaffId: worker.id,
+    }),
+    true,
+  );
+  assert.equal(
+    isValidEntityTransition("building-violations", "approve-work", { status: "done" }),
+    true,
+  );
+  assert.equal(
+    isValidEntityTransition("elevator-jobs", "approve-work", { status: "assigned" }),
     false,
   );
 });

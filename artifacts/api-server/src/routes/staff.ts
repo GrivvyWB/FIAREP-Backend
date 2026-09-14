@@ -14,6 +14,7 @@ import { audit } from "../lib/audit";
 import {
   STAFF_POSITIONS,
   STAFF_ROLES,
+  canBrowseStaffDirectory,
   isBoroughDirector,
   isElevated,
 } from "../lib/domain";
@@ -109,6 +110,10 @@ export function scopedDevelopmentNames(
 
 router.get("/v1/staff", async (req, res) => {
   const actor = actorFrom(res);
+  if (!canBrowseStaffDirectory(actor)) {
+    res.status(403).json({ error: "The staff directory is restricted to supervisors" });
+    return;
+  }
   const status =
     typeof req.query["status"] === "string" ? req.query["status"] : undefined;
   const rows = await db
@@ -128,6 +133,10 @@ router.get("/v1/staff", async (req, res) => {
 
 router.get("/v1/staff/developments", async (_req, res) => {
   const actor = actorFrom(res);
+  if (!canBrowseStaffDirectory(actor)) {
+    res.status(403).json({ error: "The staff directory is restricted to supervisors" });
+    return;
+  }
   const [propertyRows, staffRows, recordRows, organizationRows] = await Promise.all([
     db
       .select({ development: organizationProperties.development })

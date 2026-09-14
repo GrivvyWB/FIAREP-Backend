@@ -22,6 +22,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Textarea } from "@/components/ui/textarea";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
+import { canApproveWork } from "@/lib/access-policy";
+import { useAuth } from "@/hooks/use-auth";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -76,6 +78,7 @@ export function GenericEntityPage({
   
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { staff } = useAuth();
 
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -294,7 +297,7 @@ export function GenericEntityPage({
                              )}
                            </div>
                          );
-                       })}
+                             })}
                     </div>
                      <div className="text-right shrink-0">
                       {state?.status && (
@@ -307,11 +310,17 @@ export function GenericEntityPage({
                       </div>
                        {workflow && state?.status !== "closed" && (
                          <div className="flex flex-wrap justify-end gap-1 mt-2">
-                            {([
-                              ...(isProcurement ? [] : [["draft", "submit"], ["returned", "submit"], ["submitted", "approve"], ["submitted", "reject"]] as const), ["approved", "return"],
-                             ["approved", "broadcast"], ["bidding", "award"], ["awarded", "rate-close"],
-                            ] as const).filter(([status]) => status === state?.status).map(([, action]) => {
-                              if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => performAction(item, action)}>{action}</Button>;
+                             {((
+                               isProcurement
+                                 ? [["approved", "return"], ["approved", "broadcast"], ["bidding", "award"], ["awarded", "rate-close"]]
+                                 : entity === "building-violations"
+                                   ? [
+                                       ...(canApproveWork(staff) ? [["submitted", "approve"], ["approved", "route"], ["done", "approve-work"]] : []),
+                                       ...(!canApproveWork(staff) ? [["routed", "complete"]] : []),
+                                     ]
+                                   : []
+                             ) as Array<[string, string]>).filter(([status]) => status === state?.status).map(([, action]) => {
+                               if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => performAction(item, action)}>{action === "approve-work" ? "Approve Work" : action}</Button>;
                               const bids = (bidData || []).filter((b: any) => (b.state as any)?.requestId === item.id);
                               return <span key={action} className="flex gap-1 items-center">
                                 <select className="h-9 rounded-md border px-2 text-sm" value={selectedBid[item.id] || ""} onChange={(e) => setSelectedBid((s) => ({ ...s, [item.id]: e.target.value }))}>

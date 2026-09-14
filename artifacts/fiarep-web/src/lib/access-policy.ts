@@ -1,4 +1,52 @@
 export type Persona = 'resident' | 'vendor' | 'staff' | null;
+import type { Staff } from "@workspace/api-client-react";
+
+export type StaffModule =
+  | "dashboard" | "inspections" | "inspection-create" | "estimates"
+  | "repairs" | "projects" | "reports" | "report-upload" | "calendar"
+  | "clients" | "team" | "violations" | "procurement" | "scope-review"
+  | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
+  | "leave" | "notifications" | "settings" | "shared-data";
+
+const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
+const ELEVATOR_POSITIONS = new Set(["Elevator Service", "Elevator Supervisor"]);
+
+/** One client-side policy shared by navigation, routes, and data surfaces.
+ * The API remains the final authority; this prevents unauthorized UI from
+ * mounting and issuing requests in the first place. */
+export function hasModuleAccess(staff: Staff | null | undefined, module: StaffModule): boolean {
+  if (!staff) return false;
+  if (staff.role === "procurement") return module === "procurement";
+  if (module === "scope-review") {
+    return staff.role === "management" &&
+      !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "");
+  }
+  if (MANAGEMENT_ROLES.has(staff.role)) {
+    if (module === "scope-writing") return false;
+    return true;
+  }
+  if (module === "dashboard" || module === "calendar" || module === "leave" ||
+      module === "notifications" || module === "settings" || module === "shared-data") return true;
+  if (staff.role === "inspector") {
+    if (module === "violations" || module === "inspections" || module === "inspection-create" ||
+        module === "reports" || module === "report-upload" || module === "repairs" ||
+        module === "projects" || module === "estimates") return true;
+    if (module === "scope-writing") return staff.position === "CPM";
+    if (module === "elevators") return staff.position === "CPM";
+    return false;
+  }
+  if (staff.role === "worker") {
+    if (module === "repairs" || module === "projects" || module === "reports") return true;
+    if (module === "elevators") return ELEVATOR_POSITIONS.has(staff.position || "");
+    return false;
+  }
+  if (staff.role === "emergency") return module === "emergency";
+  return false;
+}
+
+export function canApproveWork(staff: Staff | null | undefined): boolean {
+  return !!staff && MANAGEMENT_ROLES.has(staff.role);
+}
 
 export interface AccessEvaluation {
   redirect?: string;

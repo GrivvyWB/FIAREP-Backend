@@ -4,6 +4,7 @@ import { db, entityRecords, notifications } from "@workspace/db";
 import {
   ENTITIES,
   canReadEntity,
+  canReadEntityRecord,
   entityDevelopmentAllowed,
   stripPricing,
   procurementRecordAllowed,
@@ -129,7 +130,11 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
     .filter((row) => entityDevelopmentAllowed(actor, row.entity, row.development))
     .filter((row) => privateVisible(actor, row))
     .filter((row) => emergencyVisible(actor, row))
-    .filter((row) => procurementRecordAllowed(actor, row));
+    .filter((row) => procurementRecordAllowed(actor, row))
+    // Deleted rows are returned as tombstones, but they must pass the same
+    // record-level boundary as live rows without letting the deleted flag
+    // itself make them fail authorization.
+    .filter((row) => canReadEntityRecord(actor, { ...row, deleted: false }));
   const visibleRecords = authorizedRecords.filter((row) => !row.deleted);
   // Deleted rows retain their metadata server-side.  Return a generic,
   // metadata-only tombstone after all of the same visibility checks as a live

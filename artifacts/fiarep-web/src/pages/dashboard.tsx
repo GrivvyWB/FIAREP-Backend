@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/use-auth";
+import { hasModuleAccess } from "@/lib/access-policy";
 import {
   getListEntityRecordsQueryKey, getListNotificationsQueryKey,
   useListEntityRecords, useListNotifications,
@@ -26,22 +27,24 @@ const formatDate = (value: string) => new Date(value).toLocaleDateString();
 
 export default function Dashboard() {
   const { staff } = useAuth();
-  const queryOptions = (entity: string) => ({
+  const queryOptions = (entity: string, module: Parameters<typeof hasModuleAccess>[1]) => ({
     query: {
       queryKey: getListEntityRecordsQueryKey(entity),
+      enabled: hasModuleAccess(staff, module),
       refetchInterval: 30_000,
       staleTime: 15_000,
       refetchOnMount: "always" as const,
     },
   });
-  const inspectionsQuery = useListEntityRecords("inspections", undefined, queryOptions("inspections"));
-  const projectsQuery = useListEntityRecords("projects", undefined, queryOptions("projects"));
-  const reportsQuery = useListEntityRecords("resident-reports", undefined, queryOptions("resident-reports"));
-  const emergenciesQuery = useListEntityRecords("emergency-jobs", undefined, queryOptions("emergency-jobs"));
-  const leaveQuery = useListEntityRecords("leave-requests", undefined, queryOptions("leave-requests"));
-  const repairsQuery = useListEntityRecords("project-scopes", undefined, queryOptions("project-scopes"));
+  const inspectionsQuery = useListEntityRecords("inspections", undefined, queryOptions("inspections", "inspections"));
+  const projectsQuery = useListEntityRecords("projects", undefined, queryOptions("projects", "projects"));
+  const reportsQuery = useListEntityRecords("resident-reports", undefined, queryOptions("resident-reports", "reports"));
+  const emergenciesQuery = useListEntityRecords("emergency-jobs", undefined, queryOptions("emergency-jobs", "emergency"));
+  const leaveQuery = useListEntityRecords("leave-requests", undefined, queryOptions("leave-requests", "leave"));
+  const repairsQuery = useListEntityRecords("project-scopes", undefined, queryOptions("project-scopes", "repairs"));
   const notificationsQuery = useListNotifications({
     query: {
+      enabled: hasModuleAccess(staff, "notifications"),
       queryKey: getListNotificationsQueryKey(),
       refetchInterval: 30_000,
       staleTime: 15_000,
@@ -67,7 +70,7 @@ export default function Dashboard() {
     { label: "Emergencies", value: emergencies.filter((item) => !["completed", "closed", "resolved"].includes(statusOf(item))).length, total: emergencies.length, icon: AlertTriangle, query: emergenciesQuery, href: "/emergency" },
     { label: "Pending Leave", value: leave.filter((item) => ["pending", "submitted", "new"].includes(statusOf(item))).length, total: leave.length, icon: Plane, query: leaveQuery, href: "/leave" },
     { label: "Unread Notifications", value: unread, total: notifications.length, icon: Bell, query: notificationsQuery, href: "/notifications" },
-  ];
+  ].filter((metric) => hasModuleAccess(staff, metric.href === "/emergency" ? "emergency" : metric.href.slice(1) as Parameters<typeof hasModuleAccess>[1]));
   const activity = [
     ...inspections.map((item) => ({ item, label: "Inspection", href: `/inspections?id=${encodeURIComponent(item.id)}`, icon: ClipboardCheck })),
     ...reports.map((item) => ({ item, label: "Resident report", href: `/reports?id=${encodeURIComponent(item.id)}`, icon: FileSearch })),
@@ -75,7 +78,8 @@ export default function Dashboard() {
     ...projects.map((item) => ({ item, label: "Project", href: "/projects", icon: FolderKanban })),
     ...leave.map((item) => ({ item, label: "Leave request", href: "/leave", icon: Plane })),
     ...repairs.map((item) => ({ item, label: "Repair scope", href: "/repairs", icon: Wrench })),
-  ].sort((a, b) => dateOf(b.item) - dateOf(a.item)).slice(0, 7);
+  ].filter((entry) => hasModuleAccess(staff, entry.href.startsWith("/emergency") ? "emergency" : entry.href.startsWith("/reports") ? "reports" : entry.href.startsWith("/inspections") ? "inspections" : entry.href.startsWith("/projects") ? "projects" : entry.href.startsWith("/repairs") ? "repairs" : "leave"))
+    .sort((a, b) => dateOf(b.item) - dateOf(a.item)).slice(0, 7);
   const activityLoading = [inspectionsQuery, reportsQuery, emergenciesQuery, projectsQuery, leaveQuery, repairsQuery].some((query) => query.isLoading);
 
   return (
@@ -123,10 +127,10 @@ export default function Dashboard() {
       </section>
 
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-[18px]">
-        <FeatureCard icon={ShieldCheck} title="Accurate Inspections" desc="Detailed field assessments" href="/inspections" />
-        <FeatureCard icon={FileSearch} title="Resident Reports" desc="Resolve housing concerns" href="/reports" />
-        <FeatureCard icon={Wrench} title="Efficient Repairs" desc="Track and manage repairs" href="/repairs" />
-        <FeatureCard icon={CalendarClock} title="Operational Control" desc="Keep teams coordinated" href="/calendar" />
+        {hasModuleAccess(staff, "inspections") && <FeatureCard icon={ShieldCheck} title="Accurate Inspections" desc="Detailed field assessments" href="/inspections" />}
+        {hasModuleAccess(staff, "reports") && <FeatureCard icon={FileSearch} title="Resident Reports" desc="Resolve housing concerns" href="/reports" />}
+        {hasModuleAccess(staff, "repairs") && <FeatureCard icon={Wrench} title="Efficient Repairs" desc="Track and manage repairs" href="/repairs" />}
+        {hasModuleAccess(staff, "calendar") && <FeatureCard icon={CalendarClock} title="Operational Control" desc="Keep teams coordinated" href="/calendar" />}
       </section>
     </div>
   );

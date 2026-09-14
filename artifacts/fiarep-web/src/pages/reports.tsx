@@ -23,6 +23,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/staff-assignment";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
+import { canApproveWork } from "@/lib/access-policy";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 
@@ -148,6 +149,7 @@ export default function Reports() {
   });
   const { data: staff = [] } = useListStaff({ status: "approved" }, {
     query: {
+      enabled: canApproveWork(actor),
       queryKey: getListStaffQueryKey({ status: "approved" }),
       staleTime: 15_000,
       refetchOnMount: "always",
@@ -249,9 +251,10 @@ export default function Reports() {
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
                 {!!String(state.assignedTo || "") && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{String(state.assignedTo)}</span>}
-                {currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => setSelected(report)}>Assign</Button>}
-                {currentStatus === "in_progress" && <Button size="sm" onClick={() => perform(report, "resolve")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Resolve</Button>}
-                {currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
+                {canApproveWork(actor) && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => setSelected(report)}>Assign</Button>}
+                {!canApproveWork(actor) && currentStatus === "in_progress" && <Button size="sm" onClick={() => perform(report, "complete")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
+                 {canApproveWork(actor) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
+                 {canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
                 <Button size="sm" variant="ghost" onClick={() => setSelected(report)}>View details</Button>
               </div>
             </div>;
@@ -269,8 +272,8 @@ export default function Reports() {
                  {!!String(state.description || "") && <div><p className="text-sm text-muted-foreground mb-1">Details</p><p className="text-sm whitespace-pre-wrap">{String(state.description)}</p></div>}
                 <div><p className="text-sm text-muted-foreground mb-2">Photos</p><Photos reportId={selected.id} /></div>
                 <FieldEvidenceDisplay state={state} reportId={selected.id} />
-                 <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={String(state.assignedStaffId || "")} onChange={(e) => assign(selected, e.target.value)} disabled={action.isPending || assigning === selected.id}><option value="">Select staff member…</option>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <optgroup key={group.label} label={group.label}>{group.people.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}</optgroup>)}</select></div>
-                <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{currentStatus === "in_progress" && <Button onClick={() => perform(selected, "resolve")} disabled={action.isPending}>Resolve report</Button>}{currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}</div>
+                  {canApproveWork(actor) && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p><select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={String(state.assignedStaffId || "")} onChange={(e) => assign(selected, e.target.value)} disabled={action.isPending || assigning === selected.id}><option value="">Select staff member…</option>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <optgroup key={group.label} label={group.label}>{group.people.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}</optgroup>)}</select></div>}
+                 <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{!canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => perform(selected, "complete")} disabled={action.isPending}>Complete</Button>}{canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => perform(selected, "resolve")} disabled={action.isPending}>Resolve report</Button>}{canApproveWork(actor) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
               </div></>;
           })()}
         </DialogContent>
