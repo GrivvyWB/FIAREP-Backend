@@ -280,6 +280,45 @@ export default function Team() {
     member.role === "management" ? 2 : member.role === "procurement" ? 3 : 4;
   const sorted = filtered?.sort((a, b) => authorityOrder(a) - authorityOrder(b) || a.name.localeCompare(b.name));
   const teamGroups = groupTeamDirectoryStaff(sorted || []);
+  const developmentGroups = [...new Set((sorted || []).flatMap((member) => member.developments))]
+    .sort((a, b) => a.localeCompare(b))
+    .map((development) => ({
+      label: development,
+      people: (sorted || []).filter((member) => member.developments.includes(development)),
+    }));
+  const staffWithoutDevelopment = (sorted || []).filter((member) => member.developments.length === 0);
+  if (staffWithoutDevelopment.length) {
+    developmentGroups.push({ label: "All Developments", people: staffWithoutDevelopment });
+  }
+  const memberCard = (member: NonNullable<typeof staff>[number]) => (
+    <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
+      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white grid place-items-center font-bold text-sm shrink-0">{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
+      <div className="flex-1 min-w-0">
+        <h4 className="font-bold truncate">{member.name}</h4>
+        <div className="text-sm text-muted-foreground">{member.position}</div>
+        {member.developments.length > 3 ? (
+          <Collapsible>
+            <CollapsibleTrigger className="mt-2 flex w-full items-center justify-between rounded-md border border-border px-3 py-2 text-left text-xs font-medium text-muted-foreground">
+              <span>{member.developments.length} assigned developments</span>
+              <ChevronDown className="h-4 w-4 shrink-0" />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-2 rounded-md border border-border p-3 text-xs leading-relaxed text-muted-foreground">
+              {member.developments.join(", ")}
+            </CollapsibleContent>
+          </Collapsible>
+        ) : (
+          <div className="text-xs text-muted-foreground">{member.developments.join(", ") || "All assigned developments"}</div>
+        )}
+      </div>
+      <div className="text-right shrink-0"><div className="text-[13px] font-semibold bg-secondary px-2.5 py-1 rounded-full inline-block">{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
+        {(member.canResetCode || member.canRevoke || member.canDelete) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
+          {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
+          {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />Revoke</Button>}
+          {member.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
+        </div>}
+      </div>
+    </div>
+  );
   const developmentSelector = (
     <div className="space-y-2">
       <Label id="employee-developments-label">Assigned developments</Label>
@@ -326,33 +365,16 @@ export default function Team() {
           {isLoading ? <div className="p-8 text-center text-muted-foreground">Loading team...</div> :
             error ? <div className="p-8 text-center text-destructive">{errorMessage(error)}</div> :
             sorted?.length === 0 ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">No team members found</h3></div> :
-            <div className="space-y-6">{teamGroups.map((group) => <section key={group.label} className="space-y-3"><div className="border-b border-border pb-2"><h3 className="font-bold">{group.label}</h3><p className="text-xs text-muted-foreground">{group.people.length} team member{group.people.length === 1 ? "" : "s"}</p></div><div className="grid gap-3">{group.people.map((member) => <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
-              <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white grid place-items-center font-bold text-sm shrink-0">{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
-              <div className="flex-1 min-w-0">
-                <h4 className="font-bold truncate">{member.name}</h4>
-                <div className="text-sm text-muted-foreground">{member.position}</div>
-                {member.developments.length > 3 ? (
-                  <Collapsible>
-                    <CollapsibleTrigger className="mt-2 flex w-full items-center justify-between rounded-md border border-border px-3 py-2 text-left text-xs font-medium text-muted-foreground">
-                      <span>{member.developments.length} assigned developments</span>
-                      <ChevronDown className="h-4 w-4 shrink-0" />
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="mt-2 rounded-md border border-border p-3 text-xs leading-relaxed text-muted-foreground">
-                      {member.developments.join(", ")}
-                    </CollapsibleContent>
-                  </Collapsible>
-                ) : (
-                  <div className="text-xs text-muted-foreground">{member.developments.join(", ") || "All assigned developments"}</div>
-                )}
-              </div>
-              <div className="text-right shrink-0"><div className="text-[13px] font-semibold bg-secondary px-2.5 py-1 rounded-full inline-block">{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
-                {(member.canResetCode || member.canRevoke || member.canDelete) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
-                  {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
-                  {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />Revoke</Button>}
-                  {member.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
-                </div>}
-              </div>
-            </div>)}</div></section>)}</div>}
+            actor?.role === "human_resources" ?
+              <div className="space-y-3">{developmentGroups.map((group) =>
+                <Collapsible key={`${group.label}:${search ? "search" : "browse"}`} defaultOpen={Boolean(search)}>
+                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3 text-left">
+                    <div><h3 className="font-bold">{group.label}</h3><p className="text-xs text-muted-foreground">{group.people.length} staff member{group.people.length === 1 ? "" : "s"}</p></div>
+                    <ChevronDown className="h-5 w-5 shrink-0" />
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="grid gap-3 pt-3">{group.people.map(memberCard)}</CollapsibleContent>
+                </Collapsible>)}</div> :
+              <div className="space-y-6">{teamGroups.map((group) => <section key={group.label} className="space-y-3"><div className="border-b border-border pb-2"><h3 className="font-bold">{group.label}</h3><p className="text-xs text-muted-foreground">{group.people.length} team member{group.people.length === 1 ? "" : "s"}</p></div><div className="grid gap-3">{group.people.map(memberCard)}</div></section>)}</div>}
         </div>
       </div>
       <Dialog open={open} onOpenChange={(v) => !v && closeForm()}>
