@@ -17,6 +17,8 @@ Trade crews are grouped automatically by position: Plumber Supervisor with Plumb
 
 Website modules and direct routes follow staff authority, not a shared menu. Inspectors have the complete violations capability; Elevator Service, Elevator Supervisor, and CPM inspectors have the Elevator capability; CPM inspectors have full scope drafting/editing/submission. Management and supervisors approve completed staff work online within their development scope.
 
+Submitted CPM requests for a development with no assigned Management account intentionally remain hidden until Platform Control assigns that development to Management.
+
 CPM may prepare and submit only its own scope/request to ordinary Management. Ordinary Management—not Administrator, Borough Director, Regional Director, or Superintendent—may return it to CPM or approve it for Procurement. Procurement sees it only after Management approval and alone may release it to vendors, select a real vendor bid, award, and close it.
 
 **Why:** The user explicitly confirmed that Borough Director ranks above Administrator, then explicitly excluded Procurement from Borough Director authority and required Procurement-only control. The user also required Management to handle its own team and Borough Directors to handle their operational group.
