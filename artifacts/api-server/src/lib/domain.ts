@@ -321,7 +321,16 @@ function staffAssignmentRecordAllowed(
   ) {
     return true;
   }
-  if (row.entity === "leave-requests") return row.createdBy === actor.id;
+  if (row.entity === "leave-requests") {
+    const employeeStaffId = typeof row.state["employeeStaffId"] === "string"
+      ? row.state["employeeStaffId"]
+      : "";
+    if (employeeStaffId) return employeeStaffId === actor.id;
+    const requesterStaffId = typeof row.state["requesterStaffId"] === "string"
+      ? row.state["requesterStaffId"]
+      : "";
+    return requesterStaffId ? requesterStaffId === actor.id : row.createdBy === actor.id;
+  }
   if (!STAFF_ASSIGNMENT_SCOPED_ENTITIES.has(row.entity)) return true;
   return normalizeAssignment(row.state).assignedStaffId === actor.id;
 }

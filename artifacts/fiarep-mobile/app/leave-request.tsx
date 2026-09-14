@@ -4,6 +4,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { createLeaveRequest, leaveBalances, leavePrefillForEmployee, listStaffNames, listLeaveForEmployee, getCurrentActor, getCurrentPosition, LEAVE_TYPES, type LeaveType, type LeaveBalance, type LeaveRequest } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
+import { syncAllEntities } from '../lib/sync';
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 function pad(n: number) { return n < 10 ? '0' + n : '' + n; }
@@ -118,11 +119,16 @@ export default function LeaveRequestScreen() {
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
       <Text style={ui.h}>Request Time Off</Text>
       <Pressable style={[ui.btnOutline, { marginTop: 6 }]} onPress={async () => {
+        if (showMine) {
+          setShowMine(false);
+          return;
+        }
         const who = employee.trim() || '';
         if (!who) { return; }
+        await syncAllEntities().catch(() => undefined);
         const list = await listLeaveForEmployee(who).catch(() => []);
         setMine(list);
-        setShowMine((v) => !v);
+        setShowMine(true);
       }}>
         <Text style={ui.btnOutlineText}>{showMine ? 'Hide my requests' : 'My Requests (see if approved)'}</Text>
       </Pressable>

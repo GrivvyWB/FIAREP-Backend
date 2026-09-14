@@ -21,3 +21,4 @@
 - [FIAREP development catalog](fiarep-development-catalog.md) — Platform Control owns each tenant’s assignment list; NYCHA may load the shared catalog.
 - [FIAREP TestFlight identity](fiarep-testflight-identity.md) — signed iOS builds must target the existing FIAREP App Store Connect record and advance its build number.
 - [FIAREP EAS build compatibility](fiarep-eas-build-compatibility.md) — keep EAS on the workspace pnpm line and exclude unused legacy native modules from signed builds.
+- [FIAREP leave identity](fiarep-leave-identity.md) — employee leave visibility and decisions follow the employee’s stable staff ID, even when Management submitted the request.

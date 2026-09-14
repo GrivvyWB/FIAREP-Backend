@@ -179,15 +179,29 @@ test("ordinary staff can read only their own leave requests", () => {
     role: "worker",
     position: "Maintenance Worker",
   });
-  const leave = (createdBy: string) => ({
+  const leave = (createdBy: string, state: Record<string, unknown> = {}) => ({
     entity: "leave-requests",
     development: "Development A",
-    state: {},
+    state,
     createdBy,
     deleted: false,
   });
   assert.equal(canReadEntityRecord(worker, leave("worker-1")), true);
   assert.equal(canReadEntityRecord(worker, leave("worker-2")), false);
+  assert.equal(
+    canReadEntityRecord(
+      worker,
+      leave("manager-1", { employeeStaffId: "worker-1", requesterStaffId: "manager-1" }),
+    ),
+    true,
+  );
+  assert.equal(
+    canReadEntityRecord(
+      worker,
+      leave("worker-1", { employeeStaffId: "worker-2", requesterStaffId: "worker-1" }),
+    ),
+    false,
+  );
 });
 
 test("procurement file access remains isolated from administrator and Borough Director roles", () => {
