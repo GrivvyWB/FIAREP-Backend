@@ -287,12 +287,16 @@ export default function Team() {
     catch (e) { setActionError(errorMessage(e)); }
   }
   async function deleteAccount(id: string, memberName: string) {
-    if (!window.confirm(`Permanently delete ${memberName}? This removes the account and signs it out on every device. This cannot be undone.`)) return;
+    if (!window.confirm(`Permanently delete ${memberName}? This removes the account and signs it out on every device. This cannot be undone.`)) return false;
     setActionError("");
     try {
       await deleteStaff.mutateAsync({ id });
       await refresh();
-    } catch (e) { setActionError(errorMessage(e)); }
+      return true;
+    } catch (e) {
+      setActionError(errorMessage(e));
+      return false;
+    }
   }
   async function copyCode() {
     if (issuedCode) await navigator.clipboard?.writeText(issuedCode);
@@ -302,6 +306,14 @@ export default function Team() {
     member.position === "Borough Director" ? 0 : member.role === "administrator" ? 1 :
     member.role === "management" ? 2 : member.role === "procurement" ? 3 : 4;
   const sorted = filtered?.sort((a, b) => authorityOrder(a) - authorityOrder(b) || a.name.localeCompare(b.name));
+  const exactSearchMatches = (staff || []).filter(
+    (member) => member.name.trim().toLowerCase() === search.trim().toLowerCase(),
+  );
+  async function deleteSearchedEmployee() {
+    const target = exactSearchMatches.length === 1 ? exactSearchMatches[0] : undefined;
+    if (!target) return;
+    if (await deleteAccount(target.id, target.name)) setSearch("");
+  }
   const teamGroups = groupTeamDirectoryStaff(sorted || []);
   const developmentGroups = [...new Set((sorted || []).flatMap((member) => member.developments))]
     .sort((a, b) => a.localeCompare(b))
@@ -381,9 +393,12 @@ export default function Team() {
          {canIssue && <Button onClick={openAddEmployee}><Plus className="mr-2 h-4 w-4" />Create</Button>}
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
-        <div className="p-4 border-b border-border"><div className="relative max-w-sm">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input aria-label="Search team members" placeholder="Search team members..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="p-4 border-b border-border"><div className="flex max-w-xl gap-2">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input aria-label="Search team members" placeholder="Search team members..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+          </div>
+          {actor?.role === "human_resources" && <Button type="button" variant="destructive" onClick={deleteSearchedEmployee} disabled={exactSearchMatches.length !== 1 || deleteStaff.isPending}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>}
         </div></div>
         <div className="p-4">
           {isLoading ? <div className="p-8 text-center text-muted-foreground">Loading team...</div> :
