@@ -1162,6 +1162,48 @@ export const LookupPublicVendorScopeResponse = zod.object({
 }))
 
 
+export const CreatePublicVendorWalkthroughCheckInParams = zod.object({
+  "trackingId": zod.coerce.string()
+})
+
+export const createPublicVendorWalkthroughCheckInBodyIdMin = 8;
+export const createPublicVendorWalkthroughCheckInBodyIdMax = 128;
+
+export const createPublicVendorWalkthroughCheckInBodyVendorNameMax = 160;
+
+export const createPublicVendorWalkthroughCheckInBodyLatitudeMin = -90;
+export const createPublicVendorWalkthroughCheckInBodyLatitudeMax = 90;
+
+export const createPublicVendorWalkthroughCheckInBodyLongitudeMin = -180;
+export const createPublicVendorWalkthroughCheckInBodyLongitudeMax = 180;
+
+export const createPublicVendorWalkthroughCheckInBodyAccuracyMin = 0;
+export const createPublicVendorWalkthroughCheckInBodyAccuracyMax = 10000;
+
+
+
+export const CreatePublicVendorWalkthroughCheckInBody = zod.object({
+  "id": zod.string().min(createPublicVendorWalkthroughCheckInBodyIdMin).max(createPublicVendorWalkthroughCheckInBodyIdMax),
+  "vendorName": zod.string().min(1).max(createPublicVendorWalkthroughCheckInBodyVendorNameMax),
+  "latitude": zod.number().min(createPublicVendorWalkthroughCheckInBodyLatitudeMin).max(createPublicVendorWalkthroughCheckInBodyLatitudeMax),
+  "longitude": zod.number().min(createPublicVendorWalkthroughCheckInBodyLongitudeMin).max(createPublicVendorWalkthroughCheckInBodyLongitudeMax),
+  "accuracy": zod.number().min(createPublicVendorWalkthroughCheckInBodyAccuracyMin).max(createPublicVendorWalkthroughCheckInBodyAccuracyMax).optional(),
+  "capturedAt": zod.coerce.date()
+})
+
+export const CreatePublicVendorWalkthroughCheckInResponse = zod.object({
+  "id": zod.string(),
+  "procurementId": zod.string(),
+  "trackingId": zod.string(),
+  "vendorName": zod.string(),
+  "latitude": zod.number(),
+  "longitude": zod.number(),
+  "accuracy": zod.number().nullish(),
+  "capturedAt": zod.coerce.date(),
+  "receivedAt": zod.coerce.date()
+})
+
+
 export const ListResidentReportPhotosQueryParams = zod.object({
   "reportId": zod.coerce.string()
 })

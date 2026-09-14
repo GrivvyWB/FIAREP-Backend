@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   boolean,
   check,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -264,6 +265,30 @@ export const entityRecords = pgTable(
     index("entity_project_idx").on(table.tenantId, table.projectId),
     index("entity_updated_idx").on(table.tenantId, table.updatedAt),
     index("entity_development_idx").on(table.tenantId, table.development),
+  ],
+);
+
+/**
+ * Immutable vendor presence evidence for scheduled procurement walk-throughs.
+ * The server receipt time is authoritative; capturedAt records device time.
+ */
+export const vendorWalkthroughCheckIns = pgTable(
+  "vendor_walkthrough_check_ins",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    procurementId: text("procurement_id").notNull(),
+    trackingId: text("tracking_id").notNull(),
+    vendorName: text("vendor_name").notNull(),
+    latitude: doublePrecision("latitude").notNull(),
+    longitude: doublePrecision("longitude").notNull(),
+    accuracy: doublePrecision("accuracy"),
+    capturedAt: timestamp("captured_at", { withTimezone: true }).notNull(),
+    receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("vendor_walkthrough_check_in_scope_idx").on(table.tenantId, table.procurementId),
+    index("vendor_walkthrough_check_in_received_idx").on(table.tenantId, table.receivedAt),
   ],
 );
 

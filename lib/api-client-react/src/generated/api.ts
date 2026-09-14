@@ -91,6 +91,8 @@ import type {
   TimeClockStatus,
   UnauthorizedResponse,
   UnregisterDeviceTokenBody,
+  VendorWalkthroughCheckIn,
+  VendorWalkthroughCheckInInput,
   ViolationClassification,
   ViolationClassificationRequest
 } from './api.schemas';
@@ -3235,6 +3237,72 @@ export function useLookupPublicVendorScope<TData = Awaited<ReturnType<typeof loo
 
 
 
+
+export const getCreatePublicVendorWalkthroughCheckInUrl = (trackingId: string,) => {
+
+
+
+
+  return `/api/v1/public/vendor-scopes/${trackingId}/walkthrough-check-ins`
+}
+
+export const createPublicVendorWalkthroughCheckIn = async (trackingId: string,
+    vendorWalkthroughCheckInInput: VendorWalkthroughCheckInInput, options?: Parameters<typeof customFetch>[1]): Promise<VendorWalkthroughCheckIn> => {
+
+  return customFetch<VendorWalkthroughCheckIn>(getCreatePublicVendorWalkthroughCheckInUrl(trackingId),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(vendorWalkthroughCheckInInput)
+  }
+);}
+
+
+
+
+
+export const getCreatePublicVendorWalkthroughCheckInMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPublicVendorWalkthroughCheckIn>>, TError,{trackingId: string;data: BodyType<VendorWalkthroughCheckInInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createPublicVendorWalkthroughCheckIn>>, TError,{trackingId: string;data: BodyType<VendorWalkthroughCheckInInput>}, TContext> => {
+
+const mutationKey = ['createPublicVendorWalkthroughCheckIn'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createPublicVendorWalkthroughCheckIn>>, {trackingId: string;data: BodyType<VendorWalkthroughCheckInInput>}> = (props) => {
+          const {trackingId,data} = props ?? {};
+
+          return  createPublicVendorWalkthroughCheckIn(trackingId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreatePublicVendorWalkthroughCheckInMutationResult = NonNullable<Awaited<ReturnType<typeof createPublicVendorWalkthroughCheckIn>>>
+    export type CreatePublicVendorWalkthroughCheckInMutationBody = BodyType<VendorWalkthroughCheckInInput>
+    export type CreatePublicVendorWalkthroughCheckInMutationError = ErrorType<Error>
+
+    export const useCreatePublicVendorWalkthroughCheckIn = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createPublicVendorWalkthroughCheckIn>>, TError,{trackingId: string;data: BodyType<VendorWalkthroughCheckInInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createPublicVendorWalkthroughCheckIn>>,
+        TError,
+        {trackingId: string;data: BodyType<VendorWalkthroughCheckInInput>},
+        TContext
+      > => {
+      return useMutation(getCreatePublicVendorWalkthroughCheckInMutationOptions(options));
+    }
 
 export const getListResidentReportPhotosUrl = (params: ListResidentReportPhotosParams,) => {
   const normalizedParams = new URLSearchParams();

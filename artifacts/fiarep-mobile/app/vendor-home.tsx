@@ -6,9 +6,12 @@ import {
   submitBid,
   vendorStartProcurement,
   vendorCompleteProcurement,
+  checkInVendorWalkthrough,
   type ProcurementRequest,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
+import { captureGeo } from '../lib/geo';
+import type { VendorWalkthroughCheckIn } from '@workspace/api-client-react';
 
 const STATUS_LABEL: Record<ProcurementRequest['status'], string> = {
   draft: 'Draft',
@@ -39,6 +42,7 @@ export default function VendorHome() {
   const [bidNote, setBidNote] = useState('');
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [walkthroughCheckIn, setWalkthroughCheckIn] = useState<VendorWalkthroughCheckIn | null>(null);
 
   async function lookup() {
     const q = query.trim();
@@ -53,8 +57,36 @@ export default function VendorHome() {
       setJob(r);
       setSearched(true);
       setNote('');
+      const priorCheckIns = Array.isArray(r?.walkthroughCheckIns) ? r.walkthroughCheckIns : [];
+      setWalkthroughCheckIn(
+        priorCheckIns.find((item) => item.vendorName.trim().toLowerCase() === vendor.toLowerCase()) ?? null,
+      );
     } catch (e: any) {
       Alert.alert('Lookup failed', e?.message ?? 'Could not find that job.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onWalkthroughCheckIn() {
+    if (!job) return;
+    setBusy(true);
+    try {
+      const geo = await captureGeo();
+      if (geo.source !== 'gps' || geo.lat == null || geo.lng == null) {
+        Alert.alert('Location required', 'Enable location access to check in.');
+        return;
+      }
+      const checkIn = await checkInVendorWalkthrough(job.trackingId, bidName, {
+        latitude: geo.lat,
+        longitude: geo.lng,
+        accuracy: geo.accuracy,
+        capturedAt: geo.at,
+      });
+      setWalkthroughCheckIn(checkIn);
+      Alert.alert('Checked in', 'Your time and location were sent to Procurement.');
+    } catch (e: any) {
+      Alert.alert('Check-in failed', e?.message ?? 'Your check-in could not be recorded.');
     } finally {
       setBusy(false);
     }
@@ -178,6 +210,23 @@ export default function VendorHome() {
                   <Text style={ui.label}>Bids close</Text>
                   <Text style={{ fontSize: 15, fontWeight: '700', color: '#c0392b' }}>{job.bidCloseAt}</Text>
                 </View>
+              )}
+            </View>
+          )}
+
+          {!!job.walkthroughAt && (
+            <View style={{ gap: 8 }}>
+              <Pressable
+                style={[ui.btn, busy && { opacity: 0.6 }]}
+                onPress={onWalkthroughCheckIn}
+                disabled={busy || !!walkthroughCheckIn}
+              >
+                <Text style={ui.btnText}>Walk-Through Check-In</Text>
+              </Pressable>
+              {!!walkthroughCheckIn && (
+                <Text style={{ fontSize: 12, color: '#666' }}>
+                  Checked in {fmt(walkthroughCheckIn.receivedAt)}
+                </Text>
               )}
             </View>
           )}

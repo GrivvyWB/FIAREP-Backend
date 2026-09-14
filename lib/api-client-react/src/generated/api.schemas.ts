@@ -212,6 +212,48 @@ export interface PublicVendorBidInput {
   note?: string;
 }
 
+export interface VendorWalkthroughCheckInInput {
+  /**
+     * @minLength 8
+     * @maxLength 128
+     */
+  id: string;
+  /**
+     * @minLength 1
+     * @maxLength 160
+     */
+  vendorName: string;
+  /**
+     * @minimum -90
+     * @maximum 90
+     */
+  latitude: number;
+  /**
+     * @minimum -180
+     * @maximum 180
+     */
+  longitude: number;
+  /**
+     * @minimum 0
+     * @maximum 10000
+     */
+  accuracy?: number;
+  capturedAt: string;
+}
+
+export interface VendorWalkthroughCheckIn {
+  id: string;
+  procurementId: string;
+  trackingId: string;
+  vendorName: string;
+  latitude: number;
+  longitude: number;
+  /** @nullable */
+  accuracy?: number | null;
+  capturedAt: string;
+  receivedAt: string;
+}
+
 export type EntityInputState = { [key: string]: unknown };
 
 export interface EntityInput {

@@ -546,6 +546,7 @@ router.delete("/v1/platform/organizations/:id", async (req, res): Promise<void> 
 
     await tx.execute(sql`delete from refresh_sessions where staff_id in (select id from staff_accounts where tenant_id = ${id})`);
     await tx.execute(sql`delete from time_clock_punches where tenant_id = ${id}`);
+    await tx.execute(sql`delete from vendor_walkthrough_check_ins where tenant_id = ${id}`);
     await tx.execute(sql`delete from public_access_codes where tenant_id = ${id}`);
     await tx.execute(sql`delete from resident_report_photos where tenant_id = ${id}`);
     await tx.execute(sql`delete from resident_photo_upload_grants where tenant_id = ${id}`);

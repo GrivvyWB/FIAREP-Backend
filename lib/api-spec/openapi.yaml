@@ -818,6 +818,33 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/public/vendor-scopes/{trackingId}/walkthrough-check-ins:
+    post:
+      operationId: createPublicVendorWalkthroughCheckIn
+      tags: [entities]
+      parameters:
+        - { name: trackingId, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/VendorWalkthroughCheckInInput" }
+      responses:
+        "201":
+          description: Vendor walk-through check-in recorded
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/VendorWalkthroughCheckIn" }
+        "400":
+          description: Invalid check-in or no scheduled walk-through
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: Released vendor scope not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/resident-report-photos:
     get:
       operationId: listResidentReportPhotos
@@ -1312,6 +1339,30 @@ components:
         vendorName: { type: string, minLength: 1 }
         amount: { type: number, exclusiveMinimum: 0 }
         note: { type: string }
+    VendorWalkthroughCheckInInput:
+      type: object
+      additionalProperties: false
+      required: [id, vendorName, latitude, longitude, capturedAt]
+      properties:
+        id: { type: string, minLength: 8, maxLength: 128 }
+        vendorName: { type: string, minLength: 1, maxLength: 160 }
+        latitude: { type: number, minimum: -90, maximum: 90 }
+        longitude: { type: number, minimum: -180, maximum: 180 }
+        accuracy: { type: number, minimum: 0, maximum: 10000 }
+        capturedAt: { type: string, format: date-time }
+    VendorWalkthroughCheckIn:
+      type: object
+      required: [id, procurementId, trackingId, vendorName, latitude, longitude, capturedAt, receivedAt]
+      properties:
+        id: { type: string }
+        procurementId: { type: string }
+        trackingId: { type: string }
+        vendorName: { type: string }
+        latitude: { type: number }
+        longitude: { type: number }
+        accuracy: { type: ["number", "null"] }
+        capturedAt: { type: string, format: date-time }
+        receivedAt: { type: string, format: date-time }
     PublicResidentReportResponse:
       allOf:
         - $ref: "#/components/schemas/EntityRecord"

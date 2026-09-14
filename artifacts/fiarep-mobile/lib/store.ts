@@ -20,6 +20,7 @@ import {
   submitPublicResidentReport,
   requestPublicResidentPhotoUpload,
   confirmPublicResidentPhoto,
+  createPublicVendorWalkthroughCheckIn,
   listResidentReportPhotos,
   requestResidentReportPhotoDownload,
   submitPublicVendorBid,
@@ -36,6 +37,7 @@ import {
   type ScoresResponse as ApiScoresResponse,
   type TimeClockStatus,
   type TimeClockPunch,
+  type VendorWalkthroughCheckIn,
 } from '@workspace/api-client-react';
 export type { TimeClockPunch, TimeClockStatus } from '@workspace/api-client-react';
 import type { Rates } from './takeoff';
@@ -2541,6 +2543,7 @@ export type ProcurementRequest = {
   walkthroughAt?: string;
   walkthroughNote?: string;
   bidCloseAt?: string;
+  walkthroughCheckIns?: VendorWalkthroughCheckIn[];
 };
 
 export type VendorPerformance = 'good' | 'fair' | 'poor';
@@ -2880,6 +2883,22 @@ export async function getProcurementByTracking(tracking: string, vendorName: str
   } catch {
     return null;
   }
+}
+
+export async function checkInVendorWalkthrough(
+  trackingId: string,
+  vendorName: string,
+  location: { latitude: number; longitude: number; accuracy?: number; capturedAt: string },
+): Promise<VendorWalkthroughCheckIn> {
+  const id = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  return createPublicVendorWalkthroughCheckIn(trackingId.trim(), {
+    id,
+    vendorName: vendorName.trim(),
+    latitude: location.latitude,
+    longitude: location.longitude,
+    accuracy: location.accuracy,
+    capturedAt: location.capturedAt,
+  });
 }
 
 // Vendor marks their awarded job as started. No-op unless it is awarded.

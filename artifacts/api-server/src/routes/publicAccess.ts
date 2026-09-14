@@ -3,12 +3,14 @@ import { Router, type IRouter } from "express";
 import { and, desc, eq, sql, gt, isNull } from "drizzle-orm";
 import {
   db,
+  auditLog,
   entityRecords,
   notifications,
   organizationProperties,
   publicAccessCodes,
   residentReportPhotos,
   residentPhotoUploadGrants,
+  vendorWalkthroughCheckIns,
 } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { evaluateLicense, licenseAllows } from "../lib/auth";
@@ -307,6 +309,120 @@ router.get("/v1/public/vendor-scopes/:trackingId", async (req, res) => {
   const org = await evaluateLicense(scope.tenantId);
   if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
   res.json(record(scope));
+});
+
+router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async (req, res) => {
+  const trackingId = req.params["trackingId"]!;
+  const vendorName = String(req.body?.vendorName ?? "").trim();
+  const id = String(req.body?.id ?? "").trim();
+  const latitude = Number(req.body?.latitude);
+  const longitude = Number(req.body?.longitude);
+  const accuracy = req.body?.accuracy == null ? null : Number(req.body.accuracy);
+  const capturedAt = new Date(String(req.body?.capturedAt ?? ""));
+  if (
+    id.length < 8 || id.length > 128 || !vendorName ||
+    !Number.isFinite(latitude) || latitude < -90 || latitude > 90 ||
+    !Number.isFinite(longitude) || longitude < -180 || longitude > 180 ||
+    (accuracy !== null && (!Number.isFinite(accuracy) || accuracy < 0 || accuracy > 10_000)) ||
+    Number.isNaN(capturedAt.getTime())
+  ) {
+    res.status(400).json({ error: "A valid vendor name and GPS location are required" });
+    return;
+  }
+  const scope = await releasedScope(trackingId);
+  if (!scope) { res.status(404).json({ error: "Released scope not found" }); return; }
+  const org = await evaluateLicense(scope.tenantId);
+  if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
+
+  const existing = await db.select().from(vendorWalkthroughCheckIns).where(eq(vendorWalkthroughCheckIns.id, id)).limit(1);
+  if (existing[0]) {
+    if (existing[0].procurementId !== scope.id || normalize(existing[0].vendorName) !== normalize(vendorName)) {
+      res.status(409).json({ error: "Check-in identifier is already in use" });
+      return;
+    }
+    res.json(existing[0]);
+    return;
+  }
+
+  try {
+    const checkIn = await db.transaction(async (tx) => {
+      const [locked] = await tx.select().from(entityRecords).where(and(
+        eq(entityRecords.id, scope.id),
+        eq(entityRecords.tenantId, scope.tenantId),
+        eq(entityRecords.entity, "procurement"),
+        eq(entityRecords.deleted, false),
+      )).limit(1).for("update");
+      if (!locked || !VENDOR_VISIBLE_STATUSES.has(normalize(locked.state["status"]))) {
+        throw Object.assign(new Error("Released scope not found"), { status: 404 });
+      }
+      if (
+        ["awarded", "eligible-awarded"].includes(normalize(locked.state["status"])) &&
+        normalize(locked.state["vendor"]) !== normalize(vendorName)
+      ) {
+        throw Object.assign(new Error("Released scope not found"), { status: 404 });
+      }
+      if (!String(locked.state["walkthroughAt"] ?? "").trim()) {
+        throw Object.assign(new Error("No walk-through is scheduled for this scope"), { status: 400 });
+      }
+      const receivedAt = new Date();
+      const [created] = await tx.insert(vendorWalkthroughCheckIns).values({
+        id,
+        tenantId: locked.tenantId,
+        procurementId: locked.id,
+        trackingId: String(locked.state["trackingId"] ?? trackingId).toUpperCase(),
+        vendorName,
+        latitude,
+        longitude,
+        accuracy,
+        capturedAt,
+        receivedAt,
+      }).returning();
+      const previous = Array.isArray(locked.state["walkthroughCheckIns"])
+        ? locked.state["walkthroughCheckIns"].filter((item) => item && typeof item === "object")
+        : [];
+      const summary = {
+        id,
+        vendorName,
+        latitude,
+        longitude,
+        accuracy,
+        capturedAt: capturedAt.toISOString(),
+        receivedAt: receivedAt.toISOString(),
+      };
+      await tx.update(entityRecords).set({
+        state: { ...locked.state, walkthroughCheckIns: [...previous, summary] },
+        version: locked.version + 1,
+        updatedAt: receivedAt,
+      }).where(and(eq(entityRecords.id, locked.id), eq(entityRecords.tenantId, locked.tenantId)));
+      await tx.insert(notifications).values({
+        id: randomUUID(),
+        tenantId: locked.tenantId,
+        target: "procurement",
+        message: `Walk-through check-in: ${vendorName}`,
+        detail: `${String(locked.state["address"] ?? locked.development ?? "Scheduled site")} · ${receivedAt.toLocaleString("en-US")}`,
+        reportId: locked.id,
+      });
+      await tx.insert(auditLog).values({
+        id: randomUUID(),
+        tenantId: locked.tenantId,
+        actorRole: "vendor",
+        actorName: vendorName,
+        action: "vendor.walkthrough-check-in",
+        detail: `GPS check-in recorded for ${String(locked.state["trackingId"] ?? trackingId).toUpperCase()}`,
+        reportId: locked.id,
+        at: receivedAt,
+      });
+      return created!;
+    });
+    res.status(201).json(checkIn);
+  } catch (error: any) {
+    if (error?.status) { res.status(error.status).json({ error: error.message }); return; }
+    if (error?.code === "23505") {
+      const [duplicate] = await db.select().from(vendorWalkthroughCheckIns).where(eq(vendorWalkthroughCheckIns.id, id)).limit(1);
+      if (duplicate) { res.json(duplicate); return; }
+    }
+    throw error;
+  }
 });
 
 router.post("/v1/public/vendor-scopes/:trackingId/bids", async (req, res) => {

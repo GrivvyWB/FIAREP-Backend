@@ -54,6 +54,7 @@ export function GenericEntityPage({
       queryKey: getListEntityRecordsQueryKey(entity),
       staleTime: 15_000,
       refetchOnMount: "always",
+      refetchInterval: isProcurement ? 15_000 : false,
     },
   });
   const { data: bidData } = useListEntityRecords(
@@ -248,6 +249,9 @@ export function GenericEntityPage({
             <div className="grid gap-3">
               {filtered?.map(item => {
                 const state = item.state as any;
+                 const walkthroughCheckIns = isProcurement && Array.isArray(state?.walkthroughCheckIns)
+                   ? state.walkthroughCheckIns
+                   : [];
                 return (
                   <div key={item.id} data-testid={`row-${entity}-${item.id}`} className="flex items-center gap-4 p-4 rounded-xl border border-border hover:bg-muted/30 transition-colors">
                     <div className="w-12 h-12 rounded-[9px] bg-secondary text-secondary-foreground grid place-items-center shrink-0">
@@ -269,6 +273,28 @@ export function GenericEntityPage({
                           {state.description}
                         </div>
                       )}
+                       {walkthroughCheckIns.map((checkIn: any) => {
+                         const latitude = Number(checkIn?.latitude);
+                         const longitude = Number(checkIn?.longitude);
+                         const hasCoordinates = Number.isFinite(latitude) && Number.isFinite(longitude);
+                         return (
+                           <div key={String(checkIn?.id)} className="mt-2 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-950">
+                             <div className="font-semibold">Walk-Through Check-In · {String(checkIn?.vendorName || "Vendor")}</div>
+                             <div>{new Date(String(checkIn?.receivedAt)).toLocaleString()}</div>
+                             {hasCoordinates && (
+                               <a
+                                 href={`https://www.google.com/maps?q=${latitude},${longitude}`}
+                                 target="_blank"
+                                 rel="noreferrer"
+                                 className="underline"
+                               >
+                                 {latitude.toFixed(6)}, {longitude.toFixed(6)}
+                                 {Number.isFinite(Number(checkIn?.accuracy)) ? ` · ±${Math.round(Number(checkIn.accuracy))} m` : ""}
+                               </a>
+                             )}
+                           </div>
+                         );
+                       })}
                     </div>
                      <div className="text-right shrink-0">
                       {state?.status && (
