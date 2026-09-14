@@ -50,6 +50,7 @@ function developmentsWithinScope(
 ) {
   return (
     actor.role === "human_resources" ||
+    actor.role === "administrator" ||
     isBoroughDirector(actor) ||
     (actor.developments.length > 0 &&
       values.length > 0 &&
@@ -111,7 +112,11 @@ export function scopedDevelopmentNames(
   const names = [...new Set(values.filter((value): value is string =>
     typeof value === "string" && value.trim().length > 0,
   ).map((value) => value.trim()))].sort((a, b) => a.localeCompare(b));
-  if (isBoroughDirector(actor) || actor.role === "human_resources") return names;
+  if (
+    isBoroughDirector(actor) ||
+    actor.role === "administrator" ||
+    actor.role === "human_resources"
+  ) return names;
   const allowed = new Set(actor.developments);
   return names.filter((name) => allowed.has(name));
 }
