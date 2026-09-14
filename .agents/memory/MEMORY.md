@@ -20,3 +20,4 @@
 - [FIAREP time-clock authority](fiarep-time-clock-authority.md) — external clocks stay authoritative; mobile punching is organization-gated, actor-only, immutable, and server-timestamped.
 - [FIAREP development catalog](fiarep-development-catalog.md) — Platform Control owns each tenant’s assignment list; NYCHA may load the shared catalog.
 - [FIAREP TestFlight identity](fiarep-testflight-identity.md) — signed iOS builds must target the existing FIAREP App Store Connect record and advance its build number.
+- [FIAREP EAS build compatibility](fiarep-eas-build-compatibility.md) — keep EAS on the workspace pnpm line and exclude unused legacy native modules from signed builds.
