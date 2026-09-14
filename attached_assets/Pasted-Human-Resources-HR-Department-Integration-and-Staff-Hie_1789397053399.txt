@@ -1,0 +1,168 @@
+Human Resources (HR) Department Integration and Staff Hierarchy Requirements
+Overview
+
+Add a Human Resources (HR) Department to the application. HR will be responsible for creating, managing, and assigning all staff members throughout the organization.
+
+The HR module will serve as the central location where employees are added, edited, transferred, and assigned to developments, regions, and supervisors.
+
+Organizational Hierarchy
+
+Staff members must be organized in the following hierarchy order:
+
+Executive and Regional Management
+Regional Director
+Assistant Regional Director
+Property Manager
+Superintendent
+Assistant Superintendent
+Trade and Operations Supervisors
+Plumbing Supervisor
+Electrical Supervisor
+Maintenance Supervisor
+CPM Supervisor (Caretaker, Porter, Maintenance)
+Grounds Supervisor (if applicable)
+Field Staff
+Inspectors
+Plumbers
+Electricians
+Maintenance Workers
+Caretakers
+Porters
+Laborers
+Groundskeepers
+Administrative Staff
+Other Support Staff
+HR Employee Assignment Rules
+Supervisor-Based Assignments
+
+When HR creates an employee, the employee must automatically be assigned under the appropriate supervisor.
+
+Examples:
+
+If a Plumber is added, assign them under the Plumbing Supervisor.
+If an Electrician is added, assign them under the Electrical Supervisor.
+If a Maintenance Worker is added, assign them under the Maintenance Supervisor.
+If a Caretaker is added, assign them to the Superintendent.
+If an Inspector is added, assign them to the designated Inspector Supervisor or Superintendent.
+
+The employee hierarchy should be visible in a reporting structure.
+
+Example:
+
+Regional Director
+ └── Property Manager
+      └── Superintendent
+           ├── Assistant Superintendent
+           ├── Plumbing Supervisor
+           │    ├── Plumber
+           │    ├── Plumber
+           │    └── Plumber
+           ├── Electrical Supervisor
+           │    ├── Electrician
+           │    └── Electrician
+           ├── Maintenance Supervisor
+           │    ├── Maintenance Worker
+           │    └── Maintenance Worker
+           └── Caretakers
+
+Development Assignment Rules
+
+Certain management staff must be assigned to specific developments before they become active within that development.
+
+The following positions are development-specific:
+
+Regional Director
+Assistant Regional Director
+Property Manager
+Superintendent
+Assistant Superintendent
+
+When HR creates any of these positions:
+
+The user must select a development.
+The employee will only appear under that assigned development.
+One employee may be assigned to multiple developments if permitted by business rules.
+
+Example:
+
+Development A
+ ├── Property Manager
+ ├── Superintendent
+ └── Assistant Superintendent
+
+Development B
+ ├── Property Manager
+ ├── Superintendent
+ └── Assistant Superintendent
+
+Supervisor Coverage Rules
+
+Supervisors may:
+
+Be assigned to a single development.
+Be assigned to multiple developments.
+Be assigned globally across all developments.
+
+If no specific development is selected, the supervisor should be considered available organization-wide.
+
+Caretaker Management Rule
+
+Caretakers report directly to the Superintendent.
+
+Example:
+
+Superintendent
+ ├── Caretaker #1
+ ├── Caretaker #2
+ ├── Caretaker #3
+
+
+The Superintendent must have the ability to:
+
+View all assigned caretakers.
+Create work assignments.
+Track caretaker activities.
+Reassign caretakers if needed.
+HR Module Features
+
+The HR Department must be able to:
+
+Employee Management
+Add employees
+Edit employees
+Transfer employees
+Terminate employees
+Reactivate employees
+Assignment Management
+Assign employees to developments
+Assign employees to supervisors
+Reassign employees between developments
+Reassign employees between supervisors
+Organizational Structure
+Display reporting hierarchy
+Display development hierarchy
+Display supervisor-to-employee relationships
+Display management chains
+Search & Filtering
+
+Filter employees by:
+
+Development
+Region
+Department
+Job Title
+Supervisor
+Employment Status
+Core Logic
+
+The HR Department is the master source for all staffing records.
+
+Whenever a new employee is added:
+
+HR selects the employee position.
+The system determines the proper supervisor.
+The system determines whether the position requires a development assignment.
+The employee is automatically placed into the organizational hierarchy.
+The employee appears under the appropriate supervisor and development.
+
+This structure should support all current and future staff positions while maintaining a clear reporting hierarchy across regions, developments, supervisors, and field employees.
