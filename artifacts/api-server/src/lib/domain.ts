@@ -564,13 +564,7 @@ export function canPerformAssignedWorkflowAction(
   ) {
     return true;
   }
-  if (
-    actor.role === "management" ||
-    actor.role === "administrator"
-  ) {
-    return true;
-  }
-  if (!["worker", "inspector", "emergency"].includes(actor.role)) {
+  if (!["management", "administrator", "worker", "inspector", "emergency"].includes(actor.role)) {
     return false;
   }
   const assignment = normalizeAssignment(state);
@@ -583,7 +577,12 @@ export function canPerformEntityAction(
   action: string,
   state: Record<string, unknown>,
 ): boolean {
-  if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
+  if (
+    isBoroughDirector(actor) &&
+    entity !== "procurement" &&
+    entity !== "procurement-bids" &&
+    !ASSIGNMENT_REQUIRED_ACTIONS.has(action)
+  ) return true;
 
   const isManagement = isOrdinaryManagement(actor);
   const isSupervisor =
@@ -619,9 +618,9 @@ export function canPerformEntityAction(
   }
 
   if (entity === "resident-reports") {
-    if (action === "assign" || action === "resolve" || action === "clear") {
-      return action === "assign" ? isAssignmentAuthority(actor) : isManagement;
-    }
+    if (action === "assign") return isAssignmentAuthority(actor);
+    if (action === "clear") return isManagement;
+    if (action === "resolve") return false;
      return ["start", "complete"].includes(action) &&
        (isFieldStaff || isSupervisor) &&
        canPerformAssignedWorkflowAction(actor, entity, action, state);

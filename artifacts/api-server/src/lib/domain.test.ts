@@ -516,6 +516,27 @@ test("operational actions require canonical assignment ownership", () => {
   }
 });
 
+test("management cannot perform work assigned to another staff member", () => {
+  const manager = actor({
+    id: "manager-1",
+    role: "management",
+    position: "Property Manager",
+  });
+  const assignedToWorker = { assignedStaffId: "worker-1" };
+  assert.equal(
+    canPerformEntityAction(manager, "resident-reports", "start", assignedToWorker),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(manager, "resident-reports", "complete", assignedToWorker),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(manager, "resident-reports", "resolve", assignedToWorker),
+    false,
+  );
+});
+
 test("assignment normalization prefers canonical ids over mutable labels", () => {
   assert.deepEqual(
     normalizeAssignment({
@@ -560,7 +581,7 @@ test("legacy name-only operational assignments fail closed", () => {
   );
 });
 
-test("supervisors may override operational assignments, but procurement may not", () => {
+test("supervisors and procurement cannot perform another staff member's assigned work", () => {
   const manager = actor();
   const admin = actor({ role: "administrator", position: "Administrator" });
   const director = actor({
@@ -571,15 +592,15 @@ test("supervisors may override operational assignments, but procurement may not"
   const state = { assignedStaffId: "someone-else" };
   assert.equal(
     canPerformEntityAction(manager, "building-violations", "complete", state),
-    true,
+    false,
   );
   assert.equal(
     canPerformEntityAction(admin, "elevator-jobs", "complete", state),
-    true,
+    false,
   );
   assert.equal(
     canPerformEntityAction(director, "emergency-jobs", "complete", state),
-    true,
+    false,
   );
   assert.equal(
     canPerformEntityAction(
@@ -755,6 +776,6 @@ test("Borough Director cannot perform procurement workflow actions", () => {
   );
   assert.equal(
     canPerformEntityAction(director, "emergency-jobs", "complete", {}),
-    true,
+    false,
   );
 });

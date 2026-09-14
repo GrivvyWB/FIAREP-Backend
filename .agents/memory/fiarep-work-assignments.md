@@ -3,7 +3,7 @@ name: FIAREP work assignments
 description: Durable rules for canonical operational assignments and supervisor authority.
 ---
 
-Operational work is assigned by canonical staff identity. Names and other editable labels never establish permission to read, start, progress, or complete work. Ordinary workers and inspectors see only operational records assigned to their staff ID; management and administrators retain oversight. Only authorized supervisors may assign or repair an assignment.
+Operational work is assigned by canonical staff identity. Names and other editable labels never establish permission to read, start, progress, or complete work. Only the canonically assigned staff member may perform field-work actions; Management, Administrators, and Borough Directors retain oversight but cannot start or complete another person's assignment. Only authorized supervisors may assign or repair an assignment.
 
 **Why:** Display names can change or collide, and accepting assignment fields from ordinary staff lets them grant themselves authority during create, update, or action requests.
 
