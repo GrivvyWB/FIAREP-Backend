@@ -54,10 +54,33 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
       updatedAt: row.updatedAt,
     }));
 
+  const developments = calculateDevelopmentScores(records);
+  const knownDevelopments = new Set(
+    developments.map((score) => score.development.trim().toLowerCase()),
+  );
+  for (const development of actor.developments) {
+    const name = development.trim();
+    if (!name || knownDevelopments.has(name.toLowerCase())) continue;
+    developments.push({
+      development: name,
+      points: 0,
+      scorePercent: 50,
+      completed: 0,
+      open: 0,
+      overdue: 0,
+      sampleSize: 0,
+    });
+    knownDevelopments.add(name.toLowerCase());
+  }
+  developments.sort((a, b) =>
+    b.scorePercent - a.scorePercent ||
+    a.development.localeCompare(b.development)
+  );
+
   const response = {
     generatedAt: new Date().toISOString(),
     formulaVersion: "v1" as const,
-    developments: calculateDevelopmentScores(records),
+    developments,
     vendors: calculateVendorScores(records),
     buildings: calculateBuildingScores(records),
     residential: calculateResidentialScores(records),

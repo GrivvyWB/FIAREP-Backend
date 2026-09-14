@@ -58,6 +58,7 @@ const DEVELOPMENT_ENTITIES = new Set([
   "route-assignments",
   "building-violations",
   "violations",
+  "inspections",
   "resident-reports",
 ]);
 const BUILDING_ENTITIES = new Set([
@@ -167,11 +168,11 @@ export function calculateVendorScores(
   for (const record of records) {
     if (record.entity !== "procurement" || statusOf(record) !== "closed") continue;
     const vendor = firstText(record, ["vendor"]);
-    if (!vendor) continue;
+    const rating = performance[text(record.state["performance"]).toLowerCase()];
+    if (!vendor || rating === undefined) continue;
     const bucket = buckets.get(vendor) ?? { performance: [], completed: 0, onTime: 0, deductions: 0 };
     bucket.completed += 1;
-    const rating = performance[text(record.state["performance"]).toLowerCase()];
-    if (rating !== undefined) bucket.performance.push(rating);
+    bucket.performance.push(rating);
     const deduction = record.state["deduction"];
     if (typeof deduction === "number" && Number.isFinite(deduction) && deduction > 0) {
       bucket.deductions += 1;

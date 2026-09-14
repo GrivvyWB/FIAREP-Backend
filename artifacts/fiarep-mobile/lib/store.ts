@@ -3154,13 +3154,13 @@ export async function getVendorScores(withinDays: number = 14): Promise<VendorSc
   const PERF: Record<VendorPerformance, number> = { good: 1, fair: 0.6, poor: 0.2 };
   const byName: Record<string, { perf: number[]; onTime: number; completed: number; deductions: number }> = {};
   for (const r of all) {
-    if (r.status !== 'closed' || !r.vendor) continue;
+    if (r.status !== 'closed' || !r.vendor || !r.performance) continue;
     const name = r.vendor.trim();
     if (!name) continue;
     if (!byName[name]) byName[name] = { perf: [], onTime: 0, completed: 0, deductions: 0 };
     const b = byName[name];
     b.completed++;
-    if (r.performance) b.perf.push(PERF[r.performance]);
+    b.perf.push(PERF[r.performance]);
     if (r.deduction && r.deduction > 0) b.deductions++;
     const start = r.awardedAt || r.startedAt;
     const done = r.completedAt || r.closedAt;

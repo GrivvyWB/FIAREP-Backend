@@ -43,6 +43,17 @@ test("vendor score applies performance, on-time, and deduction rates", () => {
   }]);
 });
 
+test("vendor score ignores closed jobs that were not rated", () => {
+  assert.deepEqual(calculateVendorScores([
+    record("procurement", {
+      status: "closed",
+      vendor: "Unrated Vendor",
+      awardedAt: "2025-01-20T00:00:00.000Z",
+      closedAt: "2025-01-25T00:00:00.000Z",
+    }),
+  ]), []);
+});
+
 test("development score separates open and fourteen-day overdue work", () => {
   const scores = calculateDevelopmentScores([
     record("procurement", { status: "closed" }),
@@ -57,6 +68,24 @@ test("development score separates open and fourteen-day overdue work", () => {
     open: 1,
     overdue: 1,
     sampleSize: 3,
+  }]);
+});
+
+test("development score includes inspections", () => {
+  assert.deepEqual(calculateDevelopmentScores([
+    record("inspections", {
+      status: "completed",
+      development: "Development A",
+      createdAt: "2025-01-20T00:00:00.000Z",
+    }),
+  ], NOW), [{
+    development: "Development A",
+    points: 10,
+    scorePercent: 60,
+    completed: 1,
+    open: 0,
+    overdue: 0,
+    sampleSize: 1,
   }]);
 });
 
