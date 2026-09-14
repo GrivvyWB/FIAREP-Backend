@@ -10,6 +10,7 @@ import {
   procurementRecordAllowed,
 } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
+import { visibleNotificationsFor } from "../lib/notificationVisibility";
 
 const router: IRouter = Router();
 function emergencyVisible(actor: ReturnType<typeof actorFrom>, row: typeof entityRecords.$inferSelect): boolean {
@@ -126,6 +127,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       ),
     )
     .orderBy(asc(notifications.updatedAt));
+  const visibleAlerts = await visibleNotificationsFor(actor, alerts);
   const authorizedRecords = records
     .filter((row) => entityDevelopmentAllowed(actor, row.entity, row.development))
     .filter((row) => privateVisible(actor, row))
@@ -166,7 +168,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       createdAt: row.createdAt,
       updatedAt: row.updatedAt,
     })), ...tombstones],
-    notifications: alerts,
+    notifications: visibleAlerts,
   });
 });
 

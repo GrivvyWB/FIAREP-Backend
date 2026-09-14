@@ -187,7 +187,13 @@ export default function Management() {
 
   async function pickPosition(pos: StaffPosition) {
     setAssignPos(pos);
-    setStaffList(await listStaffByPosition(pos));
+    const report = reports.find((item) => item.id === assignFor);
+    const development = (report?.development || '').trim().toLowerCase();
+    const candidates = await listStaffByPosition(pos);
+    setStaffList(candidates.filter((staff) =>
+      Boolean(development) &&
+      (staff.developments || []).some((item) => item.trim().toLowerCase() === development)
+    ));
   }
 
   async function assignStaff(a: StaffAccount) {
@@ -336,9 +342,9 @@ export default function Management() {
                   <Text style={ui.btnOutlineText}>{r.development ? `Change (now: ${r.development})` : 'Set development'}</Text>
                 </Pressable>
 
-                <Text style={ui.label}>Assign staff member</Text>
+                <Text style={ui.label}>Send complaint</Text>
                 <Pressable style={ui.btn} onPress={() => { setAssignFor(r.id); setAssignPos(null); setStaffList([]); }}>
-                  <Text style={ui.btnText}>{r.assignedTo ? `Reassign (now: ${r.assignedTo})` : 'Assign staff member'}</Text>
+                  <Text style={ui.btnText}>{r.assignedTo ? `Reassign complaint (now: ${r.assignedTo})` : 'Send complaint to staff'}</Text>
                 </Pressable>
                 {r.status !== 'resolved' && (
                   <Pressable style={ui.btnOutline} onPress={() => onResolve(r)}>
@@ -387,7 +393,7 @@ export default function Management() {
       <Modal visible={!!assignFor} animationType="slide" onRequestClose={() => setAssignFor(null)}>
         <View style={{ flex: 1, padding: 20, paddingTop: 60, backgroundColor: '#fff' }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-            <Text style={{ fontSize: 20, fontWeight: '700' }}>{assignPos ? assignPos + 's' : 'Choose position'}</Text>
+            <Text style={{ fontSize: 20, fontWeight: '700' }}>{assignPos ? assignPos + 's' : 'Choose staff position'}</Text>
             <Pressable onPress={() => { setAssignFor(null); setAssignPos(null); setStaffList([]); }}>
               <Text style={{ color: ACCENT, fontWeight: '600', fontSize: 16 }}>Close</Text>
             </Pressable>

@@ -7,6 +7,7 @@ import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
+import { syncAllEntities } from '../lib/sync';
 
 const STATUS_LABEL: Record<ResidentReport['status'], string> = {
   submitted: 'Submitted',
@@ -28,7 +29,17 @@ export default function ReportDetail() {
   const [r, setR] = useState<ResidentReport | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
 
-  const load = useCallback(() => { if (id) getResidentReport(String(id)).then(setR); }, [id]);
+  const load = useCallback(() => {
+    if (!id) return;
+    (async () => {
+      let report = await getResidentReport(String(id));
+      if (!report) {
+        await syncAllEntities().catch(() => undefined);
+        report = await getResidentReport(String(id));
+      }
+      setR(report);
+    })();
+  }, [id]);
   useFocusEffect(load);
 
   if (!r) {

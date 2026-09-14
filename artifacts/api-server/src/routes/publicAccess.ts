@@ -18,6 +18,7 @@ import { evaluateLicense, licenseAllows } from "../lib/auth";
 import { fileStorage } from "../lib/fileStorage";
 import { isBoroughDirector } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
+import { residentReportRecipientIds } from "../lib/notificationVisibility";
 import { rateLimit } from "../lib/rateLimit";
 import { lookupNychaResidentialAddress } from "../lib/nycProperty";
 import { UpdateResidentReportPhotoBody } from "@workspace/api-zod";
@@ -123,10 +124,17 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       id, tenantId, entity: "resident-reports", development: reportDevelopment,
       state, createdBy: "public-resident", createdAt: now, updatedAt: now,
     }).returning();
-    const createdNotifications = await tx.insert(notifications).values([
-      { id: randomUUID(), tenantId, target: "management", message: "New resident report", detail: `${reportDevelopment} · ${complaintNo}`, reportId: id },
-      { id: randomUUID(), tenantId, target: "administrator", message: "New resident report", detail: `${reportDevelopment} · ${complaintNo}`, reportId: id },
-    ]).returning();
+    const recipientIds = await residentReportRecipientIds(tenantId, reportDevelopment);
+    const createdNotifications = recipientIds.length
+      ? await tx.insert(notifications).values(recipientIds.map((target) => ({
+          id: randomUUID(),
+          tenantId,
+          target,
+          message: "New resident report",
+          detail: `${reportDevelopment} · ${complaintNo}`,
+          reportId: id,
+        }))).returning()
+      : [];
     return { row, createdNotifications };
   }).catch(() => null);
   if (!created) { res.status(503).json({ error: "Could not issue a complaint code" }); return; }

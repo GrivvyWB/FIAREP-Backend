@@ -16,7 +16,6 @@ export default function Notifications() {
   const [position, setPosition] = useState('');
   const router = useRouter();
   async function openFor(n: Notification) {
-    await markNotificationRead(n.id);
     const msg = (n.message || '').toLowerCase();
     if (msg.includes('new resident report') && n.reportId) {
       let report = await getResidentReport(n.reportId);
@@ -25,12 +24,14 @@ export default function Notifications() {
         report = await getResidentReport(n.reportId);
       }
       if (report) {
+        await markNotificationRead(n.id);
         router.push('/report-detail?id=' + encodeURIComponent(report.id));
       } else {
-        Alert.alert('Report unavailable', 'This report could not be loaded. Please try again.');
+        Alert.alert('Report unavailable', 'This report is not assigned to one of your developments.');
       }
       return;
     }
+    await markNotificationRead(n.id);
     if (n.reportId && n.reportId.startsWith('hud:')) { router.push('/hud-view?id=' + n.reportId.slice(4)); return; }
     if (n.reportId && n.reportId.startsWith('proj:')) { router.push('/project/' + n.reportId.slice(5)); return; }
     // Scope-flow notifications carry the procurement id (no prefix).

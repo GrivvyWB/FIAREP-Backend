@@ -13,6 +13,7 @@ import {
 import { notify } from "./audit";
 import type { Actor } from "./auth";
 import { deliverPushNotification } from "./push";
+import { residentReportRecipientIds } from "./notificationVisibility";
 
 const realFetch = globalThis.fetch;
 const PUSH_TEST_TENANT_PATTERN =
@@ -95,6 +96,27 @@ async function addToken(
     platform: "test",
   });
   return value;
+}
+
+async function addScopedStaff(
+  tenantId: string,
+  name: string,
+  role: string,
+  position: string,
+  developments: string[],
+): Promise<string> {
+  const id = randomUUID();
+  await db.insert(staffAccounts).values({
+    id,
+    tenantId,
+    name,
+    role,
+    position,
+    developments,
+    code: String(Math.floor(1000 + Math.random() * 9000)),
+    status: "approved",
+  });
+  return id;
 }
 
 function expoResponse(
@@ -384,6 +406,47 @@ test("notification creation persists an unambiguous staff target by id", async (
       const deliveryRows = await deliveries(tenantId);
       assert.equal(deliveryRows[0]?.status, "no_recipients");
     });
+  } finally {
+    await cleanup(tenantId);
+  }
+});
+
+test("resident report recipients follow management development scope", async () => {
+  const tenantId = tenant();
+  try {
+    const propertyManager = await addScopedStaff(
+      tenantId, "Jefferson PM", "management", "Property Manager", ["Jefferson"],
+    );
+    const supervisor = await addScopedStaff(
+      tenantId, "Jefferson Supervisor", "management", "Maintenance Supervisor", ["Jefferson"],
+    );
+    const regionalDirector = await addScopedStaff(
+      tenantId, "Jefferson Regional", "management", "Regional Director", ["Jefferson"],
+    );
+    const scopedAdministrator = await addScopedStaff(
+      tenantId, "Jefferson Admin", "administrator", "Director", ["Jefferson"],
+    );
+    const boroughDirector = await addScopedStaff(
+      tenantId, "Borough Director", "administrator", "Borough Director", [],
+    );
+    await addScopedStaff(
+      tenantId, "Adams PM", "management", "Property Manager", ["Adams"],
+    );
+    await addScopedStaff(
+      tenantId, "Unscoped Director", "administrator", "Director", [],
+    );
+
+    const recipients = await residentReportRecipientIds(tenantId, "Jefferson");
+    assert.deepEqual(
+      new Set(recipients),
+      new Set([
+        propertyManager,
+        supervisor,
+        regionalDirector,
+        scopedAdministrator,
+        boroughDirector,
+      ]),
+    );
   } finally {
     await cleanup(tenantId);
   }
