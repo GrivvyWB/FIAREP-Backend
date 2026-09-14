@@ -109,6 +109,7 @@ export default function Notifications() {
             <div className="divide-y divide-border">
               {items.map((notification) => {
                 const urgent = isUrgent(notification);
+                const pendingEmployee = notification.message === "Employee pending approval";
                 const content = (
                   <>
                     <div
@@ -151,10 +152,10 @@ export default function Notifications() {
                   >
                     {notification.reportId ? (
                       <Link
-                        href="/reports"
+                        href={pendingEmployee ? "/team" : "/reports"}
                         className="flex min-w-0 flex-1 items-start gap-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => {
-                          if (!notification.read) void handleMarkRead(notification.id);
+                          if (!notification.read && !pendingEmployee) void handleMarkRead(notification.id);
                         }}
                       >
                         {content}
@@ -163,7 +164,7 @@ export default function Notifications() {
                     ) : (
                       <div className="flex min-w-0 flex-1 items-start gap-4">{content}</div>
                     )}
-                    {!notification.read && (
+                    {!notification.read && !pendingEmployee && (
                       <Button
                         variant="ghost"
                         size="sm"

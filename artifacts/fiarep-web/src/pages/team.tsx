@@ -3,6 +3,7 @@ import {
   StaffInputRole,
   StaffRole,
   useCreateStaff,
+  useApproveStaff,
   useDeleteStaff,
   useListStaff,
   useResetStaffCode,
@@ -87,6 +88,7 @@ export default function Team() {
     },
   });
   const create = useCreateStaff();
+  const approve = useApproveStaff();
   const reset = useResetStaffCode();
   const revoke = useRevokeStaff();
   const deleteStaff = useDeleteStaff();
@@ -98,6 +100,7 @@ export default function Team() {
   const [position, setPosition] = useState<string>("Staff Worker");
   const [developments, setDevelopments] = useState<string[]>([]);
   const [developmentsOpen, setDevelopmentsOpen] = useState(false);
+  const [waitingForDocuments, setWaitingForDocuments] = useState(false);
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
   const [issuedRole, setIssuedRole] = useState<string>("");
   const [issuedEmployee, setIssuedEmployee] = useState<string>("");
@@ -140,6 +143,7 @@ export default function Team() {
     setPosition("Staff Worker");
     setName("");
     setDevelopments([]);
+    setWaitingForDocuments(false);
     setDevelopmentsOpen(false);
     setIssuedCode(null);
     setIssuedRole("");
@@ -154,6 +158,7 @@ export default function Team() {
   function closeForm() {
     setOpen(false); setName(""); setRole(roleOptions.includes("worker") ? "worker" : (roleOptions[0] ?? "worker")); setPosition("Staff Worker");
     setDevelopments([]); setDevelopmentsOpen(false);
+    setWaitingForDocuments(false);
     setIssuedCode(null); setIssuedRole(""); setIssuedEmployee(""); setActionError("");
     setCreateMode("single"); setBulkNames([]); setBulkFileName(""); setBulkResults([]); setBulkCreating(false);
   }
@@ -169,9 +174,15 @@ export default function Team() {
           name: name.trim(), role: role as typeof StaffInputRole[keyof typeof StaffInputRole],
           position: position as typeof StaffPosition[keyof typeof StaffPosition],
           developments,
+          status: waitingForDocuments ? "pending" : "approved",
         },
       });
-      setIssuedCode(result.code); setIssuedRole(role); setIssuedEmployee(name.trim()); await refresh();
+      if (waitingForDocuments) {
+        await refresh();
+        closeForm();
+      } else {
+        setIssuedCode(result.code); setIssuedRole(role); setIssuedEmployee(name.trim()); await refresh();
+      }
     } catch (e) { setActionError(errorMessage(e)); }
   }
   async function uploadEmployeeList(event: React.ChangeEvent<HTMLInputElement>) {
@@ -205,6 +216,7 @@ export default function Team() {
             role: role as typeof StaffInputRole[keyof typeof StaffInputRole],
             position: position as typeof StaffPosition[keyof typeof StaffPosition],
             developments,
+              status: waitingForDocuments ? "pending" : "approved",
             clientRequestId: crypto.randomUUID(),
           },
         });
@@ -253,6 +265,17 @@ export default function Team() {
       setIssuedCode(result.code);
       setIssuedRole(resetTarget.role);
       setIssuedEmployee(resetTarget.name);
+      setOpen(true);
+      await refresh();
+    } catch (e) { setActionError(errorMessage(e)); }
+  }
+  async function approveEmployee(id: string, memberName: string, memberRole: string) {
+    setActionError("");
+    try {
+      const result = await approve.mutateAsync({ id });
+      setIssuedCode(result.code);
+      setIssuedRole(memberRole);
+      setIssuedEmployee(memberName);
       setOpen(true);
       await refresh();
     } catch (e) { setActionError(errorMessage(e)); }
@@ -312,6 +335,7 @@ export default function Team() {
       </div>
       <div className="text-right shrink-0"><div className="text-[13px] font-semibold bg-secondary px-2.5 py-1 rounded-full inline-block">{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
         {(member.canResetCode || member.canRevoke || member.canDelete) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
+          {member.canApprove && <Button size="sm" onClick={() => approveEmployee(member.id, member.name, member.role)} disabled={approve.isPending}>Approve employee</Button>}
           {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
           {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />Revoke</Button>}
           {member.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
@@ -391,6 +415,7 @@ export default function Team() {
                   <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => setRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
                   <div><Label htmlFor="employee-position">Position</Label><select id="employee-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
                   {developmentSelector}
+                   {actor?.role === "human_resources" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={waitingForDocuments} onCheckedChange={(checked) => setWaitingForDocuments(checked === true)} /><span>Waiting for documents</span></label>}
                   {actionError && <p className="text-sm text-destructive">{actionError}</p>}
                   <DialogFooter><Button type="button" variant="outline" onClick={closeForm}>Cancel</Button><Button type="submit" disabled={create.isPending}>{create.isPending ? "Creating..." : "Create employee"}</Button></DialogFooter>
                 </form>
@@ -412,6 +437,7 @@ export default function Team() {
                   <div><Label htmlFor="employee-list-role">Role</Label><select id="employee-list-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => setRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
                   <div><Label htmlFor="employee-list-position">Position</Label><select id="employee-list-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
                   {developmentSelector}
+                   {actor?.role === "human_resources" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={waitingForDocuments} onCheckedChange={(checked) => setWaitingForDocuments(checked === true)} /><span>Waiting for documents</span></label>}
                   <div className="space-y-2">
                     <Label htmlFor="employee-list">Employee list</Label>
                     <Input id="employee-list" type="file" accept=".csv,.txt,text/csv,text/plain" onChange={uploadEmployeeList} disabled={bulkCreating} />

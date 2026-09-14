@@ -1,11 +1,33 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
-import { db, notifications } from "@workspace/db";
+import { db, notifications, staffAccounts } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { visibleNotificationsFor } from "../lib/notificationVisibility";
 
 const router: IRouter = Router();
 router.use("/v1/notifications", requireAuth);
+
+async function pendingEmployeeReminderIds(
+  tenantId: string,
+  rows: Array<typeof notifications.$inferSelect>,
+) {
+  const staffIds = [...new Set(rows
+    .filter((row) => row.message === "Employee pending approval" && row.reportId)
+    .map((row) => row.reportId!))];
+  if (!staffIds.length) return new Set<string>();
+  const pending = await db
+    .select({ id: staffAccounts.id })
+    .from(staffAccounts)
+    .where(and(
+      eq(staffAccounts.tenantId, tenantId),
+      eq(staffAccounts.status, "pending"),
+      inArray(staffAccounts.id, staffIds),
+    ));
+  const pendingIds = new Set(pending.map((staff) => staff.id));
+  return new Set(rows
+    .filter((row) => row.reportId && pendingIds.has(row.reportId))
+    .map((row) => row.id));
+}
 
 router.get("/v1/notifications", async (_req, res) => {
   const actor = actorFrom(res);
@@ -63,6 +85,10 @@ router.post("/v1/notifications/:id/read", async (req, res) => {
     res.status(404).json({ error: "Notification not found" });
     return;
   }
+  if ((await pendingEmployeeReminderIds(actor.tenantId, [candidate])).has(candidate.id)) {
+    res.json(candidate);
+    return;
+  }
   const [updated] = await db
     .update(notifications)
     .set({ read: true, updatedAt: new Date() })
@@ -93,7 +119,11 @@ router.post("/v1/notifications/read-all", async (_req, res) => {
       ),
     );
   const visible = await visibleNotificationsFor(actor, candidates);
-  if (!visible.length) {
+  const protectedIds = await pendingEmployeeReminderIds(actor.tenantId, visible);
+  const markableIds = visible
+    .filter((notification) => !protectedIds.has(notification.id))
+    .map((notification) => notification.id);
+  if (!markableIds.length) {
     res.status(204).send();
     return;
   }
@@ -103,7 +133,7 @@ router.post("/v1/notifications/read-all", async (_req, res) => {
     .where(
       and(
         eq(notifications.tenantId, actor.tenantId),
-        inArray(notifications.id, visible.map((notification) => notification.id)),
+        inArray(notifications.id, markableIds),
       ),
     );
   res.status(204).send();

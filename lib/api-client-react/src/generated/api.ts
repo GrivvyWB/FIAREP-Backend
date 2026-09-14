@@ -2517,6 +2517,71 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       return useMutation(getResetStaffCodeMutationOptions(options));
     }
 
+export const getApproveStaffUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/staff/${id}/approve`
+}
+
+export const approveStaff = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<StaffIssueResponse> => {
+
+  return customFetch<StaffIssueResponse>(getApproveStaffUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getApproveStaffMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveStaff>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof approveStaff>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['approveStaff'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof approveStaff>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  approveStaff(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ApproveStaffMutationResult = NonNullable<Awaited<ReturnType<typeof approveStaff>>>
+
+    export type ApproveStaffMutationError = ErrorType<Error>
+
+    export const useApproveStaff = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof approveStaff>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof approveStaff>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getApproveStaffMutationOptions(options));
+    }
+
 export const getDeleteStaffUrl = (id: string,) => {
 
 

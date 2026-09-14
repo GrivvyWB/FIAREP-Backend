@@ -277,11 +277,20 @@ export type PublicResidentReportResponse = EntityRecord & {
   statusToken: string;
 };
 
+export type PublicResidentReportStatusStatus = typeof PublicResidentReportStatusStatus[keyof typeof PublicResidentReportStatusStatus];
+
+
+export const PublicResidentReportStatusStatus = {
+  pending: 'pending',
+  approved: 'approved',
+  revoked: 'revoked',
+} as const;
+
 export type PublicResidentReportStatusUpdatesItem = { [key: string]: unknown };
 
 export interface PublicResidentReportStatus {
   complaintNo: string;
-  status: string;
+  status: PublicResidentReportStatusStatus;
   description: string;
   updates: PublicResidentReportStatusUpdatesItem[];
   createdAt: string;
@@ -616,6 +625,7 @@ export interface Staff {
   canResetCode?: boolean;
   canRevoke?: boolean;
   canDelete?: boolean;
+  canApprove?: boolean;
 }
 
 export interface AuthResponse {
@@ -728,6 +738,14 @@ export const StaffInputPosition = {
   Other: 'Other',
 } as const;
 
+export type StaffInputStatus = typeof StaffInputStatus[keyof typeof StaffInputStatus];
+
+
+export const StaffInputStatus = {
+  pending: 'pending',
+  approved: 'approved',
+} as const;
+
 export interface StaffInput {
   name: string;
   firstName?: string;
@@ -741,6 +759,7 @@ export interface StaffInput {
      * @pattern ^[a-zA-Z0-9_-]+$
      */
   clientRequestId?: string;
+  status?: StaffInputStatus;
 }
 
 export interface StaffCodeUpdate { [key: string]: unknown }

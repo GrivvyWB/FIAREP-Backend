@@ -644,6 +644,24 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/staff/{id}/approve:
+    post:
+      operationId: approveStaff
+      tags: [staff]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Approved staff account and one-time access code
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StaffIssueResponse" }
+        "403":
+          description: Only Human Resources may approve a pending employee
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/staff/{id}:
     delete:
       operationId: deleteStaff
@@ -1373,7 +1391,7 @@ components:
       required: [complaintNo, status, description, updates, createdAt]
       properties:
         complaintNo: { type: string }
-        status: { type: string }
+        status: { type: string, enum: [pending, approved, revoked] }
         description: { type: string }
         updates: { type: array, items: { type: object, additionalProperties: true } }
         createdAt: { type: string }
@@ -1627,6 +1645,7 @@ components:
         canResetCode: { type: boolean }
         canRevoke: { type: boolean }
         canDelete: { type: boolean }
+        canApprove: { type: boolean }
     StaffIssueResponse:
       allOf:
         - $ref: "#/components/schemas/Staff"
@@ -1656,6 +1675,9 @@ components:
           minLength: 8
           maxLength: 100
           pattern: "^[a-zA-Z0-9_-]+$"
+        status:
+          type: string
+          enum: [pending, approved]
     StaffCodeUpdate:
       type: object
       additionalProperties: false

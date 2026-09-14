@@ -5,12 +5,13 @@ import {
   db,
   deviceTokens,
   entityRecords,
+  notifications,
   refreshSessions,
   staffAccounts,
   organizations,
   organizationProperties,
 } from "@workspace/db";
-import { audit } from "../lib/audit";
+import { audit, notify } from "../lib/audit";
 import {
   STAFF_POSITIONS,
   STAFF_ROLES,
@@ -36,7 +37,11 @@ function safe(
         canManage: canManageStaff(actor, staff),
         canResetCode: canManageStaff(actor, staff),
         canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
-         canDelete: actor.id !== staff.id && canManageStaff(actor, staff),
+        canDelete: actor.id !== staff.id && canManageStaff(actor, staff),
+        canApprove:
+          actor.role === "human_resources" &&
+          staff.status === "pending" &&
+          canManageStaff(actor, staff),
       }
     : {};
   if (includeCode) return data;
@@ -201,6 +206,9 @@ router.post("/v1/staff", async (req, res) => {
     : [];
   const clientRequestId =
     typeof input["clientRequestId"] === "string" ? input["clientRequestId"].trim() : "";
+  const requestedStatus =
+    input["status"] === "pending" ? "pending" :
+    input["status"] === undefined || input["status"] === "approved" ? "approved" : "";
   if (clientRequestId && !/^[a-zA-Z0-9_-]{8,100}$/.test(clientRequestId)) {
     res.status(400).json({ error: "Invalid staff issuance request id" });
     return;
@@ -208,9 +216,14 @@ router.post("/v1/staff", async (req, res) => {
   if (
     !name ||
     !STAFF_ROLES.has(role) ||
+    !requestedStatus ||
     !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number])
   ) {
     res.status(400).json({ error: "Valid name, role, and position are required" });
+    return;
+  }
+  if (requestedStatus === "pending" && actor.role !== "human_resources") {
+    res.status(403).json({ error: "Only Human Resources may create a pending employee" });
     return;
   }
   const developmentRequiredPositions = new Set([
@@ -272,7 +285,7 @@ router.post("/v1/staff", async (req, res) => {
       role,
       position,
       code: await allocateStaffCode(tx, actor.tenantId, name),
-       status: "approved",
+       status: requestedStatus,
       developments,
       createdBy: actor.id,
       issuerName: actor.name,
@@ -287,7 +300,72 @@ router.post("/v1/staff", async (req, res) => {
   });
   if (!created) return;
   await audit(actor, "staff.created", `Issued account for ${name}`, created.row.id);
+  if (created.row.status === "pending") {
+    await notify(
+      actor,
+      "human_resources",
+      "Employee pending approval",
+      `${name} is waiting for documents`,
+      created.row.id,
+    );
+  }
   res.status(201).json(safe(created.row, true, actor));
+});
+
+router.post("/v1/staff/:id/approve", async (req, res) => {
+  const actor = actorFrom(res);
+  const [target] = await db
+    .select()
+    .from(staffAccounts)
+    .where(and(
+      eq(staffAccounts.id, req.params["id"]!),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    ))
+    .limit(1);
+  if (!target) {
+    res.status(404).json({ error: "Staff account not found" });
+    return;
+  }
+  if (
+    actor.role !== "human_resources" ||
+    target.status !== "pending" ||
+    !canManageStaff(actor, target)
+  ) {
+    res.status(403).json({ error: "Only Human Resources may approve a pending employee" });
+    return;
+  }
+  const updatedResult = await db.transaction(async (tx) => {
+    const code = await allocateStaffCode(tx, actor.tenantId, target.name);
+    const [updated] = await tx
+      .update(staffAccounts)
+      .set({
+        code,
+        status: "approved",
+        sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(staffAccounts.id, target.id),
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.status, "pending"),
+      ))
+      .returning();
+    return { updated, code };
+  });
+  if (!updatedResult.updated) {
+    res.status(409).json({ error: "Employee is no longer pending" });
+    return;
+  }
+  await db
+    .update(notifications)
+    .set({ read: true, updatedAt: new Date() })
+    .where(and(
+      eq(notifications.tenantId, actor.tenantId),
+      eq(notifications.reportId, target.id),
+      eq(notifications.message, "Employee pending approval"),
+    ));
+  await audit(actor, "staff.approved", `Approved account for ${target.name}`, target.id);
+  res.json(safe(updatedResult.updated, true, actor));
 });
 
 router.post("/v1/staff/:id/reset-code", async (req, res) => {
