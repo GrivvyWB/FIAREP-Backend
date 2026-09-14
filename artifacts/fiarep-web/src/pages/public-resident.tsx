@@ -8,7 +8,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { useSubmitPublicResidentReport, useLookupPublicResidentReports, getLookupPublicResidentReportsQueryKey } from '@workspace/api-client-react';
+import {
+  confirmPublicResidentPhoto,
+  getLookupPublicResidentReportsQueryKey,
+  requestPublicResidentPhotoUpload,
+  useLookupPublicResidentReports,
+  useSubmitPublicResidentReport,
+} from '@workspace/api-client-react';
 import { ArrowLeft } from 'lucide-react';
 
 const reportSchema = z.object({
@@ -28,6 +34,8 @@ const lookupSchema = z.object({
 export default function PublicResident() {
   const [view, setView] = useState<'options' | 'submit' | 'lookup'>('options');
   const [lookupData, setLookupData] = useState<{ complaintNo: string } | null>(null);
+  const [photo, setPhoto] = useState<File | null>(null);
+  const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   
   const { toast } = useToast();
   
@@ -63,20 +71,55 @@ export default function PublicResident() {
         state: values
       }
     }, {
-      onSuccess: (res) => {
+      onSuccess: async (res) => {
         const returnedComplaintNo = (res.state as any)?.complaintNo || res.id;
+        let photoUploadFailed = false;
+
+        if (photo) {
+          setIsUploadingPhoto(true);
+          try {
+            const address = values.address?.trim() || '';
+            const contentType = photo.type as 'image/jpeg' | 'image/png' | 'image/heic' | 'image/heif' | 'image/webp';
+            const upload = await requestPublicResidentPhotoUpload(returnedComplaintNo, {
+              statusToken: res.statusToken,
+              address,
+              name: photo.name,
+              size: photo.size,
+              contentType,
+            });
+            const putResponse = await fetch(upload.uploadUrl, {
+              method: 'PUT',
+              headers: { 'Content-Type': contentType },
+              body: photo,
+            });
+            if (!putResponse.ok) throw new Error(`Picture upload failed (${putResponse.status})`);
+            await confirmPublicResidentPhoto(returnedComplaintNo, {
+              grantId: (upload as any).grantId || upload.file.id,
+              statusToken: res.statusToken,
+              address,
+              objectPath: upload.file.objectPath,
+            });
+          } catch {
+            photoUploadFailed = true;
+          } finally {
+            setIsUploadingPhoto(false);
+          }
+        }
         
         sessionStorage.setItem('fiarep_resident_complaint', returnedComplaintNo);
         sessionStorage.setItem('fiarep_resident_token', res.statusToken);
         
         toast({
           title: 'Report Submitted',
-          description: `Your complaint number is ${returnedComplaintNo}. Keep this for your records.`,
+          description: photoUploadFailed
+            ? `Your complaint number is ${returnedComplaintNo}. The picture could not be uploaded.`
+            : `Your complaint number is ${returnedComplaintNo}. Keep this for your records.`,
         });
         
         lookupForm.setValue('complaintNo', returnedComplaintNo);
         setView('options');
         reportForm.reset();
+        setPhoto(null);
       },
       onError: (err: any) => {
         toast({ variant: 'destructive', title: 'Submission Failed', description: err.message || 'Could not submit report.' });
@@ -179,6 +222,19 @@ export default function PublicResident() {
                       <FormMessage />
                     </FormItem>
                   )} />
+                   <div>
+                     <input
+                       id="resident-report-photo"
+                       type="file"
+                       accept="image/jpeg,image/png,image/heic,image/heif,image/webp"
+                       capture="environment"
+                       className="sr-only"
+                       onChange={(event) => setPhoto(event.target.files?.[0] || null)}
+                     />
+                     <Button type="button" variant="outline" className="w-full" asChild>
+                       <label htmlFor="resident-report-photo">{photo ? photo.name : 'Add Picture (Optional)'}</label>
+                     </Button>
+                   </div>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <FormField control={reportForm.control} name="reporterName" render={({ field }) => (
                       <FormItem>
@@ -202,8 +258,8 @@ export default function PublicResident() {
                       <FormMessage />
                     </FormItem>
                   )} />
-                  <Button type="submit" className="w-full" disabled={submitReport.isPending}>
-                    {submitReport.isPending ? 'Submitting...' : 'Submit Report'}
+                   <Button type="submit" className="w-full" disabled={submitReport.isPending || isUploadingPhoto}>
+                     {submitReport.isPending || isUploadingPhoto ? 'Submitting...' : 'Submit Report'}
                   </Button>
                 </form>
               </Form>
