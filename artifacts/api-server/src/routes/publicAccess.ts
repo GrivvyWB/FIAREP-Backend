@@ -7,6 +7,7 @@ import {
   entityRecords,
   notifications,
   organizationProperties,
+  organizations,
   publicAccessCodes,
   residentReportPhotos,
   residentPhotoUploadGrants,
@@ -54,7 +55,23 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     if (licenseAllows(org, property.organizationId)) valid.push({ property, org });
   }
   const property = valid.length === 1 ? valid[0]!.property : null;
-  const tenantId = property?.organizationId ?? "default";
+  let tenantId = property?.organizationId ?? "default";
+  if (!property) {
+    const customerOrganizations = await db
+      .select({ id: organizations.id })
+      .from(organizations);
+    const licensedCustomerIds: string[] = [];
+    for (const organization of customerOrganizations) {
+      if (organization.id === "default") continue;
+      const license = await evaluateLicense(organization.id);
+      if (licenseAllows(license, organization.id)) {
+        licensedCustomerIds.push(organization.id);
+      }
+    }
+    if (licensedCustomerIds.length === 1) {
+      tenantId = licensedCustomerIds[0]!;
+    }
+  }
   const reportAddress = property?.displayAddress ?? address;
   const now = new Date();
   const id = typeof input.id === "string" && input.id.trim() ? input.id.trim() : randomUUID();
