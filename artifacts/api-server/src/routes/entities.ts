@@ -891,6 +891,10 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
         ? employeeMatches[0]!.id
         : String(current.state["requesterStaffId"] ?? current.createdBy ?? "");
     }
+  } else if (entity === "resident-reports" && action === "assign") {
+    target = typeof state["assignedStaffId"] === "string"
+      ? state["assignedStaffId"]
+      : "";
   } else if (entity === "procurement") {
     // Every procurement notification follows the canonical workflow.  Never
     // honor a client supplied target.
@@ -930,6 +934,16 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
         .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.id, current.createdBy || "")))
         .limit(1);
       if (origin && origin.position === "CPM") await notify(actor, origin.name, `Scope ${nextStatus}`, undefined, current.id);
+    } else if (entity === "resident-reports" && action === "assign") {
+      const detail = [
+        typeof state["complaintNo"] === "string" ? state["complaintNo"] : "",
+        typeof state["address"] === "string" ? state["address"] : "",
+        typeof state["unit"] === "string" && state["unit"]
+          ? `Unit ${state["unit"]}`
+          : "",
+        typeof state["development"] === "string" ? state["development"] : "",
+      ].filter(Boolean).join(" · ");
+      await notify(actor, target, "New job assigned", detail || undefined, current.id);
     } else {
       await notify(actor, target, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
     }
