@@ -3,6 +3,7 @@ import type { Actor } from "./auth";
 
 export const STAFF_ROLES = new Set([
   "administrator",
+  "human_resources",
   "management",
   "worker",
   "inspector",
@@ -15,20 +16,31 @@ export const STAFF_ROLES = new Set([
 export const STAFF_POSITIONS = [
   "Borough Director",
   "Regional Director",
+  "Assistant Regional Director",
   "Property Manager",
-  "Assistant Property Manager",
   "Superintendent",
   "Assistant Superintendent",
-  "Housing Assistant",
-  "Maintenance Worker",
-  "Caretaker",
-  "Groundskeeper",
-  "Janitorial Staff",
-  "CPM",
+  "Plumbing Supervisor",
+  "Electrical Supervisor",
+  "Maintenance Supervisor",
+  "CPM Supervisor",
+  "Grounds Supervisor",
   "Inspector",
-  "Elevator Service",
   "Plumber",
   "Electrician",
+  "Maintenance Worker",
+  "Caretaker",
+  "Porter",
+  "Laborer",
+  "Groundskeeper",
+  "Administrative Staff",
+  "Other Support Staff",
+  "Human Resources",
+  "Assistant Property Manager",
+  "Housing Assistant",
+  "Janitorial Staff",
+  "CPM",
+  "Elevator Service",
   "Painter",
   "Plumber Supervisor",
   "Electric Supervisor",
@@ -150,6 +162,7 @@ export function isElevatorFieldStaff(actor: Actor): boolean {
 
 export function canBrowseStaffDirectory(actor: Actor): boolean {
   return (
+    actor.role === "human_resources" ||
     actor.role === "management" ||
     actor.role === "administrator" ||
     isBoroughDirector(actor)

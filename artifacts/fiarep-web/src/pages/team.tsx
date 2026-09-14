@@ -30,7 +30,7 @@ import { invalidateStaffQueries } from "@/lib/query-invalidation";
 const positions = Object.values(StaffPosition);
 const allRoles = Object.values(StaffRole).filter((r) => r !== "resident");
 const roleLabels: Record<string, string> = {
-  administrator: "Administrator", management: "Management", worker: "Worker",
+  administrator: "Administrator", human_resources: "Human Resources", management: "Management", worker: "Worker",
   inspector: "Inspector", procurement: "Procurement", vendor: "Vendor",
   resident: "Resident", emergency: "Emergency",
 };
@@ -82,6 +82,9 @@ export default function Team() {
   const roleOptions = useMemo(() => {
     if (!actor) return [];
     if (actor.position === "Borough Director") return allRoles;
+    if (actor.role === "human_resources") {
+      return ["management", "worker", "inspector", "procurement", "emergency"];
+    }
     if (actor.role === "administrator") {
       return allRoles.filter((r) => !["administrator", "resident"].includes(r));
     }
@@ -121,7 +124,7 @@ export default function Team() {
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setActionError("");
-    if (position !== "Borough Director" && developments.length === 0) {
+    if (["Regional Director", "Assistant Regional Director", "Property Manager", "Superintendent", "Assistant Superintendent"].includes(position) && developments.length === 0) {
       setActionError("Select at least one assigned development.");
       return;
     }
@@ -180,7 +183,7 @@ export default function Team() {
       <div className="flex items-start justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Team Directory</h1>
           <p className="text-muted-foreground text-sm">View staff directory and authority.</p></div>
-        {canIssue && <Button onClick={openAddEmployee}><Plus className="mr-2 h-4 w-4" />Add Employee</Button>}
+         {canIssue && <Button onClick={openAddEmployee}><Plus className="mr-2 h-4 w-4" />Create</Button>}
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
         <div className="p-4 border-b border-border"><div className="relative max-w-sm">

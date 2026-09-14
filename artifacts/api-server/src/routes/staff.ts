@@ -49,6 +49,7 @@ function developmentsWithinScope(
   values: string[],
 ) {
   return (
+    actor.role === "human_resources" ||
     isBoroughDirector(actor) ||
     (actor.developments.length > 0 &&
       values.length > 0 &&
@@ -63,6 +64,10 @@ function canManageStaff(
     "role" | "position" | "developments"
   >,
 ) {
+  if (actor.role === "human_resources") {
+    return target.position !== "Borough Director" &&
+      !["administrator", "human_resources"].includes(target.role);
+  }
   if (isBoroughDirector(actor)) return true;
   if (target.position === "Borough Director" || target.role === "administrator") {
     return false;
@@ -87,6 +92,9 @@ function canIssueStaff(
   if (role === "resident") return false;
   if (position === "Borough Director" && !isBoroughDirector(actor)) return false;
   if (!developmentsWithinScope(actor, developments)) return false;
+  if (actor.role === "human_resources") {
+    return !["administrator", "human_resources", "resident", "vendor"].includes(role);
+  }
   if (isBoroughDirector(actor)) return true;
   if (actor.role === "administrator") {
     return role !== "administrator";
@@ -103,7 +111,7 @@ export function scopedDevelopmentNames(
   const names = [...new Set(values.filter((value): value is string =>
     typeof value === "string" && value.trim().length > 0,
   ).map((value) => value.trim()))].sort((a, b) => a.localeCompare(b));
-  if (isBoroughDirector(actor)) return names;
+  if (isBoroughDirector(actor) || actor.role === "human_resources") return names;
   const allowed = new Set(actor.developments);
   return names.filter((name) => allowed.has(name));
 }
@@ -198,6 +206,17 @@ router.post("/v1/staff", async (req, res) => {
     !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number])
   ) {
     res.status(400).json({ error: "Valid name, role, and position are required" });
+    return;
+  }
+  const developmentRequiredPositions = new Set([
+    "Regional Director",
+    "Assistant Regional Director",
+    "Property Manager",
+    "Superintendent",
+    "Assistant Superintendent",
+  ]);
+  if (developmentRequiredPositions.has(position) && developments.length === 0) {
+    res.status(400).json({ error: "Select at least one assigned development" });
     return;
   }
   const canIssue = canIssueStaff(actor, role, position, developments);

@@ -71,6 +71,17 @@ test("ordinary administrators are limited to assigned developments", () => {
   assert.equal(entityDevelopmentAllowed(administrator, "projects", null), false);
 });
 
+test("human resources can browse the staff directory", () => {
+  assert.equal(
+    canBrowseStaffDirectory(actor({
+      role: "human_resources",
+      position: "Human Resources",
+      developments: [],
+    })),
+    true,
+  );
+});
+
 test("management oversight is limited to assigned developments", () => {
   const manager = actor({
     role: "management",

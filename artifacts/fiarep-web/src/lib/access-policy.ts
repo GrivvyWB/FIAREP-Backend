@@ -16,6 +16,10 @@ const ELEVATOR_POSITIONS = new Set(["Elevator Service", "Elevator Supervisor"]);
  * mounting and issuing requests in the first place. */
 export function hasModuleAccess(staff: Staff | null | undefined, module: StaffModule): boolean {
   if (!staff) return false;
+  if (staff.role === "human_resources") {
+    return module === "dashboard" || module === "team" ||
+      module === "notifications" || module === "settings";
+  }
   if (staff.role === "procurement") return module === "procurement";
   if (module === "scope-review") {
     return staff.role === "management" &&

@@ -1617,10 +1617,10 @@ components:
         lastName: { type: string, nullable: true }
         role:
           type: string
-          enum: [administrator, management, worker, inspector, procurement, vendor, resident, emergency]
+          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, resident, emergency]
         position:
           type: string
-          enum: [Borough Director, Regional Director, Property Manager, Assistant Property Manager, Superintendent, Assistant Superintendent, Housing Assistant, Maintenance Worker, Caretaker, Groundskeeper, Janitorial Staff, CPM, Inspector, Elevator Service, Plumber, Electrician, Painter, Plumber Supervisor, Electric Supervisor, Elevator Supervisor, Painter Supervisor, Carpenter Supervisor, Carpenter, Roofer, General Construction, CCTV Installation, Heating Service, Staff Worker, Director, Other]
+          enum: [Borough Director, Regional Director, Assistant Regional Director, Property Manager, Superintendent, Assistant Superintendent, Plumbing Supervisor, Electrical Supervisor, Maintenance Supervisor, CPM Supervisor, Grounds Supervisor, Inspector, Plumber, Electrician, Maintenance Worker, Caretaker, Porter, Laborer, Groundskeeper, Administrative Staff, Other Support Staff, Human Resources, Assistant Property Manager, Housing Assistant, Janitorial Staff, CPM, Elevator Service, Painter, Plumber Supervisor, Electric Supervisor, Elevator Supervisor, Painter Supervisor, Carpenter Supervisor, Carpenter, Roofer, General Construction, CCTV Installation, Heating Service, Staff Worker, Director, Other]
         status: { type: string }
         developments:
           type: array
@@ -1651,10 +1651,10 @@ components:
         lastName: { type: string }
         role:
           type: string
-          enum: [administrator, management, worker, inspector, procurement, vendor, emergency]
+          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, emergency]
         position:
           type: string
-          enum: [Borough Director, Regional Director, Property Manager, Assistant Property Manager, Superintendent, Assistant Superintendent, Housing Assistant, Maintenance Worker, Caretaker, Groundskeeper, Janitorial Staff, CPM, Inspector, Elevator Service, Plumber, Electrician, Painter, Plumber Supervisor, Electric Supervisor, Elevator Supervisor, Painter Supervisor, Carpenter Supervisor, Carpenter, Roofer, General Construction, CCTV Installation, Heating Service, Staff Worker, Director, Other]
+          enum: [Borough Director, Regional Director, Assistant Regional Director, Property Manager, Superintendent, Assistant Superintendent, Plumbing Supervisor, Electrical Supervisor, Maintenance Supervisor, CPM Supervisor, Grounds Supervisor, Inspector, Plumber, Electrician, Maintenance Worker, Caretaker, Porter, Laborer, Groundskeeper, Administrative Staff, Other Support Staff, Human Resources, Assistant Property Manager, Housing Assistant, Janitorial Staff, CPM, Elevator Service, Painter, Plumber Supervisor, Electric Supervisor, Elevator Supervisor, Painter Supervisor, Carpenter Supervisor, Carpenter, Roofer, General Construction, CCTV Installation, Heating Service, Staff Worker, Director, Other]
         developments:
           type: array
           items: { type: string }
