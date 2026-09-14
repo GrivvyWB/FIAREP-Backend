@@ -57,7 +57,9 @@ export default function Leave() {
   const [editing, setEditing] = useState<Row | null>(null);
   const [draft, setDraft] = useState<LeaveDraft>(emptyDraft());
   const rows = (query.data || []) as Row[];
-  const canReview = staff?.role === "management";
+  const canReview = staff?.role === "management" ||
+    staff?.role === "administrator" ||
+    staff?.position === "Supervisor Inspector";
   const teamView = canReview && new URLSearchParams(window.location.search).get("view") === "team";
   const ownRows = rows.filter((row) => {
     const state = row.state || {};

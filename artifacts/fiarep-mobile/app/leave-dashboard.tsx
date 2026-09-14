@@ -75,7 +75,7 @@ export default function LeaveDashboard() {
   const isBoroughDir = (myPosition || '').trim().toLowerCase() === 'borough director';
   const APPROVER_TITLES = [
     'property manager', 'assistant property manager', 'superintendent',
-    'assistant superintendent', 'regional director', 'borough director',
+    'assistant superintendent', 'supervisor inspector', 'regional director', 'borough director',
     'plumber supervisor', 'electric supervisor', 'elevator supervisor',
     'painter supervisor', 'carpenter supervisor',
   ];

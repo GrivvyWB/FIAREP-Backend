@@ -451,6 +451,7 @@ test("management and supervisors can decide leave while ordinary staff and HR ca
     actor({ role: "management", position: "Superintendent" }),
     actor({ role: "administrator", position: "Administrator" }),
     actor({ role: "worker", position: "Plumber Supervisor" }),
+    actor({ role: "inspector", position: "Supervisor Inspector" }),
   ];
   for (const approver of canApprove) {
     assert.equal(

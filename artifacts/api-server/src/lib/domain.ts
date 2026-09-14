@@ -20,6 +20,7 @@ export const STAFF_POSITIONS = [
   "Property Manager",
   "Superintendent",
   "Assistant Superintendent",
+  "Supervisor Inspector",
   "Plumbing Supervisor",
   "Electrical Supervisor",
   "Maintenance Supervisor",
@@ -466,6 +467,7 @@ const LEAVE_APPROVER_POSITIONS = new Set([
   "Assistant Property Manager",
   "Superintendent",
   "Assistant Superintendent",
+  "Supervisor Inspector",
   "Regional Director",
   ...TRADE_SUPERVISOR_POSITIONS,
 ]);
