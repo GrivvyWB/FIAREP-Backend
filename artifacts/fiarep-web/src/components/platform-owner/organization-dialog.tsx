@@ -247,7 +247,10 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
 
       if (isEditing) {
         const { directorName: _directorName, ...updates } = payload;
-        await updateMutation.mutateAsync({ id: organization!.id, data: updates });
+        await updateMutation.mutateAsync({
+          id: organization!.id,
+          data: organization!.id === "default" ? { features: updates.features } : updates,
+        });
         await updateTimeClockMutation.mutateAsync({
           id: organization!.id,
           data: { integrationEnabled: false, mobileClockEnabled },

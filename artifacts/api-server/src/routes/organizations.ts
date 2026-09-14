@@ -492,8 +492,11 @@ router.post("/v1/platform/organizations/:id/administrators", async (req, res) =>
 
 router.patch("/v1/platform/organizations/:id", async (req, res) => {
   const id = req.params.id;
-  if (id === "default") { res.status(400).json({ error: "Default organization cannot be modified" }); return; }
   const body = req.body as Record<string, unknown>;
+  if (id === "default" && Object.keys(body).some((key) => key !== "features")) {
+    res.status(400).json({ error: "Default organization settings cannot be modified" });
+    return;
+  }
   const [before] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
   if (!before) { res.status(404).json({ error: "Organization not found" }); return; }
   const allowed = ["name", "status", "startsAt", "endsAt", "staffLimit", "propertyLimit", "features", "unrestricted"] as const;
