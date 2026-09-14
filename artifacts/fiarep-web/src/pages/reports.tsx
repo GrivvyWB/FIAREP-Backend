@@ -160,6 +160,8 @@ export default function Reports() {
   const [status, setStatus] = useState("all");
   const [development, setDevelopment] = useState("all");
   const [selected, setSelected] = useState<Report | null>(null);
+  const [dialogMode, setDialogMode] = useState<"details" | "assign">("details");
+  const [selectedStaffId, setSelectedStaffId] = useState("");
   const [assigning, setAssigning] = useState<string | null>(null);
   const deepLinkHandled = useRef(false);
 
@@ -182,8 +184,17 @@ export default function Reports() {
     const reportId = new URLSearchParams(window.location.search).get("id");
     if (!reportId) return;
     const report = reports.find((item) => item.id === reportId);
-    if (report) setSelected(report);
+    if (report) {
+      setDialogMode("details");
+      setSelected(report);
+    }
   }, [reports, reportsQuery.isLoading]);
+
+  const openReport = (report: Report, mode: "details" | "assign") => {
+    setDialogMode(mode);
+    setSelectedStaffId(String(report.state?.assignedStaffId || ""));
+    setSelected(report);
+  };
 
   const perform = async (report: Report, actionName: string, body?: Record<string, unknown>) => {
     try {
@@ -239,7 +250,7 @@ export default function Reports() {
             return <div key={report.id} className="rounded-xl border border-border p-4 hover:bg-muted/30 transition-colors">
               <div className="flex items-start gap-3">
                 <div className="w-11 h-11 rounded-[9px] bg-secondary text-secondary-foreground grid place-items-center shrink-0"><FolderOpen className="w-5 h-5" /></div>
-                <button className="min-w-0 flex-1 text-left" onClick={() => setSelected(report)}>
+                <button className="min-w-0 flex-1 text-left" onClick={() => openReport(report, "details")}>
                   <h4 className="font-semibold truncate">{String(state.title || state.complaintNo || `Report ${report.id.slice(0, 8)}`)}</h4>
                   <div className="flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground mt-1">
                     {report.development && <span className="inline-flex items-center gap-1"><MapPin className="h-3 w-3" />{report.development}</span>}
@@ -251,28 +262,34 @@ export default function Reports() {
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
                 {!!String(state.assignedTo || "") && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{String(state.assignedTo)}</span>}
-                {canApproveWork(actor) && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => setSelected(report)}>Assign</Button>}
+                {canApproveWork(actor) && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>Assign</Button>}
                 {!canApproveWork(actor) && currentStatus === "in_progress" && <Button size="sm" onClick={() => perform(report, "complete")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
                  {canApproveWork(actor) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
-                <Button size="sm" variant="ghost" onClick={() => setSelected(report)}>View details</Button>
+                <Button size="sm" variant="ghost" onClick={() => openReport(report, "details")}>View details</Button>
               </div>
             </div>;
           })}</div>}
         </div>
       </div>
-      <Dialog open={!!selected} onOpenChange={(open) => !open && setSelected(null)}>
+      <Dialog open={!!selected} onOpenChange={(open) => {
+        if (!open) {
+          setSelected(null);
+          setSelectedStaffId("");
+          setDialogMode("details");
+        }
+      }}>
         <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
           {selected && (() => {
             const state = selected.state || {};
             const currentStatus = String(state.status || "submitted");
-            return <><DialogHeader><DialogTitle>{String(state.title || state.complaintNo || "Resident report")}</DialogTitle><DialogDescription>Submitted {new Date(selected.createdAt).toLocaleString()}</DialogDescription></DialogHeader>
+             return <><DialogHeader><DialogTitle>{dialogMode === "assign" ? "Assign complaint" : String(state.title || state.complaintNo || "Resident report")}</DialogTitle><DialogDescription>Submitted {new Date(selected.createdAt).toLocaleString()}</DialogDescription></DialogHeader>
               <div className="space-y-4 pt-2">
                 <div className="grid grid-cols-2 gap-3 text-sm"><div><span className="text-muted-foreground">Status</span><p className="font-medium capitalize">{statusLabel(currentStatus)}</p></div><div><span className="text-muted-foreground">Development</span><p className="font-medium">{selected.development || "—"}</p></div><div><span className="text-muted-foreground">Complaint number</span><p className="font-medium">{String(state.complaintNo || "—")}</p></div><div><span className="text-muted-foreground">Address</span><p className="font-medium">{String(state.address || "—")}</p></div></div>
                  {!!String(state.description || "") && <div><p className="text-sm text-muted-foreground mb-1">Details</p><p className="text-sm whitespace-pre-wrap">{String(state.description)}</p></div>}
                 <div><p className="text-sm text-muted-foreground mb-2">Photos</p><Photos reportId={selected.id} /></div>
                 <FieldEvidenceDisplay state={state} reportId={selected.id} />
-                  {canApproveWork(actor) && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p><select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={String(state.assignedStaffId || "")} onChange={(e) => assign(selected, e.target.value)} disabled={action.isPending || assigning === selected.id}><option value="">Select staff member…</option>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <optgroup key={group.label} label={group.label}>{group.people.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}</optgroup>)}</select></div>}
+                   {canApproveWork(actor) && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p><select className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={selectedStaffId} onChange={(e) => setSelectedStaffId(e.target.value)} disabled={action.isPending || assigning === selected.id}><option value="">Select staff member…</option>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <optgroup key={group.label} label={group.label}>{group.people.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}</optgroup>)}</select><Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{!canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => perform(selected, "complete")} disabled={action.isPending}>Complete</Button>}{canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => perform(selected, "resolve")} disabled={action.isPending}>Resolve report</Button>}{canApproveWork(actor) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
               </div></>;
           })()}
