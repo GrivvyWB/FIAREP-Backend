@@ -20,8 +20,13 @@ export default function Settings() {
   const [ratesLoading, setRatesLoading] = useState(true);
   const [ratesSaving, setRatesSaving] = useState(false);
   const canEditRates = staff?.position === "Borough Director";
+  const isHumanResources = staff?.role === "human_resources";
 
   useEffect(() => {
+    if (isHumanResources) {
+      setRatesLoading(false);
+      return;
+    }
     let cancelled = false;
     fetch("/api/v1/settings/default-rates", {
       headers: { Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}` },
@@ -39,7 +44,7 @@ export default function Settings() {
       })
       .finally(() => { if (!cancelled) setRatesLoading(false); });
     return () => { cancelled = true; };
-  }, [toast]);
+  }, [isHumanResources, toast]);
 
   const saveRates = async () => {
     try {
@@ -101,7 +106,7 @@ export default function Settings() {
             </div>
           </div>
 
-          <div className="space-y-4">
+          {!isHumanResources && <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Calculator className="w-4 h-4" /> Shared Default Rates
             </h3>
@@ -138,9 +143,9 @@ export default function Settings() {
             ) : (
               <p className="text-xs text-muted-foreground">Only the Borough Director can change shared default rates.</p>
             )}
-          </div>
+          </div>}
 
-          <div className="space-y-4">
+          {!isHumanResources && <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Shield className="w-4 h-4" /> Access & Security
             </h3>
@@ -152,7 +157,7 @@ export default function Settings() {
                   : "All Access (System Wide)"}
               </div>
             </div>
-          </div>
+          </div>}
         </div>
 
         <div className="p-6 bg-muted/30 border-t border-border flex justify-between items-center">
