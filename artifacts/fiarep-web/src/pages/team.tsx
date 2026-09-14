@@ -346,11 +346,11 @@ export default function Team() {
         )}
       </div>
       <div className="text-right shrink-0"><div className="text-[13px] font-semibold bg-secondary px-2.5 py-1 rounded-full inline-block">{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
-        {(member.canResetCode || member.canRevoke || member.canDelete) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
+        {(member.canResetCode || member.canRevoke || (member.canDelete && actor?.role !== "human_resources")) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
           {member.canApprove && <Button size="sm" onClick={() => approveEmployee(member.id, member.name, member.role)} disabled={approve.isPending}>Approve employee</Button>}
           {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
           {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />Revoke</Button>}
-          {member.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
+          {member.canDelete && actor?.role !== "human_resources" && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
         </div>}
       </div>
     </div>
