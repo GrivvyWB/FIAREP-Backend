@@ -70,6 +70,34 @@ test("ordinary administrators are limited to assigned developments", () => {
   assert.equal(entityDevelopmentAllowed(administrator, "projects", null), false);
 });
 
+test("management oversight is limited to assigned developments", () => {
+  const manager = actor({
+    role: "management",
+    position: "Property Manager",
+    developments: ["Development A"],
+  });
+  assert.equal(
+    entityDevelopmentAllowed(manager, "resident-reports", "Development A"),
+    true,
+  );
+  assert.equal(
+    entityDevelopmentAllowed(manager, "resident-reports", "Development B"),
+    false,
+  );
+  assert.equal(
+    entityDevelopmentAllowed(manager, "resident-reports", null),
+    false,
+  );
+  assert.equal(
+    entityDevelopmentAllowed(
+      actor({ role: "management", position: "Property Manager", developments: [] }),
+      "resident-reports",
+      "Development A",
+    ),
+    false,
+  );
+});
+
 test("file record access follows development and role boundaries", () => {
   const record = (overrides: Partial<Parameters<typeof canReadEntityRecord>[1]> = {}) => ({
     entity: "rooms",
