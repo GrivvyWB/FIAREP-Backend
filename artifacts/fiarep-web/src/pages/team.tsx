@@ -93,6 +93,7 @@ export default function Team() {
   const revoke = useRevokeStaff();
   const deleteStaff = useDeleteStaff();
   const [search, setSearch] = useState("");
+  const [directoryDevelopment, setDirectoryDevelopment] = useState("");
   const [open, setOpen] = useState(false);
   const [createMode, setCreateMode] = useState<"single" | "bulk">("single");
   const [name, setName] = useState("");
@@ -129,6 +130,10 @@ export default function Team() {
   const canIssue = roleOptions.length > 0;
 
   const filtered = staff?.filter((member) => {
+    if (actor?.role === "human_resources") {
+      if (member.role === "human_resources") return false;
+      if (!directoryDevelopment || !member.developments.includes(directoryDevelopment)) return false;
+    }
     const q = search.toLowerCase();
     return !q || [member.name, member.role, member.position].some((v) => v.toLowerCase().includes(q));
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -315,16 +320,6 @@ export default function Team() {
     if (await deleteAccount(target.id, target.name)) setSearch("");
   }
   const teamGroups = groupTeamDirectoryStaff(sorted || []);
-  const developmentGroups = [...new Set((sorted || []).flatMap((member) => member.developments))]
-    .sort((a, b) => a.localeCompare(b))
-    .map((development) => ({
-      label: development,
-      people: (sorted || []).filter((member) => member.developments.includes(development)),
-    }));
-  const staffWithoutDevelopment = (sorted || []).filter((member) => member.developments.length === 0);
-  if (staffWithoutDevelopment.length) {
-    developmentGroups.push({ label: "All Developments", people: staffWithoutDevelopment });
-  }
   const memberCard = (member: NonNullable<typeof staff>[number]) => (
     <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white grid place-items-center font-bold text-sm shrink-0">{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
@@ -393,26 +388,34 @@ export default function Team() {
          {canIssue && <Button onClick={openAddEmployee}><Plus className="mr-2 h-4 w-4" />Create</Button>}
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
-        <div className="p-4 border-b border-border"><div className="flex max-w-xl gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input aria-label="Search team members" placeholder="Search team members..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="p-4 border-b border-border space-y-3">
+          {actor?.role === "human_resources" && <select aria-label="Select development" className="w-full max-w-xl rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryDevelopment} onChange={(event) => { setDirectoryDevelopment(event.target.value); setSearch(""); }}>
+            <option value="">Select development</option>
+            {(availableDevelopments || []).map((development) => <option key={development} value={development}>{development}</option>)}
+          </select>}
+          <div className="flex max-w-xl gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input aria-label="Search team members" placeholder="Search team members..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
+            {actor?.role === "human_resources" && <Button type="button" variant="destructive" onClick={deleteSearchedEmployee} disabled={exactSearchMatches.length !== 1 || deleteStaff.isPending}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>}
           </div>
-          {actor?.role === "human_resources" && <Button type="button" variant="destructive" onClick={deleteSearchedEmployee} disabled={exactSearchMatches.length !== 1 || deleteStaff.isPending}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>}
-        </div></div>
+        </div>
         <div className="p-4">
           {isLoading ? <div className="p-8 text-center text-muted-foreground">Loading team...</div> :
             error ? <div className="p-8 text-center text-destructive">{errorMessage(error)}</div> :
+            actor?.role === "human_resources" && !directoryDevelopment ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">Select a development</h3></div> :
             sorted?.length === 0 ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">No team members found</h3></div> :
             actor?.role === "human_resources" ?
-              <div className="space-y-3">{developmentGroups.map((group) =>
-                <Collapsible key={`${group.label}:${search ? "search" : "browse"}`} defaultOpen={Boolean(search)}>
+              <div className="space-y-3">
+                <Collapsible key={`${directoryDevelopment}:${search ? "search" : "browse"}`} defaultOpen>
                   <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3 text-left">
-                    <div><h3 className="font-bold">{group.label}</h3><p className="text-xs text-muted-foreground">{group.people.length} staff member{group.people.length === 1 ? "" : "s"}</p></div>
+                    <div><h3 className="font-bold">{directoryDevelopment}</h3><p className="text-xs text-muted-foreground">{sorted?.length || 0} staff member{sorted?.length === 1 ? "" : "s"}</p></div>
                     <ChevronDown className="h-5 w-5 shrink-0" />
                   </CollapsibleTrigger>
-                  <CollapsibleContent className="grid gap-3 pt-3">{group.people.map(memberCard)}</CollapsibleContent>
-                </Collapsible>)}</div> :
+                  <CollapsibleContent className="grid gap-3 pt-3">{(sorted || []).map(memberCard)}</CollapsibleContent>
+                </Collapsible>
+              </div> :
               <div className="space-y-6">{teamGroups.map((group) => <section key={group.label} className="space-y-3"><div className="border-b border-border pb-2"><h3 className="font-bold">{group.label}</h3><p className="text-xs text-muted-foreground">{group.people.length} team member{group.people.length === 1 ? "" : "s"}</p></div><div className="grid gap-3">{group.people.map(memberCard)}</div></section>)}</div>}
         </div>
       </div>
