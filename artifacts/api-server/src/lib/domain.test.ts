@@ -482,6 +482,35 @@ test("management and supervisors can decide leave while ordinary staff and HR ca
   );
 });
 
+test("management cannot approve or deny its own leave request", () => {
+  const manager = actor({
+    id: "manager-1",
+    name: "Kye G",
+    role: "management",
+    position: "Property Manager",
+  });
+  assert.equal(
+    canPerformEntityAction(manager, "leave-requests", "approve", {
+      employeeStaffId: manager.id,
+      employee: manager.name,
+    }),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(manager, "leave-requests", "deny", {
+      employee: manager.name,
+    }),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(manager, "leave-requests", "approve", {
+      employeeStaffId: "worker-1",
+      employee: "Mark K",
+    }),
+    true,
+  );
+});
+
 test("legacy name-only leave requests do not grant cancellation ownership", () => {
   const worker = actor({
     id: "worker-1",

@@ -644,6 +644,18 @@ export function canPerformEntityAction(
 
   if (entity === "leave-requests") {
     if (action === "approve" || action === "deny") {
+      const employeeStaffId = typeof state["employeeStaffId"] === "string"
+        ? state["employeeStaffId"]
+        : "";
+      const employeeName = typeof state["employee"] === "string"
+        ? state["employee"].trim().toLowerCase()
+        : "";
+      if (
+        employeeStaffId === actor.id ||
+        (!employeeStaffId && employeeName === actor.name.trim().toLowerCase())
+      ) {
+        return false;
+      }
       return isLeaveApprovalAuthority(actor);
     }
     if (action !== "cancel") return false;

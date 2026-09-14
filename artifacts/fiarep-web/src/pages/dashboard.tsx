@@ -68,15 +68,15 @@ export default function Dashboard() {
     { label: "Resident Reports", value: reports.filter((item) => !["resolved", "closed"].includes(statusOf(item))).length, total: reports.length, icon: FileSearch, query: reportsQuery, href: "/reports" },
     { label: "Open Inspections", value: inspections.filter((item) => !["completed", "closed"].includes(statusOf(item))).length, total: inspections.length, icon: ClipboardCheck, query: inspectionsQuery, href: "/inspections" },
     { label: "Emergencies", value: emergencies.filter((item) => !["completed", "closed", "resolved"].includes(statusOf(item))).length, total: emergencies.length, icon: AlertTriangle, query: emergenciesQuery, href: "/emergency" },
-    { label: "Pending Leave", value: leave.filter((item) => ["pending", "submitted", "new"].includes(statusOf(item))).length, total: leave.length, icon: Plane, query: leaveQuery, href: "/leave" },
+    { label: "Pending Leave", value: leave.length, total: leave.length, icon: Plane, query: leaveQuery, href: "/leave?view=team" },
     { label: "Unread Notifications", value: unread, total: notifications.length, icon: Bell, query: notificationsQuery, href: "/notifications" },
-  ].filter((metric) => hasModuleAccess(staff, metric.href === "/emergency" ? "emergency" : metric.href.slice(1) as Parameters<typeof hasModuleAccess>[1]));
+  ].filter((metric) => hasModuleAccess(staff, metric.href === "/emergency" ? "emergency" : metric.href.startsWith("/leave") ? "leave" : metric.href.slice(1) as Parameters<typeof hasModuleAccess>[1]));
   const activity = [
     ...inspections.map((item) => ({ item, label: "Inspection", href: `/inspections?id=${encodeURIComponent(item.id)}`, icon: ClipboardCheck })),
     ...reports.map((item) => ({ item, label: "Resident report", href: `/reports?id=${encodeURIComponent(item.id)}`, icon: FileSearch })),
     ...emergencies.map((item) => ({ item, label: "Emergency", href: "/emergency", icon: AlertTriangle })),
     ...projects.map((item) => ({ item, label: "Project", href: "/projects", icon: FolderKanban })),
-    ...leave.map((item) => ({ item, label: "Leave request", href: "/leave", icon: Plane })),
+    ...leave.map((item) => ({ item, label: "Leave request", href: staff?.role === "management" || staff?.role === "administrator" ? "/leave?view=team" : "/leave", icon: Plane })),
     ...repairs.map((item) => ({ item, label: "Repair scope", href: "/repairs", icon: Wrench })),
   ].filter((entry) => hasModuleAccess(staff, entry.href.startsWith("/emergency") ? "emergency" : entry.href.startsWith("/reports") ? "reports" : entry.href.startsWith("/inspections") ? "inspections" : entry.href.startsWith("/projects") ? "projects" : entry.href.startsWith("/repairs") ? "repairs" : "leave"))
     .sort((a, b) => dateOf(b.item) - dateOf(a.item)).slice(0, 7);

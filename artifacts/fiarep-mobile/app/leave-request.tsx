@@ -82,6 +82,14 @@ export default function LeaveRequestScreen() {
       const a = await getCurrentActor();
       if (isMgmt) {
         setNames(await listStaffNames().catch(() => []));
+        setEmployee(a.name || '');
+        try { setTitle(await getCurrentPosition()); } catch (e) {}
+        const pre = await leavePrefillForEmployee(a.name || '').catch(() => null);
+        if (pre) {
+          if (pre.development) setDevelopment(pre.development);
+          if (pre.supervisor) setSupervisor(pre.supervisor);
+        }
+        setBalances(await leaveBalances(a.name || '').catch(() => []));
       } else {
         setEmployee(a.name || '');
         try { setTitle(await getCurrentPosition()); } catch (e) {}
