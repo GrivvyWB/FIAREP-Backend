@@ -1071,8 +1071,7 @@ export const LookupPublicResidentReportsParams = zod.object({
 })
 
 export const LookupPublicResidentReportsQueryParams = zod.object({
-  "address": zod.coerce.string(),
-  "statusToken": zod.coerce.string()
+  "address": zod.coerce.string()
 })
 
 export const LookupPublicResidentReportsResponse = zod.object({

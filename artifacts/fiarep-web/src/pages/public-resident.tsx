@@ -23,12 +23,11 @@ const reportSchema = z.object({
 const lookupSchema = z.object({
   complaintNo: z.string().min(1, 'Complaint number is required'),
   address: z.string().min(1, 'Address is required'),
-  statusToken: z.string().min(1, 'Status token is required'),
 });
 
 export default function PublicResident() {
   const [view, setView] = useState<'options' | 'submit' | 'lookup'>('options');
-  const [lookupData, setLookupData] = useState<{ complaintNo: string, address: string, statusToken: string } | null>(null);
+  const [lookupData, setLookupData] = useState<{ complaintNo: string, address: string } | null>(null);
   
   const { toast } = useToast();
   
@@ -36,8 +35,8 @@ export default function PublicResident() {
   
   const { data: statusResult, isLoading: isLookingUp, error: lookupError } = useLookupPublicResidentReports(
     lookupData?.complaintNo || '',
-    { address: lookupData?.address || '', statusToken: lookupData?.statusToken || '' },
-    { query: { enabled: !!lookupData, retry: false, queryKey: getLookupPublicResidentReportsQueryKey(lookupData?.complaintNo || '', { address: lookupData?.address || '', statusToken: lookupData?.statusToken || '' }) } }
+    { address: lookupData?.address || '' },
+    { query: { enabled: !!lookupData, retry: false, queryKey: getLookupPublicResidentReportsQueryKey(lookupData?.complaintNo || '', { address: lookupData?.address || '' }) } }
   );
 
   useEffect(() => {
@@ -56,7 +55,6 @@ export default function PublicResident() {
     defaultValues: { 
       complaintNo: sessionStorage.getItem('fiarep_resident_complaint') || '', 
       address: sessionStorage.getItem('fiarep_resident_address') || '',
-      statusToken: sessionStorage.getItem('fiarep_resident_token') || '',
     },
   });
 
@@ -81,8 +79,6 @@ export default function PublicResident() {
         
         lookupForm.setValue('complaintNo', returnedComplaintNo);
         lookupForm.setValue('address', values.address);
-        lookupForm.setValue('statusToken', res.statusToken);
-        
         setView('options');
         reportForm.reset();
       },
@@ -143,13 +139,6 @@ export default function PublicResident() {
                         <FormMessage />
                       </FormItem>
                     )} />
-                    <FormField control={lookupForm.control} name="statusToken" render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status Token</FormLabel>
-                        <FormControl><Input {...field} /></FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )} />
                     <Button type="submit" className="w-full" disabled={isLookingUp}>
                       {isLookingUp ? 'Checking...' : 'Check Status'}
                     </Button>
@@ -157,7 +146,7 @@ export default function PublicResident() {
                 </Form>
                 {lookupError && (
                   <div className="mt-4 p-3 bg-destructive/10 text-destructive text-sm rounded-md border border-destructive/20">
-                    {(lookupError as any)?.message || 'Report not found or invalid token.'}
+                    {(lookupError as any)?.message || 'Report not found.'}
                   </div>
                 )}
               </CardContent>

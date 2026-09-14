@@ -29,7 +29,6 @@ export default function ResidentLookup() {
   const [complaintNo, setComplaintNo] = useState('');
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [address, setAddress] = useState('');
-  const [statusToken, setStatusToken] = useState('');
   const [results, setResults] = useState<ResidentReport[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [saved, setSaved] = useState<SavedResidentReport[]>([]);
@@ -45,14 +44,9 @@ export default function ResidentLookup() {
         item.complaintNo.trim().toUpperCase() === complaintNo.trim().toUpperCase() &&
         item.address.trim().toLowerCase() === address.trim().toLowerCase(),
     );
-    const privateToken = statusToken || savedReport?.statusToken || '';
-    if (!privateToken) {
-      Alert.alert('Report not saved', 'Select a report saved on this device to check its status.');
-      return;
-    }
     setSearching(true);
     try {
-      const found = await findResidentReports(complaintNo.trim(), address.trim(), privateToken);
+      const found = await findResidentReports(complaintNo.trim(), address.trim(), savedReport?.statusToken || '');
       setResults(found);
     } catch (e: any) {
       Alert.alert('Lookup failed', e?.message ?? 'Could not look up reports.');
@@ -71,7 +65,7 @@ export default function ResidentLookup() {
           <Text style={ui.label}>Saved reports</Text>
           {saved.map((item) => (
             <Pressable key={item.complaintNo} style={ui.btnOutline} onPress={() => {
-              setComplaintNo(item.complaintNo); setAddress(item.address); setStatusToken(item.statusToken);
+              setComplaintNo(item.complaintNo); setAddress(item.address);
             }}>
               <Text style={ui.btnOutlineText}>{item.complaintNo} · {item.address}</Text>
             </Pressable>

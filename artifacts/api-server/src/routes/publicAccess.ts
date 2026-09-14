@@ -99,11 +99,10 @@ router.post("/v1/public/resident-reports", async (req, res) => {
 
 router.get("/v1/public/resident-reports/:complaintNo", async (req, res) => {
   const address = normalize(req.query.address);
-  const suppliedToken = String(req.query.statusToken ?? "");
   const [access] = await db.select().from(publicAccessCodes).where(and(
     eq(publicAccessCodes.kind, "resident"), eq(publicAccessCodes.code, req.params.complaintNo!.toUpperCase()),
   )).limit(1);
-  if (!access || !access.tokenHash || hash(suppliedToken) !== access.tokenHash || !address) {
+  if (!access || !address) {
     res.status(404).json({ error: "Report not found" }); return;
   }
   const [row] = await db.select().from(entityRecords).where(and(

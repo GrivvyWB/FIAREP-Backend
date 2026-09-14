@@ -1076,7 +1076,6 @@ status?: string;
 
 export type LookupPublicResidentReportsParams = {
 address: string;
-statusToken: string;
 };
 
 export type LookupPublicVendorScopeParams = {

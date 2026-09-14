@@ -772,9 +772,11 @@ export async function getResidentReport(id: string): Promise<ResidentReport | nu
 }
 
 export async function findResidentReports(complaintNo: string, address: string, statusToken: string): Promise<ResidentReport[]> {
-  const result = await lookupPublicResidentReports(complaintNo.trim(), { address: address.trim(), statusToken });
+  const result = await lookupPublicResidentReports(complaintNo.trim(), { address: address.trim() });
   const report = normalizeResidentReport({ ...result, photos: [], id: complaintNo });
-  await saveResidentCredentials({ complaintNo: complaintNo.trim(), address: address.trim(), statusToken });
+  if (statusToken) {
+    await saveResidentCredentials({ complaintNo: complaintNo.trim(), address: address.trim(), statusToken });
+  }
   return [report];
 }
 
