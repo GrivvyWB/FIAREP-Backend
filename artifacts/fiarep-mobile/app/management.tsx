@@ -44,6 +44,29 @@ function fmt(iso: string): string {
 
 const ALL = '__ALL__';
 
+const MANAGEMENT_WORK_ORDER_EXCLUDED_POSITIONS = new Set<StaffPosition>([
+  'Borough Director',
+  'Regional Director',
+  'Property Manager',
+  'Assistant Property Manager',
+  'Superintendent',
+  'Plumber',
+  'Electrician',
+  'Painter',
+  'Plumber Supervisor',
+  'Electric Supervisor',
+  'Elevator Supervisor',
+  'Painter Supervisor',
+  'Carpenter Supervisor',
+  'Roofer',
+  'CCTV Installation',
+  'Director',
+]);
+
+const MANAGEMENT_WORK_ORDER_POSITIONS = STAFF_POSITIONS.filter(
+  (position) => !MANAGEMENT_WORK_ORDER_EXCLUDED_POSITIONS.has(position),
+);
+
 function DevPicker(props: {
   visible: boolean;
   onClose: () => void;
@@ -400,7 +423,7 @@ export default function Management() {
           </View>
           {!assignPos ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {STAFF_POSITIONS.map((pos) => (
+              {MANAGEMENT_WORK_ORDER_POSITIONS.map((pos) => (
                 <Pressable key={pos} style={ui.btnOutline} onPress={() => pickPosition(pos)}>
                   <Text style={ui.btnOutlineText}>{pos}</Text>
                 </Pressable>
