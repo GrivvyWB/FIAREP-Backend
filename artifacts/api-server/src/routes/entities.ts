@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
-import { db, entityRecords, publicAccessCodes, staffAccounts } from "@workspace/db";
+import { db, entityRecords, notifications, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, notify } from "../lib/audit";
 import {
   ENTITIES,
@@ -998,21 +998,32 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(409).json({ error: "Concurrent update detected", current: outward(actor, current) });
     return;
   }
-  const [deleted] = await db
-    .update(entityRecords)
-    .set({
-      deleted: true,
-      version: sql`${entityRecords.version} + 1`,
-      updatedAt: new Date(),
-    })
-    .where(and(
-      eq(entityRecords.id, current.id),
-      eq(entityRecords.entity, entity),
-      eq(entityRecords.tenantId, actor.tenantId),
-      eq(entityRecords.deleted, false),
-      eq(entityRecords.version, expectedVersion),
-    ))
-    .returning();
+  const deleted = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(entityRecords)
+      .set({
+        deleted: true,
+        version: sql`${entityRecords.version} + 1`,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(entityRecords.id, current.id),
+        eq(entityRecords.entity, entity),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+        eq(entityRecords.version, expectedVersion),
+      ))
+      .returning();
+    if (row && entity === "resident-reports") {
+      await tx
+        .delete(notifications)
+        .where(and(
+          eq(notifications.tenantId, actor.tenantId),
+          eq(notifications.reportId, current.id),
+        ));
+    }
+    return row;
+  });
   if (!deleted) {
     res.status(409).json({ error: "Concurrent update detected" });
     return;
