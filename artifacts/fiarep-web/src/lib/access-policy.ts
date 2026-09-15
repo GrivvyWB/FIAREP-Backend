@@ -19,7 +19,7 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
   if (!staff) return false;
   if (staff.role === "human_resources") {
     return module === "dashboard" || module === "team" ||
-      module === "notifications" || module === "settings";
+      module === "leave" || module === "notifications" || module === "settings";
   }
   if (staff.role === "procurement") return module === "procurement";
   if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
