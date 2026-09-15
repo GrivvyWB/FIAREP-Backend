@@ -14,7 +14,7 @@ import {
   useGetDeletionPolicy,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2, ChevronDown, Upload, Download } from "lucide-react";
+import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2, ChevronDown, Upload, Download, CalendarDays } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,6 +28,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Checkbox } from "@/components/ui/checkbox";
 import { groupTeamDirectoryByTitleAndLocation } from "@/lib/staff-assignment";
 import { invalidateStaffQueries } from "@/lib/query-invalidation";
+import { useLocation } from "wouter";
 
 const positions = Object.values(StaffPosition);
 const allRoles = Object.values(StaffRole).filter((r) => r !== "resident");
@@ -78,6 +79,7 @@ function roleForPosition(position: string) {
 
 export default function Team() {
   const { staff: actor } = useAuth();
+  const [, navigate] = useLocation();
   const { data: deletionPolicy } = useGetDeletionPolicy();
   const queryClient = useQueryClient();
   const { data: staff, isLoading, error } = useListStaff(undefined, {
@@ -151,8 +153,8 @@ export default function Team() {
   const filtered = staff?.filter((member) => {
     if (actor?.role === "human_resources") {
       if (member.role === "human_resources") return false;
-      if (!directoryStaffId || member.id !== directoryStaffId) return false;
-      if (directoryDevelopment && !member.developments.includes(directoryDevelopment)) return false;
+      const q = search.trim().toLowerCase();
+      return !q || member.name.toLowerCase().includes(q);
     }
     const q = search.toLowerCase();
     return !q || [member.name, member.role, member.position].some((v) => v.toLowerCase().includes(q));
@@ -407,7 +409,17 @@ export default function Team() {
         {(member.canResetCode || member.canRevoke || (member.canDelete && actor?.role !== "human_resources")) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
           {member.canApprove && <Button size="sm" onClick={() => approveEmployee(member.id, member.name, member.role)} disabled={approve.isPending}>Approve employee</Button>}
           {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
-          {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />Revoke</Button>}
+          {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />{actor?.role === "human_resources" ? "Deactivate" : "Revoke"}</Button>}
+          {actor?.role === "human_resources" && member.status === "approved" && <Button size="sm" variant="outline" onClick={() => {
+            const params = new URLSearchParams({
+              new: "1",
+              view: "team",
+              staffId: member.id,
+              employee: member.name,
+            });
+            if (member.developments[0]) params.set("development", member.developments[0]);
+            navigate(`/leave?${params.toString()}`);
+          }}><CalendarDays className="mr-1 h-3 w-3" />Leave</Button>}
           {member.canDelete && deletionPolicy?.enabled && deletionPolicy.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
         </div>}
       </div>
@@ -452,50 +464,17 @@ export default function Team() {
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
         <div className="p-4 border-b border-border space-y-3">
-          {actor?.role === "human_resources" && <select aria-label="Select development" className="w-full max-w-xl rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryDevelopment} onChange={(event) => { setDirectoryDevelopment(event.target.value); setDirectoryStaffId(""); setSearch(""); }}>
-            <option value="">Select development</option>
-            {(availableDevelopments || []).map((development) => <option key={development} value={development}>{development}</option>)}
-          </select>}
           <div className="flex max-w-xl gap-2">
-            {actor?.role === "human_resources" ? <select aria-label="Select staff member" className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm" value={directoryStaffId} onChange={(event) => {
-              const staffId = event.target.value;
-              setDirectoryStaffId(staffId);
-              if (!directoryDevelopment) {
-                const selectedMember = (staff || []).find((member) => member.id === staffId);
-                if (selectedMember?.developments[0]) setDirectoryDevelopment(selectedMember.developments[0]);
-              }
-            }}>
-              <option value="">Select staff member</option>
-              {(developmentStaff || []).map((member) => <option key={member.id} value={member.id}>{member.name} — {member.position}</option>)}
-            </select> : <div className="relative flex-1">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input aria-label="Search team members" placeholder="Search team members..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
-            </div>}
+              <Input aria-label={actor?.role === "human_resources" ? "Search staff by name" : "Search team members"} placeholder={actor?.role === "human_resources" ? "Search staff by name" : "Search team members..."} className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+            </div>
           </div>
         </div>
         <div className="p-4">
           {isLoading ? <div className="p-8 text-center text-muted-foreground">Loading team...</div> :
             error ? <div className="p-8 text-center text-destructive">{errorMessage(error)}</div> :
-            actor?.role === "human_resources" && !directoryDevelopment && !directoryStaffId ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">Select a development</h3></div> :
-            actor?.role === "human_resources" && !directoryStaffId ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">Select a staff member</h3></div> :
             sorted?.length === 0 ? <div className="p-12 text-center flex flex-col items-center"><UsersRound className="w-12 h-12 text-muted-foreground/30 mb-4" /><h3 className="text-lg font-bold">No team members found</h3></div> :
-            actor?.role === "human_resources" ?
-              <div className="space-y-3">
-                <Collapsible key={`${directoryDevelopment}:${search ? "search" : "browse"}`} defaultOpen>
-                  <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3 text-left">
-                    <div><h3 className="font-bold">{directoryDevelopment}</h3><p className="text-xs text-muted-foreground">{sorted?.length || 0} staff member{sorted?.length === 1 ? "" : "s"}</p></div>
-                    <ChevronDown className="h-5 w-5 shrink-0" />
-                  </CollapsibleTrigger>
-                  <CollapsibleContent className="grid gap-3 pt-3">
-                    {(sorted || []).map(memberCard)}
-                    <div className="space-y-2 rounded-xl border border-border p-4">
-                      <Label htmlFor="hr-notes">HR notes</Label>
-                      <textarea id="hr-notes" className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={hrNotes} onChange={(event) => setHrNotes(event.target.value)} />
-                      <Button type="button" onClick={saveHrNotes} disabled={notesSaving}>{notesSaving ? "Saving..." : "Save notes"}</Button>
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
-              </div> :
               <div className="space-y-3">
                 {teamGroups.map((group) => {
                   const groupCount = group.locations.reduce((total, location) => total + location.people.length, 0);
