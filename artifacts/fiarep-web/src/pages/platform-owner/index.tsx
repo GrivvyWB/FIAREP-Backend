@@ -5,10 +5,8 @@ import {
   useDeleteOrganization,
   OrganizationWithUsage, 
   getListOrganizationsQueryKey,
-  getListPlatformLicenseAuditQueryKey,
   NYCHA_DEVELOPMENT_NAMES,
   useListPlatformLicenseAudit,
-  useTransferOrganizationDirector,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -54,14 +52,11 @@ export default function OwnerDashboard() {
   const [organizationPreset, setOrganizationPreset] = useState<"nycha" | null>(null);
   const [restoreOrg, setRestoreOrg] = useState<OrganizationWithUsage | null>(null);
   const [restoreEndDate, setRestoreEndDate] = useState("");
-  const [directorTransferOrg, setDirectorTransferOrg] = useState<OrganizationWithUsage | null>(null);
-  const [directorTransferName, setDirectorTransferName] = useState("");
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const updateMutation = useUpdateOrganization();
   const deleteOrganization = useDeleteOrganization();
-  const transferDirector = useTransferOrganizationDirector();
 
   const filteredOrgs = useMemo(() => {
     if (!organizations) return [];
@@ -156,29 +151,6 @@ export default function OwnerDashboard() {
         variant: "destructive",
         title: "Delete Failed",
         description: err?.data?.error || err?.message || "Could not delete organization.",
-      });
-    }
-  };
-
-  const handleDirectorTransfer = async () => {
-    if (!directorTransferOrg || !directorTransferName.trim()) return;
-    try {
-      const result = await transferDirector.mutateAsync({
-        id: directorTransferOrg.id,
-        data: { name: directorTransferName.trim() },
-      });
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() }),
-        queryClient.invalidateQueries({ queryKey: getListPlatformLicenseAuditQueryKey() }),
-      ]);
-      toast({ title: `${result.name} is now Borough Director.` });
-      setDirectorTransferOrg(null);
-      setDirectorTransferName("");
-    } catch (err: any) {
-      toast({
-        variant: "destructive",
-        title: "Borough Director replacement failed",
-        description: err?.data?.error || err?.message,
       });
     }
   };
@@ -364,12 +336,6 @@ export default function OwnerDashboard() {
                             <DropdownMenuItem onClick={() => handleEdit(org)}>
                               <Edit2 className="w-4 h-4 mr-2 text-slate-400" /> Edit Constraints
                             </DropdownMenuItem>
-                             <DropdownMenuItem onClick={() => {
-                               setDirectorTransferOrg(org);
-                               setDirectorTransferName("");
-                             }}>
-                               <RotateCcw className="w-4 h-4 mr-2 text-slate-400" /> Replace Borough Director
-                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             
                             {!isActive && (
@@ -452,35 +418,6 @@ export default function OwnerDashboard() {
               disabled={!restoreEndDate || updateMutation.isPending}
             >
               Restore / Activate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      <Dialog open={Boolean(directorTransferOrg)} onOpenChange={(open) => {
-        if (!open) {
-          setDirectorTransferOrg(null);
-          setDirectorTransferName("");
-        }
-      }}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Replace Borough Director</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-2">
-            <label htmlFor="director-transfer-name" className="text-sm font-medium text-slate-700">Name</label>
-            <Input
-              id="director-transfer-name"
-              value={directorTransferName}
-              onChange={(event) => setDirectorTransferName(event.target.value)}
-            />
-          </div>
-          <DialogFooter>
-            <Button
-              type="button"
-              onClick={handleDirectorTransfer}
-              disabled={!directorTransferName.trim() || transferDirector.isPending}
-            >
-              Replace Borough Director
             </Button>
           </DialogFooter>
         </DialogContent>
