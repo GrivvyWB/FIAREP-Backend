@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { and, eq, inArray } from "drizzle-orm";
-import { db, entityRecords } from "@workspace/db";
+import { db, entityRecords, organizationProperties } from "@workspace/db";
 import { GetScoresResponse } from "@workspace/api-zod";
 import { entityDevelopmentAllowed, isBoroughDirector } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -30,14 +30,23 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
     return;
   }
 
-  const storedRows = await db
-    .select()
-    .from(entityRecords)
-    .where(and(
-      eq(entityRecords.tenantId, actor.tenantId),
-      eq(entityRecords.deleted, false),
-      inArray(entityRecords.entity, [...SCORE_ENTITIES]),
-    ));
+  const [storedRows, activeProperties] = await Promise.all([
+    db
+      .select()
+      .from(entityRecords)
+      .where(and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+        inArray(entityRecords.entity, [...SCORE_ENTITIES]),
+      )),
+    db
+      .select({ development: organizationProperties.development })
+      .from(organizationProperties)
+      .where(and(
+        eq(organizationProperties.organizationId, actor.tenantId),
+        eq(organizationProperties.active, true),
+      )),
+  ]);
   const rows = await Promise.all(storedRows.map(repairLegacyResidentDevelopment));
 
   const records: ScoringRecord[] = rows
@@ -56,13 +65,29 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
       updatedAt: row.updatedAt,
     }));
 
-  const developments = calculateDevelopmentScores(records);
+  const propertyDevelopments = new Set(
+    activeProperties
+      .map((property) => property.development?.trim().toLowerCase())
+      .filter((development): development is string => Boolean(development)),
+  );
+  const developmentRecords = records.filter((record) => {
+    const stateDevelopment = typeof record.state["development"] === "string"
+      ? record.state["development"].trim()
+      : "";
+    const development = record.development?.trim() || stateDevelopment;
+    return Boolean(development && propertyDevelopments.has(development.toLowerCase()));
+  });
+  const developments = calculateDevelopmentScores(developmentRecords);
   const knownDevelopments = new Set(
     developments.map((score) => score.development.trim().toLowerCase()),
   );
   for (const development of actor.developments) {
     const name = development.trim();
-    if (!name || knownDevelopments.has(name.toLowerCase())) continue;
+    if (
+      !name ||
+      !propertyDevelopments.has(name.toLowerCase()) ||
+      knownDevelopments.has(name.toLowerCase())
+    ) continue;
     developments.push({
       development: name,
       points: 0,
