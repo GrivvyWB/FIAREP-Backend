@@ -154,7 +154,7 @@ router.post("/v1/auth/procurement/login", rateLimit("procurement-login", 12), as
     name?: unknown; code?: unknown; challengeCode?: unknown; challengeToken?: unknown;
   };
   if (typeof name !== "string" || typeof code !== "string" ||
-      !/^[A-HJ-NP-Z2-9]{4}$/i.test(code.trim()) ||
+      !/^\d{4}$/.test(code.trim()) ||
       typeof challengeCode !== "string" || !/^\d{2}$/.test(challengeCode) ||
       typeof challengeToken !== "string") {
     res.status(400).json({ error: "Procurement credentials and verification number are required" });
