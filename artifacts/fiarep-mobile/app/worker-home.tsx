@@ -4,16 +4,47 @@ import { clearAppMode, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
+import {
+  developmentsForStaff,
+  getCurrentActor,
+  getCurrentPosition,
+  listResidentReports,
+  listRoutedInspectionsFor,
+} from '../lib/store';
 import { ui } from '../lib/ui';
-import AlertBanner from '../components/AlertBanner';
 
 export default function WorkerHome() {
   const router = useRouter();
   const { refresh } = useAppMode();
-  const [unread, setUnread] = useState(0);
+  const [jobCount, setJobCount] = useState(0);
   const [position, setPosition] = useState('');
-  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = a.name ? await unreadCount(a.name) : 0; setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, [])); 
+  useFocusEffect(useCallback(() => {
+    void (async () => {
+      const actor = await getCurrentActor();
+      if (actor.name && actor.id) {
+        const developments = (await developmentsForStaff(actor.name).catch(() => []))
+          .map((development) => development.trim().toLowerCase())
+          .filter(Boolean);
+        const inAssignedDevelopment = (development?: string) => {
+          const value = (development || '').trim().toLowerCase();
+          return !value || developments.length === 0 || developments.includes(value);
+        };
+        const [repairs, reports] = await Promise.all([
+          listRoutedInspectionsFor(actor.name),
+          listResidentReports(),
+        ]);
+        const residentJobs = reports.filter((report) =>
+          report.status !== 'resolved' &&
+          report.assignedStaffId === actor.id &&
+          inAssignedDevelopment(report.development)
+        );
+        setJobCount(repairs.length + residentJobs.length);
+      } else {
+        setJobCount(0);
+      }
+      try { setPosition(await getCurrentPosition()); } catch {}
+    })();
+  }, []));
 
   async function onSignOut() {
     await logout();
@@ -23,14 +54,13 @@ export default function WorkerHome() {
 
   return (
     <ScrollView contentContainerStyle={[ui.wrap, { paddingTop: 40 }]}>
-      <AlertBanner count={unread} />
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center', marginBottom: 6 }}>{position === 'Elevator Service' ? 'Elevator Mechanic' : (position || 'Worker')}</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 24 }]}>
         View your assigned jobs and check report status.
       </Text>
 
       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
-        <Text style={ui.btnText}>My Jobs</Text>
+        <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
       </Pressable>
       <Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
         <Text style={ui.btnOutlineText}>Attendance</Text>
@@ -41,10 +71,6 @@ export default function WorkerHome() {
       <Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
         <Text style={ui.btnOutlineText}>Request Time Off</Text>
       </Pressable>
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
-        <Text style={ui.btnOutlineText}>Inbox{unread > 0 ? '  (' + unread + ')' : ''}</Text>
-      </Pressable>
-
       <Pressable style={ui.btnOutline} onPress={() => router.push('/resident-lookup')}>
         <Text style={ui.btnOutlineText}>Check Report Status</Text>
       </Pressable>
