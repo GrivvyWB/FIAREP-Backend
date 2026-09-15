@@ -7,6 +7,7 @@ import {
   canCreateEntity,
   canMutateEntity,
   canDeleteEntity,
+  canDeleteOperationalRecords,
   canPerformEntityAction,
   canPerformAssignedWorkflowAction,
   canAssignStaff,
@@ -41,6 +42,14 @@ test("staff access codes are generated as four digits", () => {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     assert.match(staffCode(), /^\d{4}$/);
   }
+});
+
+test("operational deletion is limited to higher management", () => {
+  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Borough Director" })), true);
+  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Regional Director" })), true);
+  assert.equal(canDeleteOperationalRecords(actor({ role: "administrator", position: "Administrator" })), true);
+  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Property Manager" })), false);
+  assert.equal(canDeleteOperationalRecords(actor({ role: "inspector", position: "Supervisor" })), false);
 });
 
 test("staff account creation excludes Resident and Vendor public-access roles", () => {

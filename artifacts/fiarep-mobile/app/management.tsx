@@ -27,6 +27,7 @@ import {
 import { ui, ACCENT } from '../lib/ui';
 import { useAppMode } from './_layout';
 import { syncAllEntities } from '../lib/sync';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 const STATUS_LABEL: Record<ResidentReport['status'], string> = {
   submitted: 'Submitted',
@@ -125,6 +126,7 @@ function DevPicker(props: {
 
 export default function Management() {
   const { mode } = useAppMode();
+  const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
   const [reports, setReports] = useState<ResidentReport[]>([]);
   const [myDevs, setMyDevs] = useState<string[]>([]);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
@@ -397,7 +399,7 @@ export default function Management() {
                 <Pressable style={ui.btnOutline} onPress={() => { setCwoFor(r); setCwoPos(''); setCwoName(''); setCwoDesc(''); setCwoStaff([]); }}>
                   <Text style={ui.btnOutlineText}>Request Change</Text>
                 </Pressable>
-                {(mode === 'administrator' || ['Borough Director', 'Regional Director'].includes(currentPosition)) && (
+                {canDelete && (mode === 'administrator' || ['Borough Director', 'Regional Director'].includes(currentPosition)) && (
                   <Pressable style={[ui.btnOutline, { borderColor: '#c0392b' }]} onPress={() => confirmDelete(r)}>
                     <Text style={{ color: '#c0392b', fontWeight: '600', textAlign: 'center' }}>Delete</Text>
                   </Pressable>

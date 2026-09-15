@@ -6,10 +6,12 @@ import { lineTotal, type Category } from '../../lib/catalog';
 import { exportQuote } from '../../lib/quote';
 import { ui, money, ACCENT } from '../../lib/ui';
 import { useAppMode } from '../_layout';
+import { useDeletionPolicy } from '../../lib/useDeletionPolicy';
 
 export default function ProjectDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { mode } = useAppMode();
+  const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
   const [locked, setLocked] = useState(false);
   const readOnly = mode === 'administrator' || locked;
   const [notes, setNotes] = useState<ProjectNote[]>([]);
@@ -234,7 +236,7 @@ export default function ProjectDetail() {
             <Pressable key={r.id} style={ui.card} onPress={() => router.push(`/project/room?projectId=${id}&roomId=${r.id}`)}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <Text style={ui.cardTitle}>{r.name}</Text>
-                {!readOnly && (<Pressable onPress={() => onDeleteRoom(r.id)}><Text style={{ color: '#c0392b' }}>Delete</Text></Pressable>)}
+                {!readOnly && canDelete && (<Pressable onPress={() => onDeleteRoom(r.id)}><Text style={{ color: '#c0392b' }}>Delete</Text></Pressable>)}
               </View>
               <View style={ui.line}><Text style={ui.lineK}>{r.lines.length} line{r.lines.length === 1 ? '' : 's'}</Text><Text style={ui.lineV}>tap to edit</Text></View>
               <View style={ui.totalRow}><Text style={ui.totalK}>Room total</Text><Text style={ui.totalV}>{money(roomTotal(r))}</Text></View>
@@ -278,7 +280,7 @@ export default function ProjectDetail() {
             </View>
           )}
 
-{mode === 'administrator' && (
+{mode === 'administrator' && canDelete && (
             <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 20 }]} onPress={onDeleteProject}>
         <Text style={[ui.btnOutlineText, { color: '#c0392b' }]}>Delete project</Text>
       </Pressable>

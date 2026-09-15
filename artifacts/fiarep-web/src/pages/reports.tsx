@@ -2,6 +2,7 @@ import {
   getListEntityRecordsQueryKey,
   getListResidentReportPhotosQueryKey,
   getListStaffQueryKey,
+  useGetDeletionPolicy,
   requestResidentReportPhotoDownload,
   useListEntityRecords,
   useListResidentReportPhotos,
@@ -141,6 +142,7 @@ export default function Reports() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { staff: actor } = useAuth();
+  const { data: deletionPolicy } = useGetDeletionPolicy();
   const reportsQuery = useListEntityRecords("resident-reports", undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),
@@ -289,7 +291,7 @@ export default function Reports() {
                  {canApproveWork(actor) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
                 <Button size="sm" variant="ghost" onClick={() => openReport(report, "details")}>View details</Button>
-                 {canApproveWork(actor) && <Button size="sm" variant="outline" onClick={() => remove(report)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-3.5 w-3.5 mr-1" />Delete</Button>}
+                 {deletionPolicy?.enabled && deletionPolicy.canDelete && <Button size="sm" variant="outline" onClick={() => remove(report)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-3.5 w-3.5 mr-1" />Delete</Button>}
               </div>
             </div>;
           })}</div>}
@@ -313,7 +315,7 @@ export default function Reports() {
                 <div><p className="text-sm text-muted-foreground mb-2">Photos</p><Photos reportId={selected.id} /></div>
                 <FieldEvidenceDisplay state={state} reportId={selected.id} />
                    {canApproveWork(actor) && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{canApproveWork(actor) && <Button variant="outline" onClick={() => remove(selected)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}{!canApproveWork(actor) && currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{!canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => perform(selected, "complete")} disabled={action.isPending}>Complete</Button>}{canApproveWork(actor) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{deletionPolicy?.enabled && deletionPolicy.canDelete && <Button variant="outline" onClick={() => remove(selected)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}{!canApproveWork(actor) && currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{!canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => perform(selected, "complete")} disabled={action.isPending}>Complete</Button>}{canApproveWork(actor) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
               </div></>;
           })()}
         </DialogContent>

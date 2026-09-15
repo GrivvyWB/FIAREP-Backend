@@ -4,11 +4,13 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { listRooms, updateRoom, type Room } from '../../lib/store';
 import RemotePhoto from '../../components/RemotePhoto';
 import { ui } from '../../lib/ui';
+import { useDeletionPolicy } from '../../lib/useDeletionPolicy';
 
 export default function ProjectPhotos() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [selected, setSelected] = useState<{ localUri: string; remote?: any } | null>(null);
+  const canDelete = useDeletionPolicy();
 
   const load = useCallback(() => {
     if (id) listRooms(id).then(setRooms);
@@ -30,6 +32,9 @@ export default function ProjectPhotos() {
   const total = Object.values(photosByUnit).reduce((s, a) => s + a.length, 0);
 
   const deletePhoto = (roomId: string, uri: string) => {
+    const room = rooms.find(x => x.id === roomId);
+    const remote = room && ((room as any).remoteFiles || []).some((file: any) => file.localUri === uri);
+    if (remote && !canDelete) return;
     Alert.alert('Delete photo?', 'This removes the photo from the room permanently.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => {
@@ -59,9 +64,9 @@ export default function ProjectPhotos() {
                 <Pressable onPress={() => setSelected({ localUri: p.uri, remote: p.remote })}>
                   <RemotePhoto localUri={p.uri} remote={p.remote} style={{ width: 108, height: 108, borderRadius: 8 }} />
                 </Pressable>
-                <Pressable onPress={() => deletePhoto(p.roomId, p.uri)} style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#c0392b', width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
+                {(!p.remote || canDelete) && <Pressable onPress={() => deletePhoto(p.roomId, p.uri)} style={{ position: 'absolute', top: -6, right: -6, backgroundColor: '#c0392b', width: 24, height: 24, borderRadius: 12, alignItems: 'center', justifyContent: 'center' }}>
                   <Text style={{ color: '#fff', fontSize: 15, fontWeight: '700', lineHeight: 17 }}>×</Text>
-                </Pressable>
+                </Pressable>}
                 <Text style={{ fontSize: 11, color: '#666', marginTop: 2 }} numberOfLines={1}>{p.room}</Text>
               </View>
             ))}

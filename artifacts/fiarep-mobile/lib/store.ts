@@ -7,6 +7,7 @@ import {
   createStaff,
   getBootstrapStatus,
   getCurrentStaff,
+  getDeletionPolicy,
   lookupPublicResidentReports,
   lookupPublicVendorScope,
   listStaff,
@@ -59,6 +60,7 @@ export type { InstallationPersona };
 // Workflow screens use the generated server action directly; keep this
 // re-export alongside the rest of the store API.
 export { performEntityAction };
+export { getDeletionPolicy };
 
 export async function getAttendanceStatus(): Promise<TimeClockStatus> {
   return getTimeClockStatus();
@@ -178,6 +180,11 @@ export async function db() {
   }
 }
 async function queueMutation(entity: string, id: string, state: any, operation: 'upsert' | 'delete' = 'upsert', baseVersion?: number) {
+  if (operation === 'delete') {
+    const policy = await getDeletionPolicy();
+    if (!policy.enabled) throw new Error('Deletion is disabled for this organization.');
+    if (!policy.canDelete) throw new Error('Only higher management can delete records.');
+  }
   const d = await db();
   await ensureQueue(d);
   const identityRow = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'session_identity');
@@ -1874,6 +1881,9 @@ export async function refuseStaffAccount(id: string): Promise<void> {
 
 
 export async function deleteStaffAccount(id: string): Promise<{ ok: boolean; reason?: string }> {
+  const policy = await getDeletionPolicy();
+  if (!policy.enabled) return { ok: false, reason: 'Deletion is disabled for this organization.' };
+  if (!policy.canDelete) return { ok: false, reason: 'Only higher management can delete records.' };
   const d = await db();
   await ensureStaffTable(d);
   // Guard: never delete the last remaining approved administrator (would lock everyone out).

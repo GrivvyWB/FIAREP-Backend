@@ -11,6 +11,7 @@ import {
   useListStaffDevelopments,
   getListStaffQueryKey,
   getListStaffDevelopmentsQueryKey,
+  useGetDeletionPolicy,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2, ChevronDown, Upload, Download } from "lucide-react";
@@ -67,6 +68,7 @@ function roleForPosition(position: string) {
 
 export default function Team() {
   const { staff: actor } = useAuth();
+  const { data: deletionPolicy } = useGetDeletionPolicy();
   const queryClient = useQueryClient();
   const { data: staff, isLoading, error } = useListStaff(undefined, {
     query: {
@@ -396,7 +398,7 @@ export default function Team() {
           {member.canApprove && <Button size="sm" onClick={() => approveEmployee(member.id, member.name, member.role)} disabled={approve.isPending}>Approve employee</Button>}
           {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
           {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />Revoke</Button>}
-          {member.canDelete && actor?.role !== "human_resources" && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
+          {member.canDelete && deletionPolicy?.enabled && deletionPolicy.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
         </div>}
       </div>
     </div>
@@ -459,7 +461,6 @@ export default function Team() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
               <Input aria-label="Search team members" placeholder="Search team members..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>}
-            {actor?.role === "human_resources" && <Button type="button" variant="destructive" onClick={deleteSearchedEmployee} disabled={exactSearchMatches.length !== 1 || deleteStaff.isPending}><Trash2 className="mr-2 h-4 w-4" />Delete</Button>}
           </div>
         </div>
         <div className="p-4">

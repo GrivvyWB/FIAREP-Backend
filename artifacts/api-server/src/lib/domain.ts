@@ -27,6 +27,12 @@ export function canUseGeneralStaffLogin(role: string): boolean {
   return isStaffAccountRole(role);
 }
 
+export function canDeleteOperationalRecords(actor: Actor): boolean {
+  return isBoroughDirector(actor) ||
+    actor.role === "administrator" ||
+    (actor.role === "management" && actor.position === "Regional Director");
+}
+
 export const STAFF_POSITIONS = [
   "Borough Director",
   "Regional Director",

@@ -31,6 +31,11 @@ export interface Organization {
   updatedAt: string;
 }
 
+export interface DeletionPolicy {
+  enabled: boolean;
+  canDelete: boolean;
+}
+
 export type OrganizationInputStatus = typeof OrganizationInputStatus[keyof typeof OrganizationInputStatus];
 
 

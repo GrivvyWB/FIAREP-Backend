@@ -5,6 +5,7 @@ import { listHudInspections, deleteHudInspection, type HudInspection } from '../
 import { getCurrentActor, developmentsForManager } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleDateString(); } catch { return iso; }
@@ -13,6 +14,7 @@ function fmt(iso: string): string {
 export default function HudReview() {
   const router = useRouter();
   const { mode } = useAppMode();
+  const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
   const [items, setItems] = useState<HudInspection[]>([]);
   const [myDevs, setMyDevs] = useState<string[]>([]);
 
@@ -50,7 +52,7 @@ export default function HudReview() {
             <Text style={{ fontSize: 16, fontWeight: '700', color: ACCENT, flex: 1 }}>
               {insp.unitAddress || 'Inspection'}{insp.development ? ' · ' + insp.development : ''}
             </Text>
-            {mode === 'administrator' && (
+            {mode === 'administrator' && canDelete && (
               <Pressable onPress={() => onDelete(insp)} hitSlop={8}><Text style={{ color: '#c0392b', fontWeight: '600' }}>Delete</Text></Pressable>
             )}
           </View>

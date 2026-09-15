@@ -4,11 +4,13 @@ import { useFocusEffect, useLocalSearchParams, useRouter, Redirect } from 'expo-
 import { listProjects, createProject, deleteProject, type Project, listApprovedProjectIds, getSessionIdentity } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 export default function Projects() {
   const router = useRouter();
   const params = useLocalSearchParams<{ new?: string }>();
   const { mode } = useAppMode();
+  const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
 
   // '/' (this Projects screen) is only for inspector & administrator.
   // Any other role that lands here is redirected to their own home.
@@ -77,7 +79,7 @@ export default function Projects() {
       {projects.map(p => {
         const isApproved = approved.has(p.id);
         return (
-        <Pressable key={p.id} style={[ui.listItem, isApproved && { borderColor: '#1a8f4c', borderWidth: 2 }]} onPress={() => router.push(`/project/${p.id}`)} onLongPress={() => { Alert.alert('Delete project?', p.name + '\n\nThis permanently removes the project and its data.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await deleteProject(p.id); listProjects().then(setProjects); } }]); }}>
+        <Pressable key={p.id} style={[ui.listItem, isApproved && { borderColor: '#1a8f4c', borderWidth: 2 }]} onPress={() => router.push(`/project/${p.id}`)} onLongPress={() => { if (!canDelete) return; Alert.alert('Delete project?', p.name + '\n\nThis permanently removes the project and its data.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await deleteProject(p.id); listProjects().then(setProjects); } }]); }}>
           <View style={{ flex: 1 }}>
             <Text style={ui.listTitle}>{p.name}</Text>
             {!!p.client && <Text style={ui.listSub}>{p.client}</Text>}

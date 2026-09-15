@@ -8,6 +8,7 @@ import {
   type ResidentReport, type ChangeOrder, type Notification,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
@@ -15,6 +16,7 @@ function fmt(iso: string): string {
 
 export default function ManageRequests() {
   const router = useRouter();
+  const canDelete = useDeletionPolicy();
   const [reports, setReports] = useState<ResidentReport[]>([]);
   const [orders, setOrders] = useState<ChangeOrder[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
@@ -58,9 +60,9 @@ export default function ManageRequests() {
             {!!r.description && <Text style={{ fontSize: 14, color: '#333' }}>{r.description}</Text>}
             <Text style={{ fontSize: 12, color: '#999' }}>{r.status} · {fmt(r.createdAt)}</Text>
           </Pressable>
-          <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => confirmDelete('report', () => deleteResidentReport(r.id))}>
+          {canDelete && <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => confirmDelete('report', () => deleteResidentReport(r.id))}>
             <Text style={[ui.btnOutlineText, { color: '#c0392b' }]}>Delete</Text>
-          </Pressable>
+          </Pressable>}
         </View>
       ))}
 
@@ -74,9 +76,9 @@ export default function ManageRequests() {
           <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{c.reportRef || 'Change order'}</Text>
           <Text style={{ fontSize: 14, color: '#333' }}>{c.targetName || c.targetPosition}{c.description ? ' \u00b7 ' + c.description : ''}</Text>
           <Text style={{ fontSize: 12, color: '#999' }}>{c.status} · {fmt(c.createdAt)}</Text>
-          <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => confirmDelete('change order', () => deleteChangeOrder(c.id))}>
+          {canDelete && <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => confirmDelete('change order', () => deleteChangeOrder(c.id))}>
             <Text style={[ui.btnOutlineText, { color: '#c0392b' }]}>Delete</Text>
-          </Pressable>
+          </Pressable>}
         </View>
       ))}
 

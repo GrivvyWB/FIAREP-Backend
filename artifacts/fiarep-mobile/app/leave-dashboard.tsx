@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal } from 'reac
 import { useFocusEffect } from 'expo-router';
 import { listLeaveRequests, decideLeaveRequest, deleteLeaveRequest, listDevelopmentNames, getCurrentActor, getCurrentPosition, type LeaveRequest, type LeaveStatus } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 const TYPE_COLOR: Record<string, string> = {
   Vacation: '#1769e0', Sick: '#c0392b', Childcare: '#8e44ad', Personal: '#16a34a',
@@ -60,6 +61,7 @@ export default function LeaveDashboard() {
 
   const [myPosition, setMyPosition] = useState('');
   const [myRole, setMyRole] = useState('');
+  const canDelete = useDeletionPolicy();
   const load = useCallback(() => {
     listLeaveRequests().then(setAll);
     getCurrentPosition().then(setMyPosition).catch(() => {});
@@ -223,7 +225,7 @@ export default function LeaveDashboard() {
                 <Pressable style={[ui.btnOutline, { flex: 1, borderColor: '#c0392b' }]} onPress={() => decide(r, 'Denied')}><Text style={{ color: '#c0392b', fontWeight: '600', textAlign: 'center' }}>Deny</Text></Pressable>
               </View>
             )}
-            {canDecide && <Pressable onPress={() => confirmDelete(r)} hitSlop={8}><Text style={{ color: '#c0392b', fontSize: 12, fontWeight: '600', marginTop: 2 }}>Delete</Text></Pressable>}
+            {canDecide && canDelete && <Pressable onPress={() => confirmDelete(r)} hitSlop={8}><Text style={{ color: '#c0392b', fontSize: 12, fontWeight: '600', marginTop: 2 }}>Delete</Text></Pressable>}
           </View>
         );
       })}

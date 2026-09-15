@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
-import { db, entityRecords, notifications, publicAccessCodes, staffAccounts } from "@workspace/db";
+import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, notify } from "../lib/audit";
 import {
   ENTITIES,
   canAssignStaff,
+  canDeleteOperationalRecords,
   canCreateEntity,
   canPerformAssignedWorkflowAction,
   canDeleteEntity,
@@ -33,6 +34,19 @@ import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopmen
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
+
+router.get("/v1/deletion-policy", async (_req, res) => {
+  const actor = actorFrom(res);
+  const [organization] = await db
+    .select({ features: organizations.features })
+    .from(organizations)
+    .where(eq(organizations.id, actor.tenantId))
+    .limit(1);
+  res.json({
+    enabled: organization?.features?.["deletionEnabled"] === true,
+    canDelete: canDeleteOperationalRecords(actor),
+  });
+});
 
 function validEntity(value: string | undefined): value is string {
   return typeof value === "string" && ENTITIES.has(value);
@@ -958,6 +972,19 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   const actor = actorFrom(res);
+  const [organization] = await db
+    .select({ features: organizations.features })
+    .from(organizations)
+    .where(eq(organizations.id, actor.tenantId))
+    .limit(1);
+  if (organization?.features?.["deletionEnabled"] !== true) {
+    res.status(403).json({ error: "Deletion is disabled for this organization" });
+    return;
+  }
+  if (!canDeleteOperationalRecords(actor)) {
+    res.status(403).json({ error: "Only higher management can delete records" });
+    return;
+  }
   const [current] = await db
     .select()
     .from(entityRecords)

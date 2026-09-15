@@ -7,6 +7,7 @@ import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
@@ -22,6 +23,7 @@ export default function MyJobs() {
   const [photos, setPhotos] = useState<PhotoEvidence[]>([]);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const canDelete = useDeletionPolicy();
 
   const load = useCallback(() => {
     getCurrentActor().then(async (a) => {
@@ -80,7 +82,7 @@ export default function MyJobs() {
                 {!!r.description && <Text style={ui.listSub} numberOfLines={2}>{r.description}</Text>}
                 <Text style={{ fontSize: 12, color: ACCENT, fontWeight: '600' }}>Open to complete \u203a</Text>
               </Pressable>
-              {r.clearedByMgmt && (
+              {r.clearedByMgmt && canDelete && (
                 <Pressable onPress={() => Alert.alert('Remove this job?', 'Management cleared it. Remove it from your list?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { await deleteResidentReport(r.id); load(); } }])} style={{ marginTop: 4 }}>
                   <Text style={{ color: '#c0392b', fontWeight: '600', fontSize: 13 }}>Remove (cleared by management)</Text>
                 </Pressable>
@@ -103,7 +105,7 @@ export default function MyJobs() {
           {!!v.code && <Text style={ui.listSub}>Code {v.code}{v.codeDesc ? ' \u00b7 ' + v.codeDesc : ''}</Text>}
           {!!v.notes && <Text style={{ fontSize: 14 }}>{v.notes}</Text>}
           <Text style={ui.listSub}>Assigned by {v.approvedBy || 'management'}  {fmt(v.routedAt || '')}</Text>
-          {v.clearedByMgmt && (
+          {v.clearedByMgmt && canDelete && (
             <Pressable onPress={() => Alert.alert('Remove this job?', 'Management cleared it. Remove it from your list?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { await deleteBuildingViolation(v.id); load(); } }])}>
               <Text style={{ color: '#c0392b', fontWeight: '600', fontSize: 13 }}>Remove (cleared by management)</Text>
             </Pressable>

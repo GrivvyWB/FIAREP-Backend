@@ -16,6 +16,7 @@ import {
   STAFF_POSITIONS,
   canIssueStaffAccountRole,
   canBrowseStaffDirectory,
+  canDeleteOperationalRecords,
   isBoroughDirector,
   isElevated,
 } from "../lib/domain";
@@ -454,6 +455,19 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
 
 router.delete("/v1/staff/:id", async (req, res) => {
   const actor = actorFrom(res);
+  const [organization] = await db
+    .select({ features: organizations.features })
+    .from(organizations)
+    .where(eq(organizations.id, actor.tenantId))
+    .limit(1);
+  if (organization?.features?.["deletionEnabled"] !== true) {
+    res.status(403).json({ error: "Deletion is disabled for this organization" });
+    return;
+  }
+  if (!canDeleteOperationalRecords(actor)) {
+    res.status(403).json({ error: "Only higher management can delete records" });
+    return;
+  }
   const [target] = await db
     .select()
     .from(staffAccounts)

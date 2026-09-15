@@ -11,6 +11,7 @@ import {
   type StaffAccount,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
@@ -32,6 +33,7 @@ export default function ViolationSend() {
   const [staff, setStaff] = useState<StaffAccount[]>([]);
   const [sent, setSent] = useState<ViolationLookup[]>([]);
   const [me, setMe] = useState('');
+  const canDelete = useDeletionPolicy();
 
   const load = useCallback(() => {
     listStaffAccounts('approved').then(setStaff);
@@ -153,7 +155,7 @@ export default function ViolationSend() {
         <Text style={ui.listSub}>Nothing sent yet.</Text>
       ) : (
         sent.slice(0, 20).map((v) => (
-          <Pressable key={v.id} onLongPress={() => { Alert.alert('Delete this record?', 'Violation ' + v.violationNumber + ' \u2014 ' + v.address, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await deleteViolationLookup(v.id); listViolationLookups().then(setSent); } }]); }} style={[ui.card, { gap: 4 }]}>
+          <Pressable key={v.id} onLongPress={() => { if (!canDelete) return; Alert.alert('Delete this record?', 'Violation ' + v.violationNumber + ' \u2014 ' + v.address, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await deleteViolationLookup(v.id); listViolationLookups().then(setSent); } }]); }} style={[ui.card, { gap: 4 }]}>
             <View style={ui.line}>
               <Text style={ui.lineK}>Violation</Text>
               <Text style={ui.lineV}>{v.violationNumber}</Text>

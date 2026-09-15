@@ -10,6 +10,7 @@ import {
 } from '../lib/store';
 import { VIOLATION_CODES, HAZARD_CLASSES, type HazardClass } from '../lib/violationCodes';
 import { ui, ACCENT } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
@@ -35,6 +36,7 @@ export default function InspectorViolations() {
   const [lookupData, setLookupData] = useState<NycPropertyLookup | null>(null);
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string>('');
+  const canDelete = useDeletionPolicy();
 
   const load = useCallback(() => {
     if (building.trim()) listBuildingViolations(building, violationNo).then(setItems);
@@ -264,9 +266,9 @@ export default function InspectorViolations() {
           <Text style={{ fontSize: 13, color: '#333' }}>{v.codeDesc}</Text>
           {!!v.notes && <Text style={{ fontSize: 13 }}>Notes: {v.notes}</Text>}
           <Text style={ui.listSub}>{v.loggedBy || 'Inspector'}  {fmt(v.loggedAt)}</Text>
-          <Pressable onPress={() => onDelete(v)} style={{ marginTop: 2 }}>
+          {canDelete && <Pressable onPress={() => onDelete(v)} style={{ marginTop: 2 }}>
             <Text style={{ color: '#c0392b', fontWeight: '600' }}>Remove</Text>
-          </Pressable>
+          </Pressable>}
         </View>
       ))}
     </ScrollView>

@@ -342,6 +342,12 @@ export const GetCurrentStaffResponse = zod.object({
 })
 
 
+export const GetDeletionPolicyResponse = zod.object({
+  "enabled": zod.boolean(),
+  "canDelete": zod.boolean()
+})
+
+
 export const ListOrganizationsResponseItem = zod.object({
   "id": zod.string().describe('System-generated organization code (ORG-XXXXXX) for new organizations; legacy organization IDs remain valid'),
   "name": zod.string(),

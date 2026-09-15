@@ -3,6 +3,7 @@ import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { listHudInspections, newHudInspection, saveHudInspection, deleteHudInspection, type HudInspection } from '../lib/hud';
 import { ui, ACCENT } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleDateString(); } catch { return iso; }
@@ -15,6 +16,7 @@ const STATUS_LABEL: Record<string, string> = {
 export default function HudInspections() {
   const router = useRouter();
   const [items, setItems] = useState<HudInspection[]>([]);
+  const canDelete = useDeletionPolicy();
 
   const load = useCallback(() => { listHudInspections().then(setItems); }, []);
   useFocusEffect(load);
@@ -55,9 +57,9 @@ export default function HudInspections() {
               </Text>
             )}
           </Pressable>
-          <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => onDelete(insp)}>
+          {canDelete && <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => onDelete(insp)}>
             <Text style={[ui.btnOutlineText, { color: '#c0392b' }]}>Delete</Text>
-          </Pressable>
+          </Pressable>}
         </View>
       ))}
     </ScrollView>

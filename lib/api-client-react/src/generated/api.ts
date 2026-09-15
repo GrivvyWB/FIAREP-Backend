@@ -25,6 +25,7 @@ import type {
   CreateOrganizationAdministratorBody,
   CreatePushSmokeTest202,
   DeleteEntityRecordBody,
+  DeletionPolicy,
   DeviceToken,
   EntityInput,
   EntityPatch,
@@ -1107,6 +1108,77 @@ export function useGetCurrentStaff<TData = Awaited<ReturnType<typeof getCurrentS
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetCurrentStaffQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetDeletionPolicyUrl = () => {
+
+
+
+
+  return `/api/v1/deletion-policy`
+}
+
+export const getDeletionPolicy = async ( options?: Parameters<typeof customFetch>[1]): Promise<DeletionPolicy> => {
+
+  return customFetch<DeletionPolicy>(getGetDeletionPolicyUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetDeletionPolicyQueryKey = () => {
+    return [
+    `/api/v1/deletion-policy`
+    ] as const;
+    }
+
+
+export const getGetDeletionPolicyQueryOptions = <TData = Awaited<ReturnType<typeof getDeletionPolicy>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeletionPolicy>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetDeletionPolicyQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getDeletionPolicy>>> = ({ signal }) => getDeletionPolicy({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getDeletionPolicy>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetDeletionPolicyQueryResult = NonNullable<Awaited<ReturnType<typeof getDeletionPolicy>>>
+export type GetDeletionPolicyQueryError = ErrorType<unknown>
+
+
+
+export function useGetDeletionPolicy<TData = Awaited<ReturnType<typeof getDeletionPolicy>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getDeletionPolicy>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetDeletionPolicyQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

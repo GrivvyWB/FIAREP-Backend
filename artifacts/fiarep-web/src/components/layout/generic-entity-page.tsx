@@ -5,6 +5,7 @@ import {
   useDeleteEntityRecord,
   usePerformEntityAction,
   getListEntityRecordsQueryKey,
+  useGetDeletionPolicy,
   EntityRecord
 } from "@workspace/api-client-react";
 import { Search, Plus, Edit2, Trash2, LucideIcon, MapPin, AlignLeft } from "lucide-react";
@@ -79,6 +80,7 @@ export function GenericEntityPage({
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { staff } = useAuth();
+  const { data: deletionPolicy } = useGetDeletionPolicy();
 
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -338,9 +340,11 @@ export function GenericEntityPage({
                         <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(item)} data-testid={`button-edit-${item.id}`}>
                           <Edit2 className="w-4 h-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingRecordId(item.id); setIsDeleteDialogOpen(true); }} data-testid={`button-delete-${item.id}`}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
+                        {deletionPolicy?.enabled && deletionPolicy.canDelete && (
+                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingRecordId(item.id); setIsDeleteDialogOpen(true); }} data-testid={`button-delete-${item.id}`}>
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>

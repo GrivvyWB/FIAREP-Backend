@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import { getScores, deleteScoreItem, type DevelopmentScore } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useAppMode } from './_layout';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 const scoreColor = (n: number) => n > 0 ? '#1a8f4c' : n < 0 ? '#c0392b' : '#666';
 const stateColor = (s: string) => s === 'completed' ? '#1a8f4c' : s === 'overdue' ? '#c0392b' : '#B4741A';
@@ -11,7 +12,8 @@ const kindLabel: Record<string, string> = { scope: 'Scope', route: 'Route', viol
 
 export default function DevScores() {
   const { mode } = useAppMode();
-  const canDelete = mode === 'administrator' || mode === 'management';
+  const policyCanDelete = useDeletionPolicy();
+  const canDelete = (mode === 'administrator' || mode === 'management') && policyCanDelete;
   const [scores, setScores] = useState<DevelopmentScore[]>([]);
   const [selectedDev, setSelectedDev] = useState<string>('');
   const [picker, setPicker] = useState(false);

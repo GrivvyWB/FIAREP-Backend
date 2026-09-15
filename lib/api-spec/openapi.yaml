@@ -309,6 +309,18 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Staff"
+  /v1/deletion-policy:
+    get:
+      operationId: getDeletionPolicy
+      tags: [auth]
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Tenant operational deletion policy for the current staff account
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeletionPolicy"
   /v1/platform/organizations:
     get:
       operationId: listOrganizations
@@ -1214,6 +1226,13 @@ components:
         unrestricted: { type: boolean }
         createdAt: { type: string, format: date-time }
         updatedAt: { type: string, format: date-time }
+    DeletionPolicy:
+      type: object
+      additionalProperties: false
+      required: [enabled, canDelete]
+      properties:
+        enabled: { type: boolean }
+        canDelete: { type: boolean }
     OrganizationInput:
       type: object
       additionalProperties: false

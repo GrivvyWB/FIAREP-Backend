@@ -3,11 +3,13 @@ import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingVi
 import { useFocusEffect } from 'expo-router';
 import { createEmergencyUnit, listEmergencyUnits, deleteEmergencyUnit, type EmergencyUnit } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
+import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
 export default function ManageTrucks() {
   const [units, setUnits] = useState<EmergencyUnit[]>([]);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  const canDelete = useDeletionPolicy();
 
   const load = useCallback(() => { listEmergencyUnits().then(setUnits); }, []);
   useFocusEffect(load);
@@ -48,7 +50,7 @@ export default function ManageTrucks() {
         <View key={u.id} style={[ui.card, { gap: 4, marginTop: 8 }]}>
           <View style={ui.line}><Text style={ui.lineK}>Truck</Text><Text style={ui.lineV}>{u.name}</Text></View>
           <View style={ui.line}><Text style={ui.lineK}>Code</Text><Text style={[ui.lineV, { color: ACCENT, fontWeight: '700' }]}>{u.code}</Text></View>
-          <Pressable onPress={() => onDelete(u)} style={{ marginTop: 4 }}><Text style={{ color: '#c0392b', fontWeight: '600' }}>Delete</Text></Pressable>
+          {canDelete && <Pressable onPress={() => onDelete(u)} style={{ marginTop: 4 }}><Text style={{ color: '#c0392b', fontWeight: '600' }}>Delete</Text></Pressable>}
         </View>
       ))}
       <View style={{ height: 40 }} />
