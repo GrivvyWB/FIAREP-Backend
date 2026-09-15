@@ -13,6 +13,20 @@ export const STAFF_ROLES = new Set([
   "emergency",
 ]);
 
+const PUBLIC_ACCESS_ROLES = new Set(["resident", "vendor"]);
+
+export function isStaffAccountRole(role: string): boolean {
+  return STAFF_ROLES.has(role) && !PUBLIC_ACCESS_ROLES.has(role);
+}
+
+export function canIssueStaffAccountRole(role: string): boolean {
+  return isStaffAccountRole(role);
+}
+
+export function canUseGeneralStaffLogin(role: string): boolean {
+  return isStaffAccountRole(role);
+}
+
 export const STAFF_POSITIONS = [
   "Borough Director",
   "Regional Director",

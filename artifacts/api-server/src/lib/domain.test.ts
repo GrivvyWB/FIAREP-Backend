@@ -19,6 +19,8 @@ import {
   procurementRecordAllowed,
   canReadEntityRecord,
   canUploadToEntityRecord,
+  canIssueStaffAccountRole,
+  canUseGeneralStaffLogin,
   staffCode,
 } from "./domain";
 
@@ -38,6 +40,22 @@ function actor(overrides: Partial<Actor> = {}): Actor {
 test("staff access codes are generated as four digits", () => {
   for (let attempt = 0; attempt < 100; attempt += 1) {
     assert.match(staffCode(), /^\d{4}$/);
+  }
+});
+
+test("staff account creation excludes Resident and Vendor public-access roles", () => {
+  assert.equal(canIssueStaffAccountRole("resident"), false);
+  assert.equal(canIssueStaffAccountRole("vendor"), false);
+  assert.equal(canIssueStaffAccountRole("worker"), true);
+  assert.equal(canIssueStaffAccountRole("procurement"), true);
+});
+
+test("general staff login rejects legacy Resident and Vendor staff roles", () => {
+  for (const role of ["resident", "vendor"]) {
+    assert.equal(canUseGeneralStaffLogin(role), false);
+  }
+  for (const role of ["administrator", "human_resources", "management", "worker", "inspector", "procurement", "emergency"]) {
+    assert.equal(canUseGeneralStaffLogin(role), true);
   }
 });
 

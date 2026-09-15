@@ -14,7 +14,7 @@ import {
 import { audit, notify } from "../lib/audit";
 import {
   STAFF_POSITIONS,
-  STAFF_ROLES,
+  canIssueStaffAccountRole,
   canBrowseStaffDirectory,
   isBoroughDirector,
   isElevated,
@@ -93,13 +93,11 @@ function canIssueStaff(
   position: string,
   developments: string[],
 ) {
-  // Resident is a supported domain/directory role, but can never be issued
-  // through employee management.
-  if (role === "resident") return false;
+  if (!canIssueStaffAccountRole(role)) return false;
   if (position === "Borough Director" && !isBoroughDirector(actor)) return false;
   if (!developmentsWithinScope(actor, developments)) return false;
   if (actor.role === "human_resources") {
-    return !["administrator", "human_resources", "resident", "vendor"].includes(role);
+    return !["administrator", "human_resources"].includes(role);
   }
   if (isBoroughDirector(actor)) return true;
   if (actor.role === "administrator") {
@@ -215,7 +213,7 @@ router.post("/v1/staff", async (req, res) => {
   }
   if (
     !name ||
-    !STAFF_ROLES.has(role) ||
+    !canIssueStaffAccountRole(role) ||
     !requestedStatus ||
     !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number])
   ) {

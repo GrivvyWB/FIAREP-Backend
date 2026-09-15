@@ -17,6 +17,7 @@ import {
 } from "../lib/auth";
 import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
+import { canUseGeneralStaffLogin } from "../lib/domain";
 
 const router: IRouter = Router();
 
@@ -126,6 +127,10 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     return;
   }
   const staff = matches[0]!;
+  if (!canUseGeneralStaffLogin(staff.role)) {
+    res.status(401).json({ error: "Invalid staff name or code" });
+    return;
+  }
   if (staff.role === "procurement") {
     if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) {
       res.status(403).json({ error: "Organization license is not active" });
