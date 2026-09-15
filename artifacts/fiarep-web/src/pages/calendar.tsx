@@ -86,10 +86,22 @@ export default function Calendar() {
         <div className="grid grid-cols-7">
           {days.map((day) => {
             const key = dayKey(day); const entries = visible.filter((item) => startOfDay(item.start) <= startOfDay(day) && startOfDay(item.end) >= startOfDay(day));
-            return <button key={key} onClick={() => setSelected(key)} className={`min-h-[76px] sm:min-h-[100px] border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-muted/60 ${day.getMonth() !== cursor.getMonth() ? "bg-muted/20 text-muted-foreground/50" : ""} ${selected === key ? "ring-2 ring-inset ring-[#F5B301]" : ""}`}>
-              <span className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${today === key ? "bg-[#F5B301] font-bold text-[#263746]" : ""}`}>{day.getDate()}</span>
-              <div className="mt-1 space-y-1">{entries.slice(0, 3).map((item) => <span key={`${item.category}-${item.id}`} className={`block truncate rounded px-1 py-0.5 text-[10px] font-semibold ${meta[item.category].color}`}>{item.label}</span>)}{entries.length > 3 && <span className="block px-1 text-[10px] text-muted-foreground">+{entries.length - 3} more</span>}</div>
-            </button>;
+            return <div key={key} onClick={() => setSelected(key)} className={`min-h-[76px] sm:min-h-[100px] border-b border-r border-border p-1.5 text-left align-top transition-colors hover:bg-muted/60 ${day.getMonth() !== cursor.getMonth() ? "bg-muted/20 text-muted-foreground/50" : ""} ${selected === key ? "ring-2 ring-inset ring-[#F5B301]" : ""}`}>
+              <button type="button" aria-label={`Select ${displayDate(day)}`} onClick={() => setSelected(key)} className={`inline-flex h-7 w-7 items-center justify-center rounded-full text-sm ${today === key ? "bg-[#F5B301] font-bold text-[#263746]" : ""}`}>{day.getDate()}</button>
+              <div className="mt-1 space-y-1">
+                {entries.slice(0, 3).map((item) => (
+                  <Link
+                    key={`${item.category}-${item.id}`}
+                    href={item.href}
+                    onClick={(event) => event.stopPropagation()}
+                    className={`block truncate rounded px-1 py-0.5 text-[10px] font-semibold ${meta[item.category].color}`}
+                  >
+                    {item.label}
+                  </Link>
+                ))}
+                {entries.length > 3 && <button type="button" onClick={() => setSelected(key)} className="block px-1 text-[10px] text-muted-foreground">+{entries.length - 3} more</button>}
+              </div>
+            </div>;
           })}
         </div>
         {loading && <div className="flex items-center justify-center gap-2 p-3 text-xs text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading operational records…</div>}
