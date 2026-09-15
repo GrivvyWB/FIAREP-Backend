@@ -1647,10 +1647,11 @@ export async function verifyStaffLogin(name: string, code: string, role: StaffRo
     const priorIdentity = await preDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
     let evidence: any;
     try { evidence = priorIdentity?.value ? JSON.parse(priorIdentity.value) : undefined; } catch {}
+    const loginRole = expectedPosition === 'Borough Director' ? undefined : role;
     const session = await loginOnServer({
       name: name.trim(),
       code: code.trim(),
-      role,
+      ...(loginRole ? { role: loginRole } : {}),
       ...(organizationId?.trim() ? { organizationId: organizationId.trim() } : {}),
     });
     if (!('staff' in session)) return false;
