@@ -38,9 +38,12 @@ function actor(overrides: Partial<Actor> = {}): Actor {
   };
 }
 
-test("staff access codes are generated as four digits", () => {
+test("staff access codes are generated with both letters and digits", () => {
   for (let attempt = 0; attempt < 100; attempt += 1) {
-    assert.match(staffCode(), /^\d{4}$/);
+    const code = staffCode();
+    assert.match(code, /^[A-HJ-NP-Z2-9]{4}$/);
+    assert.match(code, /[A-HJ-NP-Z]/);
+    assert.match(code, /[2-9]/);
   }
 });
 

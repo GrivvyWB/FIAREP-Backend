@@ -866,5 +866,18 @@ export function recordId(input: unknown): string {
 }
 
 export function staffCode(): string {
-  return randomInt(1000, 10000).toString();
+  const letters = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const digits = "23456789";
+  const alphabet = `${letters}${digits}`;
+  const characters = [
+    letters[randomInt(letters.length)]!,
+    digits[randomInt(digits.length)]!,
+    alphabet[randomInt(alphabet.length)]!,
+    alphabet[randomInt(alphabet.length)]!,
+  ];
+  for (let index = characters.length - 1; index > 0; index -= 1) {
+    const swapIndex = randomInt(index + 1);
+    [characters[index], characters[swapIndex]] = [characters[swapIndex]!, characters[index]!];
+  }
+  return characters.join("");
 }
