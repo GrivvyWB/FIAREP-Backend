@@ -458,7 +458,9 @@ export function canDeleteEntity(
   }
   if (entity === "procurement" || entity === "procurement-bids") {
     return entity === "procurement" &&
-      actor.role === "inspector" && actor.position === "CPM";
+      !isBoroughDirector(actor) &&
+      (actor.role === "administrator" ||
+        (actor.role === "management" && actor.position === "Regional Director"));
   }
   if (isBoroughDirector(actor)) return true;
   if (actor.role === "worker" || actor.role === "inspector") {

@@ -2,6 +2,8 @@ import {
   getGetEntityRecordQueryKey,
   getListEntityRecordsQueryKey,
   useGetEntityRecord,
+  useDeleteEntityRecord,
+  useGetDeletionPolicy,
   useListEntityRecords,
   usePerformEntityAction,
 } from "@workspace/api-client-react";
@@ -17,7 +19,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Plus, Search, Building2, MapPin, RefreshCw } from "lucide-react";
+import { Plus, Search, Building2, MapPin, RefreshCw, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
@@ -39,6 +41,7 @@ function displayValue(value: unknown): string {
 
 export default function Inspections() {
   const queryClient = useQueryClient();
+  const { data: deletionPolicy } = useGetDeletionPolicy();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(
     () => new URLSearchParams(window.location.search).get("id"),
@@ -68,6 +71,7 @@ export default function Inspections() {
       },
     },
   });
+  const deleteInspection = useDeleteEntityRecord();
 
   const filtered = inspections?.filter((inspection) => {
     if (!search) return true;
@@ -89,6 +93,21 @@ export default function Inspections() {
   const runAction = (workflowAction: string) => {
     if (!selectedId) return;
     action.mutate({ entity: "inspections", id: selectedId, action: workflowAction });
+  };
+
+  const remove = async (id: string, version: number) => {
+    if (!window.confirm("Permanently delete this inspection? This cannot be undone.")) return;
+    try {
+      await deleteInspection.mutateAsync({
+        entity: "inspections",
+        id,
+        data: { version },
+      });
+      await invalidateOperationalQueries(queryClient, "inspections", id);
+      setSelectedId(null);
+    } catch (error) {
+      window.alert(messageFor(error));
+    }
   };
 
   return (
@@ -142,12 +161,8 @@ export default function Inspections() {
           ) : (
             <div className="grid gap-3">
               {filtered?.map(insp => (
-                <button
-                  type="button"
-                  key={insp.id}
-                  onClick={() => setSelectedId(insp.id)}
-                  className="w-full text-left flex items-center gap-4 p-4 rounded-xl border border-border hover:bg-muted/30 transition-colors"
-                >
+                <div key={insp.id} className="flex items-center gap-2 rounded-xl border border-border p-2 hover:bg-muted/30 transition-colors">
+                  <button type="button" onClick={() => setSelectedId(insp.id)} className="min-w-0 flex-1 text-left flex items-center gap-4 p-2">
                   <div className="w-12 h-12 rounded-[9px] bg-secondary text-secondary-foreground grid place-items-center shrink-0">
                     <Building2 className="w-6 h-6" />
                   </div>
@@ -164,7 +179,13 @@ export default function Inspections() {
                     </div>
                     <div className="text-xs text-muted-foreground block">{new Date(insp.createdAt).toLocaleDateString()}</div>
                   </div>
-                </button>
+                  </button>
+                  {deletionPolicy?.enabled && deletionPolicy.canDelete && (
+                    <Button variant="outline" size="sm" className="text-destructive" onClick={() => remove(insp.id, insp.version)} disabled={deleteInspection.isPending}>
+                      <Trash2 className="mr-1 h-4 w-4" />Delete
+                    </Button>
+                  )}
+                </div>
               ))}
             </div>
           )}
@@ -207,6 +228,11 @@ export default function Inspections() {
             <div className="py-6 text-sm text-muted-foreground">This inspection is no longer available.</div>
           )}
           <DialogFooter>
+            {detail.data && deletionPolicy?.enabled && deletionPolicy.canDelete && (
+              <Button variant="outline" className="text-destructive" onClick={() => remove(detail.data.id, detail.data.version)} disabled={deleteInspection.isPending}>
+                <Trash2 className="mr-1 h-4 w-4" />Delete
+              </Button>
+            )}
             {availableActions.map(workflowAction => (
               <Button key={workflowAction} onClick={() => runAction(workflowAction)} disabled={action.isPending} variant="outline">
                 {action.isPending ? "Working…" : workflowAction.replaceAll("-", " ")}

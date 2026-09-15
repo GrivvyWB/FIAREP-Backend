@@ -89,6 +89,16 @@ test("development score includes inspections", () => {
   }]);
 });
 
+test("development score prefers the assigned development over a street address", () => {
+  const [score] = calculateDevelopmentScores([
+    record("procurement", {
+      status: "submitted",
+      address: "237 2185 3rd Ave NY NY 10067",
+    }, "Jefferson"),
+  ], NOW);
+  assert.equal(score?.development, "Jefferson");
+});
+
 test("building and residential scores use resolved statuses and grouping fallbacks", () => {
   const records = [
     record("building-violations", { status: "resolved", building: "100 Main", createdAt: "2025-01-01T00:00:00.000Z" }),

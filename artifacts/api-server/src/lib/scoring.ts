@@ -212,7 +212,9 @@ export function calculateDevelopmentScores(
   const nowMs = now.getTime();
   for (const record of records) {
     if (!DEVELOPMENT_ENTITIES.has(record.entity)) continue;
-    const development = groupingValue(record, ["development", "address", "building", "propertyAddress"]);
+    const development = text(record.development) ||
+      firstText(record, ["development", "address", "building", "propertyAddress"]) ||
+      "Unassigned";
     const bucket = buckets.get(development) ?? { points: 0, completed: 0, open: 0, overdue: 0 };
     if (isResolved(record) || (record.entity === "procurement" && statusOf(record) === "closed")) {
       bucket.points += 10;

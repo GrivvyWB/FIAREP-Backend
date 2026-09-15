@@ -52,6 +52,13 @@ test("operational deletion is limited to higher management", () => {
   assert.equal(canDeleteOperationalRecords(actor({ role: "inspector", position: "Supervisor" })), false);
 });
 
+test("procurement deletion preserves its higher-management boundary", () => {
+  assert.equal(canDeleteEntity(actor({ role: "administrator", position: "Administrator" }), "procurement", {}), true);
+  assert.equal(canDeleteEntity(actor({ role: "management", position: "Regional Director" }), "procurement", {}), true);
+  assert.equal(canDeleteEntity(actor({ role: "management", position: "Borough Director" }), "procurement", {}), false);
+  assert.equal(canDeleteEntity(actor({ role: "inspector", position: "CPM" }), "procurement", {}), false);
+});
+
 test("staff account creation excludes Resident and Vendor public-access roles", () => {
   assert.equal(canIssueStaffAccountRole("resident"), false);
   assert.equal(canIssueStaffAccountRole("vendor"), false);

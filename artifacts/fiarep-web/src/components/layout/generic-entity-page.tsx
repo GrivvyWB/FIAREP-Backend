@@ -335,18 +335,18 @@ export function GenericEntityPage({
                          </div>
                        )}
                     </div>
-                    {(!workflow || (!isProcurement && state?.status !== "closed")) && (
-                      <div className="flex items-center gap-1 ml-2">
+                    <div className="flex items-center gap-1 ml-2">
+                      {(!workflow || (!isProcurement && state?.status !== "closed")) && (
                         <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(item)} data-testid={`button-edit-${item.id}`}>
                           <Edit2 className="w-4 h-4" />
                         </Button>
-                        {deletionPolicy?.enabled && deletionPolicy.canDelete && (
-                          <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingRecordId(item.id); setIsDeleteDialogOpen(true); }} data-testid={`button-delete-${item.id}`}>
-                            <Trash2 className="w-4 h-4" />
-                          </Button>
-                        )}
-                      </div>
-                    )}
+                      )}
+                      {deletionPolicy?.enabled && deletionPolicy.canDelete && (!isProcurement || state?.status !== "closed") && (
+                        <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingRecordId(item.id); setIsDeleteDialogOpen(true); }} data-testid={`button-delete-${item.id}`}>
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
