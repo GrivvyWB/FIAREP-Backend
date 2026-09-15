@@ -490,6 +490,31 @@ router.post("/v1/platform/organizations/:id/administrators", async (req, res) =>
   }
 });
 
+router.patch("/v1/platform/organizations/:id/deletion-policy", async (req, res) => {
+  const id = req.params.id;
+  const enabled = req.body?.enabled;
+  if (typeof enabled !== "boolean") {
+    res.status(400).json({ error: "Deletion setting is required" });
+    return;
+  }
+  const [before] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+  if (!before) {
+    res.status(404).json({ error: "Organization not found" });
+    return;
+  }
+  const features = before.features && typeof before.features === "object" && !Array.isArray(before.features)
+    ? { ...before.features, deletionEnabled: enabled }
+    : { deletionEnabled: enabled };
+  const [organization] = await db
+    .update(organizations)
+    .set({ features, updatedAt: new Date() })
+    .where(eq(organizations.id, id))
+    .returning();
+  const owner = res.locals["platformOwner"] as { name: string };
+  await platformAudit(owner.name, "organization.deletion_policy_updated", id, before, organization);
+  res.json({ enabled });
+});
+
 router.patch("/v1/platform/organizations/:id", async (req, res) => {
   const id = req.params.id;
   const body = req.body as Record<string, unknown>;

@@ -22,6 +22,7 @@ import {
   type OrganizationWithUsage,
   useListOrganizations,
   useUpdateOrganization,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -76,6 +77,7 @@ export default function OwnerModules() {
   const [organizationId, setOrganizationId] = useState("");
   const [modules, setModules] = useState<Record<string, boolean>>({});
   const [deletionEnabled, setDeletionEnabled] = useState(false);
+  const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -109,22 +111,30 @@ export default function OwnerModules() {
   };
 
   const toggleDeletion = async (enabled: boolean) => {
-    if (!organization) return;
+    if (!organization || deletionSaving) return;
     const previous = deletionEnabled;
+    setDeletionSaving(true);
     setDeletionEnabled(enabled);
     try {
-      await updateOrganization.mutateAsync({
-        id: organization.id,
-        data: {
-          features: {
-            ...organization.features,
-            modules,
-            deletionEnabled: enabled,
-          },
+      await customFetch<{ enabled: boolean }>(
+        `/api/v1/platform/organizations/${organization.id}/deletion-policy`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled }),
         },
+      );
+      queryClient.setQueryData(
+        getListOrganizationsQueryKey(),
+        (current: typeof organizations | undefined) => current?.map((item) => (
+          item.id === organization.id
+            ? { ...item, features: { ...item.features, deletionEnabled: enabled } }
+            : item
+        )),
+      );
+      await queryClient.invalidateQueries({
+        queryKey: getListOrganizationsQueryKey(),
       });
-      await queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
-      setDirty(false);
       toast({ title: enabled ? "Deletion enabled." : "Deletion disabled." });
     } catch (saveError: any) {
       setDeletionEnabled(previous);
@@ -133,6 +143,8 @@ export default function OwnerModules() {
         title: "Save failed",
         description: saveError?.data?.error || saveError?.message || "Deletion setting could not be saved.",
       });
+    } finally {
+      setDeletionSaving(false);
     }
   };
 
@@ -259,9 +271,20 @@ export default function OwnerModules() {
                     </div>
                   );
                 })}
-                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => void toggleDeletion(!deletionEnabled)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      void toggleDeletion(!deletionEnabled);
+                    }
+                  }}
+                  className={`flex min-h-18 cursor-pointer items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
                   deletionEnabled ? "" : "opacity-60"
-                }`}>
+                }`}
+                >
                   <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
                     deletionEnabled ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
                   }`}>
@@ -279,7 +302,8 @@ export default function OwnerModules() {
                   <Switch
                     checked={deletionEnabled}
                     onCheckedChange={toggleDeletion}
-                    disabled={updateOrganization.isPending}
+                     onClick={(event) => event.stopPropagation()}
+                     disabled={deletionSaving}
                     aria-label={`${deletionEnabled ? "Disable" : "Enable"} deletion`}
                   />
                 </div>
