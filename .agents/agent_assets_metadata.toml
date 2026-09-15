@@ -14,3 +14,17 @@ mtime_ms = 1789481170255
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/64df2c13-d955-4ed9-bb86-51ad3b5ba04f/e6fc9833-74ce-40db-84f4-76d3afceb2e5"
 storage_version_token = "1789481178372961"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "PMifOoDzGZSarErtIp7dr"
+uri = "file://exports/FIAREP-1.0.0-build-4.ipa"
+type = "unspecified"
+title = "FIAREP iOS 1.0.0 Build 4"
+description = "Signed production IPA from Expo construction-pm, bundle com.fiarep.app. Verified version 1.0.0, build 4."
+logical_id = "6d501802-0310-4438-9947-ef851824b24a"
+content_hash = "sha256:a55645140f0b4fcc7a94aead5300257bc4c6c5cad404d222d10a3d75d85311c5"
+size = 26780258
+mtime_ms = 1789493726007
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/6d501802-0310-4438-9947-ef851824b24a/3a70daf2-551f-4362-b3de-a52ce07ea1ce"
+storage_version_token = "1789493763053397"
+content_type = "application/octet-stream"

@@ -23,3 +23,4 @@
 - [FIAREP EAS build compatibility](fiarep-eas-build-compatibility.md) — keep EAS on the workspace pnpm line and exclude unused legacy native modules from signed builds.
 - [FIAREP leave identity](fiarep-leave-identity.md) — employee leave visibility and decisions follow the employee’s stable staff ID, even when Management submitted the request.
 - [GitHub repository authentication](github-repository-authentication.md) — an active generic connector may not authenticate Git; link the repository through Version Control.
+- [Replit GitHub initial push](replit-github-initial-push.md) — an active GitHub App may still require the Git pane for a clean repository’s first authenticated push.
