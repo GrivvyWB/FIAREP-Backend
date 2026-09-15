@@ -11,6 +11,7 @@ import {
   canPerformEntityAction,
   canPerformAssignedWorkflowAction,
   canApproveLeaveForEmployee,
+  canApproveLeaveDuration,
   canAssignStaff,
   isAssignmentAuthority,
   normalizeAssignment,
@@ -24,6 +25,8 @@ import {
   canIssueStaffAccountRole,
   canUseGeneralStaffLogin,
   staffCode,
+  leaveRequestDurationDays,
+  validLeaveRequestDuration,
 } from "./domain";
 
 function actor(overrides: Partial<Actor> = {}): Actor {
@@ -556,6 +559,21 @@ test("HR controls leave while supervisors are limited to their members", () => {
     ),
     false,
   );
+});
+
+test("leave duration routes short requests to supervisors and long requests to HR", () => {
+  assert.equal(leaveRequestDurationDays({ startDate: "2026-09-01", endDate: "2026-09-14" }), 14);
+  assert.equal(leaveRequestDurationDays({ startDate: "2026-09-01", endDate: "2026-09-30" }), 30);
+  assert.equal(validLeaveRequestDuration(14), true);
+  assert.equal(validLeaveRequestDuration(15), false);
+  assert.equal(validLeaveRequestDuration(29), false);
+  assert.equal(validLeaveRequestDuration(30), true);
+  assert.equal(validLeaveRequestDuration(365), true);
+  assert.equal(validLeaveRequestDuration(366), false);
+  assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 14), true);
+  assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 30), false);
+  assert.equal(canApproveLeaveDuration(actor({ role: "human_resources" }), 14), false);
+  assert.equal(canApproveLeaveDuration(actor({ role: "human_resources" }), 30), true);
 });
 
 test("management cannot approve or deny its own leave request", () => {

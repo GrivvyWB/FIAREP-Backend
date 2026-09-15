@@ -532,6 +532,39 @@ export function canApproveLeaveForEmployee(
   return actor.role === "management";
 }
 
+export function leaveRequestDurationDays(state: Record<string, unknown>): number | null {
+  const startValue = typeof state["startAt"] === "string"
+    ? state["startAt"]
+    : typeof state["startDate"] === "string"
+      ? state["startDate"]
+      : "";
+  const endValue = typeof state["endAt"] === "string"
+    ? state["endAt"]
+    : typeof state["endDate"] === "string"
+      ? state["endDate"]
+      : startValue;
+  const startDate = startValue.slice(0, 10);
+  const endDate = endValue.slice(0, 10);
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  const difference = end.getTime() - start.getTime();
+  if (!startDate || !endDate || !Number.isFinite(difference) || difference < 0) return null;
+  return Math.floor(difference / 86_400_000) + 1;
+}
+
+export function validLeaveRequestDuration(days: number): boolean {
+  return (days >= 1 && days <= 14) || (days >= 30 && days <= 365);
+}
+
+export function canApproveLeaveDuration(
+  actor: Pick<Actor, "role">,
+  days: number,
+): boolean {
+  if (days >= 30 && days <= 365) return actor.role === "human_resources";
+  if (days >= 1 && days <= 14) return actor.role !== "human_resources";
+  return false;
+}
+
 /**
  * Assignment authority is intentionally narrower than generic mutation
  * authority.  Field staff can edit their own non-workflow data, but cannot

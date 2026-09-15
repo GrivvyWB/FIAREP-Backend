@@ -7,6 +7,7 @@ import {
   ENTITIES,
   canAssignStaff,
   canApproveLeaveForEmployee,
+  canApproveLeaveDuration,
   canDeleteOperationalRecords,
   canCreateEntity,
   canPerformAssignedWorkflowAction,
@@ -20,10 +21,12 @@ import {
   isBoroughDirector,
   isAssignmentAuthority,
   isLeaveApprovalAuthority,
+  leaveRequestDurationDays,
   isValidEntityTransition,
   patchesWorkflowManagedFields,
   recordId,
   stripPricing,
+  validLeaveRequestDuration,
   withInitialWorkflowState,
   procurementRecordAllowed,
 } from "../lib/domain";
@@ -365,6 +368,19 @@ router.post("/v1/:entity", async (req, res, next) => {
         createdState["employeeStaffId"] = employeeMatches[0]!.id;
       }
     }
+    const leaveDays = leaveRequestDurationDays(createdState);
+    if (leaveDays === null || !validLeaveRequestDuration(leaveDays)) {
+      res.status(400).json({ error: "Time off must be 1 to 14 days or 30 to 365 days" });
+      return;
+    }
+    if (
+      leaveDays >= 30 &&
+      (typeof createdState["reasonableAccommodation"] !== "string" ||
+        !createdState["reasonableAccommodation"].trim())
+    ) {
+      res.status(400).json({ error: "A reasonable accommodation is required for 30 to 365 days off" });
+      return;
+    }
   }
   if (
     actor.role === "inspector" &&
@@ -576,6 +592,21 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   const updatedState = { ...current.state, ...canonicalPatch.state };
+  if (entity === "leave-requests") {
+    const leaveDays = leaveRequestDurationDays(updatedState);
+    if (leaveDays === null || !validLeaveRequestDuration(leaveDays)) {
+      res.status(400).json({ error: "Time off must be 1 to 14 days or 30 to 365 days" });
+      return;
+    }
+    if (
+      leaveDays >= 30 &&
+      (typeof updatedState["reasonableAccommodation"] !== "string" ||
+        !updatedState["reasonableAccommodation"].trim())
+    ) {
+      res.status(400).json({ error: "A reasonable accommodation is required for 30 to 365 days off" });
+      return;
+    }
+  }
   const updatedDevelopment =
     typeof updatedState["development"] === "string"
       ? updatedState["development"]
@@ -731,6 +762,15 @@ router.post(
     return;
   }
   if (entity === "leave-requests" && (action === "approve" || action === "deny")) {
+    const leaveDays = leaveRequestDurationDays(current.state);
+    if (leaveDays === null || !canApproveLeaveDuration(actor, leaveDays)) {
+      res.status(403).json({
+        error: actor.role === "human_resources"
+          ? "HR may decide time off from 30 to 365 days"
+          : "Management and supervisors may decide up to 14 days",
+      });
+      return;
+    }
     const employeeStaffId = typeof current.state["employeeStaffId"] === "string"
       ? current.state["employeeStaffId"]
       : "";
