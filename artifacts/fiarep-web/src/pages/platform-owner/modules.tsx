@@ -80,7 +80,7 @@ export default function OwnerModules() {
   const [settingsOpen, setSettingsOpen] = useState(false);
 
   const selectableOrganizations = useMemo(
-    () => organizations.filter((organization) => organization.id !== "default"),
+    () => organizations,
     [organizations],
   );
   const organization = selectableOrganizations.find((item) => item.id === organizationId) ?? null;
@@ -187,7 +187,9 @@ export default function OwnerModules() {
             </SelectTrigger>
             <SelectContent>
               {selectableOrganizations.map((item) => (
-                <SelectItem key={item.id} value={item.id}>{item.name}</SelectItem>
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.id === "default" ? "FIAREP" : item.name}
+                  </SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -307,7 +309,7 @@ export default function OwnerModules() {
                     </div>
                   </div>
                   <div className="border-t border-white/10 px-4 py-3 text-[10px] text-slate-400">
-                    {organization.name}
+                    {organization.id === "default" ? "FIAREP" : organization.name}
                   </div>
                 </div>
               </div>
