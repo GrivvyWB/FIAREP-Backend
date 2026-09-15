@@ -24,3 +24,4 @@
 - [FIAREP leave identity](fiarep-leave-identity.md) — employee leave visibility and decisions follow the employee’s stable staff ID, even when Management submitted the request.
 - [GitHub repository authentication](github-repository-authentication.md) — an active generic connector may not authenticate Git; link the repository through Version Control.
 - [Replit GitHub initial push](replit-github-initial-push.md) — an active GitHub App may still require the Git pane for a clean repository’s first authenticated push.
+- [FIAREP deletion controls](fiarep-deletion-controls.md) — Platform Control manages the tenant deletion switch from Module Management, not organization registration.

@@ -43,7 +43,6 @@ const orgSchema = z.object({
   staffLimit: z.number().nullable().optional(),
   propertyLimit: z.number().nullable().optional(),
   unrestricted: z.boolean().default(false),
-  deletionEnabled: z.boolean().default(false),
   directorName: z.string().optional(),
 });
 
@@ -113,7 +112,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       staffLimit: null,
       propertyLimit: null,
       unrestricted: false,
-      deletionEnabled: false,
       directorName: "",
     },
   });
@@ -146,7 +144,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         staffLimit: organization.staffLimit,
         propertyLimit: organization.propertyLimit,
         unrestricted: organization.unrestricted,
-        deletionEnabled: organization.features?.deletionEnabled === true,
         directorName: "",
       });
       const configured = organization.features?.timeClock;
@@ -178,7 +175,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         staffLimit: null,
         propertyLimit: null,
         unrestricted: false,
-        deletionEnabled: false,
         directorName: "",
       });
       setMobileClockEnabled(false);
@@ -205,7 +201,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         staffLimit: null,
         propertyLimit: null,
         unrestricted: false,
-        deletionEnabled: false,
         directorName: "",
       });
       setMobileClockEnabled(false);
@@ -253,7 +248,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
           ...(organization?.features ?? {}),
           organizationType: values.organizationType?.trim() || "",
           configuredDevelopments,
-          deletionEnabled: values.deletionEnabled,
         },
       };
 
@@ -593,18 +587,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                         checked={field.value}
                         onCheckedChange={field.onChange}
                       />
-                    </FormControl>
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={form.control}
-                name="deletionEnabled"
-                render={({ field }) => (
-                  <FormItem className="flex flex-row items-center justify-between rounded-lg border border-slate-200 p-4 bg-white shadow-sm">
-                    <FormLabel className="text-base font-semibold text-slate-900">Delete enabled</FormLabel>
-                    <FormControl>
-                      <Switch checked={field.value} onCheckedChange={field.onChange} />
                     </FormControl>
                   </FormItem>
                 )}

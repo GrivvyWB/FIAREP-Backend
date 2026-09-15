@@ -12,6 +12,7 @@ import {
   Save,
   Settings,
   ShieldCheck,
+  Trash2,
   Users,
   Wrench,
   type LucideIcon,
@@ -74,6 +75,7 @@ export default function OwnerModules() {
   const { toast } = useToast();
   const [organizationId, setOrganizationId] = useState("");
   const [modules, setModules] = useState<Record<string, boolean>>({});
+  const [deletionEnabled, setDeletionEnabled] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
@@ -93,6 +95,7 @@ export default function OwnerModules() {
   useEffect(() => {
     if (!organization) return;
     setModules(configuredModules(organization));
+    setDeletionEnabled(organization.features?.deletionEnabled === true);
     setDirty(false);
   }, [organization]);
 
@@ -114,6 +117,7 @@ export default function OwnerModules() {
           features: {
             ...organization.features,
             modules,
+            deletionEnabled,
           },
         },
       });
@@ -225,6 +229,32 @@ export default function OwnerModules() {
                     </div>
                   );
                 })}
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  deletionEnabled ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    deletionEnabled ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <Trash2 className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Delete enabled</p>
+                    <p className="truncate text-xs text-slate-500">Allow authorized staff to delete records</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    deletionEnabled ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {deletionEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={deletionEnabled}
+                    onCheckedChange={(checked) => {
+                      setDeletionEnabled(checked);
+                      setDirty(true);
+                    }}
+                    aria-label={`${deletionEnabled ? "Disable" : "Enable"} deletion`}
+                  />
+                </div>
               </div>
             </section>
 
