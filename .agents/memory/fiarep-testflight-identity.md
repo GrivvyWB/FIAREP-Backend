@@ -3,7 +3,7 @@ name: FIAREP TestFlight identity
 description: Durable App Store Connect identity and release constraints for signed FIAREP iOS builds.
 ---
 
-Signed FIAREP iOS binaries must use bundle identifier `com.fiarep.app` and target the existing FIAREP App Store Connect application with Apple ID `6811256624`. Use the same Apple Developer team that owns that application. The next reserved TestFlight build number after installed build 2 is build 3.
+Signed FIAREP iOS binaries must use bundle identifier `com.fiarep.app` and target the existing FIAREP App Store Connect application with Apple ID `6811256624`. Use the same Apple Developer team that owns that application. The user confirmed the next TestFlight build number is build 4.
 
 The previous signed TestFlight delivery used the existing Expo EAS project rather than a new Replit Launch project. In Launch, choose **Use existing** for both the Expo project and Apple app so the prior identity and credentials can be reused; do not create replacement projects or app records.
 

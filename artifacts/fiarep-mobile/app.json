@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "deploymentTarget": "16.4",
       "bundleIdentifier": "com.fiarep.app",
-      "buildNumber": "3",
+      "buildNumber": "4",
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos of rooms and areas for estimates.",
         "NSPhotoLibraryUsageDescription": "Attach existing photos to estimates.",
