@@ -1,0 +1,141 @@
+iOS App Store build
+fd0c83d · Keep GitHub source export clean
+
+Profile
+
+Environment
+SDK version
+Version
+Fingerprint
+Commit
+Created by
+production
+production
+57.0.0
+ 1.0.0 (4)
+
+fecf269
+
+
+main
+fd0c83d
+
+tmstni account icon
+tmstni
+
+Build artifact
+
+Notify me
+
+
+
+Status: Build in progress
+Elapsed time:
+1m 57s
+
+Logs
+
+
+
+Waiting to start
+30s
+
+
+
+Spin up build environment
+< 1s
+
+
+
+Prepare project
+25s
+
+
+
+Read eas.json
+< 1s
+
+
+
+Read package.json
+< 1s
+
+
+
+Install dependencies
+17s
+
+
+
+Read app config
+< 1s
+
+
+
+Resolve build configuration
+6s
+
+
+
+Prepare credentials
+3s
+
+
+
+Prebuild
+4s
+
+
+
+Install pods
+21s
+Installing React-RCTLinking (0.86.3)
+Installing React-RCTNetwork (0.86.3)
+Installing React-RCTRuntime (0.86.3)
+Installing React-RCTSettings (0.86.3)
+Installing React-RCTText (0.86.3)
+Installing React-RCTVibration (0.86.3)
+Installing React-RuntimeApple (0.86.3)
+Installing React-RuntimeCore (0.86.3)
+Installing React-RuntimeHermes (0.86.3)
+Installing React-callinvoker (0.86.3)
+Installing React-cxxreact (0.86.3)
+Installing React-debug (0.86.3)
+Installing React-defaultsnativemodule (0.86.3)
+Installing React-domnativemodule (0.86.3)
+Installing React-featureflags (0.86.3)
+Installing React-featureflagsnativemodule (0.86.3)
+Installing React-graphics (0.86.3)
+Installing React-hermes (0.86.3)
+Installing React-idlecallbacksnativemodule (0.86.3)
+Installing React-intersectionobservernativemodule (0.86.3)
+Installing React-jserrorhandler (0.86.3)
+Installing React-jsi (0.86.3)
+Installing React-jsiexecutor (0.86.3)
+Installing React-jsinspector (0.86.3)
+Installing React-jsinspectorcdp (0.86.3)
+Installing React-jsinspectornetwork (0.86.3)
+Installing React-jsinspectortracing (0.86.3)
+Installing React-jsitooling (0.86.3)
+Installing React-jsitracing (0.86.3)
+Installing React-logger (0.86.3)
+Installing React-microtasksnativemodule (0.86.3)
+Installing React-mutationobservernativemodule (0.86.3)
+Installing React-networking (0.86.3)
+Installing React-oscompat (0.86.3)
+Installing React-perflogger (0.86.3)
+Installing React-performancecdpmetrics (0.86.3)
+Installing React-performancetimeline (0.86.3)
+Installing React-rendererconsistency (0.86.3)
+Installing React-renderercss (0.86.3)
+Installing React-rendererdebug (0.86.3)
+Installing React-runtimeexecutor (0.86.3)
+Installing React-runtimescheduler (0.86.3)
+Installing React-timing (0.86.3)
+Installing React-utils (0.86.3)
+Installing React-viewtransitionnativemodule (0.86.3)
+Installing React-webperformancenativemodule (0.86.3)
+Installing ReactAppDependencyProvider (0.86.3)
+Installing ReactCodegen (0.86.3)
+Installing ReactCommon (0.86.3)
+Installing ReactNativeDependencies (0.86.3)
