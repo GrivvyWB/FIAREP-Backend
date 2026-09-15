@@ -91,11 +91,11 @@ test("project visibility is limited to an actor's developments", () => {
   assert.equal(entityDevelopmentAllowed(staff, "projects", null), false);
 });
 
-test("ordinary administrators are limited to assigned developments", () => {
+test("administrators can see operational work across their organization", () => {
   const administrator = actor({
     role: "administrator",
     position: "Administrator",
-    developments: ["Development A"],
+    developments: [],
   });
   assert.equal(
     entityDevelopmentAllowed(administrator, "projects", "Development A"),
@@ -103,9 +103,9 @@ test("ordinary administrators are limited to assigned developments", () => {
   );
   assert.equal(
     entityDevelopmentAllowed(administrator, "projects", "Development B"),
-    false,
+    true,
   );
-  assert.equal(entityDevelopmentAllowed(administrator, "projects", null), false);
+  assert.equal(entityDevelopmentAllowed(administrator, "projects", null), true);
 });
 
 test("human resources can browse the staff directory", () => {
@@ -166,7 +166,7 @@ test("file record access follows development and role boundaries", () => {
       actor({ role: "administrator", position: "Administrator" }),
       record({ development: "Development B" }),
     ),
-    false,
+    true,
   );
   assert.equal(
     canReadEntityRecord(

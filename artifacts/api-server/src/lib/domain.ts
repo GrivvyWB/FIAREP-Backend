@@ -245,7 +245,8 @@ export function developmentAllowed(
   development: string | null,
 ): boolean {
   if (isBoroughDirector(actor)) return true;
-  if (actor.role === "administrator" || actor.role === "management") {
+  if (actor.role === "administrator") return true;
+  if (actor.role === "management") {
     return Boolean(development && actor.developments.includes(development));
   }
   return (
