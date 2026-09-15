@@ -26,7 +26,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
-import { groupTeamDirectoryStaff } from "@/lib/staff-assignment";
+import { groupTeamDirectoryByTitleAndLocation } from "@/lib/staff-assignment";
 import { invalidateStaffQueries } from "@/lib/query-invalidation";
 
 const positions = Object.values(StaffPosition);
@@ -36,6 +36,16 @@ const roleLabels: Record<string, string> = {
   inspector: "Inspector", procurement: "Procurement", vendor: "Vendor",
   resident: "Resident", emergency: "Emergency",
 };
+
+const HR_DISPLAY_MEMBER_IDS = new Set([
+  "b6802ecf-d5ed-47c4-aa43-5507899b40f7",
+  "4342c152-6153-48ee-a66a-c9544866da4a",
+  "ccfe0518-7619-492d-a7a7-d45e2e141b92",
+  "8ecfee4d-ba4a-4cd8-a695-ea2254e593dd",
+  "30a1f21b-8ef8-4477-b716-6c9ae6f4945c",
+  "3ef21a3f-941c-435b-8eb6-319fc597970d",
+  "1feb78c3-2843-488b-8ee2-7e21baa34515",
+]);
 
 function errorMessage(error: unknown) {
   const e = error as { data?: { error?: string }; message?: string } | undefined;
@@ -372,7 +382,7 @@ export default function Team() {
       setNotesSaving(false);
     }
   }
-  const teamGroups = groupTeamDirectoryStaff(sorted || []);
+  const teamGroups = groupTeamDirectoryByTitleAndLocation(sorted || [], HR_DISPLAY_MEMBER_IDS);
   const memberCard = (member: NonNullable<typeof staff>[number]) => (
     <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
       <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white grid place-items-center font-bold text-sm shrink-0">{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
@@ -486,7 +496,38 @@ export default function Team() {
                   </CollapsibleContent>
                 </Collapsible>
               </div> :
-              <div className="space-y-6">{teamGroups.map((group) => <section key={group.label} className="space-y-3"><div className="border-b border-border pb-2"><h3 className="font-bold">{group.label}</h3><p className="text-xs text-muted-foreground">{group.people.length} team member{group.people.length === 1 ? "" : "s"}</p></div><div className="grid gap-3">{group.people.map(memberCard)}</div></section>)}</div>}
+              <div className="space-y-3">
+                {teamGroups.map((group) => {
+                  const groupCount = group.locations.reduce((total, location) => total + location.people.length, 0);
+                  return (
+                    <Collapsible key={group.label} defaultOpen>
+                      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3 text-left">
+                        <div>
+                          <h3 className="font-bold">{group.label}</h3>
+                          <p className="text-xs text-muted-foreground">{group.subtitle} · {groupCount} staff member{groupCount === 1 ? "" : "s"}</p>
+                        </div>
+                        <ChevronDown className="h-5 w-5 shrink-0" />
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="space-y-3 pt-3">
+                        {group.locations.map((location) => (
+                          <Collapsible key={`${group.label}:${location.label}`} defaultOpen>
+                            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-2 text-left">
+                              <div>
+                                <h4 className="text-sm font-semibold">{location.label}</h4>
+                                <p className="text-xs text-muted-foreground">{location.people.length} staff member{location.people.length === 1 ? "" : "s"}</p>
+                              </div>
+                              <ChevronDown className="h-4 w-4 shrink-0" />
+                            </CollapsibleTrigger>
+                            <CollapsibleContent className="grid gap-3 pt-3">
+                              {location.people.map(memberCard)}
+                            </CollapsibleContent>
+                          </Collapsible>
+                        ))}
+                      </CollapsibleContent>
+                    </Collapsible>
+                  );
+                })}
+              </div>}
         </div>
       </div>
       <Dialog open={open} onOpenChange={(v) => !v && closeForm()}>

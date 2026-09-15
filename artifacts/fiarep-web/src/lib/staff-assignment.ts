@@ -11,6 +11,21 @@ export const TRADE_CREW_SECTIONS = [
   { label: "Carpenter Supervisor & Crew", supervisor: "Carpenter Supervisor", crew: "Carpenter" },
 ] as const;
 
+const TITLE_FAMILIES = [
+  {
+    label: "Plumber",
+    positions: ["Plumber Supervisor", "Supervisor Plumber", "Plumber"],
+  },
+  {
+    label: "Inspector",
+    positions: ["Inspector Supervisor", "Inspection Supervisor", "Supervisor Inspector", "Inspector"],
+  },
+  {
+    label: "CPM",
+    positions: ["CPM Supervisor", "Supervisor CPM", "CPM"],
+  },
+] as const;
+
 const TRADE_POSITIONS = new Set(
   TRADE_CREW_SECTIONS.flatMap((section) => [section.supervisor, section.crew]),
 );
@@ -70,5 +85,79 @@ export function groupTeamDirectoryStaff(staff: Staff[]) {
   const groups = groupStaffByTradeSections(nonProcurement, "Management & Other Staff");
   return procurement.length
     ? [...groups, { label: "Procurement", people: procurement.sort((a, b) => a.name.localeCompare(b.name)) }]
+    : groups;
+}
+
+type DirectoryLocation = {
+  label: string;
+  people: Staff[];
+};
+
+export type TeamDirectoryGroup = {
+  label: string;
+  subtitle: string;
+  locations: DirectoryLocation[];
+};
+
+function titleFamily(position: string) {
+  return TITLE_FAMILIES.find((family) =>
+    family.positions.some((candidate) => candidate.toLowerCase() === position.toLowerCase())
+  )?.label || position;
+}
+
+function stationaryLocation(member: Staff) {
+  if (member.developments.length === 1) return member.developments[0]!;
+  if (member.developments.length > 1) return `${member.developments.length} assigned developments`;
+  return "All assigned developments";
+}
+
+function groupedLocations(people: Staff[]): DirectoryLocation[] {
+  const locations = new Map<string, Staff[]>();
+  for (const member of people) {
+    const location = stationaryLocation(member);
+    locations.set(location, [...(locations.get(location) || []), member]);
+  }
+  return [...locations.entries()]
+    .map(([label, members]) => ({
+      label,
+      people: members.sort((a, b) => {
+        const aSupervisor = a.position.toLowerCase().includes("supervisor") ? 0 : 1;
+        const bSupervisor = b.position.toLowerCase().includes("supervisor") ? 0 : 1;
+        return aSupervisor - bSupervisor || a.name.localeCompare(b.name);
+      }),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+export function groupTeamDirectoryByTitleAndLocation(
+  staff: Staff[],
+  hrDisplayMemberIds: ReadonlySet<string>,
+): TeamDirectoryGroup[] {
+  const hrPeople = staff.filter((member) => hrDisplayMemberIds.has(member.id));
+  const regularPeople = staff.filter((member) => !hrDisplayMemberIds.has(member.id));
+  const titles = new Map<string, Staff[]>();
+  for (const member of regularPeople) {
+    const title = member.role === "procurement" ? "Procurement" : titleFamily(member.position);
+    titles.set(title, [...(titles.get(title) || []), member]);
+  }
+  const groups = [...titles.entries()]
+    .map(([label, people]) => ({
+      label,
+      subtitle: [...new Set(people.map((member) => member.position))]
+        .sort((a, b) => {
+          const aSupervisor = a.toLowerCase().includes("supervisor") ? 0 : 1;
+          const bSupervisor = b.toLowerCase().includes("supervisor") ? 0 : 1;
+          return aSupervisor - bSupervisor || a.localeCompare(b);
+        })
+        .join(" · "),
+      locations: groupedLocations(people),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+  return hrPeople.length
+    ? [{
+        label: "HR",
+        subtitle: "Human Resources staff list",
+        locations: groupedLocations(hrPeople),
+      }, ...groups]
     : groups;
 }
