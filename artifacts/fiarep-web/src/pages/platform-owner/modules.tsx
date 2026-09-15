@@ -108,6 +108,34 @@ export default function OwnerModules() {
     setDirty(true);
   };
 
+  const toggleDeletion = async (enabled: boolean) => {
+    if (!organization) return;
+    const previous = deletionEnabled;
+    setDeletionEnabled(enabled);
+    try {
+      await updateOrganization.mutateAsync({
+        id: organization.id,
+        data: {
+          features: {
+            ...organization.features,
+            modules,
+            deletionEnabled: enabled,
+          },
+        },
+      });
+      await queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+      setDirty(false);
+      toast({ title: enabled ? "Deletion enabled." : "Deletion disabled." });
+    } catch (saveError: any) {
+      setDeletionEnabled(previous);
+      toast({
+        variant: "destructive",
+        title: "Save failed",
+        description: saveError?.data?.error || saveError?.message || "Deletion setting could not be saved.",
+      });
+    }
+  };
+
   const save = async () => {
     if (!organization) return;
     try {
@@ -248,10 +276,8 @@ export default function OwnerModules() {
                   </span>
                   <Switch
                     checked={deletionEnabled}
-                    onCheckedChange={(checked) => {
-                      setDeletionEnabled(checked);
-                      setDirty(true);
-                    }}
+                    onCheckedChange={toggleDeletion}
+                    disabled={updateOrganization.isPending}
                     aria-label={`${deletionEnabled ? "Disable" : "Enable"} deletion`}
                   />
                 </div>

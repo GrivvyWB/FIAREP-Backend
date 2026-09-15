@@ -42,6 +42,7 @@ router.get("/v1/deletion-policy", async (_req, res) => {
     .from(organizations)
     .where(eq(organizations.id, actor.tenantId))
     .limit(1);
+  res.setHeader("Cache-Control", "no-store");
   res.json({
     enabled: organization?.features?.["deletionEnabled"] === true,
     canDelete: canDeleteOperationalRecords(actor),

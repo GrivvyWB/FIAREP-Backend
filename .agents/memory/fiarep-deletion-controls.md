@@ -7,4 +7,4 @@ The organization-wide `Delete enabled` switch belongs in Platform Control’s Mo
 
 **Why:** The user explicitly identified Module Management as the expected and correct place for this control.
 
-**How to apply:** Keep deletion disabled by default. Platform Control selects the organization, changes `Delete enabled`, and saves the module settings. Authorized tenant staff then receive record-level Delete actions according to server-enforced role boundaries.
+**How to apply:** Keep deletion disabled by default. Platform Control selects the organization and changes `Delete enabled`; this switch must save immediately without requiring the page’s separate module Save Changes action. Authorized tenant staff then receive record-level Delete actions according to server-enforced role boundaries. Do not cache the tenant deletion-policy response.
