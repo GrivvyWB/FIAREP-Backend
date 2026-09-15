@@ -498,9 +498,38 @@ const LEAVE_APPROVER_POSITIONS = new Set([
 export function isLeaveApprovalAuthority(
   actor: Pick<Actor, "role" | "position">,
 ): boolean {
-  return actor.role === "management" ||
+  return actor.role === "human_resources" ||
+    actor.role === "management" ||
     actor.role === "administrator" ||
     LEAVE_APPROVER_POSITIONS.has(actor.position ?? "");
+}
+
+const SUPERVISED_LEAVE_POSITIONS = new Map<string, Set<string>>([
+  ["Plumber Supervisor", new Set(["Plumber"])],
+  ["Electric Supervisor", new Set(["Electrician"])],
+  ["Elevator Supervisor", new Set(["Elevator Service"])],
+  ["Painter Supervisor", new Set(["Painter"])],
+  ["Carpenter Supervisor", new Set(["Carpenter"])],
+  ["Supervisor Inspector", new Set(["Inspector", "CPM"])],
+]);
+
+export function canApproveLeaveForEmployee(
+  actor: Actor,
+  employee: Pick<Actor, "id" | "role" | "position" | "developments">,
+): boolean {
+  if (!isLeaveApprovalAuthority(actor) || actor.id === employee.id) return false;
+  if (actor.role === "human_resources" || actor.role === "administrator" || isBoroughDirector(actor)) {
+    return true;
+  }
+  if (
+    employee.developments.length > 0 &&
+    !employee.developments.every((development) => actor.developments.includes(development))
+  ) {
+    return false;
+  }
+  const supervisedPositions = SUPERVISED_LEAVE_POSITIONS.get(actor.position ?? "");
+  if (supervisedPositions) return supervisedPositions.has(employee.position ?? "");
+  return actor.role === "management";
 }
 
 /**

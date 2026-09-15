@@ -10,6 +10,7 @@ import {
   canDeleteOperationalRecords,
   canPerformEntityAction,
   canPerformAssignedWorkflowAction,
+  canApproveLeaveForEmployee,
   canAssignStaff,
   isAssignmentAuthority,
   normalizeAssignment,
@@ -482,7 +483,7 @@ test("staff can cancel only their own leave request", () => {
   );
 });
 
-test("management and supervisors can decide leave while ordinary staff and HR cannot", () => {
+test("management, supervisors, and HR can decide leave while ordinary staff cannot", () => {
   const canApprove = [
     actor({ role: "management", position: "Property Manager" }),
     actor({ role: "management", position: "Superintendent" }),
@@ -515,6 +516,43 @@ test("management and supervisors can decide leave while ordinary staff and HR ca
       "leave-requests",
       "approve",
       {},
+    ),
+    true,
+  );
+});
+
+test("HR controls leave while supervisors are limited to their members", () => {
+  const employee = actor({
+    id: "employee-1",
+    role: "worker",
+    position: "Plumber",
+    developments: ["Development A"],
+  });
+  assert.equal(
+    canApproveLeaveForEmployee(
+      actor({ id: "hr-1", role: "human_resources", position: "Human Resources", developments: [] }),
+      employee,
+    ),
+    true,
+  );
+  assert.equal(
+    canApproveLeaveForEmployee(
+      actor({ id: "plumber-supervisor", role: "management", position: "Plumber Supervisor", developments: ["Development A"] }),
+      employee,
+    ),
+    true,
+  );
+  assert.equal(
+    canApproveLeaveForEmployee(
+      actor({ id: "painter-supervisor", role: "management", position: "Painter Supervisor", developments: ["Development A"] }),
+      employee,
+    ),
+    false,
+  );
+  assert.equal(
+    canApproveLeaveForEmployee(
+      actor({ id: "other-development", role: "management", position: "Property Manager", developments: ["Development B"] }),
+      employee,
     ),
     false,
   );

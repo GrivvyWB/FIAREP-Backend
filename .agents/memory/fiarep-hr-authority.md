@@ -1,0 +1,14 @@
+---
+name: FIAREP HR authority
+description: Human Resources authority boundaries across the employee lifecycle.
+---
+
+HR administers hiring and recruiting, onboarding and orientation, payroll coordination and benefits, vacation and sick leave, attendance policies, employee relations and complaints, performance processes, disciplinary processes, harassment and discrimination investigations, training and professional development, labor-law compliance, terminations and exits, and employee records.
+
+HR authority is not unlimited. Pay changes, discipline, termination, layoffs, and similar policy-sensitive actions must follow company policy, required company approval, and applicable employment law. HR may advise or administer a process without being the sole final business decision-maker.
+
+For leave, HR controls administration and may approve or deny after confirming its own access code. Supervisors may approve only leave for members within their supervisory scope.
+
+**Why:** HR needs enough authority to administer the complete employee lifecycle without bypassing management approval, company policy, or legal safeguards.
+
+**How to apply:** Give HR full visibility and administrative workflow access for employee matters. Add explicit confirmation and approval boundaries to high-impact actions, preserve audit records, and enforce supervisor scope on the server rather than only hiding controls in the interface.

@@ -6,6 +6,7 @@ import { audit, notify } from "../lib/audit";
 import {
   ENTITIES,
   canAssignStaff,
+  canApproveLeaveForEmployee,
   canDeleteOperationalRecords,
   canCreateEntity,
   canPerformAssignedWorkflowAction,
@@ -31,9 +32,11 @@ import type { Actor } from "../lib/auth";
 import { emailReleasedScope } from "../lib/vendorEmail";
 import { logger } from "../lib/logger";
 import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
+import { rateLimit } from "../lib/rateLimit";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
+const hrLeaveDecisionRateLimit = rateLimit("hr-leave-decision", 12);
 
 router.get("/v1/deletion-policy", async (_req, res) => {
   const actor = actorFrom(res);
@@ -610,7 +613,21 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
   res.json(outward(actor, updated!));
 });
 
-router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
+router.post(
+  "/v1/:entity/:id/actions/:action",
+  (req, res, next) => {
+    const actor = actorFrom(res);
+    if (
+      actor.role === "human_resources" &&
+      req.params["entity"] === "leave-requests" &&
+      (req.params["action"] === "approve" || req.params["action"] === "deny")
+    ) {
+      hrLeaveDecisionRateLimit(req, res, next);
+      return;
+    }
+    next();
+  },
+  async (req, res, next) => {
   const entity = req.params["entity"];
   if (!validEntity(entity)) {
     next();
@@ -713,6 +730,48 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     res.status(403).json({ error: "Not allowed to perform this workflow action" });
     return;
   }
+  if (entity === "leave-requests" && (action === "approve" || action === "deny")) {
+    const employeeStaffId = typeof current.state["employeeStaffId"] === "string"
+      ? current.state["employeeStaffId"]
+      : "";
+    const employeeName = typeof current.state["employee"] === "string"
+      ? current.state["employee"].trim()
+      : "";
+    const employeeMatches = employeeStaffId
+      ? await db.select().from(staffAccounts).where(and(
+          eq(staffAccounts.id, employeeStaffId),
+          eq(staffAccounts.tenantId, actor.tenantId),
+        )).limit(1)
+      : employeeName
+        ? await db.select().from(staffAccounts).where(and(
+            eq(staffAccounts.tenantId, actor.tenantId),
+            sql`lower(${staffAccounts.name}) = lower(${employeeName})`,
+          )).limit(2)
+        : [];
+    const employee = employeeMatches.length === 1 ? employeeMatches[0] : undefined;
+    if (!employee || !canApproveLeaveForEmployee(actor, employee)) {
+      res.status(403).json({ error: "You may only decide leave for staff you supervise" });
+      return;
+    }
+    if (actor.role === "human_resources") {
+      const authorizationCode = typeof body["authorizationCode"] === "string"
+        ? body["authorizationCode"].trim().toUpperCase()
+        : "";
+      const [confirmed] = authorizationCode
+        ? await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+            eq(staffAccounts.id, actor.id),
+            eq(staffAccounts.tenantId, actor.tenantId),
+            eq(staffAccounts.role, "human_resources"),
+            eq(staffAccounts.status, "approved"),
+            eq(staffAccounts.code, authorizationCode),
+          )).limit(1)
+        : [];
+      if (!confirmed) {
+        res.status(401).json({ error: "Enter your valid HR access code" });
+        return;
+      }
+    }
+  }
   if (entity === "procurement" && action === "submit" &&
       current.createdBy !== actor.id) {
     res.status(403).json({ error: "Only the record owner may submit a procurement draft" });
@@ -764,6 +823,7 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
   const persistedBody = { ...body };
   delete persistedBody["vendorRecipients"];
   delete persistedBody["target"];
+  delete persistedBody["authorizationCode"];
   const reviewNote = typeof body["note"] === "string" ? body["note"].trim() : "";
   delete persistedBody["note"];
   const now = new Date();
@@ -964,7 +1024,8 @@ router.post("/v1/:entity/:id/actions/:action", async (req, res, next) => {
     }
   }
   res.json(outward(actor, updated!));
-});
+  },
+);
 
 router.delete("/v1/:entity/:id", async (req, res, next) => {
   const entity = req.params["entity"];
