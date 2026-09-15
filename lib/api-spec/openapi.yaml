@@ -413,6 +413,28 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/OrganizationDirectorCredentials" }
+  /v1/platform/organizations/{id}/director-transfer:
+    post:
+      operationId: transferOrganizationDirector
+      tags: [platform-owner]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OrganizationDirectorTransferInput" }
+      responses:
+        "200":
+          description: Existing staff account promoted to sole Borough Director
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OrganizationDirectorCredentials" }
+        "404":
+          description: Organization or staff account not found
+        "409":
+          description: Staff name is ambiguous
   /v1/platform/organizations/{id}/administrators:
     post:
       operationId: createOrganizationAdministrator
@@ -1239,6 +1261,12 @@ components:
         propertyLimit: { type: integer, nullable: true }
         features: { type: object, additionalProperties: true }
         unrestricted: { type: boolean }
+    OrganizationDirectorTransferInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
     TimeClockConfig:
       type: object
       required: [integrationEnabled, externalAuthoritative, mobileClockEnabled, provider]
