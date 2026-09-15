@@ -385,9 +385,16 @@ export default function Team() {
     }
   }
   const teamGroups = groupTeamDirectoryByTitleAndLocation(sorted || [], HR_DISPLAY_MEMBER_IDS);
-  const memberCard = (member: NonNullable<typeof staff>[number]) => (
+  const memberCard = (member: NonNullable<typeof staff>[number]) => {
+    const isSupervisorOrManagement =
+      member.role === "management" || member.position.toLowerCase().includes("supervisor");
+    return (
     <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
-      <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white grid place-items-center font-bold text-sm shrink-0">{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
+      <div className={`w-12 h-12 rounded-full grid place-items-center font-bold text-sm shrink-0 ${
+        isSupervisorOrManagement
+          ? "bg-yellow-400 text-yellow-950"
+          : "bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white"
+      }`}>{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
       <div className="flex-1 min-w-0">
         <h4 className="font-bold truncate">{member.name}</h4>
         <div className="text-sm text-muted-foreground">{member.position}</div>
@@ -424,7 +431,8 @@ export default function Team() {
         </div>}
       </div>
     </div>
-  );
+    );
+  };
   const developmentSelector = (
     <div className="space-y-2">
       <Label id="employee-developments-label">Assigned developments</Label>

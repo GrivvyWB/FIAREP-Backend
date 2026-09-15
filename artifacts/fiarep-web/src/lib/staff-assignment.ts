@@ -17,6 +17,22 @@ const TITLE_FAMILIES = [
     positions: ["Plumber Supervisor", "Supervisor Plumber", "Plumber"],
   },
   {
+    label: "Electrician",
+    positions: ["Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician", "Electrician"],
+  },
+  {
+    label: "Elevator Service",
+    positions: ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator", "Elevator Service"],
+  },
+  {
+    label: "Painter",
+    positions: ["Painter Supervisor", "Supervisor Painter", "Painter"],
+  },
+  {
+    label: "Carpenter",
+    positions: ["Carpenter Supervisor", "Supervisor Carpenter", "Carpenter"],
+  },
+  {
     label: "Inspector",
     positions: ["Inspector Supervisor", "Inspection Supervisor", "Supervisor Inspector", "Inspector"],
   },
