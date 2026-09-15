@@ -1,0 +1,16 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "2dQTJIvV_Waadv9XfbHzg"
+uri = "file://exports/fiarep-source-build-4.zip"
+type = "unspecified"
+title = "FIAREP Complete Source — Build 4"
+description = "Complete current FIAREP source code and project configuration, including the latest mobile, web, API, and shared changes. Secrets, dependencies, caches, build outputs, and private workspace files are excluded."
+logical_id = "64df2c13-d955-4ed9-bb86-51ad3b5ba04f"
+content_hash = "sha256:97d0976d315726937b7ea929e7221d0188c18699881ac0652186bfaa1004b47f"
+size = 3710221
+mtime_ms = 1789481170255
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/64df2c13-d955-4ed9-bb86-51ad3b5ba04f/e6fc9833-74ce-40db-84f4-76d3afceb2e5"
+storage_version_token = "1789481178372961"
+content_type = "application/octet-stream"
