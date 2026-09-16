@@ -13,6 +13,13 @@ const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
 const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "shared-data"]);
 const ELEVATOR_POSITIONS = new Set(["Elevator Supervisor", "Elevator Service"]);
 const HUD_REVIEW_POSITIONS = new Set(["Supervisor Inspector", "CPM Supervisor", "Supervisor CPM"]);
+const CPM_ONLY_MODULES = new Set<StaffModule>([
+  "estimates",
+  "repairs",
+  "projects",
+  "scope-review",
+  "change-orders",
+]);
 
 export function isSupervisor(staff: Staff | null | undefined): boolean {
   const position = staff?.position?.trim().toLowerCase() || "";
@@ -28,6 +35,12 @@ export function canReviewHud(staff: Staff | null | undefined): boolean {
  * mounting and issuing requests in the first place. */
 export function hasModuleAccess(staff: Staff | null | undefined, module: StaffModule): boolean {
   if (!staff) return false;
+  if (
+    staff.position?.trim().toLowerCase() === "supervisor inspector" &&
+    CPM_ONLY_MODULES.has(module)
+  ) {
+    return false;
+  }
   if (staff.role === "human_resources") {
     return module === "dashboard" || module === "team" ||
       module === "leave" || module === "hr" || module === "notifications" || module === "settings";
