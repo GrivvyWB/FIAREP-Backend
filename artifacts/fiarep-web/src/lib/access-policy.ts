@@ -49,7 +49,7 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
   if (module === "hud-inspections") return canReviewHud(staff);
   if (module === "change-orders" && isSupervisor(staff)) return true;
   if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
-  if (module === "hr") return staff.role === "management" || staff.role === "administrator";
+  if (module === "hr") return false;
   if (module === "elevators") {
     return staff.role === "administrator" || ELEVATOR_POSITIONS.has(staff.position || "");
   }

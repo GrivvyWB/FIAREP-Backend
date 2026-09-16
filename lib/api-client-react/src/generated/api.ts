@@ -2794,7 +2794,7 @@ export const getGetHrWorkspaceUrl = () => {
 }
 
 /**
- * Returns tenant employee records and lifecycle records for Human Resources, or supervisory-scope records for an authorized supervisor.
+ * Returns tenant employee records and lifecycle records for Human Resources.
  * @summary Get the authorized HR employee lifecycle workspace
  */
 export const getHrWorkspace = async ( options?: Parameters<typeof customFetch>[1]): Promise<HRWorkspace> => {

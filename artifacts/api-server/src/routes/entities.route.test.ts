@@ -390,16 +390,7 @@ test("HR exit approval route consumes approval and revokes linked staff atomical
     const workspace = await fetch(`${base}/api/v1/hr/workspace`, {
       headers: { authorization: `Bearer ${supervisorToken}` },
     });
-    assert.equal(workspace.status, 200);
-    const workspaceBody = await workspace.json() as {
-      records: Array<{ id: string }>;
-      staff: Array<{ id: string }>;
-    };
-    assert.equal(workspaceBody.records.some((row) => row.id === inScopeRecordId), true);
-    assert.equal(workspaceBody.records.some((row) => row.id === outOfScopeRecordId), false);
-    assert.equal(workspaceBody.staff.some((row) => row.id === supervisorId), false);
-    assert.equal(workspaceBody.staff.some((row) => row.id === inScopeEmployeeId), true);
-    assert.equal(workspaceBody.staff.some((row) => row.id === outOfScopeEmployeeId), false);
+    assert.equal(workspace.status, 403);
     const hrWorkspace = await fetch(`${base}/api/v1/hr/workspace`, {
       headers: { authorization: `Bearer ${actorToken}` },
     });

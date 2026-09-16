@@ -713,7 +713,7 @@ paths:
       operationId: getHrWorkspace
       tags: [hr]
       summary: Get the authorized HR employee lifecycle workspace
-      description: Returns tenant employee records and lifecycle records for Human Resources, or supervisory-scope records for an authorized supervisor.
+      description: Returns tenant employee records and lifecycle records for Human Resources.
       security: [{ bearerAuth: [] }]
       responses:
         "200":

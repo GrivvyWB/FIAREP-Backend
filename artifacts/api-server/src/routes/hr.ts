@@ -2,7 +2,6 @@ import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
 import { auditLog, db, entityRecords, staffAccounts } from "@workspace/db";
 import {
-  canApproveLeaveForEmployee,
   canReadHrEntityRecord,
   isHrEntity,
   serializeHrStaff,
@@ -28,8 +27,8 @@ function outward(row: typeof entityRecords.$inferSelect) {
 
 router.get("/v1/hr/workspace", async (_req, res): Promise<void> => {
   const actor = actorFrom(res);
-  if (!["human_resources", "administrator", "management"].includes(actor.role)) {
-    res.status(403).json({ error: "The HR workspace is restricted to Human Resources and supervisors" });
+  if (actor.role !== "human_resources") {
+    res.status(403).json({ error: "The HR workspace is restricted to Human Resources" });
     return;
   }
   const [staffRows, recordRows, audits] = await Promise.all([
@@ -58,14 +57,7 @@ router.get("/v1/hr/workspace", async (_req, res): Promise<void> => {
     })
     .map(outward);
   const visibleRecordIds = new Set(records.map((row) => row.id));
-  const visibleStaffIds = new Set(
-    staffRows
-      .filter((row) => actor.role !== "management" || (
-        row.id !== actor.id &&
-        canApproveLeaveForEmployee(actor, row)
-      ))
-      .map((row) => row.id),
-  );
+  const visibleStaffIds = new Set(staffRows.map((row) => row.id));
   const visibleAudits = audits.filter((row) => {
     const reportId = row.reportId || "";
     const actionEntity = row.action.split(".", 1)[0] || "";
@@ -77,12 +69,7 @@ router.get("/v1/hr/workspace", async (_req, res): Promise<void> => {
     );
   });
   res.json({
-    staff: staffRows
-      .filter((row) => actor.role !== "management" || (
-        row.id !== actor.id &&
-        canApproveLeaveForEmployee(actor, row)
-      ))
-      .map((row) => serializeHrStaff(row, actor.role !== "management")),
+    staff: staffRows.map((row) => serializeHrStaff(row, true)),
     records,
     audit: visibleAudits.map((row) => ({
       id: row.id,
