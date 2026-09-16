@@ -1107,6 +1107,33 @@ router.post(
     delete body["assignedStaffName"];
     delete body["assignedToName"];
   }
+  if (
+    entity === "resident-reports" &&
+    (action === "complete" || action === "resolve")
+  ) {
+    const requestedDevelopment = typeof body["development"] === "string"
+      ? body["development"].trim()
+      : "";
+    const stateDevelopment = typeof current.state["development"] === "string"
+      ? current.state["development"].trim()
+      : "";
+    const assignedDevelopments = actor.developments
+      .map((development) => development.trim())
+      .filter(Boolean);
+    const development = current.development?.trim() ||
+      stateDevelopment ||
+      requestedDevelopment ||
+      (assignedDevelopments.length === 1 ? assignedDevelopments[0]! : "");
+    if (!development) {
+      res.status(400).json({ error: "Development is required to complete a complaint" });
+      return;
+    }
+    if (!entityDevelopmentAllowed(actor, entity, development)) {
+      res.status(403).json({ error: "Select a development assigned to your account" });
+      return;
+    }
+    body["development"] = development;
+  }
   if (patchesWorkflowManagedFields(entity, body)) {
     res.status(403).json({
       error: "Workflow-managed fields are controlled by the selected action",
@@ -1208,6 +1235,11 @@ router.post(
         const [row] = await tx
           .update(entityRecords)
           .set({
+            ...(entity === "resident-reports" &&
+            typeof state["development"] === "string" &&
+            state["development"].trim()
+              ? { development: state["development"].trim() }
+              : {}),
             state,
             version: sql`${entityRecords.version} + 1`,
             updatedAt: now,

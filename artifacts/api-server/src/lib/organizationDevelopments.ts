@@ -20,3 +20,18 @@ export function addConfiguredDevelopmentName(features: unknown, name: string): R
   ].filter(Boolean))].sort((a, b) => a.localeCompare(b));
   return existing;
 }
+
+export function addOrganizationNameForDevelopmentType(
+  features: unknown,
+  organizationName: string,
+): Record<string, unknown> {
+  const existing = features && typeof features === "object" && !Array.isArray(features)
+    ? { ...(features as Record<string, unknown>) }
+    : {};
+  const organizationType = typeof existing["organizationType"] === "string"
+    ? existing["organizationType"].trim().toLowerCase()
+    : "";
+  return organizationType === "development"
+    ? addConfiguredDevelopmentName(existing, organizationName)
+    : existing;
+}

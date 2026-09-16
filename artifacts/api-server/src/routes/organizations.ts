@@ -12,7 +12,11 @@ import {
   type TimeClockConfig,
 } from "../lib/timeClock";
 import { allocateStaffCode } from "../lib/staffCodes";
-import { addConfiguredDevelopmentName, getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
+import {
+  addConfiguredDevelopmentName,
+  addOrganizationNameForDevelopmentType,
+  getConfiguredDevelopmentNames,
+} from "../lib/organizationDevelopments";
 import { researchOrganization } from "../lib/organizationResearch";
 
 const router: IRouter = Router();
@@ -318,7 +322,10 @@ router.post("/v1/platform/organizations", async (req, res) => {
     return;
   }
    const requestedFeatures = typeof body["features"] === "object" && body["features"] !== null && !Array.isArray(body["features"]) ? body["features"] as Record<string, unknown> : {};
-   const features = mergeTimeClockConfig(requestedFeatures, { integrationEnabled: false, provider: null });
+   const features = addOrganizationNameForDevelopmentType(
+     mergeTimeClockConfig(requestedFeatures, { integrationEnabled: false, provider: null }),
+     name,
+   );
   const unrestricted = body["unrestricted"] === true;
   try {
     const result = await db.transaction(async (tx) => {
@@ -541,6 +548,9 @@ router.patch("/v1/platform/organizations/:id", async (req, res) => {
     }
     updates.features = mergeTimeClockConfig(body["features"], { integrationEnabled: false, provider: null });
   }
+  const effectiveName = updates.name ?? before.name;
+  const effectiveFeatures = updates.features ?? before.features;
+  updates.features = addOrganizationNameForDevelopmentType(effectiveFeatures, effectiveName);
   if ("unrestricted" in body) { if (typeof body["unrestricted"] !== "boolean") { res.status(400).json({ error: "Invalid unrestricted flag" }); return; } updates.unrestricted = body["unrestricted"]; }
   const effectiveStartsAt = "startsAt" in updates ? updates.startsAt : before.startsAt;
   let effectiveEndsAt = "endsAt" in updates ? updates.endsAt : before.endsAt;
