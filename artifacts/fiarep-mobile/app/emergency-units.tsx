@@ -1,7 +1,7 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Image, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { listEmergencyJobsForTruck, getEmergencyUnitByCode, setEmergencyProgress, addEmergencyPhoto, completeEmergencyJob, type EmergencyJob } from '../lib/store';
+import { listEmergencyJobsForTruck, listEmergencyUnits, setEmergencyProgress, addEmergencyPhoto, completeEmergencyJob, type EmergencyJob, type EmergencyUnit } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
@@ -10,9 +10,8 @@ import { ui, ACCENT } from '../lib/ui';
 function fmt(iso?: string): string { try { return iso ? new Date(iso).toLocaleString() : ''; } catch { return iso || ''; } }
 
 export default function EmergencyUnits() {
-  const [code, setCode] = useState('');
+  const [units, setUnits] = useState<EmergencyUnit[]>([]);
   const [loadedTruck, setLoadedTruck] = useState('');
-  const [codeErr, setCodeErr] = useState('');
   const [jobs, setJobs] = useState<EmergencyJob[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
@@ -22,16 +21,10 @@ export default function EmergencyUnits() {
     const list = await listEmergencyJobsForTruck(truckName).catch(() => []);
     setJobs(list); setLoadedTruck(truckName);
   }, []);
-  async function loadByCode() {
-    const c = code.trim();
-    if (!c) return;
-    const unit = await getEmergencyUnitByCode(c).catch(() => null);
-    if (!unit) { setCodeErr('No truck matches that code.'); setJobs([]); setLoadedTruck(''); return; }
-    setCodeErr('');
-    await loadFor(unit.name);
-  }
-
-  useFocusEffect(useCallback(() => { if (loadedTruck) loadFor(loadedTruck); }, [loadedTruck, loadFor]));
+  useFocusEffect(useCallback(() => {
+    listEmergencyUnits().then(setUnits).catch(() => setUnits([]));
+    if (loadedTruck) loadFor(loadedTruck);
+  }, [loadedTruck, loadFor]));
 
   async function refresh() { if (loadedTruck) await loadFor(loadedTruck); }
 
@@ -58,14 +51,17 @@ export default function EmergencyUnits() {
           <Text style={{ color: '#fff', fontSize: 12, marginTop: 2 }}>Respond immediately. This stays until every job is marked complete.</Text>
         </View>
       )}
-      <Text style={ui.label}>Enter your truck code to see its emergency jobs, then send updates and photos back to the supervisor.</Text>
-
-      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-        <TextInput style={[ui.input, { flex: 1 }]} value={code} onChangeText={setCode} placeholder="Enter your truck code (e.g. TRK-4821)" autoCapitalize="characters" />
-        <Pressable style={ui.btn} onPress={loadByCode}><Text style={ui.btnText}>Load</Text></Pressable>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+        {units.map((unit, index) => (
+          <Pressable
+            key={unit.id}
+            style={[ui.btn, { minWidth: 104 }, loadedTruck === unit.name && { backgroundColor: '#c0392b' }]}
+            onPress={() => loadFor(unit.name)}
+          >
+            <Text style={ui.btnText}>TRK-{index + 1}</Text>
+          </Pressable>
+        ))}
       </View>
-      {!!codeErr && <Text style={{ color: '#c0392b', fontSize: 13, marginTop: 4 }}>{codeErr}</Text>}
-      {!!loadedTruck && <Text style={{ color: '#1a8f4c', fontSize: 13, marginTop: 4, fontWeight: '600' }}>Loaded: {loadedTruck}</Text>}
 
       {!!loadedTruck && jobs.length === 0 && <Text style={[ui.empty, { marginTop: 20 }]}>No jobs for {loadedTruck}.</Text>}
 

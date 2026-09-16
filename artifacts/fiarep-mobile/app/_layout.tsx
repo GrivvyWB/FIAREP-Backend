@@ -208,7 +208,6 @@ function PersonaPicker({ onPick }: { onPick: (persona: InstallationPersona) => v
 function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?: string }) {
   const [gateFor, setGateFor] = useState<StaffRole | null>(null);
   const [boroughDirectorGate, setBoroughDirectorGate] = useState(false);
-  const [emergencyGate, setEmergencyGate] = useState(false);
   const pickStaffRole = async (role: StaffRole) => {
     const staff = await restoreServerSession();
     if (staff?.role === role) onPick(role as AppMode);
@@ -219,10 +218,10 @@ function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?:
     return (
       <StaffGate
         role={gateFor}
-        label={boroughDirectorGate ? 'Borough Director' : emergencyGate ? 'Emergency Unit' : undefined}
+        label={boroughDirectorGate ? 'Borough Director' : undefined}
         expectedPosition={boroughDirectorGate ? 'Borough Director' : undefined}
-        onUnlock={(override?: AppMode) => { const r = override || (boroughDirectorGate ? 'management' : emergencyGate ? 'emergency' : gateFor as AppMode); setGateFor(null); setBoroughDirectorGate(false); setEmergencyGate(false); onPick(r); }}
-        onCancel={() => { setGateFor(null); setBoroughDirectorGate(false); setEmergencyGate(false); }}
+        onUnlock={(override?: AppMode) => { const r = override || (boroughDirectorGate ? 'management' : gateFor as AppMode); setGateFor(null); setBoroughDirectorGate(false); onPick(r); }}
+        onCancel={() => { setGateFor(null); setBoroughDirectorGate(false); }}
       />
     );
   }
@@ -237,7 +236,7 @@ function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?:
       />
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Select a staff role</Text>
       {!!notice && <Text style={{ color: '#9a3412', textAlign: 'center', marginBottom: 8 }}>{notice}</Text>}
-      <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => { setEmergencyGate(true); setGateFor('emergency'); }}>
+      <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => onPick('emergency')}>
         <Text style={ui.btnText}>Emergency Unit</Text>
       </Pressable>
       <Pressable style={ui.btn} onPress={() => { setBoroughDirectorGate(true); setGateFor('administrator'); }}>
