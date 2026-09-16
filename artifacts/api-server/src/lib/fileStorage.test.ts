@@ -46,7 +46,7 @@ const record = (overrides: Partial<{
   ...overrides,
 });
 
-test("legacy ownership can be claimed only from one exact same-tenant reference", () => {
+test("legacy ownership can be claimed only from one exact same-tenant reference", async () => {
   const path = ownership().objectPath;
   const legacy = record({
     state: { remoteFiles: [{ objectPath: path }] },
@@ -66,7 +66,7 @@ test("legacy ownership can be claimed only from one exact same-tenant reference"
   });
   assert.equal(legacyFileOwnerCandidates([crossDevelopmentLegacy], path).length, 1);
   assert.equal(
-    canReadOwnedFile(actor, path, ownership(), crossDevelopmentLegacy),
+    await canReadOwnedFile(actor, path, ownership(), crossDevelopmentLegacy),
     false,
   );
   assert.equal(isSafeTenantObjectPath("tenant-1", path), true);
@@ -74,27 +74,27 @@ test("legacy ownership can be claimed only from one exact same-tenant reference"
   assert.equal(isSafeTenantObjectPath("tenant-1", `${path}/../other`), false);
 });
 
-test("immutable file ownership authorization enforces exact owner and development scope", () => {
+test("immutable file ownership authorization enforces exact owner and development scope", async () => {
   const path = ownership().objectPath;
-  assert.equal(canReadOwnedFile(actor, path, ownership(), record()), true);
+  assert.equal(await canReadOwnedFile(actor, path, ownership(), record()), true);
   assert.equal(
-    canReadOwnedFile(actor, path, ownership(), record({ development: "Development B" })),
+    await canReadOwnedFile(actor, path, ownership(), record({ development: "Development B" })),
     false,
   );
   assert.equal(
-    canReadOwnedFile(actor, path, ownership({ tenantId: "tenant-2" }), record()),
+    await canReadOwnedFile(actor, path, ownership({ tenantId: "tenant-2" }), record()),
     false,
   );
   assert.equal(
-    canReadOwnedFile(actor, path, ownership({ recordId: "room-2" }), record()),
+    await canReadOwnedFile(actor, path, ownership({ recordId: "room-2" }), record()),
     false,
   );
   assert.equal(
-    canReadOwnedFile(actor, path, ownership(), record({ deleted: true })),
+    await canReadOwnedFile(actor, path, ownership(), record({ deleted: true })),
     false,
   );
   assert.equal(
-    canReadOwnedFile(
+    await canReadOwnedFile(
       actor,
       `${path}-unknown`,
       ownership(),
@@ -103,7 +103,7 @@ test("immutable file ownership authorization enforces exact owner and developmen
     false,
   );
   assert.equal(
-    canReadOwnedFile(
+    await canReadOwnedFile(
       actor,
       path,
       ownership(),

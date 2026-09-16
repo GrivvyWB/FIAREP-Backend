@@ -673,6 +673,26 @@ export interface PlatformLicenseAudit {
   at: string;
 }
 
+export type HRStaff = Staff & ({
+  hrNotes?: string | null;
+});
+
+export interface HRAudit {
+  id: string;
+  actorRole: string;
+  actorName: string;
+  action: string;
+  detail: string;
+  reportId?: string | null;
+  at: string;
+}
+
+export interface HRWorkspace {
+  staff: HRStaff[];
+  records: EntityRecord[];
+  audit: HRAudit[];
+}
+
 export type StaffIssueResponse = Staff & {
   /**
      * @minLength 4

@@ -29,6 +29,24 @@ export async function audit(
   });
 }
 
+export async function auditInTransaction(
+  tx: Pick<typeof db, "insert">,
+  actor: Actor,
+  action: string,
+  detail: string,
+  reportId?: string,
+) {
+  await tx.insert(auditLog).values({
+    id: randomUUID(),
+    tenantId: actor.tenantId,
+    actorRole: actor.role,
+    actorName: actor.name,
+    action,
+    detail,
+    reportId,
+  });
+}
+
 function safeSnapshot(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
   const output: Record<string, unknown> = {};

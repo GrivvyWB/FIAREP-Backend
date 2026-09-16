@@ -22,6 +22,7 @@ tags:
   - name: scores
   - name: platform-owner
   - name: time-clock
+  - name: hr
 paths:
   /healthz:
     get:
@@ -704,6 +705,27 @@ paths:
               schema: { $ref: "#/components/schemas/Staff" }
         "403":
           description: Not authorized to manage this account
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /v1/hr/workspace:
+    get:
+      operationId: getHrWorkspace
+      tags: [hr]
+      summary: Get the authorized HR employee lifecycle workspace
+      description: Returns tenant employee records and lifecycle records for Human Resources, or supervisory-scope records for an authorized supervisor.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: HR workspace data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HRWorkspace"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: HR workspace access is restricted
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1665,6 +1687,36 @@ components:
         canRevoke: { type: boolean }
         canDelete: { type: boolean }
         canApprove: { type: boolean }
+    HRStaff:
+      allOf:
+        - $ref: "#/components/schemas/Staff"
+        - type: object
+          properties:
+            hrNotes: { type: string, nullable: true }
+    HRAudit:
+      type: object
+      required: [id, actorRole, actorName, action, detail, at]
+      properties:
+        id: { type: string }
+        actorRole: { type: string }
+        actorName: { type: string }
+        action: { type: string }
+        detail: { type: string }
+        reportId: { type: string, nullable: true }
+        at: { type: string, format: date-time }
+    HRWorkspace:
+      type: object
+      required: [staff, records, audit]
+      properties:
+        staff:
+          type: array
+          items: { $ref: "#/components/schemas/HRStaff" }
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/EntityRecord" }
+        audit:
+          type: array
+          items: { $ref: "#/components/schemas/HRAudit" }
     StaffIssueResponse:
       allOf:
         - $ref: "#/components/schemas/Staff"

@@ -4,36 +4,13 @@ import { db, entityRecords, notifications } from "@workspace/db";
 import {
   ENTITIES,
   canReadEntity,
-  canReadEntityRecord,
-  entityDevelopmentAllowed,
   stripPricing,
-  procurementRecordAllowed,
 } from "../lib/domain";
+import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { visibleNotificationsFor } from "../lib/notificationVisibility";
 
 const router: IRouter = Router();
-function emergencyVisible(actor: ReturnType<typeof actorFrom>, row: typeof entityRecords.$inferSelect): boolean {
-  if (actor.role !== "emergency") return true;
-  const normalizedActor = actor.name.trim().toLowerCase().replace(/\s+/g, " ");
-  return (row.entity === "emergency-jobs" || row.entity === "emergency-units") &&
-    [row.state["assignedTo"], row.state["assignedStaffId"], row.state["assignedUnitId"], row.state["unitId"], row.state["name"], row.state["unitName"]]
-      .some((value) => typeof value === "string" && (value === actor.id || value.trim().toLowerCase().replace(/\s+/g, " ") === normalizedActor));
-}
-
-function privateVisible(actor: ReturnType<typeof actorFrom>, row: typeof entityRecords.$inferSelect): boolean {
-  if (actor.role === "resident") {
-    return row.entity === "resident-reports" && row.createdBy === actor.id;
-  }
-  if (
-    actor.role === "vendor" &&
-    (row.entity === "procurement-bids" || row.entity === "vendor-quotes")
-  ) {
-    return row.createdBy === actor.id;
-  }
-  return true;
-}
-
 function parseRecordCursors(value: string | undefined): Record<string, Date> {
   if (!value) return {};
   let parsed: unknown;
@@ -128,15 +105,16 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
     )
     .orderBy(asc(notifications.updatedAt));
   const visibleAlerts = await visibleNotificationsFor(actor, alerts);
-  const authorizedRecords = records
-    .filter((row) => entityDevelopmentAllowed(actor, row.entity, row.development))
-    .filter((row) => privateVisible(actor, row))
-    .filter((row) => emergencyVisible(actor, row))
-    .filter((row) => procurementRecordAllowed(actor, row))
-    // Deleted rows are returned as tombstones, but they must pass the same
-    // record-level boundary as live rows without letting the deleted flag
-    // itself make them fail authorization.
-    .filter((row) => canReadEntityRecord(actor, { ...row, deleted: false }));
+  const authorizedRecords = (
+    await Promise.all(
+      records.map(async (row) => ({
+        row,
+        allowed: await canReadEntityRecordForActor(actor, { ...row, deleted: false }),
+      })),
+    )
+  )
+    .filter(({ allowed }) => allowed)
+    .map(({ row }) => row);
   const visibleRecords = authorizedRecords.filter((row) => !row.deleted);
   // Deleted rows retain their metadata server-side.  Return a generic,
   // metadata-only tombstone after all of the same visibility checks as a live

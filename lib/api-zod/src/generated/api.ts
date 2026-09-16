@@ -864,6 +864,57 @@ export const RevokeStaffResponse = zod.object({
 
 
 /**
+ * Returns tenant employee records and lifecycle records for Human Resources, or supervisory-scope records for an authorized supervisor.
+ * @summary Get the authorized HR employee lifecycle workspace
+ */
+
+
+
+export const GetHrWorkspaceResponse = zod.object({
+  "staff": zod.array(zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "role": zod.enum(['administrator', 'human_resources', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
+  "status": zod.string(),
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional(),
+  "canApprove": zod.boolean().optional()
+}).and(zod.object({
+  "hrNotes": zod.string().nullish()
+}))),
+  "records": zod.array(zod.object({
+  "id": zod.string(),
+  "projectId": zod.string().optional(),
+  "development": zod.string().optional(),
+  "state": zod.record(zod.string(), zod.unknown()),
+  "version": zod.number().int().min(1)
+}).and(zod.object({
+  "entity": zod.string(),
+  "deleted": zod.boolean().optional(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date(),
+  "version": zod.number().int()
+}))),
+  "audit": zod.array(zod.object({
+  "id": zod.string(),
+  "actorRole": zod.string(),
+  "actorName": zod.string(),
+  "action": zod.string(),
+  "detail": zod.string(),
+  "reportId": zod.string().nullish(),
+  "at": zod.coerce.date()
+}))
+})
+
+
+/**
  * Returns vendor, development, building, and residential scores calculated from authorized entity records.
  * @summary FIAREP scores for the current tenant
  */

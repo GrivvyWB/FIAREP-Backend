@@ -37,6 +37,7 @@ import type {
   FileUploadUrlResponse,
   GetBootstrapStatus200,
   GetPlatformOwner200,
+  HRWorkspace,
   HealthStatus,
   IssueOrganizationDirectorCodeBody,
   ListEntityRecordsParams,
@@ -2783,6 +2784,84 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
       > => {
       return useMutation(getRevokeStaffMutationOptions(options));
     }
+
+export const getGetHrWorkspaceUrl = () => {
+
+
+
+
+  return `/api/v1/hr/workspace`
+}
+
+/**
+ * Returns tenant employee records and lifecycle records for Human Resources, or supervisory-scope records for an authorized supervisor.
+ * @summary Get the authorized HR employee lifecycle workspace
+ */
+export const getHrWorkspace = async ( options?: Parameters<typeof customFetch>[1]): Promise<HRWorkspace> => {
+
+  return customFetch<HRWorkspace>(getGetHrWorkspaceUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetHrWorkspaceQueryKey = () => {
+    return [
+    `/api/v1/hr/workspace`
+    ] as const;
+    }
+
+
+export const getGetHrWorkspaceQueryOptions = <TData = Awaited<ReturnType<typeof getHrWorkspace>>, TError = ErrorType<UnauthorizedResponse | Error>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHrWorkspace>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetHrWorkspaceQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getHrWorkspace>>> = ({ signal }) => getHrWorkspace({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getHrWorkspace>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetHrWorkspaceQueryResult = NonNullable<Awaited<ReturnType<typeof getHrWorkspace>>>
+export type GetHrWorkspaceQueryError = ErrorType<UnauthorizedResponse | Error>
+
+
+/**
+ * @summary Get the authorized HR employee lifecycle workspace
+ */
+
+export function useGetHrWorkspace<TData = Awaited<ReturnType<typeof getHrWorkspace>>, TError = ErrorType<UnauthorizedResponse | Error>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getHrWorkspace>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetHrWorkspaceQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getGetScoresUrl = () => {
 

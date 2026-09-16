@@ -6,7 +6,7 @@ export type StaffModule =
   | "repairs" | "projects" | "reports" | "report-upload" | "calendar"
   | "clients" | "team" | "violations" | "procurement" | "scope-review"
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
-  | "leave" | "notifications" | "settings" | "shared-data"
+  | "leave" | "hr" | "notifications" | "settings" | "shared-data"
   | "hud-inspections";
 
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
@@ -30,12 +30,13 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
   if (!staff) return false;
   if (staff.role === "human_resources") {
     return module === "dashboard" || module === "team" ||
-      module === "leave" || module === "notifications" || module === "settings";
+      module === "leave" || module === "hr" || module === "notifications" || module === "settings";
   }
   if (staff.role === "procurement") return module === "procurement";
   if (module === "hud-inspections") return canReviewHud(staff);
   if (module === "change-orders" && isSupervisor(staff)) return true;
   if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
+  if (module === "hr") return staff.role === "management" || staff.role === "administrator";
   if (module === "elevators") {
     return staff.role === "administrator" || ELEVATOR_POSITIONS.has(staff.position || "");
   }

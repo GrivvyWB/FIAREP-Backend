@@ -6,7 +6,8 @@ import {
   staffAccounts,
 } from "@workspace/db";
 import type { Actor } from "./auth";
-import { canReadEntityRecord, isBoroughDirector } from "./domain";
+import { isBoroughDirector } from "./domain";
+import { canReadEntityRecordForActor } from "./hrAuthorization";
 import { repairLegacyResidentDevelopment } from "./legacyResidentDevelopment";
 
 type NotificationRow = typeof notifications.$inferSelect;
@@ -41,12 +42,13 @@ export async function visibleNotificationsFor(
   );
   const byId = new Map(records.map((record) => [record.id, record]));
 
-  return rows.filter((notification) => {
+  const visibility = await Promise.all(rows.map(async (notification) => {
     if (!notification.reportId) return true;
     const record = byId.get(notification.reportId);
     if (!record) return !isResidentReportAlert(notification);
-    return canReadEntityRecord(actor, record);
-  });
+    return canReadEntityRecordForActor(actor, record);
+  }));
+  return rows.filter((_notification, index) => visibility[index]);
 }
 
 export async function residentReportRecipientIds(

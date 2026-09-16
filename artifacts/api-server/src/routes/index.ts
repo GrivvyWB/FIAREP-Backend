@@ -13,6 +13,7 @@ import publicAccessRouter from "./publicAccess";
 import organizationsRouter from "./organizations";
 import scoresRouter from "./scores";
 import timeClockRouter from "./timeClock";
+import hrRouter from "./hr";
 
 const router: IRouter = Router();
 
@@ -25,6 +26,7 @@ router.use(notificationRouter);
 router.use(syncRouter);
 router.use(systemRouter);
 router.use(scoresRouter);
+router.use(hrRouter);
 router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);

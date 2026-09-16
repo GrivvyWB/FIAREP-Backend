@@ -4,12 +4,17 @@ type Bucket = { count: number; resetAt: number };
 const buckets = new Map<string, Bucket>();
 const WINDOW_MS = 60_000;
 
-export function rateLimit(scope: string, max: number) {
+export function rateLimit(
+  scope: string,
+  max: number,
+  keyForRequest?: (req: Request, res: Response) => string,
+) {
   return (req: Request, res: Response, next: NextFunction) => {
     // Do not use X-Forwarded-For unless the application explicitly enables
     // Express trust proxy; socket address is the safe default.
     const ip = req.socket.remoteAddress ?? "unknown";
-    const key = `${scope}:${ip}`;
+    const subject = keyForRequest ? keyForRequest(req, res) : ip;
+    const key = `${scope}:${subject}`;
     const now = Date.now();
     let bucket = buckets.get(key);
     if (!bucket || bucket.resetAt <= now) {

@@ -66,10 +66,8 @@ export default function Leave() {
   const [authorizationCode, setAuthorizationCode] = useState("");
   const rows = (query.data || []) as Row[];
   const canDecide = staff?.role === "human_resources" ||
-    staff?.role === "management" ||
-    staff?.role === "administrator" ||
-    staff?.position === "Supervisor Inspector";
-  const canViewTeamLeave = canDecide || staff?.role === "human_resources";
+    staff?.role === "management";
+  const canViewTeamLeave = canDecide;
   const teamView = canViewTeamLeave && new URLSearchParams(window.location.search).get("view") === "team";
   const ownRows = rows.filter((row) => {
     const state = row.state || {};

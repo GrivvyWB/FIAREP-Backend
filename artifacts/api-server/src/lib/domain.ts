@@ -106,8 +106,34 @@ export const ENTITIES = new Set([
   "emergency-jobs",
   "leave-requests",
   "global-settings",
+  "hr-employee-records",
+  "hr-recruiting",
+  "hr-onboarding",
+  "hr-payroll-benefits",
+  "hr-attendance",
+  "hr-relations",
+  "hr-performance",
+  "hr-discipline",
+  "hr-investigations",
+  "hr-training-compliance",
+  "hr-exits",
+  "hr-approvals",
 ]);
 
+export const HR_ENTITIES = new Set([
+  "hr-employee-records",
+  "hr-recruiting",
+  "hr-onboarding",
+  "hr-payroll-benefits",
+  "hr-attendance",
+  "hr-relations",
+  "hr-performance",
+  "hr-discipline",
+  "hr-investigations",
+  "hr-training-compliance",
+  "hr-exits",
+  "hr-approvals",
+]);
 const PRICING_KEYS = new Set([
   "amount",
   "amountCharged",
@@ -202,6 +228,11 @@ export function canBrowseStaffDirectory(actor: Actor): boolean {
 }
 
 export function canReadEntity(actor: Actor, entity: string): boolean {
+  if (isHrEntity(entity)) {
+    return actor.role === "human_resources" ||
+      actor.role === "administrator" ||
+      actor.role === "management";
+  }
   if (entity === "hud-inspections") {
     return isHudReviewSupervisor(actor) ||
       (actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position));
@@ -286,6 +317,7 @@ export function developmentAllowed(
 ): boolean {
   if (isBoroughDirector(actor)) return true;
   if (actor.role === "administrator") return true;
+  if (actor.role === "human_resources") return true;
   if (actor.role === "management") {
     return Boolean(development && actor.developments.includes(development));
   }
@@ -311,7 +343,7 @@ export function entityDevelopmentAllowed(
   return developmentAllowed(actor, development);
 }
 
-type EntityRecordAuthorizationState = {
+export type EntityRecordAuthorizationState = {
   entity: string;
   development: string | null;
   state: Record<string, unknown>;
@@ -399,14 +431,18 @@ function staffAssignmentRecordAllowed(
 }
 
 /**
- * The complete record-level read boundary. File authorization uses this
- * predicate rather than only checking the tenant or entity name, so objects
- * cannot become a cross-development side channel.
+ * The complete synchronous boundary for non-HR records. HR records are
+ * intentionally denied here because their canonical employee linkage requires
+ * the async predicate in hrAuthorization.ts.
  */
 export function canReadEntityRecord(
   actor: Actor,
   row: EntityRecordAuthorizationState,
 ): boolean {
+  // HR records require the async linked-employee lookup.  Returning false
+  // here prevents synchronous consumers from accidentally bypassing the
+  // supervisory scope boundary.
+  if (isHrEntity(row.entity)) return false;
   return !row.deleted &&
     canReadEntity(actor, row.entity) &&
     entityDevelopmentAllowed(actor, row.entity, row.development) &&
@@ -417,6 +453,13 @@ export function canReadEntityRecord(
     staffAssignmentRecordAllowed(actor, row);
 }
 
+export type HrLinkedStaff = {
+  id: string;
+  role: string;
+  position: string;
+  developments: string[];
+  status: string;
+};
 /**
  * Uploads are attached to an existing record before an object URL is signed.
  * Mutability is intentional here: a read-only role must not be able to attach
@@ -430,6 +473,11 @@ export function canUploadToEntityRecord(
 }
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
+  if (isHrEntity(entity)) {
+    return actor.role === "human_resources" ||
+      actor.role === "administrator" ||
+      (entity === "hr-approvals" && actor.role === "management");
+  }
   if (actor.role === "emergency") return false;
   if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
@@ -474,6 +522,11 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 }
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
+  if (isHrEntity(entity)) {
+    return actor.role === "human_resources" ||
+      actor.role === "administrator" ||
+      (entity === "hr-approvals" && actor.role === "management");
+  }
   if (actor.role === "emergency") return entity === "emergency-jobs";
   if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
@@ -496,6 +549,10 @@ export function canDeleteEntity(
   entity: string,
   state: Record<string, unknown>,
 ): boolean {
+  // HR lifecycle records and company approval evidence are retained as
+  // employment history. No role may soft-delete them through the generic
+  // entity deletion route.
+  if (isHrEntity(entity)) return false;
   if (entity === "hud-inspections") return false;
   if (ELEVATOR_ENTITIES.has(entity)) {
     return (
@@ -581,6 +638,13 @@ export function canApproveLeaveForEmployee(
   return actor.role === "management";
 }
 
+export function canReadStaffDirectoryEmployee(
+  actor: Actor,
+  employee: Pick<Actor, "id" | "role" | "position" | "developments">,
+): boolean {
+  if (actor.role === "human_resources" || actor.role === "administrator") return true;
+  return employee.id !== actor.id && canApproveLeaveForEmployee(actor, employee);
+}
 export function leaveRequestDurationDays(state: Record<string, unknown>): number | null {
   const startValue = typeof state["startAt"] === "string"
     ? state["startAt"]
@@ -594,13 +658,40 @@ export function leaveRequestDurationDays(state: Record<string, unknown>): number
       : startValue;
   const startDate = startValue.slice(0, 10);
   const endDate = endValue.slice(0, 10);
-  const start = new Date(`${startDate}T00:00:00Z`);
-  const end = new Date(`${endDate}T00:00:00Z`);
+  const start = parseLeaveDateTime(startValue);
+  const end = parseLeaveDateTime(endValue);
+  if (!start || !end) return null;
   const difference = end.getTime() - start.getTime();
   if (!startDate || !endDate || !Number.isFinite(difference) || difference < 0) return null;
-  return Math.floor(difference / 86_400_000) + 1;
+  const calendarDifference =
+    Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate()) -
+    Date.UTC(start.getUTCFullYear(), start.getUTCMonth(), start.getUTCDate());
+  return Math.floor(calendarDifference / 86_400_000) + 1;
 }
 
+function parseLeaveDateTime(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})(?:T(\d{2}):(\d{2})(?::(\d{2}))?)?$/.exec(value.trim());
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4] ?? "0");
+  const minute = Number(match[5] ?? "0");
+  const second = Number(match[6] ?? "0");
+  if (
+    month < 1 || month > 12 || day < 1 || hour > 23 || minute > 59 ||
+    second > 59
+  ) return null;
+  const date = new Date(Date.UTC(year, month - 1, day, hour, minute, second));
+  return date.getUTCFullYear() === year &&
+    date.getUTCMonth() === month - 1 &&
+    date.getUTCDate() === day &&
+    date.getUTCHours() === hour &&
+    date.getUTCMinutes() === minute &&
+    date.getUTCSeconds() === second
+    ? date
+    : null;
+}
 export function validLeaveRequestDuration(days: number): boolean {
   return (days >= 1 && days <= 14) || (days >= 30 && days <= 365);
 }
@@ -610,7 +701,7 @@ export function canApproveLeaveDuration(
   days: number,
 ): boolean {
   if (days >= 30 && days <= 365) return actor.role === "human_resources";
-  if (days >= 1 && days <= 14) return actor.role !== "human_resources";
+  if (days >= 1 && days <= 14) return actor.role === "management";
   return false;
 }
 
@@ -722,6 +813,27 @@ export function canPerformEntityAction(
   action: string,
   state: Record<string, unknown>,
 ): boolean {
+  if (isHrEntity(entity)) {
+    if (entity === "hr-approvals") {
+      return action === "approve" &&
+        (actor.role === "management" || actor.role === "administrator");
+    }
+    if (actor.role === "human_resources") {
+      return [
+        "advance",
+        "approve-pay-change",
+        "approve-discipline",
+        "approve-termination",
+        "approve-layoff",
+        "close",
+      ].includes(action);
+    }
+    if (actor.role === "administrator") {
+      return ["advance", "close"].includes(action);
+    }
+    return actor.role === "management" &&
+      ["advance", "close"].includes(action);
+  }
   if (
     isBoroughDirector(actor) &&
     entity !== "procurement" &&
@@ -831,6 +943,7 @@ const WORKFLOW_ENTITIES = new Set([
   "elevator-jobs",
   "emergency-jobs",
   "hud-inspections",
+  ...HR_ENTITIES,
 ]);
 
 const WORKFLOW_MANAGED_FIELDS = new Set([
@@ -862,6 +975,12 @@ const WORKFLOW_MANAGED_FIELDS = new Set([
   "completed",
   "completionStatus",
   "completionDate",
+  "advanceAt",
+  "approve_pay_changeAt",
+  "approve_disciplineAt",
+  "approve_terminationAt",
+  "approve_layoffAt",
+  "closeAt",
 ]);
 
 export function patchesWorkflowManagedFields(
@@ -870,7 +989,10 @@ export function patchesWorkflowManagedFields(
 ): boolean {
   return (
     WORKFLOW_ENTITIES.has(entity) &&
-    Object.keys(patch).some((key) => WORKFLOW_MANAGED_FIELDS.has(key))
+    Object.keys(patch).some((key) =>
+      WORKFLOW_MANAGED_FIELDS.has(key) &&
+      !(entity === "leave-requests" && ["startAt", "returnAt"].includes(key)),
+    )
   );
 }
 
@@ -882,6 +1004,18 @@ const INITIAL_WORKFLOW_STATUS: Record<string, string> = {
   "elevator-jobs": "assigned",
   "emergency-jobs": "assigned",
   "hud-inspections": "Submitted",
+  "hr-employee-records": "draft",
+  "hr-recruiting": "draft",
+  "hr-onboarding": "draft",
+  "hr-payroll-benefits": "draft",
+  "hr-attendance": "draft",
+  "hr-relations": "draft",
+  "hr-performance": "draft",
+  "hr-discipline": "draft",
+  "hr-investigations": "draft",
+  "hr-training-compliance": "draft",
+  "hr-exits": "draft",
+  "hr-approvals": "pending",
 };
 
 export function withInitialWorkflowState(
@@ -893,7 +1027,9 @@ export function withInitialWorkflowState(
   return {
     ...Object.fromEntries(
       Object.entries(state).filter(
-        ([key]) => !WORKFLOW_MANAGED_FIELDS.has(key),
+        ([key]) =>
+          !WORKFLOW_MANAGED_FIELDS.has(key) ||
+          (entity === "leave-requests" && ["startAt", "returnAt"].includes(key)),
       ),
     ),
     status: initialStatus,
@@ -905,7 +1041,7 @@ export function isValidEntityTransition(
   action: string,
   state: Record<string, unknown>,
 ): boolean {
-  const status = state["status"];
+  const status = String(state["status"] ?? "").trim().toLowerCase();
   const allowed: Record<string, Record<string, readonly unknown[]>> = {
     procurement: {
       submit: ["draft", "returned"],
@@ -932,9 +1068,9 @@ export function isValidEntityTransition(
       "approve-work": ["done"],
     },
     "leave-requests": {
-      approve: ["Pending"],
-      deny: ["Pending"],
-      cancel: ["Pending"],
+      approve: ["pending"],
+      deny: ["pending"],
+      cancel: ["pending"],
     },
     "elevator-jobs": {
       "on-my-way": ["assigned"],
@@ -949,12 +1085,28 @@ export function isValidEntityTransition(
       "approve-work": ["done"],
     },
     "hud-inspections": {
-      approve: ["Submitted"],
-      deny: ["Submitted"],
-      correction: ["Submitted"],
-      resubmit: ["Correction"],
+      approve: ["submitted"],
+      deny: ["submitted"],
+      correction: ["submitted"],
+      resubmit: ["correction"],
+    },
+    "hr-approvals": {
+      approve: ["pending"],
     },
   };
+  if (isHrEntity(entity) && entity !== "hr-approvals") {
+    if (action === "advance") return ["draft", "in_progress"].includes(status);
+    if (action === "close") {
+      if (entity === "hr-payroll-benefits") return status === "approved";
+      if (entity === "hr-discipline") return status === "disciplined";
+      if (entity === "hr-exits") return ["terminated", "laid off"].includes(status);
+      return ["in_progress", "approved", "disciplined", "terminated", "laid off"].includes(status);
+    }
+    if (action === "approve-pay-change") return ["draft", "in_progress"].includes(status);
+    if (action === "approve-discipline") return ["draft", "in_progress"].includes(status);
+    if (action === "approve-termination") return ["draft", "in_progress"].includes(status);
+    if (action === "approve-layoff") return ["draft", "in_progress"].includes(status);
+  }
   return allowed[entity]?.[action]?.includes(status) === true;
 }
 
@@ -1011,4 +1163,85 @@ export function staffCode(): string {
     [characters[index], characters[swapIndex]] = [characters[swapIndex]!, characters[index]!];
   }
   return characters.join("");
+}
+
+export function serializeStaffIssueResponse<T extends Record<string, unknown>>(
+  staff: T,
+  includeHrNotes: boolean,
+): Omit<T, "sessionVersion" | "hrNotes"> {
+  const safe = serializeHrStaff(staff, includeHrNotes);
+  return { ...safe, code: staff.code } as Omit<T, "sessionVersion" | "hrNotes">;
+}
+
+export function isHrEntity(entity: string): boolean {
+  return HR_ENTITIES.has(entity);
+}
+
+export function isHrProtectedField(field: string): boolean {
+  return HR_PROTECTED_FIELDS.has(field);
+}
+
+export function serializeHrStaff<T extends Record<string, unknown>>(
+  staff: T,
+  includeHrNotes: boolean,
+): Omit<T, "code" | "sessionVersion" | "hrNotes"> & Partial<Pick<T, "hrNotes">> {
+  const {
+    code: _code,
+    sessionVersion: _sessionVersion,
+    hrNotes,
+    ...safe
+  } = staff;
+  return (includeHrNotes ? { ...safe, hrNotes } : safe) as Omit<T, "code" | "sessionVersion" | "hrNotes"> & Partial<Pick<T, "hrNotes">>;
+}
+
+const HR_PROTECTED_FIELDS = new Set([
+  "targetRecordId",
+  "employeeStaffId",
+  "approvalPurpose",
+  "status",
+  "exitType",
+]);
+
+export function canReadHrEntityRecord(
+  actor: Actor,
+  row: EntityRecordAuthorizationState,
+  employee?: HrLinkedStaff,
+): boolean {
+  if (!isHrEntity(row.entity) || row.deleted || !canReadEntity(actor, row.entity)) return false;
+  if (actor.role === "human_resources" || actor.role === "administrator") return true;
+  if (actor.role !== "management") return false;
+  const status = typeof row.state["status"] === "string"
+    ? row.state["status"].trim().toLowerCase()
+    : "";
+  if (row.entity === "hr-approvals" && status !== "pending") return false;
+  const employeeStaffId = typeof row.state["employeeStaffId"] === "string"
+    ? row.state["employeeStaffId"].trim()
+    : "";
+  return Boolean(
+    employee &&
+    employee.status === "approved" &&
+    employee.id === employeeStaffId &&
+    employee.id !== actor.id &&
+    canApproveLeaveForEmployee(actor, employee),
+  );
+}
+
+export function validateLeaveRequestSchedule(
+  state: Record<string, unknown>,
+): string | null {
+  const startValue = typeof state["startAt"] === "string"
+    ? state["startAt"]
+    : typeof state["startDate"] === "string" ? state["startDate"] : "";
+  const endValue = typeof state["endAt"] === "string"
+    ? state["endAt"]
+    : typeof state["endDate"] === "string" ? state["endDate"] : "";
+  const returnValue = typeof state["returnAt"] === "string" ? state["returnAt"] : "";
+  const start = parseLeaveDateTime(startValue);
+  const end = parseLeaveDateTime(endValue);
+  const returnAt = parseLeaveDateTime(returnValue);
+  if (!start || !end) return "Start and end must be valid dates and times";
+  if (end.getTime() < start.getTime()) return "End must not be before start";
+  if (!returnAt) return "A valid return date and time is required";
+  if (returnAt.getTime() < end.getTime()) return "Return must not be before end";
+  return null;
 }

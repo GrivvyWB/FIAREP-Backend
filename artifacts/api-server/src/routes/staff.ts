@@ -17,8 +17,11 @@ import {
   canIssueStaffAccountRole,
   canBrowseStaffDirectory,
   canDeleteOperationalRecords,
+  canReadStaffDirectoryEmployee,
   isBoroughDirector,
   isElevated,
+  serializeHrStaff,
+  serializeStaffIssueResponse,
 } from "../lib/domain";
 import { allocateStaffCode } from "../lib/staffCodes";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
@@ -29,10 +32,12 @@ router.use("/v1/staff", requireAuth);
 
 function safe(
   staff: typeof staffAccounts.$inferSelect,
-  includeCode = false,
   actor?: ReturnType<typeof actorFrom>,
 ) {
-  const { sessionVersion: _version, ...data } = staff;
+  const data = serializeHrStaff(
+    staff,
+    actor?.role === "human_resources" || actor?.role === "administrator",
+  );
   const permissions = actor
     ? {
         canManage: canManageStaff(actor, staff),
@@ -45,9 +50,27 @@ function safe(
           canManageStaff(actor, staff),
       }
     : {};
-  if (includeCode) return data;
-  const { code: _code, ...withoutCode } = data;
-  return { ...withoutCode, ...permissions };
+  return { ...data, ...permissions };
+}
+
+function issueSafe(
+  staff: typeof staffAccounts.$inferSelect,
+  actor: ReturnType<typeof actorFrom>,
+) {
+  return {
+    ...serializeStaffIssueResponse(
+      staff,
+      actor.role === "human_resources" || actor.role === "administrator",
+    ),
+    canManage: canManageStaff(actor, staff),
+    canResetCode: canManageStaff(actor, staff),
+    canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
+    canDelete: actor.id !== staff.id && canManageStaff(actor, staff),
+    canApprove:
+      actor.role === "human_resources" &&
+      staff.status === "pending" &&
+      canManageStaff(actor, staff),
+  };
 }
 
 function developmentsWithinScope(
@@ -145,7 +168,8 @@ router.get("/v1/staff", async (req, res) => {
         : eq(staffAccounts.tenantId, actor.tenantId),
     )
     .orderBy(asc(staffAccounts.name));
-  res.json(rows.map((row) => safe(row, false, actor)));
+  res.json(rows.filter((row) => canReadStaffDirectoryEmployee(actor, row))
+    .map((row) => safe(row, actor)));
 });
 
 router.get("/v1/staff/developments", async (_req, res) => {
@@ -308,7 +332,7 @@ router.post("/v1/staff", async (req, res) => {
       created.row.id,
     );
   }
-  res.status(201).json(safe(created.row, true, actor));
+  res.status(201).json(issueSafe(created.row, actor));
 });
 
 router.post("/v1/staff/:id/approve", async (req, res) => {
@@ -364,7 +388,7 @@ router.post("/v1/staff/:id/approve", async (req, res) => {
       eq(notifications.message, "Employee pending approval"),
     ));
   await audit(actor, "staff.approved", `Approved account for ${target.name}`, target.id);
-  res.json(safe(updatedResult.updated, true, actor));
+  res.json(issueSafe(updatedResult.updated, actor));
 });
 
 router.put("/v1/staff/:id/hr-notes", async (req, res) => {
@@ -399,7 +423,7 @@ router.put("/v1/staff/:id/hr-notes", async (req, res) => {
     return;
   }
   await audit(actor, "staff.hr_notes_updated", `Updated HR notes for ${updated.name}`, updated.id);
-  res.json(safe(updated, false, actor));
+  res.json(safe(updated, actor));
 });
 
 router.post("/v1/staff/:id/reset-code", async (req, res) => {
@@ -450,7 +474,7 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     return;
   }
   await audit(actor, "staff.code_reset", `Reset code for ${updated.name}`, updated.id);
-  res.json(safe(updated, true, actor));
+  res.json(issueSafe(updated, actor));
 });
 
 router.delete("/v1/staff/:id", async (req, res) => {
@@ -542,7 +566,7 @@ router.post("/v1/staff/:id/revoke", async (req, res) => {
     return;
   }
   await audit(actor, "staff.revoked", `Revoked ${updated.name}`, updated.id);
-  res.json(safe(updated, false, actor));
+  res.json(safe(updated, actor));
 });
 
 export default router;

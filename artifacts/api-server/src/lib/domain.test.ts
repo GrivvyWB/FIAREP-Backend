@@ -12,6 +12,8 @@ import {
   canPerformAssignedWorkflowAction,
   canApproveLeaveForEmployee,
   canApproveLeaveDuration,
+  validateLeaveRequestSchedule,
+  canReadStaffDirectoryEmployee,
   canAssignStaff,
   isAssignmentAuthority,
   normalizeAssignment,
@@ -21,12 +23,17 @@ import {
   withInitialWorkflowState,
   procurementRecordAllowed,
   canReadEntityRecord,
+  canReadHrEntityRecord,
   canUploadToEntityRecord,
   canIssueStaffAccountRole,
   canUseGeneralStaffLogin,
   staffCode,
   leaveRequestDurationDays,
   validLeaveRequestDuration,
+  isHrEntity,
+  isHrProtectedField,
+  serializeHrStaff,
+  serializeStaffIssueResponse,
 } from "./domain";
 
 function actor(overrides: Partial<Actor> = {}): Actor {
@@ -51,6 +58,155 @@ test("staff access codes are generated with both letters and digits", () => {
   }
 });
 
+test("HR lifecycle entities are tenant-administered without changing staff authority", () => {
+  assert.equal(isHrEntity("hr-employee-records"), true);
+  assert.equal(canReadEntity(actor({ role: "human_resources", developments: [] }), "hr-payroll-benefits"), true);
+  assert.equal(canCreateEntity(actor({ role: "human_resources", developments: [] }), "hr-payroll-benefits"), true);
+  assert.equal(canReadEntity(actor({ role: "worker" }), "hr-payroll-benefits"), false);
+  assert.equal(canCreateEntity(actor({ role: "management" }), "hr-payroll-benefits"), false);
+});
+
+test("policy-sensitive HR actions require the HR workflow authority", () => {
+  const hr = actor({ role: "human_resources", developments: [] });
+  const administrator = actor({ role: "administrator", developments: [] });
+  const supervisor = actor({ role: "management" });
+  assert.equal(canPerformEntityAction(hr, "hr-payroll-benefits", "approve-pay-change", {}), true);
+  for (const [entity, sensitiveAction] of [
+    ["hr-payroll-benefits", "approve-pay-change"],
+    ["hr-discipline", "approve-discipline"],
+    ["hr-exits", "approve-termination"],
+    ["hr-exits", "approve-layoff"],
+  ] as const) {
+    assert.equal(canPerformEntityAction(administrator, entity, sensitiveAction, {}), false);
+  }
+  assert.equal(canPerformEntityAction(supervisor, "hr-payroll-benefits", "approve-pay-change", {}), false);
+  assert.equal(canPerformEntityAction(supervisor, "hr-approvals", "approve", {}), true);
+  assert.equal(isValidEntityTransition("hr-payroll-benefits", "approve-pay-change", { status: "draft" }), true);
+  assert.equal(isValidEntityTransition("hr-payroll-benefits", "approve-pay-change", { status: "Approved" }), false);
+  assert.equal(isValidEntityTransition("hr-payroll-benefits", "close", { status: "in_progress" }), false);
+  assert.equal(isValidEntityTransition("hr-payroll-benefits", "close", { status: "approved" }), true);
+  assert.equal(isValidEntityTransition("hr-discipline", "close", { status: "in_progress" }), false);
+  assert.equal(isValidEntityTransition("hr-discipline", "close", { status: "disciplined" }), true);
+  assert.equal(isValidEntityTransition("hr-exits", "close", { status: "in_progress" }), false);
+  assert.equal(isValidEntityTransition("hr-exits", "close", { status: "terminated" }), true);
+});
+
+test("supervisory HR scope excludes employees outside the assigned developments", () => {
+  const supervisor = actor({
+    role: "management",
+    position: "Property Manager",
+    developments: ["Development A"],
+  });
+  const inScope = {
+    id: "employee-a",
+    role: "worker",
+    position: "Maintenance Worker",
+    developments: ["Development A"],
+  };
+  const outOfScope = {
+    id: "employee-b",
+    role: "worker",
+    position: "Maintenance Worker",
+    developments: ["Development B"],
+  };
+  assert.equal(canApproveLeaveForEmployee(supervisor, inScope), true);
+  assert.equal(canApproveLeaveForEmployee(supervisor, outOfScope), false);
+  assert.equal(canReadStaffDirectoryEmployee(supervisor, inScope), true);
+  assert.equal(canReadStaffDirectoryEmployee(supervisor, outOfScope), false);
+  assert.equal(canReadStaffDirectoryEmployee(supervisor, supervisor), false);
+});
+
+test("HR record authorization fails closed without canonical employee linkage", () => {
+  const supervisor = actor({ role: "management", position: "Property Manager" });
+  const employee = {
+    id: "employee-a",
+    role: "worker",
+    position: "Maintenance Worker",
+    developments: ["Development A"],
+    status: "approved",
+  };
+  assert.equal(canReadHrEntityRecord(supervisor, {
+    entity: "hr-employee-records",
+    development: "Development A",
+    state: { status: "in_progress", employeeStaffId: "employee-a" },
+    createdBy: supervisor.id,
+    deleted: false,
+  }, employee), true);
+  assert.equal(canReadHrEntityRecord(supervisor, {
+    entity: "hr-employee-records",
+    development: "Development A",
+    state: { status: "in_progress" },
+    createdBy: supervisor.id,
+    deleted: false,
+  }), false);
+  assert.equal(canReadHrEntityRecord(supervisor, {
+    entity: "hr-approvals",
+    development: "Development A",
+    state: { status: "approved", employeeStaffId: "employee-a" },
+    createdBy: supervisor.id,
+    deleted: false,
+  }, employee), false);
+});
+
+test("HR linkage and workflow fields cannot be patched directly", () => {
+  assert.equal(isHrProtectedField("targetRecordId"), true);
+  assert.equal(isHrProtectedField("employeeStaffId"), true);
+  assert.equal(isHrProtectedField("approvalPurpose"), true);
+  assert.equal(isHrProtectedField("status"), true);
+  assert.equal(isHrProtectedField("details"), false);
+  assert.deepEqual(withInitialWorkflowState("hr-approvals", {
+    targetRecordId: "target-1",
+    employeeStaffId: "employee-1",
+    approvalPurpose: "pay-change",
+    status: "approved",
+  }), {
+    targetRecordId: "target-1",
+    employeeStaffId: "employee-1",
+    approvalPurpose: "pay-change",
+    status: "pending",
+  });
+  assert.equal(isValidEntityTransition("hr-approvals", "approve", { status: "PENDING" }), true);
+  assert.equal(isValidEntityTransition("hr-approvals", "approve", { status: "consumed" }), false);
+  const managementView = serializeHrStaff({
+    id: "staff-1",
+    code: "AB12",
+    sessionVersion: 3,
+    hrNotes: "restricted",
+    name: "Employee",
+  }, false);
+  assert.equal("code" in managementView, false);
+  assert.equal("sessionVersion" in managementView, false);
+  assert.equal("hrNotes" in managementView, false);
+  const hrView = serializeHrStaff({
+    id: "staff-1",
+    code: "AB12",
+    sessionVersion: 3,
+    hrNotes: "restricted",
+    name: "Employee",
+  }, true);
+  assert.equal("code" in hrView, false);
+  assert.equal("sessionVersion" in hrView, false);
+  assert.equal(hrView.hrNotes, "restricted");
+  const administratorView = serializeHrStaff({
+    id: "staff-1",
+    code: "AB12",
+    sessionVersion: 3,
+    hrNotes: "restricted",
+    name: "Employee",
+  }, true);
+  assert.equal(administratorView.hrNotes, "restricted");
+  const issuedView = serializeStaffIssueResponse({
+    id: "staff-1",
+    code: "AB12",
+    sessionVersion: 3,
+    hrNotes: "restricted",
+    name: "Employee",
+  }, false);
+  assert.equal(issuedView.code, "AB12");
+  assert.equal("sessionVersion" in issuedView, false);
+  assert.equal("hrNotes" in issuedView, false);
+});
+
 test("operational deletion is limited to higher management", () => {
   assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Borough Director" })), true);
   assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Regional Director" })), true);
@@ -64,6 +220,9 @@ test("procurement deletion preserves its higher-management boundary", () => {
   assert.equal(canDeleteEntity(actor({ role: "management", position: "Regional Director" }), "procurement", {}), true);
   assert.equal(canDeleteEntity(actor({ role: "management", position: "Borough Director" }), "procurement", {}), false);
   assert.equal(canDeleteEntity(actor({ role: "inspector", position: "CPM" }), "procurement", {}), false);
+  assert.equal(canDeleteEntity(actor({ role: "administrator" }), "hr-employee-records", {}), false);
+  assert.equal(canDeleteEntity(actor({ role: "human_resources" }), "hr-exits", {}), false);
+  assert.equal(canDeleteEntity(actor({ role: "management" }), "hr-approvals", {}), false);
 });
 
 test("staff account creation excludes Resident and Vendor public-access roles", () => {
@@ -732,8 +891,26 @@ test("leave duration routes short requests to supervisors and long requests to H
   assert.equal(validLeaveRequestDuration(366), false);
   assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 14), true);
   assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 30), false);
+  assert.equal(canApproveLeaveDuration(actor({ role: "administrator" }), 14), false);
+  assert.equal(canApproveLeaveDuration(actor({ role: "worker" }), 14), false);
+  assert.equal(canApproveLeaveDuration(actor({ role: "inspector" }), 14), false);
   assert.equal(canApproveLeaveDuration(actor({ role: "human_resources" }), 14), false);
   assert.equal(canApproveLeaveDuration(actor({ role: "human_resources" }), 30), true);
+  assert.equal(validateLeaveRequestSchedule({
+    startAt: "2026-09-01T09:00",
+    endAt: "2026-09-01T17:00",
+    returnAt: "2026-09-02T09:00",
+  }), null);
+  assert.equal(validateLeaveRequestSchedule({
+    startAt: "2026-09-01T17:00",
+    endAt: "2026-09-01T09:00",
+    returnAt: "2026-09-02T09:00",
+  }), "End must not be before start");
+  assert.equal(validateLeaveRequestSchedule({
+    startAt: "2026-09-01T09:00",
+    endAt: "2026-09-01T17:00",
+    returnAt: "2026-09-01T16:00",
+  }), "Return must not be before end");
 });
 
 test("management cannot approve or deny its own leave request", () => {

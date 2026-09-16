@@ -14,8 +14,9 @@ import { and, eq } from "drizzle-orm";
 import { audit } from "../lib/audit";
 import {
   ENTITIES,
-  canUploadToEntityRecord,
+  canMutateEntity,
 } from "../lib/domain";
+import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import {
   FILE_KINDS,
   canReadOwnedFile,
@@ -97,7 +98,11 @@ router.post("/v1/files/upload-url", async (req, res) => {
           ),
         )
         .limit(1);
-      if (!owner || !canUploadToEntityRecord(actor, owner)) {
+       if (
+         !owner ||
+         !(await canReadEntityRecordForActor(actor, owner)) ||
+         !canMutateEntity(actor, owner.entity)
+       ) {
         throw new FileOwnerNotAccessibleError();
       }
       const upload = await fileStorage.createUpload(actor.tenantId, actor.id, {
@@ -204,7 +209,7 @@ router.post("/v1/files/download-url", async (req, res) => {
           .limit(1);
         if (
           !existingOwner ||
-          !canReadOwnedFile(actor, objectPath, existingOwnership, existingOwner)
+           !(await canReadOwnedFile(actor, objectPath, existingOwnership, existingOwner))
         ) {
           throw new LegacyFileNotClaimableError();
         }
@@ -234,7 +239,7 @@ router.post("/v1/files/download-url", async (req, res) => {
         entity: legacyOwner.entity,
         recordId: legacyOwner.id,
       };
-      if (!canReadOwnedFile(actor, objectPath, candidateOwnership, legacyOwner)) {
+       if (!(await canReadOwnedFile(actor, objectPath, candidateOwnership, legacyOwner))) {
         throw new LegacyFileNotClaimableError();
       }
       const [claimedOwnership] = await tx
@@ -287,7 +292,7 @@ router.post("/v1/files/download-url", async (req, res) => {
         .limit(1);
       if (
         !winnerOwner ||
-        !canReadOwnedFile(actor, objectPath, winner, winnerOwner)
+         !(await canReadOwnedFile(actor, objectPath, winner, winnerOwner))
       ) {
         throw new LegacyFileNotClaimableError();
       }

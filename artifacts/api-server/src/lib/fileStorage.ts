@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Actor } from "./auth";
-import { canReadEntityRecord } from "./domain";
+import { canReadEntityRecordForActor } from "./hrAuthorization";
 
 const REPLIT_SIDECAR_ENDPOINT = "http://127.0.0.1:1106";
 const UPLOAD_TTL_SECONDS = 15 * 60;
@@ -95,18 +95,18 @@ export function isSafeTenantObjectPath(
  * Authorizes the immutable ownership row against the exact current owner
  * record. No mutable JSON file references participate in this decision.
  */
-export function canReadOwnedFile(
+export async function canReadOwnedFile(
   actor: Actor,
   requestedObjectPath: string,
   ownership: FileOwnershipRecord,
   owner: FileOwnerRecord,
-): boolean {
+): Promise<boolean> {
   return ownership.tenantId === actor.tenantId &&
     ownership.objectPath === requestedObjectPath &&
     ownership.entity === owner.entity &&
     ownership.recordId === owner.id &&
     owner.tenantId === actor.tenantId &&
-    canReadEntityRecord(actor, owner);
+    await canReadEntityRecordForActor(actor, owner);
 }
 
 function privateObjectDir(): string {
