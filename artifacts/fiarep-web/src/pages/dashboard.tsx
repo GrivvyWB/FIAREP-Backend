@@ -61,7 +61,7 @@ export default function Dashboard() {
   const repairs = records(repairsQuery);
   const notifications = notificationsQuery.data ?? [];
   const watchlistNotifications = notifications.filter(
-    (notification) => notification.message.trim().toLowerCase() !== "leave requests approved",
+    (notification) => !/^leave requests?\b/i.test(notification.message.trim()),
   );
   const firstName = staff?.name?.split(" ")[0] || "User";
   const unread = notifications.filter((notification) => !notification.read).length;
