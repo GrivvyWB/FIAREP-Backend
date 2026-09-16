@@ -19,7 +19,7 @@ export default function ManagementHome() {
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
   const _pos = (position || '').trim().toLowerCase();
-  const isSup = /supervisor$/.test(_pos) || _pos === 'superintendent';
+  const isSup = _pos.includes('supervisor') || _pos === 'superintendent';
   // Elevated roles see every module. Regular supervisors are restricted.
   const isElevated = mode === 'administrator'
     || _pos === 'regional director' || _pos === 'borough director' || _pos === 'superintendent'
@@ -58,7 +58,7 @@ export default function ManagementHome() {
         ...(!restricted ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         { label: 'Assign a Job', onPress: () => router.push('/dispatch-job'), tone: 'solid' },
         { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' },
-        { label: 'Staff Member Jobs', onPress: () => router.push('/worker'), tone: 'tint' },
+        ...(!restricted ? [{ label: 'Staff Member Jobs', onPress: () => router.push('/worker'), tone: 'tint' as Tone }] : []),
         ...(emergencyAdmin ? [{ label: 'Assign Emergency Unit', onPress: () => router.push('/assign-emergency'), tone: 'tint' as Tone }, { label: 'Manage Trucks', onPress: () => router.push('/manage-trucks'), tone: 'tint' as Tone }, { label: 'Truck Scores', onPress: () => router.push('/truck-scores'), tone: 'tint' as Tone }] : []),
         { label: 'Emergency Activity', onPress: () => router.push('/emergency-activity'), tone: 'tint' },
         { label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' },
@@ -96,7 +96,7 @@ export default function ManagementHome() {
     },
   ];
 
-  const isSupervisor = /supervisor$/i.test((position || '').trim()) || /superintendent/i.test((position || '').trim());
+  const isSupervisor = /supervisor/i.test((position || '').trim()) || /superintendent/i.test((position || '').trim());
   const heading = position === 'Borough Director' ? 'Borough Director' : isSupervisor ? position : 'Management';
 
   return (
