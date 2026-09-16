@@ -70,12 +70,15 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
       .map((property) => property.development?.trim().toLowerCase())
       .filter((development): development is string => Boolean(development)),
   );
+  // Authorization above determines which developments the actor may see.
+  // Do not require a matching property-catalog row here: a development can
+  // contain many addresses, and valid operational records may arrive before
+  // those addresses have been loaded into the property catalog.
   const developmentRecords = records.filter((record) => {
     const stateDevelopment = typeof record.state["development"] === "string"
       ? record.state["development"].trim()
       : "";
-    const development = record.development?.trim() || stateDevelopment;
-    return Boolean(development && propertyDevelopments.has(development.toLowerCase()));
+    return Boolean(record.development?.trim() || stateDevelopment);
   });
   const developments = calculateDevelopmentScores(developmentRecords);
   const knownDevelopments = new Set(
