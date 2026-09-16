@@ -22,6 +22,7 @@ import {
   isElevated,
   serializeHrStaff,
   serializeStaffIssueResponse,
+  withInitialWorkflowState,
 } from "../lib/domain";
 import { allocateStaffCode } from "../lib/staffCodes";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
@@ -316,13 +317,38 @@ router.post("/v1/staff", async (req, res) => {
       updatedAt: now,
       })
       .returning();
-    return { row, inserted: true };
+    const hrRecordId = `hr-employee:${row.id}`;
+    await tx.insert(entityRecords).values({
+      id: hrRecordId,
+      tenantId: actor.tenantId,
+      entity: "hr-employee-records",
+      development: developments.length === 1 ? developments[0] : null,
+      state: withInitialWorkflowState("hr-employee-records", {
+        employeeStaffId: row.id,
+        firstName: row.firstName || undefined,
+        lastName: row.lastName || undefined,
+        position: row.position,
+        employmentStatus: row.status,
+        title: `${row.name} employee record`,
+        assignedDevelopments: row.developments,
+      }),
+      createdBy: actor.id,
+      createdAt: now,
+      updatedAt: now,
+    });
+    return { row, hrRecordId };
   }).catch((error: any) => {
     if (error?.status) { res.status(error.status).json({ error: error.message }); return null; }
     throw error;
   });
   if (!created) return;
   await audit(actor, "staff.created", `Issued account for ${name}`, created.row.id);
+  await audit(
+    actor,
+    "hr-employee-records.created",
+    `Started employee record for ${name}`,
+    created.hrRecordId,
+  );
   if (created.row.status === "pending") {
     await notify(
       actor,

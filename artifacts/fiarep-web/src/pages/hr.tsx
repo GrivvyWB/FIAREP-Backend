@@ -6,10 +6,11 @@ import {
   useCreateEntityRecord,
   useGetHrWorkspace,
   usePerformEntityAction,
+  useUpdateEntityRecord,
   type EntityRecord,
 } from "@workspace/api-client-react";
 import { 
-  BriefcaseBusiness, Check, Clock3, Plus, ShieldCheck, 
+  BriefcaseBusiness, Check, Clock3, Pencil, Plus, ShieldCheck,
   History, Search, FileText, User, AlertCircle, Folder
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -167,6 +168,7 @@ export default function HRWorkspace() {
     query: { queryKey: getGetHrWorkspaceQueryKey(), refetchOnMount: "always" },
   });
   const create = useCreateEntityRecord();
+  const update = useUpdateEntityRecord();
   const action = usePerformEntityAction();
   
   const [open, setOpen] = useState(false);
@@ -177,6 +179,7 @@ export default function HRWorkspace() {
   } | null>(null);
   const [authorizationCode, setAuthorizationCode] = useState("");
   const [sectionValues, setSectionValues] = useState<Record<string, string>>({});
+  const [editingRecord, setEditingRecord] = useState<EntityRecord | null>(null);
   
   const [view, setView] = useState<"records" | "audit">("records");
   const [filterProcess, setFilterProcess] = useState<string>("all");
@@ -261,29 +264,49 @@ export default function HRWorkspace() {
         setError("Select a sensitive HR record for company approval.");
         return;
       }
-      await create.mutateAsync({
-        entity: values.category,
-        data: {
-          id: crypto.randomUUID(),
-          version: 1,
-          development: values.development || undefined,
-          state: {
-            employeeStaffId: approvalTarget
-              ? approvalTarget.state.employeeStaffId
-              : values.employeeStaffId || undefined,
-            title: values.title,
-            details: values.details,
-             ...Object.fromEntries(
-               Object.entries(sectionValues)
-                 .map(([key, value]) => [key, value.trim()])
-                 .filter(([, value]) => value !== ""),
-             ),
-            targetRecordId: approvalTarget?.id,
-            approvalPurpose: approvalPurpose || undefined,
-            exitType: values.category === "hr-exits" ? values.exitType : undefined,
+      const sectionEntries = Object.entries(sectionValues)
+        .map(([key, value]) => [key, value.trim()]);
+      const sectionState = Object.fromEntries(
+        editingRecord
+          ? sectionEntries
+          : sectionEntries.filter(([, value]) => value !== ""),
+      );
+      if (editingRecord) {
+        await update.mutateAsync({
+          entity: editingRecord.entity,
+          id: editingRecord.id,
+          data: {
+            id: editingRecord.id,
+            version: editingRecord.version,
+            state: {
+              title: values.title,
+              details: values.details,
+              development: values.development,
+              ...sectionState,
+            },
           },
-        },
-      });
+        });
+      } else {
+        await create.mutateAsync({
+          entity: values.category,
+          data: {
+            id: crypto.randomUUID(),
+            version: 1,
+            development: values.development || undefined,
+            state: {
+              employeeStaffId: approvalTarget
+                ? approvalTarget.state.employeeStaffId
+                : values.employeeStaffId || undefined,
+              title: values.title,
+              details: values.details,
+              ...sectionState,
+              targetRecordId: approvalTarget?.id,
+              approvalPurpose: approvalPurpose || undefined,
+              exitType: values.category === "hr-exits" ? values.exitType : undefined,
+            },
+          },
+        });
+      }
       await refresh();
       form.reset({
         category: values.category,
@@ -295,6 +318,7 @@ export default function HRWorkspace() {
         exitType: "termination",
       });
       setSectionValues({});
+      setEditingRecord(null);
       setOpen(false);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -346,6 +370,7 @@ export default function HRWorkspace() {
       ? filterProcess as Category
       : fallback;
     setError("");
+    setEditingRecord(null);
     setSectionValues({});
     form.reset({
       category,
@@ -355,6 +380,31 @@ export default function HRWorkspace() {
       development: "",
       targetRecordId: "",
       exitType: "termination",
+    });
+    setOpen(true);
+  }
+
+  function openEditRecord(row: EntityRecord) {
+    const category = row.entity as Category;
+    const state = row.state || {};
+    setError("");
+    setEditingRecord(row);
+    setSectionValues(Object.fromEntries(
+      (sectionFields[category] || []).map((field) => [
+        field.key,
+        state[field.key] === undefined || state[field.key] === null
+          ? ""
+          : String(state[field.key]),
+      ]),
+    ));
+    form.reset({
+      category,
+      employeeStaffId: typeof state.employeeStaffId === "string" ? state.employeeStaffId : "",
+      title: typeof state.title === "string" ? state.title : "",
+      details: typeof state.details === "string" ? state.details : "",
+      development: row.development || "",
+      targetRecordId: "",
+      exitType: state.exitType === "layoff" ? "layoff" : "termination",
     });
     setOpen(true);
   }
@@ -539,6 +589,12 @@ export default function HRWorkspace() {
                             </div>
                             
                             <div className="flex items-center gap-2 sm:shrink-0 sm:self-start">
+                               {actor?.role === "human_resources" && row.entity !== "hr-approvals" && (
+                                 <Button size="sm" variant="outline" data-testid={`button-edit-hr-record-${row.id}`} onClick={() => openEditRecord(row)}>
+                                   <Pencil className="mr-1.5 h-3.5 w-3.5" />
+                                   Edit
+                                 </Button>
+                               )}
                               {status === "draft" && (
                                 <Button size="sm" variant="outline" data-testid={`button-advance-hr-record-${row.id}`} onClick={() => requestAction(row, "advance")} disabled={action.isPending}>
                                   Advance
@@ -617,10 +673,13 @@ export default function HRWorkspace() {
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(value) => {
+        setOpen(value);
+        if (!value) setEditingRecord(null);
+      }}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Create HR record</DialogTitle>
+            <DialogTitle>{editingRecord?.entity === "hr-employee-records" ? "Complete employee record" : editingRecord ? "Edit HR record" : "Create HR record"}</DialogTitle>
           </DialogHeader>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
@@ -628,10 +687,10 @@ export default function HRWorkspace() {
                 <FormItem>
                   <FormLabel>Process</FormLabel>
                   <FormControl>
-                    <select {...field} onChange={(event) => {
+                    <select {...field} disabled={Boolean(editingRecord)} onChange={(event) => {
                       field.onChange(event);
                       setSectionValues({});
-                    }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="select-hr-process">
+                    }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70" data-testid="select-hr-process">
                       {visibleCategories.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </FormControl>
@@ -658,7 +717,7 @@ export default function HRWorkspace() {
                 <FormItem>
                   <FormLabel>Employee</FormLabel>
                   <FormControl>
-                    <select {...field} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="select-hr-employee">
+                    <select {...field} disabled={Boolean(editingRecord)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-70" data-testid="select-hr-employee">
                       <option value="">Select employee</option>
                       {staff.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
                     </select>
@@ -743,7 +802,9 @@ export default function HRWorkspace() {
               )}
               <DialogFooter className="pt-2">
                 <Button type="button" variant="outline" data-testid="button-cancel-hr-record" onClick={() => setOpen(false)}>Cancel</Button>
-                <Button type="submit" data-testid="button-submit-hr-record" disabled={create.isPending}>{create.isPending ? "Creating..." : "Create record"}</Button>
+                <Button type="submit" data-testid="button-submit-hr-record" disabled={create.isPending || update.isPending}>
+                  {editingRecord ? (update.isPending ? "Saving..." : "Save record") : (create.isPending ? "Creating..." : "Create record")}
+                </Button>
               </DialogFooter>
             </form>
           </Form>
