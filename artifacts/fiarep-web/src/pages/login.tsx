@@ -92,7 +92,7 @@ export default function Login() {
           Sign in to your account
         </h2>
         <p className="mt-2 text-center text-sm text-muted-foreground">
-          Field Inspection, Repair, Estimation &amp; Property Operations Platform
+          Field Inspection, Assessment, Repair, Estimation &amp; Property Operations Platform
         </p>
       </div>
 

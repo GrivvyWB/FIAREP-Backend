@@ -13,7 +13,7 @@ export default function Fiarep() {
       <div className="absolute bottom-[9vh] left-[10vw] max-w-[77vw]">
         <div className="mb-[2vh] text-[1.8vw] font-semibold text-primary">Property operations, connected.</div>
         <h1 className="m-0 text-[7vw] font-bold leading-[1.02] tracking-[-0.045em] text-[#111111]">FIAREP</h1>
-        <p className="mt-[2vh] max-w-[78vw] text-[2.15vw] font-normal leading-[1.36] text-[#666666] text-wrap-balance">Field Inspection, Repair, Estimation &amp; Property Operations Platform</p>
+        <p className="mt-[2vh] max-w-[78vw] text-[2.15vw] font-normal leading-[1.36] text-[#666666] text-wrap-balance">Field Inspection, Assessment, Repair, Estimation &amp; Property Operations Platform</p>
         <p className="mt-[1.3vh] max-w-[78vw] text-[1.7vw] font-normal leading-[1.42] text-[#667085] text-wrap-pretty">One connected system for field teams, management, residents, vendors, Procurement, and platform administration.</p>
       </div>
     </div>
