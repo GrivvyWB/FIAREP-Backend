@@ -1,5 +1,5 @@
 import * as SQLite from 'expo-sqlite';
-import { addNotification, listManagementForDevelopment } from './store';
+import { addNotification, listManagementForDevelopment, queueMutation } from './store';
 
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 
@@ -195,6 +195,13 @@ export async function addHudNote(inspectionId: string, text: string, byRole: str
 
 // Notify admin + management for the inspection's development that it's ready for review.
 export async function notifyInspectionForReview(insp: HudInspection): Promise<void> {
+  const queued = {
+    ...insp,
+    ...(insp.review?.decision === "needs_revision"
+      ? { _pendingWorkflowActions: [{ action: "resubmit", body: {} }] }
+      : {}),
+  };
+  await queueMutation("hud-inspections", insp.id, queued);
   const detail = (insp.unitAddress || 'Inspection') + (insp.development ? ' \u00b7 ' + insp.development : '');
   await addNotification('administrator', 'HUD inspection ready for review', detail, 'hud:' + insp.id);
   if (insp.development) {

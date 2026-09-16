@@ -86,6 +86,7 @@ export const ENTITIES = new Set([
   "project-scopes",
   "intakes",
   "inspections",
+  "hud-inspections",
   "elevators",
   "roofplans",
   "project-notes",
@@ -181,6 +182,16 @@ export function isElevatorFieldStaff(actor: Actor): boolean {
   );
 }
 
+export function isSupervisorPosition(actor: Actor): boolean {
+  return actor.position.toLowerCase().includes("supervisor") ||
+    actor.position === "Superintendent";
+}
+
+export function isHudReviewSupervisor(actor: Actor): boolean {
+  return actor.position === "Supervisor Inspector" ||
+    actor.position === "CPM Supervisor";
+}
+
 export function canBrowseStaffDirectory(actor: Actor): boolean {
   return (
     actor.role === "human_resources" ||
@@ -191,6 +202,11 @@ export function canBrowseStaffDirectory(actor: Actor): boolean {
 }
 
 export function canReadEntity(actor: Actor, entity: string): boolean {
+  if (entity === "hud-inspections") {
+    return isHudReviewSupervisor(actor) ||
+      (actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position));
+  }
+  if (entity === "change-orders" && isSupervisorPosition(actor)) return true;
   if (ELEVATOR_ENTITIES.has(entity)) {
     if (["management", "administrator"].includes(actor.role) ||
         isBoroughDirector(actor)) {
@@ -336,6 +352,7 @@ function staffAssignmentRecordAllowed(
   row: EntityRecordAuthorizationState,
 ): boolean {
   if (!["worker", "inspector"].includes(actor.role)) return true;
+  if (row.entity === "hud-inspections") return row.createdBy === actor.id;
   if (
     actor.role === "inspector" &&
     actor.position === "CPM" &&
@@ -391,6 +408,10 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
   if (actor.role === "emergency") return false;
   if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
+  if (entity === "hud-inspections") {
+    return actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position);
+  }
+  if (entity === "change-orders" && isSupervisorPosition(actor)) return true;
   if (ELEVATOR_ENTITIES.has(entity)) {
     return (
       isElevatorFieldStaff(actor) ||
@@ -431,6 +452,10 @@ export function canMutateEntity(actor: Actor, entity: string): boolean {
   if (actor.role === "emergency") return entity === "emergency-jobs";
   if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
+  if (entity === "hud-inspections") {
+    return actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position);
+  }
+  if (entity === "change-orders" && isSupervisorPosition(actor)) return true;
   if (ELEVATOR_ENTITIES.has(entity) || VIOLATION_ENTITIES.has(entity)) {
     return canCreateEntity(actor, entity);
   }
@@ -446,6 +471,7 @@ export function canDeleteEntity(
   entity: string,
   state: Record<string, unknown>,
 ): boolean {
+  if (entity === "hud-inspections") return false;
   if (ELEVATOR_ENTITIES.has(entity)) {
     return (
       (isElevatorFieldStaff(actor) && state["clearedByMgmt"] === true) ||
@@ -682,7 +708,8 @@ export function canPerformEntityAction(
 
   const isManagement = isOrdinaryManagement(actor);
   const isSupervisor =
-    actor.role === "management" || actor.role === "administrator";
+    actor.role === "management" || actor.role === "administrator" ||
+    isSupervisorPosition(actor);
   const isFieldStaff =
     actor.role === "worker" || actor.role === "inspector";
   if (
@@ -711,6 +738,15 @@ export function canPerformEntityAction(
       actor.role === "procurement" &&
       ["broadcast", "award", "rate-close", "return"].includes(action)
     );
+  }
+
+  if (entity === "hud-inspections") {
+    if (["approve", "deny", "correction"].includes(action)) {
+      return isHudReviewSupervisor(actor);
+    }
+    return action === "resubmit" &&
+      actor.role === "inspector" &&
+      ["CPM", "Inspector"].includes(actor.position);
   }
 
   if (entity === "resident-reports") {
@@ -770,6 +806,7 @@ const WORKFLOW_ENTITIES = new Set([
   "leave-requests",
   "elevator-jobs",
   "emergency-jobs",
+  "hud-inspections",
 ]);
 
 const WORKFLOW_MANAGED_FIELDS = new Set([
@@ -820,6 +857,7 @@ const INITIAL_WORKFLOW_STATUS: Record<string, string> = {
   "leave-requests": "Pending",
   "elevator-jobs": "assigned",
   "emergency-jobs": "assigned",
+  "hud-inspections": "Submitted",
 };
 
 export function withInitialWorkflowState(
@@ -885,6 +923,12 @@ export function isValidEntityTransition(
       start: ["assigned"],
       complete: ["assigned", "in_progress"],
       "approve-work": ["done"],
+    },
+    "hud-inspections": {
+      approve: ["Submitted"],
+      deny: ["Submitted"],
+      correction: ["Submitted"],
+      resubmit: ["Correction"],
     },
   };
   return allowed[entity]?.[action]?.includes(status) === true;

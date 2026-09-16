@@ -214,6 +214,116 @@ test("ordinary staff can read only operational records assigned to their canonic
   );
 });
 
+test("HUD inspections are created on mobile and reviewed only by designated supervisors", () => {
+  const cpm = actor({ id: "cpm-1", role: "inspector", position: "CPM" });
+  const inspector = actor({ id: "inspector-1", role: "inspector", position: "Inspector" });
+  const inspectorSupervisor = actor({ role: "management", position: "Supervisor Inspector" });
+  const cpmSupervisor = actor({ role: "management", position: "CPM Supervisor" });
+  const tradeSupervisor = actor({ role: "management", position: "Plumber Supervisor" });
+
+  assert.equal(canCreateEntity(cpm, "hud-inspections"), true);
+  assert.equal(canCreateEntity(inspector, "hud-inspections"), true);
+  assert.equal(canCreateEntity(inspectorSupervisor, "hud-inspections"), false);
+  assert.equal(canReadEntity(inspectorSupervisor, "hud-inspections"), true);
+  assert.equal(canReadEntity(cpmSupervisor, "hud-inspections"), true);
+  assert.equal(canReadEntity(tradeSupervisor, "hud-inspections"), false);
+
+  for (const supervisor of [inspectorSupervisor, cpmSupervisor]) {
+    for (const action of ["approve", "deny", "correction"]) {
+      assert.equal(
+        canPerformEntityAction(supervisor, "hud-inspections", action, { status: "Submitted" }),
+        true,
+      );
+    }
+  }
+  assert.equal(
+    canPerformEntityAction(tradeSupervisor, "hud-inspections", "approve", { status: "Submitted" }),
+    false,
+  );
+  assert.equal(
+    canPerformEntityAction(cpm, "hud-inspections", "resubmit", { status: "Correction" }),
+    true,
+  );
+});
+
+test("HUD inspection records remain scoped to their creator and development", () => {
+  const record = {
+    entity: "hud-inspections",
+    development: "Development A",
+    state: { status: "Submitted" },
+    createdBy: "inspector-1",
+    deleted: false,
+  };
+  assert.equal(
+    canReadEntityRecord(
+      actor({ id: "inspector-1", role: "inspector", position: "Inspector" }),
+      record,
+    ),
+    true,
+  );
+  assert.equal(
+    canReadEntityRecord(
+      actor({ id: "inspector-2", role: "inspector", position: "Inspector" }),
+      record,
+    ),
+    false,
+  );
+  assert.equal(
+    canReadEntityRecord(
+      actor({ role: "management", position: "Supervisor Inspector" }),
+      record,
+    ),
+    true,
+  );
+  assert.equal(
+    canReadEntityRecord(
+      actor({
+        role: "management",
+        position: "Supervisor Inspector",
+        developments: ["Development B"],
+      }),
+      record,
+    ),
+    false,
+  );
+});
+
+test("HUD inspection workflow protects review status and valid transitions", () => {
+  assert.deepEqual(
+    withInitialWorkflowState("hud-inspections", { status: "completed", unitAddress: "1 Main St" }),
+    { status: "Submitted", unitAddress: "1 Main St" },
+  );
+  assert.equal(
+    patchesWorkflowManagedFields("hud-inspections", { status: "Approved" }),
+    true,
+  );
+  assert.equal(
+    isValidEntityTransition("hud-inspections", "approve", { status: "Submitted" }),
+    true,
+  );
+  assert.equal(
+    isValidEntityTransition("hud-inspections", "correction", { status: "Submitted" }),
+    true,
+  );
+  assert.equal(
+    isValidEntityTransition("hud-inspections", "resubmit", { status: "Correction" }),
+    true,
+  );
+  assert.equal(
+    isValidEntityTransition("hud-inspections", "approve", { status: "Approved" }),
+    false,
+  );
+});
+
+test("all supervisors can open and change work orders", () => {
+  for (const position of ["Supervisor Inspector", "CPM Supervisor", "Plumber Supervisor"]) {
+    const supervisor = actor({ role: "management", position });
+    assert.equal(canReadEntity(supervisor, "change-orders"), true);
+    assert.equal(canCreateEntity(supervisor, "change-orders"), true);
+    assert.equal(canMutateEntity(supervisor, "change-orders"), true);
+  }
+});
+
 test("ordinary staff can read only their own leave requests", () => {
   const worker = actor({
     id: "worker-1",

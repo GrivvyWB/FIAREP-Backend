@@ -6,11 +6,22 @@ export type StaffModule =
   | "repairs" | "projects" | "reports" | "report-upload" | "calendar"
   | "clients" | "team" | "violations" | "procurement" | "scope-review"
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
-  | "leave" | "notifications" | "settings" | "shared-data";
+  | "leave" | "notifications" | "settings" | "shared-data"
+  | "hud-inspections";
 
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
 const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "shared-data"]);
 const ELEVATOR_POSITIONS = new Set(["Elevator Supervisor", "Elevator Service"]);
+const HUD_REVIEW_POSITIONS = new Set(["Supervisor Inspector", "CPM Supervisor", "Supervisor CPM"]);
+
+export function isSupervisor(staff: Staff | null | undefined): boolean {
+  const position = staff?.position?.trim().toLowerCase() || "";
+  return position.includes("supervisor") || position === "superintendent";
+}
+
+export function canReviewHud(staff: Staff | null | undefined): boolean {
+  return !!staff && HUD_REVIEW_POSITIONS.has(staff.position || "");
+}
 
 /** One client-side policy shared by navigation, routes, and data surfaces.
  * The API remains the final authority; this prevents unauthorized UI from
@@ -22,6 +33,8 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
       module === "leave" || module === "notifications" || module === "settings";
   }
   if (staff.role === "procurement") return module === "procurement";
+  if (module === "hud-inspections") return canReviewHud(staff);
+  if (module === "change-orders" && isSupervisor(staff)) return true;
   if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
   if (module === "elevators") {
     return staff.role === "administrator" || ELEVATOR_POSITIONS.has(staff.position || "");
@@ -52,7 +65,7 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
 }
 
 export function canApproveWork(staff: Staff | null | undefined): boolean {
-  return !!staff && MANAGEMENT_ROLES.has(staff.role);
+  return !!staff && (MANAGEMENT_ROLES.has(staff.role) || isSupervisor(staff));
 }
 
 export interface AccessEvaluation {

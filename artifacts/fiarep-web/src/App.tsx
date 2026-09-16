@@ -36,6 +36,7 @@ import ProcurementLogin from '@/pages/procurement-login';
 import ScopeReview from '@/pages/scope-review';
 import ScopeWriting from '@/pages/scope-writing';
 import Scores from '@/pages/scores';
+import HudInspections from '@/pages/hud-inspections';
 
 // Owner Pages
 import Access from '@/pages/access';
@@ -184,6 +185,7 @@ function AppRouter() {
           <Route path="/" component={DashboardRoute} />
           <Route path="/dashboard" component={DashboardRoute} />
           <Route path="/inspections" component={InspectionsRoute} />
+          <Route path="/hud-inspections" component={HudInspectionsRoute} />
           <Route path="/inspections/new" component={NewInspectionRoute} />
           <Route path="/estimates" component={EstimatesRoute} />
           <Route path="/repairs" component={RepairsRoute} />
@@ -224,6 +226,7 @@ function ModuleRoute({ module, children }: { module: StaffModule; children: Reac
 
 const DashboardRoute = () => <ModuleRoute module="dashboard"><Dashboard /></ModuleRoute>;
 const InspectionsRoute = () => <ModuleRoute module="inspections"><Inspections /></ModuleRoute>;
+const HudInspectionsRoute = () => <ModuleRoute module="hud-inspections"><HudInspections /></ModuleRoute>;
 const NewInspectionRoute = () => <ModuleRoute module="inspection-create"><NewInspection /></ModuleRoute>;
 const EstimatesRoute = () => <ModuleRoute module="estimates"><Estimates /></ModuleRoute>;
 const RepairsRoute = () => <ModuleRoute module="repairs"><Repairs /></ModuleRoute>;
@@ -256,7 +259,7 @@ function ManagementRoute({ children }: { children: ReactNode }) {
 }
 
 function ManagementRouteChangeOrders() {
-  return <ManagementRoute><ChangeOrders /></ManagementRoute>;
+  return <ModuleRoute module="change-orders"><ChangeOrders /></ModuleRoute>;
 }
 
 function ManagementRouteScores() {

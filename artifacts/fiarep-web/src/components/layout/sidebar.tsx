@@ -35,6 +35,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" as const },
     { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },
+    { name: "HUD Inspections", href: "/hud-inspections", icon: ClipboardCheck, module: "hud-inspections" as const },
     { name: "Estimates", href: "/estimates", icon: FileText, module: "estimates" as const },
     { name: "Repairs", href: "/repairs", icon: Wrench, module: "repairs" as const },
     { name: "Projects", href: "/projects", icon: Briefcase, module: "projects" as const },
@@ -48,9 +49,9 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     ...(hasModuleAccess(staff, "scope-writing") ? [{ name: "Scope Writing", href: "/scope-writing", icon: ClipboardCheck, module: "scope-writing" as const }] : []),
     ...((staff?.role === "management" || staff?.role === "administrator") ? [
       { name: "Emergency", href: "/emergency", icon: BellRing, module: "emergency" as const },
-      { name: "Change Orders", href: "/change-orders", icon: FileCog, module: "change-orders" as const },
       { name: "Scores", href: "/scores", icon: Target, module: "scores" as const },
     ] : []),
+    { name: "Change Orders", href: "/change-orders", icon: FileCog, module: "change-orders" as const },
     { name: "Elevators", href: "/elevators", icon: ArrowUpToLine, module: "elevators" as const },
     { name: "Leave", href: "/leave", icon: Plane, module: "leave" as const },
     { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },

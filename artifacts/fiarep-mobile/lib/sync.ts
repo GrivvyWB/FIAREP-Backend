@@ -18,6 +18,7 @@ const TABLES: Array<{ table: string; entity: string; key: string; column?: 'stat
   { table: 'checklists', entity: 'checklists', key: 'projectId' },
   { table: 'roofplans', entity: 'roofplans', key: 'projectId', column: 'data' },
   { table: 'inspections', entity: 'inspections', key: 'projectId' },
+  { table: 'hud_inspections', entity: 'hud-inspections', key: 'id' },
   { table: 'cost_estimates', entity: 'cost-estimates', key: 'projectId' },
   { table: 'intakes', entity: 'intakes', key: 'projectId' },
   { table: 'elevators', entity: 'elevators', key: 'projectId' },
@@ -43,7 +44,7 @@ const TABLES: Array<{ table: string; entity: string; key: string; column?: 'stat
 const ROLE_ENTITIES: Record<string, Set<string>> = {
   administrator: new Set(TABLES.map((item) => item.entity)),
   management: new Set(TABLES.map((item) => item.entity)),
-  inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'priority-violations', 'route-assignments', 'procurement', 'global-settings']),
+  inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'hud-inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'priority-violations', 'route-assignments', 'procurement', 'global-settings']),
   worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests', 'global-settings']),
   vendor: new Set(['projects', 'project-scopes', 'project-notes', 'project-reviews', 'building-violations', 'route-assignments', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes']),
   resident: new Set(['resident-reports']),
@@ -76,8 +77,9 @@ function writableState(entity: string, state: Record<string, any>) {
   const copy = { ...state };
   delete copy._meta;
   delete copy._pendingWorkflowActions;
-  if (['procurement', 'resident-reports', 'building-violations', 'leave-requests', 'elevator-jobs', 'emergency-jobs'].includes(entity)) {
+  if (['procurement', 'resident-reports', 'building-violations', 'leave-requests', 'elevator-jobs', 'emergency-jobs', 'hud-inspections'].includes(entity)) {
     for (const key of WORKFLOW_FIELDS) delete copy[key];
+    if (entity === 'hud-inspections') delete copy.review;
   }
   return copy;
 }
@@ -145,6 +147,9 @@ async function discoverQueue(d: any) {
           try { state.remoteFiles = JSON.parse(row.remoteFiles); } catch {}
         }
         normalizeLocalState(mapping, state);
+        if (mapping.entity === 'hud-inspections' &&
+            state.status !== 'completed' &&
+            !state._meta?.serverVersion) continue;
         const encoded = JSON.stringify(state);
         const prior = await d.getFirstAsync(
           'SELECT * FROM sync_queue WHERE owner=? AND entity = ? AND id = ?', owner, mapping.entity, id,

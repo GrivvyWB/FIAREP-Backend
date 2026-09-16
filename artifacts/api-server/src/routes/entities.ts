@@ -719,6 +719,12 @@ router.post(
       deny: "Denied",
       cancel: "Cancelled",
     },
+    "hud-inspections": {
+      approve: "Approved",
+      deny: "Denied",
+      correction: "Correction",
+      resubmit: "Submitted",
+    },
     "elevator-jobs": {
       "on-my-way": "assigned",
       start: "in_progress",
@@ -874,6 +880,21 @@ router.post(
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
   };
+  if (
+    entity === "hud-inspections" &&
+    ["approve", "deny", "correction"].includes(action)
+  ) {
+    state["review"] = {
+      decision: action === "approve"
+        ? "approved"
+        : action === "deny"
+          ? "rejected"
+          : "needs_revision",
+      decidedBy: actor.name,
+      decidedAt: now.toISOString(),
+      ...(reviewNote ? { notes: reviewNote } : {}),
+    };
+  }
   if (entity === "procurement" &&
       (action === "approve" || action === "reject" || action === "return") &&
       reviewNote) {
@@ -1010,6 +1031,8 @@ router.post(
     target = typeof state["assignedStaffId"] === "string"
       ? state["assignedStaffId"]
       : "";
+  } else if (entity === "hud-inspections") {
+    target = String(current.createdBy ?? "");
   } else if (entity === "procurement") {
     // Every procurement notification follows the canonical workflow.  Never
     // honor a client supplied target.

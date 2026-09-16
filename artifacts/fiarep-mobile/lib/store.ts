@@ -179,7 +179,7 @@ export async function db() {
     if (!_db) _dbInit = null;
   }
 }
-async function queueMutation(entity: string, id: string, state: any, operation: 'upsert' | 'delete' = 'upsert', baseVersion?: number) {
+export async function queueMutation(entity: string, id: string, state: any, operation: 'upsert' | 'delete' = 'upsert', baseVersion?: number) {
   if (operation === 'delete') {
     const policy = await getDeletionPolicy();
     if (!policy.enabled) throw new Error('Deletion is disabled for this organization.');
