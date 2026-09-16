@@ -109,11 +109,23 @@ test("building and residential scores use resolved statuses and grouping fallbac
   assert.equal(calculateBuildingScores(records, NOW)[0]?.resolved, 1);
   assert.deepEqual(calculateResidentialScores(records, NOW), [{
     address: "200 Main",
-    score: 0,
+    score: -15,
     total: 1,
     resolved: 0,
     open: 0,
     overdue: 1,
     resolutionRate: 0,
   }]);
+});
+
+test("building and residential scores remain negative for unresolved work", () => {
+  const records = [
+    record("resident-reports", {
+      status: "submitted",
+      address: "2201 1st Avenue NY NY 10029",
+      createdAt: "2025-01-30T00:00:00.000Z",
+    }),
+  ];
+  assert.equal(calculateBuildingScores(records, NOW)[0]?.score, -5);
+  assert.equal(calculateResidentialScores(records, NOW)[0]?.score, -5);
 });

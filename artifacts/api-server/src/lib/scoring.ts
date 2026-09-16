@@ -264,7 +264,7 @@ function calculateResolutionScores(
       key,
       ...bucket,
       resolutionRate,
-      score: clamp(Math.round(100 * resolutionRate - 15 * overdueRate - 5 * openRate), 0, 100),
+      score: Math.round(100 * resolutionRate - 15 * overdueRate - 5 * openRate),
     };
   });
 }

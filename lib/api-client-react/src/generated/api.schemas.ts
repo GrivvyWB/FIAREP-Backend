@@ -804,7 +804,7 @@ export type ScoresResponseFormulaVersion = typeof ScoresResponseFormulaVersion[k
 
 
 export const ScoresResponseFormulaVersion = {
-  v1: 'v1',
+  v2: 'v2',
 } as const;
 
 export interface DevelopmentScore {
@@ -846,7 +846,7 @@ export interface VendorScore {
 export interface BuildingScore {
   building: string;
   /**
-     * @minimum 0
+     * @minimum -15
      * @maximum 100
      */
   score: number;
@@ -868,7 +868,7 @@ export interface BuildingScore {
 export interface ResidentialScore {
   address: string;
   /**
-     * @minimum 0
+     * @minimum -15
      * @maximum 100
      */
   score: number;

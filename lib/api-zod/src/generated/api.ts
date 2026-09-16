@@ -939,7 +939,7 @@ export const getScoresResponseVendorsItemOnTimeRateMax = 1;
 
 export const getScoresResponseVendorsItemDeductionsMin = 0;
 
-export const getScoresResponseBuildingsItemScoreMin = 0;
+export const getScoresResponseBuildingsItemScoreMin = -15;
 export const getScoresResponseBuildingsItemScoreMax = 100;
 
 export const getScoresResponseBuildingsItemTotalMin = 0;
@@ -953,7 +953,7 @@ export const getScoresResponseBuildingsItemOverdueMin = 0;
 export const getScoresResponseBuildingsItemResolutionRateMin = 0;
 export const getScoresResponseBuildingsItemResolutionRateMax = 1;
 
-export const getScoresResponseResidentialItemScoreMin = 0;
+export const getScoresResponseResidentialItemScoreMin = -15;
 export const getScoresResponseResidentialItemScoreMax = 100;
 
 export const getScoresResponseResidentialItemTotalMin = 0;
@@ -971,7 +971,7 @@ export const getScoresResponseResidentialItemResolutionRateMax = 1;
 
 export const GetScoresResponse = zod.object({
   "generatedAt": zod.coerce.date(),
-  "formulaVersion": zod.enum(['v1']),
+  "formulaVersion": zod.enum(['v2']),
   "developments": zod.array(zod.object({
   "development": zod.string(),
   "points": zod.number().int(),

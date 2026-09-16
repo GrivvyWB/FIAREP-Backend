@@ -3148,7 +3148,7 @@ export type VendorScore = {
 
 export type ScoresSnapshot = {
   generatedAt?: string;
-  formulaVersion: 'v1';
+  formulaVersion: 'v2';
   developments: DevelopmentScore[];
   vendors: VendorScore[];
   buildings: ApiScoresResponse['buildings'];
@@ -4155,7 +4155,7 @@ export async function getScores(): Promise<ScoresSnapshot> {
       getVendorScores(),
     ]);
     return {
-      formulaVersion: 'v1',
+      formulaVersion: 'v2',
       developments: developments.map((score) => ({
         ...score,
         points: score.score,

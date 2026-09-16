@@ -106,7 +106,7 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
 
   const response = {
     generatedAt: new Date().toISOString(),
-    formulaVersion: "v1" as const,
+    formulaVersion: "v2" as const,
     developments,
     vendors: calculateVendorScores(records),
     buildings: calculateBuildingScores(records),

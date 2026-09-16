@@ -1792,7 +1792,7 @@ components:
       required: [generatedAt, formulaVersion, developments, vendors, buildings, residential]
       properties:
         generatedAt: { type: string, format: date-time }
-        formulaVersion: { type: string, enum: [v1] }
+        formulaVersion: { type: string, enum: [v2] }
         developments:
           type: array
           items: { $ref: "#/components/schemas/DevelopmentScore" }
@@ -1830,7 +1830,7 @@ components:
       required: [building, score, total, resolved, open, overdue, resolutionRate]
       properties:
         building: { type: string }
-        score: { type: integer, minimum: 0, maximum: 100 }
+        score: { type: integer, minimum: -15, maximum: 100 }
         total: { type: integer, minimum: 0 }
         resolved: { type: integer, minimum: 0 }
         open: { type: integer, minimum: 0 }
@@ -1841,7 +1841,7 @@ components:
       required: [address, score, total, resolved, open, overdue, resolutionRate]
       properties:
         address: { type: string }
-        score: { type: integer, minimum: 0, maximum: 100 }
+        score: { type: integer, minimum: -15, maximum: 100 }
         total: { type: integer, minimum: 0 }
         resolved: { type: integer, minimum: 0 }
         open: { type: integer, minimum: 0 }
