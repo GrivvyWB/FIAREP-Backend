@@ -23,7 +23,6 @@ import {
   isAssignmentAuthority,
   isLeaveApprovalAuthority,
   leaveRequestDurationDays,
-  validateLeaveRequestSchedule,
   isValidEntityTransition,
   patchesWorkflowManagedFields,
   recordId,
@@ -44,15 +43,6 @@ const router: IRouter = Router();
 router.use("/v1", requireAuth);
 const hrLeaveDecisionRateLimit = rateLimit("hr-leave-decision", 12);
 
-const hrSensitiveDecisionRateLimit = rateLimit(
-  "hr-sensitive-code",
-  10,
-  (req, res) => {
-    const actorId = (res.locals["actor"] as { id?: string } | undefined)?.id;
-    const source = req.socket.remoteAddress ?? "unknown";
-    return `${actorId || "anonymous"}:${source}`;
-  },
-);
 const HR_SENSITIVE_APPROVAL_PURPOSES = new Set([
   "pay-change",
   "discipline",
@@ -334,17 +324,11 @@ router.get("/v1/:entity", async (req, res, next) => {
     ? await Promise.all(storedRows.map(repairLegacyResidentDevelopment))
     : storedRows;
   const projectId =
-    typeof body["projectId"] === "string"
-      ? body["projectId"]
-      : typeof rawState["projectId"] === "string"
-        ? rawState["projectId"]
-        : null;
-  let development =
-    typeof body["development"] === "string"
-      ? body["development"]
-      : typeof rawState["development"] === "string"
-        ? rawState["development"]
-        : null;
+    typeof req.query["projectId"] === "string" ? req.query["projectId"] : null;
+  const development =
+    typeof req.query["development"] === "string"
+      ? req.query["development"]
+      : null;
   const status =
     typeof req.query["status"] === "string" ? req.query["status"] : null;
   const authorizedRows = await Promise.all(
@@ -444,11 +428,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     return;
   }
   if (entity === "hr-approvals" && actor.role === "management") {
-    const linkage = await validateHrApprovalLinkage(actor, createdState);
-
-    const requestedId = typeof createdState["employeeStaffId"] === "string"
-      ? createdState["employeeStaffId"].trim()
-      : "";
+    const linkage = await validateHrApprovalLinkage(actor, rawState);
     if (!linkage) {
       res.status(400).json({ error: "Approval must link to a matching sensitive HR record and employee" });
       return;
@@ -471,24 +451,36 @@ router.post("/v1/:entity", async (req, res, next) => {
   );
   if (entity === "hr-approvals") {
     const linkage = await validateHrApprovalLinkage(actor, createdState);
-
-    const requestedId = typeof createdState["employeeStaffId"] === "string"
-      ? createdState["employeeStaffId"].trim()
+    if (!linkage) {
+      res.status(400).json({ error: "Approval linkage is invalid" });
+      return;
+    }
+    createdState = {
+      ...createdState,
+      targetRecordId: linkage.target.id,
+      employeeStaffId: linkage.employee.id,
+      approvalPurpose: linkage.purpose,
+    };
+  }
+  if (entity === "leave-requests") {
+    delete createdState["employeeStaffId"];
+    const employeeName = typeof createdState["employee"] === "string"
+      ? createdState["employee"].trim()
       : "";
-      const employeeName = typeof current.state["employee"] === "string"
-        ? current.state["employee"].trim()
-        : "";
-      const employeeMatches = employeeName
-        ? await db.select({ id: staffAccounts.id })
-          .from(staffAccounts)
-          .where(and(
-            eq(staffAccounts.tenantId, actor.tenantId),
-            eq(staffAccounts.status, "approved"),
-            sql`lower(${staffAccounts.name}) = lower(${employeeName})`,
-          ))
-          .limit(2)
-        : [];
-    const leaveDays = leaveRequestDurationDays(current.state);
+    if (employeeName) {
+      const employeeMatches = await db.select({ id: staffAccounts.id })
+        .from(staffAccounts)
+        .where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+          sql`lower(${staffAccounts.name}) = lower(${employeeName})`,
+        ))
+        .limit(2);
+      if (employeeMatches.length === 1) {
+        createdState["employeeStaffId"] = employeeMatches[0]!.id;
+      }
+    }
+    const leaveDays = leaveRequestDurationDays(createdState);
     if (leaveDays === null || !validLeaveRequestDuration(leaveDays)) {
       res.status(400).json({ error: "Time off must be 1 to 14 days or 30 to 365 days" });
       return;
@@ -565,13 +557,10 @@ router.post("/v1/:entity", async (req, res, next) => {
       id,
     );
   } else if (entity === "leave-requests") {
-      const reviewers = await db.select({ name: staffAccounts.name, position: staffAccounts.position })
-        .from(staffAccounts)
-        .where(and(
-          eq(staffAccounts.tenantId, actor.tenantId),
-          eq(staffAccounts.role, "management"),
-          eq(staffAccounts.status, "approved"),
-        ));
+    const reviewers = await db.select().from(staffAccounts).where(and(
+      eq(staffAccounts.tenantId, actor.tenantId),
+      eq(staffAccounts.status, "approved"),
+    ));
     for (const reviewer of reviewers) {
       const reviewerActor: Actor = {
         id: reviewer.id,
@@ -649,7 +638,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   const input = stateOf(req.body);
-  const expectedVersion = (req.body as { version?: unknown })?.version;
+  const expectedVersion = input?.["version"];
   if (typeof expectedVersion !== "number") {
     res.status(400).json({ error: "version is required" });
     return;
@@ -692,7 +681,38 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     )
     .limit(1);
 
-    const leaveIdentityFields = ["employeeStaffId", "employee", "requesterStaffId"];
+  if (
+    !current ||
+    !(await canReadRecordForActor(actor, current))
+  ) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  if (entity === "hr-approvals" &&
+      ["approved", "consumed"].includes(normalizeStatus(current.state["status"]))) {
+    res.status(409).json({ error: "Approved company approval evidence is immutable" });
+    return;
+  }
+  if (entity === "procurement" &&
+      actor.role === "inspector" && actor.position === "CPM" &&
+      !["draft", "returned"].includes(String(current.state["status"] ?? ""))) {
+    res.status(403).json({ error: "Submitted procurement scopes are read-only" });
+    return;
+  }
+  if (
+    entity === "procurement" &&
+     current.state["status"] === "closed"
+  ) {
+    res.status(409).json({ error: "Closed procurement records are immutable" });
+    return;
+  }
+  if (expectedVersion !== current.version) {
+    res.status(409).json({
+      error: "Concurrent update detected",
+      current: outward(actor, current),
+    });
+    return;
+  }
   const canonicalPatch = await canonicalizeAssignment(
     actor,
     entity,
@@ -704,6 +724,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   const updatedState = { ...current.state, ...canonicalPatch.state };
+  if (entity === "leave-requests") {
     const leaveDays = leaveRequestDurationDays(current.state);
     if (leaveDays === null || !validLeaveRequestDuration(leaveDays)) {
       res.status(400).json({ error: "Time off must be 1 to 14 days or 30 to 365 days" });
@@ -758,7 +779,18 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
 router.post(
   "/v1/:entity/:id/actions/:action",
   (req, res, next) => {
-  const actor = actorFrom(res);
+    const actor = actorFrom(res);
+    if (
+      actor.role === "human_resources" &&
+      req.params["entity"] === "leave-requests" &&
+      (req.params["action"] === "approve" || req.params["action"] === "deny")
+    ) {
+      hrLeaveDecisionRateLimit(req, res, next);
+      return;
+    }
+    next();
+  },
+  async (req, res, next) => {
   const entity = req.params["entity"];
   if (!validEntity(entity)) {
     next();
@@ -766,11 +798,6 @@ router.post(
   }
   const actor = actorFrom(res);
   const action = req.params["action"]!;
-
-    const isHrLeaveDecision =
-      actor.role === "human_resources" &&
-      entity === "leave-requests" &&
-      (action === "approve" || action === "deny");
   const [current] = await db
     .select()
     .from(entityRecords)
@@ -784,7 +811,6 @@ router.post(
     )
     .limit(1);
 
-    const leaveIdentityFields = ["employeeStaffId", "employee", "requesterStaffId"];
   if (!current || !(await canReadRecordForActor(actor, current))) {
     res.status(404).json({ error: "Record not found" });
     return;
@@ -921,14 +947,6 @@ router.post(
     });
     return;
   }
-  if (
-    isHrEntity(entity) &&
-    HR_SENSITIVE_ACTIONS.has(action) &&
-    actor.role !== "human_resources"
-  ) {
-    res.status(403).json({ error: "Only Human Resources may perform sensitive HR approvals" });
-    return;
-  }
   if (!canPerformAssignedWorkflowAction(actor, entity, action, current.state)) {
     res.status(403).json({ error: "This workflow action is restricted to the assigned staff member" });
     return;
@@ -966,25 +984,22 @@ router.post(
       });
       return;
     }
-          const employeeStaffId = typeof current.state["employeeStaffId"] === "string"
-            ? current.state["employeeStaffId"].trim()
-            : "";
-
-    const requesterStaffId = typeof current.state["requesterStaffId"] === "string"
-      ? current.state["requesterStaffId"]
-      : employeeStaffId;
-      const employeeName = typeof current.state["employee"] === "string"
+    const employeeStaffId = typeof current.state["employeeStaffId"] === "string"
+      ? current.state["employeeStaffId"]
+      : "";
+    const employeeName = typeof current.state["employee"] === "string"
         ? current.state["employee"].trim()
         : "";
-      const employeeMatches = employeeName
-        ? await db.select({ id: staffAccounts.id })
-          .from(staffAccounts)
-          .where(and(
+    const employeeMatches = employeeStaffId
+      ? await db.select().from(staffAccounts).where(and(
+          eq(staffAccounts.id, employeeStaffId),
+          eq(staffAccounts.tenantId, actor.tenantId),
+        )).limit(1)
+      : employeeName
+        ? await db.select().from(staffAccounts).where(and(
             eq(staffAccounts.tenantId, actor.tenantId),
-            eq(staffAccounts.status, "approved"),
             sql`lower(${staffAccounts.name}) = lower(${employeeName})`,
-          ))
-          .limit(2)
+          )).limit(2)
         : [];
     const employee = employeeMatches.length === 1 ? employeeMatches[0] : undefined;
     if (!employee || !canApproveLeaveForEmployee(actor, employee)) {
@@ -1215,10 +1230,6 @@ router.post(
           const employeeStaffId = typeof current.state["employeeStaffId"] === "string"
             ? current.state["employeeStaffId"].trim()
             : "";
-
-    const requesterStaffId = typeof current.state["requesterStaffId"] === "string"
-      ? current.state["requesterStaffId"]
-      : employeeStaffId;
           if (!employeeStaffId || employeeStaffId === actor.id) {
             throw Object.assign(new Error("The departure employee linkage is invalid"), { status: 409 });
           }
@@ -1468,7 +1479,6 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     )
     .limit(1);
 
-    const leaveIdentityFields = ["employeeStaffId", "employee", "requesterStaffId"];
   if (!current) {
     res.status(404).json({ error: "Record not found" });
     return;
@@ -1537,38 +1547,3 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
 });
 
 export default router;
-
-    const isHrSensitiveDecision =
-      actor.role === "human_resources" &&
-      entity === "hr-payroll-benefits" &&
-      ["approve-pay-change"].includes(action);
-
-    const isHrExitDecision =
-      actor.role === "human_resources" &&
-      entity === "hr-exits" &&
-      (action === "approve-termination" || action === "approve-layoff");
-
-    const isHrSensitiveAction =
-      actor.role === "human_resources" &&
-      entity === "hr-discipline" &&
-      action === "approve-discipline";
-
-    const scheduleError = validateLeaveRequestSchedule(updatedState);
-
-      const [employee] = await db.select().from(staffAccounts).where(and(
-        eq(staffAccounts.id, employeeStaffId),
-        eq(staffAccounts.tenantId, actor.tenantId),
-        eq(staffAccounts.status, "approved"),
-      )).limit(1);
-
-    const identityProvided = Boolean(requestedId || requestedName);
-
-    const isSelfIdentity = requestedId
-      ? requestedId === actor.id
-      : requestedName.toLowerCase() === actor.name.trim().toLowerCase();
-
-    const requestedName = typeof createdState["employee"] === "string"
-      ? createdState["employee"].trim()
-      : "";
-
-    let canEditLeave = requesterStaffId === actor.id;
