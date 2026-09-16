@@ -50,6 +50,88 @@ type Draft = {
   exitType: "termination" | "layoff";
 };
 
+type SectionField = {
+  key: string;
+  label: string;
+  type?: "text" | "email" | "tel" | "date" | "datetime-local" | "number";
+};
+
+const sectionFields: Partial<Record<Category, readonly SectionField[]>> = {
+  "hr-employee-records": [
+    { key: "employeeNumber", label: "Employee number" },
+    { key: "firstName", label: "First name" },
+    { key: "lastName", label: "Last name" },
+    { key: "email", label: "Email", type: "email" },
+    { key: "phone", label: "Phone", type: "tel" },
+    { key: "position", label: "Position" },
+    { key: "department", label: "Department" },
+    { key: "hireDate", label: "Hire date", type: "date" },
+    { key: "employmentStatus", label: "Status" },
+    { key: "managerId", label: "Manager ID" },
+  ],
+  "hr-recruiting": [
+    { key: "recordType", label: "Record type" },
+    { key: "jobTitle", label: "Job title" },
+    { key: "department", label: "Department" },
+    { key: "location", label: "Location" },
+    { key: "recruitingStatus", label: "Status" },
+    { key: "postedDate", label: "Posted date", type: "date" },
+    { key: "closingDate", label: "Closing date", type: "date" },
+    { key: "applicantName", label: "Applicant name" },
+    { key: "applicantEmail", label: "Applicant email", type: "email" },
+  ],
+  "hr-onboarding": [
+    { key: "taskName", label: "Task name" },
+    { key: "completed", label: "Completed" },
+    { key: "dueDate", label: "Due date", type: "date" },
+  ],
+  "hr-payroll-benefits": [
+    { key: "recordType", label: "Record type" },
+    { key: "payPeriod", label: "Pay period" },
+    { key: "grossPay", label: "Gross pay", type: "number" },
+    { key: "taxes", label: "Taxes", type: "number" },
+    { key: "netPay", label: "Net pay", type: "number" },
+    { key: "benefitPlan", label: "Benefit plan" },
+    { key: "enrollmentStatus", label: "Enrollment status" },
+  ],
+  "hr-attendance": [
+    { key: "clockIn", label: "Clock in", type: "datetime-local" },
+    { key: "clockOut", label: "Clock out", type: "datetime-local" },
+    { key: "hoursWorked", label: "Hours worked", type: "number" },
+  ],
+  "hr-relations": [
+    { key: "caseNumber", label: "Case number" },
+    { key: "complaint", label: "Complaint" },
+    { key: "caseStatus", label: "Status" },
+    { key: "resolution", label: "Resolution" },
+  ],
+  "hr-performance": [
+    { key: "reviewDate", label: "Review date", type: "date" },
+    { key: "rating", label: "Rating", type: "number" },
+    { key: "comments", label: "Comments" },
+    { key: "goals", label: "Goals" },
+  ],
+  "hr-discipline": [
+    { key: "actionType", label: "Action type" },
+    { key: "description", label: "Description" },
+    { key: "actionDate", label: "Action date", type: "date" },
+    { key: "disciplineStatus", label: "Status" },
+  ],
+  "hr-investigations": [
+    { key: "caseNumber", label: "Case number" },
+    { key: "complaint", label: "Complaint" },
+    { key: "investigator", label: "Investigator" },
+    { key: "investigationStatus", label: "Status" },
+    { key: "resolution", label: "Resolution" },
+  ],
+  "hr-training-compliance": [
+    { key: "courseName", label: "Course name" },
+    { key: "completionDate", label: "Completion date", type: "date" },
+    { key: "expirationDate", label: "Expiration date", type: "date" },
+    { key: "trainingStatus", label: "Status" },
+  ],
+};
+
 const labelFor = (category: string) =>
   categories.find(([value]) => value === category)?.[1] || category;
 
@@ -94,6 +176,7 @@ export default function HRWorkspace() {
     action: string;
   } | null>(null);
   const [authorizationCode, setAuthorizationCode] = useState("");
+  const [sectionValues, setSectionValues] = useState<Record<string, string>>({});
   
   const [view, setView] = useState<"records" | "audit">("records");
   const [filterProcess, setFilterProcess] = useState<string>("all");
@@ -190,6 +273,11 @@ export default function HRWorkspace() {
               : values.employeeStaffId || undefined,
             title: values.title,
             details: values.details,
+             ...Object.fromEntries(
+               Object.entries(sectionValues)
+                 .map(([key, value]) => [key, value.trim()])
+                 .filter(([, value]) => value !== ""),
+             ),
             targetRecordId: approvalTarget?.id,
             approvalPurpose: approvalPurpose || undefined,
             exitType: values.category === "hr-exits" ? values.exitType : undefined,
@@ -197,7 +285,16 @@ export default function HRWorkspace() {
         },
       });
       await refresh();
-      form.reset();
+      form.reset({
+        category: values.category,
+        employeeStaffId: "",
+        title: "",
+        details: "",
+        development: "",
+        targetRecordId: "",
+        exitType: "termination",
+      });
+      setSectionValues({});
       setOpen(false);
     } catch (reason) {
       setError(errorMessage(reason));
@@ -235,6 +332,33 @@ export default function HRWorkspace() {
     void perform(row, nextAction);
   }
 
+  function selectProcess(category: Category | "all") {
+    setFilterProcess(category);
+    setView("records");
+    setSearchQuery("");
+    if (category !== "all") form.setValue("category", category);
+  }
+
+  function openCreateRecord() {
+    const fallback = visibleCategories[0]?.[0] ?? "hr-employee-records";
+    const category = filterProcess !== "all" &&
+      visibleCategories.some(([value]) => value === filterProcess)
+      ? filterProcess as Category
+      : fallback;
+    setError("");
+    setSectionValues({});
+    form.reset({
+      category,
+      employeeStaffId: "",
+      title: "",
+      details: "",
+      development: "",
+      targetRecordId: "",
+      exitType: "termination",
+    });
+    setOpen(true);
+  }
+
   return (
     <div className="flex h-full flex-col gap-6">
       <div className="flex items-start justify-between gap-4">
@@ -242,7 +366,7 @@ export default function HRWorkspace() {
           <h1 className="text-2xl font-bold tracking-tight">HR Workspace</h1>
           <p className="text-muted-foreground text-sm">Employee lifecycle administration and approvals.</p>
         </div>
-        <Button data-testid="button-create-hr-record" onClick={() => { setError(""); form.reset(); setOpen(true); }}>
+        <Button data-testid="button-create-hr-record" onClick={openCreateRecord}>
           <Plus className="mr-2 h-4 w-4" />Create record
         </Button>
       </div>
@@ -257,7 +381,7 @@ export default function HRWorkspace() {
           <div className="w-full md:w-64 shrink-0 flex flex-col gap-4">
             <div className="rounded-xl border border-border bg-card p-2 flex flex-col gap-1 shadow-sm">
               <button
-                onClick={() => setFilterProcess("all")}
+                 onClick={() => selectProcess("all")}
                 className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${filterProcess === "all" ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
                 data-testid="filter-hr-process-all"
               >
@@ -267,7 +391,7 @@ export default function HRWorkspace() {
               {counts.map((item) => (
                 <button
                   key={item.category}
-                  onClick={() => setFilterProcess(item.category)}
+                  onClick={() => selectProcess(item.category)}
                   className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${filterProcess === item.category ? "bg-secondary text-foreground" : "text-muted-foreground hover:bg-muted/50 hover:text-foreground"}`}
                   data-testid={`filter-hr-process-${item.category}`}
                 >
@@ -399,6 +523,18 @@ export default function HRWorkspace() {
                                 {typeof state.details === "string" && state.details && (
                                   <p className="mt-2 text-sm text-foreground/80 line-clamp-2">{state.details}</p>
                                 )}
+                                 <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                                   {(sectionFields[row.entity as Category] || []).map((sectionField) => {
+                                     const value = state[sectionField.key];
+                                     if (value === undefined || value === null || String(value).trim() === "") return null;
+                                     return (
+                                       <span key={sectionField.key}>
+                                         <span className="font-medium text-foreground/80">{sectionField.label}:</span>{" "}
+                                         {String(value)}
+                                       </span>
+                                     );
+                                   })}
+                                 </div>
                               </div>
                             </div>
                             
@@ -492,13 +628,32 @@ export default function HRWorkspace() {
                 <FormItem>
                   <FormLabel>Process</FormLabel>
                   <FormControl>
-                    <select {...field} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="select-hr-process">
+                    <select {...field} onChange={(event) => {
+                      field.onChange(event);
+                      setSectionValues({});
+                    }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" data-testid="select-hr-process">
                       {visibleCategories.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
                     </select>
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )} />
+              {(sectionFields[selectedCategory] || []).map((sectionField) => (
+                <div key={sectionField.key} className="space-y-2">
+                  <Label htmlFor={`hr-field-${sectionField.key}`}>{sectionField.label}</Label>
+                  <Input
+                    id={`hr-field-${sectionField.key}`}
+                    type={sectionField.type || "text"}
+                    step={sectionField.type === "number" ? "any" : undefined}
+                    value={sectionValues[sectionField.key] || ""}
+                    onChange={(event) => setSectionValues((current) => ({
+                      ...current,
+                      [sectionField.key]: event.target.value,
+                    }))}
+                    data-testid={`input-hr-${sectionField.key}`}
+                  />
+                </div>
+              ))}
               {selectedCategory !== "hr-approvals" ? <FormField control={form.control} name="employeeStaffId" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Employee</FormLabel>
