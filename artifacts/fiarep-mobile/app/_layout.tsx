@@ -310,6 +310,9 @@ function InspectorStack() {
     <Stack initialRouteName="cpm-home">
       <Stack.Screen name="cpm-home" options={{ title: 'CPM / Inspector', headerBackVisible: false }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
+      <Stack.Screen name="create-report" options={{ title: 'Create Report' }} />
+      <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
+      <Stack.Screen name="leave-dashboard" options={{ title: 'Leave Calendar' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'Log Violations' }} />

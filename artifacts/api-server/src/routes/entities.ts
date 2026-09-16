@@ -473,6 +473,16 @@ router.post("/v1/:entity", async (req, res, next) => {
       typeof rawState["building"] === "string" ? rawState["building"] : undefined,
       id,
     );
+  } else if (entity === "resident-reports" && actor.role === "inspector") {
+    await notify(
+      actor,
+      actor.id,
+      "Report submitted",
+      typeof persistedCreatedState["description"] === "string"
+        ? persistedCreatedState["description"]
+        : undefined,
+      id,
+    );
   } else if (entity === "leave-requests") {
     const reviewers = await db.select({
       id: staffAccounts.id,

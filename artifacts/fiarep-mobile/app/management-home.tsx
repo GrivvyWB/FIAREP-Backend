@@ -31,7 +31,7 @@ export default function ManagementHome() {
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
   const ordinaryManagement = mode === 'management' &&
     !['borough director', 'regional director', 'superintendent'].includes(_pos);
-  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('management'); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, []));
+  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('management'); if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, []));
 
   async function onSignOut() {
     await logout();
@@ -49,7 +49,6 @@ export default function ManagementHome() {
         ] : []),
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' },
         { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' },
-        { label: 'Assign Route', onPress: () => router.push('/assign-route'), tone: 'tint' },
       ],
     },
     {

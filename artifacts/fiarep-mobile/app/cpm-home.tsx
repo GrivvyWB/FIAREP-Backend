@@ -15,7 +15,7 @@ export default function CpmHome() {
   const { refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
-  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('inspector'); if (a.name) c += await unreadCount(a.name); setUnread(c); setPosition(await getCurrentPosition()); })(); }, []));
+  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('inspector'); if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); setPosition(await getCurrentPosition()); })(); }, []));
 
   async function onSignOut() {
     await logout();
@@ -30,9 +30,13 @@ export default function CpmHome() {
       tiles: [
         { label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone },
         { label: 'Projects', onPress: () => router.push('/'), tone: 'outline' as Tone },
+        ...(position === 'CPM' ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
+        { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone },
+        { label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'outline' as Tone },
+        { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },
         { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone },
       ],
     },

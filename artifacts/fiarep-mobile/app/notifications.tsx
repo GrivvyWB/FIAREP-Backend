@@ -146,6 +146,7 @@ export default function Notifications() {
       try { setPosition(await getCurrentPosition()); } catch (e) { setPosition(''); }
       const targets: string[] = [];
       if (mode) targets.push(mode);
+      if (actor.id) targets.push(actor.id);
       if (actor.name) targets.push(actor.name);
       const seen: Record<string, boolean> = {};
       const seenWork: Record<string, boolean> = {};
