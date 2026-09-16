@@ -596,11 +596,10 @@ test("staff can cancel only their own leave request", () => {
   );
 });
 
-test("management, supervisors, and HR can decide leave while ordinary staff cannot", () => {
+test("immediate supervisors and HR can decide leave while upper management cannot", () => {
   const canApprove = [
     actor({ role: "management", position: "Property Manager" }),
     actor({ role: "management", position: "Superintendent" }),
-    actor({ role: "administrator", position: "Administrator" }),
     actor({ role: "worker", position: "Plumber Supervisor" }),
     actor({ role: "inspector", position: "Supervisor Inspector" }),
   ];
@@ -612,6 +611,16 @@ test("management, supervisors, and HR can decide leave while ordinary staff cann
     assert.equal(
       canPerformEntityAction(approver, "leave-requests", "deny", {}),
       true,
+    );
+  }
+  for (const upperManagement of [
+    actor({ role: "administrator", position: "Administrator" }),
+    actor({ role: "management", position: "Regional Director" }),
+    actor({ role: "management", position: "Borough Director" }),
+  ]) {
+    assert.equal(
+      canPerformEntityAction(upperManagement, "leave-requests", "approve", {}),
+      false,
     );
   }
   assert.equal(
@@ -667,6 +676,47 @@ test("HR controls leave while supervisors are limited to their members", () => {
       actor({ id: "other-development", role: "management", position: "Property Manager", developments: ["Development B"] }),
       employee,
     ),
+    false,
+  );
+  assert.equal(
+    canApproveLeaveForEmployee(
+      actor({ id: "regional", role: "management", position: "Regional Director", developments: ["Development A"] }),
+      employee,
+    ),
+    false,
+  );
+});
+
+test("leave records are visible only to HR, the employee, and the immediate supervisor", () => {
+  const leave = {
+    entity: "leave-requests",
+    development: "Development A",
+    state: {
+      employeeStaffId: "employee-1",
+      supervisorStaffId: "supervisor-1",
+      status: "Pending",
+    },
+    createdBy: "employee-1",
+    deleted: false,
+  };
+  assert.equal(
+    canReadEntityRecord(actor({ id: "employee-1", role: "worker", position: "Plumber" }), leave),
+    true,
+  );
+  assert.equal(
+    canReadEntityRecord(actor({ id: "supervisor-1", role: "management", position: "Plumber Supervisor" }), leave),
+    true,
+  );
+  assert.equal(
+    canReadEntityRecord(actor({ id: "hr-1", role: "human_resources", position: "Human Resources" }), leave),
+    true,
+  );
+  assert.equal(
+    canReadEntityRecord(actor({ id: "regional", role: "management", position: "Regional Director" }), leave),
+    false,
+  );
+  assert.equal(
+    canReadEntityRecord(actor({ id: "admin", role: "administrator", position: "Administrator" }), leave),
     false,
   );
 });
@@ -1019,7 +1069,7 @@ test("Borough Director cannot perform procurement workflow actions", () => {
   );
   assert.equal(
     canPerformEntityAction(director, "leave-requests", "cancel", {}),
-    true,
+    false,
   );
   assert.equal(
     canPerformEntityAction(director, "emergency-jobs", "complete", {}),

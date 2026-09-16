@@ -238,6 +238,30 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
   return true;
 }
 
+function leaveRecordAllowed(
+  actor: Actor,
+  row: EntityRecordAuthorizationState,
+): boolean {
+  if (row.entity !== "leave-requests") return true;
+  if (actor.role === "human_resources") return true;
+  const employeeStaffId = typeof row.state["employeeStaffId"] === "string"
+    ? row.state["employeeStaffId"]
+    : "";
+  if (employeeStaffId) return employeeStaffId === actor.id ||
+    row.state["supervisorStaffId"] === actor.id;
+  const employeeName = typeof row.state["employee"] === "string"
+    ? row.state["employee"].trim().toLowerCase()
+    : "";
+  if (employeeName && employeeName === actor.name.trim().toLowerCase()) return true;
+  if (!employeeName && row.createdBy === actor.id) return true;
+  const supervisorName = typeof row.state["supervisor"] === "string"
+    ? row.state["supervisor"].trim().toLowerCase()
+    : "";
+  return !row.state["supervisorStaffId"] &&
+    supervisorName === actor.name.trim().toLowerCase() &&
+    isLeaveApprovalAuthority(actor);
+}
+
 export function procurementRecordAllowed(
   actor: Actor,
   row: { entity: string; createdBy: string | null; state: Record<string, unknown> },
@@ -389,6 +413,7 @@ export function canReadEntityRecord(
     privateRecordAllowed(actor, row) &&
     procurementRecordAllowed(actor, row) &&
     emergencyRecordAllowed(actor, row) &&
+    leaveRecordAllowed(actor, row) &&
     staffAssignmentRecordAllowed(actor, row);
 }
 
@@ -517,7 +542,7 @@ const LEAVE_APPROVER_POSITIONS = new Set([
   "Superintendent",
   "Assistant Superintendent",
   "Supervisor Inspector",
-  "Regional Director",
+  "CPM Supervisor",
   ...TRADE_SUPERVISOR_POSITIONS,
 ]);
 
@@ -525,8 +550,6 @@ export function isLeaveApprovalAuthority(
   actor: Pick<Actor, "role" | "position">,
 ): boolean {
   return actor.role === "human_resources" ||
-    actor.role === "management" ||
-    actor.role === "administrator" ||
     LEAVE_APPROVER_POSITIONS.has(actor.position ?? "");
 }
 
@@ -544,7 +567,7 @@ export function canApproveLeaveForEmployee(
   employee: Pick<Actor, "id" | "role" | "position" | "developments">,
 ): boolean {
   if (!isLeaveApprovalAuthority(actor) || actor.id === employee.id) return false;
-  if (actor.role === "human_resources" || actor.role === "administrator" || isBoroughDirector(actor)) {
+  if (actor.role === "human_resources") {
     return true;
   }
   if (
@@ -703,6 +726,7 @@ export function canPerformEntityAction(
     isBoroughDirector(actor) &&
     entity !== "procurement" &&
     entity !== "procurement-bids" &&
+    entity !== "leave-requests" &&
     !ASSIGNMENT_REQUIRED_ACTIONS.has(action)
   ) return true;
 

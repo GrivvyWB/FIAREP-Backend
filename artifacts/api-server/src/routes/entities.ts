@@ -352,11 +352,13 @@ router.post("/v1/:entity", async (req, res, next) => {
   );
   if (entity === "leave-requests") {
     delete createdState["employeeStaffId"];
+    delete createdState["supervisorStaffId"];
     const employeeName = typeof createdState["employee"] === "string"
       ? createdState["employee"].trim()
       : "";
+    let employee: typeof staffAccounts.$inferSelect | undefined;
     if (employeeName) {
-      const employeeMatches = await db.select({ id: staffAccounts.id })
+      const employeeMatches = await db.select()
         .from(staffAccounts)
         .where(and(
           eq(staffAccounts.tenantId, actor.tenantId),
@@ -365,7 +367,44 @@ router.post("/v1/:entity", async (req, res, next) => {
         ))
         .limit(2);
       if (employeeMatches.length === 1) {
-        createdState["employeeStaffId"] = employeeMatches[0]!.id;
+        employee = employeeMatches[0]!;
+        createdState["employeeStaffId"] = employee.id;
+      }
+    }
+    if (employee) {
+      const supervisorName = typeof createdState["supervisor"] === "string"
+        ? createdState["supervisor"].trim()
+        : "";
+      const supervisorMatches = await db.select().from(staffAccounts).where(and(
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.status, "approved"),
+        ...(supervisorName
+          ? [sql`lower(${staffAccounts.name}) = lower(${supervisorName})`]
+          : []),
+      ));
+      const eligibleSupervisors = supervisorMatches.filter((candidate) =>
+        candidate.role !== "human_resources" &&
+        canApproveLeaveForEmployee(
+          {
+            id: candidate.id,
+            tenantId: candidate.tenantId,
+            name: candidate.name,
+            role: candidate.role as Actor["role"],
+            position: candidate.position,
+            developments: candidate.developments,
+            sessionVersion: candidate.sessionVersion,
+          },
+          {
+            id: employee.id,
+            role: employee.role as Actor["role"],
+            position: employee.position,
+            developments: employee.developments,
+          },
+        )
+      );
+      if (eligibleSupervisors.length === 1) {
+        createdState["supervisorStaffId"] = eligibleSupervisors[0]!.id;
+        createdState["supervisor"] = eligibleSupervisors[0]!.name;
       }
     }
     const leaveDays = leaveRequestDurationDays(createdState);
@@ -435,24 +474,16 @@ router.post("/v1/:entity", async (req, res, next) => {
       id,
     );
   } else if (entity === "leave-requests") {
-    const reviewers = await db.select().from(staffAccounts).where(and(
+    const reviewers = await db.select({
+      id: staffAccounts.id,
+      role: staffAccounts.role,
+    }).from(staffAccounts).where(and(
       eq(staffAccounts.tenantId, actor.tenantId),
       eq(staffAccounts.status, "approved"),
     ));
     for (const reviewer of reviewers) {
-      const reviewerActor: Actor = {
-        id: reviewer.id,
-        tenantId: reviewer.tenantId,
-        name: reviewer.name,
-        role: reviewer.role as Actor["role"],
-        position: reviewer.position,
-        developments: reviewer.developments,
-        sessionVersion: reviewer.sessionVersion,
-      };
-      if (
-        isLeaveApprovalAuthority(reviewerActor) &&
-        entityDevelopmentAllowed(reviewerActor, entity, development)
-      ) {
+      if (reviewer.role === "human_resources" ||
+          reviewer.id === persistedCreatedState["supervisorStaffId"]) {
         await notify(
           actor,
           reviewer.id,
