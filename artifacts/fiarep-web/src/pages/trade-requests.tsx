@@ -75,6 +75,7 @@ export default function TradeRequests() {
     query: {
       queryKey: getListStaffQueryKey({ status: "approved" }),
       refetchOnMount: "always",
+      refetchInterval: 15_000,
     },
   });
   const create = useCreateEntityRecord();

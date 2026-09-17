@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { format } from "date-fns";
 import {
   getGetHrWorkspaceQueryKey,
+  getListStaffQueryKey,
   useCreateEntityRecord,
   useGetHrWorkspace,
   usePerformEntityAction,
@@ -250,7 +251,10 @@ export default function HRWorkspace() {
   }), [rows]);
 
   async function refresh() {
-    await queryClient.invalidateQueries({ queryKey: getGetHrWorkspaceQueryKey() });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: getGetHrWorkspaceQueryKey() }),
+      queryClient.invalidateQueries({ queryKey: getListStaffQueryKey({ status: "approved" }) }),
+    ]);
   }
 
   async function submit(values: Draft) {

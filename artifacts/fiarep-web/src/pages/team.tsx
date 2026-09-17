@@ -208,7 +208,7 @@ export default function Team() {
   }
   async function submit(event: React.FormEvent) {
     event.preventDefault(); setActionError("");
-    if (["Regional Director", "Assistant Regional Director", "Property Manager", "Superintendent", "Assistant Superintendent"].includes(position) && developments.length === 0) {
+    if ((["Regional Director", "Assistant Regional Director", "Property Manager", "Superintendent", "Assistant Superintendent"].includes(position) || position.toLowerCase().includes("supervisor")) && developments.length === 0) {
       setActionError("Select at least one assigned development.");
       return;
     }
@@ -246,7 +246,7 @@ export default function Team() {
       setActionError("Upload an employee list.");
       return;
     }
-    if (["Regional Director", "Assistant Regional Director", "Property Manager", "Superintendent", "Assistant Superintendent"].includes(position) && developments.length === 0) {
+    if ((["Regional Director", "Assistant Regional Director", "Property Manager", "Superintendent", "Assistant Superintendent"].includes(position) || position.toLowerCase().includes("supervisor")) && developments.length === 0) {
       setActionError("Select at least one assigned development.");
       return;
     }

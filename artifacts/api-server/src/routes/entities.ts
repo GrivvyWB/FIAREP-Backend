@@ -5,6 +5,7 @@ import { db, entityRecords, notifications, organizations, publicAccessCodes, sta
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import {
   ENTITIES,
+  STAFF_POSITIONS,
   canAssignStaff,
   canApproveLeaveForEmployee,
   canApproveLeaveDuration,
@@ -866,33 +867,79 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     res.status(403).json({ error: "Development access denied" });
     return;
   }
+  const linkedPosition = entity === "hr-employee-records" &&
+    typeof updatedState["position"] === "string"
+      ? updatedState["position"].trim()
+      : "";
+  if (linkedPosition && !STAFF_POSITIONS.some((position) => position === linkedPosition)) {
+    res.status(400).json({ error: "Select a valid staff position" });
+    return;
+  }
   const now = new Date();
-  const [updated] = await db
-    .update(entityRecords)
-    .set({
-      state: updatedState,
-      projectId:
-        typeof updatedState["projectId"] === "string"
-          ? updatedState["projectId"]
-          : current.projectId,
-      development: updatedDevelopment,
-      version: sql`${entityRecords.version} + 1`,
-      updatedAt: now,
-    })
-    .where(and(
-      eq(entityRecords.id, current.id),
-      eq(entityRecords.entity, entity),
-      eq(entityRecords.tenantId, actor.tenantId),
-      eq(entityRecords.deleted, false),
-      eq(entityRecords.version, expectedVersion),
-    ))
-    .returning();
+  const updated = await db.transaction(async (tx) => {
+    const [updatedRecord] = await tx
+      .update(entityRecords)
+      .set({
+        state: updatedState,
+        projectId:
+          typeof updatedState["projectId"] === "string"
+            ? updatedState["projectId"]
+            : current.projectId,
+        development: updatedDevelopment,
+        version: sql`${entityRecords.version} + 1`,
+        updatedAt: now,
+      })
+      .where(and(
+        eq(entityRecords.id, current.id),
+        eq(entityRecords.entity, entity),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+        eq(entityRecords.version, expectedVersion),
+      ))
+      .returning();
+    if (!updatedRecord) return null;
+
+    const employeeStaffId = entity === "hr-employee-records" &&
+      typeof current.state["employeeStaffId"] === "string"
+        ? current.state["employeeStaffId"]
+        : "";
+    if (employeeStaffId) {
+      const [linkedStaff] = await tx.select().from(staffAccounts).where(and(
+        eq(staffAccounts.id, employeeStaffId),
+        eq(staffAccounts.tenantId, actor.tenantId),
+      )).limit(1);
+      if (linkedStaff) {
+        const firstName = typeof updatedState["firstName"] === "string" &&
+          updatedState["firstName"].trim()
+            ? updatedState["firstName"].trim()
+            : linkedStaff.firstName;
+        const lastName = typeof updatedState["lastName"] === "string" &&
+          updatedState["lastName"].trim()
+            ? updatedState["lastName"].trim()
+            : linkedStaff.lastName;
+        await tx.update(staffAccounts).set({
+          firstName,
+          lastName,
+          name: [firstName, lastName].filter(Boolean).join(" ") || linkedStaff.name,
+          position: linkedPosition || linkedStaff.position,
+          developments: updatedDevelopment
+            ? [updatedDevelopment]
+            : linkedStaff.developments,
+          updatedAt: now,
+        }).where(and(
+          eq(staffAccounts.id, linkedStaff.id),
+          eq(staffAccounts.tenantId, actor.tenantId),
+        ));
+      }
+    }
+    return updatedRecord;
+  });
   if (!updated) {
     res.status(409).json({ error: "Concurrent update detected" });
     return;
   }
   await audit(actor, `${entity}.updated`, `Updated ${entity} record`, current.id);
-  res.json(outward(actor, updated!));
+  res.json(outward(actor, updated));
 });
 
 router.post(

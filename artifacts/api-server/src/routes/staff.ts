@@ -257,7 +257,11 @@ router.post("/v1/staff", async (req, res) => {
     "Superintendent",
     "Assistant Superintendent",
   ]);
-  if (developmentRequiredPositions.has(position) && developments.length === 0) {
+  if (
+    (developmentRequiredPositions.has(position) ||
+      position.toLowerCase().includes("supervisor")) &&
+    developments.length === 0
+  ) {
     res.status(400).json({ error: "Select at least one assigned development" });
     return;
   }
