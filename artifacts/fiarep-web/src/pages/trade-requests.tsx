@@ -22,9 +22,9 @@ const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elev
 const supervisorPositions: Record<(typeof trades)[number], readonly string[]> = {
   Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
   CPM: ["CPM Supervisor", "Supervisor CPM"],
-  Plumber: ["Plumber Supervisor", "Supervisor Plumber"],
+  Plumber: ["Plumbing Supervisor", "Plumber Supervisor", "Supervisor Plumber"],
   Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
-  Electrician: ["Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
+  Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
   "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
 };
 
@@ -91,11 +91,8 @@ export default function TradeRequests() {
   const selectedSource = sourceRecords.find((record) => record.id === sourceRecordId);
   const supervisors = useMemo(() => staff.filter((member) =>
     member.id !== actor?.id &&
-    (member.role === "administrator" ||
-      ["Borough Director", "Regional Director", "Superintendent"].includes(member.position) ||
-      supervisorPositions[requestedTrade].includes(member.position)) &&
+    supervisorPositions[requestedTrade].includes(member.position) &&
     (!selectedSource?.development ||
-      member.position === "Borough Director" ||
       member.developments.includes(selectedSource.development)),
   ), [actor?.id, requestedTrade, selectedSource?.development, staff]);
 
@@ -267,7 +264,7 @@ export default function TradeRequests() {
             <div className="space-y-2">
               <Label>Receiving supervisor</Label>
               <select value={receiverSupervisorId} onChange={(event) => setReceiverSupervisorId(event.target.value)} disabled={!selectedSource} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60">
-                <option value="">Select supervisor</option>
+                <option value="">{supervisors.length ? "Select supervisor" : `No approved ${supervisorPositions[requestedTrade][0]} available`}</option>
                 {supervisors.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}
               </select>
             </div>

@@ -438,9 +438,9 @@ router.post("/v1/:entity", async (req, res, next) => {
     const supervisorPositions: Record<string, readonly string[]> = {
       Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
       CPM: ["CPM Supervisor", "Supervisor CPM"],
-      Plumber: ["Plumber Supervisor", "Supervisor Plumber"],
+      Plumber: ["Plumbing Supervisor", "Plumber Supervisor", "Supervisor Plumber"],
       Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
-      Electrician: ["Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
+      Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
       "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
     };
     if (
@@ -480,9 +480,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     if (
       !receiver ||
       receiver.id === actor.id ||
-      (!["administrator"].includes(receiver.role) &&
-        !["Borough Director", "Regional Director", "Superintendent"].includes(receiver.position) &&
-        !(supervisorPositions[requestedTrade] || []).includes(receiver.position))
+      !(supervisorPositions[requestedTrade] || []).includes(receiver.position)
     ) {
       res.status(403).json({ error: "Select the supervisor for the requested trade" });
       return;
@@ -490,8 +488,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     development = source.development;
     if (
       development &&
-      !receiver.developments.includes(development) &&
-      receiver.position !== "Borough Director"
+      !receiver.developments.includes(development)
     ) {
       res.status(403).json({ error: "The receiving supervisor must cover this development" });
       return;
