@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { auditLog, db, entityRecords, staffAccounts } from "@workspace/db";
 import {
   canReadHrEntityRecord,
@@ -31,6 +31,17 @@ router.get("/v1/hr/workspace", async (_req, res): Promise<void> => {
     res.status(403).json({ error: "The HR workspace is restricted to Human Resources" });
     return;
   }
+  await db.delete(entityRecords).where(and(
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.entity, "hr-employee-records"),
+    sql`${entityRecords.state}->>'employeeStaffId' IS NOT NULL`,
+    sql`NOT EXISTS (
+      SELECT 1
+      FROM ${staffAccounts}
+      WHERE ${staffAccounts.id} = ${entityRecords.state}->>'employeeStaffId'
+        AND ${staffAccounts.tenantId} = ${entityRecords.tenantId}
+    )`,
+  ));
   const [staffRows, recordRows, audits] = await Promise.all([
     db.select().from(staffAccounts)
       .where(eq(staffAccounts.tenantId, actor.tenantId))

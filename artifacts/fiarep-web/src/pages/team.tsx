@@ -393,6 +393,7 @@ export default function Team() {
       member.role === "management" ||
       member.role === "human_resources" ||
       member.role === "procurement" ||
+      member.position === "Administrative Staff" ||
       member.position === "Borough Director" ||
       member.position === "Superintendent Ⓔ" ||
       member.position.toLowerCase().includes("supervisor");
