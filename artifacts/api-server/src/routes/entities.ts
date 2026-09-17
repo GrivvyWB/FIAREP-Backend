@@ -490,6 +490,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     development = source.development;
     if (
       development &&
+      receiver.developments.length > 0 &&
       !receiver.developments.includes(development)
     ) {
       res.status(403).json({ error: "The receiving supervisor must cover this development" });

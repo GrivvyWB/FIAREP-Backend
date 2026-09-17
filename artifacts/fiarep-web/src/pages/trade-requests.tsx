@@ -94,6 +94,7 @@ export default function TradeRequests() {
     member.id !== actor?.id &&
     supervisorPositions[requestedTrade].includes(member.position) &&
     (!selectedSource?.development ||
+      member.developments.length === 0 ||
       member.developments.includes(selectedSource.development)),
   ), [actor?.id, requestedTrade, selectedSource?.development, staff]);
 
