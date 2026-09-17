@@ -137,8 +137,16 @@ function groupedLocations(people: Staff[]): DirectoryLocation[] {
     .map(([label, members]) => ({
       label,
       people: members.sort((a, b) => {
-        const aSupervisor = a.position.toLowerCase().includes("supervisor") ? 0 : 1;
-        const bSupervisor = b.position.toLowerCase().includes("supervisor") ? 0 : 1;
+        const aSupervisor =
+          a.position === "Borough Director" ||
+          a.role === "human_resources" ||
+          a.role === "management" ||
+          a.position.toLowerCase().includes("supervisor") ? 0 : 1;
+        const bSupervisor =
+          b.position === "Borough Director" ||
+          b.role === "human_resources" ||
+          b.role === "management" ||
+          b.position.toLowerCase().includes("supervisor") ? 0 : 1;
         return aSupervisor - bSupervisor || a.name.localeCompare(b.name);
       }),
     }))
@@ -168,7 +176,15 @@ export function groupTeamDirectoryByTitleAndLocation(
         .join(" · "),
       locations: groupedLocations(people),
     }))
-    .sort((a, b) => a.label.localeCompare(b.label));
+    .sort((a, b) => {
+      const leadership = (group: TeamDirectoryGroup) =>
+        group.locations.some((location) => location.people.some((member) =>
+          member.position === "Borough Director" ||
+          member.role === "management" ||
+          member.position.toLowerCase().includes("supervisor"),
+        )) ? 0 : 1;
+      return leadership(a) - leadership(b) || a.label.localeCompare(b.label);
+    });
   return hrPeople.length
     ? [{
         label: "HR",

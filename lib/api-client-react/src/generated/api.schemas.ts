@@ -1028,6 +1028,10 @@ export interface Error {
  */
 export type UnauthorizedResponse = Error;
 
+export type GetResidentReportPhotoAiConfig200 = {
+  enabled: boolean;
+};
+
 export type LookupNycPropertyParams = {
 /**
  * @minLength 3

@@ -37,6 +37,7 @@ import type {
   FileUploadUrlResponse,
   GetBootstrapStatus200,
   GetPlatformOwner200,
+  GetResidentReportPhotoAiConfig200,
   HRWorkspace,
   HealthStatus,
   IssueOrganizationDirectorCodeBody,
@@ -272,6 +273,154 @@ export const useClassifyViolation = <TError = ErrorType<Error | UnauthorizedResp
         TContext
       > => {
       return useMutation(getClassifyViolationMutationOptions(options));
+    }
+
+export const getGetResidentReportPhotoAiConfigUrl = () => {
+
+
+
+
+  return `/api/resident-report-photo-ai/config`
+}
+
+/**
+ * @summary Get tenant resident photo AI configuration
+ */
+export const getResidentReportPhotoAiConfig = async ( options?: Parameters<typeof customFetch>[1]): Promise<GetResidentReportPhotoAiConfig200> => {
+
+  return customFetch<GetResidentReportPhotoAiConfig200>(getGetResidentReportPhotoAiConfigUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetResidentReportPhotoAiConfigQueryKey = () => {
+    return [
+    `/api/resident-report-photo-ai/config`
+    ] as const;
+    }
+
+
+export const getGetResidentReportPhotoAiConfigQueryOptions = <TData = Awaited<ReturnType<typeof getResidentReportPhotoAiConfig>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getResidentReportPhotoAiConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetResidentReportPhotoAiConfigQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getResidentReportPhotoAiConfig>>> = ({ signal }) => getResidentReportPhotoAiConfig({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getResidentReportPhotoAiConfig>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetResidentReportPhotoAiConfigQueryResult = NonNullable<Awaited<ReturnType<typeof getResidentReportPhotoAiConfig>>>
+export type GetResidentReportPhotoAiConfigQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary Get tenant resident photo AI configuration
+ */
+
+export function useGetResidentReportPhotoAiConfig<TData = Awaited<ReturnType<typeof getResidentReportPhotoAiConfig>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getResidentReportPhotoAiConfig>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetResidentReportPhotoAiConfigQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getClassifyResidentReportPhotoUrl = (id: string,) => {
+
+
+
+
+  return `/api/resident-report-photos/${id}/classify`
+}
+
+/**
+ * @summary Classify a resident complaint photo for an authorized supervisor
+ */
+export const classifyResidentReportPhoto = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<ViolationClassification> => {
+
+  return customFetch<ViolationClassification>(getClassifyResidentReportPhotoUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getClassifyResidentReportPhotoMutationOptions = <TError = ErrorType<Error | UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof classifyResidentReportPhoto>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof classifyResidentReportPhoto>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['classifyResidentReportPhoto'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof classifyResidentReportPhoto>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  classifyResidentReportPhoto(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ClassifyResidentReportPhotoMutationResult = NonNullable<Awaited<ReturnType<typeof classifyResidentReportPhoto>>>
+
+    export type ClassifyResidentReportPhotoMutationError = ErrorType<Error | UnauthorizedResponse>
+
+    /**
+ * @summary Classify a resident complaint photo for an authorized supervisor
+ */
+export const useClassifyResidentReportPhoto = <TError = ErrorType<Error | UnauthorizedResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof classifyResidentReportPhoto>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof classifyResidentReportPhoto>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getClassifyResidentReportPhotoMutationOptions(options));
     }
 
 export const getLookupNycPropertyUrl = (params: LookupNycPropertyParams,) => {

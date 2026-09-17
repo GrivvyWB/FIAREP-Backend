@@ -387,7 +387,10 @@ export default function Team() {
   const teamGroups = groupTeamDirectoryByTitleAndLocation(sorted || [], HR_DISPLAY_MEMBER_IDS);
   const memberCard = (member: NonNullable<typeof staff>[number]) => {
     const isSupervisorOrManagement =
-      member.role === "management" || member.position.toLowerCase().includes("supervisor");
+      member.role === "management" ||
+      member.role === "human_resources" ||
+      member.position === "Borough Director" ||
+      member.position.toLowerCase().includes("supervisor");
     return (
     <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
       <div className={`w-12 h-12 rounded-full grid place-items-center font-bold text-sm shrink-0 ${

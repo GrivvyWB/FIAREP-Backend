@@ -55,6 +55,45 @@ export const ClassifyViolationResponse = zod.object({
 
 
 /**
+ * @summary Get tenant resident photo AI configuration
+ */
+export const GetResidentReportPhotoAiConfigResponse = zod.object({
+  "enabled": zod.boolean()
+})
+
+
+/**
+ * @summary Classify a resident complaint photo for an authorized supervisor
+ */
+export const ClassifyResidentReportPhotoParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const classifyResidentReportPhotoResponseConfidenceMin = 0;
+export const classifyResidentReportPhotoResponseConfidenceMax = 100;
+
+export const classifyResidentReportPhotoResponseConditionMax = 300;
+
+export const classifyResidentReportPhotoResponseHpCodeMax = 100;
+
+export const classifyResidentReportPhotoResponseTradeMax = 100;
+
+export const classifyResidentReportPhotoResponseDescriptionMax = 1000;
+
+
+
+export const ClassifyResidentReportPhotoResponse = zod.object({
+  "classification": zod.enum(['A', 'B', 'C']),
+  "confidence": zod.number().int().min(classifyResidentReportPhotoResponseConfidenceMin).max(classifyResidentReportPhotoResponseConfidenceMax),
+  "condition": zod.string().min(1).max(classifyResidentReportPhotoResponseConditionMax),
+  "hpCode": zod.string().min(1).max(classifyResidentReportPhotoResponseHpCodeMax),
+  "trade": zod.string().min(1).max(classifyResidentReportPhotoResponseTradeMax),
+  "priority": zod.enum(['Low', 'Medium', 'High']),
+  "description": zod.string().min(1).max(classifyResidentReportPhotoResponseDescriptionMax)
+})
+
+
+/**
  * @summary Look up official NYC property, HPD, and DOB records by address
  */
 export const lookupNycPropertyQueryAddressMin = 3;

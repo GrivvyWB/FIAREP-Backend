@@ -8,13 +8,16 @@ import {
   useListResidentReportPhotos,
   useListStaff,
   useDeleteEntityRecord,
+  useClassifyResidentReportPhoto,
+  useGetResidentReportPhotoAiConfig,
   usePerformEntityAction,
   useUpdateResidentReportPhoto,
+  type ViolationClassification,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle, CheckCircle2, ChevronDown, FolderOpen, Image as ImageIcon,
-  MapPin, Search, Send, Trash2, UserRound, X,
+  MapPin, ScanLine, Search, Send, Trash2, UserRound, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -30,15 +33,21 @@ import { canApproveWork } from "@/lib/access-policy";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 
-function Photos({ reportId }: { reportId: string }) {
+function Photos({ reportId, savedScans }: {
+  reportId: string;
+  savedScans?: Record<string, ViolationClassification>;
+}) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { data: photos = [], isLoading } = useListResidentReportPhotos({ reportId });
   const renamePhoto = useUpdateResidentReportPhoto();
+  const classifyPhoto = useClassifyResidentReportPhoto();
+  const { data: aiConfig } = useGetResidentReportPhotoAiConfig();
   const [busy, setBusy] = useState<string | null>(null);
   const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
   const [previewError, setPreviewError] = useState<Record<string, boolean>>({});
   const [names, setNames] = useState<Record<string, string>>({});
+  const [scanResults, setScanResults] = useState<Record<string, ViolationClassification>>({});
   const photoIds = photos.map((photo) => photo.id).join(",");
 
   useEffect(() => {
@@ -88,10 +97,29 @@ function Photos({ reportId }: { reportId: string }) {
       });
     }
   };
+  const scanPhoto = async (id: string) => {
+    setBusy(id);
+    try {
+      const result = await classifyPhoto.mutateAsync({ id });
+      setScanResults((current) => ({ ...current, [id]: result }));
+      await invalidateOperationalQueries(queryClient, "resident-reports", reportId);
+      toast({ title: "Violation analysis complete" });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Photo analysis failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
   if (isLoading) return <span className="text-xs text-muted-foreground">Loading photos…</span>;
   if (!photos.length) return <span className="text-xs text-muted-foreground">No photos attached</span>;
   return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-    {photos.map((photo) => (
+    {photos.map((photo) => {
+      const scan = scanResults[photo.id] || savedScans?.[photo.id];
+      return (
       <div
         key={photo.id}
         className="overflow-hidden rounded-xl border border-border bg-card"
@@ -111,6 +139,16 @@ function Photos({ reportId }: { reportId: string }) {
           )}
         </button>
         <div className="space-y-2 p-3">
+          {scan && (
+            <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-3 text-sm text-yellow-950">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-bold">HP Code {scan.hpCode}</span>
+                <span className="font-semibold">{scan.classification} · {scan.confidence}%</span>
+              </div>
+              <p className="mt-1 font-medium">{scan.condition}</p>
+              <p className="mt-1 text-xs">{scan.trade} · {scan.priority}</p>
+            </div>
+          )}
           <label className="text-xs font-medium text-muted-foreground" htmlFor={`photo-name-${photo.id}`}>Photo name</label>
           <div className="flex gap-2">
             <Input
@@ -129,9 +167,22 @@ function Photos({ reportId }: { reportId: string }) {
               {renamePhoto.isPending ? "Saving…" : "Save"}
             </Button>
           </div>
+          {aiConfig?.enabled && (
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full"
+              disabled={busy === photo.id || classifyPhoto.isPending}
+              onClick={() => scanPhoto(photo.id)}
+            >
+              <ScanLine className="mr-2 h-4 w-4" />
+              {busy === photo.id ? "Analyzing…" : scan ? "Analyze again" : "Analyze violation"}
+            </Button>
+          )}
         </div>
       </div>
-    ))}
+      );
+    })}
   </div>;
 }
 
@@ -316,7 +367,19 @@ export default function Reports() {
               <div className="space-y-4 pt-2">
                 <div className="grid grid-cols-2 gap-3 text-sm"><div><span className="text-muted-foreground">Status</span><p className="font-medium capitalize">{statusLabel(currentStatus)}</p></div><div><span className="text-muted-foreground">Development</span><p className="font-medium">{selected.development || "—"}</p></div><div><span className="text-muted-foreground">Complaint number</span><p className="font-medium">{String(state.complaintNo || "—")}</p></div><div><span className="text-muted-foreground">Address</span><p className="font-medium">{String(state.address || "—")}</p></div></div>
                  {!!String(state.description || "") && <div><p className="text-sm text-muted-foreground mb-1">Details</p><p className="text-sm whitespace-pre-wrap">{String(state.description)}</p></div>}
-                <div><p className="text-sm text-muted-foreground mb-2">Photos</p><Photos reportId={selected.id} /></div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">Photos</p>
+                  <Photos
+                    reportId={selected.id}
+                    savedScans={
+                      state.aiPhotoScans &&
+                      typeof state.aiPhotoScans === "object" &&
+                      !Array.isArray(state.aiPhotoScans)
+                        ? state.aiPhotoScans as Record<string, ViolationClassification>
+                        : undefined
+                    }
+                  />
+                </div>
                 <FieldEvidenceDisplay state={state} reportId={selected.id} />
                    {canApproveWork(actor) && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{deletionPolicy?.enabled && deletionPolicy.canDelete && <Button variant="outline" onClick={() => remove(selected)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}{!canApproveWork(actor) && currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{!canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => perform(selected, "complete")} disabled={action.isPending}>Complete</Button>}{canApproveWork(actor) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>

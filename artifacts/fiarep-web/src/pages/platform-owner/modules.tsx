@@ -10,6 +10,7 @@ import {
   Home,
   Package,
   Save,
+  ScanLine,
   Settings,
   ShieldCheck,
   Trash2,
@@ -77,6 +78,7 @@ export default function OwnerModules() {
   const [organizationId, setOrganizationId] = useState("");
   const [modules, setModules] = useState<Record<string, boolean>>({});
   const [deletionEnabled, setDeletionEnabled] = useState(false);
+  const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -98,6 +100,11 @@ export default function OwnerModules() {
     if (!organization) return;
     setModules(configuredModules(organization));
     setDeletionEnabled(organization.features?.deletionEnabled === true);
+    const configured = organization.features?.modules;
+    setResidentPhotoAiEnabled(
+      Boolean(configured && typeof configured === "object" &&
+        (configured as Record<string, unknown>).residentPhotoAiViolationReader === true),
+    );
     setDirty(false);
   }, [organization]);
 
@@ -107,6 +114,11 @@ export default function OwnerModules() {
 
   const toggleModule = (moduleId: string, enabled: boolean) => {
     setModules((current) => ({ ...current, [moduleId]: enabled }));
+    setDirty(true);
+  };
+
+  const toggleResidentPhotoAi = (enabled: boolean) => {
+    setResidentPhotoAiEnabled(enabled);
     setDirty(true);
   };
 
@@ -156,7 +168,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules,
+            modules: { ...modules, residentPhotoAiViolationReader: residentPhotoAiEnabled },
             deletionEnabled,
           },
         },
@@ -271,6 +283,29 @@ export default function OwnerModules() {
                     </div>
                   );
                 })}
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  residentPhotoAiEnabled ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    residentPhotoAiEnabled ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <ScanLine className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Residential photo AI scan</p>
+                    <p className="truncate text-xs text-slate-500">Give supervisors private violation analysis for complaint photos</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    residentPhotoAiEnabled ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {residentPhotoAiEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={residentPhotoAiEnabled}
+                    onCheckedChange={toggleResidentPhotoAi}
+                    aria-label={`${residentPhotoAiEnabled ? "Disable" : "Enable"} Residential photo AI scan`}
+                  />
+                </div>
                 <div
                   role="button"
                   tabIndex={0}
