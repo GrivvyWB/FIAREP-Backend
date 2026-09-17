@@ -740,14 +740,12 @@ export async function listResidentReports(): Promise<ResidentReport[]> {
 
 export async function listResidentReportPhotoUrls(reportId: string): Promise<string[]> {
   const photos = await listResidentReportPhotos({ reportId });
-  const urls: string[] = [];
-  for (const photo of photos) {
-    try {
-      const result = await requestResidentReportPhotoDownload(photo.id);
-      urls.push(result.downloadUrl);
-    } catch {}
-  }
-  return urls;
+  // Keep this report-scoped: resident photos are not generic file records and
+  // must be resolved through the authorized report photo endpoint.
+  return Promise.all(photos.map(async (photo) => {
+    const result = await requestResidentReportPhotoDownload(photo.id);
+    return result.downloadUrl;
+  }));
 }
 
 export async function findReportByRef(detail: string): Promise<ResidentReport | null> {
@@ -1068,8 +1066,12 @@ export async function setRolePin(role: StaffRole, pin: string): Promise<void> {
 
 export type StaffStatus = 'pending' | 'approved' | 'revoked';
 
-export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Supervisor Inspector', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other'] as const;
-export type StaffPosition = typeof STAFF_POSITIONS[number];
+export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Supervisor Inspector', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Superintendent Ⓔ'] as const;
+export type StaffPosition = typeof STAFF_POSITIONS[number] | 'Other';
+/** User-facing label for the legacy catch-all position. Keep stored/API value compatible. */
+export function displayStaffPosition(position?: string): string {
+  return (position || '').trim().toLowerCase() === 'other' ? 'Superintendent Ⓔ' : (position || 'Superintendent Ⓔ');
+}
 
 export type StaffAccount = {
   id: string;
@@ -1289,7 +1291,7 @@ async function saveLocalStaffAccount(d: SQLite.SQLiteDatabase, account: StaffAcc
 }
 
 async function createServerStaffAccount(account: StaffAccount): Promise<StaffAccount> {
-  const position = STAFF_POSITIONS.includes(account.position as StaffPosition)
+  const position = account.position && (STAFF_POSITIONS as readonly string[]).includes(account.position)
     ? account.position as StaffPosition
     : 'Other';
   const remote = await createStaff({
@@ -1521,7 +1523,7 @@ export type ParsedEmployee = { firstName: string; lastName: string; position: St
 export function parseEmployeeList(text: string): ParsedEmployee[] {
   const out: ParsedEmployee[] = [];
   const lines = (text || '').split(/\r?\n/);
-  const trades = [...STAFF_POSITIONS].filter(t => t !== 'Other').sort((a, b) => b.length - a.length);
+  const trades = [...STAFF_POSITIONS].sort((a, b) => b.length - a.length);
   for (const line of lines) {
     const raw = line.trim();
     if (!raw) continue;
@@ -1643,22 +1645,20 @@ export async function revokeStaffAccount(id: string): Promise<void> {
 }
 
 // Verify a login: name + code must match an APPROVED account for the given role.
-export async function verifyStaffLogin(name: string, code: string, role: StaffRole, expectedPosition?: string, organizationId?: string): Promise<boolean> {
+export async function verifyStaffLogin(name: string, code: string, role?: StaffRole, expectedPosition?: string, organizationId?: string): Promise<boolean> {
   try {
     if (role === 'resident' || role === 'vendor') return false;
     const persona = await getInstallationPersona();
-    if (persona && !isModeAllowedForPersona(persona, role)) {
+    if (persona && role && !isModeAllowedForPersona(persona, role)) {
       return false;
     }
     const preDb = await db();
     const priorIdentity = await preDb.getFirstAsync('SELECT value FROM settings WHERE key=?', 'session_identity') as { value: string } | null;
     let evidence: any;
     try { evidence = priorIdentity?.value ? JSON.parse(priorIdentity.value) : undefined; } catch {}
-    const loginRole = expectedPosition === 'Borough Director' ? undefined : role;
     const session = await loginOnServer({
       name: name.trim(),
       code: code.trim(),
-      ...(loginRole ? { role: loginRole } : {}),
       ...(organizationId?.trim() ? { organizationId: organizationId.trim() } : {}),
     });
     if (!('staff' in session)) return false;

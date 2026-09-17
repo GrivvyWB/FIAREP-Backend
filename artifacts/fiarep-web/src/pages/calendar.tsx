@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, ClipboardCheck, FolderKanban, Loader2, Plane, Wrench, FileSearch } from "lucide-react";
 import { Link } from "wouter";
 import { getListEntityRecordsQueryKey, useListEntityRecords } from "@workspace/api-client-react";
+import { useAuth } from "@/hooks/use-auth";
+import type { Staff } from "@workspace/api-client-react";
 
 type RecordItem = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt?: string; updatedAt?: string };
 type CalendarItem = RecordItem & { category: Category; label: string; href: string; start: Date; end: Date };
@@ -25,6 +27,32 @@ const dayKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() +
 const startOfDay = (date: Date) => new Date(date.getFullYear(), date.getMonth(), date.getDate());
 const displayDate = (date: Date) => date.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 
+/**
+ * Keep the calendar's source list in step with the entity-level read policy.
+ * The API remains authoritative (and still filters individual records), but
+ * avoiding requests for entities a role can never read prevents expected 403s
+ * from being presented as broken calendar sources.
+ */
+function canReadCalendarEntity(staff: Staff | null, entity: string): boolean {
+  if (!staff) return false;
+  if (staff.role === "emergency") return entity === "emergency-jobs";
+  if (entity === "emergency-jobs") {
+    return staff.role === "administrator" ||
+      staff.role === "management" ||
+      staff.position === "Borough Director";
+  }
+  if (entity === "elevator-jobs") {
+    return staff.role === "administrator" ||
+      staff.role === "management" ||
+      staff.position === "Borough Director" ||
+      (["worker", "inspector"].includes(staff.role) &&
+        (staff.position === "Elevator Service" ||
+          staff.position === "Elevator Supervisor" ||
+          (staff.role === "inspector" && staff.position === "CPM")));
+  }
+  return true;
+}
+
 function normalize(record: RecordItem, category: Category): CalendarItem | null {
   const s = record.state || {};
   const start = parseDate(value(s, ["startDate", "scheduledDate", "date", "dueDate", "inspectionDate", "eventDate", "appointmentDate", "plannedDate"]), record.updatedAt || record.createdAt);
@@ -38,17 +66,34 @@ function normalize(record: RecordItem, category: Category): CalendarItem | null 
 }
 
 export default function Calendar() {
+  const { staff } = useAuth();
   const [cursor, setCursor] = useState(() => new Date());
   const [selected, setSelected] = useState(() => dayKey(new Date()));
   const [filter, setFilter] = useState<"All" | Category>("All");
-  const options = (entity: string) => ({ query: { queryKey: getListEntityRecordsQueryKey(entity), refetchInterval: 30_000, staleTime: 10_000, refetchOnMount: "always" as const } });
+  const options = (entity: string) => ({
+    query: {
+      queryKey: getListEntityRecordsQueryKey(entity),
+      enabled: canReadCalendarEntity(staff, entity),
+      refetchInterval: 30_000,
+      staleTime: 10_000,
+      refetchOnMount: "always" as const,
+    },
+  });
   const projects = useListEntityRecords("projects", undefined, options("projects"));
   const inspections = useListEntityRecords("inspections", undefined, options("inspections"));
   const reports = useListEntityRecords("resident-reports", undefined, options("resident-reports"));
   const emergencies = useListEntityRecords("emergency-jobs", undefined, options("emergency-jobs"));
   const elevators = useListEntityRecords("elevator-jobs", undefined, options("elevator-jobs"));
   const leave = useListEntityRecords("leave-requests", undefined, options("leave-requests"));
-  const queries = [projects, inspections, reports, emergencies, elevators, leave];
+  const sources = [
+    { query: projects, enabled: canReadCalendarEntity(staff, "projects") },
+    { query: inspections, enabled: canReadCalendarEntity(staff, "inspections") },
+    { query: reports, enabled: canReadCalendarEntity(staff, "resident-reports") },
+    { query: emergencies, enabled: canReadCalendarEntity(staff, "emergency-jobs") },
+    { query: elevators, enabled: canReadCalendarEntity(staff, "elevator-jobs") },
+    { query: leave, enabled: canReadCalendarEntity(staff, "leave-requests") },
+  ] as const;
+  const queries = sources.map(({ query }) => query);
   const records = useMemo(() => ([projects, inspections, reports, emergencies, elevators, leave] as const).flatMap((query, i) =>
     ((query.data || []) as RecordItem[]).map((record) => normalize(record, categories[i]))
   ).filter((item): item is CalendarItem => Boolean(item)), [projects.data, inspections.data, reports.data, emergencies.data, elevators.data, leave.data]);
@@ -59,7 +104,9 @@ export default function Calendar() {
   const agenda = visible.filter((item) => startOfDay(item.start) <= startOfDay(new Date(`${selected}T23:59:59`)) && startOfDay(item.end) >= startOfDay(new Date(`${selected}T00:00:00`))).sort((a, b) => a.start.getTime() - b.start.getTime());
   const today = dayKey(new Date());
   const loading = queries.some((query) => query.isLoading);
-  const errors = queries.filter((query) => query.isError).length;
+  // Disabled sources are intentionally absent, not unavailable. Only count
+  // failures from requests this staff member is authorized to make.
+  const errors = sources.filter(({ query, enabled }) => enabled && query.isError).length;
   const goMonth = (amount: number) => {
     const target = new Date(cursor.getFullYear(), cursor.getMonth() + amount, 1);
     const selectedDate = new Date(`${selected}T12:00:00`);

@@ -1,9 +1,8 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Image, Alert } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listElevatorJobsForMechanic } from '../lib/store';
-import { photoUri } from '../lib/photos';
+import { getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listElevatorJobsForMechanic, listResidentReportPhotoUrls } from '../lib/store';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
@@ -28,19 +27,56 @@ export default function ReportDetail() {
   useFocusEffect(useCallback(() => { getCurrentPosition().then(setPosition).catch(() => {}); }, []));
   const [r, setR] = useState<ResidentReport | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
+  const [remotePhotoUris, setRemotePhotoUris] = useState<string[]>([]);
+  const [photosLoading, setPhotosLoading] = useState(false);
+  const [photosError, setPhotosError] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
-    if (!id) return;
+    if (!id) {
+      setLoading(false);
+      return;
+    }
+    let active = true;
     (async () => {
-      let report = await getResidentReport(String(id));
-      if (!report) {
-        await syncAllEntities().catch(() => undefined);
-        report = await getResidentReport(String(id));
+      try {
+        let report = await getResidentReport(String(id));
+        if (!report) {
+          await syncAllEntities().catch(() => undefined);
+          report = await getResidentReport(String(id));
+        }
+        if (!active) return;
+        setR(report);
+        setRemotePhotoUris([]);
+        setPhotosError(false);
+        if (!report) return;
+        setPhotosLoading(true);
+        try {
+          // Resident report photos must use the report-scoped authorized endpoint.
+          const urls = await listResidentReportPhotoUrls(String(id));
+          if (active) setRemotePhotoUris(urls);
+        } catch {
+          if (active) setPhotosError(true);
+        } finally {
+          if (active) setPhotosLoading(false);
+        }
+      } catch {
+        if (active) setR(null);
+      } finally {
+        if (active) setLoading(false);
       }
-      setR(report);
     })();
+    return () => { active = false; };
   }, [id]);
   useFocusEffect(load);
+
+  if (loading) {
+    return (
+      <ScrollView contentContainerStyle={ui.wrap}>
+        <Text style={ui.empty}>Loading report…</Text>
+      </ScrollView>
+    );
+  }
 
   if (!r) {
     return (
@@ -130,15 +166,23 @@ export default function ReportDetail() {
             <Text style={ui.btnOutlineText}>FIAREP Vision (AI photo)</Text>
           </Pressable>
         )}
-        {r.photos.length > 0 && (
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {r.photos.map((uri, i) => (
               <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}>
                 <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
               </Pressable>
             ))}
-          </View>
-        )}
+            {remotePhotoUris.map((uri, i) => (
+              <Pressable key={`remote-${uri}-${i}`} onPress={() => setViewerUri(uri)}>
+                <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+              </Pressable>
+            ))}
+            {photosLoading && <Text style={ui.listSub}>Loading photos…</Text>}
+            {!photosLoading && photosError && <Text style={ui.listSub}>Photos could not be loaded.</Text>}
+            {!photosLoading && !photosError && r.photos.length === 0 && remotePhotoUris.length === 0 && (
+              <Text style={ui.listSub}>No photos attached.</Text>
+            )}
+        </View>
       </View>
 
       {r.updates.length > 0 && (

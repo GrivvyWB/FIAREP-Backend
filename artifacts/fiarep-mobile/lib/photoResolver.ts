@@ -31,6 +31,9 @@ export async function hydrateRemotePhotosFromDb(d: any): Promise<void> {
 /** Local-first, authenticated remote fallback for every photo-bearing screen. */
 export async function resolvePhoto(ref: StoredPhotoRef | string): Promise<string | null> {
   const local = typeof ref === 'string' ? ref : ref.localUri;
+  // Report-scoped download helpers already return authorized URLs. Do not
+  // send those URLs through the generic file downloader or local-file check.
+  if (local && /^https?:\/\//i.test(local)) return local;
   if (local) {
     const localInfo = await FileSystem.getInfoAsync(photoUri(local)).catch(() => ({ exists: false }));
     if (localInfo.exists) return photoUri(local);

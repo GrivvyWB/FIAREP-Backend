@@ -75,6 +75,7 @@ export const STAFF_POSITIONS = [
   "Heating Service",
   "Staff Worker",
   "Director",
+  "Superintendent Ⓔ",
   "Other",
 ] as const;
 
@@ -173,6 +174,10 @@ const ELEVATED_POSITIONS = new Set([
   "Regional Director",
   "Superintendent",
 ]);
+const SPECIALIZED_MANAGEMENT_POSITIONS = new Set([
+  ...ELEVATED_POSITIONS,
+  "Superintendent Ⓔ",
+]);
 
 export function isBoroughDirector(actor: Actor): boolean {
   return actor.position === "Borough Director";
@@ -181,8 +186,19 @@ export function isBoroughDirector(actor: Actor): boolean {
 export function isElevated(actor: Actor): boolean {
   return (
     isBoroughDirector(actor) ||
-    (actor.role === "management" && ELEVATED_POSITIONS.has(actor.position))
+    (actor.role === "management" &&
+      ELEVATED_POSITIONS.has(actor.position))
   );
+}
+
+/** Audit history is restricted to the two organization-wide directors. */
+export function canReadAuditLog(actor: Actor): boolean {
+  return isBoroughDirector(actor) ||
+    (actor.role === "management" && actor.position === "Regional Director");
+}
+
+export function canReadSharedDefaultRates(actor: Actor): boolean {
+  return actor.position !== "Maintenance Worker";
 }
 
 /** The only management actors who may review procurement scopes.  Keep this
@@ -191,7 +207,7 @@ export function isElevated(actor: Actor): boolean {
 export function isOrdinaryManagement(actor: Actor): boolean {
   return actor.role === "management" &&
     !isBoroughDirector(actor) &&
-    !ELEVATED_POSITIONS.has(actor.position);
+    !SPECIALIZED_MANAGEMENT_POSITIONS.has(actor.position);
 }
 
 /**
@@ -279,6 +295,15 @@ function leaveRecordAllowed(
   const employeeStaffId = typeof row.state["employeeStaffId"] === "string"
     ? row.state["employeeStaffId"]
     : "";
+  if (isBoroughDirector(actor)) {
+    const employeeName = typeof row.state["employee"] === "string"
+      ? row.state["employee"].trim().toLowerCase()
+      : "";
+    return employeeStaffId === actor.id ||
+      (!employeeStaffId &&
+        (row.createdBy === actor.id ||
+          employeeName === actor.name.trim().toLowerCase()));
+  }
   if (employeeStaffId) return employeeStaffId === actor.id ||
     row.state["supervisorStaffId"] === actor.id;
   const employeeName = typeof row.state["employee"] === "string"

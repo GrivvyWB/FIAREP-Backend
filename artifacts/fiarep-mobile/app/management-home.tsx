@@ -4,7 +4,7 @@ import { clearAppMode, logout, getCurrentPosition } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { unreadCount, getCurrentActor } from '../lib/store';
+import { unreadCount, getCurrentActor, displayStaffPosition } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
@@ -31,6 +31,7 @@ export default function ManagementHome() {
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
   const ordinaryManagement = mode === 'management' &&
     !['borough director', 'regional director', 'superintendent'].includes(_pos);
+  const director = _pos === 'borough director' || _pos === 'regional director';
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('management'); if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, []));
 
   async function onSignOut() {
@@ -61,7 +62,7 @@ export default function ManagementHome() {
         ...(!restricted ? [{ label: 'Staff Member Jobs', onPress: () => router.push('/worker'), tone: 'tint' as Tone }] : []),
         ...(emergencyAdmin ? [{ label: 'Assign Emergency Unit', onPress: () => router.push('/assign-emergency'), tone: 'tint' as Tone }, { label: 'Manage Trucks', onPress: () => router.push('/manage-trucks'), tone: 'tint' as Tone }, { label: 'Truck Scores', onPress: () => router.push('/truck-scores'), tone: 'tint' as Tone }] : []),
         { label: 'Emergency Activity', onPress: () => router.push('/emergency-activity'), tone: 'tint' },
-        { label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' },
+        ...(_pos !== 'borough director' ? [{ label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' as Tone }] : []),
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' },
         { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' },
         ...(position === 'Elevator Supervisor' ? [{ label: 'Elevator Dashboard', onPress: () => router.push('/elevator-dashboard'), tone: 'tint' as Tone }] : []),
@@ -89,15 +90,17 @@ export default function ManagementHome() {
       heading: 'System',
       color: '#4A5560',
       tiles: [
-        { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
-        ...(!restricted ? [{ label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' as Tone }, { label: 'Default rates', onPress: () => router.push('/settings'), tone: 'tint' as Tone }] : []),
+        ...(mode === 'management' ? [{ label: unread > 0 ? 'Manage All Requests (' + unread + ')' : 'Manage All Requests', onPress: () => router.push('/manage-requests'), tone: 'solid' as Tone }] : []),
+        ...(director ? [{ label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' as Tone }] : []),
+        ...(director ? [{ label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' as Tone }] : []),
+        ...(!restricted ? [{ label: 'Default rates', onPress: () => router.push('/settings'), tone: 'tint' as Tone }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },
   ];
 
   const isSupervisor = /supervisor/i.test((position || '').trim()) || /superintendent/i.test((position || '').trim());
-  const heading = position === 'Borough Director' ? 'Borough Director' : isSupervisor ? position : 'Management';
+  const heading = position === 'Borough Director' ? 'Borough Director' : isSupervisor ? displayStaffPosition(position) : 'Management';
 
   return (
     <ScrollView contentContainerStyle={ui.wrap}>

@@ -30,7 +30,9 @@ import { groupTeamDirectoryByTitleAndLocation } from "@/lib/staff-assignment";
 import { invalidateStaffQueries } from "@/lib/query-invalidation";
 import { useLocation } from "wouter";
 
-const positions = Object.values(StaffPosition);
+// "Other" remains readable for legacy employee records, but must not be
+// offered when issuing or editing a new staff account.
+const positions = Object.values(StaffPosition).filter((position) => position !== "Other");
 const allRoles = Object.values(StaffRole).filter((r) => r !== "resident");
 const roleLabels: Record<string, string> = {
   administrator: "Administrator", human_resources: "Human Resources", management: "Management", worker: "Worker",
@@ -72,7 +74,7 @@ function roleForPosition(position: string) {
   if (position === "CPM" || position === "Inspector") return "inspector";
   if (
     position.includes("Supervisor") ||
-    ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager", "Superintendent", "Assistant Superintendent", "Housing Assistant", "Director"].includes(position)
+    ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager", "Superintendent", "Superintendent Ⓔ", "Assistant Superintendent", "Housing Assistant", "Director"].includes(position)
   ) return "management";
   return "worker";
 }

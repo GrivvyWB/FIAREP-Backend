@@ -12,7 +12,7 @@ import {
   setReportDevelopment,
   listDevelopmentNames,
   listStaffByPosition,
-  STAFF_POSITIONS,
+  STAFF_POSITIONS, displayStaffPosition,
   createChangeOrder,
   getCurrentActor,
   developmentsForManager,
@@ -493,7 +493,7 @@ export default function Management() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
             {STAFF_POSITIONS.map((pos) => (
               <Pressable key={pos} style={[ui.btnOutline, cwoPos === pos && { backgroundColor: ACCENT }]} onPress={() => cwoPickPosition(pos)}>
-                <Text style={cwoPos === pos ? ui.btnText : ui.btnOutlineText}>{pos}</Text>
+                <Text style={cwoPos === pos ? ui.btnText : ui.btnOutlineText}>{displayStaffPosition(pos)}</Text>
               </Pressable>
             ))}
           </View>

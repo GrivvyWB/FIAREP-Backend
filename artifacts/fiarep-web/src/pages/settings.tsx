@@ -4,6 +4,7 @@ import { User, LogOut, Shield, Calculator } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { canReadSharedDefaultRates } from "@/lib/access-policy";
 
 const DEFAULT_RATES = {
   waste: 1.12,
@@ -20,10 +21,11 @@ export default function Settings() {
   const [ratesLoading, setRatesLoading] = useState(true);
   const [ratesSaving, setRatesSaving] = useState(false);
   const canEditRates = staff?.position === "Borough Director";
+  const canReadRates = canReadSharedDefaultRates(staff);
   const isHumanResources = staff?.role === "human_resources";
 
   useEffect(() => {
-    if (isHumanResources) {
+    if (isHumanResources || !canReadRates) {
       setRatesLoading(false);
       return;
     }
@@ -44,7 +46,7 @@ export default function Settings() {
       })
       .finally(() => { if (!cancelled) setRatesLoading(false); });
     return () => { cancelled = true; };
-  }, [isHumanResources, toast]);
+  }, [isHumanResources, canReadRates, toast]);
 
   const saveRates = async () => {
     try {
@@ -106,7 +108,7 @@ export default function Settings() {
             </div>
           </div>
 
-          {!isHumanResources && <div className="space-y-4">
+          {!isHumanResources && canReadRates && <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Calculator className="w-4 h-4" /> Shared Default Rates
             </h3>
@@ -145,7 +147,7 @@ export default function Settings() {
             )}
           </div>}
 
-          {!isHumanResources && <div className="space-y-4">
+          {!isHumanResources && canReadRates && <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Shield className="w-4 h-4" /> Access & Security
             </h3>

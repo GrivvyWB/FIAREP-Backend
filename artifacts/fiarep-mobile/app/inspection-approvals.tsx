@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, Modal, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { listLoggedInspections, listActiveInspections, clearInspectionForStaff, approveAndRouteViolation, listStaffAccounts, type BuildingViolation, type StaffAccount } from '../lib/store';
+import { listLoggedInspections, listActiveInspections, clearInspectionForStaff, approveAndRouteViolation, listStaffAccounts, displayStaffPosition, type BuildingViolation, type StaffAccount } from '../lib/store';
 import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
@@ -130,7 +130,7 @@ export default function InspectionApprovals() {
               {positions.map((pos) => (
                 <View key={pos}>
                   <Pressable onPress={() => setOpenPos((m) => ({ ...m, [pos]: !m[pos] }))} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, backgroundColor: '#f2f7fb' }}>
-                    <Text style={{ fontWeight: '700', color: ACCENT }}>{openPos[pos] ? '\u2013 ' : '+ '}{pos}</Text>
+                    <Text style={{ fontWeight: '700', color: ACCENT }}>{openPos[pos] ? '\u2013 ' : '+ '}{displayStaffPosition(pos)}</Text>
                     <Text style={{ color: '#667085', fontSize: 13 }}>{byPos[pos].length}</Text>
                   </Pressable>
                   {openPos[pos] && byPos[pos].map((s) => (

@@ -255,6 +255,7 @@ router.post("/v1/staff", async (req, res) => {
     "Assistant Regional Director",
     "Property Manager",
     "Superintendent",
+    "Superintendent Ⓔ",
     "Assistant Superintendent",
   ]);
   if (

@@ -59,6 +59,9 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Change Orders", href: "/change-orders", icon: FileCog, module: "change-orders" as const },
     { name: "Elevators", href: "/elevators", icon: ArrowUpToLine, module: "elevators" as const },
     { name: "Leave", href: "/leave", icon: Plane, module: "leave" as const },
+    ...((staff?.role === "management" || staff?.role === "administrator") ? [
+      { name: "Manage All Requests", href: "/notifications", icon: BellRing, module: "notifications" as const },
+    ] : []),
     { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },
     { name: "Settings", href: "/settings", icon: Settings, module: "settings" as const },
     { name: "What is FIAREP?", href: "/platform", icon: Info, module: "dashboard" as const },

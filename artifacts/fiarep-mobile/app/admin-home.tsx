@@ -86,7 +86,6 @@ export default function AdminHome() {
       color: '#4A5560',
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
-        { label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' },
         { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
       ],
     },

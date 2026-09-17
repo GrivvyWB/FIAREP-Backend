@@ -67,7 +67,7 @@ export default function Leave() {
   const rows = (query.data || []) as Row[];
   const canDecide = staff?.role === "human_resources" ||
     staff?.role === "management";
-  const canViewTeamLeave = canDecide;
+  const canViewTeamLeave = canDecide && staff?.position !== "Borough Director";
   const teamView = canViewTeamLeave && new URLSearchParams(window.location.search).get("view") === "team";
   const ownRows = rows.filter((row) => {
     const state = row.state || {};

@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, CheckCircle2, ExternalLink, Loader2, RefreshCw } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+import { useAuth } from "@/hooks/use-auth";
 
 function isUrgent(notification: { message: string; detail?: string | null }) {
   const text = `${notification.message} ${notification.detail ?? ""}`.toLowerCase();
@@ -18,6 +19,8 @@ function isUrgent(notification: { message: string; detail?: string | null }) {
 }
 
 export default function Notifications() {
+  const { staff } = useAuth();
+  const managementSurface = staff?.role === "management" || staff?.role === "administrator";
   const queryClient = useQueryClient();
   const {
     data: notifications,
@@ -58,8 +61,10 @@ export default function Notifications() {
     <div className="max-w-3xl mx-auto space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Notifications</h1>
-          <p className="text-muted-foreground text-sm">View and manage your alerts.</p>
+          <h1 className="text-2xl font-bold tracking-tight">{managementSurface ? "Manage All Requests" : "Notifications"}</h1>
+          <p className="text-muted-foreground text-sm">
+            {managementSurface ? "Review requests and alerts that need your attention." : "View and manage your alerts."}
+          </p>
         </div>
         {unread.length > 0 && (
           <Button
@@ -152,7 +157,13 @@ export default function Notifications() {
                   >
                     {notification.reportId ? (
                       <Link
-                        href={pendingEmployee ? `/team?staffId=${encodeURIComponent(notification.reportId)}` : "/reports"}
+                        href={
+                          pendingEmployee
+                            ? `/team?staffId=${encodeURIComponent(notification.reportId)}`
+                            : notification.message === "Leave request"
+                              ? "/leave?view=team"
+                              : "/reports"
+                        }
                         className="flex min-w-0 flex-1 items-start gap-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => {
                           if (!notification.read && !pendingEmployee) void handleMarkRead(notification.id);

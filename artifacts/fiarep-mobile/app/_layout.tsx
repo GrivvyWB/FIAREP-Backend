@@ -4,9 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter } from 'expo-router';
 import {
   getAppMode, setAppMode,
-  verifyStaffLogin, hasAnyAdministrator, bootstrapAdministrator,
+  verifyStaffLogin,
   setRememberedStaff,
-   setCurrentActor, restoreServerSession, logout, clearAppMode, clearRememberedStaff,
+   restoreServerSession, logout, clearAppMode, clearRememberedStaff,
    getInstallationPersona, setInstallationPersona,
    inferInstallationPersona,
    type AppMode, type InstallationPersona } from '../lib/store';
@@ -17,17 +17,8 @@ type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
 export function useAppMode() { return useContext(ModeContext); }
 
-type StaffRole = 'administrator' | 'management' | 'worker' | 'inspector' | 'emergency';
 const CODE_LEN = 4;
 const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
-const ROLE_LABEL: Record<StaffRole, string> = {
-  administrator: 'Administrator',
-  management: 'Management',
-  worker: 'Staff Member',
-  inspector: 'CPM / Inspector',
-  emergency: 'Emergency Unit',
-};
-const roleLabel = (role: StaffRole) => ROLE_LABEL[role];
 
 const HOME_FOR_MODE: Record<AppMode, string> = {
   management: '/management-home',
@@ -51,35 +42,33 @@ function Screen({ children }: { children: React.ReactNode }) {
   );
 }
 
-function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: string; onUnlock: (overrideMode?: AppMode) => void; onCancel: () => void }) {
+function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel: () => void }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
-  const [organizationId, setOrganizationId] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
-  const [canBootstrap, setCanBootstrap] = useState(false);
   const [ready, setReady] = useState(false);
-  const [issuedCode, setIssuedCode] = useState<string | null>(null);
 
   useEffect(() => {
-    if (props.role === 'administrator') {
-      hasAnyAdministrator()
-        .then((h) => setCanBootstrap(!h))
-        .catch(() => setMsg('Could not reach the FIAREP backend. Try again.'))
-        .finally(() => setReady(true));
-    } else {
-      setReady(true);
-    }
-  }, [props.role]);
+    setReady(true);
+  }, []);
 
   async function doLogin() {
     setMsg(''); setBusy(true);
     try {
-      const ok = await verifyStaffLogin(name.trim(), normCode(code), props.role, props.expectedPosition, organizationId);
+      const ok = await verifyStaffLogin(name.trim(), normCode(code));
       if (ok) {
-        await setRememberedStaff(props.role, name.trim()).catch(() => undefined);
+        const actor = await restoreServerSession();
+        const supportedRoles: AppMode[] = ['administrator', 'management', 'worker', 'inspector', 'emergency'];
+        const actualRole = actor?.role;
+        if (!actualRole || !supportedRoles.includes(actualRole as AppMode)) {
+          setMsg('This account has an unsupported mobile staff role. Contact an administrator.');
+          return;
+        }
+        const modeRole = actualRole as AppMode;
+        await setRememberedStaff(modeRole, name.trim()).catch(() => undefined);
         await syncAllEntities().catch(() => undefined);
-        props.onUnlock();
+        props.onUnlock(modeRole);
       }
       else setMsg('No approved account matches that name and code.');
     } catch (error) {
@@ -96,48 +85,15 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
     } finally { setBusy(false); }
   }
 
-  async function doBootstrap() {
-    setMsg(''); setBusy(true);
-    try {
-      if (!name.trim()) { setMsg('Enter your name.'); setBusy(false); return; }
-      const acct = await bootstrapAdministrator(name.trim());
-      await setCurrentActor('administrator', name.trim());
-      // Show the generated code, then continue.
-      setIssuedCode(acct.code);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : '';
-      setMsg(message.includes('409') ? 'An administrator already exists. Log in instead.' : 'Could not create the administrator. Try again.');
-    } finally { setBusy(false); }
-  }
-
   if (!ready) {
     return <Screen><ActivityIndicator /></Screen>;
   }
 
-  // Bootstrap success: show generated admin code once, then enter.
-  if (issuedCode) {
-    return (
-      <Screen>
-        <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>Administrator created</Text>
-        <Text style={[ui.label, { textAlign: 'center' }]}>Your login code (save it):</Text>
-        <Text style={{ fontSize: 34, fontWeight: '700', textAlign: 'center', letterSpacing: 6, color: ACCENT }}>{issuedCode}</Text>
-        <Text style={[ui.label, { textAlign: 'center' }]}>Log in with your name and this code next time.</Text>
-        <Pressable style={ui.btn} onPress={() => props.onUnlock()}>
-          <Text style={ui.btnText}>Continue</Text>
-        </Pressable>
-      </Screen>
-    );
-  }
-
-  const bootstrapping = props.role === 'administrator' && canBootstrap;
-
   return (
     <Screen>
-      <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{props.label || roleLabel(props.role)}</Text>
+      <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>Staff Member</Text>
       <Text style={[ui.label, { textAlign: 'center' }]}>
-        {bootstrapping
-          ? 'No administrator exists yet. Create the first administrator account.'
-          : `Log in with the name and code you were issued.`}
+        Log in with the name and code you were issued.
       </Text>
 
       <Text style={ui.label}>Name</Text>
@@ -148,15 +104,7 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
         placeholder="Your name"
         autoCapitalize="words"
       />
-      {!bootstrapping && (
-        <>
-          <Text style={ui.label}>Organization ID (customer staff)</Text>
-          <TextInput style={ui.input} value={organizationId} onChangeText={setOrganizationId} autoCapitalize="none" />
-        </>
-      )}
-
-      {!bootstrapping && (
-        <>
+      <>
           <Text style={ui.label}>Code</Text>
           <TextInput
             style={[ui.input, { textAlign: 'center', fontSize: 22, letterSpacing: 4 }]}
@@ -167,13 +115,12 @@ function StaffGate(props: { role: StaffRole; label?: string; expectedPosition?: 
             autoCorrect={false}
             maxLength={CODE_LEN}
           />
-        </>
-      )}
+      </>
 
       {!!msg && <Text style={{ color: '#c00', textAlign: 'center' }}>{msg}</Text>}
 
-      <Pressable style={ui.btn} onPress={bootstrapping ? doBootstrap : doLogin} disabled={busy}>
-        <Text style={ui.btnText}>{busy ? '…' : bootstrapping ? 'Create administrator' : 'Log in'}</Text>
+      <Pressable style={ui.btn} onPress={doLogin} disabled={busy}>
+        <Text style={ui.btnText}>{busy ? '…' : 'Log in'}</Text>
       </Pressable>
       <Pressable style={ui.btnOutline} onPress={props.onCancel}>
         <Text style={ui.btnOutlineText}>Cancel</Text>
@@ -206,22 +153,13 @@ function PersonaPicker({ onPick }: { onPick: (persona: InstallationPersona) => v
 }
 
 function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?: string }) {
-  const [gateFor, setGateFor] = useState<StaffRole | null>(null);
-  const [boroughDirectorGate, setBoroughDirectorGate] = useState(false);
-  const pickStaffRole = async (role: StaffRole) => {
-    const staff = await restoreServerSession();
-    if (staff?.role === role) onPick(role as AppMode);
-    else setGateFor(role);
-  };
+  const [gateFor, setGateFor] = useState(false);
 
   if (gateFor) {
     return (
       <StaffGate
-        role={gateFor}
-        label={boroughDirectorGate ? 'Borough Director' : undefined}
-        expectedPosition={boroughDirectorGate ? 'Borough Director' : undefined}
-        onUnlock={(override?: AppMode) => { const r = override || (boroughDirectorGate ? 'management' : gateFor as AppMode); setGateFor(null); setBoroughDirectorGate(false); onPick(r); }}
-        onCancel={() => { setGateFor(null); setBoroughDirectorGate(false); }}
+        onUnlock={(override?: AppMode) => { setGateFor(false); onPick(override || 'management'); }}
+        onCancel={() => setGateFor(false)}
       />
     );
   }
@@ -234,25 +172,10 @@ function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?:
         resizeMode="contain"
         style={{ width: 300, height: 150, alignSelf: 'center', marginBottom: 6 }}
       />
-      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Select a staff role</Text>
+      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Staff sign in</Text>
       {!!notice && <Text style={{ color: '#9a3412', textAlign: 'center', marginBottom: 8 }}>{notice}</Text>}
-      <Pressable style={[ui.btn, { backgroundColor: '#c0392b' }]} onPress={() => onPick('emergency')}>
-        <Text style={ui.btnText}>Emergency Unit</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => { setBoroughDirectorGate(true); setGateFor('administrator'); }}>
-        <Text style={ui.btnText}>Borough Director  🔒</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => pickStaffRole('administrator')}>
-        <Text style={ui.btnText}>Administrator  🔒</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => pickStaffRole('management')}>
-        <Text style={ui.btnText}>Management  🔒</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => pickStaffRole('worker')}>
+      <Pressable style={ui.btn} onPress={() => setGateFor(true)}>
         <Text style={ui.btnText}>Staff Member  🔒</Text>
-      </Pressable>
-      <Pressable style={ui.btn} onPress={() => pickStaffRole('inspector')}>
-        <Text style={ui.btnText}>CPM / Inspector  🔒</Text>
       </Pressable>
     </Screen>
   );
@@ -268,7 +191,6 @@ function AdministratorStack() {
       <Stack.Screen name="admin-job" options={{ title: 'Add Job' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
-      <Stack.Screen name="audit-log" options={{ title: 'Audit Log' }} />
       <Stack.Screen name="manage-requests" options={{ title: 'Manage Requests' }} />
       <Stack.Screen name="assign-emergency" options={{ title: 'Assign Emergency Unit' }} />
       <Stack.Screen name="manage-trucks" options={{ title: 'Emergency Units' }} />
@@ -357,7 +279,6 @@ function ManagementStack() {
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="create-report" options={{ title: 'Create Report' }} />
-      <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
       <Stack.Screen name="audit-log" options={{ title: 'Audit Log' }} />
       <Stack.Screen name="settings" options={{ title: 'Default rates' }} />
       <Stack.Screen name="management" options={{ title: 'Resident Reports' }} />

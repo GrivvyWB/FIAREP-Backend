@@ -46,7 +46,7 @@ export default function ManageRequests() {
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Manage All Requests</Text>
-      <Text style={ui.listSub}>Admin only. Delete any request, job, change order, or inbox item.</Text>
+      <Text style={ui.listSub}>Review pending requests, jobs, change orders, and alerts in one place.</Text>
 
       <Pressable onPress={() => toggle('reports')} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, backgroundColor: '#f2f7fb', borderRadius: 10, padding: 12 }}>
         <Text style={{ fontSize: 16, fontWeight: '700', color: ACCENT }}>{open['reports'] ? '\u2013' : '+'}  Reports & Jobs</Text>

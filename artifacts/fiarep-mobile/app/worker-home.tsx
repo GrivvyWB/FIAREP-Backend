@@ -10,6 +10,7 @@ import {
   getCurrentPosition,
   listResidentReports,
   listRoutedInspectionsFor,
+  displayStaffPosition,
 } from '../lib/store';
 import { ui } from '../lib/ui';
 
@@ -54,7 +55,7 @@ export default function WorkerHome() {
 
   return (
     <ScrollView contentContainerStyle={[ui.wrap, { paddingTop: 40 }]}>
-      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center', marginBottom: 6 }}>{position === 'Elevator Service' ? 'Elevator Mechanic' : (position || 'Worker')}</Text>
+      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center', marginBottom: 6 }}>{position === 'Elevator Service' ? 'Elevator Mechanic' : displayStaffPosition(position || 'Worker')}</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 24 }]}>
         View your assigned jobs and check report status.
       </Text>

@@ -30,6 +30,10 @@ export function canReviewHud(staff: Staff | null | undefined): boolean {
   return !!staff && HUD_REVIEW_POSITIONS.has(staff.position || "");
 }
 
+export function canReadSharedDefaultRates(staff: Staff | null | undefined): boolean {
+  return !!staff && staff.position !== "Maintenance Worker";
+}
+
 /** One client-side policy shared by navigation, routes, and data surfaces.
  * The API remains the final authority; this prevents unauthorized UI from
  * mounting and issuing requests in the first place. */
@@ -47,6 +51,9 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
   }
   if (staff.role === "procurement") return module === "procurement";
   if (module === "hud-inspections") return canReviewHud(staff);
+  // Shared Data remains an administrator-only module.  Default-rate
+  // visibility is a Settings concern, not a reason to broaden this module.
+  if (module === "shared-data") return staff.role === "administrator";
   if (module === "change-orders" && isSupervisor(staff)) return true;
   if (module === "trade-requests") {
     return MANAGEMENT_ROLES.has(staff.role) || isSupervisor(staff);

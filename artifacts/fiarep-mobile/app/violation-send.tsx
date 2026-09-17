@@ -9,6 +9,7 @@ import {
   getCurrentActor,
   type ViolationLookup,
   type StaffAccount,
+  displayStaffPosition,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
@@ -119,7 +120,7 @@ export default function ViolationSend() {
                   onPress={() => setOpenGroup(expanded ? '' : pos)}
                 >
                   <Text style={{ fontWeight: '600', color: hasPick ? ACCENT : '#000' }}>
-                    {pos}{hasPick ? '  \u2713 ' + sentTo : '  (' + people.length + ')'}
+                     {displayStaffPosition(pos)}{hasPick ? '  \u2713 ' + sentTo : '  (' + people.length + ')'}
                   </Text>
                   <Text style={{ color: '#666' }}>{expanded ? '\u25b2' : '\u25bc'}</Text>
                 </Pressable>

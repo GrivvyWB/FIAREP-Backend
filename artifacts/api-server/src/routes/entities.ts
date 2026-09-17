@@ -183,6 +183,17 @@ async function canonicalizeAssignment(
   state: Record<string, unknown>,
   development: string | null,
 ): Promise<{ state: Record<string, unknown> | null; error?: string }> {
+  // The Emergency Unit superintendent has one additional, narrowly scoped
+  // responsibility: assigning emergency-unit maintenance staff to jobs in
+  // covered developments.  Do not let the ordinary Superintendent title
+  // acquire this authority, and do not let the emergency title assign work
+  // in unrelated modules.
+  if (actor.position === "Superintendent Ⓔ" && entity !== "emergency-jobs") {
+    return { state: null, error: "Emergency Unit assignments are limited to emergency jobs" };
+  }
+  if (entity === "emergency-jobs" && actor.position === "Superintendent") {
+    return { state: null, error: "Only the Emergency Unit superintendent may assign emergency staff" };
+  }
   if (!ASSIGNMENT_SCOPED_ENTITIES.includes(entity) &&
     containsAssignmentFields(state) &&
     !isAssignmentAuthority(actor)) {
@@ -218,6 +229,15 @@ async function canonicalizeAssignment(
     ["violations", "building-violations", "priority-violations", "route-assignments"]
       .includes(entity) &&
     target?.id === actor.id;
+  if (
+    actor.position === "Superintendent Ⓔ" &&
+    (target?.role !== "worker" || target.position !== "Maintenance Worker")
+  ) {
+    return {
+      state: null,
+      error: "The Emergency Unit superintendent may assign only maintenance workers",
+    };
+  }
   if (!target || (!canAssignStaff(actor, target, development) && !inspectorSelfAssignment)) {
     return {
       state: null,

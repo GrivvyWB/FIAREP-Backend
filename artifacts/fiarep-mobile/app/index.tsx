@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, Redirect } from 'expo-router';
-import { listProjects, createProject, deleteProject, type Project, listApprovedProjectIds, getSessionIdentity } from '../lib/store';
+import { listProjects, createProject, deleteProject, type Project, listApprovedProjectIds, getSessionIdentity, getCurrentPosition } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
@@ -23,11 +23,13 @@ export default function Projects() {
   const [adding, setAdding] = useState(false);
   const [developments, setDevelopments] = useState<string[]>([]);
   const [development, setDevelopment] = useState('');
+  const [position, setPosition] = useState('');
 
   const load = useCallback(() => {
     listProjects().then(setProjects);
     listApprovedProjectIds().then(setApproved);
     getSessionIdentity().then((identity) => setDevelopments(identity?.developments || []));
+    getCurrentPosition().then(setPosition).catch(() => undefined);
   }, []);
   useFocusEffect(load);
   useEffect(() => {
@@ -44,7 +46,7 @@ export default function Projects() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap}>
-      {mode !== 'administrator' && (
+      {mode !== 'administrator' && !/maintenance worker/i.test(position) && (
         <View style={[ui.card, { gap: 10 }]}>
           <Text style={ui.cardTitle}>Project tools</Text>
           {!adding ? (

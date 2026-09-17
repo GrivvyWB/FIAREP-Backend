@@ -9,7 +9,7 @@ import {
   settings,
 } from "@workspace/db";
 import { notify } from "../lib/audit";
-import { isElevated } from "../lib/domain";
+import { canReadAuditLog, canReadSharedDefaultRates, isElevated } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
@@ -69,6 +69,10 @@ router.delete("/v1/devices/token", async (req, res) => {
 
 router.get("/v1/settings/:key", async (req, res) => {
   const actor = actorFrom(res);
+  if (req.params["key"] === "default-rates" && !canReadSharedDefaultRates(actor)) {
+    res.status(403).json({ error: "Shared default rates are not available for this position" });
+    return;
+  }
   const [row] = await db
     .select()
     .from(settings)
@@ -116,8 +120,8 @@ router.put("/v1/settings/:key", async (req, res) => {
 
 router.get("/v1/audit-log", async (_req, res) => {
   const actor = actorFrom(res);
-  if (!isElevated(actor)) {
-    res.status(403).json({ error: "Elevated management access required" });
+  if (!canReadAuditLog(actor)) {
+    res.status(403).json({ error: "Audit Log is restricted to Borough and Regional Directors" });
     return;
   }
   const rows = await db
