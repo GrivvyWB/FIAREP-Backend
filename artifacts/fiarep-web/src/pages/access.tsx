@@ -1,6 +1,6 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Home, HardHat, Building2 } from 'lucide-react';
-import { useLocation } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { setStoredPersona } from '@/lib/access-policy';
 
 export default function Access() {
@@ -60,6 +60,15 @@ export default function Access() {
               </CardHeader>
             </Card>
           </button>
+        </div>
+        <div className="mt-8 text-center">
+          <Link
+            href="/platform"
+            className="inline-flex items-center justify-center rounded-md border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
+            data-testid="link-about-fiarep"
+          >
+            What is FIAREP?
+          </Link>
         </div>
       </div>
     </div>

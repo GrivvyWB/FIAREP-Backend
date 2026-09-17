@@ -25,6 +25,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
+  Info,
 } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
@@ -60,6 +61,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Leave", href: "/leave", icon: Plane, module: "leave" as const },
     { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },
     { name: "Settings", href: "/settings", icon: Settings, module: "settings" as const },
+    { name: "What is FIAREP?", href: "/platform", icon: Info, module: "dashboard" as const },
   ].filter((item) => hasModuleAccess(staff, item.module));
 
   return (

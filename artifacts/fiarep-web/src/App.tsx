@@ -32,6 +32,7 @@ import Leave from '@/pages/leave';
 import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
 import SharedData from '@/pages/shared-data';
+import Platform from '@/pages/platform';
 import ProcurementLogin from '@/pages/procurement-login';
 import ScopeReview from '@/pages/scope-review';
 import ScopeWriting from '@/pages/scope-writing';
@@ -112,6 +113,10 @@ function AppRouter() {
     );
   }
 
+  if (location === "/platform") {
+    return <RoutedErrorBoundary><Platform /></RoutedErrorBoundary>;
+  }
+
   const persona = getStoredPersona();
 
   if (persona === 'resident') {
@@ -141,6 +146,7 @@ function AppRouter() {
       <RoutedErrorBoundary>
         <Switch>
           <Route path="/" component={Access} />
+          <Route path="/platform" component={Platform} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
@@ -211,6 +217,7 @@ function AppRouter() {
           <Route path="/notifications" component={NotificationsRoute} />
           <Route path="/settings" component={SettingsRoute} />
           <Route path="/shared-data" component={SharedDataRoute} />
+          <Route path="/platform" component={Platform} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
