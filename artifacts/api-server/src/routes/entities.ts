@@ -368,7 +368,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     res.status(400).json({ error: "A JSON state object is required" });
     return;
   }
-  const id = recordId(body["id"]);
+  let id = recordId(body["id"]);
   const [existing] = await db
     .select()
     .from(entityRecords)
@@ -471,6 +471,20 @@ router.post("/v1/:entity", async (req, res, next) => {
       res.status(404).json({ error: "Complaint or violation not found" });
       return;
     }
+    const [existingRequest] = await db.select({ id: entityRecords.id })
+      .from(entityRecords)
+      .where(and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.entity, "manpower-requests"),
+        eq(entityRecords.deleted, false),
+        sql`${entityRecords.state}->>'sourceEntity' = ${sourceEntity}`,
+        sql`${entityRecords.state}->>'sourceRecordId' = ${source.id}`,
+      ))
+      .limit(1);
+    if (existingRequest) {
+      res.status(409).json({ error: "This complaint or violation has already been sent" });
+      return;
+    }
     const sourceStatus = normalizeStatus(source.state["status"]);
     const sourceReady =
       (sourceEntity === "resident-reports" && sourceStatus === "submitted") ||
@@ -498,6 +512,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     }
     rawState["sourceEntity"] = sourceEntity;
     rawState["sourceRecordId"] = source.id;
+    id = `manpower-request:${source.id}`;
     rawState["sourceTitle"] = String(
       source.state["title"] ||
       source.state["complaintNo"] ||
@@ -637,7 +652,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     persistedCreatedState["cpmName"] = actor.name;
     persistedCreatedState["cpmId"] = actor.id;
   }
-  const [created] = await db
+  const insert = db
     .insert(entityRecords)
     .values({
       id,
@@ -649,8 +664,14 @@ router.post("/v1/:entity", async (req, res, next) => {
       createdBy: actor.id,
       createdAt: now,
       updatedAt: now,
-    })
-    .returning();
+    });
+  const [created] = entity === "manpower-requests"
+    ? await insert.onConflictDoNothing().returning()
+    : await insert.returning();
+  if (!created) {
+    res.status(409).json({ error: "This complaint or violation has already been sent" });
+    return;
+  }
   await audit(actor, `${entity}.created`, `Created ${entity} record`, id);
   if (entity === "building-violations") {
     await notify(

@@ -89,7 +89,14 @@ export default function TradeRequests() {
     const status = String(record.state?.status || "").toLowerCase();
     return sourceEntity === "resident-reports" ? status === "submitted" : status === "approved";
   });
+  const sentSourceIds = useMemo(
+    () => new Set((requestsQuery.data || []).map((request) =>
+      String(request.state?.sourceRecordId || ""),
+    ).filter(Boolean)),
+    [requestsQuery.data],
+  );
   const selectedSource = sourceRecords.find((record) => record.id === sourceRecordId);
+  const selectedSourceSent = Boolean(selectedSource && sentSourceIds.has(selectedSource.id));
   const supervisors = useMemo(() => staff.filter((member) =>
     member.id !== actor?.id &&
     supervisorPositions[requestedTrade].includes(member.position) &&
@@ -254,7 +261,14 @@ export default function TradeRequests() {
                 setReceiverSupervisorId("");
               }} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                 <option value="">Select record</option>
-                {sourceRecords.map((record) => <option key={record.id} value={record.id}>{sourceLabel(record)}</option>)}
+                {sourceRecords.map((record) => {
+                  const sent = sentSourceIds.has(record.id);
+                  return (
+                    <option key={record.id} value={record.id} disabled={sent}>
+                      {sourceLabel(record)}{sent ? " · Sent" : ""}
+                    </option>
+                  );
+                })}
               </select>
             </div>
             <div className="space-y-2">
@@ -277,7 +291,7 @@ export default function TradeRequests() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
-            <Button onClick={submitRequest} disabled={!selectedSource || !receiverSupervisorId || create.isPending}>
+            <Button onClick={submitRequest} disabled={!selectedSource || selectedSourceSent || !receiverSupervisorId || create.isPending}>
               {create.isPending ? "Sending..." : "Send request"}
             </Button>
           </DialogFooter>
