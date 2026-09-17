@@ -8,9 +8,6 @@ export function WebsiteFooter() {
         <p className="mt-4 text-lg text-muted-foreground">
           Have a question, partnership opportunity, or want to see FIAREP in action?
         </p>
-        <p className="mt-2 text-lg text-muted-foreground">
-          Contact Timothy Winn, Founder of FIAREP.
-        </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
           <Button asChild size="lg" variant="outline">
             <a href="mailto:fiarep@outlook.com?subject=Request%20a%20Demo">Request a Demo</a>
