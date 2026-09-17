@@ -12,9 +12,6 @@ export function WebsiteFooter() {
           Contact Timothy Winn, Founder of FIAREP.
         </p>
         <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-          <Button asChild size="lg">
-            <a href="mailto:fiarep@outlook.com">Contact FIAREP</a>
-          </Button>
           <Button asChild size="lg" variant="outline">
             <a href="mailto:fiarep@outlook.com?subject=Request%20a%20Demo">Request a Demo</a>
           </Button>
