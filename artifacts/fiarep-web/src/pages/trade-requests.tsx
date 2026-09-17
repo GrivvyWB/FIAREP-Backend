@@ -173,8 +173,8 @@ export default function TradeRequests() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Trade Requests</h1>
-          <p className="text-sm text-muted-foreground">Send complaints and violations to the supervisor with the required manpower.</p>
+          <h1 className="text-2xl font-bold tracking-tight">Trade-Supervisors:</h1>
+          <p className="text-sm text-muted-foreground">Sending complaints or violations to trade supervision.</p>
         </div>
         <Button onClick={() => setOpen(true)}><Plus className="mr-2 h-4 w-4" />New request</Button>
       </div>

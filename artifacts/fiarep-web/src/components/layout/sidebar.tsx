@@ -47,7 +47,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Team", href: "/team", icon: UsersRound, module: "team" as const },
     { name: "HR Workspace", href: "/hr", icon: UserCog, module: "hr" as const },
     { name: "Violations", href: "/violations", icon: AlertTriangle, module: "violations" as const },
-    { name: "Trade Requests", href: "/trade-requests", icon: UserRoundCheck, module: "trade-requests" as const },
+    { name: "Trade-Supervisors:", href: "/trade-requests", icon: UserRoundCheck, module: "trade-requests" as const },
     ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart, module: "procurement" as const }] : []),
     ...(hasModuleAccess(staff, "scope-review") ? [{ name: "Scope Review", href: "/scope-review", icon: ClipboardCheck, module: "scope-review" as const }] : []),
     ...(hasModuleAccess(staff, "scope-writing") ? [{ name: "Scope Writing", href: "/scope-writing", icon: ClipboardCheck, module: "scope-writing" as const }] : []),
