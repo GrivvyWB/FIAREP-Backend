@@ -391,7 +391,9 @@ export default function Team() {
     const isSupervisorOrManagement =
       member.role === "management" ||
       member.role === "human_resources" ||
+      member.role === "procurement" ||
       member.position === "Borough Director" ||
+      member.position === "Superintendent Ⓔ" ||
       member.position.toLowerCase().includes("supervisor");
     return (
     <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
@@ -417,8 +419,8 @@ export default function Team() {
           <div className="text-xs text-muted-foreground">{member.developments.join(", ") || "All assigned developments"}</div>
         )}
       </div>
-      <div className="text-right shrink-0"><div className="text-[13px] font-semibold bg-secondary px-2.5 py-1 rounded-full inline-block">{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
-        {(member.canResetCode || member.canRevoke || (member.canDelete && actor?.role !== "human_resources")) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
+      <div className="text-right shrink-0"><div className={`text-[13px] font-semibold px-2.5 py-1 rounded-full inline-block ${isSupervisorOrManagement ? "bg-yellow-400 text-yellow-950" : "bg-secondary"}`}>{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
+        {(member.canResetCode || member.canRevoke || member.canDelete) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
           {member.canApprove && <Button size="sm" onClick={() => approveEmployee(member.id, member.name, member.role)} disabled={approve.isPending}>Approve employee</Button>}
           {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
           {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />{actor?.role === "human_resources" ? "Deactivate" : "Revoke"}</Button>}
@@ -432,7 +434,7 @@ export default function Team() {
             if (member.developments[0]) params.set("development", member.developments[0]);
             navigate(`/leave?${params.toString()}`);
           }}><CalendarDays className="mr-1 h-3 w-3" />Leave</Button>}
-          {member.canDelete && deletionPolicy?.enabled && deletionPolicy.canDelete && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
+          {member.canDelete && deletionPolicy?.enabled && (deletionPolicy.canDelete || actor?.role === "human_resources") && <Button size="sm" variant="destructive" onClick={() => deleteAccount(member.id, member.name)} disabled={deleteStaff.isPending}><Trash2 className="mr-1 h-3 w-3" />Delete</Button>}
         </div>}
       </div>
     </div>

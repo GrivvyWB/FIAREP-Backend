@@ -16,7 +16,7 @@ import {
   STAFF_POSITIONS,
   canIssueStaffAccountRole,
   canBrowseStaffDirectory,
-  canDeleteOperationalRecords,
+  canDeleteStaffAccounts,
   canReadStaffDirectoryEmployee,
   isBoroughDirector,
   isElevated,
@@ -519,8 +519,8 @@ router.delete("/v1/staff/:id", async (req, res) => {
     res.status(403).json({ error: "Deletion is disabled for this organization" });
     return;
   }
-  if (!canDeleteOperationalRecords(actor)) {
-    res.status(403).json({ error: "Only higher management can delete records" });
+  if (!canDeleteStaffAccounts(actor)) {
+    res.status(403).json({ error: "Only Human Resources or higher management can delete staff accounts" });
     return;
   }
   const [target] = await db

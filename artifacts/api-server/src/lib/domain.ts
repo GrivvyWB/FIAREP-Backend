@@ -33,6 +33,10 @@ export function canDeleteOperationalRecords(actor: Actor): boolean {
     (actor.role === "management" && actor.position === "Regional Director");
 }
 
+export function canDeleteStaffAccounts(actor: Actor): boolean {
+  return actor.role === "human_resources" || canDeleteOperationalRecords(actor);
+}
+
 export const STAFF_POSITIONS = [
   "Borough Director",
   "Regional Director",

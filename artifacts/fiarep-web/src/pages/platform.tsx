@@ -20,12 +20,12 @@ const stagger: Variants = {
 };
 
 const roles = [
-  { name: "Management", icon: Target, desc: "Oversight, strategic decisions, and performance scores.", color: "text-blue-500", bg: "bg-blue-500/10", border: "border-blue-500/20" },
-  { name: "Supervisors", icon: Briefcase, desc: "Task delegation, tracking, and operational flow.", color: "text-indigo-500", bg: "bg-indigo-500/10", border: "border-indigo-500/20" },
+  { name: "Management", icon: Target, desc: "Oversight, strategic decisions, and performance scores.", color: "text-yellow-600", bg: "bg-yellow-400/15", border: "border-yellow-500/30" },
+  { name: "Supervisors", icon: Briefcase, desc: "Task delegation, tracking, and operational flow.", color: "text-yellow-600", bg: "bg-yellow-400/15", border: "border-yellow-500/30" },
   { name: "Inspectors", icon: ClipboardCheck, desc: "HUD compliance, quality checks, and evidence.", color: "text-emerald-500", bg: "bg-emerald-500/10", border: "border-emerald-500/20" },
   { name: "Trade Staff", icon: Wrench, desc: "Repairs, maintenance, and work order execution.", color: "text-amber-500", bg: "bg-amber-500/10", border: "border-amber-500/20" },
   { name: "Human Resources", icon: UserCog, desc: "Staffing requests, leave management, and personnel.", color: "text-purple-500", bg: "bg-purple-500/10", border: "border-purple-500/20" },
-  { name: "Procurement", icon: ShoppingCart, desc: "Vendor management, materials, and purchasing.", color: "text-rose-500", bg: "bg-rose-500/10", border: "border-rose-500/20" },
+  { name: "Procurement", icon: ShoppingCart, desc: "Vendor management, materials, and purchasing.", color: "text-yellow-600", bg: "bg-yellow-400/15", border: "border-yellow-500/30" },
   { name: "Residents", icon: Home, desc: "Complaints reporting and community transparency.", color: "text-teal-500", bg: "bg-teal-500/10", border: "border-teal-500/20" },
   { name: "Vendors", icon: HardHat, desc: "Project bids, external contracting, and supply.", color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" }
 ];
