@@ -40,6 +40,7 @@ import { emailReleasedScope } from "../lib/vendorEmail";
 import { logger } from "../lib/logger";
 import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
 import { rateLimit } from "../lib/rateLimit";
+import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -875,6 +876,29 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     res.status(400).json({ error: "Select a valid staff position" });
     return;
   }
+  const rawLinkedDevelopments = entity === "hr-employee-records"
+    ? updatedState["assignedDevelopments"]
+    : undefined;
+  const linkedDevelopments = Array.isArray(rawLinkedDevelopments)
+    ? [...new Set(rawLinkedDevelopments.filter(
+        (development): development is string =>
+          typeof development === "string" && Boolean(development.trim()),
+      ).map((development) => development.trim()))]
+    : null;
+  if (linkedDevelopments) {
+    const [organization] = await db.select({ features: organizations.features })
+      .from(organizations)
+      .where(eq(organizations.id, actor.tenantId))
+      .limit(1);
+    const configuredDevelopments = getConfiguredDevelopmentNames(organization?.features);
+    if (
+      configuredDevelopments !== null &&
+      linkedDevelopments.some((development) => !configuredDevelopments.includes(development))
+    ) {
+      res.status(400).json({ error: "Assigned developments must be configured by Platform Control" });
+      return;
+    }
+  }
   const now = new Date();
   const updated = await db.transaction(async (tx) => {
     const [updatedRecord] = await tx
@@ -922,9 +946,8 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
           lastName,
           name: [firstName, lastName].filter(Boolean).join(" ") || linkedStaff.name,
           position: linkedPosition || linkedStaff.position,
-          developments: updatedDevelopment
-            ? [updatedDevelopment]
-            : linkedStaff.developments,
+          developments: linkedDevelopments ??
+            (updatedDevelopment ? [updatedDevelopment] : linkedStaff.developments),
           updatedAt: now,
         }).where(and(
           eq(staffAccounts.id, linkedStaff.id),

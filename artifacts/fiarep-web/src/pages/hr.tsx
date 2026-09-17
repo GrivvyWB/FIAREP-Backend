@@ -4,6 +4,7 @@ import { format } from "date-fns";
 import {
   getGetHrWorkspaceQueryKey,
   getListStaffQueryKey,
+  useListStaffDevelopments,
   useCreateEntityRecord,
   useGetHrWorkspace,
   usePerformEntityAction,
@@ -168,6 +169,7 @@ export default function HRWorkspace() {
   const workspace = useGetHrWorkspace({
     query: { queryKey: getGetHrWorkspaceQueryKey(), refetchOnMount: "always" },
   });
+  const { data: developmentOptions = [] } = useListStaffDevelopments();
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
   const action = usePerformEntityAction();
@@ -180,6 +182,7 @@ export default function HRWorkspace() {
   } | null>(null);
   const [authorizationCode, setAuthorizationCode] = useState("");
   const [sectionValues, setSectionValues] = useState<Record<string, string>>({});
+  const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
   const [editingRecord, setEditingRecord] = useState<EntityRecord | null>(null);
   
   const [view, setView] = useState<"records" | "audit">("records");
@@ -276,6 +279,9 @@ export default function HRWorkspace() {
           : sectionEntries.filter(([, value]) => value !== ""),
       );
       if (editingRecord) {
+        const employeeDevelopments = values.category === "hr-employee-records"
+          ? assignedDevelopments
+          : undefined;
         await update.mutateAsync({
           entity: editingRecord.entity,
           id: editingRecord.id,
@@ -285,8 +291,11 @@ export default function HRWorkspace() {
             state: {
               title: values.title,
               details: values.details,
-              development: values.development,
+              development: employeeDevelopments?.length === 1
+                ? employeeDevelopments[0]
+                : values.development,
               ...sectionState,
+              assignedDevelopments: employeeDevelopments,
             },
           },
         });
@@ -322,6 +331,7 @@ export default function HRWorkspace() {
         exitType: "termination",
       });
       setSectionValues({});
+      setAssignedDevelopments([]);
       setEditingRecord(null);
       setOpen(false);
     } catch (reason) {
@@ -376,6 +386,7 @@ export default function HRWorkspace() {
     setError("");
     setEditingRecord(null);
     setSectionValues({});
+    setAssignedDevelopments([]);
     form.reset({
       category,
       employeeStaffId: "",
@@ -393,6 +404,11 @@ export default function HRWorkspace() {
     const state = row.state || {};
     setError("");
     setEditingRecord(row);
+    const linkedStaffId = typeof state.employeeStaffId === "string" ? state.employeeStaffId : "";
+    const savedDevelopments = Array.isArray(state.assignedDevelopments)
+      ? state.assignedDevelopments.filter((value): value is string => typeof value === "string")
+      : staffById.get(linkedStaffId)?.developments || (row.development ? [row.development] : []);
+    setAssignedDevelopments(savedDevelopments);
     setSectionValues(Object.fromEntries(
       (sectionFields[category] || []).map((field) => [
         field.key,
@@ -777,8 +793,37 @@ export default function HRWorkspace() {
                 </FormItem>
               )} />
               
-              <div className="grid grid-cols-2 gap-4">
-                <FormField control={form.control} name="development" render={({ field }) => (
+              {selectedCategory === "hr-employee-records" ? (
+                <div className="space-y-2">
+                  <Label>Developments</Label>
+                  <label className="flex items-center gap-2 rounded-md border border-border px-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={developmentOptions.length > 0 && assignedDevelopments.length === developmentOptions.length}
+                      onChange={(event) => setAssignedDevelopments(event.target.checked ? [...developmentOptions] : [])}
+                    />
+                    All developments
+                  </label>
+                  <div className="grid max-h-48 gap-2 overflow-y-auto rounded-md border border-border p-3 sm:grid-cols-2">
+                    {developmentOptions.map((development) => (
+                      <label key={development} className="flex items-center gap-2 text-sm">
+                        <input
+                          type="checkbox"
+                          checked={assignedDevelopments.includes(development)}
+                          onChange={(event) => setAssignedDevelopments((current) =>
+                            event.target.checked
+                              ? [...new Set([...current, development])]
+                              : current.filter((value) => value !== development)
+                          )}
+                        />
+                        {development}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField control={form.control} name="development" render={({ field }) => (
                   <FormItem>
                     <FormLabel>Development</FormLabel>
                     <FormControl>
@@ -786,9 +831,10 @@ export default function HRWorkspace() {
                     </FormControl>
                     <FormMessage />
                   </FormItem>
-                )} />
-                {selectedCategory !== "hr-approvals" && <div />}
-              </div>
+                  )} />
+                  {selectedCategory !== "hr-approvals" && <div />}
+                </div>
+              )}
               
               {selectedCategory === "hr-exits" && (
                 <FormField control={form.control} name="exitType" render={({ field }) => (
