@@ -644,7 +644,13 @@ export function canReadStaffDirectoryEmployee(
   employee: Pick<Actor, "id" | "role" | "position" | "developments">,
 ): boolean {
   if (actor.role === "human_resources" || actor.role === "administrator") return true;
-  return employee.id !== actor.id && canApproveLeaveForEmployee(actor, employee);
+  if (employee.id === actor.id) return false;
+  if (actor.role === "management") {
+    if (isBoroughDirector(actor)) return true;
+    return employee.developments.length === 0 ||
+      actor.developments.some((development) => employee.developments.includes(development));
+  }
+  return canApproveLeaveForEmployee(actor, employee);
 }
 export function leaveRequestDurationDays(state: Record<string, unknown>): number | null {
   const startValue = typeof state["startAt"] === "string"

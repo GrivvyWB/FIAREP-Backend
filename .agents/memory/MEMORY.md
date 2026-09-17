@@ -30,3 +30,4 @@
 - [FIAREP HR authority](fiarep-hr-authority.md) — HR administers the employee lifecycle but policy-sensitive decisions still require company and legal approval.
 - [FIAREP employee intake handoff](fiarep-employee-intake-handoff.md) — staff accounts start in Team and atomically open a linked HR employee record for completion.
 - [FIAREP HUD inspection authority](fiarep-hud-inspection-authority.md) — CPMs and Inspectors submit HUD inspections from mobile; designated supervisors review them on web.
+- [FIAREP directory scope](fiarep-directory-scope.md) — staff visibility uses shared development coverage; never reuse stricter leave-approval scope for routing lists.

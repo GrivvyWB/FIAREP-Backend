@@ -109,10 +109,18 @@ test("supervisory HR scope excludes employees outside the assigned developments"
     position: "Maintenance Worker",
     developments: ["Development B"],
   };
+  const sharedScope = {
+    id: "employee-c",
+    role: "management",
+    position: "Plumber Supervisor",
+    developments: ["Development A", "Development B"],
+  };
   assert.equal(canApproveLeaveForEmployee(supervisor, inScope), true);
   assert.equal(canApproveLeaveForEmployee(supervisor, outOfScope), false);
+  assert.equal(canApproveLeaveForEmployee(supervisor, sharedScope), false);
   assert.equal(canReadStaffDirectoryEmployee(supervisor, inScope), true);
   assert.equal(canReadStaffDirectoryEmployee(supervisor, outOfScope), false);
+  assert.equal(canReadStaffDirectoryEmployee(supervisor, sharedScope), true);
   assert.equal(canReadStaffDirectoryEmployee(supervisor, supervisor), false);
 });
 
