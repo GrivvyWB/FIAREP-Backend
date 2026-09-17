@@ -81,6 +81,23 @@ export default function Platform() {
             </Link>
           </motion.div>
         </motion.div>
+
+        <motion.div 
+          initial="hidden"
+          animate="visible"
+          variants={stagger}
+          className="mt-20 w-full max-w-5xl mx-auto"
+        >
+          <motion.div variants={fadeIn} className="relative rounded-2xl overflow-hidden border border-border shadow-2xl bg-card">
+            <div className="absolute inset-0 bg-primary/5 blur-[50px] -z-10" />
+            <img 
+              src={import.meta.env.BASE_URL + 'platform-media/field-technician-fiarep.jpeg'} 
+              alt="Field Technician using FIAREP tablet" 
+              className="w-full h-auto max-h-[650px] object-cover object-top relative z-10"
+              data-testid="media-hero-image" 
+            />
+          </motion.div>
+        </motion.div>
       </section>
 
       {/* The Ecosystem */}
@@ -147,31 +164,18 @@ export default function Platform() {
               ))}
             </ul>
           </motion.div>
-          <motion.div variants={fadeIn} className="relative">
+          <motion.div variants={fadeIn} className="relative group">
             <div className="absolute inset-0 bg-emerald-500/20 blur-[100px] rounded-full" />
-            <div className="rounded-2xl border border-border bg-card shadow-2xl overflow-hidden p-6 relative z-10 hover-elevate">
-              <div className="flex justify-between items-center mb-6 border-b border-border pb-4">
-                <div className="font-bold text-lg">Unit 4B Inspection</div>
-                <div className="px-3 py-1 rounded-full bg-destructive/10 text-destructive text-xs font-bold uppercase tracking-wide">Failed</div>
-              </div>
-              <div className="space-y-4">
-                <div className="flex gap-4 p-4 rounded-xl bg-muted/50">
-                  <div className="w-16 h-16 rounded bg-muted flex items-center justify-center border border-border/50 shrink-0">
-                     <AlertTriangle className="w-6 h-6 text-muted-foreground/50" />
-                  </div>
-                  <div className="flex-1 py-1">
-                    <div className="h-4 bg-muted-foreground/20 rounded w-3/4 mb-3"></div>
-                    <div className="h-3 bg-muted-foreground/10 rounded w-1/2"></div>
-                  </div>
-                </div>
-                <div className="p-4 rounded-xl bg-primary/5 border border-primary/20 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-bold text-primary mb-1">Work Order #8892 Created</div>
-                    <div className="text-xs text-muted-foreground font-medium">Assigned to: Plumbing Staff</div>
-                  </div>
-                  <ArrowRight className="w-4 h-4 text-primary" />
-                </div>
-              </div>
+            <div className="rounded-2xl border border-border bg-card shadow-2xl overflow-hidden relative z-10 hover-elevate bg-black">
+               <video 
+                 src={import.meta.env.BASE_URL + 'platform-media/technician-inspection.mp4'} 
+                 autoPlay 
+                 loop 
+                 muted 
+                 playsInline
+                 className="w-full h-auto object-cover aspect-video opacity-90 transition-opacity group-hover:opacity-100"
+                 data-testid="video-technician-inspection"
+               />
             </div>
           </motion.div>
         </motion.div>
@@ -184,34 +188,18 @@ export default function Platform() {
           variants={stagger}
           className="grid md:grid-cols-2 gap-16 items-center"
         >
-          <motion.div variants={fadeIn} className="order-2 md:order-1 relative">
+          <motion.div variants={fadeIn} className="order-2 md:order-1 relative group">
             <div className="absolute inset-0 bg-accent/20 blur-[100px] rounded-full" />
-            <div className="rounded-2xl border border-border bg-card shadow-2xl overflow-hidden p-6 relative z-10 hover-elevate">
-              <div className="space-y-4">
-                {[
-                  { title: "Emergency: Water Leak", time: "2 mins ago", active: true },
-                  { title: "Appliance Repair", time: "1 hour ago", active: false },
-                  { title: "HVAC Maintenance", time: "3 hours ago", active: false }
-                ].map((item, i) => (
-                  <div key={i} className={`p-4 rounded-xl border transition-colors ${item.active ? 'border-accent shadow-md bg-accent/5' : 'border-border bg-card'}`}>
-                    <div className="flex justify-between items-center mb-3">
-                      <div className="font-bold text-sm">{item.title}</div>
-                      <div className="text-xs font-medium text-muted-foreground">{item.time}</div>
-                    </div>
-                    {item.active ? (
-                      <div className="flex items-center gap-2 text-accent">
-                        <div className="w-2 h-2 rounded-full bg-accent animate-pulse"></div>
-                        <span className="text-xs font-bold uppercase tracking-wider">Dispatching On-Call Staff</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2 text-muted-foreground">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        <span className="text-xs font-medium">Assigned</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
+            <div className="rounded-2xl border border-border bg-card shadow-2xl overflow-hidden relative z-10 hover-elevate bg-black">
+               <video 
+                 src={import.meta.env.BASE_URL + 'platform-media/technician-repair-log.mp4'} 
+                 autoPlay 
+                 loop 
+                 muted 
+                 playsInline
+                 className="w-full h-auto object-cover aspect-video opacity-90 transition-opacity group-hover:opacity-100"
+                 data-testid="video-technician-repair-log"
+               />
             </div>
           </motion.div>
           <motion.div variants={fadeIn} className="order-1 md:order-2">
@@ -295,6 +283,37 @@ export default function Platform() {
              </div>
           </motion.div>
         </motion.div>
+      </section>
+
+      {/* Resident Experience */}
+      <section id="resident-experience" className="py-24 bg-card/50 border-t border-border">
+        <div className="max-w-5xl mx-auto px-6 lg:px-8 text-center">
+          <motion.div 
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
+            variants={stagger}
+          >
+            <motion.div variants={fadeIn} className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-teal-500/10 text-teal-600 dark:text-teal-400 font-semibold text-sm mb-6">
+              <Home className="w-4 h-4" />
+              Resident Experience
+            </motion.div>
+            <motion.h2 variants={fadeIn} className="text-3xl md:text-4xl font-bold mb-6">Complaints reporting and community transparency.</motion.h2>
+            <motion.p variants={fadeIn} className="text-lg text-muted-foreground mb-12 max-w-2xl mx-auto">
+              Turn resident complaints and approved violations into trade requests, providing transparency and rapid resolution for everyday issues.
+            </motion.p>
+            
+            <motion.div variants={fadeIn} className="relative rounded-2xl overflow-hidden border border-border shadow-2xl bg-black hover-elevate">
+              <video 
+                src={import.meta.env.BASE_URL + 'platform-media/resident-photo-easy.mp4'} 
+                controls
+                playsInline
+                className="w-full max-h-[70vh] object-contain"
+                data-testid="video-resident-easy"
+              />
+            </motion.div>
+          </motion.div>
+        </div>
       </section>
 
       {/* Footer CTA */}

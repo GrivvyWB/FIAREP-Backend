@@ -28,3 +28,10 @@ mtime_ms = 1789493726007
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/6d501802-0310-4438-9947-ef851824b24a/3a70daf2-551f-4362-b3de-a52ce07ea1ce"
 storage_version_token = "1789493763053397"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "7DoUZs2b-3YQ6JrFcw1FT"
+uri = "file://attached_assets/generated_audio/resident-that-was-easy.mp3"
+type = "audio"
+title = "resident says that was easy"
+description = "Text-to-speech audio: That was easy."
