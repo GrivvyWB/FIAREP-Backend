@@ -77,10 +77,26 @@ async function rotateActorCache(staff: Staff) {
   const d = await db();
   const fingerprint = `${staff.tenantId || ''}:${staff.id}:${[...(staff.developments || [])].sort().join('|')}`;
   const prior = await d.getFirstAsync('SELECT value FROM settings WHERE key=?', 'cache_fingerprint') as { value: string } | null;
-  if (prior?.value && prior.value !== fingerprint) {
+  const cursorRepair = await d.getFirstAsync(
+    'SELECT value FROM settings WHERE key=?',
+    'identity_cache_cursor_repair',
+  ) as { value: string } | null;
+  const cacheChanged = Boolean(prior?.value && prior.value !== fingerprint);
+  if (cacheChanged) {
     for (const table of ['projects','rooms','checklists','roofplans','inspections','cost_estimates','intakes','elevators','resident_reports','violations','building_violations','priority_violations','route_assignments','procurement','procurement_bids','vendor_contacts','vendor_quotes','change_orders','elevator_jobs','emergency_jobs','emergency_units','leave_requests']) {
       try { await d.runAsync(`DELETE FROM ${table}`); } catch {}
     }
+  }
+  // A cleared identity-scoped cache must never keep a cursor that says those
+  // now-empty tables are already hydrated. The repair marker also resets
+  // affected build-5 installations once so existing server records repopulate.
+  if (cacheChanged || cursorRepair?.value !== '1') {
+    await d.runAsync("DELETE FROM settings WHERE key LIKE 'sync_all_cursor:%'");
+    await d.runAsync(
+      "INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+      'identity_cache_cursor_repair',
+      '1',
+    );
   }
   await d.runAsync("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", 'cache_fingerprint', fingerprint);
 }
