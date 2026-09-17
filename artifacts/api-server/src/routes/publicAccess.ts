@@ -184,6 +184,17 @@ router.post("/v1/public/resident-reports/:complaintNo/photos/upload-url", async 
   if (!auth || !name || !residentPhotoTypes.has(contentType) || !Number.isInteger(size) || size <= 0 || size > MAX_RESIDENT_PHOTO_BYTES) {
     res.status(404).json({ error: "Report not found" }); return;
   }
+  const [existingPhoto] = await db.select({ id: residentReportPhotos.id })
+    .from(residentReportPhotos)
+    .where(and(
+      eq(residentReportPhotos.tenantId, auth.access.tenantId),
+      eq(residentReportPhotos.reportId, auth.access.recordId),
+    ))
+    .limit(1);
+  if (existingPhoto) {
+    res.status(409).json({ error: "Photo already sent" });
+    return;
+  }
   try {
      const result = await fileStorage.createUpload(auth.access.tenantId, `public-resident:${auth.access.recordId}`, {
       kind: "resident-report-photo", name, size, contentType,
@@ -209,6 +220,15 @@ router.post("/v1/public/resident-reports/:complaintNo/photos/confirm", async (re
   }
   const photo = await db.transaction(async (tx) => {
     const now = new Date();
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`resident-photo:${auth.access.tenantId}:${auth.access.recordId}`}))`);
+    const [existingPhoto] = await tx.select({ id: residentReportPhotos.id })
+      .from(residentReportPhotos)
+      .where(and(
+        eq(residentReportPhotos.tenantId, auth.access.tenantId),
+        eq(residentReportPhotos.reportId, auth.access.recordId),
+      ))
+      .limit(1);
+    if (existingPhoto) return null;
     const [grant] = await tx.select().from(residentPhotoUploadGrants).where(and(
       eq(residentPhotoUploadGrants.id, grantId),
       eq(residentPhotoUploadGrants.tenantId, auth.access.tenantId),
@@ -227,7 +247,7 @@ router.post("/v1/public/resident-reports/:complaintNo/photos/confirm", async (re
     }).onConflictDoNothing().returning();
     return created ?? null;
   });
-  if (!photo) { res.status(409).json({ error: "Photo already confirmed" }); return; }
+  if (!photo) { res.status(409).json({ error: "Photo already sent" }); return; }
   res.status(201).json({ id: photo.id, contentType: photo.contentType });
 });
 

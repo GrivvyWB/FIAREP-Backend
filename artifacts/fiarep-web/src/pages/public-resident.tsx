@@ -228,10 +228,11 @@ export default function PublicResident() {
                        type="file"
                        accept="image/jpeg,image/png,image/heic,image/heif,image/webp"
                        capture="environment"
+                        disabled={Boolean(photo) || submitReport.isPending || isUploadingPhoto}
                        className="sr-only"
                        onChange={(event) => setPhoto(event.target.files?.[0] || null)}
                      />
-                     <Button type="button" variant="outline" className="w-full" asChild>
+                      <Button type="button" variant="outline" className="w-full" disabled={Boolean(photo) || submitReport.isPending || isUploadingPhoto} asChild>
                        <label htmlFor="resident-report-photo">{photo ? photo.name : 'Add Picture (Optional)'}</label>
                      </Button>
                    </div>
