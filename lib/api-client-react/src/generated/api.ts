@@ -280,7 +280,7 @@ export const getGetResidentReportPhotoAiConfigUrl = () => {
 
 
 
-  return `/api/resident-report-photo-ai/config`
+  return `/api/v1/resident-report-photo-ai/config`
 }
 
 /**
@@ -303,7 +303,7 @@ export const getResidentReportPhotoAiConfig = async ( options?: Parameters<typeo
 
 export const getGetResidentReportPhotoAiConfigQueryKey = () => {
     return [
-    `/api/resident-report-photo-ai/config`
+    `/api/v1/resident-report-photo-ai/config`
     ] as const;
     }
 
@@ -357,7 +357,7 @@ export const getClassifyResidentReportPhotoUrl = (id: string,) => {
 
 
 
-  return `/api/resident-report-photos/${id}/classify`
+  return `/api/v1/resident-report-photos/${id}/classify`
 }
 
 /**

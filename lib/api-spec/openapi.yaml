@@ -73,7 +73,7 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-  /resident-report-photo-ai/config:
+  /v1/resident-report-photo-ai/config:
     get:
       operationId: getResidentReportPhotoAiConfig
       tags: [ai]
@@ -91,7 +91,7 @@ paths:
                   enabled: { type: boolean }
         "401":
           $ref: "#/components/responses/Unauthorized"
-  /resident-report-photos/{id}/classify:
+  /v1/resident-report-photos/{id}/classify:
     post:
       operationId: classifyResidentReportPhoto
       tags: [ai]

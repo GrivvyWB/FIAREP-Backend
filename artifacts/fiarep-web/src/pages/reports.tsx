@@ -48,6 +48,7 @@ function Photos({ reportId, savedScans }: {
   const [previewError, setPreviewError] = useState<Record<string, boolean>>({});
   const [names, setNames] = useState<Record<string, string>>({});
   const [scanResults, setScanResults] = useState<Record<string, ViolationClassification>>({});
+  const attemptedScans = useRef(new Set<string>());
   const photoIds = photos.map((photo) => photo.id).join(",");
 
   useEffect(() => {
@@ -114,6 +115,18 @@ function Photos({ reportId, savedScans }: {
       setBusy(null);
     }
   };
+  useEffect(() => {
+    if (!aiConfig?.enabled) return;
+    for (const photo of photos) {
+      if (
+        savedScans?.[photo.id] ||
+        scanResults[photo.id] ||
+        attemptedScans.current.has(photo.id)
+      ) continue;
+      attemptedScans.current.add(photo.id);
+      void scanPhoto(photo.id);
+    }
+  }, [aiConfig?.enabled, photoIds, savedScans, scanResults]);
   if (isLoading) return <span className="text-xs text-muted-foreground">Loading photos…</span>;
   if (!photos.length) return <span className="text-xs text-muted-foreground">No photos attached</span>;
   return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
