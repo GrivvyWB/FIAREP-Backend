@@ -21,6 +21,7 @@ import {
   generatedCode,
   isBoroughDirector,
   isAssignmentAuthority,
+  isSupervisorPosition,
   isLeaveApprovalAuthority,
   leaveRequestDurationDays,
   isValidEntityTransition,
@@ -405,6 +406,119 @@ router.post("/v1/:entity", async (req, res, next) => {
       : typeof rawState["development"] === "string"
         ? rawState["development"]
         : null;
+  if (entity === "manpower-requests") {
+    if (
+      actor.role !== "management" &&
+      actor.role !== "administrator" &&
+      !isSupervisorPosition(actor)
+    ) {
+      res.status(403).json({ error: "Only supervisors and Management may request manpower" });
+      return;
+    }
+    const sourceEntity = typeof rawState["sourceEntity"] === "string"
+      ? rawState["sourceEntity"]
+      : "";
+    const sourceRecordId = typeof rawState["sourceRecordId"] === "string"
+      ? rawState["sourceRecordId"]
+      : "";
+    const receiverSupervisorId = typeof rawState["receiverSupervisorId"] === "string"
+      ? rawState["receiverSupervisorId"]
+      : "";
+    const requestedTrade = typeof rawState["requestedTrade"] === "string"
+      ? rawState["requestedTrade"]
+      : "";
+    const allowedTrades = new Set([
+      "Inspector",
+      "CPM",
+      "Plumber",
+      "Carpenter",
+      "Electrician",
+      "Elevator Service",
+    ]);
+    const supervisorPositions: Record<string, readonly string[]> = {
+      Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
+      CPM: ["CPM Supervisor", "Supervisor CPM"],
+      Plumber: ["Plumber Supervisor", "Supervisor Plumber"],
+      Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
+      Electrician: ["Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
+      "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
+    };
+    if (
+      !["resident-reports", "building-violations"].includes(sourceEntity) ||
+      !sourceRecordId ||
+      !receiverSupervisorId ||
+      !allowedTrades.has(requestedTrade)
+    ) {
+      res.status(400).json({ error: "Select a complaint or violation, trade, and receiving supervisor" });
+      return;
+    }
+    const [[source], [receiver]] = await Promise.all([
+      db.select().from(entityRecords).where(and(
+        eq(entityRecords.id, sourceRecordId),
+        eq(entityRecords.entity, sourceEntity),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+      )).limit(1),
+      db.select().from(staffAccounts).where(and(
+        eq(staffAccounts.id, receiverSupervisorId),
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.status, "approved"),
+      )).limit(1),
+    ]);
+    if (!source || !(await canReadRecordForActor(actor, source))) {
+      res.status(404).json({ error: "Complaint or violation not found" });
+      return;
+    }
+    const sourceStatus = normalizeStatus(source.state["status"]);
+    const sourceReady =
+      (sourceEntity === "resident-reports" && sourceStatus === "submitted") ||
+      (sourceEntity === "building-violations" && sourceStatus === "approved");
+    if (!sourceReady) {
+      res.status(409).json({ error: "Only work that is ready for assignment can be sent as a trade request" });
+      return;
+    }
+    if (
+      !receiver ||
+      receiver.id === actor.id ||
+      (!["administrator"].includes(receiver.role) &&
+        !["Borough Director", "Regional Director", "Superintendent"].includes(receiver.position) &&
+        !(supervisorPositions[requestedTrade] || []).includes(receiver.position))
+    ) {
+      res.status(403).json({ error: "Select the supervisor for the requested trade" });
+      return;
+    }
+    development = source.development;
+    if (
+      development &&
+      !receiver.developments.includes(development) &&
+      receiver.position !== "Borough Director"
+    ) {
+      res.status(403).json({ error: "The receiving supervisor must cover this development" });
+      return;
+    }
+    rawState["sourceEntity"] = sourceEntity;
+    rawState["sourceRecordId"] = source.id;
+    rawState["sourceTitle"] = String(
+      source.state["title"] ||
+      source.state["complaintNo"] ||
+      source.state["violationNumber"] ||
+      `${sourceEntity} record`,
+    );
+    rawState["sourceDetails"] = String(
+      source.state["description"] ||
+      source.state["details"] ||
+      source.state["issue"] ||
+      "",
+    );
+    rawState["receiverSupervisorId"] = receiver.id;
+    rawState["receiverSupervisorName"] = receiver.name;
+    rawState["requestedByStaffId"] = actor.id;
+    rawState["requestedByName"] = actor.name;
+    rawState["requestedTrade"] = requestedTrade;
+    delete rawState["assignedStaffId"];
+    delete rawState["assignedTo"];
+    delete rawState["assignedStaffName"];
+  }
   if (!development && projectId) {
     const [project] = await db.select({ development: entityRecords.development })
       .from(entityRecords)
@@ -586,6 +700,14 @@ router.post("/v1/:entity", async (req, res, next) => {
         );
       }
     }
+  } else if (entity === "manpower-requests") {
+    await notify(
+      actor,
+      String(persistedCreatedState["receiverSupervisorId"] || ""),
+      `${String(persistedCreatedState["requestedTrade"] || "Trade")} manpower requested`,
+      String(persistedCreatedState["sourceTitle"] || ""),
+      id,
+    );
   }
   res.status(201).json(outward(actor, created!));
 });
@@ -847,6 +969,10 @@ router.post(
       clear: "done",
       "approve-work": "work_approved",
     },
+    "manpower-requests": {
+      assign: "assigned",
+      dispatch: "dispatched",
+    },
     "leave-requests": {
       approve: "Approved",
       deny: "Denied",
@@ -935,7 +1061,7 @@ router.post(
   if (
     hasAssignmentFields(body) &&
     !(
-      entity === "resident-reports" &&
+      ["resident-reports", "manpower-requests"].includes(entity) &&
       action === "assign" &&
       Object.keys(body)
         .filter((key) => ASSIGNMENT_FIELDS.has(key))
@@ -1107,6 +1233,37 @@ router.post(
     delete body["assignedStaffName"];
     delete body["assignedToName"];
   }
+  if (entity === "manpower-requests" && action === "assign") {
+    const tradePositions: Record<string, readonly string[]> = {
+      Inspector: ["Inspector"],
+      CPM: ["CPM"],
+      Plumber: ["Plumber"],
+      Carpenter: ["Carpenter"],
+      Electrician: ["Electrician"],
+      "Elevator Service": ["Elevator Service"],
+    };
+    const assignedStaffId = typeof body["assignedStaffId"] === "string"
+      ? body["assignedStaffId"].trim()
+      : "";
+    const [target] = assignedStaffId
+      ? await db.select().from(staffAccounts).where(and(
+          eq(staffAccounts.id, assignedStaffId),
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+        )).limit(1)
+      : [];
+    const allowedPositions = tradePositions[String(current.state["requestedTrade"])] || [];
+    if (
+      !target ||
+      !allowedPositions.includes(target.position) ||
+      (current.development && !target.developments.includes(current.development))
+    ) {
+      res.status(403).json({ error: "Select an available employee from the requested trade" });
+      return;
+    }
+    body["assignedStaffId"] = target.id;
+    body["assignedTo"] = target.name;
+  }
   if (
     entity === "resident-reports" &&
     (action === "complete" || action === "resolve")
@@ -1254,6 +1411,60 @@ router.post(
           .returning();
         if (!row) {
           throw Object.assign(new Error("Concurrent update detected"), { status: 409 });
+        }
+        if (entity === "manpower-requests" && action === "dispatch") {
+          const sourceEntity = String(current.state["sourceEntity"] || "");
+          const sourceRecordId = String(current.state["sourceRecordId"] || "");
+          const assignedStaffId = String(current.state["assignedStaffId"] || "");
+          const assignedTo = String(current.state["assignedTo"] || "");
+          const [source] = await tx.select().from(entityRecords).where(and(
+            eq(entityRecords.id, sourceRecordId),
+            eq(entityRecords.entity, sourceEntity),
+            eq(entityRecords.tenantId, actor.tenantId),
+            eq(entityRecords.deleted, false),
+          )).limit(1);
+          if (!source || !assignedStaffId) {
+            throw Object.assign(new Error("The linked work record or assignment is missing"), { status: 409 });
+          }
+          const sourceStatus = normalizeStatus(source.state["status"]);
+          const sourceStatusAllowed =
+            (sourceEntity === "resident-reports" && sourceStatus === "submitted") ||
+            (sourceEntity === "building-violations" && sourceStatus === "approved");
+          if (!sourceStatusAllowed) {
+            throw Object.assign(
+              new Error("The linked complaint or violation is no longer ready for dispatch"),
+              { status: 409 },
+            );
+          }
+          const sourceState = {
+            ...source.state,
+            assignedStaffId,
+            assignedTo,
+            status: sourceEntity === "building-violations" ? "routed" : "assigned",
+            dispatchedAt: now.toISOString(),
+            manpowerRequestId: current.id,
+          };
+          const [dispatchedSource] = await tx.update(entityRecords).set({
+            state: sourceState,
+            version: sql`${entityRecords.version} + 1`,
+            updatedAt: now,
+          }).where(and(
+            eq(entityRecords.id, source.id),
+            eq(entityRecords.entity, source.entity),
+            eq(entityRecords.tenantId, actor.tenantId),
+            eq(entityRecords.deleted, false),
+            eq(entityRecords.version, source.version),
+          )).returning();
+          if (!dispatchedSource) {
+            throw Object.assign(new Error("The linked work record changed before dispatch"), { status: 409 });
+          }
+          await auditInTransaction(
+            tx,
+            actor,
+            `${sourceEntity}.dispatched`,
+            `Dispatched through manpower request`,
+            source.id,
+          );
         }
         if (
           entity === "hr-exits" &&
@@ -1411,7 +1622,10 @@ router.post(
         ? employeeMatches[0]!.id
         : String(current.state["requesterStaffId"] ?? current.createdBy ?? "");
     }
-  } else if (entity === "resident-reports" && action === "assign") {
+  } else if (
+    (entity === "resident-reports" && action === "assign") ||
+    (entity === "manpower-requests" && ["assign", "dispatch"].includes(action))
+  ) {
     target = typeof state["assignedStaffId"] === "string"
       ? state["assignedStaffId"]
       : "";
@@ -1456,7 +1670,10 @@ router.post(
         .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.id, current.createdBy || "")))
         .limit(1);
       if (origin && origin.position === "CPM") await notify(actor, origin.name, `Scope ${nextStatus}`, undefined, current.id);
-    } else if (entity === "resident-reports" && action === "assign") {
+    } else if (
+      (entity === "resident-reports" && action === "assign") ||
+      (entity === "manpower-requests" && action === "dispatch")
+    ) {
       const detail = [
         typeof state["complaintNo"] === "string" ? state["complaintNo"] : "",
         typeof state["address"] === "string" ? state["address"] : "",

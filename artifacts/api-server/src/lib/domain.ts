@@ -96,6 +96,7 @@ export const ENTITIES = new Set([
   "building-violations",
   "priority-violations",
   "route-assignments",
+  "manpower-requests",
   "procurement",
   "procurement-bids",
   "vendor-contacts",
@@ -834,6 +835,13 @@ export function canPerformEntityAction(
     return actor.role === "management" &&
       ["advance", "close"].includes(action);
   }
+  if (entity === "manpower-requests") {
+    return (
+      state["receiverSupervisorId"] === actor.id &&
+      (actor.role === "management" || actor.role === "administrator" || isSupervisorPosition(actor)) &&
+      ["assign", "dispatch"].includes(action)
+    );
+  }
   if (
     isBoroughDirector(actor) &&
     entity !== "procurement" &&
@@ -1016,6 +1024,7 @@ const INITIAL_WORKFLOW_STATUS: Record<string, string> = {
   "hr-training-compliance": "draft",
   "hr-exits": "draft",
   "hr-approvals": "pending",
+  "manpower-requests": "pending",
 };
 
 export function withInitialWorkflowState(
@@ -1066,6 +1075,10 @@ export function isValidEntityTransition(
       complete: ["routed"],
       clear: ["done"],
       "approve-work": ["done"],
+    },
+    "manpower-requests": {
+      assign: ["pending"],
+      dispatch: ["assigned"],
     },
     "leave-requests": {
       approve: ["pending"],

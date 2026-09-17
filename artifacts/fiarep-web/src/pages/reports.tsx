@@ -14,9 +14,10 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle, CheckCircle2, ChevronDown, FolderOpen, Image as ImageIcon,
-  MapPin, Search, Trash2, UserRound, X,
+  MapPin, Search, Send, Trash2, UserRound, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Link } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -241,9 +242,12 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
-        <p className="text-muted-foreground text-sm">Review and manage resident reports across your developments.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
+          <p className="text-muted-foreground text-sm">Review and manage resident reports across your developments.</p>
+        </div>
+        {canApproveWork(actor) && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
         <div className="p-4 border-b border-border flex flex-col lg:flex-row gap-3">

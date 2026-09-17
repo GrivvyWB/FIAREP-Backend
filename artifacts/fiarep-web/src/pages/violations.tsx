@@ -1,6 +1,9 @@
 import { useState } from "react";
 import { GenericEntityPage } from "@/components/layout/generic-entity-page";
-import { AlertTriangle, Search, Building2, FileWarning, AlertCircle } from "lucide-react";
+import { AlertTriangle, Search, Building2, FileWarning, AlertCircle, Send } from "lucide-react";
+import { Link } from "wouter";
+import { useAuth } from "@/hooks/use-auth";
+import { canApproveWork } from "@/lib/access-policy";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getLookupNycPropertyQueryKey, useLookupNycProperty } from "@workspace/api-client-react";
@@ -12,6 +15,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 export default function Violations() {
+  const { staff } = useAuth();
   const [searchInput, setSearchInput] = useState("");
   const [addressToSearch, setAddressToSearch] = useState("");
 
@@ -37,9 +41,12 @@ export default function Violations() {
     <div className="space-y-12 pb-10">
       {/* NYC Property Lookup Section */}
       <section className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">NYC Property Lookup</h1>
-          <p className="text-muted-foreground text-sm">Query official NYC property records and live violations.</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold tracking-tight">NYC Property Lookup</h1>
+            <p className="text-muted-foreground text-sm">Query official NYC property records and live violations.</p>
+          </div>
+          {canApproveWork(staff) && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
         </div>
 
         <Card className="border-border shadow-sm">
