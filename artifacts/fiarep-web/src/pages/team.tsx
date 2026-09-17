@@ -333,7 +333,7 @@ export default function Team() {
     catch (e) { setActionError(errorMessage(e)); }
   }
   async function deleteAccount(id: string, memberName: string) {
-    if (!window.confirm(`Permanently delete ${memberName}? This removes the account and signs it out on every device. This cannot be undone.`)) return false;
+    if (!window.confirm(`Permanently delete ${memberName}? This removes the account, linked HR employee record, and signs it out on every device. This cannot be undone.`)) return false;
     setActionError("");
     try {
       await deleteStaff.mutateAsync({ id });
@@ -389,6 +389,7 @@ export default function Team() {
   const teamGroups = groupTeamDirectoryByTitleAndLocation(sorted || [], HR_DISPLAY_MEMBER_IDS);
   const memberCard = (member: NonNullable<typeof staff>[number]) => {
     const isSupervisorOrManagement =
+      member.role === "administrator" ||
       member.role === "management" ||
       member.role === "human_resources" ||
       member.role === "procurement" ||

@@ -549,6 +549,11 @@ router.delete("/v1/staff/:id", async (req, res) => {
       eq(deviceTokens.tenantId, actor.tenantId),
       eq(deviceTokens.staffId, target.id),
     ));
+    await tx.delete(entityRecords).where(and(
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.entity, "hr-employee-records"),
+      sql`(${entityRecords.id} = ${`hr-employee:${target.id}`} OR ${entityRecords.state}->>'employeeStaffId' = ${target.id})`,
+    ));
     await tx.delete(staffAccounts).where(and(
       eq(staffAccounts.id, target.id),
       eq(staffAccounts.tenantId, actor.tenantId),
