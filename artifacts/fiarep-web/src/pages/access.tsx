@@ -2,6 +2,7 @@ import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Home, HardHat, Building2 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
 import { setStoredPersona } from '@/lib/access-policy';
+import { WebsiteFooter } from '@/components/layout/website-footer';
 
 export default function Access() {
   const [, setLocation] = useLocation();
@@ -17,17 +18,18 @@ export default function Access() {
   };
 
   return (
-    <div className="min-h-screen bg-background flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-      <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8">
-        <div className="flex justify-center">
-          <div className="font-bold text-4xl tracking-tight">
-            FIA<span className="text-[#F5B301]">REP</span>
+    <div className="min-h-screen bg-background flex flex-col">
+      <div className="flex flex-1 flex-col justify-center py-12 sm:px-6 lg:px-8">
+        <div className="sm:mx-auto sm:w-full sm:max-w-md mb-8">
+          <div className="flex justify-center">
+            <div className="font-bold text-4xl tracking-tight">
+              FIA<span className="text-[#F5B301]">REP</span>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="sm:mx-auto sm:w-full sm:max-w-4xl px-4">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="sm:mx-auto sm:w-full sm:max-w-4xl px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <button onClick={() => handleSelect('resident')} className="group block focus:outline-none w-full text-left">
             <Card className="h-full hover:border-primary transition-all cursor-pointer hover-elevate shadow-md group-focus:ring-2 group-focus:ring-primary group-focus:ring-offset-2">
               <CardHeader className="text-center py-8">
@@ -60,17 +62,19 @@ export default function Access() {
               </CardHeader>
             </Card>
           </button>
-        </div>
-        <div className="mt-8 text-center">
-          <Link
-            href="/platform"
-            className="inline-flex items-center justify-center rounded-md border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
-            data-testid="link-about-fiarep"
-          >
-            What is FIAREP?
-          </Link>
+          </div>
+          <div className="mt-8 text-center">
+            <Link
+              href="/platform"
+              className="inline-flex items-center justify-center rounded-md border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
+              data-testid="link-about-fiarep"
+            >
+              What is FIAREP?
+            </Link>
+          </div>
         </div>
       </div>
+      <WebsiteFooter />
     </div>
   );
 }

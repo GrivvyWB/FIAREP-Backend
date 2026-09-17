@@ -1,6 +1,7 @@
 import { motion, type Variants } from 'framer-motion';
 import { Link } from 'wouter';
 import { PERSONA_KEY } from '@/lib/access-policy';
+import { WebsiteFooter } from '@/components/layout/website-footer';
 import { 
   ClipboardCheck, Wrench, 
   UserCog, ShoppingCart, Target, Briefcase, ArrowRight, Home,
@@ -316,18 +317,7 @@ export default function Platform() {
         </div>
       </section>
 
-      {/* Footer CTA */}
-      <section className="py-24 border-t border-border bg-card/30">
-        <div className="max-w-4xl mx-auto px-6 text-center">
-          <h2 className="text-3xl md:text-5xl font-bold mb-6">Ready for operational clarity?</h2>
-          <p className="text-xl text-muted-foreground mb-10">
-             Bring complaints, violations, inspections, staff coordination, projects, and compliance work into one connected platform.
-          </p>
-          <Link href="/login" onClick={prepareStaffLogin} className="inline-flex items-center justify-center rounded-lg bg-primary px-10 py-5 text-lg font-bold text-primary-foreground shadow-xl hover:bg-primary/90 transition-all hover:scale-105" data-testid="link-footer-cta">
-            Access Platform Workspace <ArrowRight className="ml-2 h-6 w-6" />
-          </Link>
-        </div>
-      </section>
+      <WebsiteFooter />
     </div>
   );
 }
