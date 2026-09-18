@@ -7,6 +7,8 @@ Field arrival and completion must be recorded through the server's authorized wo
 
 Maintenance completion photos are ordinary work evidence sent to the supervisor. They must remain separate from resident issue photos and must not enter the AI photo-analysis flow.
 
+The resident receipt/status lookup must show the completion timestamp, maintenance note, and completed-work photo so the tenant can verify service remotely.
+
 **Why:** Workflow-managed status and timestamps are intentionally stripped from generic entity writes. Generic sync alone can preserve evidence fields but cannot legally advance an assigned job to started or completed.
 
-**How to apply:** For every mobile field action, capture a fresh timestamp/GPS stamp at the action boundary, capture independent metadata for each photo, persist locally before network work, queue the entity immediately, and retry any failed workflow action in order during sync. Store completion evidence through the normal authorized file path without requesting AI classification.
+**How to apply:** For every mobile field action, capture a fresh timestamp/GPS stamp at the action boundary, capture independent metadata for each photo, persist locally before network work, queue the entity immediately, and retry any failed workflow action in order during sync. Store completion evidence through the normal authorized file path without requesting AI classification, then expose the non-sensitive completion receipt to the resident lookup.

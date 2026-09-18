@@ -252,8 +252,8 @@ export default function ReportDetail() {
               multiline
             />
             <Pressable
-              style={[ui.btn, (completionBusy || completionPhotos.length === 0) && { opacity: 0.45 }]}
-              disabled={completionBusy || completionPhotos.length === 0}
+              style={[ui.btn, (completionBusy || completionPhotos.length === 0 || !completionNote.trim()) && { opacity: 0.45 }]}
+              disabled={completionBusy || completionPhotos.length === 0 || !completionNote.trim()}
               onPress={completeWork}
             >
               <Text style={ui.btnText}>Complete</Text>

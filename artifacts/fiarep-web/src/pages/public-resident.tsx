@@ -289,6 +289,31 @@ export default function PublicResident() {
                 </p>
               </div>
 
+              {statusResult.completedAt && (
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">Completed</h4>
+                  <p className="text-sm">{new Date(statusResult.completedAt).toLocaleString()}</p>
+                </div>
+              )}
+
+              {statusResult.completionNote && (
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">Completion notes</h4>
+                  <p className="text-sm bg-muted/30 p-3 rounded-md border border-border/50">{statusResult.completionNote}</p>
+                </div>
+              )}
+
+              {statusResult.completionPhotoUrl && (
+                <div>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Completed work</h4>
+                  <img
+                    src={statusResult.completionPhotoUrl}
+                    alt={statusResult.completionPhotoName || 'Completed work'}
+                    className="w-full rounded-xl border border-border bg-muted object-contain"
+                  />
+                </div>
+              )}
+
               {statusResult.updates && statusResult.updates.length > 0 && (
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground mb-3">Updates</h4>

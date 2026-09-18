@@ -289,9 +289,12 @@ export type PublicResidentReportStatusStatus = typeof PublicResidentReportStatus
 
 
 export const PublicResidentReportStatusStatus = {
-  pending: 'pending',
-  approved: 'approved',
-  revoked: 'revoked',
+  submitted: 'submitted',
+  assigned: 'assigned',
+  in_progress: 'in_progress',
+  done: 'done',
+  resolved: 'resolved',
+  work_approved: 'work_approved',
 } as const;
 
 export type PublicResidentReportStatusUpdatesItem = { [key: string]: unknown };
@@ -302,6 +305,10 @@ export interface PublicResidentReportStatus {
   description: string;
   updates: PublicResidentReportStatusUpdatesItem[];
   createdAt: string;
+  completedAt?: string;
+  completionNote?: string;
+  completionPhotoUrl?: string;
+  completionPhotoName?: string;
 }
 
 export type PublicResidentPhotoUploadInputContentType = typeof PublicResidentPhotoUploadInputContentType[keyof typeof PublicResidentPhotoUploadInputContentType];

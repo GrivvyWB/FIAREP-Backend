@@ -1551,10 +1551,14 @@ components:
       required: [complaintNo, status, description, updates, createdAt]
       properties:
         complaintNo: { type: string }
-        status: { type: string, enum: [pending, approved, revoked] }
+        status: { type: string, enum: [submitted, assigned, in_progress, done, resolved, work_approved] }
         description: { type: string }
         updates: { type: array, items: { type: object, additionalProperties: true } }
         createdAt: { type: string }
+        completedAt: { type: string, format: date-time }
+        completionNote: { type: string }
+        completionPhotoUrl: { type: string, format: uri }
+        completionPhotoName: { type: string }
     PublicResidentPhotoUploadInput:
       type: object
       required: [statusToken, address, name, size, contentType]

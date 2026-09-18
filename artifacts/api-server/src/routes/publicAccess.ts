@@ -157,7 +157,33 @@ router.get("/v1/public/resident-reports/:complaintNo", async (req, res) => {
   )).limit(1);
   if (!row) { res.status(404).json({ error: "Report not found" }); return; }
   const state = row.state;
-  res.json({ complaintNo: state["complaintNo"], status: state["status"], description: state["description"], updates: state["updates"], createdAt: state["createdAt"] });
+  const remoteFiles = Array.isArray(state["remoteFiles"])
+    ? state["remoteFiles"].filter((file): file is Record<string, unknown> => Boolean(file && typeof file === "object"))
+    : [];
+  const completionFile = [...remoteFiles].reverse().find((file) =>
+    file["kind"] === "completion-photo" &&
+    typeof file["objectPath"] === "string"
+  );
+  const completionDownload = completionFile
+    ? await fileStorage.createDownload(access.tenantId, String(completionFile["objectPath"])).catch(() => null)
+    : null;
+  const updates = Array.isArray(state["updates"]) ? state["updates"] : [];
+  const completionUpdate = [...updates].reverse().find((update: unknown) => {
+    if (!update || typeof update !== "object") return false;
+    const status = String((update as Record<string, unknown>)["status"] || "");
+    return status === "done" || status === "resolved";
+  }) as Record<string, unknown> | undefined;
+  res.json({
+    complaintNo: state["complaintNo"],
+    status: state["status"],
+    description: state["description"],
+    updates,
+    createdAt: state["createdAt"],
+    completedAt: state["completeAt"] || state["resolveAt"] || state["completedAt"] || state["resolvedAt"],
+    completionNote: state["completionNote"] || completionUpdate?.["note"],
+    completionPhotoUrl: completionDownload?.downloadUrl,
+    completionPhotoName: completionFile?.["name"],
+  });
 });
 
 const residentPhotoTypes = new Set(["image/jpeg", "image/png", "image/heic", "image/heif", "image/webp"]);

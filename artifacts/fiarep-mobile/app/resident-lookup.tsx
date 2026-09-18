@@ -104,11 +104,28 @@ export default function ResidentLookup() {
             <Text>{r.description}</Text>
           </View>
 
+          {!!r.completedAt && (
+            <View style={ui.line}>
+              <Text style={ui.lineK}>Completed</Text>
+              <Text style={ui.lineV}>{fmt(r.completedAt)}</Text>
+            </View>
+          )}
+
+          {!!r.completionNote && (
+            <View style={{ paddingVertical: 4 }}>
+              <Text style={ui.label}>Completion notes</Text>
+              <Text>{r.completionNote}</Text>
+            </View>
+          )}
+
           {r.photos.length > 0 && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {r.photos.map((uri, i) => (
-                <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} /></Pressable>
-              ))}
+            <View>
+              <Text style={ui.label}>Completed work</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                {r.photos.map((uri, i) => (
+                  <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><RemotePhoto localUri={uri} style={{ width: 120, height: 120, borderRadius: 8, backgroundColor: '#eee' }} /></Pressable>
+                ))}
+              </View>
             </View>
           )}
 

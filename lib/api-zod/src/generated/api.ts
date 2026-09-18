@@ -1193,10 +1193,14 @@ export const LookupPublicResidentReportsParams = zod.object({
 
 export const LookupPublicResidentReportsResponse = zod.object({
   "complaintNo": zod.string(),
-  "status": zod.enum(['pending', 'approved', 'revoked']),
+  "status": zod.enum(['submitted', 'assigned', 'in_progress', 'done', 'resolved', 'work_approved']),
   "description": zod.string(),
   "updates": zod.array(zod.record(zod.string(), zod.unknown())),
-  "createdAt": zod.string()
+  "createdAt": zod.string(),
+  "completedAt": zod.coerce.date().optional(),
+  "completionNote": zod.string().optional(),
+  "completionPhotoUrl": zod.string().url().optional(),
+  "completionPhotoName": zod.string().optional()
 })
 
 

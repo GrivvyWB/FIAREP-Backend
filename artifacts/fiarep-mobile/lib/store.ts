@@ -544,6 +544,9 @@ export type ResidentReport = {
   arrivalGeo?: import('./geo').GeoStamp;
   completionGeo?: import('./geo').GeoStamp;
   photoEvidence?: import('./photos').PhotoEvidence[];
+  completedAt?: string;
+  completionNote?: string;
+  completionPhotoUrl?: string;
   clearedByMgmt?: boolean;  // management cleared it so the worker may remove it from My Jobs
   _meta?: any;
 };
@@ -794,7 +797,11 @@ export async function getResidentReport(id: string): Promise<ResidentReport | nu
 
 export async function findResidentReports(complaintNo: string, statusToken: string): Promise<ResidentReport[]> {
   const result = await lookupPublicResidentReports(complaintNo.trim());
-  const report = normalizeResidentReport({ ...result, photos: [], id: complaintNo });
+  const report = normalizeResidentReport({
+    ...result,
+    photos: result.completionPhotoUrl ? [result.completionPhotoUrl] : [],
+    id: complaintNo,
+  });
   if (statusToken) {
     await saveResidentCredentials({ complaintNo: complaintNo.trim(), statusToken });
   }
