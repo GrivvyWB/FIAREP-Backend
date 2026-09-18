@@ -39,6 +39,8 @@ export function canReadSharedDefaultRates(staff: Staff | null | undefined): bool
  * mounting and issuing requests in the first place. */
 export function hasModuleAccess(staff: Staff | null | undefined, module: StaffModule): boolean {
   if (!staff) return false;
+  const isEmergencyMaintenance =
+    staff.role === "emergency" && staff.position === "Maintenance Worker";
   if (
     staff.position?.trim().toLowerCase() === "supervisor inspector" &&
     CPM_ONLY_MODULES.has(module)
@@ -80,7 +82,8 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
     if (module === "scope-writing") return staff.position === "CPM";
     return false;
   }
-  if (staff.role === "worker") {
+  if (staff.role === "worker" || isEmergencyMaintenance) {
+    if (isEmergencyMaintenance && module === "emergency") return true;
     if (module === "repairs" || module === "projects" || module === "reports") return true;
     return false;
   }

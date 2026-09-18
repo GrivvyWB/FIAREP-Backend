@@ -49,7 +49,8 @@ export default function ViolationSend() {
     // Inspection routes to inspectors only. Complaints (and the default) can go to
     // ANY trade OR an inspector — whoever can check it out / take a photo.
     if (_filter === 'inspector') return s.role === 'inspector';
-    return s.role === 'inspector' || s.role === 'worker';
+    return s.role === 'inspector' || s.role === 'worker' ||
+      (s.role === 'emergency' && s.position === 'Maintenance Worker');
   });
 
   async function submit() {

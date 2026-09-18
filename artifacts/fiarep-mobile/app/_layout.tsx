@@ -27,7 +27,7 @@ const HOME_FOR_MODE: Record<AppMode, string> = {
   inspector: '/cpm-home',
   resident: '/resident-home',
   vendor: '/vendor-home',
-  emergency: '/emergency-units',
+  emergency: '/worker-home',
 };
 
 function Screen({ children }: { children: React.ReactNode }) {
@@ -326,8 +326,19 @@ function WorkerStack() {
 
 function EmergencyStack() {
   return (
-    <Stack initialRouteName="emergency-units">
-      <Stack.Screen name="emergency-units" options={{ title: 'Emergency Units', headerBackVisible: false }} />
+    <Stack initialRouteName="worker-home">
+      <Stack.Screen name="worker-home" options={{ title: 'Emergency Maintenance', headerBackVisible: false }} />
+      <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
+      <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
+      <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
+      <Stack.Screen name="worker-change-order" options={{ title: 'Change Work Order' }} />
+      <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
+      <Stack.Screen name="project/elevator" options={{ title: 'Elevator Services' }} />
+      <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
+      <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
+      <Stack.Screen name="emergency-units" options={{ title: 'Emergency Units' }} />
     </Stack>
   );
 }

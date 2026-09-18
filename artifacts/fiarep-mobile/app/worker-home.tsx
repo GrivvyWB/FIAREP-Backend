@@ -19,9 +19,15 @@ export default function WorkerHome() {
   const { refresh } = useAppMode();
   const [jobCount, setJobCount] = useState(0);
   const [position, setPosition] = useState('');
+  const [isEmergencyMaintenance, setIsEmergencyMaintenance] = useState(false);
   useFocusEffect(useCallback(() => {
     void (async () => {
       const actor = await getCurrentActor();
+      const currentPosition = await getCurrentPosition().catch(() => '');
+      setPosition(currentPosition);
+      setIsEmergencyMaintenance(
+        actor.role === 'emergency' && currentPosition === 'Maintenance Worker'
+      );
       if (actor.name && actor.id) {
         const developments = (await developmentsForStaff(actor.name).catch(() => []))
           .map((development) => development.trim().toLowerCase())
@@ -43,7 +49,6 @@ export default function WorkerHome() {
       } else {
         setJobCount(0);
       }
-      try { setPosition(await getCurrentPosition()); } catch {}
     })();
   }, []));
 
@@ -63,6 +68,11 @@ export default function WorkerHome() {
       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
       </Pressable>
+      {isEmergencyMaintenance && (
+        <Pressable style={ui.btnOutline} onPress={() => router.push('/emergency-units')}>
+          <Text style={ui.btnOutlineText}>Emergency Units</Text>
+        </Pressable>
+      )}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
         <Text style={ui.btnOutlineText}>Attendance</Text>
       </Pressable>

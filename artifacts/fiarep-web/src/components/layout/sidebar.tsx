@@ -52,9 +52,11 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart, module: "procurement" as const }] : []),
     ...(hasModuleAccess(staff, "scope-review") ? [{ name: "Scope Review", href: "/scope-review", icon: ClipboardCheck, module: "scope-review" as const }] : []),
     ...(hasModuleAccess(staff, "scope-writing") ? [{ name: "Scope Writing", href: "/scope-writing", icon: ClipboardCheck, module: "scope-writing" as const }] : []),
-    ...((staff?.role === "management" || staff?.role === "administrator") ? [
+    ...((staff?.role === "management" || staff?.role === "administrator" || staff?.role === "emergency") ? [
       { name: "Emergency", href: "/emergency", icon: BellRing, module: "emergency" as const },
+      ...(staff?.role === "emergency" ? [] : [
       { name: "Scores", href: "/scores", icon: Target, module: "scores" as const },
+      ]),
     ] : []),
     { name: "Change Orders", href: "/change-orders", icon: FileCog, module: "change-orders" as const },
     { name: "Elevators", href: "/elevators", icon: ArrowUpToLine, module: "elevators" as const },

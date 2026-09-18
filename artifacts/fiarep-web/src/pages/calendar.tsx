@@ -35,7 +35,10 @@ const displayDate = (date: Date) => date.toLocaleDateString(undefined, { month: 
  */
 function canReadCalendarEntity(staff: Staff | null, entity: string): boolean {
   if (!staff) return false;
-  if (staff.role === "emergency") return entity === "emergency-jobs";
+  if (staff.role === "emergency") {
+    if (entity === "emergency-jobs") return true;
+    if (staff.position !== "Maintenance Worker") return false;
+  }
   if (entity === "emergency-jobs") {
     return staff.role === "administrator" ||
       staff.role === "management" ||

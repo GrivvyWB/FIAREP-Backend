@@ -7,6 +7,8 @@ Superintendent Ⓔ manages every employee whose role is Emergency and whose posi
 
 Emergency truck drivers receive sequential TRK labels such as TRK-1 and TRK-2. Emergency Maintenance employees who do not drive emergency trucks receive no TRK label. All members appear beneath Superintendent Ⓔ in the Team hierarchy.
 
+Emergency Maintenance Workers receive the same maintenance functions as ordinary Maintenance Workers, plus their Emergency Unit access.
+
 **Why:** Emergency truck drivers and other mobile emergency maintenance staff share one supervisory chain, while stationary development maintenance staff remain under their development supervision.
 
-**How to apply:** Use the Emergency role plus Maintenance Worker position as the authoritative membership rule. Treat the TRK label only as an optional emergency-truck designation, not as a login credential or a separate role.
+**How to apply:** Use the Emergency role plus Maintenance Worker position as the authoritative membership rule. In authorization and navigation, inherit the ordinary Maintenance Worker capabilities and add emergency-job access. Treat the TRK label only as an optional emergency-truck designation, not as a login credential or a separate role.

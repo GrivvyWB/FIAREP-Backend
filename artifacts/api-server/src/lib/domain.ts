@@ -250,6 +250,8 @@ export function canBrowseStaffDirectory(actor: Actor): boolean {
 }
 
 export function canReadEntity(actor: Actor, entity: string): boolean {
+  const isEmergencyMaintenance =
+    actor.role === "emergency" && actor.position === "Maintenance Worker";
   if (isHrEntity(entity)) {
     return actor.role === "human_resources" ||
       actor.role === "administrator" ||
@@ -280,7 +282,12 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
       isOrdinaryManagement(actor) ||
       (entity === "procurement" && actor.role === "inspector" && actor.position === "CPM");
   }
-  if (actor.role === "emergency") return entity === "emergency-jobs" || entity === "emergency-units";
+  if (actor.role === "emergency" && !isEmergencyMaintenance) {
+    return entity === "emergency-jobs" || entity === "emergency-units";
+  }
+  if (isEmergencyMaintenance && (entity === "emergency-jobs" || entity === "emergency-units")) {
+    return true;
+  }
   if (entity === "emergency-jobs" || entity === "emergency-units") {
     return actor.role === "administrator" || actor.role === "management" || isBoroughDirector(actor);
   }
@@ -403,6 +410,9 @@ function emergencyRecordAllowed(
   row: EntityRecordAuthorizationState,
 ): boolean {
   if (actor.role !== "emergency") return true;
+  const isEmergencyEntity =
+    row.entity === "emergency-jobs" || row.entity === "emergency-units";
+  if (actor.position === "Maintenance Worker" && !isEmergencyEntity) return true;
   const normalizedActor = actor.name.trim().toLowerCase().replace(/\s+/g, " ");
   return (row.entity === "emergency-jobs" || row.entity === "emergency-units") &&
     [
@@ -438,7 +448,9 @@ function staffAssignmentRecordAllowed(
   actor: Actor,
   row: EntityRecordAuthorizationState,
 ): boolean {
-  if (!["worker", "inspector"].includes(actor.role)) return true;
+  const isEmergencyMaintenance =
+    actor.role === "emergency" && actor.position === "Maintenance Worker";
+  if (!["worker", "inspector"].includes(actor.role) && !isEmergencyMaintenance) return true;
   if (row.entity === "hud-inspections") return row.createdBy === actor.id;
   if (
     actor.role === "inspector" &&
@@ -504,12 +516,14 @@ export function canUploadToEntityRecord(
 }
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
+  const isEmergencyMaintenance =
+    actor.role === "emergency" && actor.position === "Maintenance Worker";
   if (isHrEntity(entity)) {
     return actor.role === "human_resources" ||
       actor.role === "administrator" ||
       (entity === "hr-approvals" && actor.role === "management");
   }
-  if (actor.role === "emergency") return false;
+  if (actor.role === "emergency" && !isEmergencyMaintenance) return false;
   if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
   if (entity === "hud-inspections") {
@@ -553,12 +567,17 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 }
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
+  const isEmergencyMaintenance =
+    actor.role === "emergency" && actor.position === "Maintenance Worker";
   if (isHrEntity(entity)) {
     return actor.role === "human_resources" ||
       actor.role === "administrator" ||
       (entity === "hr-approvals" && actor.role === "management");
   }
-  if (actor.role === "emergency") return entity === "emergency-jobs";
+  if (actor.role === "emergency") {
+    if (entity === "emergency-jobs") return true;
+    if (!isEmergencyMaintenance) return false;
+  }
   if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
   if (entity === "hud-inspections") {
@@ -603,7 +622,11 @@ export function canDeleteEntity(
         (actor.role === "management" && actor.position === "Regional Director"));
   }
   if (isBoroughDirector(actor)) return true;
-  if (actor.role === "worker" || actor.role === "inspector") {
+  if (
+    actor.role === "worker" ||
+    actor.role === "inspector" ||
+    (actor.role === "emergency" && actor.position === "Maintenance Worker")
+  ) {
     return state["clearedByMgmt"] === true;
   }
   return actor.role === "administrator" || actor.role === "management";
@@ -892,7 +915,8 @@ export function canPerformEntityAction(
     actor.role === "management" || actor.role === "administrator" ||
     isSupervisorPosition(actor);
   const isFieldStaff =
-    actor.role === "worker" || actor.role === "inspector";
+    actor.role === "worker" || actor.role === "inspector" ||
+    (actor.role === "emergency" && actor.position === "Maintenance Worker");
   if (
     action === "approve-work" &&
     ["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
@@ -900,7 +924,7 @@ export function canPerformEntityAction(
   ) {
     return isSupervisor;
   }
-  if (actor.role === "emergency") {
+  if (actor.role === "emergency" && entity === "emergency-jobs") {
     return entity === "emergency-jobs" &&
       ["on-my-way", "start", "complete"].includes(action) &&
       canPerformAssignedWorkflowAction(actor, entity, action, state);
