@@ -121,6 +121,7 @@ export default function Team() {
   const [developments, setDevelopments] = useState<string[]>([]);
   const [developmentsOpen, setDevelopmentsOpen] = useState(false);
   const [waitingForDocuments, setWaitingForDocuments] = useState(false);
+  const [emergencyTruckDriver, setEmergencyTruckDriver] = useState(false);
   const [issuedCode, setIssuedCode] = useState<string | null>(null);
   const [issuedRole, setIssuedRole] = useState<string>("");
   const [issuedEmployee, setIssuedEmployee] = useState<string>("");
@@ -190,6 +191,7 @@ export default function Team() {
     setName("");
     setDevelopments([]);
     setWaitingForDocuments(false);
+    setEmergencyTruckDriver(false);
     setDevelopmentsOpen(false);
     setIssuedCode(null);
     setIssuedRole("");
@@ -205,6 +207,7 @@ export default function Team() {
     setOpen(false); setName(""); setRole(roleOptions.includes("worker") ? "worker" : (roleOptions[0] ?? "worker")); setPosition("Staff Worker");
     setDevelopments([]); setDevelopmentsOpen(false);
     setWaitingForDocuments(false);
+    setEmergencyTruckDriver(false);
     setIssuedCode(null); setIssuedRole(""); setIssuedEmployee(""); setActionError("");
     setCreateMode("single"); setBulkNames([]); setBulkFileName(""); setBulkResults([]); setBulkCreating(false);
   }
@@ -220,6 +223,7 @@ export default function Team() {
           name: name.trim(), role: role as typeof StaffInputRole[keyof typeof StaffInputRole],
           position: position as typeof StaffPosition[keyof typeof StaffPosition],
           developments,
+           emergencyTruckDriver,
           status: waitingForDocuments ? "pending" : "approved",
         },
       });
@@ -297,6 +301,7 @@ export default function Team() {
   }
   function selectPosition(nextPosition: string) {
     setPosition(nextPosition);
+    if (nextPosition !== "Maintenance Worker") setEmergencyTruckDriver(false);
     const nextRole = roleForPosition(nextPosition);
     if (roleOptions.includes(nextRole)) setRole(nextRole);
   }
@@ -537,8 +542,9 @@ export default function Team() {
               {createMode === "single" ? (
                 <form onSubmit={submit} className="space-y-4">
                   <div><Label htmlFor="employee-name">Name</Label><Input id="employee-name" required value={name} onChange={(e) => setName(e.target.value)} /></div>
-                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => setRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => { setRole(e.target.value); if (e.target.value !== "emergency") setEmergencyTruckDriver(false); }}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
                   <div><Label htmlFor="employee-position">Position</Label><select id="employee-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
+                  {role === "emergency" && position === "Maintenance Worker" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={emergencyTruckDriver} onCheckedChange={(checked) => setEmergencyTruckDriver(checked === true)} /><span>Emergency truck driver</span></label>}
                   {developmentSelector}
                    {actor?.role === "human_resources" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={waitingForDocuments} onCheckedChange={(checked) => setWaitingForDocuments(checked === true)} /><span>Waiting for documents</span></label>}
                   {actionError && <p className="text-sm text-destructive">{actionError}</p>}

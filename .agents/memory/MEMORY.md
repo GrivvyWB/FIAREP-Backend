@@ -31,3 +31,4 @@
 - [FIAREP employee intake handoff](fiarep-employee-intake-handoff.md) — staff accounts start in Team and atomically open a linked HR employee record for completion.
 - [FIAREP HUD inspection authority](fiarep-hud-inspection-authority.md) — CPMs and Inspectors submit HUD inspections from mobile; designated supervisors review them on web.
 - [FIAREP directory scope](fiarep-directory-scope.md) — staff visibility uses shared development coverage; never reuse stricter leave-approval scope for routing lists.
+- [FIAREP emergency maintenance unit](fiarep-emergency-maintenance-unit.md) — Superintendent Ⓔ manages Emergency-role maintenance staff; only truck drivers receive sequential TRK labels.

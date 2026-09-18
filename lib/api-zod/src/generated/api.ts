@@ -775,6 +775,7 @@ export const CreateStaffBody = zod.object({
   "role": zod.enum(['administrator', 'human_resources', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'emergency']),
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "developments": zod.array(zod.string()).optional(),
+  "emergencyTruckDriver": zod.boolean().optional(),
   "clientRequestId": zod.string().min(createStaffBodyClientRequestIdMin).max(createStaffBodyClientRequestIdMax).regex(createStaffBodyClientRequestIdRegExp).optional(),
   "status": zod.enum(['pending', 'approved']).optional()
 })

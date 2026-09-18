@@ -233,6 +233,7 @@ router.post("/v1/staff", async (req, res) => {
   const requestedStatus =
     input["status"] === "pending" ? "pending" :
     input["status"] === undefined || input["status"] === "approved" ? "approved" : "";
+  const emergencyTruckDriver = input["emergencyTruckDriver"] === true;
   if (clientRequestId && !/^[a-zA-Z0-9_-]{8,100}$/.test(clientRequestId)) {
     res.status(400).json({ error: "Invalid staff issuance request id" });
     return;
@@ -248,6 +249,10 @@ router.post("/v1/staff", async (req, res) => {
   }
   if (requestedStatus === "pending" && actor.role !== "human_resources") {
     res.status(403).json({ error: "Only Human Resources may create a pending employee" });
+    return;
+  }
+  if (emergencyTruckDriver && (role !== "emergency" || position !== "Maintenance Worker")) {
+    res.status(400).json({ error: "Truck designation is limited to emergency maintenance workers" });
     return;
   }
   const developmentRequiredPositions = new Set([
@@ -301,12 +306,28 @@ router.post("/v1/staff", async (req, res) => {
       if (Number(value) >= organization.staffLimit) throw Object.assign(new Error("Organization staff license limit reached"), { status: 403 });
     }
     const now = new Date();
+    let issuedName = name.replace(/^TRK-\d+\s+/i, "");
+    if (emergencyTruckDriver) {
+      const existingTruckDrivers = await tx
+        .select({ name: staffAccounts.name })
+        .from(staffAccounts)
+        .where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.role, "emergency"),
+          eq(staffAccounts.position, "Maintenance Worker"),
+        ));
+      const nextTruckNumber = existingTruckDrivers.reduce((highest, staff) => {
+        const value = /^TRK-(\d+)\s+/i.exec(staff.name)?.[1];
+        return value ? Math.max(highest, Number(value)) : highest;
+      }, 0) + 1;
+      issuedName = `TRK-${nextTruckNumber} ${issuedName}`;
+    }
     const [row] = await tx
       .insert(staffAccounts)
       .values({
        id: clientRequestId || randomUUID(),
       tenantId: actor.tenantId,
-      name,
+      name: issuedName,
       firstName:
         typeof input["firstName"] === "string" ? input["firstName"] : null,
       lastName:

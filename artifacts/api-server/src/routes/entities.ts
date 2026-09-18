@@ -231,11 +231,11 @@ async function canonicalizeAssignment(
     target?.id === actor.id;
   if (
     actor.position === "Superintendent Ⓔ" &&
-    (target?.role !== "worker" || target.position !== "Maintenance Worker")
+    (target?.role !== "emergency" || target.position !== "Maintenance Worker")
   ) {
     return {
       state: null,
-      error: "The Emergency Unit superintendent may assign only maintenance workers",
+      error: "The Emergency Unit superintendent may assign only emergency maintenance workers",
     };
   }
   if (!target || (!canAssignStaff(actor, target, development) && !inspectorSelfAssignment)) {

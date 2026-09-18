@@ -1794,6 +1794,8 @@ components:
         developments:
           type: array
           items: { type: string }
+        emergencyTruckDriver:
+          type: boolean
         clientRequestId:
           type: string
           minLength: 8

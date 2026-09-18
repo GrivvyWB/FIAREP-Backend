@@ -780,6 +780,7 @@ export interface StaffInput {
   role: StaffInputRole;
   position: StaffInputPosition;
   developments?: string[];
+  emergencyTruckDriver?: boolean;
   /**
      * @minLength 8
      * @maxLength 100

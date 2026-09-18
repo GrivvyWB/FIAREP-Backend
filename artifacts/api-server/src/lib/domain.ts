@@ -231,7 +231,8 @@ export function isElevatorFieldStaff(actor: Actor): boolean {
 
 export function isSupervisorPosition(actor: Actor): boolean {
   return actor.position.toLowerCase().includes("supervisor") ||
-    actor.position === "Superintendent";
+    actor.position === "Superintendent" ||
+    actor.position === "Superintendent Ⓔ";
 }
 
 export function isHudReviewSupervisor(actor: Actor): boolean {
@@ -749,7 +750,8 @@ export function canApproveLeaveDuration(
 export function isAssignmentAuthority(actor: Actor): boolean {
   return actor.role === "management" ||
     actor.role === "administrator" ||
-    isBoroughDirector(actor);
+    isBoroughDirector(actor) ||
+    actor.position === "Superintendent Ⓔ";
 }
 
 export function canAssignStaff(

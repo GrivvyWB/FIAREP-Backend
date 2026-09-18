@@ -158,7 +158,26 @@ export function groupTeamDirectoryByTitleAndLocation(
   hrDisplayMemberIds: ReadonlySet<string>,
 ): TeamDirectoryGroup[] {
   const hrPeople = staff.filter((member) => hrDisplayMemberIds.has(member.id));
-  const regularPeople = staff.filter((member) => !hrDisplayMemberIds.has(member.id));
+  const emergencyMaintenance = staff
+    .filter((member) =>
+      member.position === "Superintendent Ⓔ" ||
+      (member.role === "emergency" && member.position === "Maintenance Worker")
+    )
+    .sort((a, b) => {
+      if (a.position === "Superintendent Ⓔ") return -1;
+      if (b.position === "Superintendent Ⓔ") return 1;
+      const aTruck = /^TRK-(\d+)/i.exec(a.name)?.[1];
+      const bTruck = /^TRK-(\d+)/i.exec(b.name)?.[1];
+      if (aTruck && bTruck) return Number(aTruck) - Number(bTruck);
+      if (aTruck) return -1;
+      if (bTruck) return 1;
+      return a.name.localeCompare(b.name);
+    });
+  const emergencyMaintenanceIds = new Set(emergencyMaintenance.map((member) => member.id));
+  const regularPeople = staff.filter((member) =>
+    !hrDisplayMemberIds.has(member.id) &&
+    !emergencyMaintenanceIds.has(member.id)
+  );
   const titles = new Map<string, Staff[]>();
   for (const member of regularPeople) {
     const title = member.role === "procurement" ? "Procurement" : titleFamily(member.position);
@@ -185,11 +204,18 @@ export function groupTeamDirectoryByTitleAndLocation(
         )) ? 0 : 1;
       return leadership(a) - leadership(b) || a.label.localeCompare(b.label);
     });
+  const emergencyGroup = emergencyMaintenance.length
+    ? [{
+        label: "Emergency Maintenance",
+        subtitle: "Managed by Superintendent Ⓔ",
+        locations: [{ label: "All assigned developments", people: emergencyMaintenance }],
+      }]
+    : [];
   return hrPeople.length
     ? [{
         label: "HR",
         subtitle: "Human Resources staff list",
         locations: groupedLocations(hrPeople),
-      }, ...groups]
-    : groups;
+      }, ...emergencyGroup, ...groups]
+    : [...emergencyGroup, ...groups];
 }
