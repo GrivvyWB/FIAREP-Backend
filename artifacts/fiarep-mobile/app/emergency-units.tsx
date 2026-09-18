@@ -9,10 +9,6 @@ import { ui, ACCENT } from '../lib/ui';
 
 function fmt(iso?: string): string { try { return iso ? new Date(iso).toLocaleString() : ''; } catch { return iso || ''; } }
 
-const LEGACY_EMERGENCY_TRUCK_NUMBERS: Record<string, number> = {
-  'peter r': 1,
-};
-
 export default function EmergencyUnits() {
   const [units, setUnits] = useState<EmergencyUnit[]>([]);
   const [loadedTruck, setLoadedTruck] = useState('');
@@ -37,17 +33,8 @@ export default function EmergencyUnits() {
         const assignedUnitIndex = availableUnits.findIndex((unit) =>
           assignedJobs.some((job) => job.assignedUnitId === unit.id)
         );
-        const truckNumber =
-          assignedUnitIndex >= 0
-            ? assignedUnitIndex + 1
-            : Number(
-                /^TRK-(\d+)/i.exec(actor.name || '')?.[1] ||
-                /(?:TRK|Truck)[- ]?(\d+)/i.exec(assignedJobs[0]?.truck || '')?.[1] ||
-                LEGACY_EMERGENCY_TRUCK_NUMBERS[(actor.name || '').trim().toLowerCase()] ||
-                0
-              );
         setJobs(assignedJobs);
-        setLoadedTruck(truckNumber > 0 ? `TRK-${truckNumber}` : 'Emergency Unit');
+        setLoadedTruck(assignedUnitIndex >= 0 ? `TRK-${assignedUnitIndex + 1}` : 'Emergency Unit');
       }
     })();
   }, [loadFor]));
