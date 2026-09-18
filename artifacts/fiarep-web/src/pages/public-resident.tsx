@@ -278,7 +278,7 @@ export default function PublicResident() {
               <div>
                 <h4 className="text-sm font-medium text-muted-foreground mb-1">Status</h4>
                 <div className="text-lg font-semibold uppercase tracking-wide text-primary">
-                  {statusResult.status}
+                  {statusResult.completedAt ? 'Completed' : statusResult.status}
                 </div>
               </div>
               
@@ -291,21 +291,21 @@ export default function PublicResident() {
 
               {statusResult.completedAt && (
                 <div>
-                  <h4 className="text-sm font-medium text-muted-foreground mb-1">Completed</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">Completion date</h4>
                   <p className="text-sm">{new Date(statusResult.completedAt).toLocaleString()}</p>
                 </div>
               )}
 
               {statusResult.completionNote && (
                 <div>
-                  <h4 className="text-sm font-medium text-muted-foreground mb-1">Completion notes</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-1">Technician notes</h4>
                   <p className="text-sm bg-muted/30 p-3 rounded-md border border-border/50">{statusResult.completionNote}</p>
                 </div>
               )}
 
               {statusResult.completionPhotoUrl && (
                 <div>
-                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Completed work</h4>
+                  <h4 className="text-sm font-medium text-muted-foreground mb-2">Completion photo</h4>
                   <img
                     src={statusResult.completionPhotoUrl}
                     alt={statusResult.completionPhotoName || 'Completed work'}
