@@ -191,6 +191,7 @@ export default function HRWorkspace() {
   const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
   const [editingRecord, setEditingRecord] = useState<EntityRecord | null>(null);
   const [credentialBusy, setCredentialBusy] = useState("");
+  const [issuedCredential, setIssuedCredential] = useState<{ staffId: string; name: string; code: string } | null>(null);
   
   const [view, setView] = useState<"records" | "audit">("records");
   const [filterProcess, setFilterProcess] = useState<string>("all");
@@ -244,7 +245,9 @@ export default function HRWorkspace() {
           : "";
         const title = String(state.title || "").toLowerCase();
         const details = String(state.details || "").toLowerCase();
-        if (!employeeName?.includes(query) && !title.includes(query) && !details.includes(query)) {
+        const draftName = `${String(state.firstName || "")} ${String(state.lastName || "")}`.trim().toLowerCase();
+        const employeeNumber = String(state.employeeNumber || "").toLowerCase();
+        if (!employeeName?.includes(query) && !draftName.includes(query) && !employeeNumber.includes(query) && !title.includes(query) && !details.includes(query)) {
           return false;
         }
       }
@@ -303,13 +306,24 @@ export default function HRWorkspace() {
                 "Content-Type": "application/json",
                 Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}`,
               },
-              body: JSON.stringify({ employeeNumber: sectionValues.employeeNumber || "" }),
+               body: JSON.stringify({
+                 employeeNumber: sectionValues.employeeNumber || "",
+                 maintenanceAssignment: sectionValues.position === "Maintenance Worker"
+                   ? sectionValues.emergencyTruckDriver === "true" ? "truck" : "regular"
+                   : undefined,
+               }),
             },
           );
-          if (!response.ok) {
+           if (!response.ok) {
             const body = await response.json().catch(() => null);
             throw new Error(body?.error || "Unable to complete employee intake.");
           }
+           const completed = await response.json() as { staffId: string; code: string };
+           setIssuedCredential({
+             staffId: completed.staffId,
+             name: `${String(editingRecord.state.firstName || "")} ${String(editingRecord.state.lastName || "")}`.trim(),
+             code: completed.code,
+           });
         } else {
         const employeeDevelopments = values.category === "hr-employee-records"
           ? assignedDevelopments
@@ -351,6 +365,9 @@ export default function HRWorkspace() {
               assignedDevelopments: values.category === "hr-employee-records"
                 ? assignedDevelopments
                 : undefined,
+               emergencyTruckDriver: values.category === "hr-employee-records"
+                 ? sectionValues.emergencyTruckDriver === "true"
+                 : undefined,
               targetRecordId: approvalTarget?.id,
               approvalPurpose: approvalPurpose || undefined,
               exitType: values.category === "hr-exits" ? values.exitType : undefined,
@@ -380,6 +397,7 @@ export default function HRWorkspace() {
   async function emailCode(staffId: string) {
     setCredentialBusy(staffId);
     setError("");
+    setIssuedCredential(null);
     try {
       const response = await fetch(`/api/v1/hr/staff/${encodeURIComponent(staffId)}/send-code`, {
         method: "POST",
@@ -486,14 +504,16 @@ export default function HRWorkspace() {
       ? state.assignedDevelopments.filter((value): value is string => typeof value === "string")
       : staffById.get(linkedStaffId)?.developments || (row.development ? [row.development] : []);
     setAssignedDevelopments(savedDevelopments);
-    setSectionValues(Object.fromEntries(
+    setSectionValues({
+      ...Object.fromEntries(
       (sectionFields[category] || []).map((field) => [
         field.key,
         state[field.key] === undefined || state[field.key] === null
           ? ""
           : String(state[field.key]),
-      ]),
-    ));
+      ])),
+      emergencyTruckDriver: state.emergencyTruckDriver === true ? "true" : "",
+    });
     form.reset({
       category,
       employeeStaffId: typeof state.employeeStaffId === "string" ? state.employeeStaffId : "",
@@ -521,6 +541,15 @@ export default function HRWorkspace() {
       {workspace.isLoading && <div className="py-20 text-center text-muted-foreground" data-testid="status-hr-loading">Loading HR workspace...</div>}
       {workspace.isError && <div className="py-20 text-center text-destructive" data-testid="status-hr-error">{errorMessage(workspace.error)}</div>}
       {error && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" data-testid="status-hr-action-error">{error}</div>}
+      {issuedCredential && (
+        <div className="flex flex-wrap items-center gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
+          <span>{issuedCredential.name}</span>
+          <span className="rounded-md border px-2 py-1 font-mono font-bold">{issuedCredential.code}</span>
+          <Button size="sm" variant="outline" onClick={() => emailCode(issuedCredential.staffId)} disabled={credentialBusy === issuedCredential.staffId}>
+            <Mail className="mr-1.5 h-3.5 w-3.5" />Email code
+          </Button>
+        </div>
+      )}
 
       {!workspace.isLoading && !workspace.isError && (
         <div className="flex flex-col md:flex-row gap-6 items-start">
@@ -705,13 +734,13 @@ export default function HRWorkspace() {
                                    </Button>
                                  );
                                })()}
-                               {actor?.role === "human_resources" && row.entity !== "hr-approvals" && (
+                                {actor?.role === "human_resources" && row.entity !== "hr-approvals" && (
                                  <Button size="sm" variant="outline" data-testid={`button-edit-hr-record-${row.id}`} onClick={() => openEditRecord(row)}>
                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                                   Edit
+                                    {row.entity === "hr-employee-records" && !state.employeeStaffId ? "Finish employee setup" : "Edit"}
                                  </Button>
                                )}
-                              {status === "draft" && (
+                               {status === "draft" && row.entity !== "hr-employee-records" && (
                                 <Button size="sm" variant="outline" data-testid={`button-advance-hr-record-${row.id}`} onClick={() => requestAction(row, "advance")} disabled={action.isPending}>
                                   Advance
                                 </Button>
@@ -880,6 +909,28 @@ export default function HRWorkspace() {
                   />}
                 </div>
               ))}
+              {selectedCategory === "hr-employee-records" && sectionValues.position === "Maintenance Worker" && (
+                <div className="space-y-2">
+                  <Label htmlFor="hr-field-maintenance-assignment">Maintenance assignment</Label>
+                  <select
+                    id="hr-field-maintenance-assignment"
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                    value={sectionValues.emergencyTruckDriver || ""}
+                    disabled={Boolean(editingRecord?.state.employeeStaffId)}
+                    onChange={(event) => setSectionValues((current) => ({
+                      ...current,
+                      emergencyTruckDriver: event.target.value,
+                      role: event.target.value === "true" ? "emergency" : "worker",
+                    }))}
+                    required
+                    data-testid="select-hr-maintenance-assignment"
+                  >
+                    <option value="">Select assignment</option>
+                    <option value="false">Regular maintenance</option>
+                    <option value="true">Truck driver</option>
+                  </select>
+                </div>
+              )}
               {selectedCategory !== "hr-approvals" && selectedCategory !== "hr-employee-records" ? <FormField control={form.control} name="employeeStaffId" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Employee</FormLabel>
@@ -1000,7 +1051,11 @@ export default function HRWorkspace() {
               <DialogFooter className="pt-2">
                 <Button type="button" variant="outline" data-testid="button-cancel-hr-record" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button type="submit" data-testid="button-submit-hr-record" disabled={create.isPending || update.isPending}>
-                  {editingRecord ? (update.isPending ? "Saving..." : "Save record") : (create.isPending ? "Creating..." : "Create record")}
+                  {editingRecord?.entity === "hr-employee-records" && !editingRecord.state.employeeStaffId
+                    ? "Complete employee and issue code"
+                    : editingRecord
+                      ? (update.isPending ? "Saving..." : "Save record")
+                      : (create.isPending ? "Creating..." : "Create record")}
                 </Button>
               </DialogFooter>
             </form>

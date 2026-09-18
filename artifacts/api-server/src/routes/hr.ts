@@ -157,7 +157,17 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
     const lastName = String(record.state["lastName"] || "").trim();
     const email = String(record.state["email"] || "").trim();
     const position = String(record.state["position"] || "").trim();
-    const role = String(record.state["role"] || "").trim();
+    let role = String(record.state["role"] || "").trim();
+    const maintenanceAssignment = req.body?.maintenanceAssignment === "truck"
+      ? "truck"
+      : req.body?.maintenanceAssignment === "regular"
+        ? "regular"
+        : "";
+    let emergencyTruckDriver = record.state["emergencyTruckDriver"] === true;
+    if (position === "Maintenance Worker" && maintenanceAssignment) {
+      emergencyTruckDriver = maintenanceAssignment === "truck";
+      role = emergencyTruckDriver ? "emergency" : "worker";
+    }
     const developments = Array.isArray(record.state["assignedDevelopments"])
       ? record.state["assignedDevelopments"].filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
       : [];
@@ -167,6 +177,14 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
         !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number]) ||
         !canIssueStaffAccountRole(role)) {
       throw Object.assign(new Error("Complete the employee name, email, role, and position first"), { status: 400 });
+    }
+    if (
+      emergencyTruckDriver && (role !== "emergency" || position !== "Maintenance Worker")
+    ) {
+      throw Object.assign(new Error("Truck designation is limited to emergency maintenance workers"), { status: 400 });
+    }
+    if (role === "emergency" && position === "Maintenance Worker" && !emergencyTruckDriver) {
+      throw Object.assign(new Error("Choose Truck driver or Regular maintenance"), { status: 400 });
     }
     const [organization] = await tx.select({
       staffLimit: organizations.staffLimit,
@@ -189,11 +207,24 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
     const staffId = randomUUID();
     const now = new Date();
     const name = `${firstName} ${lastName}`.trim();
+    let issuedName = name.replace(/^TRK-\d+\s+/i, "");
+    if (emergencyTruckDriver) {
+      const existingTruckDrivers = await tx.select({ name: staffAccounts.name }).from(staffAccounts).where(and(
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.role, "emergency"),
+        eq(staffAccounts.position, "Maintenance Worker"),
+      ));
+      const nextTruckNumber = existingTruckDrivers.reduce((highest, member) => {
+        const value = /^TRK-(\d+)\s+/i.exec(member.name)?.[1];
+        return value ? Math.max(highest, Number(value)) : highest;
+      }, 0) + 1;
+      issuedName = `TRK-${nextTruckNumber} ${issuedName}`;
+    }
     const code = await allocateStaffCode(tx, actor.tenantId, name);
     const [staff] = await tx.insert(staffAccounts).values({
       id: staffId,
       tenantId: actor.tenantId,
-      name,
+      name: issuedName,
       firstName,
       lastName,
       role,
@@ -213,6 +244,8 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
         employeeNumber,
         employeeStaffId: staffId,
         employmentStatus: "approved",
+        role,
+        emergencyTruckDriver,
         status: "in_progress",
         advanceAt: now.toISOString(),
       },
