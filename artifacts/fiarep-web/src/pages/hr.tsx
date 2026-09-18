@@ -9,6 +9,7 @@ import {
   useGetHrWorkspace,
   usePerformEntityAction,
   useUpdateEntityRecord,
+  StaffPosition,
   type EntityRecord,
 } from "@workspace/api-client-react";
 import { 
@@ -41,6 +42,10 @@ const categories = [
   ["hr-exits", "Exits"],
   ["hr-approvals", "Company approvals"],
 ] as const;
+
+const employeePositions = Object.values(StaffPosition).filter(
+  (position) => position !== "Other" && position !== "Borough Director",
+);
 
 type Category = typeof categories[number][0];
 type Draft = {
@@ -829,6 +834,7 @@ export default function HRWorkspace() {
                         ...current,
                         role: event.target.value,
                       }))}
+                      required
                     >
                       <option value="">Select role</option>
                       <option value="management">Management</option>
@@ -836,6 +842,26 @@ export default function HRWorkspace() {
                       <option value="inspector">Inspector</option>
                       <option value="procurement">Procurement</option>
                       <option value="emergency">Emergency</option>
+                    </select>
+                  ) : sectionField.key === "position" ? (
+                    <select
+                      id="hr-field-position"
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={sectionValues.position || ""}
+                      disabled={selectedCategory === "hr-employee-records" &&
+                        Boolean(editingRecord) &&
+                        !editingRecord?.state.employeeStaffId}
+                      onChange={(event) => setSectionValues((current) => ({
+                        ...current,
+                        position: event.target.value,
+                      }))}
+                      required
+                      data-testid="select-hr-position"
+                    >
+                      <option value="">Select position</option>
+                      {employeePositions.map((position) => (
+                        <option key={position} value={position}>{position}</option>
+                      ))}
                     </select>
                   ) : <Input
                     id={`hr-field-${sectionField.key}`}
