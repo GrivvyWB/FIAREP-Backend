@@ -14,10 +14,11 @@ interface FieldEvidenceDisplayProps {
 
 export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayProps) {
   // Extract all useful timestamps
+  const startedBy = state.startedByStaffName || state.assignedTo;
+  const completedBy = state.completedByStaffName || state.assignedTo;
   const primaryTimestamps = [
-    { label: "Arrival / En Route", value: state.arrivalAt || state.startedAt || state.onMyWayAt },
-    { label: "Started", value: state.startAt || state.startedAt },
-    { label: "Completed / Resolved", value: state.completedAt || state.resolvedAt },
+    { label: startedBy ? `Started by ${startedBy}` : "Started", value: state.startAt || state.startedAt || state.arrivalAt || state.onMyWayAt },
+    { label: completedBy ? `Completed by ${completedBy}` : "Completed", value: state.completeAt || state.completedAt || state.resolveAt || state.resolvedAt },
   ].filter(t => t.value); // we will render these if truthy
   const usedTimestampValues = new Set(primaryTimestamps.map((item) => String(item.value)));
   const otherTimestamps = Object.entries(state)
@@ -111,8 +112,8 @@ export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayPr
 
       {(arrivalGeo || completionGeo) && (
         <div className="grid grid-cols-2 gap-3 text-sm border-t pt-3">
-          {arrivalGeo && <GeoDisplay label="Arrival Location" geo={arrivalGeo} />}
-          {completionGeo && <GeoDisplay label="Completion Location" geo={completionGeo} />}
+          {arrivalGeo && <GeoDisplay label={startedBy ? `Start location · ${startedBy}` : "Start location"} geo={arrivalGeo} />}
+          {completionGeo && <GeoDisplay label={completedBy ? `Completion location · ${completedBy}` : "Completion location"} geo={completionGeo} />}
         </div>
       )}
 

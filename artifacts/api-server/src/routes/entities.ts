@@ -1535,6 +1535,14 @@ router.post(
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
   };
+  if (action === "start") {
+    state["startedByStaffId"] = actor.id;
+    state["startedByStaffName"] = actor.name;
+  }
+  if (action === "complete" || action === "resolve") {
+    state["completedByStaffId"] = actor.id;
+    state["completedByStaffName"] = actor.name;
+  }
   if (action === "release") {
     const existingUpdates = Array.isArray(current.state["updates"])
       ? current.state["updates"].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))

@@ -94,7 +94,7 @@ export default function FiarepVision() {
           </View>
 
           <View style={{ gap: 8 }}>
-            <View style={ui.line}><Text style={ui.lineK}>Suggested HPD code</Text><Text style={ui.lineV}>{result.hpCode}</Text></View>
+            <View style={ui.line}><Text style={ui.lineK}>Suggested FIA Code</Text><Text style={ui.lineV}>{result.hpCode}</Text></View>
             <View style={ui.line}><Text style={ui.lineK}>Recommended trade</Text><Text style={ui.lineV}>{result.trade}</Text></View>
             <View style={ui.line}><Text style={ui.lineK}>Priority</Text><Text style={ui.lineV}>{result.priority}</Text></View>
             <View style={ui.line}><Text style={ui.lineK}>Classification</Text><Text style={[ui.lineV, { color: cc.fg, fontWeight: '700' }]}>Class {cls}</Text></View>
