@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, listRoutedInspectionsFor, completeRoutedViolation, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, type BuildingViolation, type ResidentReport } from '../lib/store';
+import { getCurrentActor, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, type BuildingViolation, type ResidentReport } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -23,6 +23,8 @@ export default function MyJobs() {
   const [photos, setPhotos] = useState<PhotoEvidence[]>([]);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [releaseOpenId, setReleaseOpenId] = useState<string | null>(null);
+  const [releaseNote, setReleaseNote] = useState('');
   const canDelete = useDeletionPolicy();
 
   const load = useCallback(() => {
@@ -65,6 +67,34 @@ export default function MyJobs() {
       Alert.alert('Error', String(e && e.message ? e.message : e));
     } finally { setBusy(false); }
   }
+  async function releaseViolation(v: BuildingViolation) {
+    if (!releaseNote.trim()) {
+      Alert.alert('Add update', 'Provide an update before releasing this assignment.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await releaseRoutedViolation(v.id, releaseNote);
+      setReleaseOpenId(null); setReleaseNote(''); load();
+      Alert.alert('Assignment released', 'The violation is available for reassignment.');
+    } catch (e: any) {
+      Alert.alert('Error', String(e && e.message ? e.message : e));
+    } finally { setBusy(false); }
+  }
+  async function releaseResident(id: string) {
+    if (!releaseNote.trim()) {
+      Alert.alert('Add update', 'Provide an update before releasing this assignment.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await releaseResidentReport(id, releaseNote);
+      setReleaseOpenId(null); setReleaseNote(''); load();
+      Alert.alert('Assignment released', 'The request is available for reassignment.');
+    } catch (e: any) {
+      Alert.alert('Error', String(e && e.message ? e.message : e));
+    } finally { setBusy(false); }
+  }
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
@@ -87,6 +117,16 @@ export default function MyJobs() {
                   <Text style={{ color: '#c0392b', fontWeight: '600', fontSize: 13 }}>Remove (cleared by management)</Text>
                 </Pressable>
               )}
+              {releaseOpenId === r.id ? (
+                <View style={{ gap: 8, marginTop: 6 }}>
+                  <Text style={ui.label}>Update before release</Text>
+                  <TextInput style={[ui.input, { minHeight: 60, textAlignVertical: 'top' }]} value={releaseNote} onChangeText={setReleaseNote} placeholder="What is the current update?" multiline />
+                  <Pressable style={[ui.btn, busy && { opacity: 0.6 }]} onPress={() => releaseResident(r.id)} disabled={busy}><Text style={ui.btnText}>Release assignment</Text></Pressable>
+                  <Pressable onPress={() => { setReleaseOpenId(null); setReleaseNote(''); }}><Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>Cancel</Text></Pressable>
+                </View>
+              ) : (
+                <Pressable style={ui.btnOutline} onPress={() => { setReleaseOpenId(r.id); setReleaseNote(''); }}><Text style={ui.btnOutlineText}>Release with update</Text></Pressable>
+              )}
             </View>
           ))}
           <Text style={[ui.label, { marginTop: 16, fontWeight: '700' }]}>Inspection repairs</Text>
@@ -105,6 +145,16 @@ export default function MyJobs() {
           {!!v.code && <Text style={ui.listSub}>Code {v.code}{v.codeDesc ? ' \u00b7 ' + v.codeDesc : ''}</Text>}
           {!!v.notes && <Text style={{ fontSize: 14 }}>{v.notes}</Text>}
           <Text style={ui.listSub}>Assigned by {v.approvedBy || 'management'}  {fmt(v.routedAt || '')}</Text>
+          {releaseOpenId === v.id ? (
+            <View style={{ gap: 8, marginTop: 6 }}>
+              <Text style={ui.label}>Update before release</Text>
+              <TextInput style={[ui.input, { minHeight: 60, textAlignVertical: 'top' }]} value={releaseNote} onChangeText={setReleaseNote} placeholder="What is the current update?" multiline />
+              <Pressable style={[ui.btn, busy && { opacity: 0.6 }]} onPress={() => releaseViolation(v)} disabled={busy}><Text style={ui.btnText}>Release assignment</Text></Pressable>
+              <Pressable onPress={() => { setReleaseOpenId(null); setReleaseNote(''); }}><Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>Cancel</Text></Pressable>
+            </View>
+          ) : (
+            <Pressable style={ui.btnOutline} onPress={() => { setReleaseOpenId(v.id); setReleaseNote(''); }}><Text style={ui.btnOutlineText}>Release with update</Text></Pressable>
+          )}
           {v.clearedByMgmt && canDelete && (
             <Pressable onPress={() => Alert.alert('Remove this job?', 'Management cleared it. Remove it from your list?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { await deleteBuildingViolation(v.id); load(); } }])}>
               <Text style={{ color: '#c0392b', fontWeight: '600', fontSize: 13 }}>Remove (cleared by management)</Text>

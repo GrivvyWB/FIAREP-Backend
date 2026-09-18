@@ -9,6 +9,8 @@ HR authority is not unlimited. Pay changes, discipline, termination, layoffs, an
 
 The HR Workspace is exclusively for the Human Resources role. Management, administrators, supervisors, and other roles must not see it or access its workspace endpoint directly.
 
+HR lifecycle notifications also stay with Human Resources. Supervisors and general Management must not receive internal HR record status alerts.
+
 For leave, visibility, notifications, and decisions are limited to HR, the employee, and the employee's immediate supervisor. Upper management and administrators do not receive or review staff leave requests merely because of their rank. HR decisions require confirmation with HR's own access code.
 
 When an organization enables deletion in Platform Workspace, HR may permanently delete staff accounts within its authorized employee scope. This does not grant HR permission to delete unrelated operational records, its own account, or accounts in another organization.

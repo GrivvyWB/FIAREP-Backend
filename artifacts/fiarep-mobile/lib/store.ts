@@ -914,6 +914,12 @@ export async function assignResidentReport(
   await addNotification(displayName, 'New job assigned', 'Unit ' + r.unit + (r.development ? ' \u00b7 ' + r.development : ''), id);
 }
 
+export async function releaseResidentReport(id: string, update: string): Promise<void> {
+  const text = update.trim();
+  if (!text) throw new Error('An update is required before releasing this assignment.');
+  await performEntityAction('resident-reports', id, 'release', { update: text });
+}
+
 export async function addResidentUpdate(
   id: string,
   status: ResidentReport['status'],
@@ -3679,7 +3685,7 @@ export async function addBuildingViolation(
 // Management approves a logged inspection, then routes it to a specific staff
 // member. Class C is flagged in the notification but any class can route. The
 // full violation payload travels with it — the recipient re-enters nothing.
-export async function approveAndRouteViolation(id: string, toName: string, toPosition: string): Promise<BuildingViolation | null> {
+export async function approveAndRouteViolation(id: string, toStaffId: string, toName: string, toPosition: string): Promise<BuildingViolation | null> {
   const d = await db();
   await ensureBuildingViolTable(d);
   const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM building_violations WHERE id = ?', id);
@@ -3699,6 +3705,21 @@ export async function approveAndRouteViolation(id: string, toName: string, toPos
   };
   await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(next), next.id);
   await queueMutation('building-violations', id, next);
+  try {
+    await performEntityAction('building-violations', id, 'route', {
+      assignedStaffId: toStaffId,
+    });
+  } catch {
+    const queued = {
+      ...next,
+      _pendingWorkflowActions: [
+        ...((v as any)._pendingWorkflowActions || []),
+        { action: 'route', body: { assignedStaffId: toStaffId } },
+      ],
+    };
+    await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(queued), id);
+    await queueMutation('building-violations', id, queued);
+  }
   const flag = next.hazardClass === 'C' ? '\u26a0\ufe0f Class C \u2014 ' : '';
   const msg = (next.routedToPosition || '').toLowerCase() === 'cpm' ? 'Approved inspection \u2014 build scope' : 'Approved inspection \u2014 work assignment';
   if (next.routedTo) {
@@ -3810,6 +3831,12 @@ export async function completeRoutedViolation(
     (next.completedBy || 'Worker') + ' \u00b7 ' + next.building + '  \u00b7 ' + next.violationNo, next.id);
   await logAudit('worker', next.completedBy || '', 'Repair complete', next.building + ' \u00b7 ' + next.violationNo, next.id);
   return next;
+}
+
+export async function releaseRoutedViolation(id: string, update: string): Promise<void> {
+  const text = update.trim();
+  if (!text) throw new Error('An update is required before releasing this assignment.');
+  await performEntityAction('building-violations', id, 'release', { update: text });
 }
 
 export async function listBuildingViolations(building: string, violationNo: string = ''): Promise<BuildingViolation[]> {

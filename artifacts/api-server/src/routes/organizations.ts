@@ -43,6 +43,13 @@ router.post("/v1/platform/organizations/research", async (req, res) => {
 
 export const ORGANIZATION_CODE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 export const ORGANIZATION_CODE_ATTEMPTS = 20;
+const DEFAULT_HR_EMAIL = "fiarep@outlook.com";
+
+function normalizeHrEmail(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const email = value.trim().toLowerCase();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) && email.length <= 320 ? email : null;
+}
 
 export function generateOrganizationCode(nextIndex = () => randomInt(ORGANIZATION_CODE_ALPHABET.length)): string {
   let suffix = "";
@@ -300,6 +307,13 @@ router.post("/v1/platform/organizations", async (req, res) => {
   }
   const status = body["status"] === "suspended" || body["status"] === "expired" || body["status"] === "active" ? body["status"] : "active";
   const directorName = typeof body["directorName"] === "string" ? body["directorName"].trim() : "";
+  const hrEmail = body["hrEmail"] === undefined
+    ? DEFAULT_HR_EMAIL
+    : normalizeHrEmail(body["hrEmail"]);
+  if (!hrEmail) {
+    res.status(400).json({ error: "A valid HR email is required" });
+    return;
+  }
   if ("directorCode" in body) {
     res.status(400).json({ error: "Director codes are generated automatically" });
     return;
@@ -330,7 +344,7 @@ router.post("/v1/platform/organizations", async (req, res) => {
   try {
     const result = await db.transaction(async (tx) => {
       const id = await allocateOrganizationCode(tx);
-      const [created] = await tx.insert(organizations).values({ id, name, status, startsAt, endsAt, staffLimit: staffLimit as number | null, propertyLimit: propertyLimit as number | null, features, unrestricted }).returning();
+      const [created] = await tx.insert(organizations).values({ id, name, status, startsAt, endsAt, staffLimit: staffLimit as number | null, propertyLimit: propertyLimit as number | null, hrEmail, features, unrestricted }).returning();
       const generatedDirectorCode = await allocateStaffCode(tx, id, directorName);
       const [director] = await tx.insert(staffAccounts).values({
         id: randomUUID(), tenantId: id, name: directorName, code: generatedDirectorCode,
@@ -531,7 +545,7 @@ router.patch("/v1/platform/organizations/:id", async (req, res) => {
   }
   const [before] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
   if (!before) { res.status(404).json({ error: "Organization not found" }); return; }
-  const allowed = ["name", "status", "startsAt", "endsAt", "staffLimit", "propertyLimit", "features", "unrestricted"] as const;
+  const allowed = ["name", "status", "startsAt", "endsAt", "staffLimit", "propertyLimit", "hrEmail", "features", "unrestricted"] as const;
   if (Object.keys(body).some((key) => !allowed.includes(key as typeof allowed[number]))) { res.status(400).json({ error: "Unknown organization field" }); return; }
   const updates: Partial<typeof organizations.$inferInsert> = {};
   if ("name" in body) { if (typeof body["name"] !== "string" || !body["name"].trim()) { res.status(400).json({ error: "Organization name is required" }); return; } updates.name = body["name"].trim(); }
@@ -541,6 +555,11 @@ router.patch("/v1/platform/organizations/:id", async (req, res) => {
   }
   for (const key of ["startsAt", "endsAt"] as const) if (key in body) { const value = body[key] == null ? null : new Date(String(body[key])); if (value && Number.isNaN(value.getTime())) { res.status(400).json({ error: "Invalid date" }); return; } updates[key] = value; }
   for (const key of ["staffLimit", "propertyLimit"] as const) if (key in body) { const value = body[key]; if (value !== null && (!Number.isInteger(value) || (value as number) < 0)) { res.status(400).json({ error: "Invalid limit" }); return; } updates[key] = value as number | null; }
+  if ("hrEmail" in body) {
+    const hrEmail = normalizeHrEmail(body["hrEmail"]);
+    if (!hrEmail) { res.status(400).json({ error: "A valid HR email is required" }); return; }
+    updates.hrEmail = hrEmail;
+  }
   if ("features" in body) {
     if (!body["features"] || typeof body["features"] !== "object" || Array.isArray(body["features"])) {
       res.status(400).json({ error: "Invalid features" });

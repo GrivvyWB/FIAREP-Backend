@@ -13,6 +13,7 @@ function organization(overrides: Partial<Organization> = {}): Organization {
     endsAt: null,
     staffLimit: null,
     propertyLimit: null,
+    hrEmail: "fiarep@outlook.com",
     features: {},
     unrestricted: false,
     createdAt: now,

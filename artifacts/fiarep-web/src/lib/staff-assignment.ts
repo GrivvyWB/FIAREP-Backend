@@ -180,7 +180,11 @@ export function groupTeamDirectoryByTitleAndLocation(
   );
   const titles = new Map<string, Staff[]>();
   for (const member of regularPeople) {
-    const title = member.role === "procurement" ? "Procurement" : titleFamily(member.position);
+    const title = member.developments.length === 0
+      ? "All developments"
+      : member.role === "procurement"
+        ? "Procurement"
+        : titleFamily(member.position);
     titles.set(title, [...(titles.get(title) || []), member]);
   }
   const groups = [...titles.entries()]

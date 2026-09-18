@@ -25,6 +25,7 @@ export interface Organization {
   endsAt?: string | null;
   staffLimit?: number | null;
   propertyLimit?: number | null;
+  hrEmail: string;
   features: OrganizationFeatures;
   unrestricted: boolean;
   createdAt: string;
@@ -54,6 +55,7 @@ export interface OrganizationInput {
   endsAt?: string;
   staffLimit?: number | null;
   propertyLimit?: number | null;
+  hrEmail?: string;
   features?: OrganizationInputFeatures;
   unrestricted?: boolean;
   /** @minLength 1 */
@@ -78,6 +80,7 @@ export interface OrganizationUpdate {
   endsAt?: string | null;
   staffLimit?: number | null;
   propertyLimit?: number | null;
+  hrEmail?: string;
   features?: OrganizationUpdateFeatures;
   unrestricted?: boolean;
 }
@@ -682,6 +685,7 @@ export type HRStaff = Staff & ({
      */
   code?: string;
   codeVisibleUntil?: string;
+  codeEmailedAt?: string | null;
 });
 
 export interface HRAudit {

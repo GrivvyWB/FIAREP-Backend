@@ -836,6 +836,7 @@ const ASSIGNMENT_REQUIRED_ACTIONS = new Set([
   "on-my-way",
   "progress",
   "complete",
+  "release",
 ]);
 
 /**
@@ -855,6 +856,7 @@ export function canPerformAssignedWorkflowAction(
     ![
       "resident-reports",
       "building-violations",
+      "manpower-requests",
       "elevator-jobs",
       "emergency-jobs",
     ].includes(entity)
@@ -896,6 +898,7 @@ export function canPerformEntityAction(
       ["advance", "close"].includes(action);
   }
   if (entity === "manpower-requests") {
+    if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     return (
       state["receiverSupervisorId"] === actor.id &&
       (actor.role === "management" || actor.role === "administrator" || isSupervisorPosition(actor)) &&
@@ -956,6 +959,7 @@ export function canPerformEntityAction(
 
   if (entity === "resident-reports") {
     if (action === "assign") return isAssignmentAuthority(actor);
+    if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     if (action === "clear") return isManagement;
     if (action === "resolve") return false;
      return ["start", "complete"].includes(action) &&
@@ -965,6 +969,7 @@ export function canPerformEntityAction(
 
   if (entity === "building-violations") {
     if (["approve", "route", "clear"].includes(action)) return isManagement;
+    if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     return action === "complete" &&
       (isFieldStaff || isSupervisor) &&
       canPerformAssignedWorkflowAction(actor, entity, action, state);
@@ -1124,6 +1129,7 @@ export function isValidEntityTransition(
     },
     "resident-reports": {
       assign: ["submitted"],
+      release: ["assigned", "in_progress"],
       start: ["assigned"],
       resolve: ["in_progress"],
       clear: ["resolved"],
@@ -1136,10 +1142,12 @@ export function isValidEntityTransition(
       complete: ["routed"],
       clear: ["done"],
       "approve-work": ["done"],
+      release: ["routed"],
     },
     "manpower-requests": {
       assign: ["pending"],
       dispatch: ["assigned"],
+      release: ["assigned", "dispatched"],
     },
     "leave-requests": {
       approve: ["pending"],

@@ -30,6 +30,7 @@ import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
+const CODE_EMAIL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 router.use("/v1/staff", requireAuth);
 
 function safe(
@@ -525,6 +526,17 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     return;
   }
   const updatedResult = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-code-email:${actor.tenantId}:${target.id}`}))`);
+    const [current] = await tx.select().from(staffAccounts).where(and(
+      eq(staffAccounts.id, target.id),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    )).limit(1);
+    const nextEmailAt = current?.codeEmailedAt
+      ? new Date(current.codeEmailedAt.getTime() + CODE_EMAIL_COOLDOWN_MS)
+      : null;
+    if (nextEmailAt && nextEmailAt.getTime() > Date.now()) {
+      throw Object.assign(new Error("Next email in 24 hrs for code"), { status: 429, nextEmailAt });
+    }
     const code = await allocateStaffCode(tx, actor.tenantId, target.name);
     const [updated] = await tx
       .update(staffAccounts)
@@ -547,10 +559,21 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
       employeeName: updated.name,
       code: updated.code,
     });
-    return { updated };
+    const [emailed] = await tx.update(staffAccounts).set({
+      codeEmailedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(and(
+      eq(staffAccounts.id, updated.id),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    )).returning();
+    if (!emailed) throw Object.assign(new Error("Staff account not found"), { status: 404 });
+    return { updated: emailed };
   }).catch((error: any) => {
-    if (error?.status === 404) {
-      res.status(404).json({ error: error.message });
+    if (error?.status) {
+      res.status(error.status).json({
+        error: error.message,
+        ...(error.nextEmailAt ? { nextEmailAt: error.nextEmailAt } : {}),
+      });
       return null;
     }
     res.status(502).json({ error: "The replacement code email could not be sent. The existing code still works." });

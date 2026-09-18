@@ -42,6 +42,7 @@ const orgSchema = z.object({
   endsAt: z.string().optional().nullable(),
   staffLimit: z.number().nullable().optional(),
   propertyLimit: z.number().nullable().optional(),
+  hrEmail: z.string().email("A valid HR email is required"),
   unrestricted: z.boolean().default(false),
   directorName: z.string().optional(),
 });
@@ -111,6 +112,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       endsAt: "",
       staffLimit: null,
       propertyLimit: null,
+      hrEmail: "fiarep@outlook.com",
       unrestricted: false,
       directorName: "",
     },
@@ -143,6 +145,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         endsAt: organization.endsAt ? localDateTimeValue(organization.endsAt) : "",
         staffLimit: organization.staffLimit,
         propertyLimit: organization.propertyLimit,
+        hrEmail: organization.hrEmail,
         unrestricted: organization.unrestricted,
         directorName: "",
       });
@@ -174,6 +177,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         endsAt: "",
         staffLimit: null,
         propertyLimit: null,
+        hrEmail: "fiarep@outlook.com",
         unrestricted: false,
         directorName: "",
       });
@@ -200,6 +204,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         endsAt: "",
         staffLimit: null,
         propertyLimit: null,
+        hrEmail: "fiarep@outlook.com",
         unrestricted: false,
         directorName: "",
       });
@@ -242,6 +247,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         endsAt: values.endsAt ? new Date(values.endsAt).toISOString() : undefined,
         staffLimit: values.staffLimit || null,
         propertyLimit: values.propertyLimit || null,
+        hrEmail: values.hrEmail.trim(),
         unrestricted: values.unrestricted,
         directorName: values.directorName || undefined,
         features: {
@@ -446,6 +452,17 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                     <FormControl>
                       <Input {...field} />
                     </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <FormField
+                control={form.control}
+                name="hrEmail"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel className="text-slate-700 font-semibold">HR email</FormLabel>
+                    <FormControl><Input type="email" {...field} /></FormControl>
                     <FormMessage />
                   </FormItem>
                 )}

@@ -18,6 +18,7 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 const router: IRouter = Router();
 router.use("/v1/hr", requireAuth);
 const CODE_WINDOW_MS = 24 * 60 * 60 * 1000;
+const CODE_EMAIL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
 function requireHr(res: Parameters<typeof actorFrom>[0]) {
   const actor = actorFrom(res);
@@ -272,28 +273,51 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
 router.post("/v1/hr/staff/:id/send-code", async (req, res): Promise<void> => {
   const actor = requireHr(res);
   if (!actor) return;
-  const [staff] = await db.select().from(staffAccounts).where(and(
-    eq(staffAccounts.id, req.params["id"]!),
-    eq(staffAccounts.tenantId, actor.tenantId),
-  )).limit(1);
-  if (!staff || !staff.codeIssuedAt ||
-      staff.codeIssuedAt.getTime() + CODE_WINDOW_MS <= Date.now()) {
-    res.status(409).json({ error: "The code is no longer visible. Issue a replacement code." });
-    return;
-  }
-  const [record] = await db.select().from(entityRecords).where(and(
-    eq(entityRecords.tenantId, actor.tenantId),
-    eq(entityRecords.entity, "hr-employee-records"),
-    eq(entityRecords.deleted, false),
-    sql`${entityRecords.state}->>'employeeStaffId' = ${staff.id}`,
-  )).limit(1);
-  const email = String(record?.state["email"] || "").trim();
-  if (!email.includes("@")) {
-    res.status(400).json({ error: "Add the employee email address before sending the code" });
-    return;
-  }
-  await emailStaffAccessCode({ email, employeeName: staff.name, code: staff.code });
-  await audit(actor, "staff.code_emailed", `Emailed access code to ${staff.name}`, staff.id);
+  const result = await db.transaction(async (tx) => {
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-code-email:${actor.tenantId}:${req.params["id"]}`}))`);
+    const [staff] = await tx.select().from(staffAccounts).where(and(
+      eq(staffAccounts.id, req.params["id"]!),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    )).limit(1);
+    if (!staff || !staff.codeIssuedAt ||
+        staff.codeIssuedAt.getTime() + CODE_WINDOW_MS <= Date.now()) {
+      throw Object.assign(new Error("The code is no longer visible. Issue a replacement code."), { status: 409 });
+    }
+    const nextEmailAt = staff.codeEmailedAt
+      ? new Date(staff.codeEmailedAt.getTime() + CODE_EMAIL_COOLDOWN_MS)
+      : null;
+    if (nextEmailAt && nextEmailAt.getTime() > Date.now()) {
+      throw Object.assign(new Error("Next email in 24 hrs for code"), { status: 429, nextEmailAt });
+    }
+    const [record] = await tx.select().from(entityRecords).where(and(
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.entity, "hr-employee-records"),
+      eq(entityRecords.deleted, false),
+      sql`${entityRecords.state}->>'employeeStaffId' = ${staff.id}`,
+    )).limit(1);
+    const email = String(record?.state["email"] || "").trim();
+    if (!email.includes("@")) {
+      throw Object.assign(new Error("Add the employee email address before sending the code"), { status: 400 });
+    }
+    await emailStaffAccessCode({ email, employeeName: staff.name, code: staff.code });
+    const [updated] = await tx.update(staffAccounts).set({
+      codeEmailedAt: new Date(),
+      updatedAt: new Date(),
+    }).where(and(eq(staffAccounts.id, staff.id), eq(staffAccounts.tenantId, actor.tenantId))).returning();
+    if (!updated) throw Object.assign(new Error("Staff account not found"), { status: 404 });
+    return { staff: updated };
+  }).catch((error: any) => {
+    if (error?.status) {
+      res.status(error.status).json({
+        error: error.message,
+        ...(error.nextEmailAt ? { nextEmailAt: error.nextEmailAt } : {}),
+      });
+      return null;
+    }
+    throw error;
+  });
+  if (!result) return;
+  await audit(actor, "staff.code_emailed", `Emailed access code to ${result.staff.name}`, result.staff.id);
   res.status(204).end();
 });
 

@@ -7,7 +7,7 @@ Employee intake starts in HR Workspace as an unlinked draft containing the emplo
 
 For Maintenance Worker intake, Team must offer Regular maintenance or Truck driver before generation. Regular maintenance creates a Worker account; Truck driver creates an Emergency account with the next sequential `TRK-` label.
 
-The sign-in code is visible inside FIAREP for 24 hours after issuance, then hidden. Only HR may replace it, and replacement codes are emailed to the employee.
+The sign-in code is visible inside FIAREP for 24 hours after issuance, then hidden. Only HR may replace it, and replacement codes are emailed to the employee. After a successful code email, every code-email path is locked for 24 hours; failed delivery must not start the lock.
 
 **Why:** HR enters employee information once, but Team owns employee-number and sign-in-code generation. Users must never type or invent an employee number.
 

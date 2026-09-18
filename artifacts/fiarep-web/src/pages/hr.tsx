@@ -367,6 +367,7 @@ export default function HRWorkspace() {
         const body = await response.json().catch(() => null);
         throw new Error(body?.error || "Unable to email the employee code.");
       }
+      await refresh();
     } catch (reason) {
       setError(errorMessage(reason));
     } finally {
@@ -672,17 +673,23 @@ export default function HRWorkspace() {
                                    codeVisibleUntil?: string;
                                  }) | undefined;
                                  if (!member) return null;
-                                 return member.code ? (
+                                  const emailCoolingDown = Boolean(member.codeEmailedAt &&
+                                    new Date(member.codeEmailedAt).getTime() + 24 * 60 * 60 * 1000 > Date.now());
+                                  return member.code ? (
                                    <>
                                      <span className="rounded-md border px-2 py-1 font-mono text-sm font-bold">{member.code}</span>
-                                     <Button size="sm" variant="outline" onClick={() => emailCode(member.id)} disabled={credentialBusy === member.id}>
+                                      <Button size="sm" variant="outline" onClick={() => emailCode(member.id)} disabled={credentialBusy === member.id || emailCoolingDown} className={emailCoolingDown ? "text-muted-foreground" : undefined}>
                                        <Mail className="mr-1.5 h-3.5 w-3.5" />Email code
                                      </Button>
+                                      {emailCoolingDown && <span className="text-xs text-muted-foreground">Next email in 24 hrs for code</span>}
                                    </>
                                  ) : (
-                                   <Button size="sm" variant="outline" onClick={() => resetAndEmailCode(member.id)} disabled={credentialBusy === member.id}>
-                                     <KeyRound className="mr-1.5 h-3.5 w-3.5" />New code
-                                   </Button>
+                                    <>
+                                      <Button size="sm" variant="outline" onClick={() => resetAndEmailCode(member.id)} disabled={credentialBusy === member.id || emailCoolingDown} className={emailCoolingDown ? "text-muted-foreground" : undefined}>
+                                        <KeyRound className="mr-1.5 h-3.5 w-3.5" />New code
+                                      </Button>
+                                      {emailCoolingDown && <span className="text-xs text-muted-foreground">Next email in 24 hrs for code</span>}
+                                    </>
                                  );
                                })()}
                                 {actor?.role === "human_resources" && row.entity !== "hr-approvals" && (

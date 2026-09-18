@@ -710,6 +710,11 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Code email is cooling down
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/staff/{id}/approve:
     post:
       operationId: approveStaff
@@ -832,6 +837,11 @@ paths:
               schema: { $ref: "#/components/schemas/Error" }
         "409":
           description: Code visibility expired
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "429":
+          description: Code email is cooling down
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
@@ -1341,7 +1351,7 @@ components:
   schemas:
     Organization:
       type: object
-      required: [id, name, status, unrestricted, features, createdAt, updatedAt]
+      required: [id, name, status, hrEmail, unrestricted, features, createdAt, updatedAt]
       properties:
         id: { type: string, description: System-generated organization code (ORG-XXXXXX) for new organizations; legacy organization IDs remain valid }
         name: { type: string }
@@ -1350,6 +1360,7 @@ components:
         endsAt: { type: string, format: date-time, nullable: true }
         staffLimit: { type: integer, nullable: true }
         propertyLimit: { type: integer, nullable: true }
+        hrEmail: { type: string, format: email }
         features: { type: object, additionalProperties: true }
         unrestricted: { type: boolean }
         createdAt: { type: string, format: date-time }
@@ -1372,6 +1383,7 @@ components:
         endsAt: { type: string, format: date-time }
         staffLimit: { type: integer, nullable: true }
         propertyLimit: { type: integer, nullable: true }
+        hrEmail: { type: string, format: email }
         features: { type: object, additionalProperties: true }
         unrestricted: { type: boolean }
         directorName: { type: string, minLength: 1 }
@@ -1384,6 +1396,7 @@ components:
         endsAt: { type: string, format: date-time, nullable: true }
         staffLimit: { type: integer, nullable: true }
         propertyLimit: { type: integer, nullable: true }
+        hrEmail: { type: string, format: email }
         features: { type: object, additionalProperties: true }
         unrestricted: { type: boolean }
     TimeClockConfig:
@@ -1801,6 +1814,7 @@ components:
             hrNotes: { type: string, nullable: true }
             code: { type: string, minLength: 4, maxLength: 4 }
             codeVisibleUntil: { type: string, format: date-time }
+            codeEmailedAt: { type: string, format: date-time, nullable: true }
     HRAudit:
       type: object
       required: [id, actorRole, actorName, action, detail, at]

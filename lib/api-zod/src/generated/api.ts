@@ -395,6 +395,7 @@ export const ListOrganizationsResponseItem = zod.object({
   "endsAt": zod.coerce.date().nullish(),
   "staffLimit": zod.number().int().nullish(),
   "propertyLimit": zod.number().int().nullish(),
+  "hrEmail": zod.string().email(),
   "features": zod.record(zod.string(), zod.unknown()),
   "unrestricted": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -426,6 +427,7 @@ export const CreateOrganizationBody = zod.object({
   "endsAt": zod.coerce.date().optional(),
   "staffLimit": zod.number().int().nullish(),
   "propertyLimit": zod.number().int().nullish(),
+  "hrEmail": zod.string().email().optional(),
   "features": zod.record(zod.string(), zod.unknown()).optional(),
   "unrestricted": zod.boolean().optional(),
   "directorName": zod.string().min(1)
@@ -445,6 +447,7 @@ export const CreateOrganizationResponse = zod.object({
   "endsAt": zod.coerce.date().nullish(),
   "staffLimit": zod.number().int().nullish(),
   "propertyLimit": zod.number().int().nullish(),
+  "hrEmail": zod.string().email(),
   "features": zod.record(zod.string(), zod.unknown()),
   "unrestricted": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -491,6 +494,7 @@ export const UpdateOrganizationBody = zod.object({
   "endsAt": zod.coerce.date().nullish(),
   "staffLimit": zod.number().int().nullish(),
   "propertyLimit": zod.number().int().nullish(),
+  "hrEmail": zod.string().email().optional(),
   "features": zod.record(zod.string(), zod.unknown()).optional(),
   "unrestricted": zod.boolean().optional()
 })
@@ -503,6 +507,7 @@ export const UpdateOrganizationResponse = zod.object({
   "endsAt": zod.coerce.date().nullish(),
   "staffLimit": zod.number().int().nullish(),
   "propertyLimit": zod.number().int().nullish(),
+  "hrEmail": zod.string().email(),
   "features": zod.record(zod.string(), zod.unknown()),
   "unrestricted": zod.boolean(),
   "createdAt": zod.coerce.date(),
@@ -932,7 +937,8 @@ export const GetHrWorkspaceResponse = zod.object({
 }).and(zod.object({
   "hrNotes": zod.string().nullish(),
   "code": zod.string().min(getHrWorkspaceResponseStaffItemTwoCodeMin).max(getHrWorkspaceResponseStaffItemTwoCodeMax).optional(),
-  "codeVisibleUntil": zod.coerce.date().optional()
+  "codeVisibleUntil": zod.coerce.date().optional(),
+  "codeEmailedAt": zod.coerce.date().nullish()
 }))),
   "records": zod.array(zod.object({
   "id": zod.string(),

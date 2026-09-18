@@ -33,6 +33,7 @@ import {
   validLeaveRequestDuration,
   withInitialWorkflowState,
   procurementRecordAllowed,
+  normalizeAssignment,
 } from "../lib/domain";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -847,6 +848,15 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   if (
+    ["resident-reports", "building-violations", "manpower-requests"].includes(entity) &&
+    hasAssignmentFields(patch)
+  ) {
+    res.status(403).json({
+      error: "Assignments must be changed through the dedicated assign action",
+    });
+    return;
+  }
+  if (
     hasAssignmentFields(patch) &&
     actor.role !== "management" &&
     actor.role !== "administrator"
@@ -874,6 +884,17 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     !(await canReadRecordForActor(actor, current))
   ) {
     res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  if (
+    ["resident-reports", "building-violations", "manpower-requests"].includes(entity) &&
+    hasAssignmentFields(patch) &&
+    normalizeAssignment(current.state).assignedStaffId &&
+    patch["assignedStaffId"] !== normalizeAssignment(current.state).assignedStaffId
+  ) {
+    res.status(409).json({
+      error: "This record is assigned. The current assignee must release it with an update before reassignment.",
+    });
     return;
   }
   if (entity === "hr-approvals" &&
@@ -1090,6 +1111,7 @@ router.post(
     },
     "resident-reports": {
       assign: "assigned",
+      release: "submitted",
       start: "in_progress",
       resolve: "resolved",
       clear: "resolved",
@@ -1100,12 +1122,14 @@ router.post(
       approve: "approved",
       route: "routed",
       complete: "done",
+      release: "approved",
       clear: "done",
       "approve-work": "work_approved",
     },
     "manpower-requests": {
       assign: "assigned",
       dispatch: "dispatched",
+      release: "pending",
     },
     "leave-requests": {
       approve: "Approved",
@@ -1182,8 +1206,12 @@ router.post(
       close: "closed",
     },
   };
-  const nextStatus = transitions[entity]?.[action];
+  let nextStatus = transitions[entity]?.[action];
   if (!nextStatus) {
+    res.status(400).json({ error: "Unsupported workflow action" });
+    return;
+  }
+  if (action === "release" && !["resident-reports", "building-violations", "manpower-requests"].includes(entity)) {
     res.status(400).json({ error: "Unsupported workflow action" });
     return;
   }
@@ -1195,8 +1223,10 @@ router.post(
   if (
     hasAssignmentFields(body) &&
     !(
-      ["resident-reports", "manpower-requests"].includes(entity) &&
-      action === "assign" &&
+      (
+        (["resident-reports", "manpower-requests"].includes(entity) && action === "assign") ||
+        (entity === "building-violations" && action === "route")
+      ) &&
       Object.keys(body)
         .filter((key) => ASSIGNMENT_FIELDS.has(key))
         .every((key) => key === "assignedStaffId" || key === "assignedTo")
@@ -1347,9 +1377,56 @@ router.post(
     });
     return;
   }
+  if (
+    action === "assign" &&
+    ["resident-reports", "building-violations", "manpower-requests"].includes(entity) &&
+    normalizeAssignment(current.state).assignedStaffId
+  ) {
+    res.status(409).json({
+      error: "This record is already assigned. The current assignee must release it with an update before reassignment.",
+    });
+    return;
+  }
+  if (
+    entity === "building-violations" &&
+    action === "route" &&
+    normalizeAssignment(current.state).assignedStaffId
+  ) {
+    res.status(409).json({
+      error: "This violation is already assigned. The current assignee must release it with an update before rerouting.",
+    });
+    return;
+  }
+  if (action === "release") {
+    const update = typeof body["update"] === "string" ? body["update"].trim() : "";
+    if (update.length < 3) {
+      res.status(400).json({ error: "A non-empty update is required before releasing this assignment" });
+      return;
+    }
+  }
   if (entity === "resident-reports" && action === "assign") {
     const assignedStaffId = typeof body["assignedStaffId"] === "string"
       ? body["assignedStaffId"]
+      : "";
+    const [target] = assignedStaffId
+      ? await db.select().from(staffAccounts).where(and(
+          eq(staffAccounts.id, assignedStaffId),
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+        )).limit(1)
+      : [];
+    if (!target || !canAssignStaff(actor, target, current.development)) {
+      res.status(403).json({ error: "Select an operational staff member from your authorized group" });
+      return;
+    }
+    body["assignedStaffId"] = target.id;
+    body["assignedTo"] = target.name;
+    delete body["assignedStaffName"];
+    delete body["assignedToName"];
+  }
+  if (entity === "building-violations" && action === "route") {
+    const assignedStaffId = typeof body["assignedStaffId"] === "string"
+      ? body["assignedStaffId"].trim()
       : "";
     const [target] = assignedStaffId
       ? await db.select().from(staffAccounts).where(and(
@@ -1448,6 +1525,8 @@ router.post(
   delete persistedBody["authorizationCode"];
   const reviewNote = typeof body["note"] === "string" ? body["note"].trim() : "";
   delete persistedBody["note"];
+  const releaseUpdate = typeof persistedBody["update"] === "string" ? String(persistedBody["update"]).trim() : "";
+  delete persistedBody["update"];
   const now = new Date();
   const state: Record<string, unknown> = {
     ...current.state,
@@ -1456,6 +1535,28 @@ router.post(
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
   };
+  if (action === "release") {
+    const existingUpdates = Array.isArray(current.state["updates"])
+      ? current.state["updates"].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+      : [];
+    state["updates"] = [
+      ...existingUpdates,
+      {
+        at: now.toISOString(),
+        action: "release",
+        staffId: actor.id,
+        staffName: actor.name,
+        update: releaseUpdate,
+      },
+    ];
+    delete state["assignedStaffId"];
+    delete state["assignedTo"];
+    delete state["assignedStaffName"];
+    delete state["assignedToName"];
+    if (["resident-reports", "building-violations"].includes(entity)) {
+      delete state["manpowerRequestId"];
+    }
+  }
   if (
     entity === "hud-inspections" &&
     ["approve", "deny", "correction"].includes(action)
@@ -1545,6 +1646,125 @@ router.post(
           .returning();
         if (!row) {
           throw Object.assign(new Error("Concurrent update detected"), { status: 409 });
+        }
+        if (
+          ["resident-reports", "building-violations"].includes(entity) &&
+          action === "release"
+        ) {
+          const manpowerRequestId = String(current.state["manpowerRequestId"] || "");
+          if (manpowerRequestId) {
+            const [request] = await tx.select().from(entityRecords).where(and(
+              eq(entityRecords.id, manpowerRequestId),
+              eq(entityRecords.entity, "manpower-requests"),
+              eq(entityRecords.tenantId, actor.tenantId),
+              eq(entityRecords.deleted, false),
+            )).limit(1);
+            if (request && normalizeAssignment(request.state).assignedStaffId !== actor.id) {
+              throw Object.assign(new Error("The linked manpower request assignment no longer matches"), { status: 409 });
+            }
+            if (request && normalizeAssignment(request.state).assignedStaffId === actor.id) {
+              const requestUpdates = Array.isArray(request.state["updates"])
+                ? request.state["updates"].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+                : [];
+              const requestState = { ...request.state };
+              delete requestState["assignedStaffId"];
+              delete requestState["assignedTo"];
+              delete requestState["assignedStaffName"];
+              delete requestState["assignedToName"];
+              requestState["status"] = "pending";
+              requestState["releasedAt"] = now.toISOString();
+              requestState["updates"] = [
+                ...requestUpdates,
+                {
+                  at: now.toISOString(),
+                  action: "release",
+                  staffId: actor.id,
+                  staffName: actor.name,
+                  update: releaseUpdate,
+                },
+              ];
+              const [releasedRequest] = await tx.update(entityRecords).set({
+                state: requestState,
+                version: sql`${entityRecords.version} + 1`,
+                updatedAt: now,
+              }).where(and(
+                eq(entityRecords.id, request.id),
+                eq(entityRecords.entity, "manpower-requests"),
+                eq(entityRecords.tenantId, actor.tenantId),
+                eq(entityRecords.deleted, false),
+                eq(entityRecords.version, request.version),
+              )).returning();
+              if (!releasedRequest) {
+                throw Object.assign(new Error("The linked manpower request changed before release"), { status: 409 });
+              }
+              await auditInTransaction(
+                tx,
+                actor,
+                "manpower-requests.released",
+                "Released linked manpower assignment with update",
+                request.id,
+              );
+            }
+          }
+        }
+        if (entity === "manpower-requests" && action === "release") {
+          const sourceEntity = String(current.state["sourceEntity"] || "");
+          const sourceRecordId = String(current.state["sourceRecordId"] || "");
+          if (["resident-reports", "building-violations"].includes(sourceEntity) && sourceRecordId) {
+            const [source] = await tx.select().from(entityRecords).where(and(
+              eq(entityRecords.id, sourceRecordId),
+              eq(entityRecords.entity, sourceEntity),
+              eq(entityRecords.tenantId, actor.tenantId),
+              eq(entityRecords.deleted, false),
+            )).limit(1);
+            if (source && normalizeAssignment(source.state).assignedStaffId !== actor.id) {
+              throw Object.assign(new Error("The linked complaint or violation assignment no longer matches"), { status: 409 });
+            }
+            if (source && normalizeAssignment(source.state).assignedStaffId === actor.id) {
+              const sourceState = { ...source.state };
+              delete sourceState["assignedStaffId"];
+              delete sourceState["assignedTo"];
+              delete sourceState["assignedStaffName"];
+              delete sourceState["assignedToName"];
+              sourceState["status"] = sourceEntity === "building-violations" ? "approved" : "submitted";
+              sourceState["releasedAt"] = now.toISOString();
+              const sourceUpdates = Array.isArray(source.state["updates"])
+                ? source.state["updates"].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+                : [];
+              sourceState["updates"] = [
+                ...sourceUpdates,
+                {
+                  at: now.toISOString(),
+                  action: "release",
+                  staffId: actor.id,
+                  staffName: actor.name,
+                  update: releaseUpdate,
+                },
+              ];
+              delete sourceState["manpowerRequestId"];
+              const [releasedSource] = await tx.update(entityRecords).set({
+                state: sourceState,
+                version: sql`${entityRecords.version} + 1`,
+                updatedAt: now,
+              }).where(and(
+                eq(entityRecords.id, source.id),
+                eq(entityRecords.entity, source.entity),
+                eq(entityRecords.tenantId, actor.tenantId),
+                eq(entityRecords.deleted, false),
+                eq(entityRecords.version, source.version),
+              )).returning();
+              if (!releasedSource) {
+                throw Object.assign(new Error("The linked complaint or violation changed before release"), { status: 409 });
+              }
+              await auditInTransaction(
+                tx,
+                actor,
+                `${sourceEntity}.released`,
+                `Released linked assignment with update`,
+                source.id,
+              );
+            }
+          }
         }
         if (entity === "manpower-requests" && action === "dispatch") {
           const sourceEntity = String(current.state["sourceEntity"] || "");
@@ -1765,6 +1985,8 @@ router.post(
       : "";
   } else if (entity === "hud-inspections") {
     target = String(current.createdBy ?? "");
+  } else if (isHrEntity(entity)) {
+    target = "human_resources";
   } else if (entity === "procurement") {
     // Every procurement notification follows the canonical workflow.  Never
     // honor a client supplied target.

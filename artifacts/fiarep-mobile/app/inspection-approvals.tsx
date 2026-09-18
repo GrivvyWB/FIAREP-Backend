@@ -30,7 +30,7 @@ export default function InspectionApprovals() {
 
   async function route(v: BuildingViolation, s: StaffAccount) {
     try {
-      await approveAndRouteViolation(v.id, s.name, s.position || '');
+      await approveAndRouteViolation(v.id, s.id, s.name, s.position || '');
       setRouteFor(null);
       load();
       Alert.alert('Approved & routed', 'Sent to ' + s.name + (s.position ? ' (' + s.position + ')' : '') + '.');

@@ -6,6 +6,8 @@ import {
   usePerformEntityAction,
   getListEntityRecordsQueryKey,
   useGetDeletionPolicy,
+  useListStaff,
+  getListStaffQueryKey,
   EntityRecord
 } from "@workspace/api-client-react";
 import { Search, Plus, Edit2, Trash2, LucideIcon, MapPin, AlignLeft } from "lucide-react";
@@ -81,6 +83,13 @@ export function GenericEntityPage({
   const { toast } = useToast();
   const { staff } = useAuth();
   const { data: deletionPolicy } = useGetDeletionPolicy();
+  const { data: operationalStaff = [] } = useListStaff(undefined, {
+    query: {
+      queryKey: getListStaffQueryKey(),
+      enabled: entity === "building-violations",
+      staleTime: 15_000,
+    },
+  });
 
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -89,6 +98,7 @@ export function GenericEntityPage({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [selectedBid, setSelectedBid] = useState<Record<string, string>>({});
+  const [selectedRouteStaff, setSelectedRouteStaff] = useState<Record<string, string>>({});
 
   // Protected entities manage their own workflow/status via other actions
   const protectedEntities = [
@@ -201,7 +211,17 @@ export function GenericEntityPage({
   const performAction = async (record: EntityRecord, action: string, bid?: any) => {
     try {
       if (action === "award" && !bid) throw new Error("Select an existing vendor bid before awarding.");
-      await actionMutation.mutateAsync({ entity, id: record.id, action, data: action === "award" ? { vendor: bid.vendorName, bidAmount: bid.amount, bidNote: bid.note, bidId: bid.id } : undefined });
+      if (action === "route" && !selectedRouteStaff[record.id]) throw new Error("Select a staff member before routing.");
+      await actionMutation.mutateAsync({
+        entity,
+        id: record.id,
+        action,
+        data: action === "award"
+          ? { vendor: bid.vendorName, bidAmount: bid.amount, bidNote: bid.note, bidId: bid.id }
+          : action === "route"
+            ? { assignedStaffId: selectedRouteStaff[record.id] }
+            : undefined,
+      });
       await invalidateOperationalQueries(queryClient, entity, record.id, isProcurement ? ["procurement-bids"] : []);
       toast({ title: `${action} completed` });
     } catch (err: any) {
@@ -322,6 +342,20 @@ export function GenericEntityPage({
                                      ]
                                    : []
                              ) as Array<[string, string]>).filter(([status]) => status === state?.status).map(([, action]) => {
+                               if (action === "route") {
+                                 const routeStaff = operationalStaff.filter((member) =>
+                                   member.status === "approved" &&
+                                   member.role !== "human_resources" &&
+                                   (!item.development || member.developments.includes(item.development)),
+                                 );
+                                 return <span key={action} className="flex gap-1 items-center">
+                                   <select className="h-9 rounded-md border px-2 text-sm" value={selectedRouteStaff[item.id] || ""} onChange={(e) => setSelectedRouteStaff((s) => ({ ...s, [item.id]: e.target.value }))}>
+                                     <option value="">Select staff</option>
+                                     {routeStaff.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}
+                                   </select>
+                                   <Button size="sm" variant="outline" disabled={!selectedRouteStaff[item.id]} onClick={() => performAction(item, action)}>Route</Button>
+                                 </span>;
+                               }
                                if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => performAction(item, action)}>{action === "approve-work" ? "Approve Work" : action}</Button>;
                               const bids = (bidData || []).filter((b: any) => (b.state as any)?.requestId === item.id);
                               return <span key={action} className="flex gap-1 items-center">
