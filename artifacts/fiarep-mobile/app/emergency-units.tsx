@@ -9,6 +9,10 @@ import { ui, ACCENT } from '../lib/ui';
 
 function fmt(iso?: string): string { try { return iso ? new Date(iso).toLocaleString() : ''; } catch { return iso || ''; } }
 
+const LEGACY_EMERGENCY_TRUCK_NUMBERS: Record<string, number> = {
+  'peter r': 1,
+};
+
 export default function EmergencyUnits() {
   const [units, setUnits] = useState<EmergencyUnit[]>([]);
   const [loadedTruck, setLoadedTruck] = useState('');
@@ -17,9 +21,9 @@ export default function EmergencyUnits() {
   const [viewer, setViewer] = useState<string | null>(null);
   const [note, setNote] = useState('');
 
-  const loadFor = useCallback(async (truckName: string) => {
+  const loadFor = useCallback(async (truckName: string, displayName = truckName) => {
     const list = await listEmergencyJobsForTruck(truckName).catch(() => []);
-    setJobs(list); setLoadedTruck(truckName);
+    setJobs(list); setLoadedTruck(displayName);
   }, []);
   useFocusEffect(useCallback(() => {
     void (async () => {
@@ -29,7 +33,21 @@ export default function EmergencyUnits() {
       ]);
       setUnits(availableUnits);
       if (actor?.role === 'emergency') {
-        await loadFor(actor.name || 'Emergency Unit');
+        const assignedJobs = await listEmergencyJobsForTruck('').catch(() => []);
+        const assignedUnitIndex = availableUnits.findIndex((unit) =>
+          assignedJobs.some((job) => job.assignedUnitId === unit.id)
+        );
+        const truckNumber =
+          assignedUnitIndex >= 0
+            ? assignedUnitIndex + 1
+            : Number(
+                /^TRK-(\d+)/i.exec(actor.name || '')?.[1] ||
+                /(?:TRK|Truck)[- ]?(\d+)/i.exec(assignedJobs[0]?.truck || '')?.[1] ||
+                LEGACY_EMERGENCY_TRUCK_NUMBERS[(actor.name || '').trim().toLowerCase()] ||
+                0
+              );
+        setJobs(assignedJobs);
+        setLoadedTruck(truckNumber > 0 ? `TRK-${truckNumber}` : 'Emergency Unit');
       }
     })();
   }, [loadFor]));
@@ -63,14 +81,15 @@ export default function EmergencyUnits() {
         {units.map((unit, index) => (
           <Pressable
             key={unit.id}
-            style={[ui.btn, { minWidth: 104 }, loadedTruck === unit.name && { backgroundColor: '#c0392b' }]}
-            onPress={() => loadFor(unit.name)}
+            style={[ui.btn, { minWidth: 104 }, loadedTruck === `TRK-${index + 1}` && { backgroundColor: '#c0392b' }]}
+            onPress={() => loadFor(unit.name, `TRK-${index + 1}`)}
           >
             <Text style={ui.btnText}>TRK-{index + 1}</Text>
           </Pressable>
         ))}
       </View>
 
+      {!!loadedTruck && <Text style={[ui.h, { marginTop: 16 }]}>{loadedTruck}</Text>}
       {!!loadedTruck && jobs.length === 0 && <Text style={[ui.empty, { marginTop: 20 }]}>No jobs for {loadedTruck}.</Text>}
 
       {jobs.map((j) => (
