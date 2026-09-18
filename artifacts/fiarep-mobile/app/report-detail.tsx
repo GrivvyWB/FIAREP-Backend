@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listElevatorJobsForMechanic, listResidentReportPhotoUrls } from '../lib/store';
+import { addResidentUpdate, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listElevatorJobsForMechanic, listResidentReportPhotoUrls } from '../lib/store';
+import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
+import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
@@ -31,6 +33,11 @@ export default function ReportDetail() {
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [actorId, setActorId] = useState('');
+  const [actorName, setActorName] = useState('');
+  const [completionNote, setCompletionNote] = useState('');
+  const [completionPhotos, setCompletionPhotos] = useState<PhotoEvidence[]>([]);
+  const [completionBusy, setCompletionBusy] = useState(false);
 
   const load = useCallback(() => {
     if (!id) {
@@ -40,6 +47,11 @@ export default function ReportDetail() {
     let active = true;
     (async () => {
       try {
+        const actor = await getCurrentActor().catch(() => null);
+        if (active) {
+          setActorId(actor?.id || '');
+          setActorName(actor?.name || '');
+        }
         let report = await getResidentReport(String(id));
         if (!report) {
           await syncAllEntities().catch(() => undefined);
@@ -69,6 +81,38 @@ export default function ReportDetail() {
     return () => { active = false; };
   }, [id]);
   useFocusEffect(load);
+
+  const addCompletionPhoto = async (source: 'camera' | 'library') => {
+    try {
+      const photo = source === 'camera' ? await takePhotoWithGeo() : await pickPhotoWithGeo();
+      if (photo) setCompletionPhotos((current) => [...current, photo]);
+    } catch (error) {
+      Alert.alert(source === 'camera' ? 'Camera' : 'Photos', error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const completeWork = async () => {
+    if (!r || !actorId || completionPhotos.length === 0) return;
+    setCompletionBusy(true);
+    try {
+      await addResidentUpdate(
+        r.id,
+        'resolved',
+        completionNote,
+        actorName,
+        completionPhotos,
+        await captureGeo(),
+      );
+      setCompletionNote('');
+      setCompletionPhotos([]);
+      load();
+      Alert.alert('Completed', 'The completed-work photo was sent to the supervisor.');
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : String(error));
+    } finally {
+      setCompletionBusy(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -158,7 +202,7 @@ export default function ReportDetail() {
             <Text style={ui.btnText}>Open Elevator Services</Text>
           </Pressable>
         )}
-        {(mode === 'worker' || mode === 'inspector') && (
+        {mode === 'inspector' && (
           <Pressable
             style={[ui.btnOutline, { marginTop: 10 }]}
             onPress={() => router.push('/fiarep-vision?preBuilding=' + encodeURIComponent((r.address || '') + (r.unit ? '  Unit ' + r.unit : '')))}
@@ -183,6 +227,39 @@ export default function ReportDetail() {
               <Text style={ui.listSub}>No photos attached.</Text>
             )}
         </View>
+        {r.assignedStaffId === actorId && r.status === 'in_progress' && (
+          <View style={{ gap: 8, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 }}>
+            <Text style={ui.label}>Completed work</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+              {completionPhotos.map((photo, index) => (
+                <Pressable key={`${photo.uri}-${index}`} onPress={() => setViewerUri(photo.uri)}>
+                  <RemotePhoto localUri={photo.uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+                </Pressable>
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => addCompletionPhoto('camera')}>
+                <Text style={ui.btnOutlineText}>Take photo</Text>
+              </Pressable>
+              <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => addCompletionPhoto('library')}>
+                <Text style={ui.btnOutlineText}>Add photo</Text>
+              </Pressable>
+            </View>
+            <TextInput
+              style={[ui.input, { minHeight: 60, textAlignVertical: 'top' }]}
+              value={completionNote}
+              onChangeText={setCompletionNote}
+              multiline
+            />
+            <Pressable
+              style={[ui.btn, (completionBusy || completionPhotos.length === 0) && { opacity: 0.45 }]}
+              disabled={completionBusy || completionPhotos.length === 0}
+              onPress={completeWork}
+            >
+              <Text style={ui.btnText}>Complete</Text>
+            </Pressable>
+          </View>
+        )}
       </View>
 
       {r.updates.length > 0 && (

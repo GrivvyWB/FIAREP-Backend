@@ -253,7 +253,12 @@ router.post("/v1/public/resident-reports/:complaintNo/photos/confirm", async (re
 
 router.use("/v1/resident-report-photos", requireAuth);
 function canReadReport(actor: ReturnType<typeof actorFrom>, report: typeof entityRecords.$inferSelect): boolean {
-  return ["administrator", "management", "inspector", "borough-director"].includes(actor.role.toLowerCase()) &&
+  const role = actor.role.toLowerCase();
+  const isCanonicalAssignee =
+    ["worker", "emergency"].includes(role) &&
+    String(report.state["assignedStaffId"] || "") === actor.id;
+  if (isCanonicalAssignee) return true;
+  return ["administrator", "management", "inspector", "borough-director"].includes(role) &&
     (!report.development || isBoroughDirector(actor) ||
       actor.developments.some((d) => d.toLowerCase() === report.development!.toLowerCase()));
 }

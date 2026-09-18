@@ -4,6 +4,7 @@ import {
   getListStaffQueryKey,
   useGetDeletionPolicy,
   requestResidentReportPhotoDownload,
+  useRequestFileUploadUrl,
   useListEntityRecords,
   useListResidentReportPhotos,
   useListStaff,
@@ -16,7 +17,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  AlertCircle, CheckCircle2, ChevronDown, FolderOpen, Image as ImageIcon,
+  AlertCircle, Camera, CheckCircle2, ChevronDown, FolderOpen, Image as ImageIcon,
   MapPin, ScanLine, Search, Send, Trash2, UserRound, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
@@ -225,6 +226,7 @@ export default function Reports() {
     },
   });
   const action = usePerformEntityAction();
+  const requestUpload = useRequestFileUploadUrl();
   const deleteReport = useDeleteEntityRecord();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -233,6 +235,9 @@ export default function Reports() {
   const [dialogMode, setDialogMode] = useState<"details" | "assign">("details");
   const [selectedStaffId, setSelectedStaffId] = useState("");
   const [releaseUpdate, setReleaseUpdate] = useState("");
+  const [completionPhoto, setCompletionPhoto] = useState<File | null>(null);
+  const [completionPreview, setCompletionPreview] = useState("");
+  const completionPhotoInput = useRef<HTMLInputElement>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
   const deepLinkHandled = useRef(false);
 
@@ -266,6 +271,8 @@ export default function Reports() {
     setSelectedStaffId(String(report.state?.assignedStaffId || ""));
     setSelected(report);
     setReleaseUpdate("");
+    setCompletionPhoto(null);
+    setCompletionPreview("");
   };
 
   const perform = async (report: Report, actionName: string, body?: Record<string, unknown>) => {
@@ -285,6 +292,50 @@ export default function Reports() {
     if (!person) return;
     setAssigning(report.id);
     perform(report, "assign", { assignedStaffId: person.id, assignedTo: person.name }).finally(() => setAssigning(null));
+  };
+
+  const completeWithPhoto = async (report: Report) => {
+    if (!completionPhoto) return;
+    try {
+      const uploaded = await requestUpload.mutateAsync({
+        data: {
+          kind: "completion-photo",
+          name: completionPhoto.name || "completed-work.jpg",
+          size: completionPhoto.size,
+          contentType: completionPhoto.type || "image/jpeg",
+          entity: "resident-reports",
+          recordId: report.id,
+        },
+      });
+      const response = await fetch(uploaded.uploadUrl, {
+        method: "PUT",
+        body: completionPhoto,
+        headers: { "Content-Type": completionPhoto.type || "image/jpeg" },
+      });
+      if (!response.ok) throw new Error("Could not upload the completed-work photo.");
+      const state = report.state || {};
+      const capturedAt = new Date().toISOString();
+      await perform(report, "complete", {
+        remoteFiles: [
+          ...(Array.isArray(state.remoteFiles) ? state.remoteFiles : []),
+          { ...uploaded.file, capturedAt },
+        ],
+        completionPhotos: [
+          ...(Array.isArray(state.completionPhotos) ? state.completionPhotos : []),
+          uploaded.file.objectPath,
+        ],
+        completionPhotoEvidence: [
+          ...(Array.isArray(state.completionPhotoEvidence) ? state.completionPhotoEvidence : []),
+          { uri: uploaded.file.objectPath, capturedAt },
+        ],
+      });
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Completion photo failed",
+        description: error instanceof Error ? error.message : "Please try again.",
+      });
+    }
   };
 
   const remove = async (report: Report) => {
@@ -358,7 +409,7 @@ export default function Reports() {
               <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
                 {!!String(state.assignedTo || "") && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{String(state.assignedTo)}</span>}
                 {canApproveWork(actor) && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>Assign</Button>}
-                {!canApproveWork(actor) && currentStatus === "in_progress" && <Button size="sm" onClick={() => perform(report, "complete")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
+                 {!canApproveWork(actor) && currentStatus === "in_progress" && <Button size="sm" onClick={() => openReport(report, "details")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
                  {canApproveWork(actor) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
                 <Button size="sm" variant="ghost" onClick={() => openReport(report, "details")}>View details</Button>
@@ -373,6 +424,8 @@ export default function Reports() {
           setSelected(null);
           setSelectedStaffId("");
           setDialogMode("details");
+          setCompletionPhoto(null);
+          setCompletionPreview("");
         }
       }}>
         <DialogContent className="sm:max-w-[620px] max-h-[90vh] overflow-y-auto">
@@ -397,9 +450,29 @@ export default function Reports() {
                   />
                 </div>
                 <FieldEvidenceDisplay state={state} reportId={selected.id} />
+                 {String(state.assignedStaffId || "") === actor?.id && currentStatus === "in_progress" && (
+                   <div className="space-y-3 border-t border-border pt-4">
+                     <input
+                       ref={completionPhotoInput}
+                       type="file"
+                       accept="image/*"
+                       capture="environment"
+                       className="hidden"
+                       onChange={(event) => {
+                         const file = event.target.files?.[0] || null;
+                         setCompletionPhoto(file);
+                         setCompletionPreview(file ? URL.createObjectURL(file) : "");
+                       }}
+                     />
+                     {completionPreview && <img src={completionPreview} alt="Completed work" className="h-48 w-full rounded-xl border bg-muted object-contain" />}
+                     <Button type="button" variant="outline" className="w-full" onClick={() => completionPhotoInput.current?.click()}>
+                       <Camera className="mr-2 h-4 w-4" />Take photo
+                     </Button>
+                   </div>
+                 )}
                    {canApproveWork(actor) && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
                  {String(state.assignedStaffId || "") === actor?.id && ["assigned", "in_progress"].includes(currentStatus) && <div className="border-t border-border pt-4 space-y-2"><p className="text-sm font-semibold">Release assignment</p><Textarea value={releaseUpdate} onChange={(event) => setReleaseUpdate(event.target.value)} placeholder="Provide an update before releasing this complaint" /><Button variant="outline" onClick={() => perform(selected, "release", { update: releaseUpdate })} disabled={action.isPending || releaseUpdate.trim().length < 3}>Release with update</Button></div>}
-                 <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{deletionPolicy?.enabled && deletionPolicy.canDelete && <Button variant="outline" onClick={() => remove(selected)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}{!canApproveWork(actor) && currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{!canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => perform(selected, "complete")} disabled={action.isPending}>Complete</Button>}{canApproveWork(actor) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{deletionPolicy?.enabled && deletionPolicy.canDelete && <Button variant="outline" onClick={() => remove(selected)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}{!canApproveWork(actor) && currentStatus === "assigned" && <Button onClick={() => perform(selected, "start")} disabled={action.isPending}>Start work</Button>}{!canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto}>Complete</Button>}{canApproveWork(actor) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
               </div></>;
           })()}
         </DialogContent>
