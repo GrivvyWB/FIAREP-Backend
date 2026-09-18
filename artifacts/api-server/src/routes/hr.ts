@@ -127,6 +127,7 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
   const result = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-limit:${actor.tenantId}`}))`);
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`employee-number-sequence:${actor.tenantId}`}))`);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`emergency-truck-sequence:${actor.tenantId}`}))`);
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`hr-employee:${actor.tenantId}:${req.params["id"]}`}))`);
     const [record] = await tx.select().from(entityRecords).where(and(
       eq(entityRecords.id, req.params["id"]!),

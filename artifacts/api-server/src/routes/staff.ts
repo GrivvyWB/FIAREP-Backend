@@ -565,7 +565,10 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
       : target.name;
     let emergencyUnitId: string | null = null;
     if (isTruckDriver) {
-      const [existingUnit] = await tx.select({ id: entityRecords.id })
+      const [existingUnit] = await tx.select({
+        id: entityRecords.id,
+        state: entityRecords.state,
+      })
         .from(entityRecords)
         .where(and(
           eq(entityRecords.tenantId, actor.tenantId),
@@ -575,21 +578,32 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
         ))
         .limit(1);
       emergencyUnitId = existingUnit?.id || randomUUID();
-      if (!existingUnit) {
-        const now = new Date();
+      const now = new Date();
+      const unitState = {
+        ...(existingUnit?.state || {}),
+        name: `Truck ${truckNumber}`,
+        unitName: `TRK-${truckNumber}`,
+        code,
+        truckNumber,
+        assignedStaffId: target.id,
+        assignedTo: issuedName,
+        createdAt: existingUnit?.state["createdAt"] || now.toISOString(),
+      };
+      if (existingUnit) {
+        await tx.update(entityRecords).set({
+          state: unitState,
+          version: sql`${entityRecords.version} + 1`,
+          updatedAt: now,
+        }).where(and(
+          eq(entityRecords.id, existingUnit.id),
+          eq(entityRecords.tenantId, actor.tenantId),
+        ));
+      } else {
         await tx.insert(entityRecords).values({
           id: emergencyUnitId,
           tenantId: actor.tenantId,
           entity: "emergency-units",
-          state: {
-            name: `Truck ${truckNumber}`,
-            unitName: `TRK-${truckNumber}`,
-            code,
-            truckNumber,
-            assignedStaffId: target.id,
-            assignedTo: issuedName,
-            createdAt: now.toISOString(),
-          },
+          state: unitState,
           createdBy: actor.id,
           createdAt: now,
           updatedAt: now,

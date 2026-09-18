@@ -6,8 +6,18 @@ import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
+import { syncAllEntities } from '../lib/sync';
 
 function fmt(iso?: string): string { try { return iso ? new Date(iso).toLocaleString() : ''; } catch { return iso || ''; } }
+function unitLabel(unit: EmergencyUnit, fallbackIndex: number): string {
+  const number = Number(
+    unit.truckNumber ||
+    /^TRK-(\d+)$/i.exec(unit.name || '')?.[1] ||
+    /(?:TRK|Truck)[- ]?(\d+)/i.exec(unit.name || '')?.[1] ||
+    fallbackIndex + 1
+  );
+  return `TRK-${number}`;
+}
 
 export default function EmergencyUnits() {
   const navigation = useNavigation();
@@ -29,6 +39,7 @@ export default function EmergencyUnits() {
       return;
     }
     void (async () => {
+      await syncAllEntities().catch(() => undefined);
       const [availableUnits, actor] = await Promise.all([
         listEmergencyUnits().catch(() => []),
         getCurrentActor().catch(() => null),
@@ -41,10 +52,11 @@ export default function EmergencyUnits() {
           assignedJobs.some((job) => job.assignedUnitId === unit.id)
         );
         const accountTruckNumber = Number(/^TRK-(\d+)\s+/i.exec(actor.name || '')?.[1] || 0);
+        const assignedUnit = assignedUnitIndex >= 0 ? availableUnits[assignedUnitIndex] : undefined;
         setJobs(assignedJobs);
         setLoadedTruck(
-          assignedUnitIndex >= 0
-            ? `TRK-${assignedUnitIndex + 1}`
+          assignedUnit
+            ? unitLabel(assignedUnit, assignedUnitIndex)
             : accountTruckNumber > 0
               ? `TRK-${accountTruckNumber}`
               : 'Emergency Unit'
@@ -80,15 +92,23 @@ export default function EmergencyUnits() {
       )}
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
         {units.map((unit, index) => (
+          (() => {
+            const label = unitLabel(unit, index);
+            return (
           <Pressable
             key={unit.id}
-            style={[ui.btn, { minWidth: 104 }, loadedTruck === `TRK-${index + 1}` && { backgroundColor: '#c0392b' }]}
-            onPress={() => loadFor(unit.name, `TRK-${index + 1}`)}
+            style={[ui.btn, { minWidth: 104 }, loadedTruck === label && { backgroundColor: '#c0392b' }]}
+            onPress={() => loadFor(unit.name, label)}
           >
-            <Text style={ui.btnText}>TRK-{index + 1}</Text>
+            <Text style={ui.btnText}>{label}</Text>
           </Pressable>
+            );
+          })()
         ))}
       </View>
+      {units.length === 0 && (
+        <Text style={[ui.empty, { marginTop: 20 }]}>No emergency units registered yet. Register a truck in Manage Trucks first.</Text>
+      )}
 
       {!!loadedTruck && <Text style={[ui.h, { marginTop: 16 }]}>{loadedTruck}</Text>}
       {!!loadedTruck && jobs.length === 0 && <Text style={[ui.empty, { marginTop: 20 }]}>No jobs for {loadedTruck}.</Text>}
