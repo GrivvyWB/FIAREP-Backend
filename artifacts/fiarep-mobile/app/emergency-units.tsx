@@ -37,6 +37,7 @@ export default function EmergencyUnits() {
       if (actor?.role === 'emergency') {
         const assignedJobs = await listEmergencyJobsForTruck('').catch(() => []);
         const assignedUnitIndex = availableUnits.findIndex((unit) =>
+          unit.assignedStaffId === actor.id ||
           assignedJobs.some((job) => job.assignedUnitId === unit.id)
         );
         const accountTruckNumber = Number(/^TRK-(\d+)\s+/i.exec(actor.name || '')?.[1] || 0);

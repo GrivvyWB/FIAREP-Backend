@@ -200,6 +200,7 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
       }
     }
     const staffId = randomUUID();
+    const emergencyUnitId = emergencyTruckDriver ? randomUUID() : null;
     const now = new Date();
     const name = `${firstName} ${lastName}`.trim();
     let issuedName = name.replace(/^TRK-\d+\s+/i, "");
@@ -237,6 +238,25 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
       createdAt: now,
       updatedAt: now,
     }).returning();
+    if (staff && issuedTruckNumber !== null && emergencyUnitId) {
+      await tx.insert(entityRecords).values({
+        id: emergencyUnitId,
+        tenantId: actor.tenantId,
+        entity: "emergency-units",
+        state: {
+          name: `Truck ${issuedTruckNumber}`,
+          unitName: `TRK-${issuedTruckNumber}`,
+          code,
+          truckNumber: issuedTruckNumber,
+          assignedStaffId: staffId,
+          assignedTo: issuedName,
+          createdAt: now.toISOString(),
+        },
+        createdBy: actor.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+    }
     const [updatedRecord] = await tx.update(entityRecords).set({
       state: {
         ...record.state,
@@ -245,6 +265,7 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
         employmentStatus: "approved",
         role,
         emergencyTruckDriver,
+        ...(emergencyUnitId ? { emergencyUnitId } : {}),
         status: "in_progress",
         advanceAt: now.toISOString(),
       },

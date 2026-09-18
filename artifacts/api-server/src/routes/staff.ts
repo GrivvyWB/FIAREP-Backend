@@ -527,6 +527,7 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
   }
   const updatedResult = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-code-email:${actor.tenantId}:${target.id}`}))`);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`emergency-truck-sequence:${actor.tenantId}`}))`);
     const [current] = await tx.select().from(staffAccounts).where(and(
       eq(staffAccounts.id, target.id),
       eq(staffAccounts.tenantId, actor.tenantId),
@@ -537,15 +538,68 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     if (nextEmailAt && nextEmailAt.getTime() > Date.now()) {
       throw Object.assign(new Error("Next email in 24 hrs for code"), { status: 429, nextEmailAt });
     }
-    const truckNumber = target.role === "emergency"
+    let truckNumber = target.role === "emergency"
       ? Number(/^TRK-(\d+)\s+/i.exec(target.name)?.[1] || 0)
       : 0;
+    const isTruckDriver = target.role === "emergency" &&
+      target.position === "Maintenance Worker" &&
+      employeeRecord?.state["emergencyTruckDriver"] === true;
+    if (isTruckDriver && truckNumber === 0) {
+      const existingTruckDrivers = await tx.select({ name: staffAccounts.name })
+        .from(staffAccounts)
+        .where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.role, "emergency"),
+          eq(staffAccounts.position, "Maintenance Worker"),
+        ));
+      truckNumber = existingTruckDrivers.reduce((highest, member) => {
+        const value = /^TRK-(\d+)\s+/i.exec(member.name)?.[1];
+        return value ? Math.max(highest, Number(value)) : highest;
+      }, 0) + 1;
+    }
     const code = truckNumber > 0
       ? truckStaffCode(truckNumber)
       : await allocateStaffCode(tx, actor.tenantId, target.name);
+    const issuedName = truckNumber > 0
+      ? `TRK-${truckNumber} ${target.name.replace(/^TRK-\d+\s+/i, "")}`
+      : target.name;
+    let emergencyUnitId: string | null = null;
+    if (isTruckDriver) {
+      const [existingUnit] = await tx.select({ id: entityRecords.id })
+        .from(entityRecords)
+        .where(and(
+          eq(entityRecords.tenantId, actor.tenantId),
+          eq(entityRecords.entity, "emergency-units"),
+          eq(entityRecords.deleted, false),
+          sql`${entityRecords.state}->>'assignedStaffId' = ${target.id}`,
+        ))
+        .limit(1);
+      emergencyUnitId = existingUnit?.id || randomUUID();
+      if (!existingUnit) {
+        const now = new Date();
+        await tx.insert(entityRecords).values({
+          id: emergencyUnitId,
+          tenantId: actor.tenantId,
+          entity: "emergency-units",
+          state: {
+            name: `Truck ${truckNumber}`,
+            unitName: `TRK-${truckNumber}`,
+            code,
+            truckNumber,
+            assignedStaffId: target.id,
+            assignedTo: issuedName,
+            createdAt: now.toISOString(),
+          },
+          createdBy: actor.id,
+          createdAt: now,
+          updatedAt: now,
+        });
+      }
+    }
     const [updated] = await tx
       .update(staffAccounts)
       .set({
+        name: issuedName,
         code,
         codeIssuedAt: new Date(),
         sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
@@ -559,6 +613,19 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
       )
       .returning();
     if (!updated) throw Object.assign(new Error("Staff account not found"), { status: 404 });
+    if (emergencyUnitId && employeeRecord) {
+      await tx.update(entityRecords).set({
+        state: {
+          ...employeeRecord.state,
+          emergencyUnitId,
+        },
+        version: sql`${entityRecords.version} + 1`,
+        updatedAt: new Date(),
+      }).where(and(
+        eq(entityRecords.id, employeeRecord.id),
+        eq(entityRecords.tenantId, actor.tenantId),
+      ));
+    }
     await emailStaffAccessCode({
       email: employeeEmail,
       employeeName: updated.name,

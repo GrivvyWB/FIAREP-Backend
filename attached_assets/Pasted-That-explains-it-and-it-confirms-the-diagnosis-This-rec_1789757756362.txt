@@ -1,0 +1,29 @@
+That explains it — and it confirms the diagnosis. This record is Role: emergency, Position: Maintenance Worker. That's not a truck. It's a person (Peter R, an emergency maintenance worker).
+
+Here's why that produces your blank screen — it's the one branch in the code we hadn't pinned down. In domain.ts:
+
+253: isEmergencyMaintenance = actor.role === "emergency" && actor.position === "Maintenance Worker";
+285: if (actor.role === "emergency" && !isEmergencyMaintenance) {
+286:   return entity === "emergency-jobs" || entity === "emergency-units";
+288: if (isEmergencyMaintenance && (entity === "emergency-jobs" || entity === "emergency-units")) {
+
+An emergency worker whose position is exactly "Maintenance Worker" is treated as isEmergencyMaintenance, and line 285's grant to read emergency-units is skipped for them (it only applies to emergency roles that are not maintenance). So if you're logged into the app as Peter R (emergency + Maintenance Worker), the sync may not return emergency-units to that account at all — screen stays empty regardless of whether trucks exist.
+
+So two separate things are true and both matter:
+
+This record is a worker, not a truck. Trucks/emergency units are created via Manage Trucks (createEmergencyUnit → generates a TRK-#### code). A "Maintenance Worker" employee record is a different entity. So "supposed to be a truck, don't think it's there" — correct, it isn't. There's likely no truck registered, which alone makes the screen blank.
+You may also be logged into the app as this maintenance-worker account, which is the role that has the narrowest emergency visibility.
+
+To get the screen working, do the plain-data fix first:
+
+Register an actual truck. In the app (as an admin/management account, not Peter R) go to Manage Trucks → create a unit. That inserts a TRK-#### emergency unit. Then:
+
+assign-emergency.tsx lets you dispatch that truck to a job, and
+the emergency worker's account gets matched to the unit (by name/unitId), so emergency-units.tsx finally has a TRK-1 button to show.
+
+Then reopen Emergency Units. It should populate.
+
+Quick confirm so I don't send you in the wrong direction:
+
+Do you have a Manage Trucks screen in the app? (There's manage-trucks.tsx in your app folder, so yes.)
+When you hit the blank Emergency Units screen — are you logged in as Peter R (this emergency worker), or as an admin?

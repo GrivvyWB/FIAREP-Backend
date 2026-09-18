@@ -4611,6 +4611,9 @@ export type EmergencyUnit = {
   id: string;
   name: string;     // e.g. "Truck 1"
   code: string;     // e.g. "TRK-4821"
+  assignedStaffId?: string;
+  assignedTo?: string;
+  truckNumber?: number;
   createdAt: string;
 };
 
