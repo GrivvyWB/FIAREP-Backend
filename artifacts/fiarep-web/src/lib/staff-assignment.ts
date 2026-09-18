@@ -161,7 +161,10 @@ export function groupTeamDirectoryByTitleAndLocation(
   const emergencyMaintenance = staff
     .filter((member) =>
       member.position === "Superintendent Ⓔ" ||
-      (member.role === "emergency" && member.position === "Maintenance Worker")
+      (
+        String(member.role).trim().toLowerCase() === "emergency" &&
+        member.position.trim().toLowerCase() === "maintenance worker"
+      )
     )
     .sort((a, b) => {
       if (a.position === "Superintendent Ⓔ") return -1;

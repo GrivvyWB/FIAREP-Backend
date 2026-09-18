@@ -1,7 +1,7 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { listEmergencyJobsForTruck, listEmergencyUnits, setEmergencyProgress, addEmergencyPhoto, completeEmergencyJob, type EmergencyJob, type EmergencyUnit } from '../lib/store';
+import { getCurrentActor, listEmergencyJobsForTruck, listEmergencyUnits, setEmergencyProgress, addEmergencyPhoto, completeEmergencyJob, type EmergencyJob, type EmergencyUnit } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
@@ -22,9 +22,17 @@ export default function EmergencyUnits() {
     setJobs(list); setLoadedTruck(truckName);
   }, []);
   useFocusEffect(useCallback(() => {
-    listEmergencyUnits().then(setUnits).catch(() => setUnits([]));
-    if (loadedTruck) loadFor(loadedTruck);
-  }, [loadedTruck, loadFor]));
+    void (async () => {
+      const [availableUnits, actor] = await Promise.all([
+        listEmergencyUnits().catch(() => []),
+        getCurrentActor().catch(() => null),
+      ]);
+      setUnits(availableUnits);
+      if (actor?.role === 'emergency') {
+        await loadFor(actor.name || 'Emergency Unit');
+      }
+    })();
+  }, [loadFor]));
 
   async function refresh() { if (loadedTruck) await loadFor(loadedTruck); }
 
