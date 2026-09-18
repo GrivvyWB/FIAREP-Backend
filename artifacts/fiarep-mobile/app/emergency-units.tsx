@@ -1,6 +1,6 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { getCurrentActor, listEmergencyJobsForTruck, listEmergencyUnits, setEmergencyProgress, addEmergencyPhoto, completeEmergencyJob, type EmergencyJob, type EmergencyUnit } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
@@ -10,6 +10,8 @@ import { ui, ACCENT } from '../lib/ui';
 function fmt(iso?: string): string { try { return iso ? new Date(iso).toLocaleString() : ''; } catch { return iso || ''; } }
 
 export default function EmergencyUnits() {
+  const navigation = useNavigation();
+  const router = useRouter();
   const [units, setUnits] = useState<EmergencyUnit[]>([]);
   const [loadedTruck, setLoadedTruck] = useState('');
   const [jobs, setJobs] = useState<EmergencyJob[]>([]);
@@ -22,6 +24,10 @@ export default function EmergencyUnits() {
     setJobs(list); setLoadedTruck(displayName);
   }, []);
   useFocusEffect(useCallback(() => {
+    if (!navigation.canGoBack()) {
+      router.replace('/worker-home');
+      return;
+    }
     void (async () => {
       const [availableUnits, actor] = await Promise.all([
         listEmergencyUnits().catch(() => []),
@@ -44,7 +50,7 @@ export default function EmergencyUnits() {
         );
       }
     })();
-  }, [loadFor]));
+  }, [loadFor, navigation, router]));
 
   async function refresh() { if (loadedTruck) await loadFor(loadedTruck); }
 
