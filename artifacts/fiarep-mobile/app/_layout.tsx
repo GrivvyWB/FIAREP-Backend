@@ -443,7 +443,10 @@ export default function Layout() {
 
   useEffect(() => {
     if (!booting && mode) {
-      router.replace(HOME_FOR_MODE[mode] as never);
+      const redirect = setTimeout(() => {
+        router.replace(HOME_FOR_MODE[mode] as never);
+      }, 0);
+      return () => clearTimeout(redirect);
     }
   }, [booting, mode, router]);
 
