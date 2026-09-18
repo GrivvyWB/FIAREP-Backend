@@ -782,6 +782,60 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/hr/employee-records/{id}/complete:
+    post:
+      operationId: completeHrEmployeeIntake
+      tags: [hr]
+      summary: Add the employee number and create the linked Team account
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [employeeNumber]
+              properties:
+                employeeNumber: { type: string, minLength: 1, maxLength: 50 }
+      responses:
+        "200":
+          description: Employee intake completed and code issued for 24-hour display
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/HREmployeeCode" }
+        "403":
+          description: Human Resources access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Employee record or employee number already completed
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+  /v1/hr/staff/{id}/send-code:
+    post:
+      operationId: sendHrStaffCode
+      tags: [hr]
+      summary: Email a still-visible employee sign-in code
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      responses:
+        "204": { description: Code emailed }
+        "403":
+          description: Human Resources access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: Code visibility expired
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/scores:
     get:
       operationId: getScores
@@ -1746,6 +1800,8 @@ components:
         - type: object
           properties:
             hrNotes: { type: string, nullable: true }
+            code: { type: string, minLength: 4, maxLength: 4 }
+            codeVisibleUntil: { type: string, format: date-time }
     HRAudit:
       type: object
       required: [id, actorRole, actorName, action, detail, at]
@@ -1777,6 +1833,13 @@ components:
           required: [code]
           properties:
             code: { type: string, minLength: 4, maxLength: 4 }
+    HREmployeeCode:
+      type: object
+      required: [staffId, code, codeVisibleUntil]
+      properties:
+        staffId: { type: string }
+        code: { type: string, minLength: 4, maxLength: 4 }
+        codeVisibleUntil: { type: string, format: date-time }
     StaffInput:
       type: object
       additionalProperties: false

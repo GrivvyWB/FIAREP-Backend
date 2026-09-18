@@ -254,7 +254,7 @@ export function GenericEntityPage({
             <div className="grid gap-3">
               {filtered?.map(item => {
                 const state = item.state as any;
-                 const walkthroughCheckIns = isProcurement && Array.isArray(state?.walkthroughCheckIns)
+                 const walkthroughCheckIns = isProcurement && staff?.role === "procurement" && Array.isArray(state?.walkthroughCheckIns)
                    ? state.walkthroughCheckIns
                    : [];
                 return (

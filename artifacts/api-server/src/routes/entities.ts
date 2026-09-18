@@ -6,6 +6,7 @@ import { audit, auditInTransaction, notify } from "../lib/audit";
 import {
   ENTITIES,
   STAFF_POSITIONS,
+  canIssueStaffAccountRole,
   canAssignStaff,
   canApproveLeaveForEmployee,
   canApproveLeaveDuration,
@@ -287,12 +288,16 @@ function outward(
   actor: ReturnType<typeof actorFrom>,
   row: typeof entityRecords.$inferSelect,
 ) {
+  const pricedState = stripPricing(actor, row.state) as Record<string, unknown>;
+  const visibleState = row.entity === "procurement" && actor.role !== "procurement"
+    ? Object.fromEntries(Object.entries(pricedState).filter(([key]) => key !== "walkthroughCheckIns"))
+    : pricedState;
   return {
     id: row.id,
     entity: row.entity,
     projectId: row.projectId,
     development: row.development,
-    state: stripPricing(actor, row.state),
+    state: visibleState,
     deleted: row.deleted,
     version: row.version,
     createdAt: row.createdAt,
@@ -317,7 +322,7 @@ function withGeneratedFields(
   if (entity === "elevator-jobs" && !state["elId"]) state["elId"] = code;
   if (entity === "emergency-jobs" && !state["emId"]) state["emId"] = code;
   if (entity === "emergency-units" && !state["code"]) state["code"] = code;
-  state["createdAt"] ??= new Date().toISOString();
+  state["createdAt"] = new Date().toISOString();
   return state;
 }
 
@@ -590,6 +595,26 @@ router.post("/v1/:entity", async (req, res, next) => {
   } else if (isHrEntity(entity) && actor.role === "management" && entity !== "hr-approvals") {
     res.status(403).json({ error: "Supervisors may create only scoped company approvals" });
     return;
+  }
+  if (entity === "hr-employee-records") {
+    if (actor.role !== "human_resources") {
+      res.status(403).json({ error: "Only Human Resources may start an employee record" });
+      return;
+    }
+    delete rawState["employeeStaffId"];
+    delete rawState["employeeNumber"];
+    const firstName = String(rawState["firstName"] || "").trim();
+    const lastName = String(rawState["lastName"] || "").trim();
+    const email = String(rawState["email"] || "").trim();
+    const role = String(rawState["role"] || "").trim();
+    const position = String(rawState["position"] || "").trim();
+    if (!firstName || !lastName || !email.includes("@") ||
+        !canIssueStaffAccountRole(role) ||
+        !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number])) {
+      res.status(400).json({ error: "First name, last name, email, role, and position are required" });
+      return;
+    }
+    rawState["title"] = `${firstName} ${lastName} employee record`;
   }
   const now = new Date();
   let createdState = withInitialWorkflowState(

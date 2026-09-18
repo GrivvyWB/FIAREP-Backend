@@ -1271,6 +1271,7 @@ export function serializeHrStaff<T extends Record<string, unknown>>(
 const HR_PROTECTED_FIELDS = new Set([
   "targetRecordId",
   "employeeStaffId",
+  "employeeNumber",
   "approvalPurpose",
   "status",
   "exitType",

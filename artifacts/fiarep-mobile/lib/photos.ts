@@ -52,7 +52,8 @@ export async function uploadPhoto(
   stored: string,
   kind: 'room-photo' | 'completion-photo' | 'inspection-evidence' = 'room-photo',
   owner: { entity: string; recordId: string },
-): Promise<{ id: string; objectPath: string; name: string; contentType: string }> {
+  stamp?: Pick<PhotoEvidence, 'capturedAt' | 'geo'>,
+): Promise<{ id: string; objectPath: string; name: string; contentType: string; capturedAt?: string; geo?: GeoStamp }> {
   const uri = photoUri(stored);
   const info = await FileSystem.getInfoAsync(uri);
   if (!info.exists || !('size' in info) || !info.size) throw new Error('Photo file is unavailable.');
@@ -73,7 +74,7 @@ export async function uploadPhoto(
   if (result.status < 200 || result.status >= 300) {
     throw new Error(`Photo upload failed (${result.status}).`);
   }
-  return requested.file;
+  return { ...requested.file, ...stamp };
 }
 
 // Read a stored photo and return a data: URI (base64) for embedding in PDF/HTML.

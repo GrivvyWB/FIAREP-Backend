@@ -28,6 +28,7 @@ export const staffAccounts = pgTable(
     position: text("position").notNull(),
     role: text("role").notNull(),
     code: text("code").notNull(),
+    codeIssuedAt: timestamp("code_issued_at", { withTimezone: true }),
     status: text("status").notNull().default("approved"),
     developments: jsonb("developments").$type<string[]>().notNull().default([]),
     createdBy: text("created_by"),

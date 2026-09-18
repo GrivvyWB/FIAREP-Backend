@@ -14,11 +14,27 @@ interface FieldEvidenceDisplayProps {
 
 export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayProps) {
   // Extract all useful timestamps
-  const timestamps = [
+  const primaryTimestamps = [
     { label: "Arrival / En Route", value: state.arrivalAt || state.startedAt || state.onMyWayAt },
     { label: "Started", value: state.startAt || state.startedAt },
     { label: "Completed / Resolved", value: state.completedAt || state.resolvedAt },
   ].filter(t => t.value); // we will render these if truthy
+  const usedTimestampValues = new Set(primaryTimestamps.map((item) => String(item.value)));
+  const otherTimestamps = Object.entries(state)
+    .filter(([key, value]) => (
+      key.endsWith("At") &&
+      typeof value === "string" &&
+      !usedTimestampValues.has(value) &&
+      !Number.isNaN(new Date(value).getTime())
+    ))
+    .map(([key, value]) => ({
+      label: key
+        .replace(/At$/, "")
+        .replace(/([a-z])([A-Z])/g, "$1 $2")
+        .replace(/^./, (letter) => letter.toUpperCase()),
+      value,
+    }));
+  const timestamps = [...primaryTimestamps, ...otherTimestamps];
 
   // Extract geo
   const arrivalGeo = state.arrivalGeo;
@@ -45,8 +61,8 @@ export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayPr
       id: f.id || f.objectPath, // fallback to objectPath if no id
       objectPath: f.objectPath,
       name: f.name || "Photo Evidence",
-      capturedAt: meta?.capturedAt,
-      geo: meta?.geo,
+      capturedAt: f.capturedAt || meta?.capturedAt,
+      geo: f.geo || meta?.geo,
     };
   });
   

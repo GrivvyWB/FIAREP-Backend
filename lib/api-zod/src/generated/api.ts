@@ -907,6 +907,9 @@ export const RevokeStaffResponse = zod.object({
  * Returns tenant employee records and lifecycle records for Human Resources.
  * @summary Get the authorized HR employee lifecycle workspace
  */
+export const getHrWorkspaceResponseStaffItemTwoCodeMin = 4;
+export const getHrWorkspaceResponseStaffItemTwoCodeMax = 4;
+
 
 
 
@@ -927,7 +930,9 @@ export const GetHrWorkspaceResponse = zod.object({
   "canDelete": zod.boolean().optional(),
   "canApprove": zod.boolean().optional()
 }).and(zod.object({
-  "hrNotes": zod.string().nullish()
+  "hrNotes": zod.string().nullish(),
+  "code": zod.string().min(getHrWorkspaceResponseStaffItemTwoCodeMin).max(getHrWorkspaceResponseStaffItemTwoCodeMax).optional(),
+  "codeVisibleUntil": zod.coerce.date().optional()
 }))),
   "records": zod.array(zod.object({
   "id": zod.string(),
@@ -952,6 +957,43 @@ export const GetHrWorkspaceResponse = zod.object({
   "at": zod.coerce.date()
 }))
 })
+
+
+/**
+ * @summary Add the employee number and create the linked Team account
+ */
+export const CompleteHrEmployeeIntakeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const completeHrEmployeeIntakeBodyEmployeeNumberMax = 50;
+
+
+
+export const CompleteHrEmployeeIntakeBody = zod.object({
+  "employeeNumber": zod.string().min(1).max(completeHrEmployeeIntakeBodyEmployeeNumberMax)
+})
+
+export const completeHrEmployeeIntakeResponseCodeMin = 4;
+export const completeHrEmployeeIntakeResponseCodeMax = 4;
+
+
+
+export const CompleteHrEmployeeIntakeResponse = zod.object({
+  "staffId": zod.string(),
+  "code": zod.string().min(completeHrEmployeeIntakeResponseCodeMin).max(completeHrEmployeeIntakeResponseCodeMax),
+  "codeVisibleUntil": zod.coerce.date()
+})
+
+
+/**
+ * @summary Email a still-visible employee sign-in code
+ */
+export const SendHrStaffCodeParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const SendHrStaffCodeResponse = zod.void()
 
 
 /**

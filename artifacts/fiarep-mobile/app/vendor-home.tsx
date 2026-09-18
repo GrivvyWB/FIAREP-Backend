@@ -224,9 +224,14 @@ export default function VendorHome() {
                 <Text style={ui.btnText}>Walk-Through Check-In</Text>
               </Pressable>
               {!!walkthroughCheckIn && (
-                <Text style={{ fontSize: 12, color: '#666' }}>
-                  Checked in {fmt(walkthroughCheckIn.receivedAt)}
-                </Text>
+                <View>
+                  <Text style={{ fontSize: 12, color: '#666' }}>
+                    Captured {fmt(walkthroughCheckIn.capturedAt)}
+                  </Text>
+                  <Text style={{ fontSize: 12, color: '#666' }}>
+                    Recorded {fmt(walkthroughCheckIn.receivedAt)}
+                  </Text>
+                </View>
               )}
             </View>
           )}

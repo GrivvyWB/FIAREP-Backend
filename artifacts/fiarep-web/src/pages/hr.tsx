@@ -13,7 +13,7 @@ import {
 } from "@workspace/api-client-react";
 import { 
   BriefcaseBusiness, Check, Clock3, Pencil, Plus, ShieldCheck,
-  History, Search, FileText, User, AlertCircle, Folder
+  History, Search, FileText, User, AlertCircle, Folder, Mail, KeyRound
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,6 +66,7 @@ const sectionFields: Partial<Record<Category, readonly SectionField[]>> = {
     { key: "lastName", label: "Last name" },
     { key: "email", label: "Email", type: "email" },
     { key: "phone", label: "Phone", type: "tel" },
+    { key: "role", label: "Role" },
     { key: "position", label: "Position" },
     { key: "department", label: "Department" },
     { key: "hireDate", label: "Hire date", type: "date" },
@@ -184,6 +185,7 @@ export default function HRWorkspace() {
   const [sectionValues, setSectionValues] = useState<Record<string, string>>({});
   const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
   const [editingRecord, setEditingRecord] = useState<EntityRecord | null>(null);
+  const [credentialBusy, setCredentialBusy] = useState("");
   
   const [view, setView] = useState<"records" | "audit">("records");
   const [filterProcess, setFilterProcess] = useState<string>("all");
@@ -272,6 +274,11 @@ export default function HRWorkspace() {
         return;
       }
       const sectionEntries = Object.entries(sectionValues)
+        .filter(([key]) => !(
+          editingRecord?.entity === "hr-employee-records" &&
+          editingRecord.state.employeeStaffId &&
+          key === "employeeNumber"
+        ))
         .map(([key, value]) => [key, value.trim()]);
       const sectionState = Object.fromEntries(
         editingRecord
@@ -279,6 +286,26 @@ export default function HRWorkspace() {
           : sectionEntries.filter(([, value]) => value !== ""),
       );
       if (editingRecord) {
+        if (
+          editingRecord.entity === "hr-employee-records" &&
+          !editingRecord.state.employeeStaffId
+        ) {
+          const response = await fetch(
+            `/api/v1/hr/employee-records/${encodeURIComponent(editingRecord.id)}/complete`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}`,
+              },
+              body: JSON.stringify({ employeeNumber: sectionValues.employeeNumber || "" }),
+            },
+          );
+          if (!response.ok) {
+            const body = await response.json().catch(() => null);
+            throw new Error(body?.error || "Unable to complete employee intake.");
+          }
+        } else {
         const employeeDevelopments = values.category === "hr-employee-records"
           ? assignedDevelopments
           : undefined;
@@ -299,6 +326,7 @@ export default function HRWorkspace() {
             },
           },
         });
+        }
       } else {
         await create.mutateAsync({
           entity: values.category,
@@ -310,9 +338,14 @@ export default function HRWorkspace() {
               employeeStaffId: approvalTarget
                 ? approvalTarget.state.employeeStaffId
                 : values.employeeStaffId || undefined,
-              title: values.title,
+              title: values.category === "hr-employee-records"
+                ? `${sectionValues.firstName || ""} ${sectionValues.lastName || ""}`.trim()
+                : values.title,
               details: values.details,
               ...sectionState,
+              assignedDevelopments: values.category === "hr-employee-records"
+                ? assignedDevelopments
+                : undefined,
               targetRecordId: approvalTarget?.id,
               approvalPurpose: approvalPurpose || undefined,
               exitType: values.category === "hr-exits" ? values.exitType : undefined,
@@ -336,6 +369,45 @@ export default function HRWorkspace() {
       setOpen(false);
     } catch (reason) {
       setError(errorMessage(reason));
+    }
+  }
+
+  async function emailCode(staffId: string) {
+    setCredentialBusy(staffId);
+    setError("");
+    try {
+      const response = await fetch(`/api/v1/hr/staff/${encodeURIComponent(staffId)}/send-code`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}` },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || "Unable to email the employee code.");
+      }
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setCredentialBusy("");
+    }
+  }
+
+  async function resetAndEmailCode(staffId: string) {
+    setCredentialBusy(staffId);
+    setError("");
+    try {
+      const response = await fetch(`/api/v1/staff/${encodeURIComponent(staffId)}/reset-code`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}` },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.error || "Unable to replace the employee code.");
+      }
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    } finally {
+      setCredentialBusy("");
     }
   }
 
@@ -608,7 +680,26 @@ export default function HRWorkspace() {
                               </div>
                             </div>
                             
-                            <div className="flex items-center gap-2 sm:shrink-0 sm:self-start">
+                              <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:self-start">
+                               {row.entity === "hr-employee-records" && typeof state.employeeStaffId === "string" && (() => {
+                                 const member = staffById.get(state.employeeStaffId) as (typeof staff[number] & {
+                                   code?: string;
+                                   codeVisibleUntil?: string;
+                                 }) | undefined;
+                                 if (!member) return null;
+                                 return member.code ? (
+                                   <>
+                                     <span className="rounded-md border px-2 py-1 font-mono text-sm font-bold">{member.code}</span>
+                                     <Button size="sm" variant="outline" onClick={() => emailCode(member.id)} disabled={credentialBusy === member.id}>
+                                       <Mail className="mr-1.5 h-3.5 w-3.5" />Email code
+                                     </Button>
+                                   </>
+                                 ) : (
+                                   <Button size="sm" variant="outline" onClick={() => resetAndEmailCode(member.id)} disabled={credentialBusy === member.id}>
+                                     <KeyRound className="mr-1.5 h-3.5 w-3.5" />New code
+                                   </Button>
+                                 );
+                               })()}
                                {actor?.role === "human_resources" && row.entity !== "hr-approvals" && (
                                  <Button size="sm" variant="outline" data-testid={`button-edit-hr-record-${row.id}`} onClick={() => openEditRecord(row)}>
                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
@@ -717,23 +808,53 @@ export default function HRWorkspace() {
                   <FormMessage />
                 </FormItem>
               )} />
-              {(sectionFields[selectedCategory] || []).map((sectionField) => (
+              {(sectionFields[selectedCategory] || [])
+                .filter((field) =>
+                  selectedCategory !== "hr-employee-records" ||
+                  Boolean(editingRecord) ||
+                  field.key !== "employeeNumber"
+                )
+                .map((sectionField) => (
                 <div key={sectionField.key} className="space-y-2">
                   <Label htmlFor={`hr-field-${sectionField.key}`}>{sectionField.label}</Label>
-                  <Input
+                  {sectionField.key === "role" ? (
+                    <select
+                      id="hr-field-role"
+                      className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                      value={sectionValues.role || ""}
+                      disabled={selectedCategory === "hr-employee-records" &&
+                        Boolean(editingRecord) &&
+                        !editingRecord?.state.employeeStaffId}
+                      onChange={(event) => setSectionValues((current) => ({
+                        ...current,
+                        role: event.target.value,
+                      }))}
+                    >
+                      <option value="">Select role</option>
+                      <option value="management">Management</option>
+                      <option value="worker">Worker</option>
+                      <option value="inspector">Inspector</option>
+                      <option value="procurement">Procurement</option>
+                      <option value="emergency">Emergency</option>
+                    </select>
+                  ) : <Input
                     id={`hr-field-${sectionField.key}`}
                     type={sectionField.type || "text"}
                     step={sectionField.type === "number" ? "any" : undefined}
                     value={sectionValues[sectionField.key] || ""}
+                    disabled={selectedCategory === "hr-employee-records" &&
+                      Boolean(editingRecord) &&
+                      !editingRecord?.state.employeeStaffId &&
+                      sectionField.key !== "employeeNumber"}
                     onChange={(event) => setSectionValues((current) => ({
                       ...current,
                       [sectionField.key]: event.target.value,
                     }))}
                     data-testid={`input-hr-${sectionField.key}`}
-                  />
+                  />}
                 </div>
               ))}
-              {selectedCategory !== "hr-approvals" ? <FormField control={form.control} name="employeeStaffId" render={({ field }) => (
+              {selectedCategory !== "hr-approvals" && selectedCategory !== "hr-employee-records" ? <FormField control={form.control} name="employeeStaffId" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Employee</FormLabel>
                   <FormControl>
@@ -744,7 +865,7 @@ export default function HRWorkspace() {
                   </FormControl>
                   <FormMessage />
                 </FormItem>
-              )} /> : (
+              )} /> : selectedCategory === "hr-approvals" ? (
                 <>
                   <FormField control={form.control} name="targetRecordId" render={({ field }) => (
                     <FormItem>
@@ -773,8 +894,8 @@ export default function HRWorkspace() {
                     })()}
                   </div>
                 </>
-              )}
-              <FormField control={form.control} name="title" render={({ field }) => (
+              ) : null}
+              {selectedCategory !== "hr-employee-records" && <FormField control={form.control} name="title" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Title</FormLabel>
                   <FormControl>
@@ -782,8 +903,8 @@ export default function HRWorkspace() {
                   </FormControl>
                   <FormMessage />
                 </FormItem>
-              )} />
-              <FormField control={form.control} name="details" render={({ field }) => (
+              )} />}
+              {selectedCategory !== "hr-employee-records" && <FormField control={form.control} name="details" render={({ field }) => (
                 <FormItem>
                   <FormLabel>Details</FormLabel>
                   <FormControl>
@@ -791,7 +912,7 @@ export default function HRWorkspace() {
                   </FormControl>
                   <FormMessage />
                 </FormItem>
-              )} />
+              )} />}
               
               {selectedCategory === "hr-employee-records" ? (
                 <div className="space-y-2">

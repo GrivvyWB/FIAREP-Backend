@@ -25,6 +25,7 @@ import {
   withInitialWorkflowState,
 } from "../lib/domain";
 import { allocateStaffCode } from "../lib/staffCodes";
+import { emailStaffAccessCode } from "../lib/staffEmail";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
@@ -42,7 +43,7 @@ function safe(
   const permissions = actor
     ? {
         canManage: canManageStaff(actor, staff),
-        canResetCode: canManageStaff(actor, staff),
+        canResetCode: actor.role === "human_resources" && canManageStaff(actor, staff),
         canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
         canDelete: actor.id !== staff.id && canManageStaff(actor, staff),
         canApprove:
@@ -64,7 +65,7 @@ function issueSafe(
       actor.role === "human_resources" || actor.role === "administrator",
     ),
     canManage: canManageStaff(actor, staff),
-    canResetCode: canManageStaff(actor, staff),
+    canResetCode: actor.role === "human_resources" && canManageStaff(actor, staff),
     canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
     canDelete: actor.id !== staff.id && canManageStaff(actor, staff),
     canApprove:
@@ -218,6 +219,10 @@ router.get("/v1/staff/developments", async (_req, res) => {
 
 router.post("/v1/staff", async (req, res) => {
   const actor = actorFrom(res);
+  if (actor.role) {
+    res.status(403).json({ error: "Start employee intake in HR Workspace" });
+    return;
+  }
   const input = req.body as Record<string, unknown>;
   const name = typeof input["name"] === "string" ? input["name"].trim() : "";
   const role = typeof input["role"] === "string" ? input["role"] : "";
@@ -410,7 +415,13 @@ router.post("/v1/staff/:id/approve", async (req, res) => {
     return;
   }
   const updatedResult = await db.transaction(async (tx) => {
-    const code = await allocateStaffCode(tx, actor.tenantId, target.name);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-code:${actor.tenantId}:${target.id}`}))`);
+    const [current] = await tx.select().from(staffAccounts).where(and(
+      eq(staffAccounts.id, target.id),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    )).limit(1);
+    if (!current) throw Object.assign(new Error("Staff account not found"), { status: 404 });
+    const code = await allocateStaffCode(tx, actor.tenantId, current.name);
     const [updated] = await tx
       .update(staffAccounts)
       .set({
@@ -494,12 +505,23 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     res.status(404).json({ error: "Staff account not found" });
     return;
   }
-  if (!canManageStaff(actor, target)) {
-    res.status(403).json({ error: "Not allowed to manage this staff account" });
+  if (actor.role !== "human_resources" || !canManageStaff(actor, target)) {
+    res.status(403).json({ error: "Only Human Resources may issue a replacement code" });
     return;
   }
   if (req.body && "code" in req.body) {
     res.status(400).json({ error: "Staff codes are generated automatically" });
+    return;
+  }
+  const [employeeRecord] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.entity, "hr-employee-records"),
+    eq(entityRecords.deleted, false),
+    sql`${entityRecords.state}->>'employeeStaffId' = ${target.id}`,
+  )).limit(1);
+  const employeeEmail = String(employeeRecord?.state["email"] || "").trim();
+  if (!employeeEmail.includes("@")) {
+    res.status(400).json({ error: "Add the employee email address before issuing a replacement code" });
     return;
   }
   const updatedResult = await db.transaction(async (tx) => {
@@ -508,6 +530,7 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
       .update(staffAccounts)
       .set({
         code,
+        codeIssuedAt: new Date(),
         sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
         updatedAt: new Date(),
       })
@@ -518,14 +541,25 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
         ),
       )
       .returning();
-    return { updated, code };
+    if (!updated) throw Object.assign(new Error("Staff account not found"), { status: 404 });
+    await emailStaffAccessCode({
+      email: employeeEmail,
+      employeeName: updated.name,
+      code: updated.code,
+    });
+    return { updated };
+  }).catch((error: any) => {
+    if (error?.status === 404) {
+      res.status(404).json({ error: error.message });
+      return null;
+    }
+    res.status(502).json({ error: "The replacement code email could not be sent. The existing code still works." });
+    return null;
   });
+  if (!updatedResult) return;
   const { updated } = updatedResult;
-  if (!updated) {
-    res.status(404).json({ error: "Staff account not found" });
-    return;
-  }
   await audit(actor, "staff.code_reset", `Reset code for ${updated.name}`, updated.id);
+  await audit(actor, "staff.code_emailed", `Emailed replacement access code to ${updated.name}`, updated.id);
   res.json(issueSafe(updated, actor));
 });
 

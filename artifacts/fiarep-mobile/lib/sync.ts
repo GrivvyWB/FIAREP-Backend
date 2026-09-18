@@ -90,6 +90,8 @@ async function prepareUploadState(
 ) {
   const photos = Array.isArray(state.photos) ? state.photos : [];
   const completionPhotos = Array.isArray(state.completionPhotos) ? state.completionPhotos : [];
+  const photoEvidence = Array.isArray(state.photoEvidence) ? state.photoEvidence : [];
+  const completionPhotoEvidence = Array.isArray(state.completionPhotoEvidence) ? state.completionPhotoEvidence : [];
   const localPhotos = [...new Set([...photos, ...completionPhotos])];
   if (!localPhotos.length) return state;
   const kind = entity === 'change-orders' || entity === 'emergency-jobs' || entity === 'elevator-jobs'
@@ -97,6 +99,16 @@ async function prepareUploadState(
       ? 'inspection-evidence' : 'room-photo';
   const { uploadPhoto } = await import('./photos');
   const remoteFiles = Array.isArray(state.remoteFiles) ? [...state.remoteFiles] : [];
+  const evidenceFor = (localUri: string) => {
+    const source = completionPhotos.includes(localUri) ? completionPhotos : photos;
+    const evidence = completionPhotos.includes(localUri) ? completionPhotoEvidence : photoEvidence;
+    const sourceIndex = source.indexOf(localUri);
+    const evidenceIndex = sourceIndex - Math.max(0, source.length - evidence.length);
+    const stamp = evidenceIndex >= 0 ? evidence[evidenceIndex] : undefined;
+    return stamp && typeof stamp === 'object'
+      ? { capturedAt: stamp.capturedAt, geo: stamp.geo }
+      : undefined;
+  };
   for (const localUri of localPhotos) {
     if (remoteFiles.some((file: any) => file.localUri === localUri)) continue;
     try {
@@ -105,7 +117,7 @@ async function prepareUploadState(
         ...(await uploadPhoto(localUri, uploadKind as any, {
           entity,
           recordId,
-        })),
+         }, evidenceFor(localUri))),
         localUri,
       });
     } catch { /* retained for retry */ }

@@ -32,3 +32,4 @@
 - [FIAREP HUD inspection authority](fiarep-hud-inspection-authority.md) — CPMs and Inspectors submit HUD inspections from mobile; designated supervisors review them on web.
 - [FIAREP directory scope](fiarep-directory-scope.md) — staff visibility uses shared development coverage; never reuse stricter leave-approval scope for routing lists.
 - [FIAREP emergency maintenance unit](fiarep-emergency-maintenance-unit.md) — Superintendent Ⓔ manages Emergency-role maintenance staff; only truck drivers receive sequential TRK labels.
+- [FIAREP vendor check-in visibility](fiarep-vendor-check-in-visibility.md) — vendor site check-in timestamps and location are operationally visible only to Procurement.

@@ -22,6 +22,7 @@ import type {
 import type {
   AuthResponse,
   BootstrapAdministratorBody,
+  CompleteHrEmployeeIntakeBody,
   CreateOrganizationAdministratorBody,
   CreatePushSmokeTest202,
   DeleteEntityRecordBody,
@@ -38,6 +39,7 @@ import type {
   GetBootstrapStatus200,
   GetPlatformOwner200,
   GetResidentReportPhotoAiConfig200,
+  HREmployeeCode,
   HRWorkspace,
   HealthStatus,
   IssueOrganizationDirectorCodeBody,
@@ -3011,6 +3013,149 @@ export function useGetHrWorkspace<TData = Awaited<ReturnType<typeof getHrWorkspa
 
 
 
+
+export const getCompleteHrEmployeeIntakeUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/hr/employee-records/${id}/complete`
+}
+
+/**
+ * @summary Add the employee number and create the linked Team account
+ */
+export const completeHrEmployeeIntake = async (id: string,
+    completeHrEmployeeIntakeBody: CompleteHrEmployeeIntakeBody, options?: Parameters<typeof customFetch>[1]): Promise<HREmployeeCode> => {
+
+  return customFetch<HREmployeeCode>(getCompleteHrEmployeeIntakeUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(completeHrEmployeeIntakeBody)
+  }
+);}
+
+
+
+
+
+export const getCompleteHrEmployeeIntakeMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeHrEmployeeIntake>>, TError,{id: string;data: BodyType<CompleteHrEmployeeIntakeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeHrEmployeeIntake>>, TError,{id: string;data: BodyType<CompleteHrEmployeeIntakeBody>}, TContext> => {
+
+const mutationKey = ['completeHrEmployeeIntake'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeHrEmployeeIntake>>, {id: string;data: BodyType<CompleteHrEmployeeIntakeBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  completeHrEmployeeIntake(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteHrEmployeeIntakeMutationResult = NonNullable<Awaited<ReturnType<typeof completeHrEmployeeIntake>>>
+    export type CompleteHrEmployeeIntakeMutationBody = BodyType<CompleteHrEmployeeIntakeBody>
+    export type CompleteHrEmployeeIntakeMutationError = ErrorType<Error>
+
+    /**
+ * @summary Add the employee number and create the linked Team account
+ */
+export const useCompleteHrEmployeeIntake = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeHrEmployeeIntake>>, TError,{id: string;data: BodyType<CompleteHrEmployeeIntakeBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeHrEmployeeIntake>>,
+        TError,
+        {id: string;data: BodyType<CompleteHrEmployeeIntakeBody>},
+        TContext
+      > => {
+      return useMutation(getCompleteHrEmployeeIntakeMutationOptions(options));
+    }
+
+export const getSendHrStaffCodeUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/hr/staff/${id}/send-code`
+}
+
+/**
+ * @summary Email a still-visible employee sign-in code
+ */
+export const sendHrStaffCode = async (id: string, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getSendHrStaffCodeUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getSendHrStaffCodeMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendHrStaffCode>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendHrStaffCode>>, TError,{id: string}, TContext> => {
+
+const mutationKey = ['sendHrStaffCode'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendHrStaffCode>>, {id: string}> = (props) => {
+          const {id} = props ?? {};
+
+          return  sendHrStaffCode(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendHrStaffCodeMutationResult = NonNullable<Awaited<ReturnType<typeof sendHrStaffCode>>>
+
+    export type SendHrStaffCodeMutationError = ErrorType<Error>
+
+    /**
+ * @summary Email a still-visible employee sign-in code
+ */
+export const useSendHrStaffCode = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendHrStaffCode>>, TError,{id: string}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendHrStaffCode>>,
+        TError,
+        {id: string},
+        TContext
+      > => {
+      return useMutation(getSendHrStaffCodeMutationOptions(options));
+    }
 
 export const getGetScoresUrl = () => {
 

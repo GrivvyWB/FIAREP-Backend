@@ -1,10 +1,12 @@
 ---
 name: FIAREP employee intake handoff
-description: Defines the durable boundary between Team staff-account creation and HR employee-record completion.
+description: Defines the three-step HR-owned employee intake, Team-account handoff, and access-code delivery.
 ---
 
-Every new staff account begins in Team and must atomically create one tenant-scoped HR employee record linked to the new staff identity. HR completes that existing record rather than creating a second employee record. HR changes to the linked employee's name, position, and development assignment must update the shared staff account in the same transaction. Permanently deleting the staff account must also delete every HR employee record linked to that staff identity.
+Employee intake starts in HR Workspace as an unlinked draft containing the employee information. After HR obtains and enters the employee number, FIAREP atomically creates the Team account, links it to the existing HR record, and advances the record to In progress. HR then emails the generated sign-in code.
 
-**Why:** Team owns account issuance and role authority, while HR owns the employee file and completes identity and job-placement details. Keeping one linked handoff prevents duplicate employee identities and ensures operational routing uses HR's completed position and location.
+The sign-in code is visible inside FIAREP for 24 hours after issuance, then hidden. Only HR may replace it, and replacement codes are emailed to the employee.
 
-**How to apply:** Any new staff-creation path, including single and bulk intake, must use the same server-side transaction. Preserve the staff ID as immutable HR linkage, keep the HR workspace restricted to Human Resources, edit the generated record in place, atomically synchronize shared staff fields, and cascade authorized permanent staff deletion to linked HR employee records.
+**Why:** HR must enter employee information only once, while the employee number remains a distinct prerequisite for creating the operational account. The delayed atomic handoff prevents incomplete staff accounts and duplicate employee identities.
+
+**How to apply:** Keep employee drafts unlinked until the employee-number step. Create and link the Team identity in one tenant-scoped transaction, preserve the staff ID as immutable linkage, synchronize later shared-field edits, and enforce code visibility and replacement on the server.

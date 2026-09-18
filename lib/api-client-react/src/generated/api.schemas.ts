@@ -676,6 +676,12 @@ export interface PlatformLicenseAudit {
 
 export type HRStaff = Staff & ({
   hrNotes?: string | null;
+  /**
+     * @minLength 4
+     * @maxLength 4
+     */
+  code?: string;
+  codeVisibleUntil?: string;
 });
 
 export interface HRAudit {
@@ -701,6 +707,16 @@ export type StaffIssueResponse = Staff & {
      */
   code: string;
 };
+
+export interface HREmployeeCode {
+  staffId: string;
+  /**
+     * @minLength 4
+     * @maxLength 4
+     */
+  code: string;
+  codeVisibleUntil: string;
+}
 
 export type StaffInputRole = typeof StaffInputRole[keyof typeof StaffInputRole];
 
@@ -1119,6 +1135,14 @@ limit?: number;
 
 export type ListStaffParams = {
 status?: string;
+};
+
+export type CompleteHrEmployeeIntakeBody = {
+  /**
+     * @minLength 1
+     * @maxLength 50
+     */
+  employeeNumber: string;
 };
 
 export type ListEntityRecordsParams = {
