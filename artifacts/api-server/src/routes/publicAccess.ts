@@ -365,10 +365,6 @@ router.post("/v1/resident-report-photos/:id/download-url", async (req, res) => {
     eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
   )).limit(1);
   if (!report) { res.status(404).json({ error: "Photo not found" }); return; }
-  if (!["administrator", "management", "inspector", "borough-director"].includes(actor.role.toLowerCase()) ||
-      !canReadReport(actor, report)) {
-    res.status(404).json({ error: "Photo not found" }); return;
-  }
   if (!canReadReport(actor, report)) {
     res.status(404).json({ error: "Photo not found" }); return;
   }
