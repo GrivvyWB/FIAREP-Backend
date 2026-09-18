@@ -24,7 +24,7 @@ import {
   serializeStaffIssueResponse,
   withInitialWorkflowState,
 } from "../lib/domain";
-import { allocateStaffCode } from "../lib/staffCodes";
+import { allocateStaffCode, truckStaffCode } from "../lib/staffCodes";
 import { emailStaffAccessCode } from "../lib/staffEmail";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -537,7 +537,12 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     if (nextEmailAt && nextEmailAt.getTime() > Date.now()) {
       throw Object.assign(new Error("Next email in 24 hrs for code"), { status: 429, nextEmailAt });
     }
-    const code = await allocateStaffCode(tx, actor.tenantId, target.name);
+    const truckNumber = target.role === "emergency"
+      ? Number(/^TRK-(\d+)\s+/i.exec(target.name)?.[1] || 0)
+      : 0;
+    const code = truckNumber > 0
+      ? truckStaffCode(truckNumber)
+      : await allocateStaffCode(tx, actor.tenantId, target.name);
     const [updated] = await tx
       .update(staffAccounts)
       .set({

@@ -4,6 +4,15 @@ import { staffCode } from "./domain";
 
 const STAFF_CODE_ATTEMPTS = 30;
 
+export function truckStaffCode(truckNumber: number): string {
+  if (!Number.isInteger(truckNumber) || truckNumber < 1 || truckNumber > 999) {
+    throw Object.assign(new Error("Truck number must be between 1 and 999"), { status: 400 });
+  }
+  return truckNumber < 10
+    ? `TRK${truckNumber}`
+    : `T${String(truckNumber).padStart(3, "0")}`;
+}
+
 export async function allocateStaffCode(
   tx: any,
   tenantId: string,

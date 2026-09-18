@@ -33,8 +33,15 @@ export default function EmergencyUnits() {
         const assignedUnitIndex = availableUnits.findIndex((unit) =>
           assignedJobs.some((job) => job.assignedUnitId === unit.id)
         );
+        const accountTruckNumber = Number(/^TRK-(\d+)\s+/i.exec(actor.name || '')?.[1] || 0);
         setJobs(assignedJobs);
-        setLoadedTruck(assignedUnitIndex >= 0 ? `TRK-${assignedUnitIndex + 1}` : 'Emergency Unit');
+        setLoadedTruck(
+          assignedUnitIndex >= 0
+            ? `TRK-${assignedUnitIndex + 1}`
+            : accountTruckNumber > 0
+              ? `TRK-${accountTruckNumber}`
+              : 'Emergency Unit'
+        );
       }
     })();
   }, [loadFor]));

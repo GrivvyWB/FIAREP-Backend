@@ -9,7 +9,7 @@ import {
   STAFF_POSITIONS,
   serializeHrStaff,
 } from "../lib/domain";
-import { allocateStaffCode } from "../lib/staffCodes";
+import { allocateStaffCode, truckStaffCode } from "../lib/staffCodes";
 import { emailStaffAccessCode } from "../lib/staffEmail";
 import { audit } from "../lib/audit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
@@ -203,6 +203,7 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
     const now = new Date();
     const name = `${firstName} ${lastName}`.trim();
     let issuedName = name.replace(/^TRK-\d+\s+/i, "");
+    let issuedTruckNumber: number | null = null;
     if (emergencyTruckDriver) {
       const existingTruckDrivers = await tx.select({ name: staffAccounts.name }).from(staffAccounts).where(and(
         eq(staffAccounts.tenantId, actor.tenantId),
@@ -213,9 +214,12 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
         const value = /^TRK-(\d+)\s+/i.exec(member.name)?.[1];
         return value ? Math.max(highest, Number(value)) : highest;
       }, 0) + 1;
+      issuedTruckNumber = nextTruckNumber;
       issuedName = `TRK-${nextTruckNumber} ${issuedName}`;
     }
-    const code = await allocateStaffCode(tx, actor.tenantId, name);
+    const code = issuedTruckNumber === null
+      ? await allocateStaffCode(tx, actor.tenantId, name)
+      : truckStaffCode(issuedTruckNumber);
     const [staff] = await tx.insert(staffAccounts).values({
       id: staffId,
       tenantId: actor.tenantId,
