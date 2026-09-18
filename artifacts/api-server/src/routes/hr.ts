@@ -123,17 +123,10 @@ router.get("/v1/hr/workspace", async (_req, res): Promise<void> => {
 router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<void> => {
   const actor = requireHr(res);
   if (!actor) return;
-  const employeeNumber = typeof req.body?.employeeNumber === "string"
-    ? req.body.employeeNumber.trim()
-    : "";
-  if (!employeeNumber || employeeNumber.length > 50) {
-    res.status(400).json({ error: "Employee number is required" });
-    return;
-  }
   const result = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-limit:${actor.tenantId}`}))`);
+    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`employee-number-sequence:${actor.tenantId}`}))`);
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`hr-employee:${actor.tenantId}:${req.params["id"]}`}))`);
-    await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`employee-number:${actor.tenantId}:${employeeNumber.toLowerCase()}`}))`);
     const [record] = await tx.select().from(entityRecords).where(and(
       eq(entityRecords.id, req.params["id"]!),
       eq(entityRecords.tenantId, actor.tenantId),
@@ -144,15 +137,16 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
     if (record.state["employeeStaffId"] || String(record.state["status"] || "").toLowerCase() !== "draft") {
       throw Object.assign(new Error("Employee record has already been completed"), { status: 409 });
     }
-    const [duplicate] = await tx.select({ id: entityRecords.id }).from(entityRecords).where(and(
+    const numberedRecords = await tx.select({ state: entityRecords.state }).from(entityRecords).where(and(
       eq(entityRecords.tenantId, actor.tenantId),
       eq(entityRecords.entity, "hr-employee-records"),
       eq(entityRecords.deleted, false),
-      sql`lower(${entityRecords.state}->>'employeeNumber') = ${employeeNumber.toLowerCase()}`,
-    )).limit(1);
-    if (duplicate && duplicate.id !== record.id) {
-      throw Object.assign(new Error("Employee number is already in use"), { status: 409 });
-    }
+    ));
+    const nextEmployeeNumber = numberedRecords.reduce((highest, item) => {
+      const value = /^EMP-(\d+)$/i.exec(String(item.state["employeeNumber"] || ""))?.[1];
+      return value ? Math.max(highest, Number(value)) : highest;
+    }, 0) + 1;
+    const employeeNumber = `EMP-${String(nextEmployeeNumber).padStart(6, "0")}`;
     const firstName = String(record.state["firstName"] || "").trim();
     const lastName = String(record.state["lastName"] || "").trim();
     const email = String(record.state["email"] || "").trim();
@@ -269,6 +263,7 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
   await audit(actor, "hr-employee-records.completed", `Completed employee intake for ${result.staff.name}`, result.record.id);
   res.json({
     staffId: result.staff.id,
+    employeeNumber: result.record.state["employeeNumber"],
     code: result.staff.code,
     codeVisibleUntil: new Date(result.staff.codeIssuedAt!.getTime() + CODE_WINDOW_MS),
   });

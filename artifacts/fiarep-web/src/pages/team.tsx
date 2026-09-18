@@ -3,6 +3,7 @@ import {
   StaffInputRole,
   StaffRole,
   useCreateStaff,
+  useGetHrWorkspace,
   useApproveStaff,
   useDeleteStaff,
   useListStaff,
@@ -10,6 +11,7 @@ import {
   useRevokeStaff,
   useListStaffDevelopments,
   getListStaffQueryKey,
+  getGetHrWorkspaceQueryKey,
   getListStaffDevelopmentsQueryKey,
   useGetDeletionPolicy,
 } from "@workspace/api-client-react";
@@ -84,6 +86,13 @@ export default function Team() {
   const [, navigate] = useLocation();
   const { data: deletionPolicy } = useGetDeletionPolicy();
   const queryClient = useQueryClient();
+  const hrDraftsQuery = useGetHrWorkspace({
+    query: {
+      queryKey: getGetHrWorkspaceQueryKey(),
+      enabled: actor?.role === "human_resources",
+      refetchOnMount: "always",
+    },
+  });
   const { data: staff, isLoading, error } = useListStaff(undefined, {
     query: {
       queryKey: getListStaffQueryKey(),
@@ -131,6 +140,10 @@ export default function Team() {
   const [bulkCreating, setBulkCreating] = useState(false);
   const [actionError, setActionError] = useState("");
   const [resetTarget, setResetTarget] = useState<{ id: string; name: string; role: string } | null>(null);
+  const [pendingDraft, setPendingDraft] = useState<any | null>(null);
+  const [draftAssignment, setDraftAssignment] = useState<"regular" | "truck">("regular");
+  const [draftCompleting, setDraftCompleting] = useState(false);
+  const [completedDraft, setCompletedDraft] = useState<{ name: string; employeeNumber: string; code: string } | null>(null);
 
   const roleOptions = useMemo(() => {
     if (!actor) return [];
@@ -162,6 +175,13 @@ export default function Team() {
     const q = search.toLowerCase();
     return !q || [member.name, member.role, member.position].some((v) => v.toLowerCase().includes(q));
   }).sort((a, b) => a.name.localeCompare(b.name));
+  const pendingEmployeeDrafts = actor?.role === "human_resources"
+    ? (hrDraftsQuery.data?.records || []).filter((record) =>
+        record.entity === "hr-employee-records" &&
+        !record.state?.employeeStaffId &&
+        String(record.state?.status || "draft").toLowerCase() === "draft"
+      )
+    : [];
 
   useEffect(() => {
     if (actor?.role !== "human_resources" || !staff?.length) return;
@@ -181,7 +201,42 @@ export default function Team() {
   }, [directoryStaffId, staff]);
 
   async function refresh() {
-    await invalidateStaffQueries(queryClient);
+    await Promise.all([
+      invalidateStaffQueries(queryClient),
+      queryClient.invalidateQueries({ queryKey: getGetHrWorkspaceQueryKey() }),
+    ]);
+  }
+  async function completeDraft() {
+    if (!pendingDraft) return;
+    setDraftCompleting(true);
+    setActionError("");
+    try {
+      const response = await fetch(`/api/v1/hr/employee-records/${encodeURIComponent(pendingDraft.id)}/complete`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}`,
+        },
+        body: JSON.stringify(
+          pendingDraft.state?.position === "Maintenance Worker"
+            ? { maintenanceAssignment: draftAssignment }
+            : {},
+        ),
+      });
+      const body = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(body?.error || "Unable to finish employee setup.");
+      const employeeName = `${String(pendingDraft.state?.firstName || "")} ${String(pendingDraft.state?.lastName || "")}`.trim();
+      setCompletedDraft({
+        name: employeeName,
+        employeeNumber: body.employeeNumber,
+        code: body.code,
+      });
+      await refresh();
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      setDraftCompleting(false);
+    }
   }
   function openAddEmployee() {
     void refetchDevelopments();
@@ -483,6 +538,30 @@ export default function Team() {
         <div><h1 className="text-2xl font-bold tracking-tight">Team Directory</h1>
           <p className="text-muted-foreground text-sm">View staff directory and authority.</p></div>
       </div>
+      {actor?.role === "human_resources" && pendingEmployeeDrafts.length > 0 && (
+        <div className="rounded-[14px] border border-border bg-card p-4 shadow-sm">
+          <h2 className="font-bold">Finish employee setup</h2>
+          <div className="mt-3 grid gap-3">
+            {pendingEmployeeDrafts.map((record) => {
+              const employeeName = `${String(record.state?.firstName || "")} ${String(record.state?.lastName || "")}`.trim();
+              return (
+                <div key={record.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+                  <div>
+                    <div className="font-semibold">{employeeName}</div>
+                    <div className="text-sm text-muted-foreground">{String(record.state?.position || "")}</div>
+                  </div>
+                  <Button onClick={() => {
+                    setPendingDraft(record);
+                    setDraftAssignment(record.state?.emergencyTruckDriver === true ? "truck" : "regular");
+                    setCompletedDraft(null);
+                    setActionError("");
+                  }}>Generate number and code</Button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
         <div className="p-4 border-b border-border space-y-3">
           <div className="flex max-w-xl gap-2">
@@ -596,6 +675,50 @@ export default function Team() {
               {reset.isPending ? "Saving..." : "Generate code"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(pendingDraft)} onOpenChange={(value) => {
+        if (!value) {
+          setPendingDraft(null);
+          setCompletedDraft(null);
+          setActionError("");
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{completedDraft ? "Employee number and code" : "Finish employee setup"}</DialogTitle>
+          </DialogHeader>
+          {completedDraft ? (
+            <div className="space-y-4">
+              <div className="font-semibold">{completedDraft.name}</div>
+              <div><Label>Employee number</Label><div className="mt-1 rounded-md border p-3 font-mono text-xl font-bold">{completedDraft.employeeNumber}</div></div>
+              <div><Label>Sign-in code</Label><div className="mt-1 rounded-md border p-3 font-mono text-3xl font-bold tracking-[0.35em]">{completedDraft.code}</div></div>
+              <DialogFooter><Button onClick={() => { setPendingDraft(null); setCompletedDraft(null); }}>Done</Button></DialogFooter>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div>
+                <div className="font-semibold">{`${String(pendingDraft?.state?.firstName || "")} ${String(pendingDraft?.state?.lastName || "")}`.trim()}</div>
+                <div className="text-sm text-muted-foreground">{String(pendingDraft?.state?.position || "")}</div>
+              </div>
+              {pendingDraft?.state?.position === "Maintenance Worker" && (
+                <div className="space-y-2">
+                  <Label htmlFor="team-maintenance-assignment">Maintenance assignment</Label>
+                  <select id="team-maintenance-assignment" className="w-full rounded-md border bg-background p-2" value={draftAssignment} onChange={(event) => setDraftAssignment(event.target.value as "regular" | "truck")}>
+                    <option value="regular">Regular maintenance</option>
+                    <option value="truck">Truck driver</option>
+                  </select>
+                </div>
+              )}
+              {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setPendingDraft(null)}>Cancel</Button>
+                <Button type="button" onClick={completeDraft} disabled={draftCompleting}>
+                  {draftCompleting ? "Generating..." : "Generate number and code"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
       {actionError && !open && <p className="text-sm text-destructive">{actionError}</p>}

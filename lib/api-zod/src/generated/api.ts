@@ -960,18 +960,14 @@ export const GetHrWorkspaceResponse = zod.object({
 
 
 /**
- * @summary Add the employee number and create the linked Team account
+ * @summary Generate the employee number, sign-in code, and linked Team account
  */
 export const CompleteHrEmployeeIntakeParams = zod.object({
   "id": zod.coerce.string()
 })
 
-export const completeHrEmployeeIntakeBodyEmployeeNumberMax = 50;
-
-
-
 export const CompleteHrEmployeeIntakeBody = zod.object({
-  "employeeNumber": zod.string().min(1).max(completeHrEmployeeIntakeBodyEmployeeNumberMax)
+  "maintenanceAssignment": zod.enum(['regular', 'truck']).optional()
 })
 
 export const completeHrEmployeeIntakeResponseCodeMin = 4;
@@ -981,6 +977,7 @@ export const completeHrEmployeeIntakeResponseCodeMax = 4;
 
 export const CompleteHrEmployeeIntakeResponse = zod.object({
   "staffId": zod.string(),
+  "employeeNumber": zod.string(),
   "code": zod.string().min(completeHrEmployeeIntakeResponseCodeMin).max(completeHrEmployeeIntakeResponseCodeMax),
   "codeVisibleUntil": zod.coerce.date()
 })

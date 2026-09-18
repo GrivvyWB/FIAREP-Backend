@@ -66,7 +66,6 @@ type SectionField = {
 
 const sectionFields: Partial<Record<Category, readonly SectionField[]>> = {
   "hr-employee-records": [
-    { key: "employeeNumber", label: "Employee number" },
     { key: "firstName", label: "First name" },
     { key: "lastName", label: "Last name" },
     { key: "email", label: "Email", type: "email" },
@@ -191,7 +190,6 @@ export default function HRWorkspace() {
   const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
   const [editingRecord, setEditingRecord] = useState<EntityRecord | null>(null);
   const [credentialBusy, setCredentialBusy] = useState("");
-  const [issuedCredential, setIssuedCredential] = useState<{ staffId: string; name: string; code: string } | null>(null);
   
   const [view, setView] = useState<"records" | "audit">("records");
   const [filterProcess, setFilterProcess] = useState<string>("all");
@@ -282,11 +280,6 @@ export default function HRWorkspace() {
         return;
       }
       const sectionEntries = Object.entries(sectionValues)
-        .filter(([key]) => !(
-          editingRecord?.entity === "hr-employee-records" &&
-          editingRecord.state.employeeStaffId &&
-          key === "employeeNumber"
-        ))
         .map(([key, value]) => [key, value.trim()]);
       const sectionState = Object.fromEntries(
         editingRecord
@@ -294,37 +287,6 @@ export default function HRWorkspace() {
           : sectionEntries.filter(([, value]) => value !== ""),
       );
       if (editingRecord) {
-        if (
-          editingRecord.entity === "hr-employee-records" &&
-          !editingRecord.state.employeeStaffId
-        ) {
-          const response = await fetch(
-            `/api/v1/hr/employee-records/${encodeURIComponent(editingRecord.id)}/complete`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}`,
-              },
-               body: JSON.stringify({
-                 employeeNumber: sectionValues.employeeNumber || "",
-                 maintenanceAssignment: sectionValues.position === "Maintenance Worker"
-                   ? sectionValues.emergencyTruckDriver === "true" ? "truck" : "regular"
-                   : undefined,
-               }),
-            },
-          );
-           if (!response.ok) {
-            const body = await response.json().catch(() => null);
-            throw new Error(body?.error || "Unable to complete employee intake.");
-          }
-           const completed = await response.json() as { staffId: string; code: string };
-           setIssuedCredential({
-             staffId: completed.staffId,
-             name: `${String(editingRecord.state.firstName || "")} ${String(editingRecord.state.lastName || "")}`.trim(),
-             code: completed.code,
-           });
-        } else {
         const employeeDevelopments = values.category === "hr-employee-records"
           ? assignedDevelopments
           : undefined;
@@ -345,7 +307,6 @@ export default function HRWorkspace() {
             },
           },
         });
-        }
       } else {
         await create.mutateAsync({
           entity: values.category,
@@ -397,7 +358,6 @@ export default function HRWorkspace() {
   async function emailCode(staffId: string) {
     setCredentialBusy(staffId);
     setError("");
-    setIssuedCredential(null);
     try {
       const response = await fetch(`/api/v1/hr/staff/${encodeURIComponent(staffId)}/send-code`, {
         method: "POST",
@@ -541,15 +501,6 @@ export default function HRWorkspace() {
       {workspace.isLoading && <div className="py-20 text-center text-muted-foreground" data-testid="status-hr-loading">Loading HR workspace...</div>}
       {workspace.isError && <div className="py-20 text-center text-destructive" data-testid="status-hr-error">{errorMessage(workspace.error)}</div>}
       {error && <div className="rounded-md bg-destructive/15 p-3 text-sm text-destructive" data-testid="status-hr-action-error">{error}</div>}
-      {issuedCredential && (
-        <div className="flex flex-wrap items-center gap-3 rounded-md border border-emerald-500/30 bg-emerald-500/10 p-3 text-sm">
-          <span>{issuedCredential.name}</span>
-          <span className="rounded-md border px-2 py-1 font-mono font-bold">{issuedCredential.code}</span>
-          <Button size="sm" variant="outline" onClick={() => emailCode(issuedCredential.staffId)} disabled={credentialBusy === issuedCredential.staffId}>
-            <Mail className="mr-1.5 h-3.5 w-3.5" />Email code
-          </Button>
-        </div>
-      )}
 
       {!workspace.isLoading && !workspace.isError && (
         <div className="flex flex-col md:flex-row gap-6 items-start">
@@ -737,7 +688,7 @@ export default function HRWorkspace() {
                                 {actor?.role === "human_resources" && row.entity !== "hr-approvals" && (
                                  <Button size="sm" variant="outline" data-testid={`button-edit-hr-record-${row.id}`} onClick={() => openEditRecord(row)}>
                                    <Pencil className="mr-1.5 h-3.5 w-3.5" />
-                                    {row.entity === "hr-employee-records" && !state.employeeStaffId ? "Finish employee setup" : "Edit"}
+                                    Edit
                                  </Button>
                                )}
                                {status === "draft" && row.entity !== "hr-employee-records" && (
@@ -842,13 +793,7 @@ export default function HRWorkspace() {
                   <FormMessage />
                 </FormItem>
               )} />
-              {(sectionFields[selectedCategory] || [])
-                .filter((field) =>
-                  selectedCategory !== "hr-employee-records" ||
-                  Boolean(editingRecord) ||
-                  field.key !== "employeeNumber"
-                )
-                .map((sectionField) => (
+              {(sectionFields[selectedCategory] || []).map((sectionField) => (
                 <div key={sectionField.key} className="space-y-2">
                   <Label htmlFor={`hr-field-${sectionField.key}`}>{sectionField.label}</Label>
                   {sectionField.key === "role" ? (
@@ -1051,11 +996,9 @@ export default function HRWorkspace() {
               <DialogFooter className="pt-2">
                 <Button type="button" variant="outline" data-testid="button-cancel-hr-record" onClick={() => setOpen(false)}>Cancel</Button>
                 <Button type="submit" data-testid="button-submit-hr-record" disabled={create.isPending || update.isPending}>
-                  {editingRecord?.entity === "hr-employee-records" && !editingRecord.state.employeeStaffId
-                    ? "Complete employee and issue code"
-                    : editingRecord
-                      ? (update.isPending ? "Saving..." : "Save record")
-                      : (create.isPending ? "Creating..." : "Create record")}
+                  {editingRecord
+                    ? (update.isPending ? "Saving..." : "Save record")
+                    : (create.isPending ? "Creating..." : "Create record")}
                 </Button>
               </DialogFooter>
             </form>

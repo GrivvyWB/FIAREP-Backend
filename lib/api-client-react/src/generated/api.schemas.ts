@@ -710,6 +710,7 @@ export type StaffIssueResponse = Staff & {
 
 export interface HREmployeeCode {
   staffId: string;
+  employeeNumber: string;
   /**
      * @minLength 4
      * @maxLength 4
@@ -1137,12 +1138,16 @@ export type ListStaffParams = {
 status?: string;
 };
 
+export type CompleteHrEmployeeIntakeBodyMaintenanceAssignment = typeof CompleteHrEmployeeIntakeBodyMaintenanceAssignment[keyof typeof CompleteHrEmployeeIntakeBodyMaintenanceAssignment];
+
+
+export const CompleteHrEmployeeIntakeBodyMaintenanceAssignment = {
+  regular: 'regular',
+  truck: 'truck',
+} as const;
+
 export type CompleteHrEmployeeIntakeBody = {
-  /**
-     * @minLength 1
-     * @maxLength 50
-     */
-  employeeNumber: string;
+  maintenanceAssignment?: CompleteHrEmployeeIntakeBodyMaintenanceAssignment;
 };
 
 export type ListEntityRecordsParams = {

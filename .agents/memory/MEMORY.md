@@ -28,7 +28,7 @@
 - [Replit GitHub initial push](replit-github-initial-push.md) — an active GitHub App may still require the Git pane for a clean repository’s first authenticated push.
 - [FIAREP deletion controls](fiarep-deletion-controls.md) — Platform Control manages the tenant deletion switch from Module Management, not organization registration.
 - [FIAREP HR authority](fiarep-hr-authority.md) — HR administers the employee lifecycle but policy-sensitive decisions still require company and legal approval.
-- [FIAREP employee intake handoff](fiarep-employee-intake-handoff.md) — staff accounts start in Team and atomically open a linked HR employee record for completion.
+- [FIAREP employee intake handoff](fiarep-employee-intake-handoff.md) — HR saves the employee draft; Team generates the employee number, account, and sign-in code.
 - [FIAREP HUD inspection authority](fiarep-hud-inspection-authority.md) — CPMs and Inspectors submit HUD inspections from mobile; designated supervisors review them on web.
 - [FIAREP directory scope](fiarep-directory-scope.md) — staff visibility uses shared development coverage; never reuse stricter leave-approval scope for routing lists.
 - [FIAREP emergency maintenance unit](fiarep-emergency-maintenance-unit.md) — Superintendent Ⓔ manages Emergency-role maintenance staff; only truck drivers receive sequential TRK labels.
