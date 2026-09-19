@@ -52,7 +52,14 @@ export type ResidentialScore = {
   resolutionRate: number;
 };
 
-const RESOLVED_STATUSES = new Set(["cleared", "completed", "resolved", "closed", "done"]);
+const RESOLVED_STATUSES = new Set([
+  "cleared",
+  "completed",
+  "resolved",
+  "closed",
+  "done",
+  "work_approved",
+]);
 const DEVELOPMENT_ENTITIES = new Set([
   "procurement",
   "route-assignments",
@@ -151,6 +158,20 @@ function groupingValue(record: ScoringRecord, keys: string[]): string {
 
 function normalizedGroupingKey(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
+function normalizedAddressGroupingKey(value: string): string {
+  const normalized = normalizedGroupingKey(value)
+    .replace(/[,.]/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\bnew ny\b/g, "new york")
+    .trim();
+  const nycAddress = normalized.match(
+    /^(.*?)(?:\s+(?:new york|ny)(?:\s+ny)?)\s+(\d{5}(?:-\d{4})?)$/,
+  );
+  return nycAddress
+    ? `${nycAddress[1]!.trim()} ${nycAddress[2]}`
+    : normalized;
 }
 
 function sorted<T extends { score?: number; scorePercent?: number; vendor?: string; development?: string; building?: string; address?: string }>(items: T[]): T[] {
@@ -254,7 +275,7 @@ function calculateResolutionScores(
   for (const record of records) {
     if (!entities.has(record.entity)) continue;
     const label = groupingValue(record, keyFields);
-    const key = normalizedGroupingKey(label);
+    const key = normalizedAddressGroupingKey(label);
     const bucket = buckets.get(key) ?? { label, total: 0, resolved: 0, open: 0, overdue: 0 };
     bucket.total += 1;
     if (isResolved(record)) bucket.resolved += 1;

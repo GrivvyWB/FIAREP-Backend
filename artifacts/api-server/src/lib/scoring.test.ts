@@ -143,6 +143,17 @@ test("done work counts as completed and resolved", () => {
   assert.equal(calculateBuildingScores(records, NOW)[0]?.resolved, 1);
 });
 
+test("approved resident work counts as completed and resolved", () => {
+  const records = [
+    record("resident-reports", {
+      status: "work_approved",
+      address: "2201 1st Avenue New York, NY 10029",
+    }, "Jefferson"),
+  ];
+  assert.equal(calculateDevelopmentScores(records, NOW)[0]?.completed, 1);
+  assert.equal(calculateResidentialScores(records, NOW)[0]?.resolved, 1);
+});
+
 test("score grouping ignores case and repeated whitespace while preserving a display label", () => {
   const records = [
     record("building-violations", {
@@ -162,4 +173,43 @@ test("score grouping ignores case and repeated whitespace while preserving a dis
   assert.equal(buildingScores.length, 1);
   assert.equal(buildingScores[0]?.building, "2201 1st Avenue New York");
   assert.equal(buildingScores[0]?.total, 2);
+});
+
+test("NYC address grouping treats common city and state variants as the same address", () => {
+  const records = [
+    record("resident-reports", {
+      status: "work_approved",
+      address: "2201 1st Avenue new ny, ny 10029",
+    }, "Jefferson"),
+    record("resident-reports", {
+      status: "work_approved",
+      address: "2201 1st Avenue New York, NY 10029",
+    }, "Jefferson"),
+    record("resident-reports", {
+      status: "assigned",
+      address: "2201 1st Avenue NY NY 10029",
+    }, "Jefferson"),
+    record("resident-reports", {
+      status: "work_approved",
+      address: "2201 1st Avenue New York, ny 10029",
+    }, "Jefferson"),
+    record("resident-reports", {
+      status: "in_progress",
+      address: "2201 1st Avenue New York, NY 10029",
+    }, "Jefferson"),
+  ];
+  const [development] = calculateDevelopmentScores(records, NOW);
+  const [building] = calculateBuildingScores(records, NOW);
+  const [residential] = calculateResidentialScores(records, NOW);
+  assert.equal(calculateBuildingScores(records, NOW).length, 1);
+  assert.equal(calculateResidentialScores(records, NOW).length, 1);
+  assert.equal(development?.completed, 3);
+  assert.equal(development?.open, 2);
+  assert.equal(development?.points, 20);
+  assert.equal(building?.building, "2201 1st Avenue new ny, ny 10029");
+  assert.equal(building?.total, 5);
+  assert.equal(building?.resolved, 3);
+  assert.equal(residential?.address, "2201 1st Avenue new ny, ny 10029");
+  assert.equal(residential?.total, 5);
+  assert.equal(residential?.resolved, 3);
 });
