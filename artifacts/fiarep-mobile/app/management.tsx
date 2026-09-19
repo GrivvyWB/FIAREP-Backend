@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { photoUri } from '../lib/photos';
@@ -146,15 +146,44 @@ export default function Management() {
   const [cwoDesc, setCwoDesc] = useState<string>('');
   const [cwoCost, setCwoCost] = useState<string>('');
   const [cwoStaff, setCwoStaff] = useState<StaffAccount[]>([]);
+  const resolvedPhotosByReportId = useRef(new Map<string, string[]>());
+  const photoRequestsInFlight = useRef(new Set<string>());
 
   const names = useMemo(() => listDevelopmentNames(), []);
   const load = useCallback(() => {
-    listResidentReports().then(async (items) => {
-      const hydrated = await Promise.all(items.map(async (item) => {
-        const urls = await listResidentReportPhotoUrls(item.id).catch(() => []);
-        return urls.length ? { ...item, photos: urls } : item;
-      }));
-      setReports(hydrated);
+    listResidentReports().then((items) => {
+      // Preserve already-resolved photo URLs so periodic refreshes do not
+      // re-sign them and remount every RemotePhoto.
+      const refreshed = items.map((item) => {
+        const cached = resolvedPhotosByReportId.current.get(item.id);
+        if (cached) return { ...item, photos: cached };
+        const existingUrls = item.photos.filter((uri) => /^https?:\/\//i.test(uri));
+        if (existingUrls.length > 0) {
+          resolvedPhotosByReportId.current.set(item.id, existingUrls);
+          return { ...item, photos: existingUrls };
+        }
+        return item;
+      });
+      setReports(refreshed);
+
+      for (const item of items) {
+        if (
+          resolvedPhotosByReportId.current.has(item.id) ||
+          photoRequestsInFlight.current.has(item.id)
+        ) continue;
+        photoRequestsInFlight.current.add(item.id);
+        void listResidentReportPhotoUrls(item.id)
+          .then((urls) => {
+            resolvedPhotosByReportId.current.set(item.id, urls);
+            setReports((current) => current.map((report) =>
+              report.id === item.id ? { ...report, photos: urls } : report
+            ));
+          })
+          .catch(() => undefined)
+          .finally(() => {
+            photoRequestsInFlight.current.delete(item.id);
+          });
+      }
     });
     getContractorScores().then((arr) => { const m: Record<string, number> = {}; for (const c of arr) m[c.name] = c.score; setScoreByName(m); });
     (async () => {
