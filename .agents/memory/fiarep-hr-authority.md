@@ -15,6 +15,8 @@ For leave, visibility, notifications, and decisions are limited to HR, the emplo
 
 When an organization enables deletion in Platform Workspace, HR may permanently delete staff accounts within its authorized employee scope. This does not grant HR permission to delete unrelated operational records, its own account, or accounts in another organization.
 
+HR may manually change eligible staff members' assigned developments. The shared staff account and linked HR employee record must be updated together.
+
 **Why:** HR needs enough authority to administer the complete employee lifecycle without bypassing management approval, company policy, or legal safeguards.
 
-**How to apply:** Give HR and Administrators full HR-record visibility, and give an employee access only to records whose employeeStaffId equals that employee's actor ID. Keep permitted leave and approval actions on separate role-scoped surfaces. Gate staff-account deletion on both the organization switch and HR's employee scope. Add explicit confirmation and approval boundaries to high-impact actions, preserve audit records, and enforce all restrictions on the server rather than only hiding controls in the interface.
+**How to apply:** Give HR and Administrators full HR-record visibility, and give an employee access only to records whose employeeStaffId equals that employee's actor ID. Keep permitted leave and approval actions on separate role-scoped surfaces. Let HR move eligible staff among developments configured by Platform Control, keep required supervisor assignments non-empty, synchronize linked employee records, and audit the change. Gate staff-account deletion on both the organization switch and HR's employee scope. Add explicit confirmation and approval boundaries to high-impact actions, preserve audit records, and enforce all restrictions on the server rather than only hiding controls in the interface.

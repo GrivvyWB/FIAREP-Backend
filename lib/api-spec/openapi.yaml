@@ -748,6 +748,29 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/staff/{id}/developments:
+    put:
+      operationId: updateStaffDevelopments
+      tags: [staff]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffDevelopmentUpdate" }
+      responses:
+        "200":
+          description: Updated staff development assignments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Staff" }
+        "403":
+          description: Only Human Resources may move eligible staff
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/staff/{id}/revoke:
     post:
       operationId: revokeStaff
@@ -1885,6 +1908,14 @@ components:
         status:
           type: string
           enum: [pending, approved]
+    StaffDevelopmentUpdate:
+      type: object
+      additionalProperties: false
+      required: [developments]
+      properties:
+        developments:
+          type: array
+          items: { type: string }
     StaffCodeUpdate:
       type: object
       additionalProperties: false

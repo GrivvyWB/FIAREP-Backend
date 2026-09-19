@@ -886,6 +886,32 @@ export const DeleteStaffParams = zod.object({
 export const DeleteStaffResponse = zod.void()
 
 
+export const UpdateStaffDevelopmentsParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+export const UpdateStaffDevelopmentsBody = zod.object({
+  "developments": zod.array(zod.string())
+})
+
+export const UpdateStaffDevelopmentsResponse = zod.object({
+  "id": zod.string(),
+  "tenantId": zod.string(),
+  "name": zod.string(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "role": zod.enum(['administrator', 'human_resources', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'resident', 'emergency']),
+  "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
+  "status": zod.string(),
+  "developments": zod.array(zod.string()),
+  "canManage": zod.boolean().optional(),
+  "canResetCode": zod.boolean().optional(),
+  "canRevoke": zod.boolean().optional(),
+  "canDelete": zod.boolean().optional(),
+  "canApprove": zod.boolean().optional()
+})
+
+
 export const RevokeStaffParams = zod.object({
   "id": zod.coerce.string()
 })

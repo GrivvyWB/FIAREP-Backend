@@ -768,6 +768,110 @@ router.delete("/v1/staff/:id", async (req, res) => {
   res.status(204).send();
 });
 
+router.put("/v1/staff/:id/developments", async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.role !== "human_resources") {
+    res.status(403).json({ error: "Only Human Resources may move staff between developments" });
+    return;
+  }
+  const input = req.body as { developments?: unknown };
+  const developments: string[] | null = Array.isArray(input.developments)
+    ? [...new Set(input.developments.filter(
+        (item: unknown): item is string => typeof item === "string",
+      ).map((item) => item.trim()).filter(Boolean))]
+    : null;
+  if (!developments) {
+    res.status(400).json({ error: "developments is required" });
+    return;
+  }
+  const [target] = await db
+    .select()
+    .from(staffAccounts)
+    .where(and(
+      eq(staffAccounts.id, req.params["id"]!),
+      eq(staffAccounts.tenantId, actor.tenantId),
+    ))
+    .limit(1);
+  if (!target) {
+    res.status(404).json({ error: "Staff account not found" });
+    return;
+  }
+  if (!canManageStaff(actor, target)) {
+    res.status(403).json({ error: "Not allowed to move this staff member" });
+    return;
+  }
+  const developmentRequiredPositions = new Set([
+    "Regional Director",
+    "Assistant Regional Director",
+    "Property Manager",
+    "Superintendent",
+    "Superintendent Ⓔ",
+    "Assistant Superintendent",
+  ]);
+  if (
+    (developmentRequiredPositions.has(target.position) ||
+      target.position.toLowerCase().includes("supervisor")) &&
+    developments.length === 0
+  ) {
+    res.status(400).json({ error: "Select at least one assigned development" });
+    return;
+  }
+  const [organization] = await db
+    .select({ features: organizations.features })
+    .from(organizations)
+    .where(eq(organizations.id, actor.tenantId))
+    .limit(1);
+  const configuredDevelopments = getConfiguredDevelopmentNames(organization?.features);
+  if (configuredDevelopments !== null) {
+    const allowedDevelopments = new Set(configuredDevelopments);
+    if (developments.some((development) => !allowedDevelopments.has(development))) {
+      res.status(400).json({ error: "Assigned developments must be configured by Platform Control" });
+      return;
+    }
+  }
+  const updated = await db.transaction(async (tx) => {
+    const [staff] = await tx
+      .update(staffAccounts)
+      .set({ developments, updatedAt: new Date() })
+      .where(and(
+        eq(staffAccounts.id, target.id),
+        eq(staffAccounts.tenantId, actor.tenantId),
+      ))
+      .returning();
+    const hrRows = await tx
+      .select()
+      .from(entityRecords)
+      .where(and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.entity, "hr-employee-records"),
+        eq(entityRecords.deleted, false),
+        sql`(${entityRecords.id} = ${`hr-employee:${target.id}`} OR ${entityRecords.state}->>'employeeStaffId' = ${target.id})`,
+      ));
+    for (const record of hrRows) {
+      await tx
+        .update(entityRecords)
+        .set({
+          development: developments.length === 1 ? developments[0]! : null,
+          state: { ...record.state, assignedDevelopments: developments },
+          version: sql`${entityRecords.version} + 1`,
+          updatedAt: new Date(),
+        })
+        .where(and(
+          eq(entityRecords.id, record.id),
+          eq(entityRecords.tenantId, actor.tenantId),
+        ));
+    }
+    return staff;
+  });
+  await audit(
+    actor,
+    "staff.developments_updated",
+    `Moved ${target.name} to ${developments.length ? developments.join(", ") : "no assigned developments"}`,
+    target.id,
+  );
+  res.json(safe(updated!, actor));
+});
+
 router.post("/v1/staff/:id/revoke", async (req, res) => {
   const actor = actorFrom(res);
   const [target] = await db

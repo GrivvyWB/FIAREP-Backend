@@ -818,6 +818,10 @@ export interface StaffInput {
   status?: StaffInputStatus;
 }
 
+export interface StaffDevelopmentUpdate {
+  developments: string[];
+}
+
 export interface StaffCodeUpdate { [key: string]: unknown }
 
 export interface EntityTombstone {

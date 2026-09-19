@@ -9,6 +9,7 @@ import {
   useListStaff,
   useResetStaffCode,
   useRevokeStaff,
+  useUpdateStaffDevelopments,
   useListStaffDevelopments,
   getListStaffQueryKey,
   getGetHrWorkspaceQueryKey,
@@ -16,7 +17,7 @@ import {
   useGetDeletionPolicy,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2, ChevronDown, Upload, Download, CalendarDays } from "lucide-react";
+import { UsersRound, Search, Copy, Plus, KeyRound, UserX, Trash2, ChevronDown, Upload, Download, CalendarDays, MoveRight } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -117,6 +118,7 @@ export default function Team() {
   const reset = useResetStaffCode();
   const revoke = useRevokeStaff();
   const deleteStaff = useDeleteStaff();
+  const updateStaffDevelopments = useUpdateStaffDevelopments();
   const [search, setSearch] = useState("");
   const [directoryDevelopment, setDirectoryDevelopment] = useState("");
   const [directoryStaffId, setDirectoryStaffId] = useState("");
@@ -144,6 +146,8 @@ export default function Team() {
   const [draftAssignment, setDraftAssignment] = useState<"regular" | "truck">("regular");
   const [draftCompleting, setDraftCompleting] = useState(false);
   const [completedDraft, setCompletedDraft] = useState<{ name: string; employeeNumber: string; code: string } | null>(null);
+  const [moveTarget, setMoveTarget] = useState<{ id: string; name: string } | null>(null);
+  const [moveDevelopments, setMoveDevelopments] = useState<string[]>([]);
 
   const roleOptions = useMemo(() => {
     if (!actor) return [];
@@ -404,6 +408,21 @@ export default function Team() {
       return false;
     }
   }
+  async function moveMember() {
+    if (!moveTarget) return;
+    setActionError("");
+    try {
+      await updateStaffDevelopments.mutateAsync({
+        id: moveTarget.id,
+        data: { developments: moveDevelopments },
+      });
+      await refresh();
+      setMoveTarget(null);
+      setMoveDevelopments([]);
+    } catch (e) {
+      setActionError(errorMessage(e));
+    }
+  }
   async function copyCode() {
     if (issuedCode) await navigator.clipboard?.writeText(issuedCode);
   }
@@ -486,6 +505,16 @@ export default function Team() {
           {member.canApprove && <Button size="sm" onClick={() => approveEmployee(member.id, member.name, member.role)} disabled={approve.isPending}>Approve employee</Button>}
           {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
           {member.canRevoke && member.status !== "revoked" && <Button size="sm" variant="destructive" onClick={() => revokeAccount(member.id, member.name)}><UserX className="mr-1 h-3 w-3" />{actor?.role === "human_resources" ? "Deactivate" : "Revoke"}</Button>}
+          {actor?.role === "human_resources" && member.canManage && <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setMoveTarget({ id: member.id, name: member.name });
+              setMoveDevelopments(member.developments);
+              setActionError("");
+            }}
+            data-testid={`button-move-member-${member.id}`}
+          ><MoveRight className="mr-1 h-3 w-3" />Move</Button>}
           {actor?.role === "human_resources" && member.status === "approved" && <Button size="sm" variant="outline" onClick={() => {
             const params = new URLSearchParams({
               new: "1",
@@ -673,6 +702,51 @@ export default function Team() {
             <Button type="button" variant="outline" onClick={() => setResetTarget(null)}>Cancel</Button>
             <Button type="button" onClick={resetCode} disabled={reset.isPending}>
               {reset.isPending ? "Saving..." : "Generate code"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(moveTarget)} onOpenChange={(value) => {
+        if (!value) {
+          setMoveTarget(null);
+          setMoveDevelopments([]);
+          setActionError("");
+        }
+      }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move {moveTarget?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            {developmentsLoading ? <p className="text-sm text-muted-foreground">Loading developments...</p> :
+              developmentsError ? <p className="text-sm text-destructive">{errorMessage(developmentsError)}</p> :
+              !availableDevelopments?.length ? <p className="text-sm text-muted-foreground">No active developments available.</p> :
+              <div className="max-h-72 space-y-2 overflow-y-auto" role="group" aria-label="Available developments">
+                {availableDevelopments.map((development) => (
+                  <label key={development} className="flex items-center gap-2 text-sm">
+                    <Checkbox
+                      checked={moveDevelopments.includes(development)}
+                      onCheckedChange={(checked) => setMoveDevelopments((current) =>
+                        checked
+                          ? [...new Set([...current, development])]
+                          : current.filter((item) => item !== development)
+                      )}
+                    />
+                    <span>{development}</span>
+                  </label>
+                ))}
+              </div>}
+            {actionError && <p className="text-sm text-destructive">{actionError}</p>}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setMoveTarget(null)}>Cancel</Button>
+            <Button
+              type="button"
+              onClick={moveMember}
+              disabled={updateStaffDevelopments.isPending || developmentsLoading}
+              data-testid="button-save-member-move"
+            >
+              {updateStaffDevelopments.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>
