@@ -1,4 +1,10 @@
-import { useGetScores, getGetScoresQueryKey } from "@workspace/api-client-react";
+import { useState } from "react";
+import {
+  useGetScores,
+  getGetScoresQueryKey,
+  useListEntityRecords,
+  getListEntityRecordsQueryKey,
+} from "@workspace/api-client-react";
 import { format } from "date-fns";
 import { Loader2, Target, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -13,6 +19,19 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type ResidentReportRecord = {
+  id: string;
+  development?: string | null;
+  state?: Record<string, unknown>;
+};
 
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(1)}%`;
@@ -25,6 +44,7 @@ function getScoreBadgeVariant(score: number) {
 }
 
 export default function Scores() {
+  const [reportDevelopment, setReportDevelopment] = useState("all");
   const { data: scores, isLoading, isError, refetch, isRefetching } = useGetScores({
     query: {
       queryKey: getGetScoresQueryKey(),
@@ -32,9 +52,34 @@ export default function Scores() {
       staleTime: 60_000,
     },
   });
+  const reportsQuery = useListEntityRecords("resident-reports", undefined, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("resident-reports"),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
+
+  const residentReports = (reportsQuery.data || []) as ResidentReportRecord[];
+  const reportDevelopments = [...new Set(
+    residentReports
+      .map((report) => report.development?.trim())
+      .filter((development): development is string => Boolean(development)),
+  )].sort();
+  const filteredResidentReports = residentReports.filter((report) =>
+    reportDevelopment === "all" ||
+    report.development?.trim().toLowerCase() === reportDevelopment.toLowerCase()
+  );
+  const inProgressReports = filteredResidentReports.filter((report) =>
+    ["submitted", "assigned", "in_progress"].includes(String(report.state?.status || "submitted"))
+  ).length;
+  const completedReports = filteredResidentReports.filter((report) =>
+    ["completed", "done", "resolved", "work_approved"].includes(String(report.state?.status || ""))
+  ).length;
 
   const handleRefresh = () => {
     refetch();
+    reportsQuery.refetch();
   };
 
   if (isLoading) {
@@ -96,7 +141,7 @@ export default function Scores() {
             onClick={handleRefresh} 
             variant="outline" 
             size="sm"
-            disabled={isRefetching}
+            disabled={isRefetching || reportsQuery.isRefetching}
             className="gap-2 shrink-0"
           >
             <RefreshCw className={`h-4 w-4 ${isRefetching ? "animate-spin" : ""}`} />
@@ -104,6 +149,50 @@ export default function Scores() {
           </Button>
         </div>
       </div>
+
+      <Card className="shadow-sm">
+        <CardHeader className="border-b border-border/40 bg-muted/20 pb-4">
+          <CardTitle className="text-lg">Resident Reports</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-5 pt-5">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="rounded-lg border bg-card p-5">
+              <p
+                className="text-3xl font-bold text-primary"
+                data-testid="text-resident-reports-in-progress"
+              >
+                {reportsQuery.isLoading ? "—" : inProgressReports}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">In Progress</p>
+            </div>
+            <div className="rounded-lg border bg-card p-5">
+              <p
+                className="text-3xl font-bold text-emerald-700"
+                data-testid="text-resident-reports-completed"
+              >
+                {reportsQuery.isLoading ? "—" : completedReports}
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground">Completed</p>
+            </div>
+          </div>
+          <div className="max-w-md space-y-2">
+            <p className="text-sm font-medium">Development</p>
+            <Select value={reportDevelopment} onValueChange={setReportDevelopment}>
+              <SelectTrigger data-testid="select-resident-reports-development">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All developments</SelectItem>
+                {reportDevelopments.map((development) => (
+                  <SelectItem key={development} value={development}>
+                    {development}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <Card className="shadow-sm">

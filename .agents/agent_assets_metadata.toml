@@ -50,3 +50,17 @@ mtime_ms = 1789838659675
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/21c2f479-c551-4441-a5f0-93b700edbf09/c3336eeb-f11f-4135-b0b9-a8ddd09ebd5d"
 storage_version_token = "1789838667235307"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "Nr3K_Pmfj5X4U-TzUI0Se"
+uri = "file://releases/FIAREP-1.0.0-build-9.ipa"
+type = "unspecified"
+title = "FIAREP iOS Build 9"
+description = "Signed production IPA containing the Resident Reports score card, Work Approved completion count, report rehydration fix, and enlarged app icon. Upload this file with Apple Transporter to the existing FIAREP App Store Connect app."
+logical_id = "64bc0217-2eef-48e7-b7cb-da7a76f83358"
+content_hash = "sha256:c3c52ffb2173e2aa0fd3e74632d2f5ce075bf8d639ea2218e49fcf61a776d811"
+size = 26869920
+mtime_ms = 1789848181899
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/64bc0217-2eef-48e7-b7cb-da7a76f83358/2f4c3b6c-3a7a-4043-8300-9c5f8998feb9"
+storage_version_token = "1789848188444171"
+content_type = "application/octet-stream"
