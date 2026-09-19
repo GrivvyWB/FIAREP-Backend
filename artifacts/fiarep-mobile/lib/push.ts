@@ -73,7 +73,6 @@ export async function notifyLocal(title: string, body: string, urgent: boolean =
         title,
         body,
         sound: 'default',
-        badge: 0,
         color: urgent ? '#c0392b' : undefined,
         interruptionLevel: urgent ? 'timeSensitive' : 'active',
       },
@@ -82,7 +81,7 @@ export async function notifyLocal(title: string, body: string, urgent: boolean =
   } catch (e) {}
 }
 
-export async function clearAppBadge(): Promise<void> {
+export async function clearBadge(): Promise<void> {
   const N = getNotifs();
   if (!N) return;
   try { await N.setBadgeCountAsync(0); } catch {}

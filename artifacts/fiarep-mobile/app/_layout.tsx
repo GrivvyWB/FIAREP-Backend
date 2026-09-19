@@ -12,6 +12,7 @@ import {
    type AppMode, type InstallationPersona } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
+import { clearBadge } from '../lib/push';
 
 type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
@@ -436,6 +437,7 @@ export default function Layout() {
     const sub = AppState.addEventListener('change', (state) => {
       if (state === 'active') {
         syncAllEntities().catch(() => undefined);
+        clearBadge().catch(() => undefined);
       }
     });
     return () => { mounted = false; sub.remove(); };
