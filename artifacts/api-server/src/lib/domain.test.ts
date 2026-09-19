@@ -221,19 +221,22 @@ test("HR linkage and workflow fields cannot be patched directly", () => {
 });
 
 test("operational deletion is limited to higher management", () => {
-  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Borough Director" })), false);
+  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Borough Director" })), true);
   assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Regional Director" })), true);
   assert.equal(canDeleteOperationalRecords(actor({ role: "administrator", position: "Administrator" })), true);
   assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Property Manager" })), false);
   assert.equal(canDeleteOperationalRecords(actor({ role: "inspector", position: "Supervisor" })), false);
 });
 
-test("Borough Director is read-only for every entity", () => {
+test("Borough Director may delete resident reports but remains read-only elsewhere", () => {
   const boroughDirector = actor({ role: "management", position: "Borough Director" });
   for (const entity of ["resident-reports", "emergency-jobs", "elevators", "procurement", "hr-approvals"]) {
     assert.equal(canCreateEntity(boroughDirector, entity), false);
     assert.equal(canMutateEntity(boroughDirector, entity), false);
-    assert.equal(canDeleteEntity(boroughDirector, entity, {}), false);
+    assert.equal(
+      canDeleteEntity(boroughDirector, entity, {}),
+      entity === "resident-reports",
+    );
   }
 });
 

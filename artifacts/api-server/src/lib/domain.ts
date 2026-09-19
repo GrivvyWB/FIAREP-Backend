@@ -29,7 +29,8 @@ export function canUseGeneralStaffLogin(role: string): boolean {
 
 export function canDeleteOperationalRecords(actor: Actor): boolean {
   return actor.role === "administrator" ||
-    (actor.role === "management" && actor.position === "Regional Director");
+    (actor.role === "management" &&
+      ["Borough Director", "Regional Director"].includes(actor.position));
 }
 
 export function canDeleteStaffAccounts(actor: Actor): boolean {
@@ -598,7 +599,7 @@ export function canDeleteEntity(
   entity: string,
   state: Record<string, unknown>,
 ): boolean {
-  if (isBoroughDirector(actor)) return false;
+  if (isBoroughDirector(actor)) return entity === "resident-reports";
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
   // entity deletion route.
