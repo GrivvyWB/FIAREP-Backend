@@ -35,3 +35,18 @@ uri = "file://attached_assets/generated_audio/resident-that-was-easy.mp3"
 type = "audio"
 title = "resident says that was easy"
 description = "Text-to-speech audio: That was easy."
+logical_id = "b5388d16-5c06-4789-bf98-77142758df45"
+
+[[outputs]]
+id = "BNYliEee0sta-bwMTNwxh"
+uri = "file://exports/fiarep-standalone.zip"
+type = "unspecified"
+title = "fiarep-standalone"
+description = "Downloadable FIAREP Expo mobile source package with its generated API client and setup instructions. Dependencies, caches, secrets, backend source, and local databases are excluded."
+logical_id = "21c2f479-c551-4441-a5f0-93b700edbf09"
+content_hash = "sha256:c978c34d161e663480b8807d798c4312fa6b656a8b7e7a29d0935430576a74a6"
+size = 2127822
+mtime_ms = 1789838659675
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/21c2f479-c551-4441-a5f0-93b700edbf09/c3336eeb-f11f-4135-b0b9-a8ddd09ebd5d"
+storage_version_token = "1789838667235307"
+content_type = "application/octet-stream"
