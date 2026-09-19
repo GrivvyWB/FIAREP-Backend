@@ -350,7 +350,9 @@ async function applyRecord(d: any, record: any, owner: string) {
   );
 }
 
-export async function syncAllEntities(): Promise<void> {
+export async function syncAllEntities(options?: {
+  refreshEntities?: string[];
+}): Promise<void> {
   if (!(await getAccessToken())) return;
   const d = await db();
   await ensureQueue(d);
@@ -376,6 +378,11 @@ export async function syncAllEntities(): Promise<void> {
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) recordCursors = parsed;
   } catch {
     // A corrupt optional per-entity cursor should not prevent legacy sync.
+  }
+  for (const entity of options?.refreshEntities || []) {
+    if (TABLES.some((item) => item.entity === entity)) {
+      recordCursors[entity] = new Date(0).toISOString();
+    }
   }
   const legacyCursor = cursorRow?.value || new Date(0).toISOString();
   const result = await pullSync({

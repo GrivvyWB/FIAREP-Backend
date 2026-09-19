@@ -151,6 +151,7 @@ export default function Management() {
   const [cwoStaff, setCwoStaff] = useState<StaffAccount[]>([]);
   const resolvedPhotosByReportId = useRef(new Map<string, string[]>());
   const photoRequestsInFlight = useRef(new Set<string>());
+  const needsReportRehydrate = useRef(true);
 
   const names = useMemo(() => listDevelopmentNames(), []);
   const load = useCallback(() => {
@@ -204,7 +205,12 @@ export default function Management() {
       if (syncing) return;
       syncing = true;
       try {
-        await syncAllEntities();
+        await syncAllEntities(
+          needsReportRehydrate.current
+            ? { refreshEntities: ['resident-reports'] }
+            : undefined,
+        );
+        needsReportRehydrate.current = false;
         if (active) load();
       } finally {
         syncing = false;
@@ -229,7 +235,9 @@ export default function Management() {
 
   const visible = filterDev === ALL
     ? reports
-    : reports.filter((r) => (r.development || '') === filterDev);
+    : reports.filter((r) =>
+        (r.development || '').trim().toLowerCase() === filterDev.trim().toLowerCase()
+      );
 
   const inProgressCount = visible.filter((r) => r.status === 'submitted' || r.status === 'assigned' || r.status === 'in_progress').length;
   const completedCount = visible.filter((r) => r.status === 'completed' || r.status === 'resolved').length;

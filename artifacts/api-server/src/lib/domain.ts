@@ -356,13 +356,20 @@ export function developmentAllowed(
   if (isBoroughDirector(actor)) return true;
   if (actor.role === "administrator") return true;
   if (actor.role === "human_resources") return true;
+  const normalizedDevelopment = development?.trim().toLowerCase() || "";
+  const normalizedAssignments = actor.developments.map((item) =>
+    item.trim().toLowerCase()
+  );
   if (actor.role === "management") {
-    return Boolean(development && actor.developments.includes(development));
+    return Boolean(
+      normalizedDevelopment &&
+      normalizedAssignments.includes(normalizedDevelopment)
+    );
   }
   return (
     actor.developments.length === 0 ||
     !development ||
-    actor.developments.includes(development)
+    normalizedAssignments.includes(normalizedDevelopment)
   );
 }
 

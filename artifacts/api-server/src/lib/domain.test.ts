@@ -318,6 +318,10 @@ test("management oversight is limited to assigned developments", () => {
     true,
   );
   assert.equal(
+    entityDevelopmentAllowed(manager, "resident-reports", " development a "),
+    true,
+  );
+  assert.equal(
     entityDevelopmentAllowed(manager, "resident-reports", "Development B"),
     false,
   );
