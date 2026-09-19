@@ -20,6 +20,19 @@ function residentPhotoAiEnabled(features: Record<string, unknown>) {
   );
 }
 
+export function hasSavedResidentPhotoScan(
+  state: Record<string, unknown>,
+  photoId: string,
+): boolean {
+  const scans = state["aiPhotoScans"];
+  return Boolean(
+    scans &&
+    typeof scans === "object" &&
+    !Array.isArray(scans) &&
+    Object.prototype.hasOwnProperty.call(scans, photoId),
+  );
+}
+
 async function tenantResidentPhotoAiEnabled(tenantId: string) {
   const [organization] = await db.select({ features: organizations.features })
     .from(organizations)
@@ -104,6 +117,10 @@ router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, 
       !actor.developments.some((value) => value.toLowerCase() === report.development!.toLowerCase()))
   ) {
     res.status(404).json({ error: "Photo not found" });
+    return;
+  }
+  if (hasSavedResidentPhotoScan(report.state, photo.id)) {
+    res.status(409).json({ error: "This complaint photo has already been analyzed" });
     return;
   }
   const apiKey = process.env.OPENAI_API_KEY;

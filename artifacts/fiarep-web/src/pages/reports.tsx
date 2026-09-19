@@ -183,16 +183,18 @@ function Photos({ reportId, savedScans }: {
             </Button>
           </div>
           {aiConfig?.enabled && (
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full"
-              disabled={busy === photo.id || classifyPhoto.isPending}
-              onClick={() => scanPhoto(photo.id)}
-            >
-              <ScanLine className="mr-2 h-4 w-4" />
-              {busy === photo.id ? "Analyzing…" : scan ? "Analyze again" : "Analyze violation"}
-            </Button>
+            !scan && (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={busy === photo.id || classifyPhoto.isPending}
+                onClick={() => scanPhoto(photo.id)}
+              >
+                <ScanLine className="mr-2 h-4 w-4" />
+                {busy === photo.id ? "Analyzing…" : "Analyze violation"}
+              </Button>
+            )
           )}
         </div>
       </div>
