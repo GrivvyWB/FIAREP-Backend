@@ -9,7 +9,7 @@ import {
   STAFF_POSITIONS,
   serializeHrStaff,
 } from "../lib/domain";
-import { allocateStaffCode, truckStaffCode } from "../lib/staffCodes";
+import { allocateStaffCode, allocateTruckStaffCode } from "../lib/staffCodes";
 import { emailStaffAccessCode } from "../lib/staffEmail";
 import { audit } from "../lib/audit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
@@ -207,21 +207,34 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
     let issuedName = name.replace(/^TRK-\d+\s+/i, "");
     let issuedTruckNumber: number | null = null;
     if (emergencyTruckDriver) {
-      const existingTruckDrivers = await tx.select({ name: staffAccounts.name }).from(staffAccounts).where(and(
-        eq(staffAccounts.tenantId, actor.tenantId),
-        eq(staffAccounts.role, "emergency"),
-        eq(staffAccounts.position, "Maintenance Worker"),
-      ));
+      const [existingTruckDrivers, existingTruckUnits] = await Promise.all([
+        tx.select({ name: staffAccounts.name }).from(staffAccounts).where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.role, "emergency"),
+          eq(staffAccounts.position, "Maintenance Worker"),
+        )),
+        tx.select({ state: entityRecords.state }).from(entityRecords).where(and(
+          eq(entityRecords.tenantId, actor.tenantId),
+          eq(entityRecords.entity, "emergency-units"),
+          eq(entityRecords.deleted, false),
+        )),
+      ]);
       const nextTruckNumber = existingTruckDrivers.reduce((highest, member) => {
         const value = /^TRK-(\d+)\s+/i.exec(member.name)?.[1];
         return value ? Math.max(highest, Number(value)) : highest;
-      }, 0) + 1;
+      }, existingTruckUnits.reduce((highest, unit) => {
+        const value = Number(
+          unit.state["truckNumber"] ||
+          /(?:TRK|Truck)[- ]?(\d+)/i.exec(String(unit.state["unitName"] || unit.state["name"] || ""))?.[1] ||
+          0
+        );
+        return Number.isInteger(value) ? Math.max(highest, value) : highest;
+      }, 0)) + 1;
       issuedTruckNumber = nextTruckNumber;
-      issuedName = `TRK-${nextTruckNumber} ${issuedName}`;
     }
     const code = issuedTruckNumber === null
       ? await allocateStaffCode(tx, actor.tenantId, name)
-      : truckStaffCode(issuedTruckNumber);
+      : await allocateTruckStaffCode(tx, actor.tenantId, issuedTruckNumber);
     const [staff] = await tx.insert(staffAccounts).values({
       id: staffId,
       tenantId: actor.tenantId,

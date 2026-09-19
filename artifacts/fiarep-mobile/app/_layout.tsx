@@ -17,8 +17,8 @@ type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
 export function useAppMode() { return useContext(ModeContext); }
 
-const CODE_LEN = 4;
-const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, CODE_LEN);
+const CODE_LEN = 16;
+const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, CODE_LEN);
 
 const HOME_FOR_MODE: Record<AppMode, string> = {
   management: '/management-home',

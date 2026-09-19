@@ -24,7 +24,7 @@ import {
   serializeStaffIssueResponse,
   withInitialWorkflowState,
 } from "../lib/domain";
-import { allocateStaffCode, truckStaffCode } from "../lib/staffCodes";
+import { allocateStaffCode, allocateTruckStaffCode } from "../lib/staffCodes";
 import { emailStaffAccessCode } from "../lib/staffEmail";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -532,40 +532,20 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
       eq(staffAccounts.id, target.id),
       eq(staffAccounts.tenantId, actor.tenantId),
     )).limit(1);
-    const nextEmailAt = current?.codeEmailedAt
-      ? new Date(current.codeEmailedAt.getTime() + CODE_EMAIL_COOLDOWN_MS)
-      : null;
-    if (nextEmailAt && nextEmailAt.getTime() > Date.now()) {
-      throw Object.assign(new Error("Next email in 24 hrs for code"), { status: 429, nextEmailAt });
-    }
-    let truckNumber = target.role === "emergency"
-      ? Number(/^TRK-(\d+)\s+/i.exec(target.name)?.[1] || 0)
-      : 0;
     const isTruckDriver = target.role === "emergency" &&
       target.position === "Maintenance Worker" &&
       employeeRecord?.state["emergencyTruckDriver"] === true;
-    if (isTruckDriver && truckNumber === 0) {
-      const existingTruckDrivers = await tx.select({ name: staffAccounts.name })
-        .from(staffAccounts)
-        .where(and(
-          eq(staffAccounts.tenantId, actor.tenantId),
-          eq(staffAccounts.role, "emergency"),
-          eq(staffAccounts.position, "Maintenance Worker"),
-        ));
-      truckNumber = existingTruckDrivers.reduce((highest, member) => {
-        const value = /^TRK-(\d+)\s+/i.exec(member.name)?.[1];
-        return value ? Math.max(highest, Number(value)) : highest;
-      }, 0) + 1;
+    const needsTruckCodeUpgrade = isTruckDriver &&
+      !/^TRK\d+-[A-Z0-9]{4}$/i.test(current?.code || "");
+    const nextEmailAt = current?.codeEmailedAt
+      ? new Date(current.codeEmailedAt.getTime() + CODE_EMAIL_COOLDOWN_MS)
+      : null;
+    if (nextEmailAt && nextEmailAt.getTime() > Date.now() && !needsTruckCodeUpgrade) {
+      throw Object.assign(new Error("Next email in 24 hrs for code"), { status: 429, nextEmailAt });
     }
-    const code = truckNumber > 0
-      ? truckStaffCode(truckNumber)
-      : await allocateStaffCode(tx, actor.tenantId, target.name);
-    const issuedName = truckNumber > 0
-      ? `TRK-${truckNumber} ${target.name.replace(/^TRK-\d+\s+/i, "")}`
-      : target.name;
-    let emergencyUnitId: string | null = null;
+    let existingUnit: { id: string; state: Record<string, unknown> } | undefined;
     if (isTruckDriver) {
-      const [existingUnit] = await tx.select({
+      [existingUnit] = await tx.select({
         id: entityRecords.id,
         state: entityRecords.state,
       })
@@ -577,6 +557,48 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
           sql`${entityRecords.state}->>'assignedStaffId' = ${target.id}`,
         ))
         .limit(1);
+    }
+    let truckNumber = target.role === "emergency"
+      ? Number(
+        existingUnit?.state["truckNumber"] ||
+        /(?:TRK|Truck)[- ]?(\d+)/i.exec(String(existingUnit?.state["unitName"] || existingUnit?.state["name"] || ""))?.[1] ||
+        /^TRK-(\d+)\s+/i.exec(target.name)?.[1] ||
+        0
+      )
+      : 0;
+    if (isTruckDriver && truckNumber === 0) {
+      const [existingTruckDrivers, existingTruckUnits] = await Promise.all([
+        tx.select({ name: staffAccounts.name })
+          .from(staffAccounts)
+          .where(and(
+            eq(staffAccounts.tenantId, actor.tenantId),
+            eq(staffAccounts.role, "emergency"),
+            eq(staffAccounts.position, "Maintenance Worker"),
+          )),
+        tx.select({ state: entityRecords.state }).from(entityRecords).where(and(
+          eq(entityRecords.tenantId, actor.tenantId),
+          eq(entityRecords.entity, "emergency-units"),
+          eq(entityRecords.deleted, false),
+        )),
+      ]);
+      truckNumber = existingTruckDrivers.reduce((highest, member) => {
+        const value = /^TRK-(\d+)\s+/i.exec(member.name)?.[1];
+        return value ? Math.max(highest, Number(value)) : highest;
+      }, existingTruckUnits.reduce((highest, unit) => {
+        const value = Number(
+          unit.state["truckNumber"] ||
+          /(?:TRK|Truck)[- ]?(\d+)/i.exec(String(unit.state["unitName"] || unit.state["name"] || ""))?.[1] ||
+          0
+        );
+        return Number.isInteger(value) ? Math.max(highest, value) : highest;
+      }, 0)) + 1;
+    }
+    const code = truckNumber > 0
+      ? await allocateTruckStaffCode(tx, actor.tenantId, truckNumber)
+      : await allocateStaffCode(tx, actor.tenantId, target.name);
+    const issuedName = target.name.replace(/^TRK-\d+\s+/i, "");
+    let emergencyUnitId: string | null = null;
+    if (isTruckDriver) {
       emergencyUnitId = existingUnit?.id || randomUUID();
       const now = new Date();
       const unitState = {

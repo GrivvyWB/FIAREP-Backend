@@ -13,8 +13,6 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
-import { REGEXP_ONLY_DIGITS_AND_CHARS } from "input-otp";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
@@ -22,8 +20,9 @@ const loginSchema = z.object({
   name: z.string().min(2, "Name must be at least 2 characters"),
   code: z
     .string()
-    .length(4, "Code must be exactly 4 characters")
-    .regex(/^[a-zA-Z0-9]+$/, "Code can only contain letters and numbers"),
+    .min(4, "Code must be at least 4 characters")
+    .max(16, "Code must be at most 16 characters")
+    .regex(/^[a-zA-Z0-9-]+$/, "Code can only contain letters, numbers, and hyphens"),
   organizationId: z.string().optional(),
 });
 
@@ -121,25 +120,15 @@ export default function Login() {
                   <FormItem>
                     <FormLabel>Access Code</FormLabel>
                     <FormControl>
-                      <div className="flex justify-center">
-                        <InputOTP
-                          maxLength={4}
-                          pattern={REGEXP_ONLY_DIGITS_AND_CHARS}
-                           inputMode="text"
-                           autoCapitalize="characters"
-                          autoCorrect="off"
-                          autoComplete="one-time-code"
-                          {...field}
-                          data-testid="input-otp-code"
-                        >
-                          <InputOTPGroup>
-                            <InputOTPSlot index={0} masked />
-                            <InputOTPSlot index={1} masked />
-                            <InputOTPSlot index={2} masked />
-                            <InputOTPSlot index={3} masked />
-                          </InputOTPGroup>
-                        </InputOTP>
-                      </div>
+                      <Input
+                        {...field}
+                        maxLength={16}
+                        autoCapitalize="characters"
+                        autoCorrect="off"
+                        autoComplete="one-time-code"
+                        onChange={(event) => field.onChange(event.target.value.toUpperCase())}
+                        data-testid="input-otp-code"
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
