@@ -10,6 +10,8 @@ import { syncAllEntities } from '../lib/sync';
 
 function fmt(iso?: string): string { try { return iso ? new Date(iso).toLocaleString() : ''; } catch { return iso || ''; } }
 function unitLabel(unit: EmergencyUnit, fallbackIndex: number): string {
+  const issuedCode = (unit.code || '').trim().toUpperCase();
+  if (/^TRK\d+-[A-Z0-9]{4}$/.test(issuedCode)) return issuedCode;
   const number = Number(
     unit.truckNumber ||
     /^TRK-(\d+)$/i.exec(unit.name || '')?.[1] ||

@@ -109,19 +109,29 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     res.status(400).json({ error: "name and code are required" });
     return;
   }
+  const normalizedCode = code.trim().toUpperCase();
   const conditions = [
     sql`lower(${staffAccounts.name}) = lower(${name.trim()})`,
-    eq(staffAccounts.code, code.trim().toUpperCase()),
     eq(staffAccounts.status, "approved"),
   ];
   const tenantId = typeof organizationId === "string" && organizationId.trim() ? organizationId.trim() : null;
   if (tenantId) conditions.push(eq(staffAccounts.tenantId, tenantId));
   if (typeof role === "string") conditions.push(eq(staffAccounts.role, role));
-  const matches = await db
+  const candidates = await db
     .select()
     .from(staffAccounts)
     .where(and(...conditions))
-    .limit(2);
+    .limit(20);
+  const matches = candidates.filter((staff) => {
+    const issuedCode = staff.code.trim().toUpperCase();
+    if (issuedCode === normalizedCode) return true;
+    return (
+      staff.role === "emergency" &&
+      /^[A-Z0-9]{4}$/.test(normalizedCode) &&
+      /^TRK\d+-[A-Z0-9]{4}$/.test(issuedCode) &&
+      issuedCode.endsWith(`-${normalizedCode}`)
+    );
+  });
   if (matches.length !== 1) {
     res.status(401).json({ error: "Invalid staff name or code" });
     return;
