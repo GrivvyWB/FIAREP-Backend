@@ -423,13 +423,14 @@ router.post("/v1/staff/:id/approve", async (req, res) => {
     )).limit(1);
     if (!current) throw Object.assign(new Error("Staff account not found"), { status: 404 });
     const code = await allocateStaffCode(tx, actor.tenantId, current.name);
+    const approvedAt = new Date();
     const [updated] = await tx
       .update(staffAccounts)
       .set({
         code,
         status: "approved",
         sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
-        updatedAt: new Date(),
+        updatedAt: approvedAt,
       })
       .where(and(
         eq(staffAccounts.id, target.id),
@@ -437,6 +438,24 @@ router.post("/v1/staff/:id/approve", async (req, res) => {
         eq(staffAccounts.status, "pending"),
       ))
       .returning();
+    if (updated) {
+      const records = await tx.select().from(entityRecords).where(and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.entity, "hr-employee-records"),
+        eq(entityRecords.deleted, false),
+        sql`${entityRecords.state}->>'employeeStaffId' = ${target.id}`,
+      ));
+      for (const record of records) {
+        await tx.update(entityRecords).set({
+          state: { ...record.state, employmentStatus: "approved" },
+          version: sql`${entityRecords.version} + 1`,
+          updatedAt: approvedAt,
+        }).where(and(
+          eq(entityRecords.id, record.id),
+          eq(entityRecords.tenantId, actor.tenantId),
+        ));
+      }
+    }
     return { updated, code };
   });
   if (!updatedResult.updated) {

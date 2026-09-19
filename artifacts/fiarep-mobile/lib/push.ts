@@ -20,7 +20,7 @@ function ensureHandler(N: any) {
   try {
     N.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: true,
+        shouldShowAlert: true, shouldPlaySound: true, shouldSetBadge: false,
         shouldShowBanner: true, shouldShowList: true,
       }),
     });
@@ -73,11 +73,17 @@ export async function notifyLocal(title: string, body: string, urgent: boolean =
         title,
         body,
         sound: 'default',
-        badge: 1,
+        badge: 0,
         color: urgent ? '#c0392b' : undefined,
         interruptionLevel: urgent ? 'timeSensitive' : 'active',
       },
       trigger: null,
     });
   } catch (e) {}
+}
+
+export async function clearAppBadge(): Promise<void> {
+  const N = getNotifs();
+  if (!N) return;
+  try { await N.setBadgeCountAsync(0); } catch {}
 }

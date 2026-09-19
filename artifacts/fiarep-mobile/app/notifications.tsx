@@ -6,6 +6,7 @@ import { syncAllEntities } from '../lib/sync';
 import { Alert } from 'react-native';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
+import { clearAppBadge } from '../lib/push';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
@@ -164,6 +165,7 @@ export default function Notifications() {
       }
       all.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
       setItems(all);
+      await clearAppBadge();
       setMyName(actor.name || '');
       // Priority items are a supervisor concern. A supervisor viewing as a
       // worker should see the worker inbox, not the pinned red card.

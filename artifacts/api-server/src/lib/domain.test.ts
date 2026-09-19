@@ -124,8 +124,9 @@ test("supervisory HR scope excludes employees outside the assigned developments"
   assert.equal(canReadStaffDirectoryEmployee(supervisor, supervisor), false);
 });
 
-test("HR record authorization fails closed without canonical employee linkage", () => {
+test("HR records are visible only to HR, administrators, and the linked employee", () => {
   const supervisor = actor({ role: "management", position: "Property Manager" });
+  const linkedEmployee = actor({ id: "employee-a", role: "worker", position: "Maintenance Worker" });
   const employee = {
     id: "employee-a",
     role: "worker",
@@ -133,13 +134,17 @@ test("HR record authorization fails closed without canonical employee linkage", 
     developments: ["Development A"],
     status: "approved",
   };
-  assert.equal(canReadHrEntityRecord(supervisor, {
+  const linkedRecord = {
     entity: "hr-employee-records",
     development: "Development A",
     state: { status: "in_progress", employeeStaffId: "employee-a" },
     createdBy: supervisor.id,
     deleted: false,
-  }, employee), true);
+  };
+  assert.equal(canReadHrEntityRecord(supervisor, linkedRecord, employee), false);
+  assert.equal(canReadHrEntityRecord(linkedEmployee, linkedRecord, employee), true);
+  assert.equal(canReadHrEntityRecord(actor({ role: "human_resources" }), linkedRecord), true);
+  assert.equal(canReadHrEntityRecord(actor({ role: "administrator" }), linkedRecord), true);
   assert.equal(canReadHrEntityRecord(supervisor, {
     entity: "hr-employee-records",
     development: "Development A",
@@ -216,11 +221,20 @@ test("HR linkage and workflow fields cannot be patched directly", () => {
 });
 
 test("operational deletion is limited to higher management", () => {
-  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Borough Director" })), true);
+  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Borough Director" })), false);
   assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Regional Director" })), true);
   assert.equal(canDeleteOperationalRecords(actor({ role: "administrator", position: "Administrator" })), true);
   assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Property Manager" })), false);
   assert.equal(canDeleteOperationalRecords(actor({ role: "inspector", position: "Supervisor" })), false);
+});
+
+test("Borough Director is read-only for every entity", () => {
+  const boroughDirector = actor({ role: "management", position: "Borough Director" });
+  for (const entity of ["resident-reports", "emergency-jobs", "elevators", "procurement", "hr-approvals"]) {
+    assert.equal(canCreateEntity(boroughDirector, entity), false);
+    assert.equal(canMutateEntity(boroughDirector, entity), false);
+    assert.equal(canDeleteEntity(boroughDirector, entity, {}), false);
+  }
 });
 
 test("procurement deletion preserves its higher-management boundary", () => {

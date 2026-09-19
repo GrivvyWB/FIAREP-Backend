@@ -3,7 +3,7 @@ name: FIAREP authority hierarchy
 description: The confirmed authority ordering and rule for expanding Administrator permissions.
 ---
 
-Borough Director is FIAREP's highest operational authority across staff and developments, except Procurement. Procurement is an isolated authority domain with a concealed two-step website sign-in; Borough Director and Administrators cannot view, create, edit, delete, approve, release, award, or close Procurement records.
+Borough Director has organization-wide read visibility across staff and developments, except Procurement, but is read-only for all writes. Procurement is an isolated authority domain with a concealed two-step website sign-in; Borough Director and Administrators cannot view, create, edit, delete, approve, release, award, or close Procurement records.
 
 Administrators are organization-wide operational authorities above Management. They may see and delete Management work across every development in the same organization even when their own development list is empty. Ordinary Management remains limited to assigned developments.
 

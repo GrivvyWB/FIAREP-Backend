@@ -107,9 +107,7 @@ export default function InspectionApprovals() {
               <Text style={{ fontSize: 14 }}>{v.building}</Text>
               <Text style={ui.listSub}>Assigned to {v.routedTo || '\u2014'}{v.routedToPosition ? ' (' + v.routedToPosition + ')' : ''}</Text>
               {!!v.completionNote && <Text style={ui.listSub}>Note: {v.completionNote}</Text>}
-              {v.clearedByMgmt ? (
-                <Text style={{ fontSize: 12, color: '#1a8f4c', fontWeight: '600' }}>Cleared \u2014 staff can remove from their view</Text>
-              ) : (
+              {!v.clearedByMgmt && (
                 <Pressable onPress={() => clearForStaff(v)} style={{ marginTop: 4 }}>
                   <Text style={{ color: ACCENT, fontWeight: '600' }}>Clear for staff</Text>
                 </Pressable>

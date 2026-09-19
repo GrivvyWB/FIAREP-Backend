@@ -7,7 +7,7 @@ HR administers hiring and recruiting, onboarding and orientation, payroll coordi
 
 HR authority is not unlimited. Pay changes, discipline, termination, layoffs, and similar policy-sensitive actions must follow company policy, required company approval, and applicable employment law. HR may advise or administer a process without being the sole final business decision-maker.
 
-The HR Workspace is exclusively for the Human Resources role. Management, administrators, supervisors, and other roles must not see it or access its workspace endpoint directly.
+HR entity records are visible only to Human Resources, Administrators, and the specific employee identified by the record's canonical employeeStaffId. Management and supervisors receive no HR-record visibility through approval scope.
 
 HR lifecycle notifications also stay with Human Resources. Supervisors and general Management must not receive internal HR record status alerts.
 
@@ -17,4 +17,4 @@ When an organization enables deletion in Platform Workspace, HR may permanently 
 
 **Why:** HR needs enough authority to administer the complete employee lifecycle without bypassing management approval, company policy, or legal safeguards.
 
-**How to apply:** Give HR full visibility and exclusive access to the HR Workspace. Keep permitted leave and approval actions on their separate role-scoped surfaces. Gate staff-account deletion on both the organization switch and HR's employee scope. Add explicit confirmation and approval boundaries to high-impact actions, preserve audit records, and enforce all restrictions on the server rather than only hiding controls in the interface.
+**How to apply:** Give HR and Administrators full HR-record visibility, and give an employee access only to records whose employeeStaffId equals that employee's actor ID. Keep permitted leave and approval actions on separate role-scoped surfaces. Gate staff-account deletion on both the organization switch and HR's employee scope. Add explicit confirmation and approval boundaries to high-impact actions, preserve audit records, and enforce all restrictions on the server rather than only hiding controls in the interface.

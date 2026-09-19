@@ -28,8 +28,7 @@ export function canUseGeneralStaffLogin(role: string): boolean {
 }
 
 export function canDeleteOperationalRecords(actor: Actor): boolean {
-  return isBoroughDirector(actor) ||
-    actor.role === "administrator" ||
+  return actor.role === "administrator" ||
     (actor.role === "management" && actor.position === "Regional Director");
 }
 
@@ -518,13 +517,13 @@ export function canUploadToEntityRecord(
 export function canCreateEntity(actor: Actor, entity: string): boolean {
   const isEmergencyMaintenance =
     actor.role === "emergency" && actor.position === "Maintenance Worker";
+  if (isBoroughDirector(actor)) return false;
   if (isHrEntity(entity)) {
     return actor.role === "human_resources" ||
       actor.role === "administrator" ||
       (entity === "hr-approvals" && actor.role === "management");
   }
   if (actor.role === "emergency" && !isEmergencyMaintenance) return false;
-  if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
   if (entity === "hud-inspections") {
     return actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position);
@@ -569,6 +568,7 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 export function canMutateEntity(actor: Actor, entity: string): boolean {
   const isEmergencyMaintenance =
     actor.role === "emergency" && actor.position === "Maintenance Worker";
+  if (isBoroughDirector(actor)) return false;
   if (isHrEntity(entity)) {
     return actor.role === "human_resources" ||
       actor.role === "administrator" ||
@@ -578,7 +578,6 @@ export function canMutateEntity(actor: Actor, entity: string): boolean {
     if (entity === "emergency-jobs") return true;
     if (!isEmergencyMaintenance) return false;
   }
-  if (isBoroughDirector(actor) && entity !== "procurement" && entity !== "procurement-bids") return true;
   if (entity === "global-settings") return false;
   if (entity === "hud-inspections") {
     return actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position);
@@ -599,6 +598,7 @@ export function canDeleteEntity(
   entity: string,
   state: Record<string, unknown>,
 ): boolean {
+  if (isBoroughDirector(actor)) return false;
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
   // entity deletion route.
@@ -609,7 +609,7 @@ export function canDeleteEntity(
       (isElevatorFieldStaff(actor) && state["clearedByMgmt"] === true) ||
       actor.role === "management" ||
       actor.role === "administrator" ||
-      isBoroughDirector(actor)
+      false
     );
   }
   if (VIOLATION_ENTITIES.has(entity) && actor.role === "inspector") {
@@ -621,7 +621,6 @@ export function canDeleteEntity(
       (actor.role === "administrator" ||
         (actor.role === "management" && actor.position === "Regional Director"));
   }
-  if (isBoroughDirector(actor)) return true;
   if (
     actor.role === "worker" ||
     actor.role === "inspector" ||
@@ -1290,23 +1289,12 @@ export function canReadHrEntityRecord(
   row: EntityRecordAuthorizationState,
   employee?: HrLinkedStaff,
 ): boolean {
-  if (!isHrEntity(row.entity) || row.deleted || !canReadEntity(actor, row.entity)) return false;
+  if (!isHrEntity(row.entity) || row.deleted) return false;
   if (actor.role === "human_resources" || actor.role === "administrator") return true;
-  if (actor.role !== "management") return false;
-  const status = typeof row.state["status"] === "string"
-    ? row.state["status"].trim().toLowerCase()
-    : "";
-  if (row.entity === "hr-approvals" && status !== "pending") return false;
   const employeeStaffId = typeof row.state["employeeStaffId"] === "string"
     ? row.state["employeeStaffId"].trim()
     : "";
-  return Boolean(
-    employee &&
-    employee.status === "approved" &&
-    employee.id === employeeStaffId &&
-    employee.id !== actor.id &&
-    canApproveLeaveForEmployee(actor, employee),
-  );
+  return Boolean(employeeStaffId && employeeStaffId === actor.id);
 }
 
 export function validateLeaveRequestSchedule(

@@ -544,6 +544,8 @@ export type ResidentReport = {
   arrivalGeo?: import('./geo').GeoStamp;
   completionGeo?: import('./geo').GeoStamp;
   photoEvidence?: import('./photos').PhotoEvidence[];
+  completionPhotos?: string[];
+  completionPhotoEvidence?: import('./photos').PhotoEvidence[];
   completedAt?: string;
   completionNote?: string;
   completionPhotoUrl?: string;
@@ -958,6 +960,12 @@ export async function addResidentUpdate(
     status,
     photos: [...r.photos, ...photos],
     photoEvidence: [...(r.photoEvidence || []), ...photoEvidence],
+    ...(status === 'resolved' ? {
+      completionPhotos: [...(r.completionPhotos || []), ...photos],
+      completionPhotoEvidence: [...(r.completionPhotoEvidence || []), ...photoEvidence],
+      completedAt: now,
+      completionNote: note.trim() || undefined,
+    } : {}),
     updates: [...r.updates, update],
     ...(isArrival ? { arrivalAt: now, arrivalGeo: geo } : {}),
     ...(status === 'resolved' ? { resolvedAt: now, completionGeo: geo } : {}),

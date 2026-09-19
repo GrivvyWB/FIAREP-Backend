@@ -396,11 +396,10 @@ export default function Management() {
                     <Text style={ui.btnOutlineText}>Clear for worker (lets them remove it)</Text>
                   </Pressable>
                 )}
-                {r.clearedByMgmt && <Text style={{ fontSize: 12, color: '#1a8f4c', fontWeight: '600' }}>\u2713 Cleared \u2014 worker can remove it</Text>}
                 <Pressable style={ui.btnOutline} onPress={() => { setCwoFor(r); setCwoPos(''); setCwoName(''); setCwoDesc(''); setCwoStaff([]); }}>
                   <Text style={ui.btnOutlineText}>Request Change</Text>
                 </Pressable>
-                {canDelete && (mode === 'administrator' || ['Borough Director', 'Regional Director'].includes(currentPosition)) && (
+                {canDelete && (mode === 'administrator' || currentPosition === 'Regional Director') && (
                   <Pressable style={[ui.btnOutline, { borderColor: '#c0392b' }]} onPress={() => confirmDelete(r)}>
                     <Text style={{ color: '#c0392b', fontWeight: '600', textAlign: 'center' }}>Delete</Text>
                   </Pressable>
