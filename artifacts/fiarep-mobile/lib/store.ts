@@ -532,7 +532,7 @@ export type ResidentReport = {
   address: string;
   description: string;
   photos: string[];
-  status: 'submitted' | 'assigned' | 'in_progress' | 'resolved';
+  status: 'submitted' | 'assigned' | 'in_progress' | 'completed' | 'resolved';
   assignedStaffId?: string;
   assignedTo?: string;
   development?: string;
@@ -566,12 +566,21 @@ async function ensureResidentTable(d: any) {
 }
 
 function normalizeResidentReport(r: any): ResidentReport {
+  const normalizeStatus = (status: unknown): ResidentReport['status'] => {
+    const value = String(status || '').toLowerCase();
+    if (value === 'work_approved' || value === 'done' || value === 'completed') return 'completed';
+    if (value === 'assigned' || value === 'in_progress' || value === 'resolved') return value;
+    return 'submitted';
+  };
   return {
     ...r,
     address: r.address ?? '',
+    status: normalizeStatus(r.status),
     assignedStaffId: r.assignedStaffId,
     assignedTo: r.assignedTo,
-    updates: Array.isArray(r.updates) ? r.updates : [],
+    updates: Array.isArray(r.updates)
+      ? r.updates.map((update: any) => ({ ...update, status: normalizeStatus(update?.status) }))
+      : [],
   } as ResidentReport;
 }
 

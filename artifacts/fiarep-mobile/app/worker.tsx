@@ -22,6 +22,7 @@ const STATUS_LABEL: Record<ResidentReport['status'], string> = {
   submitted: 'Submitted',
   assigned: 'Assigned',
   in_progress: 'In progress',
+  completed: 'Completed',
   resolved: 'Resolved',
 };
 

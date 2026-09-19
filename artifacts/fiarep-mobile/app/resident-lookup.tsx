@@ -10,6 +10,7 @@ const STATUS_LABEL: Record<ResidentReport['status'], string> = {
   submitted: 'Submitted',
   assigned: 'Assigned',
   in_progress: 'In progress',
+  completed: 'Completed',
   resolved: 'Resolved',
 };
 
@@ -106,21 +107,21 @@ export default function ResidentLookup() {
 
           {!!r.completedAt && (
             <View style={ui.line}>
-              <Text style={ui.lineK}>Completed</Text>
+              <Text style={ui.lineK}>Completion date</Text>
               <Text style={ui.lineV}>{fmt(r.completedAt)}</Text>
             </View>
           )}
 
           {!!r.completionNote && (
             <View style={{ paddingVertical: 4 }}>
-              <Text style={ui.label}>Completion notes</Text>
+              <Text style={ui.label}>Technician notes</Text>
               <Text>{r.completionNote}</Text>
             </View>
           )}
 
           {r.photos.length > 0 && (
             <View>
-              <Text style={ui.label}>Completed work</Text>
+              <Text style={ui.label}>Completion photo</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {r.photos.map((uri, i) => (
                   <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}><RemotePhoto localUri={uri} style={{ width: 120, height: 120, borderRadius: 8, backgroundColor: '#eee' }} /></Pressable>
