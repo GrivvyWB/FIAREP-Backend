@@ -34,20 +34,20 @@ export default function ResidentScreen() {
   const [submitting, setSubmitting] = useState(false);
 
   async function onTakePhoto() {
-    if (photos.length > 0 || submitting) return;
+    if (submitting) return;
     try {
       const uri = await takePhoto();
-      if (uri) setPhotos([uri]);
+      if (uri) setPhotos((current) => current.includes(uri) ? current : [...current, uri]);
     } catch (e: any) {
       Alert.alert('Camera error', e?.message ?? 'Could not take photo.');
     }
   }
 
   async function onPickPhoto() {
-    if (photos.length > 0 || submitting) return;
+    if (submitting) return;
     try {
       const uri = await pickPhoto();
-      if (uri) setPhotos([uri]);
+      if (uri) setPhotos((current) => current.includes(uri) ? current : [...current, uri]);
     } catch (e: any) {
       Alert.alert('Photo error', e?.message ?? 'Could not pick photo.');
     }
@@ -146,11 +146,11 @@ export default function ResidentScreen() {
 
       <Text style={styles.label}>Photos</Text>
       <View style={styles.photoRow}>
-        <TouchableOpacity style={[styles.photoBtn, photos.length > 0 && styles.photoBtnDisabled]} onPress={onTakePhoto} disabled={photos.length > 0 || submitting}>
-          <Text style={[styles.photoBtnText, photos.length > 0 && styles.photoBtnTextDisabled]}>Take Photo</Text>
+        <TouchableOpacity style={[styles.photoBtn, submitting && styles.photoBtnDisabled]} onPress={onTakePhoto} disabled={submitting}>
+          <Text style={[styles.photoBtnText, submitting && styles.photoBtnTextDisabled]}>Take Photo</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={[styles.photoBtn, photos.length > 0 && styles.photoBtnDisabled]} onPress={onPickPhoto} disabled={photos.length > 0 || submitting}>
-          <Text style={[styles.photoBtnText, photos.length > 0 && styles.photoBtnTextDisabled]}>Choose Photo</Text>
+        <TouchableOpacity style={[styles.photoBtn, submitting && styles.photoBtnDisabled]} onPress={onPickPhoto} disabled={submitting}>
+          <Text style={[styles.photoBtnText, submitting && styles.photoBtnTextDisabled]}>Choose Photo</Text>
         </TouchableOpacity>
       </View>
 
