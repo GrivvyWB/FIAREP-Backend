@@ -23,6 +23,8 @@ import {
   deleteResidentReport,
   getCurrentPosition,
   listResidentReportPhotoUrls,
+  getScores,
+  type DevelopmentScore,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useAppMode } from './_layout';
@@ -141,6 +143,7 @@ export default function Management() {
   const [cwoFor, setCwoFor] = useState<ResidentReport | null>(null);
   const [currentPosition, setCurrentPosition] = useState('');
   const [scoreByName, setScoreByName] = useState<Record<string, number>>({});
+  const [developmentScores, setDevelopmentScores] = useState<DevelopmentScore[]>([]);
   const [cwoPos, setCwoPos] = useState<string>('');
   const [cwoName, setCwoName] = useState<string>('');
   const [cwoDesc, setCwoDesc] = useState<string>('');
@@ -186,6 +189,7 @@ export default function Management() {
       }
     });
     getContractorScores().then((arr) => { const m: Record<string, number> = {}; for (const c of arr) m[c.name] = c.score; setScoreByName(m); });
+    getScores().then((snapshot) => setDevelopmentScores(snapshot.developments));
     (async () => {
       const a = await getCurrentActor();
       if (a.name) setMyDevs(await developmentsForManager(a.name));
@@ -228,7 +232,20 @@ export default function Management() {
     : reports.filter((r) => (r.development || '') === filterDev);
 
   const inProgressCount = visible.filter((r) => r.status === 'submitted' || r.status === 'assigned' || r.status === 'in_progress').length;
-  const completedCount = visible.filter((r) => r.status === 'resolved').length;
+  const completedCount = visible.filter((r) => r.status === 'completed' || r.status === 'resolved').length;
+  const visibleDevelopmentScores = developmentScores.filter((score) =>
+    filterDev === ALL
+      ? true
+      : score.development.trim().toLowerCase() === filterDev.trim().toLowerCase()
+  );
+  const score = visibleDevelopmentScores.length === 0
+    ? null
+    : filterDev === ALL
+      ? Math.max(0, Math.min(100, 50 + visibleDevelopmentScores.reduce(
+          (total, item) => total + (item.points ?? ((item.scorePercent ?? item.score) - 50)),
+          0,
+        )))
+      : visibleDevelopmentScores[0]?.scorePercent ?? visibleDevelopmentScores[0]?.score ?? null;
 
   async function onAssign(r: ResidentReport) {
     const name = (workerNames[r.id] || '').trim();
@@ -331,6 +348,12 @@ export default function Management() {
         <View style={{ flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 14, backgroundColor: '#fafafa' }}>
           <Text style={{ fontSize: 28, fontWeight: '700', color: '#2e7d32' }}>{completedCount}</Text>
           <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>Completed</Text>
+        </View>
+        <View style={{ flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 14, backgroundColor: '#fafafa' }}>
+          <Text style={{ fontSize: 28, fontWeight: '700', color: score !== null && score >= 50 ? '#2e7d32' : '#c0392b' }}>
+            {score === null ? '—' : `${score}%`}
+          </Text>
+          <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>Score</Text>
         </View>
       </View>
 
