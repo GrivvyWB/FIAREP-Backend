@@ -129,3 +129,37 @@ test("building and residential scores remain negative for unresolved work", () =
   assert.equal(calculateBuildingScores(records, NOW)[0]?.score, -5);
   assert.equal(calculateResidentialScores(records, NOW)[0]?.score, -5);
 });
+
+test("done work counts as completed and resolved", () => {
+  const records = [
+    record("building-violations", {
+      status: "done",
+      building: "2201 1st Avenue New York",
+      createdAt: "2025-01-30T00:00:00.000Z",
+    }, "Jefferson"),
+  ];
+  assert.equal(calculateDevelopmentScores(records, NOW)[0]?.completed, 1);
+  assert.equal(calculateDevelopmentScores(records, NOW)[0]?.open, 0);
+  assert.equal(calculateBuildingScores(records, NOW)[0]?.resolved, 1);
+});
+
+test("score grouping ignores case and repeated whitespace while preserving a display label", () => {
+  const records = [
+    record("building-violations", {
+      status: "done",
+      building: "2201 1st Avenue New York",
+    }, "Jefferson"),
+    record("building-violations", {
+      status: "open",
+      building: "  2201  1ST avenue new york ",
+    }, "  JEFFERSON  "),
+  ];
+  const developmentScores = calculateDevelopmentScores(records, NOW);
+  const buildingScores = calculateBuildingScores(records, NOW);
+  assert.equal(developmentScores.length, 1);
+  assert.equal(developmentScores[0]?.development, "Jefferson");
+  assert.equal(developmentScores[0]?.sampleSize, 2);
+  assert.equal(buildingScores.length, 1);
+  assert.equal(buildingScores[0]?.building, "2201 1st Avenue New York");
+  assert.equal(buildingScores[0]?.total, 2);
+});

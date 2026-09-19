@@ -1,0 +1,69 @@
+This is the scoring bug — one of the two backend items the agent said was still pending ("Correct scoring's authorization/legacy-repair ordering"). It hasn't been fixed yet, and this screen shows exactly the symptom.
+
+Look at what the screen shows: Jefferson has "0 done, 5 open" and scores stuck at 25% / -5 even though you completed work. Two problems visible:
+
+Completed work isn't counting as "done." You marked jobs complete, but the score still shows "0 done, 5 open." The completion isn't flowing into the score calculation.
+Duplicate building rows — "2201 1st Avenue new ny", "new york", "New York" are the same address with different capitalization, each counted separately as -5. That's a normalization bug (the address isn't being deduplicated), which also throws off the totals.
+
+The scoring formula on screen is 50 + completed×10 + open×(-5) + overdue×(-10). With 0 done / 5 open that's 50 - 25 = 25%. So the math is right — the problem is the inputs: completed jobs aren't being recorded as completed in the score data.
+
+This is server-side, in scoring.ts / the scores route — the agent's territory, and it's the fix it explicitly flagged as not-yet-done. Let me look at the actual scoring code to tell you (and the agent) precisely what's wrong. Let me read it:
+
+I can see the scoring logic. RESOLVED_STATUSES = {"cleared", "completed", "resolved", "closed"} (line 55), and it counts a record as done if statusOf(record) (which reads record.state["status"]) is in that set. Let me see the exact bucketing and which entities feed development scores — the bug is likely that completed resident-report jobs store their completion under a different status value or a different field than status:
+
+Now I've found the actual bug — and it's diagnosable. Two issues, and they explain your screen exactly:
+
+Bug 1 — completion isn't counting as "done." The score counts a record resolved only if record.state["status"] ∈ {cleared, completed, resolved, closed}. But your completed resident-report jobs (the "5 open" for Jefferson) — when a worker marks them complete, the status they get written with must not be one of those exact strings. Earlier in this conversation I saw the Job Details screen show a complaint with Status: "Completed" and Status: "Resolved" — capital C/R. statusOf does .toLowerCase(), so "Completed"→"completed" ✓ should match... which means the completed jobs aren't reaching this scoring query at all, OR they're stored under a status like "done" / "complete" (not "completed") that isn't in the set.
+
+Bug 2 — duplicate buildings (the clearer one). Your "Building & Residential Scores" screen shows the same address three times — "2201 1st Avenue new ny", "new york", "New York" — each scored -5 separately. The bucketing key (line 215) groups by the raw development/address string with no normalization — no .trim().toLowerCase(). So three capitalizations = three buckets = triple-counted. The development-score dedup on line 85 does lowercase, but the building/address bucketing doesn't.
+
+Both are the "scoring authorization/legacy-repair ordering" fix the agent flagged as pending. This is backend code on fiarep.com, not the app binary — so building 8 won't fix it. It needs the agent (or a code change here + redeploy).
+
+Let me confirm the exact status value your completed jobs get, so the fix is precise. Let me check how the worker's "Mark complete" writes status:
+
+Now I have the exact bug pinpointed. Look at line 3638 and 3828:
+
+BuildingViolationStatus = 'logged' | 'approved' | 'routed' | 'done'
+...
+status: 'done',   // building violations get status 'done' when complete
+
+Building violations get status: 'done' when completed — but the scoring's RESOLVED_STATUSES = {"cleared", "completed", "resolved", "closed"} does NOT include "done". So a completed building violation is counted as open (-5), not done (+10). That's exactly your screen: buildings showing -5, 0 resolved, 1 open, even though the work is complete.
+
+That's the scoring bug, precisely. Two fixes needed in scoring.ts:
+
+Add "done" to RESOLVED_STATUSES — so completed building violations count as resolved.
+Normalize the building/development bucket key (.trim().toLowerCase()) — so "new ny" / "new york" / "New York" collapse into one, instead of triple-counting.
+
+These are backend changes. I can make them right here in FIAREP-Backend, but they only take effect when the backend redeploys to fiarep.com — which the Replit agent does, not the app build. Let me make the code fix now so it's ready, then you have the agent deploy it (or deploy however you deploy the API).
+
+Let me see the exact RESOLVED_STATUSES line and the building bucketing to write a precise fix:
+
+Confirmed — groupingValue returns the raw text with no case/whitespace normalization, so "new ny" vs "New York" become separate buckets. Both bugs confirmed. Now let me make the two fixes to scoring.ts:
+
+Add "done" to RESOLVED_STATUSES (completed building violations count as resolved)
+Normalize the grouping key so address capitalization variants collapse into one
+
+But I need to be careful with #2 — if I lowercase the key, the display would show lowercase. Better: group by a normalized key but keep the first-seen original spelling for display. Let me make both fixes cleanly:
+
+Fix 1 done — completed building violations (status 'done') will now count as resolved (+10 / resolved count) instead of open (-5).
+
+Now Fix 2 — the duplicate-address bug. I'll make the resolution-score and development-score bucketing group by a normalized key while preserving the display name:
+
+One issue I spot: ...bucket now spreads label into the returned object too (it wasn't there before). That adds a stray label field to building/residential scores. Harmless (the frontend ignores unknown fields), but let me clean it so label doesn't leak — exclude it from the spread:
+
+Both scoring fixes are complete and clean in FIAREP-Backend/artifacts/api-server/src/lib/scoring.ts:
+
+Fix 1 — completed work now counts. Added "done" to RESOLVED_STATUSES. Building violations get status: 'done' when a worker finishes them, but that wasn't in the resolved set — so completed work was counted as open (-5) instead of resolved (+10). That's exactly why Jefferson showed "0 done, 5 open" and the buildings sat at -5 despite the work being done.
+
+Fix 2 — duplicate buildings collapse. The same address in three capitalizations ("new ny" / "new york" / "New York") was bucketed as three separate -5 buildings. Now the bucket key is normalized (trim + lowercase + collapse spaces), so they merge into one, while the display keeps the first-seen spelling.
+
+But — this is backend code, and it's NOT live yet. These changes are in the source on your Mac. They only take effect when the API server redeploys to fiarep.com. The app binary (build 8) has nothing to do with this — scoring is computed server-side.
+
+So two separate deploy tracks now:
+
+App build 8 (the 9 fixes + Staff login) → eas build + submit to TestFlight (you were mid-way on this).
+Backend scoring fix → needs the API redeployed. This is where the Replit agent comes in — it deploys the backend.
+
+The cleanest path: since your Mac's FIAREP-Backend now has the scoring fix, tell the agent to pull/deploy it, OR paste the change to the agent so it applies + redeploys on its side. Here's the summary to hand the agent:
+
+In artifacts/api-server/src/lib/scoring.ts: (1) add "done" to RESOLVED_STATUSES — building violations complete with status 'done' and weren't counting as resolved. (2) In both calculateResolutionScores and calculateDevelopmentScores, normalize the bucket key with .trim().toLowerCase().replace(/\s+/g," ") so the same address in different capitalizations groups as one, keeping the first-seen spelling for display. Then typecheck and redeploy the API.

@@ -52,7 +52,7 @@ export type ResidentialScore = {
   resolutionRate: number;
 };
 
-const RESOLVED_STATUSES = new Set(["cleared", "completed", "resolved", "closed"]);
+const RESOLVED_STATUSES = new Set(["cleared", "completed", "resolved", "closed", "done"]);
 const DEVELOPMENT_ENTITIES = new Set([
   "procurement",
   "route-assignments",
@@ -149,6 +149,10 @@ function groupingValue(record: ScoringRecord, keys: string[]): string {
     "Unassigned";
 }
 
+function normalizedGroupingKey(value: string): string {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 function sorted<T extends { score?: number; scorePercent?: number; vendor?: string; development?: string; building?: string; address?: string }>(items: T[]): T[] {
   return items.sort((a, b) => {
     const scoreA = a.score ?? a.scorePercent ?? 0;
@@ -208,14 +212,15 @@ export function calculateDevelopmentScores(
   records: readonly ScoringRecord[],
   now: Date = new Date(),
 ): DevelopmentScore[] {
-  const buckets = new Map<string, { points: number; completed: number; open: number; overdue: number }>();
+  const buckets = new Map<string, { label: string; points: number; completed: number; open: number; overdue: number }>();
   const nowMs = now.getTime();
   for (const record of records) {
     if (!DEVELOPMENT_ENTITIES.has(record.entity)) continue;
     const development = text(record.development) ||
       firstText(record, ["development", "address", "building", "propertyAddress"]) ||
       "Unassigned";
-    const bucket = buckets.get(development) ?? { points: 0, completed: 0, open: 0, overdue: 0 };
+    const groupingKey = normalizedGroupingKey(development);
+    const bucket = buckets.get(groupingKey) ?? { label: development, points: 0, completed: 0, open: 0, overdue: 0 };
     if (isResolved(record) || (record.entity === "procurement" && statusOf(record) === "closed")) {
       bucket.points += 10;
       bucket.completed += 1;
@@ -226,10 +231,10 @@ export function calculateDevelopmentScores(
       bucket.points -= 5;
       bucket.open += 1;
     }
-    buckets.set(development, bucket);
+    buckets.set(groupingKey, bucket);
   }
-  return sorted(Array.from(buckets, ([development, bucket]) => ({
-    development,
+  return sorted(Array.from(buckets.values(), (bucket) => ({
+    development: bucket.label,
     points: bucket.points,
     scorePercent: clamp(50 + bucket.points, 0, 100),
     completed: bucket.completed,
@@ -245,24 +250,28 @@ function calculateResolutionScores(
   keyFields: string[],
   now: Date,
 ): Array<{ key: string; total: number; resolved: number; open: number; overdue: number; resolutionRate: number; score: number }> {
-  const buckets = new Map<string, { total: number; resolved: number; open: number; overdue: number }>();
+  const buckets = new Map<string, { label: string; total: number; resolved: number; open: number; overdue: number }>();
   for (const record of records) {
     if (!entities.has(record.entity)) continue;
-    const key = groupingValue(record, keyFields);
-    const bucket = buckets.get(key) ?? { total: 0, resolved: 0, open: 0, overdue: 0 };
+    const label = groupingValue(record, keyFields);
+    const key = normalizedGroupingKey(label);
+    const bucket = buckets.get(key) ?? { label, total: 0, resolved: 0, open: 0, overdue: 0 };
     bucket.total += 1;
     if (isResolved(record)) bucket.resolved += 1;
     else if (isOverdue(record, now.getTime())) bucket.overdue += 1;
     else bucket.open += 1;
     buckets.set(key, bucket);
   }
-  return Array.from(buckets, ([key, bucket]) => {
+  return Array.from(buckets.values(), (bucket) => {
     const resolutionRate = ratio(bucket.resolved, bucket.total);
     const overdueRate = ratio(bucket.overdue, bucket.total);
     const openRate = ratio(bucket.open, bucket.total);
     return {
-      key,
-      ...bucket,
+      key: bucket.label,
+      total: bucket.total,
+      resolved: bucket.resolved,
+      open: bucket.open,
+      overdue: bucket.overdue,
       resolutionRate,
       score: Math.round(100 * resolutionRate - 15 * overdueRate - 5 * openRate),
     };
