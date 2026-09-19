@@ -744,7 +744,7 @@ router.delete("/v1/staff/:id", async (req, res) => {
     res.status(403).json({ error: "You cannot delete your own account" });
     return;
   }
-  if (!canManageStaff(actor, target)) {
+  if (actor.role !== "administrator" && !canManageStaff(actor, target)) {
     res.status(403).json({ error: "Not allowed to delete this staff account" });
     return;
   }

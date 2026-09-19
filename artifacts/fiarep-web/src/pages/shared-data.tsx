@@ -1,22 +1,57 @@
 import { useState } from "react";
-import { getListEntityRecordsQueryKey, useListEntityRecords } from "@workspace/api-client-react";
-import { Database, Search } from "lucide-react";
+import {
+  getListEntityRecordsQueryKey,
+  useDeleteEntityRecord,
+  useGetDeletionPolicy,
+  useListEntityRecords,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Database, Search, Trash2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
 
 const MODULES = [
+  ["projects", "Projects"],
+  ["rooms", "Rooms"],
   ["checklists", "Checklists"],
+  ["cost-estimates", "Cost Estimates"],
   ["roofplans", "Roof Plans & Scans"],
   ["project-scopes", "Project Scopes"],
   ["project-notes", "Project Notes"],
   ["project-reviews", "Project Reviews"],
+  ["intakes", "Client Intakes"],
+  ["inspections", "Inspections"],
+  ["hud-inspections", "HUD Inspections"],
+  ["elevators", "Elevators"],
+  ["resident-reports", "Resident Reports"],
   ["violations", "Inspector Violations"],
+  ["building-violations", "Building Violations"],
   ["priority-violations", "Priority Violations"],
   ["route-assignments", "Route Assignments"],
+  ["manpower-requests", "Trade Requests"],
+  ["procurement", "Procurement"],
+  ["procurement-bids", "Procurement Bids"],
   ["vendor-contacts", "Vendor Contacts"],
   ["vendor-quotes", "Vendor Quotes"],
   ["change-orders", "Change Orders"],
+  ["elevator-jobs", "Elevator Jobs"],
   ["emergency-units", "Emergency Units"],
+  ["emergency-jobs", "Emergency Jobs"],
+  ["leave-requests", "Leave Requests"],
+  ["global-settings", "Global Settings"],
+  ["hr-employee-records", "HR Employee Records"],
+  ["hr-recruiting", "HR Recruiting"],
+  ["hr-onboarding", "HR Onboarding"],
+  ["hr-payroll-benefits", "HR Payroll & Benefits"],
+  ["hr-attendance", "HR Attendance"],
+  ["hr-relations", "HR Relations"],
+  ["hr-performance", "HR Performance"],
+  ["hr-discipline", "HR Discipline"],
+  ["hr-investigations", "HR Investigations"],
+  ["hr-training-compliance", "HR Training & Compliance"],
+  ["hr-exits", "HR Exits"],
+  ["hr-approvals", "HR Approvals"],
 ] as const;
 
 function recordTitle(state: Record<string, unknown>, fallback: string) {
@@ -34,8 +69,12 @@ function recordSummary(state: Record<string, unknown>) {
 }
 
 export default function SharedData() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
   const [entity, setEntity] = useState<(typeof MODULES)[number][0]>("checklists");
   const [search, setSearch] = useState("");
+  const { data: deletionPolicy } = useGetDeletionPolicy();
+  const deleteRecord = useDeleteEntityRecord();
   const { data, isLoading, error } = useListEntityRecords(entity, undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey(entity),
@@ -49,6 +88,21 @@ export default function SharedData() {
     if (!query) return true;
     return JSON.stringify(record).toLowerCase().includes(query);
   });
+
+  async function removeRecord(id: string, version: number) {
+    if (!window.confirm(`Permanently delete this ${activeLabel.toLowerCase()} record? This cannot be undone.`)) return;
+    try {
+      await deleteRecord.mutateAsync({ entity, id, data: { version } });
+      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey(entity) });
+      toast({ title: "Record deleted" });
+    } catch (deleteError: any) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: deleteError?.message || "The server rejected this deletion.",
+      });
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -114,9 +168,24 @@ export default function SharedData() {
                           {recordSummary(state)}
                         </p>
                       </div>
-                      <span className="text-xs text-muted-foreground whitespace-nowrap">
-                        {new Date(record.updatedAt).toLocaleDateString()}
-                      </span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {new Date(record.updatedAt).toLocaleDateString()}
+                        </span>
+                        {deletionPolicy?.enabled && deletionPolicy.canDelete && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive"
+                            onClick={() => removeRecord(record.id, record.version)}
+                            disabled={deleteRecord.isPending}
+                            data-testid={`button-delete-${entity}-${record.id}`}
+                          >
+                            <Trash2 className="mr-1.5 h-4 w-4" />
+                            Delete
+                          </Button>
+                        )}
+                      </div>
                     </div>
                     <div className="flex flex-wrap gap-2 mt-3 text-xs">
                       {record.development && (

@@ -240,12 +240,21 @@ test("Borough Director may delete resident reports but remains read-only elsewhe
   }
 });
 
-test("procurement deletion preserves its higher-management boundary", () => {
-  assert.equal(canDeleteEntity(actor({ role: "administrator", position: "Administrator" }), "procurement", {}), true);
+test("administrators can delete every entity while other roles retain deletion boundaries", () => {
+  const administrator = actor({ role: "administrator", position: "Administrator" });
+  for (const entity of [
+    "procurement",
+    "procurement-bids",
+    "hr-employee-records",
+    "hr-approvals",
+    "hud-inspections",
+    "resident-reports",
+  ]) {
+    assert.equal(canDeleteEntity(administrator, entity, {}), true);
+  }
   assert.equal(canDeleteEntity(actor({ role: "management", position: "Regional Director" }), "procurement", {}), true);
   assert.equal(canDeleteEntity(actor({ role: "management", position: "Borough Director" }), "procurement", {}), false);
   assert.equal(canDeleteEntity(actor({ role: "inspector", position: "CPM" }), "procurement", {}), false);
-  assert.equal(canDeleteEntity(actor({ role: "administrator" }), "hr-employee-records", {}), false);
   assert.equal(canDeleteEntity(actor({ role: "human_resources" }), "hr-exits", {}), false);
   assert.equal(canDeleteEntity(actor({ role: "management" }), "hr-approvals", {}), false);
 });
@@ -573,13 +582,13 @@ test("procurement file access remains isolated from administrator and Borough Di
   );
 });
 
-test("Borough Director cannot access procurement records", () => {
+test("administrator authority overrides a Borough Director position for procurement access", () => {
   const director = actor({
     role: "administrator",
     position: "Borough Director",
     developments: [],
   });
-  assert.equal(canReadEntity(director, "procurement"), false);
+  assert.equal(canReadEntity(director, "procurement"), true);
   assert.equal(
     entityDevelopmentAllowed(director, "projects", "Any Development"),
     true,
@@ -599,7 +608,7 @@ test("procurement entity boundary is role- and ownership-specific", () => {
   assert.equal(canCreateEntity(cpm, "procurement"), true);
   assert.equal(canMutateEntity(director, "procurement"), false);
   assert.equal(canMutateEntity(admin, "procurement"), false);
-  assert.equal(canDeleteEntity(director, "procurement", {}), false);
+  assert.equal(canDeleteEntity(director, "procurement", {}), true);
   assert.equal(canDeleteEntity(procurement, "procurement", {}), false);
 });
 

@@ -2062,7 +2062,7 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   const actor = actorFrom(res);
-  if (isHrEntity(entity)) {
+  if (isHrEntity(entity) && actor.role !== "administrator") {
     res.status(403).json({ error: "HR lifecycle and approval records are retained and cannot be deleted" });
     return;
   }
@@ -2096,7 +2096,8 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(404).json({ error: "Record not found" });
     return;
   }
-  if (entity === "hr-approvals" &&
+  if (actor.role !== "administrator" &&
+      entity === "hr-approvals" &&
       ["approved", "consumed"].includes(normalizeStatus(current.state["status"]))) {
     res.status(409).json({ error: "Approved company approval evidence is immutable" });
     return;
@@ -2106,13 +2107,15 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(403).json({ error: "Not allowed to delete this record" });
     return;
   }
-  if (entity === "procurement" &&
+  if (actor.role !== "administrator" &&
+      entity === "procurement" &&
       actor.role === "inspector" && actor.position === "CPM" &&
       !["draft", "returned"].includes(String(current.state["status"] ?? ""))) {
     res.status(403).json({ error: "Submitted procurement scopes cannot be deleted" });
     return;
   }
-  if (entity === "procurement" && current.state["status"] === "closed") {
+  if (actor.role !== "administrator" &&
+      entity === "procurement" && current.state["status"] === "closed") {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
   }

@@ -3,13 +3,15 @@ import {
   getListEntityRecordsQueryKey,
   getListStaffQueryKey,
   useCreateEntityRecord,
+  useDeleteEntityRecord,
+  useGetDeletionPolicy,
   useListEntityRecords,
   useListStaff,
   usePerformEntityAction,
   type EntityRecord,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ClipboardList, Plus, Send, UserRoundCheck } from "lucide-react";
+import { ClipboardList, Plus, Send, Trash2, UserRoundCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
@@ -49,6 +51,7 @@ export default function TradeRequests() {
   const { staff: actor } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { data: deletionPolicy } = useGetDeletionPolicy();
   const [open, setOpen] = useState(false);
   const [sourceEntity, setSourceEntity] = useState<SourceEntity>("resident-reports");
   const [sourceRecordId, setSourceRecordId] = useState("");
@@ -80,6 +83,7 @@ export default function TradeRequests() {
   });
   const create = useCreateEntityRecord();
   const action = usePerformEntityAction();
+  const deleteRequest = useDeleteEntityRecord();
 
   const sourceRecords = (
     sourceEntity === "resident-reports"
@@ -172,6 +176,25 @@ export default function TradeRequests() {
     }
   }
 
+  async function removeRequest(request: EntityRecord) {
+    if (!window.confirm("Permanently delete this trade request? This cannot be undone.")) return;
+    try {
+      await deleteRequest.mutateAsync({
+        entity: "manpower-requests",
+        id: request.id,
+        data: { version: request.version },
+      });
+      await refresh();
+      toast({ title: "Trade request deleted" });
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Delete failed",
+        description: error?.message || "The server rejected this deletion.",
+      });
+    }
+  }
+
   const requests = [...(requestsQuery.data || [])].sort(
     (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
   );
@@ -217,7 +240,7 @@ export default function TradeRequests() {
                       {!!String(state.note || "") && <p className="mt-2 text-sm">{String(state.note)}</p>}
                       {!!String(state.assignedTo || "") && <p className="mt-2 text-sm font-medium">Assigned to {String(state.assignedTo)}</p>}
                     </div>
-                    {isReceiver && (
+                    {(isReceiver || (deletionPolicy?.enabled && deletionPolicy.canDelete)) && (
                       <div className="flex gap-2">
                         {status === "pending" && (
                           <Button size="sm" variant="outline" onClick={() => setAssigningRequest(request)}>
@@ -227,6 +250,18 @@ export default function TradeRequests() {
                         {status === "assigned" && (
                           <Button size="sm" onClick={() => runAction(request, "dispatch")} disabled={action.isPending}>
                             <Send className="mr-1.5 h-4 w-4" />Dispatch
+                          </Button>
+                        )}
+                        {deletionPolicy?.enabled && deletionPolicy.canDelete && actor?.role === "administrator" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-destructive"
+                            onClick={() => removeRequest(request)}
+                            disabled={deleteRequest.isPending}
+                            data-testid={`button-delete-trade-request-${request.id}`}
+                          >
+                            <Trash2 className="mr-1.5 h-4 w-4" />Delete
                           </Button>
                         )}
                       </div>

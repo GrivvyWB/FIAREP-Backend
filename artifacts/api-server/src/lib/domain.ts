@@ -250,6 +250,7 @@ export function canBrowseStaffDirectory(actor: Actor): boolean {
 }
 
 export function canReadEntity(actor: Actor, entity: string): boolean {
+  if (actor.role === "administrator") return true;
   const isEmergencyMaintenance =
     actor.role === "emergency" && actor.position === "Maintenance Worker";
   if (isHrEntity(entity)) {
@@ -606,6 +607,7 @@ export function canDeleteEntity(
   entity: string,
   state: Record<string, unknown>,
 ): boolean {
+  if (actor.role === "administrator") return true;
   if (isBoroughDirector(actor)) return entity === "resident-reports";
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
@@ -616,7 +618,6 @@ export function canDeleteEntity(
     return (
       (isElevatorFieldStaff(actor) && state["clearedByMgmt"] === true) ||
       actor.role === "management" ||
-      actor.role === "administrator" ||
       false
     );
   }
@@ -626,8 +627,7 @@ export function canDeleteEntity(
   if (entity === "procurement" || entity === "procurement-bids") {
     return entity === "procurement" &&
       !isBoroughDirector(actor) &&
-      (actor.role === "administrator" ||
-        (actor.role === "management" && actor.position === "Regional Director"));
+      actor.role === "management" && actor.position === "Regional Director";
   }
   if (
     actor.role === "worker" ||
@@ -636,7 +636,7 @@ export function canDeleteEntity(
   ) {
     return state["clearedByMgmt"] === true;
   }
-  return actor.role === "administrator" || actor.role === "management";
+  return actor.role === "management";
 }
 
 const ASSIGNABLE_STAFF_ROLES = new Set([
