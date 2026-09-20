@@ -161,6 +161,145 @@ router.delete("/v1/hr/records/:id", async (req, res): Promise<void> => {
   res.status(204).send();
 });
 
+router.post("/v1/hr/employee-records/:id/maintenance-assignment", async (req, res): Promise<void> => {
+  const actor = requireHr(res);
+  if (!actor) return;
+  const assignment = req.body?.maintenanceAssignment === "truck"
+    ? "truck"
+    : req.body?.maintenanceAssignment === "regular"
+      ? "regular"
+      : "";
+  if (!assignment) {
+    res.status(400).json({ error: "Choose Truck driver or Regular maintenance" });
+    return;
+  }
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`emergency-truck-sequence:${actor.tenantId}`}))`);
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`hr-employee:${actor.tenantId}:${req.params["id"]}`}))`);
+      const [record] = await tx.select().from(entityRecords).where(and(
+        eq(entityRecords.id, req.params["id"]!),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.entity, "hr-employee-records"),
+        eq(entityRecords.deleted, false),
+      )).limit(1);
+      if (!record) throw Object.assign(new Error("Employee record not found"), { status: 404 });
+      const employeeStaffId = String(record.state["employeeStaffId"] || "").trim();
+      if (!employeeStaffId) throw Object.assign(new Error("Complete the employee account before assigning a truck"), { status: 409 });
+      const [staff] = await tx.select().from(staffAccounts).where(and(
+        eq(staffAccounts.id, employeeStaffId),
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.status, "approved"),
+      )).limit(1);
+      if (!staff) throw Object.assign(new Error("Approved employee account not found"), { status: 404 });
+      if (staff.position !== "Maintenance Worker") {
+        throw Object.assign(new Error("Truck assignment is limited to Maintenance Workers"), { status: 400 });
+      }
+      const [existingUnit] = await tx.select().from(entityRecords).where(and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.entity, "emergency-units"),
+        eq(entityRecords.deleted, false),
+        sql`${entityRecords.state}->>'assignedStaffId' = ${staff.id}`,
+      )).limit(1);
+      const now = new Date();
+      let emergencyUnitId: string | undefined;
+      if (assignment === "truck") {
+        if (existingUnit) {
+          emergencyUnitId = existingUnit.id;
+          await tx.update(staffAccounts).set({
+            role: "emergency",
+            updatedAt: now,
+          }).where(eq(staffAccounts.id, staff.id));
+        } else {
+          const [existingTruckDrivers, existingTruckUnits] = await Promise.all([
+            tx.select({ name: staffAccounts.name }).from(staffAccounts).where(and(
+              eq(staffAccounts.tenantId, actor.tenantId),
+              eq(staffAccounts.role, "emergency"),
+              eq(staffAccounts.position, "Maintenance Worker"),
+            )),
+            tx.select({ state: entityRecords.state }).from(entityRecords).where(and(
+              eq(entityRecords.tenantId, actor.tenantId),
+              eq(entityRecords.entity, "emergency-units"),
+              eq(entityRecords.deleted, false),
+            )),
+          ]);
+          const nextTruckNumber = existingTruckDrivers.reduce((highest, member) => {
+            const value = /^TRK-(\d+)\s+/i.exec(member.name)?.[1];
+            return value ? Math.max(highest, Number(value)) : highest;
+          }, existingTruckUnits.reduce((highest, unit) => {
+            const value = Number(
+              unit.state["truckNumber"] ||
+              /(?:TRK|Truck)[- ]?(\d+)/i.exec(String(unit.state["unitName"] || unit.state["name"] || ""))?.[1] ||
+              0
+            );
+            return Number.isInteger(value) ? Math.max(highest, value) : highest;
+          }, 0)) + 1;
+          const code = await allocateTruckStaffCode(tx, actor.tenantId, nextTruckNumber);
+          emergencyUnitId = randomUUID();
+          await tx.update(staffAccounts).set({
+            role: "emergency",
+            code,
+            codeIssuedAt: now,
+            codeEmailedAt: null,
+            sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
+            updatedAt: now,
+          }).where(eq(staffAccounts.id, staff.id));
+          await tx.insert(entityRecords).values({
+            id: emergencyUnitId,
+            tenantId: actor.tenantId,
+            entity: "emergency-units",
+            state: {
+              name: `Truck ${nextTruckNumber}`,
+              unitName: `TRK-${nextTruckNumber}`,
+              code,
+              truckNumber: nextTruckNumber,
+              assignedStaffId: staff.id,
+              assignedTo: staff.name,
+              createdAt: now.toISOString(),
+            },
+            createdBy: actor.id,
+            createdAt: now,
+            updatedAt: now,
+          });
+        }
+      } else {
+        const code = await allocateStaffCode(tx, actor.tenantId, staff.name);
+        await tx.update(staffAccounts).set({
+          role: "worker",
+          code,
+          codeIssuedAt: now,
+          codeEmailedAt: null,
+          sessionVersion: sql`${staffAccounts.sessionVersion} + 1`,
+          updatedAt: now,
+        }).where(eq(staffAccounts.id, staff.id));
+        if (existingUnit) {
+          await tx.update(entityRecords).set({
+            deleted: true,
+            updatedAt: now,
+            version: sql`${entityRecords.version} + 1`,
+          }).where(eq(entityRecords.id, existingUnit.id));
+        }
+      }
+      const { emergencyUnitId: _oldUnitId, ...recordState } = record.state;
+      const [updatedRecord] = await tx.update(entityRecords).set({
+        state: {
+          ...recordState,
+          role: assignment === "truck" ? "emergency" : "worker",
+          emergencyTruckDriver: assignment === "truck",
+          ...(emergencyUnitId ? { emergencyUnitId } : {}),
+        },
+        updatedAt: now,
+        version: sql`${entityRecords.version} + 1`,
+      }).where(eq(entityRecords.id, record.id)).returning();
+      return updatedRecord;
+    });
+    await audit(actor, "staff.maintenance-assignment", `Assigned ${assignment === "truck" ? "truck driver" : "regular maintenance"}`, String(result?.state["employeeStaffId"] || ""));
+    res.json(result ? outward(result) : null);
+  } catch (error: any) {
+    res.status(Number(error?.status) || 500).json({ error: error?.message || "Could not change maintenance assignment" });
+  }
+});
+
 router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<void> => {
   const actor = requireHr(res);
   if (!actor) return;

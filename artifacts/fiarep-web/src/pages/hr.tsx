@@ -317,6 +317,12 @@ export default function HRWorkspace() {
           : sectionEntries.filter(([, value]) => value !== ""),
       );
       if (editingRecord) {
+        const maintenanceAssignmentChanged =
+          values.category === "hr-employee-records" &&
+          Boolean(editingRecord.state.employeeStaffId) &&
+          sectionValues.position === "Maintenance Worker" &&
+          (sectionValues.emergencyTruckDriver === "true") !==
+            (editingRecord.state.emergencyTruckDriver === true);
         const employeeDevelopments = values.category === "hr-employee-records"
           ? assignedDevelopments
           : undefined;
@@ -337,6 +343,25 @@ export default function HRWorkspace() {
             },
           },
         });
+        if (maintenanceAssignmentChanged) {
+          const response = await fetch(
+            `/api/v1/hr/employee-records/${encodeURIComponent(editingRecord.id)}/maintenance-assignment`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              credentials: "include",
+              body: JSON.stringify({
+                maintenanceAssignment: sectionValues.emergencyTruckDriver === "true"
+                  ? "truck"
+                  : "regular",
+              }),
+            },
+          );
+          if (!response.ok) {
+            const payload = await response.json().catch(() => ({}));
+            throw new Error(payload.error || "Could not change maintenance assignment");
+          }
+        }
       } else {
         await create.mutateAsync({
           entity: values.category,
@@ -922,7 +947,6 @@ export default function HRWorkspace() {
                     id="hr-field-maintenance-assignment"
                     className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
                     value={sectionValues.emergencyTruckDriver || ""}
-                    disabled={Boolean(editingRecord?.state.employeeStaffId)}
                     onChange={(event) => setSectionValues((current) => ({
                       ...current,
                       emergencyTruckDriver: event.target.value,
