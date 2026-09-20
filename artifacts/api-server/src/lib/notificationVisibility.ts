@@ -57,7 +57,17 @@ export async function visibleNotificationsFor(
     if (!record) return !isResidentReportAlert(notification);
     return canReadEntityRecordForActor(actor, record);
   }));
-  return candidateRows.filter((_notification, index) => visibility[index]);
+  return candidateRows
+    .filter((_notification, index) => visibility[index])
+    .map((notification) => {
+      if (!notification.reportId) return notification;
+      const record = byId.get(notification.reportId);
+      if (record?.entity !== "manpower-requests") return notification;
+      const sourceEntity = String(record.state["sourceEntity"] || "");
+      const sourceRecordId = String(record.state["sourceRecordId"] || "");
+      if (sourceEntity !== "resident-reports" || !sourceRecordId) return notification;
+      return { ...notification, reportId: sourceRecordId };
+    });
 }
 
 export async function residentReportRecipientIds(

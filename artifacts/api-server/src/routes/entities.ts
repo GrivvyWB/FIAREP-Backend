@@ -934,7 +934,7 @@ router.post("/v1/:entity", async (req, res, next) => {
       String(persistedCreatedState["receiverSupervisorId"] || ""),
       `${String(persistedCreatedState["requestedTrade"] || "Trade")} manpower requested`,
       String(persistedCreatedState["sourceTitle"] || ""),
-      id,
+      String(persistedCreatedState["sourceRecordId"] || id),
     );
   }
   res.status(201).json(outward(actor, created!));
