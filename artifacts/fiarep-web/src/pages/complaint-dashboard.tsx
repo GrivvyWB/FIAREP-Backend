@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getListEntityRecordsQueryKey, useListEntityRecords } from "@workspace/api-client-react";
 import { 
-  Building2, ChevronRight, Clock, 
+  Building2, ChevronDown, ChevronRight, Clock, 
   Flame, Loader2, MapPin, Search, 
   Siren, Target, X, AlertOctagon, CheckSquare, Building,
   ShieldAlert, Users, CheckCircle, AlertCircle, Layers, Wrench, Calendar, ArrowDownUp, Trophy
@@ -29,8 +29,8 @@ function isCorrected(status: string) {
 }
 function addressOf(r: Report) { return getField(r, ["address", "buildingAddress", "building"], "Unknown Address"); }
 function categoryOf(r: Report) { return getField(r, ["category", "type", "complaintType"], "Uncategorized"); }
-function boroughOf(r: Report) { return getField(r, ["borough"], ""); }
-function tradeOf(r: Report) { return getField(r, ["trade", "assignedTrade", "tradeName"], ""); }
+function boroughOf(r: Report) { return getField(r, ["borough"], "Unknown"); }
+function tradeOf(r: Report) { return getField(r, ["trade", "assignedTrade", "tradeName"], "Unassigned"); }
 
 type Stats = {
   name: string;
@@ -109,7 +109,7 @@ export default function ComplaintDashboard() {
       const trd = tradeOf(r);
       
       if (boro) boroughs.add(boro);
-      if (cat && cat !== "Uncategorized") categories.add(cat);
+      if (cat) categories.add(cat);
       if (trd) trades.add(trd);
     });
     
@@ -303,23 +303,29 @@ export default function ComplaintDashboard() {
              />
           </div>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
-            <div className="flex items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm">
-              <MapPin className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
-              <select value={boroughFilter} onChange={e => setBoroughFilter(e.target.value)} className="bg-transparent text-xs text-slate-700 outline-none pr-4 w-full" data-testid="filter-borough">
+             <div className="relative flex min-w-[145px] items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm hover:border-blue-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-colors">
+               <MapPin className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 pointer-events-none" />
+               <span className="flex-1 text-xs text-slate-700 pointer-events-none truncate">{boroughFilter === "all" ? "All Boroughs" : boroughFilter}</span>
+               <ChevronDown className="w-3.5 h-3.5 text-slate-500 ml-2 pointer-events-none" />
+               <select value={boroughFilter} onChange={e => setBoroughFilter(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Borough" data-testid="filter-borough">
                 <option value="all">All Boroughs</option>
                 {filterOptions.boroughs.map(b => <option key={b} value={b}>{b}</option>)}
               </select>
             </div>
-            <div className="flex items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm">
-              <Layers className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
-              <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="bg-transparent text-xs text-slate-700 outline-none pr-4 w-full" data-testid="filter-category">
+             <div className="relative flex min-w-[150px] items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm hover:border-blue-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-colors">
+               <Layers className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 pointer-events-none" />
+               <span className="flex-1 text-xs text-slate-700 pointer-events-none truncate">{categoryFilter === "all" ? "All Categories" : categoryFilter}</span>
+               <ChevronDown className="w-3.5 h-3.5 text-slate-500 ml-2 pointer-events-none" />
+               <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Category" data-testid="filter-category">
                 <option value="all">All Categories</option>
                 {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
               </select>
             </div>
-            <div className="flex items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm">
-              <Wrench className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0" />
-              <select value={tradeFilter} onChange={e => setTradeFilter(e.target.value)} className="bg-transparent text-xs text-slate-700 outline-none pr-4 w-full" data-testid="filter-trade">
+             <div className="relative flex min-w-[135px] items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm hover:border-blue-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-colors">
+               <Wrench className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 pointer-events-none" />
+               <span className="flex-1 text-xs text-slate-700 pointer-events-none truncate">{tradeFilter === "all" ? "All Trades" : tradeFilter}</span>
+               <ChevronDown className="w-3.5 h-3.5 text-slate-500 ml-2 pointer-events-none" />
+               <select value={tradeFilter} onChange={e => setTradeFilter(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Trade" data-testid="filter-trade">
                 <option value="all">All Trades</option>
                 {filterOptions.trades.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
