@@ -122,9 +122,20 @@ export default function Dashboard() {
             {notificationsQuery.isLoading ? <div className="p-8 text-center text-sm text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />Loading notifications...</div> :
               notificationsQuery.isError ? <div className="p-8 text-center text-sm text-muted-foreground"><Bell className="w-8 h-8 opacity-20 mx-auto mb-2" />Notifications are unavailable.</div> :
                 watchlistNotifications.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground"><ShieldCheck className="w-8 h-8 opacity-20 mx-auto mb-2" />No notifications requiring attention.</div> :
-                  watchlistNotifications.slice().sort((a, b) => Number(b.read) - Number(a.read) || new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 5).map((notification) => <div key={notification.id} className={`flex gap-3.5 p-3 border-b border-border last:border-0 ${!notification.read ? "bg-[#fffaf0]" : ""}`}>
-                    <div className="w-[34px] h-[34px] rounded-[9px] shrink-0 bg-[#fff5d6] text-[#F5B301] grid place-items-center"><Bell className="w-[17px] h-[17px]" /></div><div><b className="text-[13.5px] font-semibold">{notification.message}</b><span className="text-xs text-muted-foreground block mt-0.5">{notification.detail || formatDate(notification.at)}{!notification.read && " · Unread"}</span></div>
-                  </div>)}
+                  watchlistNotifications.slice().sort((a, b) => Number(b.read) - Number(a.read) || new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 5).map((notification) => {
+                    const className = `flex gap-3.5 p-3 border-b border-border last:border-0 ${!notification.read ? "bg-[#fffaf0]" : ""}`;
+                    const content = <>
+                      <div className="w-[34px] h-[34px] rounded-[9px] shrink-0 bg-[#fff5d6] text-[#F5B301] grid place-items-center"><Bell className="w-[17px] h-[17px]" /></div>
+                      <div><b className="text-[13.5px] font-semibold">{notification.message}</b><span className="text-xs text-muted-foreground block mt-0.5">{notification.detail || formatDate(notification.at)}{!notification.read && " · Unread"}</span></div>
+                    </>;
+                    return notification.reportId ? (
+                      <Link key={notification.id} href={`/reports?id=${encodeURIComponent(notification.reportId)}`} className={`${className} rounded-md hover:bg-muted/50 transition-colors`}>
+                        {content}
+                      </Link>
+                    ) : (
+                      <div key={notification.id} className={className}>{content}</div>
+                    );
+                  })}
           </div>
         </div>
       </section>

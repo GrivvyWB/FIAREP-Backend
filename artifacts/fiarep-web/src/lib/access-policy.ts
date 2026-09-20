@@ -48,19 +48,19 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
     return exactWorkflowShell.has(module) || ["inspections", "inspection-create", "violations"].includes(module);
   }
   if (staff.role === "management" && position === "Supervisor Inspector") {
-    return exactWorkflowShell.has(module) || module === "violations";
+    return exactWorkflowShell.has(module) || module === "violations" || module === "reports";
   }
   if (staff.role === "inspector" && position === "CPM") {
     return exactWorkflowShell.has(module) || module === "scope-writing";
   }
   if (staff.role === "management" && position === "CPM Supervisor") {
-    return exactWorkflowShell.has(module) || module === "scope-review";
+    return exactWorkflowShell.has(module) || module === "scope-review" || module === "reports";
   }
   const isTradeSupervisor =
     isSupervisor(staff) &&
     !["Supervisor Inspector", "CPM Supervisor"].includes(position);
   if (isTradeSupervisor) {
-    return exactWorkflowShell.has(module) || module === "trade-requests";
+    return exactWorkflowShell.has(module) || module === "trade-requests" || module === "reports";
   }
   if ((staff.role as string) === "worker") {
     return exactWorkflowShell.has(module) || module === "my-jobs";
