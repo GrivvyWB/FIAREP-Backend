@@ -64,3 +64,17 @@ mtime_ms = 1789848181899
 storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/64bc0217-2eef-48e7-b7cb-da7a76f83358/2f4c3b6c-3a7a-4043-8300-9c5f8998feb9"
 storage_version_token = "1789848188444171"
 content_type = "application/octet-stream"
+
+[[outputs]]
+id = "YgWnDU_W0oaZ196niHY05"
+uri = "file://builds/FIAREP-1.0.0-build-10.ipa"
+type = "unspecified"
+title = "FIAREP iOS Build 10"
+description = "Signed production IPA for com.fiarep.app. Upload this file with Apple Transporter to the existing FIAREP App Store Connect app."
+logical_id = "feeefa5b-f20a-437d-ace6-8a4b76c855f9"
+content_hash = "sha256:f672b10eced32bff8890e833f78435be27439b303cf4af08541e1bfd6636e2e2"
+size = 26903817
+mtime_ms = 1789877147005
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:443d7a91-ede2-4e6e-9769-8c5f2d34dc79/feeefa5b-f20a-437d-ace6-8a4b76c855f9/f92044c4-7d4a-43d7-92a2-9ae00a150729"
+storage_version_token = "1789877151818086"
+content_type = "application/octet-stream"
