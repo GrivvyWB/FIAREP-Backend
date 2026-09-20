@@ -12,6 +12,33 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 const DEVELOPMENTS_PER_ROTATION = 10;
 const DEVELOPMENT_ROTATION_MS = 30 * 60 * 1000;
+const NYC_MAP_URL = "https://www.openstreetmap.org/export/embed.html?bbox=-74.25909%2C40.477399%2C-73.700181%2C40.916178&layer=mapnik";
+const DEVELOPMENT_MAP_LOCATIONS: Record<string, { latitude: number; longitude: number }> = {
+  "amsterdam houses": { latitude: 40.773168, longitude: -73.9874639 },
+};
+
+function mapLocationFor(development: string | null) {
+  if (!development) return null;
+  const normalizedName = development.trim().toLowerCase();
+  return DEVELOPMENT_MAP_LOCATIONS[normalizedName]
+    || (normalizedName.includes("amsterdam") ? DEVELOPMENT_MAP_LOCATIONS["amsterdam houses"] : null);
+}
+
+function mapUrlFor(development: string | null) {
+  const location = mapLocationFor(development);
+  if (!location) return NYC_MAP_URL;
+
+  const longitudeSpan = 0.012;
+  const latitudeSpan = 0.009;
+  const bbox = [
+    location.longitude - longitudeSpan,
+    location.latitude - latitudeSpan,
+    location.longitude + longitudeSpan,
+    location.latitude + latitudeSpan,
+  ].join(",");
+
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${location.latitude}%2C${location.longitude}`;
+}
 
 function getField(r: Report, aliases: string[], fallback: string = ""): string {
   const s = r.state || {};
@@ -97,6 +124,8 @@ export default function ComplaintDashboard() {
   // Detail View State
   const [selectedDev, setSelectedDev] = useState<string | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
+  const selectedMapLocation = mapLocationFor(selectedDev);
+  const mapUrl = mapUrlFor(selectedDev);
 
   const filterOptions = useMemo(() => {
     const boroughs = new Set<string>();
@@ -442,18 +471,20 @@ export default function ComplaintDashboard() {
             {/* Column 2: Interactive Map Surface */}
             <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden relative shadow-sm min-h-[300px]">
               <iframe 
-                src="https://www.openstreetmap.org/export/embed.html?bbox=-74.25909%2C40.477399%2C-73.700181%2C40.916178&amp;layer=mapnik" 
+                src={mapUrl}
                 className="w-full h-full border-0 absolute inset-0 opacity-[0.7] filter contrast-[0.9] saturate-[0.7]" 
                 title="NYC Overview" 
               />
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                 <div className="relative flex flex-col items-center justify-center mt-[-40px]">
-                    <div className="w-24 h-24 bg-red-500/20 rounded-full animate-ping absolute" />
-                    <div className="w-12 h-12 bg-red-500/10 rounded-full animate-pulse absolute" />
-                    <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center z-10 shadow-lg border-2 border-white">
-                       <MapPin className="w-4 h-4 text-white" />
-                    </div>
-                 </div>
+                 {!selectedMapLocation && (
+                   <div className="relative flex flex-col items-center justify-center mt-[-40px]">
+                      <div className="w-24 h-24 bg-red-500/20 rounded-full animate-ping absolute" />
+                      <div className="w-12 h-12 bg-red-500/10 rounded-full animate-pulse absolute" />
+                      <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center z-10 shadow-lg border-2 border-white">
+                         <MapPin className="w-4 h-4 text-white" />
+                      </div>
+                   </div>
+                 )}
                  {selectedDev && (
                     <div className="mt-4 bg-white px-4 py-1.5 rounded-full shadow-lg border border-slate-200 font-bold text-sm text-slate-800 pointer-events-auto shadow-red-500/10 ring-1 ring-red-100">
                       {selectedDev}
