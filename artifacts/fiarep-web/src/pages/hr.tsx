@@ -664,7 +664,9 @@ export default function HRWorkspace() {
                       const employee = typeof state.employeeStaffId === "string"
                         ? staffById.get(state.employeeStaffId)?.name
                         : undefined;
-                      const status = String(state.status || "draft").toLowerCase();
+                      const status = row.entity === "hr-employee-records" && state.employeeStaffId
+                        ? "completed"
+                        : String(state.status || "draft").toLowerCase();
                       const sensitive = row.entity === "hr-payroll-benefits"
                         ? "approve-pay-change"
                         : row.entity === "hr-discipline"
