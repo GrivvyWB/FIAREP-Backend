@@ -196,7 +196,9 @@ export function groupTeamDirectoryByTitleAndLocation(
   staff: Staff[],
   hrDisplayMemberIds: ReadonlySet<string>,
 ): TeamDirectoryGroup[] {
-  const hrPeople = staff.filter((member) => hrDisplayMemberIds.has(member.id));
+  const hrPeople = staff.filter((member) =>
+    hrDisplayMemberIds.has(member.id) && member.position === "Human Resources"
+  );
   const emergencyMaintenance = staff
     .filter((member) =>
       member.position === "Superintendent Ⓔ" ||
@@ -217,7 +219,7 @@ export function groupTeamDirectoryByTitleAndLocation(
     });
   const emergencyMaintenanceIds = new Set(emergencyMaintenance.map((member) => member.id));
   const regularPeople = staff.filter((member) =>
-    !hrDisplayMemberIds.has(member.id) &&
+    !hrPeople.some((hrMember) => hrMember.id === member.id) &&
     !emergencyMaintenanceIds.has(member.id)
   );
   const titles = new Map<string, Staff[]>();

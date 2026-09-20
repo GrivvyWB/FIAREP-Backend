@@ -207,6 +207,12 @@ export default function Team() {
       queryClient.invalidateQueries({ queryKey: getGetHrWorkspaceQueryKey() }),
     ]);
   }
+  async function prepareAssignmentUpdate() {
+    await Promise.all([
+      queryClient.cancelQueries({ queryKey: getListStaffQueryKey() }),
+      queryClient.cancelQueries({ queryKey: getGetHrWorkspaceQueryKey() }),
+    ]);
+  }
   async function completeDraft() {
     if (!pendingDraft) return;
     setDraftCompleting(true);
@@ -416,7 +422,8 @@ export default function Team() {
       return;
     }
     try {
-      await updateStaffAssignment.mutateAsync({
+      await prepareAssignmentUpdate();
+      const updated = await updateStaffAssignment.mutateAsync({
         id: moveTarget.id,
         data: {
           position: movePosition,
@@ -426,6 +433,8 @@ export default function Team() {
           hourlyRate,
         },
       });
+      queryClient.setQueryData(getListStaffQueryKey(), (current: typeof staff) =>
+        current?.map((member) => member.id === updated.id ? updated : member));
       await refresh();
       setMoveTarget(null);
       setMovePosition("");
@@ -473,7 +482,10 @@ export default function Team() {
     setActionError("");
     setDropTarget(zoneId);
     try {
-      await updateStaffAssignment.mutateAsync({ id: member.id, data: assignment });
+      await prepareAssignmentUpdate();
+      const updated = await updateStaffAssignment.mutateAsync({ id: member.id, data: assignment });
+      queryClient.setQueryData(getListStaffQueryKey(), (current: typeof staff) =>
+        current?.map((candidate) => candidate.id === updated.id ? updated : candidate));
       await refresh();
     } catch (error) {
       setActionError(errorMessage(error));
