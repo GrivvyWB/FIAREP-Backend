@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getListEntityRecordsQueryKey, useListEntityRecords } from "@workspace/api-client-react";
 import { 
   Building2, ChevronRight, Clock, 
@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
+const DEVELOPMENTS_PER_ROTATION = 10;
+const DEVELOPMENT_ROTATION_MS = 30 * 60 * 1000;
 
 function getField(r: Report, aliases: string[], fallback: string = ""): string {
   const s = r.state || {};
@@ -71,6 +73,7 @@ export default function ComplaintDashboard() {
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
+  const [developmentPage, setDevelopmentPage] = useState(0);
 
   // Detail View State
   const [selectedDev, setSelectedDev] = useState<string | null>(null);
@@ -184,6 +187,28 @@ export default function ComplaintDashboard() {
     return { devStats: activeDevs, bldgStats: activeBldgs, globalStats: glob };
   }, [filteredReports, sortOrder]);
 
+  const developmentPageCount = Math.max(
+    1,
+    Math.ceil(devStats.length / DEVELOPMENTS_PER_ROTATION),
+  );
+  const visibleDevelopments = devStats.slice(
+    developmentPage * DEVELOPMENTS_PER_ROTATION,
+    (developmentPage + 1) * DEVELOPMENTS_PER_ROTATION,
+  );
+
+  useEffect(() => {
+    setDevelopmentPage(0);
+  }, [search, boroughFilter, categoryFilter, tradeFilter, fromDate, toDate, sortOrder]);
+
+  useEffect(() => {
+    setDevelopmentPage((current) => Math.min(current, developmentPageCount - 1));
+    if (developmentPageCount <= 1) return;
+    const timer = window.setInterval(() => {
+      setDevelopmentPage((current) => (current + 1) % developmentPageCount);
+    }, DEVELOPMENT_ROTATION_MS);
+    return () => window.clearInterval(timer);
+  }, [developmentPageCount]);
+
   const topDev = devStats.length > 0 ? (sortOrder === "desc" ? devStats[0] : devStats[devStats.length - 1]) : null;
   const topBldg = bldgStats.length > 0 ? (sortOrder === "desc" ? bldgStats[0] : bldgStats[bldgStats.length - 1]) : null;
 
@@ -270,9 +295,14 @@ export default function ComplaintDashboard() {
           {/* Main Concentration Surface */}
           <div className="flex-1 flex flex-col min-w-0 bg-black/40 border border-red-950/60 rounded-xl overflow-hidden shadow-2xl shadow-red-950/20 backdrop-blur-sm">
             <div className="p-4 border-b border-red-900/30 bg-red-950/20 flex flex-wrap items-center gap-4 justify-between">
-              <div className="flex items-center gap-2 text-red-100 font-semibold">
-                <Flame className="w-4 h-4 text-red-500" />
-                Active Development Concentrations
+              <div>
+                <div className="flex items-center gap-2 text-red-100 font-semibold">
+                  <Flame className="w-4 h-4 text-red-500" />
+                  Active Development Concentrations
+                </div>
+                <div className="mt-1 text-[10px] font-medium uppercase tracking-wider text-red-400/60">
+                  Showing {visibleDevelopments.length} of {devStats.length} developments · Rotates every 30 minutes
+                </div>
               </div>
             </div>
             
@@ -280,12 +310,15 @@ export default function ComplaintDashboard() {
               {devStats.length === 0 ? (
                 <div className="p-10 text-center text-red-500/40 text-sm">No active developments matching criteria.</div>
               ) : (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2">
-                  {devStats.map(dev => {
-                    const intensity = dev.activeCount > 20 ? "bg-red-600 border-red-500 text-white" : 
-                                      dev.activeCount > 10 ? "bg-red-800/80 border-red-600/80 text-red-50" : 
-                                      dev.activeCount > 5 ? "bg-red-900/60 border-red-800/60 text-red-100" : 
-                                      "bg-red-950/40 border-red-900/40 text-red-200";
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 xl:grid-cols-10 gap-2">
+                  {visibleDevelopments.map(dev => {
+                    const intensity = dev.activeCount >= 20
+                      ? "bg-red-600 border-red-300 text-white animate-pulse shadow-lg shadow-red-600/60"
+                      : dev.activeCount >= 10
+                        ? "bg-orange-600/90 border-orange-300 text-white animate-pulse shadow-md shadow-orange-600/40"
+                        : dev.activeCount >= 5
+                          ? "bg-orange-900/70 border-orange-600/70 text-orange-50"
+                          : "bg-red-950/40 border-red-900/40 text-red-200";
                     return (
                       <button
                         key={dev.name}
@@ -305,6 +338,29 @@ export default function ComplaintDashboard() {
                 </div>
               )}
             </ScrollArea>
+            {developmentPageCount > 1 && (
+              <div className="flex items-center justify-between border-t border-red-900/30 bg-red-950/20 px-4 py-2">
+                <button
+                  type="button"
+                  onClick={() => setDevelopmentPage((current) => (current - 1 + developmentPageCount) % developmentPageCount)}
+                  className="rounded border border-red-900/50 px-3 py-1 text-xs font-semibold text-red-200 hover:bg-red-900/40"
+                  data-testid="button-previous-development-rotation"
+                >
+                  Previous 10
+                </button>
+                <span className="text-xs font-semibold text-red-300" data-testid="text-development-rotation-page">
+                  Group {developmentPage + 1} of {developmentPageCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setDevelopmentPage((current) => (current + 1) % developmentPageCount)}
+                  className="rounded border border-red-900/50 px-3 py-1 text-xs font-semibold text-red-200 hover:bg-red-900/40"
+                  data-testid="button-next-development-rotation"
+                >
+                  Next 10
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Drill-down Panel */}
