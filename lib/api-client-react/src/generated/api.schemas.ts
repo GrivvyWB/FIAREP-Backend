@@ -822,6 +822,26 @@ export interface StaffDevelopmentUpdate {
   developments: string[];
 }
 
+export type StaffAssignmentUpdateRole = typeof StaffAssignmentUpdateRole[keyof typeof StaffAssignmentUpdateRole];
+
+
+export const StaffAssignmentUpdateRole = {
+  administrator: 'administrator',
+  human_resources: 'human_resources',
+  management: 'management',
+  worker: 'worker',
+  inspector: 'inspector',
+  procurement: 'procurement',
+  vendor: 'vendor',
+  emergency: 'emergency',
+} as const;
+
+export interface StaffAssignmentUpdate {
+  position: string;
+  role: StaffAssignmentUpdateRole;
+  developments: string[];
+}
+
 export interface StaffCodeUpdate { [key: string]: unknown }
 
 export interface EntityTombstone {

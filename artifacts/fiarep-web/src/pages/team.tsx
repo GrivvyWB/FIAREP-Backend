@@ -2,6 +2,7 @@ import {
   StaffPosition,
   StaffInputRole,
   StaffRole,
+  StaffAssignmentUpdateRole,
   useCreateStaff,
   useGetHrWorkspace,
   useApproveStaff,
@@ -9,6 +10,7 @@ import {
   useListStaff,
   useResetStaffCode,
   useRevokeStaff,
+  useUpdateStaffAssignment,
   useUpdateStaffDevelopments,
   useListStaffDevelopments,
   getListStaffQueryKey,
@@ -29,7 +31,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
-import { groupTeamDirectoryByTitleAndLocation } from "@/lib/staff-assignment";
+import { groupTeamDirectoryByTitleAndLocation, type StaffAssignmentTarget } from "@/lib/staff-assignment";
 import { invalidateStaffQueries } from "@/lib/query-invalidation";
 import { useLocation } from "wouter";
 
@@ -118,6 +120,7 @@ export default function Team() {
   const reset = useResetStaffCode();
   const revoke = useRevokeStaff();
   const deleteStaff = useDeleteStaff();
+  const updateStaffAssignment = useUpdateStaffAssignment();
   const updateStaffDevelopments = useUpdateStaffDevelopments();
   const [search, setSearch] = useState("");
   const [directoryDevelopment, setDirectoryDevelopment] = useState("");
@@ -148,6 +151,8 @@ export default function Team() {
   const [completedDraft, setCompletedDraft] = useState<{ name: string; employeeNumber: string; code: string } | null>(null);
   const [moveTarget, setMoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [moveDevelopments, setMoveDevelopments] = useState<string[]>([]);
+  const [draggedMember, setDraggedMember] = useState<string | null>(null);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
 
   const roleOptions = useMemo(() => {
     if (!actor) return [];
@@ -423,6 +428,51 @@ export default function Team() {
       setActionError(errorMessage(e));
     }
   }
+  function dragStart(member: NonNullable<typeof staff>[number], event: React.DragEvent<HTMLDivElement>) {
+    if (actor?.role !== "human_resources" || !member.canManage) return;
+    setDraggedMember(member.id);
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", member.id);
+  }
+  function dragEnd() {
+    setDraggedMember(null);
+    setDropTarget(null);
+  }
+  async function dropMember(
+    target: StaffAssignmentTarget,
+    zoneId: string,
+    event: React.DragEvent<HTMLElement>,
+  ) {
+    event.preventDefault();
+    const memberId = draggedMember || event.dataTransfer.getData("text/plain");
+    const member = staff?.find((candidate) => candidate.id === memberId);
+    if (!member || actor?.role !== "human_resources" || !member.canManage) {
+      dragEnd();
+      return;
+    }
+    // A multi-development or "all developments" bucket is not a safe target:
+    // retain the explicit Move dialog for those assignments.
+    if (!target.developments && target.position === null) {
+      setActionError("Use Move to choose the assigned developments.");
+      dragEnd();
+      return;
+    }
+    const assignment = {
+      position: target.position || member.position,
+      role: (target.role || member.role) as typeof StaffAssignmentUpdateRole[keyof typeof StaffAssignmentUpdateRole],
+      developments: target.developments || member.developments,
+    };
+    setActionError("");
+    setDropTarget(zoneId);
+    try {
+      await updateStaffAssignment.mutateAsync({ id: member.id, data: assignment });
+      await refresh();
+    } catch (error) {
+      setActionError(errorMessage(error));
+    } finally {
+      dragEnd();
+    }
+  }
   async function copyCode() {
     if (issuedCode) await navigator.clipboard?.writeText(issuedCode);
   }
@@ -476,8 +526,14 @@ export default function Team() {
       member.position === "Borough Director" ||
       member.position === "Superintendent Ⓔ" ||
       member.position.toLowerCase().includes("supervisor");
+    const draggable = actor?.role === "human_resources" && member.canManage === true;
     return (
-    <div key={member.id} className="flex items-center gap-4 p-4 rounded-xl border border-border">
+    <div key={member.id} className={`flex items-center gap-4 p-4 rounded-xl border border-border ${draggable ? "cursor-grab active:cursor-grabbing" : ""}`}
+      draggable={draggable}
+      onDragStart={(event) => dragStart(member, event)}
+      onDragEnd={dragEnd}
+      data-testid={`staff-member-card-${member.id}`}
+    >
       <div className={`w-12 h-12 rounded-full grid place-items-center font-bold text-sm shrink-0 ${
         isSupervisorOrManagement
           ? "bg-yellow-400 text-yellow-950"
@@ -607,9 +663,21 @@ export default function Team() {
               <div className="space-y-3">
                 {teamGroups.map((group) => {
                   const groupCount = group.locations.reduce((total, location) => total + location.people.length, 0);
+                  const groupDropId = `group:${group.label}`;
                   return (
                     <Collapsible key={group.label} defaultOpen>
-                      <CollapsibleTrigger className="flex w-full items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3 text-left">
+                      <CollapsibleTrigger
+                        className={`flex w-full items-center justify-between rounded-xl border border-border bg-secondary/30 px-4 py-3 text-left ${dropTarget === groupDropId ? "border-primary bg-primary/10" : ""}`}
+                        onDragOver={(event) => {
+                          if (actor?.role === "human_resources" && draggedMember) {
+                            event.preventDefault();
+                            event.dataTransfer.dropEffect = "move";
+                            setDropTarget(groupDropId);
+                          }
+                        }}
+                        onDrop={(event) => void dropMember(group.assignment, groupDropId, event)}
+                        data-testid={`drop-title-${group.label}`}
+                      >
                         <div>
                           <h3 className="font-bold">{group.label}</h3>
                           <p className="text-xs text-muted-foreground">{group.subtitle} · {groupCount} staff member{groupCount === 1 ? "" : "s"}</p>
@@ -617,9 +685,27 @@ export default function Team() {
                         <ChevronDown className="h-5 w-5 shrink-0" />
                       </CollapsibleTrigger>
                       <CollapsibleContent className="space-y-3 pt-3">
-                        {group.locations.map((location) => (
+                        {group.locations.map((location) => {
+                          const locationDropId = `location:${group.label}:${location.label}`;
+                          const locationTarget: StaffAssignmentTarget = {
+                            position: null,
+                            role: null,
+                            developments: location.development ? [location.development] : null,
+                          };
+                          return (
                           <Collapsible key={`${group.label}:${location.label}`} defaultOpen>
-                            <CollapsibleTrigger className="flex w-full items-center justify-between rounded-lg border border-border px-4 py-2 text-left">
+                            <CollapsibleTrigger
+                              className={`flex w-full items-center justify-between rounded-lg border border-border px-4 py-2 text-left ${dropTarget === locationDropId ? "border-primary bg-primary/10" : ""}`}
+                              onDragOver={(event) => {
+                                if (actor?.role === "human_resources" && draggedMember) {
+                                  event.preventDefault();
+                                  event.dataTransfer.dropEffect = "move";
+                                  setDropTarget(locationDropId);
+                                }
+                              }}
+                              onDrop={(event) => void dropMember(locationTarget, locationDropId, event)}
+                              data-testid={`drop-development-${group.label}-${location.label}`}
+                            >
                               <div>
                                 <h4 className="text-sm font-semibold">{location.label}</h4>
                                 <p className="text-xs text-muted-foreground">{location.people.length} staff member{location.people.length === 1 ? "" : "s"}</p>
@@ -630,7 +716,8 @@ export default function Team() {
                               {location.people.map(memberCard)}
                             </CollapsibleContent>
                           </Collapsible>
-                        ))}
+                          );
+                        })}
                       </CollapsibleContent>
                     </Collapsible>
                   );

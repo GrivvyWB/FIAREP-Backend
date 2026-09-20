@@ -19,14 +19,22 @@ function isResidentReportAlert(notification: NotificationRow): boolean {
   return normalize(notification.message).includes("resident report");
 }
 
+function isHrAlert(notification: NotificationRow): boolean {
+  return /\bhr\b|employee record|employee pending|payroll|discipline|termination|onboarding/i
+    .test(notification.message || "");
+}
+
 export async function visibleNotificationsFor(
   actor: Actor,
   rows: NotificationRow[],
 ): Promise<NotificationRow[]> {
+  const candidateRows = actor.role === "management"
+    ? rows.filter((row) => !isHrAlert(row))
+    : rows;
   const reportIds = [
-    ...new Set(rows.map((row) => row.reportId).filter((id): id is string => Boolean(id))),
+    ...new Set(candidateRows.map((row) => row.reportId).filter((id): id is string => Boolean(id))),
   ];
-  if (!reportIds.length) return rows;
+  if (!reportIds.length) return candidateRows;
 
   const storedRecords = await db
     .select()
@@ -42,13 +50,15 @@ export async function visibleNotificationsFor(
   );
   const byId = new Map(records.map((record) => [record.id, record]));
 
-  const visibility = await Promise.all(rows.map(async (notification) => {
-    if (!notification.reportId) return true;
+  const visibility = await Promise.all(candidateRows.map(async (notification) => {
+    if (!notification.reportId) {
+      return true;
+    }
     const record = byId.get(notification.reportId);
     if (!record) return !isResidentReportAlert(notification);
     return canReadEntityRecordForActor(actor, record);
   }));
-  return rows.filter((_notification, index) => visibility[index]);
+  return candidateRows.filter((_notification, index) => visibility[index]);
 }
 
 export async function residentReportRecipientIds(

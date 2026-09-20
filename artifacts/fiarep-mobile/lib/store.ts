@@ -1445,26 +1445,60 @@ export type TradeGroup = { position: string; people: StaffAccount[] };
 export async function listAssignableByTrade(): Promise<TradeGroup[]> {
   const all = await listStaffAccounts('approved');
   const identity = await getSessionIdentity();
-  const SUPERVISOR_TITLES = ['Property Manager', 'Superintendent', 'Regional Manager', 'Director', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor'];
+  const normalizedPosition = (identity?.position || '').trim().toLowerCase();
+  const supervisorTrade: Record<string, string> = {
+    'plumber supervisor': 'Plumber',
+    'plumbing supervisor': 'Plumber',
+    'supervisor inspector': 'Inspector',
+    'inspector supervisor': 'Inspector',
+    'inspection supervisor': 'Inspector',
+    'cpm supervisor': 'CPM',
+    'supervisor cpm': 'CPM',
+    'carpenter supervisor': 'Carpenter',
+    'supervisor carpenter': 'Carpenter',
+    'elevator supervisor': 'Elevator Service',
+    'elevator service supervisor': 'Elevator Service',
+    'supervisor elevator': 'Elevator Service',
+    'electrical supervisor': 'Electrician',
+    'electric supervisor': 'Electrician',
+    'electrician supervisor': 'Electrician',
+    'supervisor electrician': 'Electrician',
+    'painter supervisor': 'Painter',
+    'supervisor painter': 'Painter',
+    'maintenance supervisor': 'Maintenance Worker',
+    'grounds supervisor': 'Groundskeeper',
+  };
+  const actorTrade = supervisorTrade[normalizedPosition];
   const operational = all.filter(a =>
-    a.role === 'worker' || a.role === 'inspector' ||
-    (a.role === 'management' && SUPERVISOR_TITLES.includes((a.position || '') as string))
-  );
+    a.role === 'worker' || a.role === 'inspector' || a.role === 'emergency'
+  ).filter(a => !String(a.position || '').toLowerCase().includes('supervisor'));
   const mine = new Set((identity?.developments || []).map(d => d.trim().toLowerCase()));
   const eligible = identity?.position === 'Borough Director'
     ? operational
     : operational.filter(a => (a.developments || []).some(d => mine.has(d.trim().toLowerCase())));
   const sectionForPosition: Record<string, string> = {
+    'Plumbing Supervisor': 'Plumber',
     'Plumber Supervisor': 'Plumber',
+    'Supervisor Inspector': 'Inspector',
+    'Inspector Supervisor': 'Inspector',
+    'Inspection Supervisor': 'Inspector',
+    'CPM Supervisor': 'CPM',
     'Electric Supervisor': 'Electrician',
     'Elevator Supervisor': 'Elevator Service',
+    'Elevator Service Supervisor': 'Elevator Service',
     'Painter Supervisor': 'Painter',
     'Carpenter Supervisor': 'Carpenter',
   };
+  const isSupervisor = normalizedPosition.includes('supervisor');
+  const tradeEligible = isSupervisor && !actorTrade
+    ? []
+    : actorTrade
+    ? eligible.filter((a) => (sectionForPosition[a.position || ''] || a.position || 'Other') === actorTrade)
+    : eligible;
   const order = [...STAFF_POSITIONS].filter(position => !sectionForPosition[position]);
   const groups: TradeGroup[] = [];
   for (const pos of order) {
-    const people = eligible
+    const people = tradeEligible
       .filter(a => (sectionForPosition[a.position || ''] || a.position || 'Other') === pos)
       .sort((x, y) => {
         const xSupervisor = sectionForPosition[x.position || ''] ? 0 : 1;
@@ -1475,7 +1509,7 @@ export async function listAssignableByTrade(): Promise<TradeGroup[]> {
   }
   // Anyone with an unrecognized/blank position lands under a trailing "Other" group.
   const known = new Set<string>(order as unknown as string[]);
-  const leftovers = eligible
+  const leftovers = tradeEligible
     .filter(a => !known.has((a.position || '') as string))
     .sort((x, y) => (x.name || '').localeCompare(y.name || ''));
   if (leftovers.length) {

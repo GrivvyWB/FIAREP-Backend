@@ -107,18 +107,50 @@ export function groupTeamDirectoryStaff(staff: Staff[]) {
 type DirectoryLocation = {
   label: string;
   people: Staff[];
+  /** A location drop is safe only when this is an exact, single development. */
+  development: string | null;
+};
+
+export type StaffAssignmentTarget = {
+  position: string | null;
+  role: Staff["role"] | null;
+  developments: string[] | null;
 };
 
 export type TeamDirectoryGroup = {
   label: string;
   subtitle: string;
   locations: DirectoryLocation[];
+  assignment: StaffAssignmentTarget;
 };
 
 function titleFamily(position: string) {
   return TITLE_FAMILIES.find((family) =>
     family.positions.some((candidate) => candidate.toLowerCase() === position.toLowerCase())
   )?.label || position;
+}
+
+export function roleForPosition(position: string): Staff["role"] {
+  if (position === "CPM" || position === "Inspector") return "inspector";
+  if (
+    position.includes("Supervisor") ||
+    ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager", "Superintendent", "Superintendent Ⓔ", "Assistant Superintendent", "Housing Assistant", "Director"].includes(position)
+  ) return "management";
+  return "worker";
+}
+
+/** Converts rendered title families into canonical API assignment values. */
+export function assignmentForTitle(title: string): StaffAssignmentTarget {
+  const canonicalPosition = title === "Emergency Maintenance"
+    ? "Superintendent Ⓔ"
+    : title === "All developments"
+      ? null
+      : TITLE_FAMILIES.find((family) => family.label === title)?.positions.at(-1) || title;
+  return {
+    position: canonicalPosition,
+    role: canonicalPosition ? roleForPosition(canonicalPosition) : null,
+    developments: null,
+  };
 }
 
 function stationaryLocation(member: Staff) {
@@ -149,6 +181,9 @@ function groupedLocations(people: Staff[]): DirectoryLocation[] {
           b.position.toLowerCase().includes("supervisor") ? 0 : 1;
         return aSupervisor - bSupervisor || a.name.localeCompare(b.name);
       }),
+      development: members.length > 0 && members.every((member) =>
+        member.developments.length === 1 && member.developments[0] === label
+      ) ? label : null,
     }))
     .sort((a, b) => a.label.localeCompare(b.label));
 }
@@ -201,6 +236,7 @@ export function groupTeamDirectoryByTitleAndLocation(
         })
         .join(" · "),
       locations: groupedLocations(people),
+      assignment: assignmentForTitle(label),
     }))
     .sort((a, b) => {
       const leadership = (group: TeamDirectoryGroup) =>
@@ -215,7 +251,8 @@ export function groupTeamDirectoryByTitleAndLocation(
     ? [{
         label: "Emergency Maintenance",
         subtitle: "Managed by Superintendent Ⓔ",
-        locations: [{ label: "All assigned developments", people: emergencyMaintenance }],
+        locations: [{ label: "All assigned developments", people: emergencyMaintenance, development: null }],
+        assignment: assignmentForTitle("Emergency Maintenance"),
       }]
     : [];
   return hrPeople.length
@@ -223,6 +260,7 @@ export function groupTeamDirectoryByTitleAndLocation(
         label: "HR",
         subtitle: "Human Resources staff list",
         locations: groupedLocations(hrPeople),
+      assignment: { position: null, role: null, developments: null },
       }, ...emergencyGroup, ...groups]
     : [...emergencyGroup, ...groups];
 }

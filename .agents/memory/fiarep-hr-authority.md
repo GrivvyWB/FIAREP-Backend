@@ -11,7 +11,7 @@ HR entity records are visible only to Human Resources, Administrators, and the s
 
 HR lifecycle notifications also stay with Human Resources. Supervisors and general Management must not receive internal HR record status alerts.
 
-For leave, visibility, notifications, and decisions are limited to HR, the employee, and the employee's immediate supervisor. Upper management and administrators do not receive or review staff leave requests merely because of their rank. HR decisions require confirmation with HR's own access code.
+For leave, visibility and notifications are limited to HR and the employee. Supervisors, upper management, and administrators do not receive, review, approve, or deny another employee's leave request. HR decisions require confirmation with HR's own access code.
 
 When an organization enables deletion in Platform Workspace, HR may permanently delete staff accounts within its authorized employee scope. This does not grant HR permission to delete unrelated operational records, its own account, or accounts in another organization.
 

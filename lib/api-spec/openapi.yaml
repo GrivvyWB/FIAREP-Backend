@@ -771,6 +771,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/staff/{id}/assignment:
+    put:
+      operationId: updateStaffAssignment
+      tags: [staff]
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffAssignmentUpdate" }
+      responses:
+        "200":
+          description: Updated staff assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Staff" }
+        "400":
+          description: Invalid staff assignment
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Only Human Resources may change staff assignments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/staff/{id}/revoke:
     post:
       operationId: revokeStaff
@@ -1913,6 +1941,18 @@ components:
       additionalProperties: false
       required: [developments]
       properties:
+        developments:
+          type: array
+          items: { type: string }
+    StaffAssignmentUpdate:
+      type: object
+      additionalProperties: false
+      required: [position, role, developments]
+      properties:
+        position: { type: string }
+        role:
+          type: string
+          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, emergency]
         developments:
           type: array
           items: { type: string }

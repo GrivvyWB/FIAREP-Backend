@@ -1,7 +1,7 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, Modal, Image, TouchableOpacity } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { listLoggedInspections, listActiveInspections, clearInspectionForStaff, approveAndRouteViolation, listStaffAccounts, displayStaffPosition, type BuildingViolation, type StaffAccount } from '../lib/store';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { listLoggedInspections, listActiveInspections, clearInspectionForStaff, approveAndRouteViolation, listStaffAccounts, displayStaffPosition, getCurrentActor, getCurrentPosition, type BuildingViolation, type StaffAccount } from '../lib/store';
 import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
@@ -13,20 +13,29 @@ function fmt(iso: string): string {
 const classColor = (c: string) => c === 'C' ? '#c0392b' : c === 'B' ? '#B4741A' : '#1a8f4c';
 
 export default function InspectionApprovals() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
   const [items, setItems] = useState<BuildingViolation[]>([]);
   const [viewer, setViewer] = useState<string | null>(null);
   const [staff, setStaff] = useState<StaffAccount[]>([]);
   const [routeFor, setRouteFor] = useState<BuildingViolation | null>(null);
-  const [routeMode, setRouteMode] = useState<'worker' | 'cpm'>('worker');
   const [openPos, setOpenPos] = useState<Record<string, boolean>>({});
   const [active, setActive] = useState<BuildingViolation[]>([]);
+  useEffect(() => {
+    Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
+      if (actor.role === 'management' && position.trim().toLowerCase() === 'supervisor inspector') setAuthorized(true);
+      else router.replace('/management-home');
+    }).catch(() => router.replace('/management-home'));
+  }, [router]);
 
   const load = useCallback(() => {
     listLoggedInspections().then(setItems);
     listActiveInspections().then(setActive);
     listStaffAccounts('approved').then(setStaff);
   }, []);
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => {
+    if (authorized) load();
+  }, [authorized, load]));
 
   async function route(v: BuildingViolation, s: StaffAccount) {
     try {
@@ -46,18 +55,17 @@ export default function InspectionApprovals() {
     ]);
   }
 
-  // group approved staff by position for the picker, filtered by route mode:
-  // CPM mode shows only CPMs (to build a scope); tradesman mode shows everyone else.
+  // The Supervisor Inspector may route only to field inspectors.
   const byPos: Record<string, StaffAccount[]> = {};
   for (const s of staff) {
-    const isCpmStaff = (s.position || '').trim().toLowerCase() === 'cpm';
-    if (routeMode === 'cpm' && !isCpmStaff) continue;
-    if (routeMode === 'worker' && isCpmStaff) continue;
+    if (String(s.position || '').toLowerCase().includes('supervisor') || s.role === 'management') continue;
+    if ((s.position || '').trim().toLowerCase() !== 'inspector') continue;
     const p = s.position || 'Other';
     (byPos[p] = byPos[p] || []).push(s);
   }
   const positions = Object.keys(byPos).sort();
 
+  if (!authorized) return null;
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Inspection Approvals</Text>
@@ -85,11 +93,7 @@ export default function InspectionApprovals() {
           )}
           <Text style={ui.listSub}>Logged by {v.loggedBy || 'inspector'}  {fmt(v.loggedAt)}</Text>
           {v.hazardClass === 'C' && <Text style={{ color: '#c0392b', fontWeight: '700', fontSize: 12 }}>Class C — priority</Text>}
-          <Pressable style={[ui.btn, { marginTop: 4 }]} onPress={() => Alert.alert('Approve & route', 'Where should this go?', [
-            { text: 'Send to a tradesman', onPress: () => { setRouteMode('worker'); setRouteFor(v); } },
-            { text: 'Send to a CPM (to scope)', onPress: () => { setRouteMode('cpm'); setRouteFor(v); } },
-            { text: 'Cancel', style: 'cancel' },
-          ])}>
+          <Pressable style={[ui.btn, { marginTop: 4 }]} onPress={() => setRouteFor(v)}>
             <Text style={ui.btnText}>Approve & route</Text>
           </Pressable>
         </View>
@@ -122,7 +126,7 @@ export default function InspectionApprovals() {
       <Modal visible={!!routeFor} transparent animationType="slide" onRequestClose={() => setRouteFor(null)}>
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '85%' }}>
-            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>{routeMode === 'cpm' ? 'Route to a CPM (to scope)' : 'Route to a tradesman'}</Text>
+            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>Route to Inspector</Text>
             <ScrollView>
               {positions.length === 0 && <Text style={[ui.listSub, { padding: 16 }]}>No approved staff to route to.</Text>}
               {positions.map((pos) => (

@@ -3,6 +3,7 @@ import test from "node:test";
 import type { Actor } from "./auth";
 import {
   canReadEntity,
+  isViolationAuthority,
   canBrowseStaffDirectory,
   canCreateEntity,
   canMutateEntity,
@@ -91,7 +92,7 @@ test("policy-sensitive HR actions require the HR workflow authority", () => {
   assert.equal(isValidEntityTransition("hr-exits", "close", { status: "terminated" }), true);
 });
 
-test("supervisory HR scope excludes employees outside the assigned developments", () => {
+test("supervisors cannot approve employee leave but retain scoped directory access", () => {
   const supervisor = actor({
     role: "management",
     position: "Property Manager",
@@ -115,7 +116,7 @@ test("supervisory HR scope excludes employees outside the assigned developments"
     position: "Plumber Supervisor",
     developments: ["Development A", "Development B"],
   };
-  assert.equal(canApproveLeaveForEmployee(supervisor, inScope), true);
+  assert.equal(canApproveLeaveForEmployee(supervisor, inScope), false);
   assert.equal(canApproveLeaveForEmployee(supervisor, outOfScope), false);
   assert.equal(canApproveLeaveForEmployee(supervisor, sharedScope), false);
   assert.equal(canReadStaffDirectoryEmployee(supervisor, inScope), true);
@@ -411,7 +412,7 @@ test("ordinary staff can read only operational records assigned to their canonic
   );
 });
 
-test("HUD inspections are created on mobile and reviewed only by designated supervisors", () => {
+test("HUD inspections are created on mobile and reviewed only by the Supervisor Inspector", () => {
   const cpm = actor({ id: "cpm-1", role: "inspector", position: "CPM" });
   const inspector = actor({ id: "inspector-1", role: "inspector", position: "Inspector" });
   const inspectorSupervisor = actor({ role: "management", position: "Supervisor Inspector" });
@@ -422,16 +423,18 @@ test("HUD inspections are created on mobile and reviewed only by designated supe
   assert.equal(canCreateEntity(inspector, "hud-inspections"), true);
   assert.equal(canCreateEntity(inspectorSupervisor, "hud-inspections"), false);
   assert.equal(canReadEntity(inspectorSupervisor, "hud-inspections"), true);
-  assert.equal(canReadEntity(cpmSupervisor, "hud-inspections"), true);
+  assert.equal(canReadEntity(cpmSupervisor, "hud-inspections"), false);
   assert.equal(canReadEntity(tradeSupervisor, "hud-inspections"), false);
 
-  for (const supervisor of [inspectorSupervisor, cpmSupervisor]) {
-    for (const action of ["approve", "deny", "correction"]) {
-      assert.equal(
-        canPerformEntityAction(supervisor, "hud-inspections", action, { status: "Submitted" }),
-        true,
-      );
-    }
+  for (const action of ["approve", "deny", "correction"]) {
+    assert.equal(
+      canPerformEntityAction(inspectorSupervisor, "hud-inspections", action, { status: "Submitted" }),
+      true,
+    );
+    assert.equal(
+      canPerformEntityAction(cpmSupervisor, "hud-inspections", action, { status: "Submitted" }),
+      false,
+    );
   }
   assert.equal(
     canPerformEntityAction(tradeSupervisor, "hud-inspections", "approve", { status: "Submitted" }),
@@ -648,6 +651,14 @@ test("violation modules are restricted to inspectors and supervisors", () => {
     assert.equal(canCreateEntity(inspector, entity), true);
     assert.equal(canMutateEntity(inspector, entity), true);
   }
+  assert.equal(isViolationAuthority(actor({ role: "management", position: "Supervisor Inspector" })), true);
+  for (const position of ["CPM Supervisor", "Plumbing Supervisor", "Carpenter Supervisor", "Elevator Supervisor"]) {
+    const supervisor = actor({ role: "management", position });
+    assert.equal(isViolationAuthority(supervisor), false);
+    assert.equal(canReadEntity(supervisor, "violations"), false);
+    assert.equal(canCreateEntity(supervisor, "building-violations"), false);
+    assert.equal(canMutateEntity(supervisor, "priority-violations"), false);
+  }
   const record = {
     entity: "violations",
     development: "Development A",
@@ -674,7 +685,7 @@ test("staff directory visibility is reserved for supervisors", () => {
 });
 
 test("workflow actions require their explicit management or specialist role", () => {
-  const manager = actor();
+  const manager = actor({ position: "Supervisor Inspector" });
   const worker = actor({ role: "worker", position: "Maintenance Worker" });
   const procurement = actor({ role: "procurement", position: "CPM" });
   const cpm = actor({ role: "inspector", position: "CPM" });
@@ -793,21 +804,21 @@ test("staff can cancel only their own leave request", () => {
   );
 });
 
-test("immediate supervisors and HR can decide leave while upper management cannot", () => {
-  const canApprove = [
+test("only HR can decide another employee's leave request", () => {
+  const cannotApprove = [
     actor({ role: "management", position: "Property Manager" }),
     actor({ role: "management", position: "Superintendent" }),
     actor({ role: "worker", position: "Plumber Supervisor" }),
     actor({ role: "inspector", position: "Supervisor Inspector" }),
   ];
-  for (const approver of canApprove) {
+  for (const approver of cannotApprove) {
     assert.equal(
       canPerformEntityAction(approver, "leave-requests", "approve", {}),
-      true,
+      false,
     );
     assert.equal(
       canPerformEntityAction(approver, "leave-requests", "deny", {}),
-      true,
+      false,
     );
   }
   for (const upperManagement of [
@@ -840,7 +851,7 @@ test("immediate supervisors and HR can decide leave while upper management canno
   );
 });
 
-test("HR controls leave while supervisors are limited to their members", () => {
+test("HR controls leave while supervisors cannot access employee leave", () => {
   const employee = actor({
     id: "employee-1",
     role: "worker",
@@ -859,7 +870,7 @@ test("HR controls leave while supervisors are limited to their members", () => {
       actor({ id: "plumber-supervisor", role: "management", position: "Plumber Supervisor", developments: ["Development A"] }),
       employee,
     ),
-    true,
+    false,
   );
   assert.equal(
     canApproveLeaveForEmployee(
@@ -884,7 +895,7 @@ test("HR controls leave while supervisors are limited to their members", () => {
   );
 });
 
-test("leave records are visible only to HR, the employee, and the immediate supervisor", () => {
+test("leave records are visible only to HR and the employee", () => {
   const leave = {
     entity: "leave-requests",
     development: "Development A",
@@ -902,7 +913,7 @@ test("leave records are visible only to HR, the employee, and the immediate supe
   );
   assert.equal(
     canReadEntityRecord(actor({ id: "supervisor-1", role: "management", position: "Plumber Supervisor" }), leave),
-    true,
+    false,
   );
   assert.equal(
     canReadEntityRecord(actor({ id: "hr-1", role: "human_resources", position: "Human Resources" }), leave),
@@ -951,7 +962,7 @@ test("leave duration routes short requests to supervisors and long requests to H
   }), "Return must not be before end");
 });
 
-test("management cannot approve or deny its own leave request", () => {
+test("management cannot approve or deny any leave request", () => {
   const manager = actor({
     id: "manager-1",
     name: "Kye G",
@@ -976,7 +987,7 @@ test("management cannot approve or deny its own leave request", () => {
       employeeStaffId: "worker-1",
       employee: "Mark K",
     }),
-    true,
+    false,
   );
 });
 
@@ -1144,6 +1155,34 @@ test("only assignment authorities may introduce canonical assignees", () => {
   assert.equal(canAssignStaff(inspector, target, "Development A"), false);
   assert.equal(canAssignStaff(emergency, target, "Development A"), false);
   assert.equal(canAssignStaff(manager, target, "Development A"), true);
+});
+
+test("trade supervisors can assign only their own non-supervisor crew", () => {
+  const plumberSupervisor = actor({
+    position: "Plumbing Supervisor",
+    developments: ["Development A"],
+  });
+  const plumber = {
+    id: "plumber-2",
+    role: "worker",
+    position: "Plumber",
+    developments: ["Development A"],
+  };
+  const inspector = {
+    id: "inspector-2",
+    role: "inspector",
+    position: "Inspector",
+    developments: ["Development A"],
+  };
+  const otherSupervisor = {
+    id: "supervisor-2",
+    role: "management",
+    position: "Plumber Supervisor",
+    developments: ["Development A"],
+  };
+  assert.equal(canAssignStaff(plumberSupervisor, plumber, "Development A"), true);
+  assert.equal(canAssignStaff(plumberSupervisor, inspector, "Development A"), false);
+  assert.equal(canAssignStaff(plumberSupervisor, otherSupervisor, "Development A"), false);
 });
 
 test("canonical emergency and elevator assignments authorize only their staff id", () => {

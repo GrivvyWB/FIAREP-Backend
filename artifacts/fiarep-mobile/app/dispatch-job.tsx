@@ -76,7 +76,7 @@ export default function DispatchJob() {
       )}
 
       <Text style={[ui.label, { marginTop: 12 }]}>Job address</Text>
-      {developments.length > 1 && <View><Text style={ui.label}>Development</Text><View style={ui.row}>{developments.map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</View></View>}
+      {developments.length > 1 && <View><Text style={ui.label}>Development</Text><ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ gap: 8 }} testID="dispatch-development-selector">{developments.map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</ScrollView></View>}
       <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 55 Hall St" />
 
       <Text style={[ui.label, { marginTop: 12 }]}>Unit (optional)</Text>

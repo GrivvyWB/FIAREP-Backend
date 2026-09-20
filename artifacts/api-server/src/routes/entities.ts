@@ -34,6 +34,7 @@ import {
   withInitialWorkflowState,
   procurementRecordAllowed,
   normalizeAssignment,
+  supervisedTradeForPosition,
 } from "../lib/domain";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -480,6 +481,11 @@ router.post("/v1/:entity", async (req, res, next) => {
       res.status(400).json({ error: "Select a complaint or violation, trade, and receiving supervisor" });
       return;
     }
+    const actorTrade = supervisedTradeForPosition(actor.position);
+    if (actorTrade && actorTrade !== requestedTrade) {
+      res.status(403).json({ error: "Supervisors may request manpower only for their own trade" });
+      return;
+    }
     const [[source], [receiver]] = await Promise.all([
       db.select().from(entityRecords).where(and(
         eq(entityRecords.id, sourceRecordId),
@@ -753,7 +759,7 @@ router.post("/v1/:entity", async (req, res, next) => {
         sessionVersion: reviewer.sessionVersion,
       };
       if (
-        isLeaveApprovalAuthority(reviewerActor) &&
+        reviewerActor.role === "human_resources" &&
         entityDevelopmentAllowed(reviewerActor, entity, development)
       ) {
         await notify(

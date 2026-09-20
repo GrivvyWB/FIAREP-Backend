@@ -1,12 +1,13 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   sendViolationLookup,
   listViolationLookups,
   deleteViolationLookup,
   listStaffAccounts,
   getCurrentActor,
+  getCurrentPosition,
   type ViolationLookup,
   type StaffAccount,
   displayStaffPosition,
@@ -19,6 +20,7 @@ function fmt(iso: string): string {
 }
 
 export default function ViolationSend() {
+  const router = useRouter();
   const { preAddress, preUnit, preNote, preComplaintNo, preResident, preDevelopment, filter } = useLocalSearchParams<{ preAddress?: string; preUnit?: string; preNote?: string; preComplaintNo?: string; preResident?: string; preDevelopment?: string; filter?: string }>();
   const [violationNumber, setViolationNumber] = useState('');
   const [address, setAddress] = useState(preAddress ? String(preAddress) : '');
@@ -35,13 +37,23 @@ export default function ViolationSend() {
   const [sent, setSent] = useState<ViolationLookup[]>([]);
   const [me, setMe] = useState('');
   const canDelete = useDeletionPolicy();
+  const [authorized, setAuthorized] = useState(false);
+
+  useEffect(() => {
+    Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
+      if (actor.role === 'management' && position.trim().toLowerCase() === 'supervisor inspector') setAuthorized(true);
+      else router.replace('/management-home');
+    }).catch(() => router.replace('/management-home'));
+  }, [router]);
 
   const load = useCallback(() => {
     listStaffAccounts('approved').then(setStaff);
     listViolationLookups().then(setSent);
     getCurrentActor().then((a) => setMe((a && a.name) || ''));
   }, []);
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => {
+    if (authorized) load();
+  }, [authorized, load]));
 
   // Inspectors and contractors are the people who go look a violation up.
   const _filter = (filter ? String(filter) : '').toLowerCase();
@@ -71,6 +83,7 @@ export default function ViolationSend() {
     }
   }
 
+  if (!authorized) return null;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={ui.wrap}>

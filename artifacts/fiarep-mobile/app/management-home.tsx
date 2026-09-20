@@ -31,8 +31,10 @@ export default function ManagementHome() {
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
   const ordinaryManagement = mode === 'management' &&
     !['borough director', 'regional director', 'superintendent'].includes(_pos);
+  const supervisorInspector = _pos === 'supervisor inspector';
+  const canReviewInspections = supervisorInspector;
   const director = _pos === 'borough director' || _pos === 'regional director';
-  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('management'); if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, []));
+  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = isElevated ? await unreadCount('management') : 0; if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, [isElevated]));
 
   async function onSignOut() {
     await logout();
@@ -48,8 +50,7 @@ export default function ManagementHome() {
         ...(!restricted ? [
           { label: 'HUD Inspections', onPress: () => router.push('/hud-review'), tone: 'outline' as Tone },
         ] : []),
-        { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' },
-        { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' },
+        ...(canReviewInspections ? [{ label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' as Tone }, { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone }] : []),
       ],
     },
     {
@@ -62,7 +63,7 @@ export default function ManagementHome() {
         ...(!restricted ? [{ label: 'Staff Member Jobs', onPress: () => router.push('/worker'), tone: 'tint' as Tone }] : []),
         ...(emergencyAdmin ? [{ label: 'Assign Emergency Unit', onPress: () => router.push('/assign-emergency'), tone: 'tint' as Tone }, { label: 'Manage Trucks', onPress: () => router.push('/manage-trucks'), tone: 'tint' as Tone }, { label: 'Truck Scores', onPress: () => router.push('/truck-scores'), tone: 'tint' as Tone }] : []),
         { label: 'Emergency Activity', onPress: () => router.push('/emergency-activity'), tone: 'tint' },
-        ...(_pos !== 'borough director' ? [{ label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' as Tone }] : []),
+        ...(!restricted && _pos !== 'borough director' ? [{ label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' as Tone }] : []),
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' },
         { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' },
         ...(position === 'Elevator Supervisor' ? [{ label: 'Elevator Dashboard', onPress: () => router.push('/elevator-dashboard'), tone: 'tint' as Tone }] : []),
@@ -90,7 +91,7 @@ export default function ManagementHome() {
       heading: 'System',
       color: '#4A5560',
       tiles: [
-        ...(mode === 'management' ? [{ label: unread > 0 ? 'Manage All Requests (' + unread + ')' : 'Manage All Requests', onPress: () => router.push('/manage-requests'), tone: 'solid' as Tone }] : []),
+        ...(mode === 'management' && isElevated ? [{ label: unread > 0 ? 'Manage All Requests (' + unread + ')' : 'Manage All Requests', onPress: () => router.push('/manage-requests'), tone: 'solid' as Tone }] : []),
         ...(director ? [{ label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' as Tone }] : []),
         ...(director ? [{ label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' as Tone }] : []),
         ...(!restricted ? [{ label: 'Default rates', onPress: () => router.push('/settings'), tone: 'tint' as Tone }] : []),

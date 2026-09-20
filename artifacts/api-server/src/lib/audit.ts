@@ -75,7 +75,7 @@ export async function notify(
   // notifications following a renamed staff member or being ambiguous when
   // names are duplicated.
   const [recipientById] = await db
-    .select({ id: staffAccounts.id })
+    .select({ id: staffAccounts.id, role: staffAccounts.role })
     .from(staffAccounts)
     .where(
       and(
@@ -91,7 +91,7 @@ export async function notify(
   const recipientsByName = recipientById || isRoleTarget
     ? []
     : await db
-      .select({ id: staffAccounts.id })
+      .select({ id: staffAccounts.id, role: staffAccounts.role })
       .from(staffAccounts)
       .where(
         and(
@@ -103,6 +103,15 @@ export async function notify(
   const stableTarget =
     recipientById?.id ??
     (recipientsByName.length === 1 ? recipientsByName[0]!.id : target);
+  const hrNotification = /\bhr\b|employee record|employee pending|payroll|discipline|termination|onboarding/i.test(message);
+  if (
+    hrNotification &&
+    (target.trim().toLowerCase() === "management" ||
+      recipientById?.role === "management" ||
+      recipientsByName.some((recipient) => recipient.role === "management"))
+  ) {
+    return undefined;
+  }
   const [notification] = await db
     .insert(notifications)
     .values({

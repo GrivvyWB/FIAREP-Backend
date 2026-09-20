@@ -236,8 +236,13 @@ export function isSupervisorPosition(actor: Actor): boolean {
 }
 
 export function isHudReviewSupervisor(actor: Actor): boolean {
-  return actor.position === "Supervisor Inspector" ||
-    actor.position === "CPM Supervisor";
+  return actor.position === "Supervisor Inspector";
+}
+
+/** Violation and inspection review authority for management positions. */
+export function isViolationAuthority(actor: Actor): boolean {
+  return actor.role === "management" &&
+    actor.position === "Supervisor Inspector";
 }
 
 export function canBrowseStaffDirectory(actor: Actor): boolean {
@@ -273,9 +278,7 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
   if (VIOLATION_ENTITIES.has(entity)) {
     return (
       actor.role === "inspector" ||
-      actor.role === "management" ||
-      actor.role === "administrator" ||
-      isBoroughDirector(actor)
+      isViolationAuthority(actor)
     );
   }
   if (entity === "procurement" || entity === "procurement-bids") {
@@ -308,28 +311,13 @@ function leaveRecordAllowed(
   const employeeStaffId = typeof row.state["employeeStaffId"] === "string"
     ? row.state["employeeStaffId"]
     : "";
-  if (isBoroughDirector(actor)) {
-    const employeeName = typeof row.state["employee"] === "string"
-      ? row.state["employee"].trim().toLowerCase()
-      : "";
-    return employeeStaffId === actor.id ||
-      (!employeeStaffId &&
-        (row.createdBy === actor.id ||
-          employeeName === actor.name.trim().toLowerCase()));
-  }
-  if (employeeStaffId) return employeeStaffId === actor.id ||
-    row.state["supervisorStaffId"] === actor.id;
+  if (employeeStaffId) return employeeStaffId === actor.id;
   const employeeName = typeof row.state["employee"] === "string"
     ? row.state["employee"].trim().toLowerCase()
     : "";
   if (employeeName && employeeName === actor.name.trim().toLowerCase()) return true;
   if (!employeeName && row.createdBy === actor.id) return true;
-  const supervisorName = typeof row.state["supervisor"] === "string"
-    ? row.state["supervisor"].trim().toLowerCase()
-    : "";
-  return !row.state["supervisorStaffId"] &&
-    supervisorName === actor.name.trim().toLowerCase() &&
-    isLeaveApprovalAuthority(actor);
+  return false;
 }
 
 export function procurementRecordAllowed(
@@ -548,8 +536,7 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
   if (VIOLATION_ENTITIES.has(entity)) {
     return (
       actor.role === "inspector" ||
-      actor.role === "management" ||
-      actor.role === "administrator"
+      isViolationAuthority(actor)
     );
   }
   if (entity === "emergency-units" || entity === "emergency-jobs") {
@@ -654,6 +641,39 @@ const TRADE_SUPERVISOR_POSITIONS = new Set([
   "Carpenter Supervisor",
 ]);
 
+const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
+  ["Plumbing Supervisor", "Plumber"],
+  ["Plumber Supervisor", "Plumber"],
+  ["Supervisor Plumber", "Plumber"],
+  ["Supervisor Inspector", "Inspector"],
+  ["Inspector Supervisor", "Inspector"],
+  ["Inspection Supervisor", "Inspector"],
+  ["CPM Supervisor", "CPM"],
+  ["Supervisor CPM", "CPM"],
+  ["Carpenter Supervisor", "Carpenter"],
+  ["Supervisor Carpenter", "Carpenter"],
+  ["Elevator Supervisor", "Elevator Service"],
+  ["Elevator Service Supervisor", "Elevator Service"],
+  ["Supervisor Elevator", "Elevator Service"],
+  ["Electrical Supervisor", "Electrician"],
+  ["Electric Supervisor", "Electrician"],
+  ["Electrician Supervisor", "Electrician"],
+  ["Supervisor Electrician", "Electrician"],
+  ["Painter Supervisor", "Painter"],
+  ["Supervisor Painter", "Painter"],
+  ["Maintenance Supervisor", "Maintenance Worker"],
+  ["Grounds Supervisor", "Groundskeeper"],
+]);
+
+export function supervisedTradeForPosition(position: string | null | undefined): string | null {
+  return TRADE_ASSIGNMENT_BY_SUPERVISOR.get(position || "") || null;
+}
+
+function isOperationalAssignee(target: { role: string; position: string | null }) {
+  return ["worker", "inspector", "emergency"].includes(target.role) &&
+    !String(target.position || "").toLowerCase().includes("supervisor");
+}
+
 const LEAVE_APPROVER_POSITIONS = new Set([
   "Property Manager",
   "Assistant Property Manager",
@@ -684,19 +704,7 @@ export function canApproveLeaveForEmployee(
   actor: Actor,
   employee: Pick<Actor, "id" | "role" | "position" | "developments">,
 ): boolean {
-  if (!isLeaveApprovalAuthority(actor) || actor.id === employee.id) return false;
-  if (actor.role === "human_resources") {
-    return true;
-  }
-  if (
-    employee.developments.length > 0 &&
-    !employee.developments.every((development) => actor.developments.includes(development))
-  ) {
-    return false;
-  }
-  const supervisedPositions = SUPERVISED_LEAVE_POSITIONS.get(actor.position ?? "");
-  if (supervisedPositions) return supervisedPositions.has(employee.position ?? "");
-  return actor.role === "management";
+  return actor.role === "human_resources" && actor.id !== employee.id;
 }
 
 export function canReadStaffDirectoryEmployee(
@@ -796,20 +804,19 @@ export function canAssignStaff(
 ): boolean {
   if (!isAssignmentAuthority(actor)) return false;
   if (target.id === actor.id || target.position === "Borough Director") return false;
-  if (!ASSIGNABLE_STAFF_ROLES.has(target.role)) return false;
+  if (!ASSIGNABLE_STAFF_ROLES.has(target.role) || !isOperationalAssignee(target)) return false;
   if (development && !target.developments.includes(development)) return false;
-  if (isBoroughDirector(actor)) return true;
+  if (isBoroughDirector(actor) || actor.role === "administrator") return true;
   if (
     !target.developments.length ||
     !target.developments.every((value) => actor.developments.includes(value))
   ) {
     return false;
   }
-  if (target.role === "management") {
-    return actor.position === "Regional Director" ||
-      TRADE_SUPERVISOR_POSITIONS.has(target.position ?? "");
-  }
-  return ["worker", "inspector", "emergency"].includes(target.role);
+  const actorTrade = supervisedTradeForPosition(actor.position);
+  if (isSupervisorPosition(actor) && !actorTrade) return false;
+  if (actorTrade && target.position !== actorTrade) return false;
+  return true;
 }
 
 /**
@@ -975,7 +982,7 @@ export function canPerformEntityAction(
   }
 
   if (entity === "building-violations") {
-    if (["approve", "route", "clear"].includes(action)) return isManagement;
+    if (["approve", "route", "clear"].includes(action)) return isViolationAuthority(actor);
     if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     return action === "complete" &&
       (isFieldStaff || isSupervisor) &&
@@ -996,7 +1003,7 @@ export function canPerformEntityAction(
       ) {
         return false;
       }
-      return isLeaveApprovalAuthority(actor);
+      return actor.role === "human_resources";
     }
     if (action !== "cancel") return false;
     return state["requesterStaffId"] === actor.id;

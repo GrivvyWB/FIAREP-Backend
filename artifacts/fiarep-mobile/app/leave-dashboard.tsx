@@ -1,6 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { listLeaveRequests, decideLeaveRequest, deleteLeaveRequest, listDevelopmentNames, getCurrentActor, getCurrentPosition, type LeaveRequest, type LeaveStatus } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
@@ -52,6 +52,7 @@ function overlaps(a: LeaveRequest, b: LeaveRequest): boolean {
 }
 
 export default function LeaveDashboard() {
+  const router = useRouter();
   const [all, setAll] = useState<LeaveRequest[]>([]);
   const [devFilter, setDevFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'All' | LeaveStatus>('Pending');
@@ -61,6 +62,7 @@ export default function LeaveDashboard() {
 
   const [myPosition, setMyPosition] = useState('');
   const [myRole, setMyRole] = useState('');
+  const [authorized, setAuthorized] = useState(false);
   const canDelete = useDeletionPolicy();
   const load = useCallback(() => {
     listLeaveRequests().then(setAll);
@@ -68,6 +70,13 @@ export default function LeaveDashboard() {
     getCurrentActor().then((actor) => setMyRole(actor?.role || '')).catch(() => {});
   }, []);
   useFocusEffect(load);
+  useEffect(() => {
+    Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
+      const restrictedSupervisor = actor.role === 'management' && position.toLowerCase().includes('supervisor');
+      if (restrictedSupervisor) router.replace('/management-home');
+      else setAuthorized(true);
+    }).catch(() => router.replace('/management-home'));
+  }, [router]);
 
   const devs = listDevelopmentNames();
 
@@ -120,6 +129,7 @@ export default function LeaveDashboard() {
 
   const pendingCount = all.filter(r => r.status === 'Pending').length;
 
+  if (!authorized) return null;
   return (
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
       <Text style={ui.h}>Leave Calendar</Text>

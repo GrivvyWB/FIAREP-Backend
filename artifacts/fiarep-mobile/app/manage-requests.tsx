@@ -6,6 +6,7 @@ import {
   listChangeOrders, deleteChangeOrder,
   listAllNotifications, deleteNotification,
   type ResidentReport, type ChangeOrder, type Notification,
+  getCurrentActor, getCurrentPosition,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
@@ -16,12 +17,25 @@ function fmt(iso: string): string {
 
 export default function ManageRequests() {
   const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
   const canDelete = useDeletionPolicy();
   const [reports, setReports] = useState<ResidentReport[]>([]);
   const [orders, setOrders] = useState<ChangeOrder[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setOpen((m) => ({ ...m, [k]: !m[k] }));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
+      const elevated = actor.role === 'administrator' ||
+        ['borough director', 'regional director', 'superintendent'].includes(position.trim().toLowerCase()) ||
+        (actor.role === 'management' && !position.trim().toLowerCase().includes('supervisor'));
+      if (!active) return;
+      if (elevated) setAuthorized(true);
+      else router.replace('/management-home');
+    }).catch(() => router.replace('/management-home'));
+    return () => { active = false; };
+  }, [router]));
   const groupedNotifs = Object.values(notifs.reduce<Record<string, { notification: Notification; ids: string[] }>>((groups, notification) => {
     const key = `${(notification.message || '').trim().toLowerCase()}|${(notification.reportId || notification.detail || '').trim().toLowerCase()}`;
     if (groups[key]) groups[key].ids.push(notification.id);
@@ -34,7 +48,10 @@ export default function ManageRequests() {
     listChangeOrders().then(setOrders);
     listAllNotifications().then(setNotifs);
   }, []);
-  useFocusEffect(load);
+  useFocusEffect(useCallback(() => {
+    if (!authorized) return;
+    load();
+  }, [authorized, load]));
 
   function confirmDelete(label: string, fn: () => Promise<void>) {
     Alert.alert('Delete ' + label + '?', 'This permanently removes it for everyone. This cannot be undone.', [
@@ -43,6 +60,7 @@ export default function ManageRequests() {
     ]);
   }
 
+  if (!authorized) return null;
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Manage All Requests</Text>
