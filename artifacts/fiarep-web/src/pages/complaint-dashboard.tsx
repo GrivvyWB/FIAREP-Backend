@@ -45,9 +45,9 @@ type Stats = {
 
 function SummaryCard({ title, value, subValue, icon: Icon, testId }: { title: string, value: string | number, subValue?: string, icon: React.ElementType, testId: string }) {
   return (
-    <div className="bg-red-950/20 border border-red-900/40 rounded-xl p-3 flex flex-col relative overflow-hidden" data-testid={testId}>
+    <div className="bg-red-950/55 border border-red-700/55 rounded-xl p-3 flex flex-col relative overflow-hidden shadow-sm shadow-red-950/30" data-testid={testId}>
       <Icon className="absolute -right-2 -top-2 w-12 h-12 text-red-900/20" />
-      <div className="text-[10px] font-bold text-red-500/80 uppercase tracking-wider mb-1 relative z-10">{title}</div>
+      <div className="text-[10px] font-bold text-red-400 uppercase tracking-wider mb-1 relative z-10">{title}</div>
       <div className="text-xl font-black text-red-50 truncate relative z-10">{value}</div>
       {subValue && <div className="text-[10px] text-red-300 truncate mt-0.5 relative z-10">{subValue}</div>}
     </div>
@@ -220,11 +220,11 @@ export default function ComplaintDashboard() {
     : [];
   const selectedBldgData = selectedBuilding ? devBuildings.find(b => b.name === selectedBuilding) : null;
 
-  const selectClass = "h-9 rounded-md border border-red-900/50 bg-black/50 text-red-100 text-xs px-3 py-1 focus:ring-1 focus:ring-red-500/50 outline-none";
+  const selectClass = "h-9 rounded-md border border-red-700/60 bg-[#260909] text-red-50 text-xs px-3 py-1 focus:ring-1 focus:ring-red-400/70 outline-none";
 
   return (
-    <div className="relative min-h-[calc(100vh-4rem)] bg-[#0f0404] text-slate-300 p-4 -m-4 md:-m-[28px_30px_40px] md:p-6 lg:p-8 overflow-hidden font-sans border border-red-950/40" style={{ colorScheme: 'dark' }}>
-      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-red-900/20 via-[#0f0404] to-[#0f0404] -z-10" />
+    <div className="relative min-h-[calc(100vh-4rem)] bg-[#210808] text-slate-200 p-4 -m-4 md:-m-[28px_30px_40px] md:p-6 lg:p-8 overflow-hidden font-sans border border-red-900/60" style={{ colorScheme: 'dark' }}>
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-red-700/35 via-[#210808] to-[#170606] -z-10" />
       
       <header className="mb-6 flex flex-col gap-4 border-b border-red-900/40 pb-6">
         <div>
@@ -232,7 +232,7 @@ export default function ComplaintDashboard() {
             <Siren className="w-5 h-5 text-red-500" />
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-red-50">Upper Management Complaint Command</h1>
           </div>
-          <p className="text-sm text-red-200/60 max-w-2xl">High-stakes operational surface. Real-time active complaint concentration mapping and deep drill-down analytics.</p>
+          <p className="text-sm text-red-100/75 max-w-2xl">High-stakes operational surface. Real-time active complaint concentration mapping and deep drill-down analytics.</p>
         </div>
 
         {/* 7 Summary Panels */}
@@ -247,14 +247,14 @@ export default function ComplaintDashboard() {
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 bg-red-950/10 p-3 border border-red-950/60 rounded-xl">
+        <div className="flex flex-wrap items-center gap-3 bg-red-950/45 p-3 border border-red-800/60 rounded-xl">
           <div className="relative min-w-[200px] flex-1">
-             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-red-500/50" />
+             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-red-400/80" />
              <Input 
                placeholder="Search dev or address..." 
                value={search} 
                onChange={e => setSearch(e.target.value)} 
-               className="pl-9 h-9 bg-black/50 border-red-900/50 text-red-100 placeholder:text-red-500/30 focus-visible:ring-red-500/50 text-xs"
+               className="pl-9 h-9 bg-[#260909] border-red-700/60 text-red-50 placeholder:text-red-300/50 focus-visible:ring-red-400/70 text-xs"
                data-testid="filter-search" 
              />
           </div>
@@ -270,11 +270,11 @@ export default function ComplaintDashboard() {
             <option value="all">All Trades</option>
             {filterOptions.trades.map(t => <option key={t} value={t}>{t}</option>)}
           </select>
-          <div className="flex items-center gap-2 bg-black/30 rounded-md border border-red-900/50 px-2">
+          <div className="flex items-center gap-2 bg-[#260909] rounded-md border border-red-700/60 px-2">
             <span className="text-[10px] text-red-400/70 uppercase">From</span>
             <input type="date" value={fromDate} onChange={e => setFromDate(e.target.value)} className="h-8 bg-transparent text-red-100 text-xs outline-none" data-testid="filter-from-date" />
           </div>
-          <div className="flex items-center gap-2 bg-black/30 rounded-md border border-red-900/50 px-2">
+          <div className="flex items-center gap-2 bg-[#260909] rounded-md border border-red-700/60 px-2">
             <span className="text-[10px] text-red-400/70 uppercase">To</span>
             <input type="date" value={toDate} onChange={e => setToDate(e.target.value)} className="h-8 bg-transparent text-red-100 text-xs outline-none" data-testid="filter-to-date" />
           </div>
@@ -293,14 +293,14 @@ export default function ComplaintDashboard() {
         <div className="flex flex-col xl:flex-row gap-6 h-[calc(100vh-24rem)] min-h-[500px]">
           
           {/* Main Concentration Surface */}
-          <div className="flex-1 flex flex-col min-w-0 bg-black/40 border border-red-950/60 rounded-xl overflow-hidden shadow-2xl shadow-red-950/20 backdrop-blur-sm">
-            <div className="p-4 border-b border-red-900/30 bg-red-950/20 flex flex-wrap items-center gap-4 justify-between">
+          <div className="flex-1 flex flex-col min-w-0 bg-[#180606]/90 border border-red-800/60 rounded-xl overflow-hidden shadow-2xl shadow-red-950/30 backdrop-blur-sm">
+            <div className="p-4 border-b border-red-700/45 bg-red-950/55 flex flex-wrap items-center gap-4 justify-between">
               <div>
                 <div className="flex items-center gap-2 text-red-100 font-semibold">
                   <Flame className="w-4 h-4 text-red-500" />
                   Active Development Concentrations
                 </div>
-                <div className="mt-1 text-[10px] font-medium uppercase tracking-wider text-red-400/60">
+                <div className="mt-1 text-[10px] font-medium uppercase tracking-wider text-red-300/80">
                   Showing {visibleDevelopments.length} of {devStats.length} developments · Rotates every 30 minutes
                 </div>
               </div>
@@ -318,7 +318,7 @@ export default function ComplaintDashboard() {
                         ? "bg-orange-600/90 border-orange-300 text-white animate-pulse shadow-md shadow-orange-600/40"
                         : dev.activeCount >= 5
                           ? "bg-orange-900/70 border-orange-600/70 text-orange-50"
-                          : "bg-red-950/40 border-red-900/40 text-red-200";
+                          : "bg-red-900/55 border-red-700/60 text-red-50";
                     return (
                       <button
                         key={dev.name}
@@ -473,7 +473,7 @@ export default function ComplaintDashboard() {
       {/* Top 10 Overlay / Extra Analytics */}
       {!selectedDev && !reportsQuery.isLoading && (
         <div className="mt-6 grid grid-cols-1 lg:grid-cols-2 gap-6 pb-6">
-          <div className="bg-black/30 border border-red-900/30 rounded-xl p-4">
+          <div className="bg-red-950/50 border border-red-800/55 rounded-xl p-4">
             <h3 className="text-sm font-bold text-red-200 mb-4 flex items-center gap-2"><Target className="w-4 h-4 text-red-500" />{sortOrder === "desc" ? "Top 10 Critical Developments" : "Lowest 10 Active Developments"}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
               {devStats.slice(0, 10).map((d, i) => (
@@ -487,7 +487,7 @@ export default function ComplaintDashboard() {
               ))}
             </div>
           </div>
-          <div className="bg-black/30 border border-red-900/30 rounded-xl p-4">
+          <div className="bg-red-950/50 border border-red-800/55 rounded-xl p-4">
             <h3 className="text-sm font-bold text-red-200 mb-4 flex items-center gap-2"><AlertOctagon className="w-4 h-4 text-red-500" />{sortOrder === "desc" ? "Top 10 Critical Buildings" : "Lowest 10 Active Buildings"}</h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
               {bldgStats.slice(0, 10).map((b, i) => (
