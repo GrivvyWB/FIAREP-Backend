@@ -140,7 +140,7 @@ export default function ProjectDetail() {
       <Text style={{ fontSize: 20, fontWeight: '500' }}>{project?.name ?? '…'}</Text>
       {!!project?.client && <Text style={ui.listSub}>{project.client}</Text>}
       {locked && (<View style={{ backgroundColor: '#eafaf0', borderColor: '#1a8f4c', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8 }}>
-        <Text style={{ color: '#1a8f4c', fontWeight: '700' }}>✓ Approved · locked</Text>
+        <Text style={{ color: '#1a8f4c', fontWeight: '700' }}>Approved · locked</Text>
         <Text style={{ color: '#1a8f4c', fontSize: 13, marginTop: 2 }}>This inspection is approved. Editing is disabled for all parties.</Text>
       </View>)}
       {!!returnedScope && returnedScope.returnedAt && (

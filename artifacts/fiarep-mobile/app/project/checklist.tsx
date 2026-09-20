@@ -73,7 +73,6 @@ export default function Checklist() {
                           backgroundColor: st.done ? '#185FA5' : 'transparent',
                           alignItems: 'center', justifyContent: 'center', marginTop: 1,
                         }}>
-                          {st.done && <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>✓</Text>}
                         </View>
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontSize: 15, color: st.done ? '#999' : '#1a1a1a', textDecorationLine: st.done ? 'line-through' : 'none' }}>{item.label}</Text>

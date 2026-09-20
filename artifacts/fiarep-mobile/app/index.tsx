@@ -85,7 +85,7 @@ export default function Projects() {
           <View style={{ flex: 1 }}>
             <Text style={ui.listTitle}>{p.name}</Text>
             {!!p.client && <Text style={ui.listSub}>{p.client}</Text>}
-            {isApproved && <Text style={{ fontSize: 12, color: '#1a8f4c', fontWeight: '700', marginTop: 2 }}>✓ Completed · approved (locked)</Text>}
+            {isApproved && <Text style={{ fontSize: 12, color: '#1a8f4c', fontWeight: '700', marginTop: 2 }}>Completed · approved (locked)</Text>}
           </View>
           <Text style={{ color: '#999', fontSize: 20 }}>›</Text>
         </Pressable>

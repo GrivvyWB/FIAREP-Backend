@@ -324,7 +324,7 @@ export default function RoomEditor() {
                     style={[ui.btnOutline, { paddingVertical: 6, marginTop: 8, backgroundColor: added ? '#e8f5e9' : undefined, borderColor: added ? '#2e7d32' : '#185FA5' }]}
                     onPress={() => addMeasuredAsLine(m)}>
                     <Text style={[ui.btnOutlineText, { fontSize: 13, color: added ? '#2e7d32' : '#185FA5' }]}>
-                      {added ? '\u2713 Added to line items (tap to update)' : 'Add as line item'}
+                      {added ? 'Added to line items (tap to update)' : 'Add as line item'}
                     </Text>
                   </Pressable>
                 );

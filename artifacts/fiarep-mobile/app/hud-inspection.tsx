@@ -330,7 +330,7 @@ export default function HudInspectionForm() {
       </View>
 
       <Pressable style={[ui.btnOutline, { marginTop: 8 }, insp.childrenUnder6 && { backgroundColor: ACCENT }]} onPress={() => patch({ childrenUnder6: !insp.childrenUnder6 })}>
-        <Text style={insp.childrenUnder6 ? ui.btnText : ui.btnOutlineText}>{insp.childrenUnder6 ? '✓ ' : ''}Children under 6 in unit</Text>
+        <Text style={insp.childrenUnder6 ? ui.btnText : ui.btnOutlineText}>Children under 6 in unit</Text>
       </Pressable>
 
       <Text style={ui.label}>General comments</Text>
@@ -409,7 +409,7 @@ export default function HudInspectionForm() {
           <TextInput style={ui.input} value={d.criteria ?? ''} onChangeText={(v) => updateDeficiency(d.id, { criteria: v })} placeholder="Criteria (optional)" />
 
           <Pressable style={[ui.btnOutline, d.healthSafety && { backgroundColor: '#c0392b' }]} onPress={() => updateDeficiency(d.id, { healthSafety: !d.healthSafety })}>
-            <Text style={d.healthSafety ? ui.btnText : ui.btnOutlineText}>{d.healthSafety ? '✓ ' : ''}Health &amp; Safety</Text>
+            <Text style={d.healthSafety ? ui.btnText : ui.btnOutlineText}>Health &amp; Safety</Text>
           </Pressable>
 
           <Text style={{ fontSize: 12, color: '#666' }}>Correction timeframe</Text>
@@ -454,7 +454,7 @@ export default function HudInspectionForm() {
           <TextInput style={ui.input} value={pi.itemName} onChangeText={(v) => updatePhysical(pi.id, { itemName: v })} placeholder="Item (e.g. Roof, Foundation, Flooring)" />
 
           <Pressable style={[ui.btnOutline, pi.maintenanceNeeded && { backgroundColor: ACCENT }]} onPress={() => updatePhysical(pi.id, { maintenanceNeeded: !pi.maintenanceNeeded })}>
-            <Text style={pi.maintenanceNeeded ? ui.btnText : ui.btnOutlineText}>{pi.maintenanceNeeded ? '✓ ' : ''}Maintenance needed</Text>
+            <Text style={pi.maintenanceNeeded ? ui.btnText : ui.btnOutlineText}>Maintenance needed</Text>
           </Pressable>
 
           <Text style={{ fontSize: 12, color: '#666' }}>Urgency</Text>
@@ -467,7 +467,7 @@ export default function HudInspectionForm() {
           </View>
 
           <Pressable style={[ui.btnOutline, pi.onPriorReport && { backgroundColor: ACCENT }]} onPress={() => updatePhysical(pi.id, { onPriorReport: !pi.onPriorReport })}>
-            <Text style={pi.onPriorReport ? ui.btnText : ui.btnOutlineText}>{pi.onPriorReport ? '✓ ' : ''}On prior report</Text>
+            <Text style={pi.onPriorReport ? ui.btnText : ui.btnOutlineText}>On prior report</Text>
           </Pressable>
 
           <Text style={{ fontSize: 12, color: '#666' }}>Estimated cost</Text>
@@ -478,10 +478,10 @@ export default function HudInspectionForm() {
       <Text style={[ui.h, { fontSize: 18, marginTop: 20 }]}>Lead-Based Paint</Text>
       <View style={[ui.card, { gap: 8 }]}>
         <Pressable style={[ui.btnOutline, insp.lead.leadVisualAssessment && { backgroundColor: ACCENT }]} onPress={() => patchLead({ leadVisualAssessment: !insp.lead.leadVisualAssessment })}>
-          <Text style={insp.lead.leadVisualAssessment ? ui.btnText : ui.btnOutlineText}>{insp.lead.leadVisualAssessment ? '✓ ' : ''}Visual assessment done</Text>
+          <Text style={insp.lead.leadVisualAssessment ? ui.btnText : ui.btnOutlineText}>Visual assessment done</Text>
         </Pressable>
         <Pressable style={[ui.btnOutline, insp.lead.deterioratedPaintPresent && { backgroundColor: '#c0392b' }]} onPress={() => patchLead({ deterioratedPaintPresent: !insp.lead.deterioratedPaintPresent })}>
-          <Text style={insp.lead.deterioratedPaintPresent ? ui.btnText : ui.btnOutlineText}>{insp.lead.deterioratedPaintPresent ? '✓ ' : ''}Deteriorated paint present</Text>
+          <Text style={insp.lead.deterioratedPaintPresent ? ui.btnText : ui.btnOutlineText}>Deteriorated paint present</Text>
         </Pressable>
         <Text style={{ fontSize: 12, color: '#666' }}>Risk level</Text>
         <View style={{ flexDirection: 'row', gap: 6 }}>
@@ -507,7 +507,7 @@ export default function HudInspectionForm() {
           const on = !!insp.lifeSafety[f.key];
           return (
             <Pressable key={f.key} style={[ui.btnOutline, on && { backgroundColor: f.danger ? '#c0392b' : '#1a8f4c' }]} onPress={() => patchLifeSafety({ [f.key]: !on } as Partial<HudLifeSafety>)}>
-              <Text style={on ? ui.btnText : ui.btnOutlineText}>{on ? '✓ ' : ''}{f.label}</Text>
+              <Text style={on ? ui.btnText : ui.btnOutlineText}>{f.label}</Text>
             </Pressable>
           );
         })}

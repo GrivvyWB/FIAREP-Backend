@@ -75,7 +75,7 @@ export default function Elevator() {
     <ScrollView contentContainerStyle={[ui.wrap, { paddingBottom: 120 }]} keyboardShouldPersistTaps="handled">
       <Text style={{ fontSize: 17, fontWeight: '600' }}>Elevator Services</Text>
       {!hidePrice && <Pressable style={[ui.btnOutline, { marginTop: 4 }]} onPress={generatePDF}><Text style={ui.btnOutlineText}>Generate PDF</Text></Pressable>}
-      <Pressable style={[ui.btnOutline, { marginTop: 6 }]} onPress={stampLocation}><Text style={ui.btnOutlineText}>{(s as any)._geo ? 'Location Stamped \u2713' : 'Stamp Location & Time'}</Text></Pressable>
+      <Pressable style={[ui.btnOutline, { marginTop: 6 }]} onPress={stampLocation}><Text style={ui.btnOutlineText}>{(s as any)._geo ? 'Location Stamped' : 'Stamp Location & Time'}</Text></Pressable>
 
       <View style={ui.card}>
         <Text style={ui.cardTitle}>Elevator Info</Text>
@@ -156,12 +156,12 @@ export default function Elevator() {
               disabled={!!(job && job.onMyWayAt)}
               style={[ui.btnOutline, { flex: 1 }, job && job.onMyWayAt && { opacity: 0.45 }]}
               onPress={async () => { if (projectId) { const j = await setElevatorProgress(String(projectId), 'onMyWay'); setJob(j); } }}
-            ><Text style={ui.btnOutlineText}>{job && job.onMyWayAt ? 'On my way \u2713' : 'On my way'}</Text></Pressable>
+            ><Text style={ui.btnOutlineText}>On my way</Text></Pressable>
             <Pressable
               disabled={!!(job && job.startedAt)}
               style={[ui.btnOutline, { flex: 1 }, job && job.startedAt && { opacity: 0.45 }]}
               onPress={async () => { if (projectId) { const j = await setElevatorProgress(String(projectId), 'started'); setJob(j); } }}
-            ><Text style={ui.btnOutlineText}>{job && job.startedAt ? 'Started \u2713' : 'Started job'}</Text></Pressable>
+            ><Text style={ui.btnOutlineText}>{job && job.startedAt ? 'Started' : 'Started job'}</Text></Pressable>
           </View>
           <Pressable
             disabled={!!(job && (job.completedAt || job.status === 'done'))}
@@ -173,7 +173,7 @@ export default function Elevator() {
               Alert.alert('Submitted', 'The elevator report, address, and photos were sent to management.', [{ text: 'OK', onPress: () => router.back() }]);
             }}
           >
-            <Text style={ui.btnText}>{job && (job.completedAt || job.status === 'done') ? 'Completed \u2713' : 'Job completion'}</Text>
+            <Text style={ui.btnText}>{job && (job.completedAt || job.status === 'done') ? 'Completed' : 'Job completion'}</Text>
           </Pressable>
         </View>
       )}

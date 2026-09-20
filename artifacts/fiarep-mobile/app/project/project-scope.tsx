@@ -193,7 +193,7 @@ export default function ProjectScope() {
           onPress={submitToSupervisor}
           disabled={submitting || submitted}
         >
-          <Text style={ui.btnText}>{submitted ? 'Submitted \u2713' : submitting ? 'Submitting\u2026' : 'Submit to supervisor'}</Text>
+          <Text style={ui.btnText}>{submitted ? 'Submitted' : submitting ? 'Submitting\u2026' : 'Submit to supervisor'}</Text>
         </Pressable>
       )}
 

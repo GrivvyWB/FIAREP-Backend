@@ -100,7 +100,7 @@ export default function Intake() {
         <Text style={ui.btnOutlineText}>Generate PDF</Text>
       </Pressable>
       <Pressable style={[ui.btnOutline, { marginTop: 6 }]} onPress={stampLocation}>
-        <Text style={ui.btnOutlineText}>{(s as any)._geo ? 'Location Stamped \u2713' : 'Stamp Location & Time'}</Text>
+        <Text style={ui.btnOutlineText}>{(s as any)._geo ? 'Location Stamped' : 'Stamp Location & Time'}</Text>
       </Pressable>
 
       {/* COVER PAGE */}

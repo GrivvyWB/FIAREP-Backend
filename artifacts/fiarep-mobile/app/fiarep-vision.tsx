@@ -45,7 +45,7 @@ export default function FiarepVision() {
     try {
       const notes = 'AI Vision: ' + result.condition + (result.description ? ' \u2014 ' + result.description : '') + ' (AI ' + result.confidence + '%, ' + result.classification + '; inspector ' + cls + ')';
       await addBuildingViolation(building.trim(), '', result.hpCode || '', result.condition || '', cls, notes, photo ? [photo] : []);
-      setStatus('\u2713 Classification ' + cls + ' confirmed and saved to FIAREP.');
+      setStatus('Classification ' + cls + ' confirmed and saved to FIAREP.');
       Alert.alert('Saved', 'Violation saved (Class ' + cls + ').', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (e: any) { Alert.alert('Save failed', String(e && e.message ? e.message : e)); }
   }
@@ -106,7 +106,7 @@ export default function FiarepVision() {
           </View>
 
           <View style={{ gap: 8, marginTop: 16 }}>
-            <Pressable style={[ui.btn, { backgroundColor: '#16a34a' }]} onPress={accept}><Text style={ui.btnText}>✓ Accept & save (Class {cls})</Text></Pressable>
+            <Pressable style={[ui.btn, { backgroundColor: '#16a34a' }]} onPress={accept}><Text style={ui.btnText}>Accept & save (Class {cls})</Text></Pressable>
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={cycleClass}><Text style={ui.btnOutlineText}>Change A / B / C</Text></Pressable>
               <Pressable style={[ui.btnOutline, { flex: 1, borderColor: '#c0392b' }]} onPress={reject}><Text style={{ color: '#c0392b', fontWeight: '600', textAlign: 'center' }}>Reject</Text></Pressable>

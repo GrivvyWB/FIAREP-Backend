@@ -190,7 +190,7 @@ export default function ViolationSend() {
                   onPress={() => setOpenGroup(expanded ? '' : pos)}
                 >
                   <Text style={{ fontWeight: '600', color: hasPick ? ACCENT : '#000' }}>
-                     {displayStaffPosition(pos)}{hasPick ? '  \u2713 ' + sentTo : '  (' + people.length + ')'}
+                     {displayStaffPosition(pos)}{hasPick ? '  ' + sentTo : '  (' + people.length + ')'}
                   </Text>
                   <Text style={{ color: '#666' }}>{expanded ? '\u25b2' : '\u25bc'}</Text>
                 </Pressable>
@@ -219,7 +219,7 @@ export default function ViolationSend() {
       <Pressable style={[ui.btn, { marginTop: 16 }]} onPress={submit}>
         <Text style={ui.btnText}>{complaintMode ? 'Send complaint' : 'Send violation'}</Text>
       </Pressable>
-      {!!lastSent && <Text style={{ color: '#1a8f4c', fontWeight: '700', textAlign: 'center', marginTop: 8 }}>\u2713 {lastSent}. Pick another person to send again.</Text>}
+      {!!lastSent && <Text style={{ color: '#1a8f4c', fontWeight: '700', textAlign: 'center', marginTop: 8 }}>{lastSent}. Pick another person to send again.</Text>}
 
       {!complaintMode && <Text style={[ui.label, { marginTop: 24 }]}>Recently sent</Text>}
       {!complaintMode && (sent.length === 0 ? (

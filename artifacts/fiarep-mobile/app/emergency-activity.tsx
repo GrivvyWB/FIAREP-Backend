@@ -54,7 +54,7 @@ export default function EmergencyActivity() {
               <View style={{ gap: 3 }}>
                 {[['Assigned', j.assignedAt], ['On my way', j.onMyWayAt], ['Started', j.startedAt], ['Completed', j.completedAt]].map(([label, ts]) => (
                   <View key={label as string} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, color: ts ? '#1a8f4c' : '#bbb' }}>{ts ? '\u2713 ' : '\u25cb '}{label as string}</Text>
+                    <Text style={{ fontSize: 13, color: ts ? '#1a8f4c' : '#bbb' }}>{label as string}</Text>
                     <Text style={{ fontSize: 12, color: '#999' }}>{ts ? fmt(ts as string) : 'pending'}</Text>
                   </View>
                 ))}

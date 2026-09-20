@@ -135,15 +135,15 @@ export default function EmergencyUnits() {
               <View style={{ gap: 3 }}>
                 {[['Assigned', j.assignedAt], ['On my way', j.onMyWayAt], ['Started', j.startedAt], ['Completed', j.completedAt]].map(([label, ts]) => (
                   <View key={label as string} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Text style={{ fontSize: 13, color: ts ? '#1a8f4c' : '#bbb' }}>{ts ? '\u2713 ' : '\u25cb '}{label as string}</Text>
+                    <Text style={{ fontSize: 13, color: ts ? '#1a8f4c' : '#bbb' }}>{label as string}</Text>
                     <Text style={{ fontSize: 12, color: '#999' }}>{ts ? fmt(ts as string) : 'pending'}</Text>
                   </View>
                 ))}
               </View>
 
               <View style={{ flexDirection: 'row', gap: 8 }}>
-                <Pressable disabled={!!j.onMyWayAt} style={[ui.btnOutline, { flex: 1 }, j.onMyWayAt && { opacity: 0.45 }]} onPress={async () => { await setEmergencyProgress(j.id, 'onMyWay'); refresh(); }}><Text style={ui.btnOutlineText}>{j.onMyWayAt ? 'On my way \u2713' : 'On my way'}</Text></Pressable>
-                <Pressable disabled={!!j.startedAt} style={[ui.btnOutline, { flex: 1 }, j.startedAt && { opacity: 0.45 }]} onPress={async () => { await setEmergencyProgress(j.id, 'started'); refresh(); }}><Text style={ui.btnOutlineText}>{j.startedAt ? 'Started \u2713' : 'Started'}</Text></Pressable>
+                <Pressable disabled={!!j.onMyWayAt} style={[ui.btnOutline, { flex: 1 }, j.onMyWayAt && { opacity: 0.45 }]} onPress={async () => { await setEmergencyProgress(j.id, 'onMyWay'); refresh(); }}><Text style={ui.btnOutlineText}>On my way</Text></Pressable>
+                <Pressable disabled={!!j.startedAt} style={[ui.btnOutline, { flex: 1 }, j.startedAt && { opacity: 0.45 }]} onPress={async () => { await setEmergencyProgress(j.id, 'started'); refresh(); }}><Text style={ui.btnOutlineText}>Started</Text></Pressable>
               </View>
 
               <Text style={ui.label}>Photos</Text>
