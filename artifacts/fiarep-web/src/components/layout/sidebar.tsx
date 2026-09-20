@@ -37,6 +37,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
 
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" as const },
+    { name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const },
     { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },
     { name: "HUD Inspections", href: "/hud-inspections", icon: ClipboardCheck, module: "hud-inspections" as const },
     { name: "Estimates", href: "/estimates", icon: FileText, module: "estimates" as const },
@@ -50,7 +51,6 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Violations", href: "/violations", icon: AlertTriangle, module: "violations" as const },
     { name: "Trade-Supervisors:", href: "/trade-requests", icon: UserRoundCheck, module: "trade-requests" as const },
     { name: "My Jobs", href: "/my-jobs", icon: Wrench, module: "my-jobs" as const },
-    { name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const },
      ...(staff?.role === "management" && staff?.position === "CPM Supervisor" ? [{ name: "CPM Supervisor", href: "/scope-review", icon: UserRoundCheck, module: "scope-review" as const }] : []),
     ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart, module: "procurement" as const }] : []),
     ...(hasModuleAccess(staff, "scope-writing") ? [{ name: "Scope Writing", href: "/scope-writing", icon: ClipboardCheck, module: "scope-writing" as const }] : []),

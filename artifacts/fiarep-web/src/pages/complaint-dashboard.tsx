@@ -185,7 +185,7 @@ export default function ComplaintDashboard() {
     reports.forEach(r => {
       const boro = boroughOf(r);
       
-      if (boro) boroughs.add(boro);
+      if (boro && boro.toLowerCase() !== "unknown") boroughs.add(boro);
     });
     
     return {
