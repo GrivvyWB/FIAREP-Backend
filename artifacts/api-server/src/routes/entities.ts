@@ -47,6 +47,7 @@ import { logger } from "../lib/logger";
 import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
 import { rateLimit } from "../lib/rateLimit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
+import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -195,22 +196,9 @@ async function canonicalizeAssignment(
   state: Record<string, unknown>,
   development: string | null,
 ): Promise<{ state: Record<string, unknown> | null; error?: string }> {
-  // The Emergency Unit superintendent has one additional, narrowly scoped
-  // responsibility: assigning emergency-unit maintenance staff to jobs in
-  // covered developments.  Do not let the ordinary Superintendent title
-  // acquire this authority, and do not let the emergency title assign work
-  // in unrelated modules.
-  if (
-    actor.position === "Superintendent Ⓔ" &&
-    !["emergency-jobs", "resident-reports"].includes(entity)
-  ) {
-    return { state: null, error: "Emergency Unit assignments are limited to emergency jobs" };
-  }
-  if (entity === "emergency-jobs" && actor.position === "Superintendent") {
-    return { state: null, error: "Only the Emergency Unit superintendent may assign emergency staff" };
-  }
+  const includesAssignment = containsAssignmentFields(state);
   if (!ASSIGNMENT_SCOPED_ENTITIES.includes(entity) &&
-    containsAssignmentFields(state) &&
+    includesAssignment &&
     !isAssignmentAuthority(actor)) {
     return {
       state: null,
@@ -219,7 +207,7 @@ async function canonicalizeAssignment(
   }
   if (
     !ASSIGNMENT_SCOPED_ENTITIES.includes(entity) ||
-    !containsAssignmentFields(state)
+    !includesAssignment
   ) {
     return { state };
   }
@@ -2152,6 +2140,8 @@ router.post(
             ...source.state,
             assignedStaffId,
             assignedTo,
+            dispatchingSupervisorId: actor.id,
+            dispatchingSupervisorName: actor.name,
             status: sourceEntity === "procurement"
               ? "in_house"
               : sourceEntity === "building-violations" ? "routed" : "assigned",
@@ -2466,6 +2456,25 @@ router.post(
     target = typeof state["assignedStaffId"] === "string"
       ? state["assignedStaffId"]
       : "";
+  } else if (
+    action === "release" &&
+    ["resident-reports", "building-violations", "manpower-requests"].includes(entity)
+  ) {
+    target = supervisorTargetForReleasedWork(current.state);
+    if (!target && entity !== "manpower-requests") {
+      const manpowerRequestId = String(current.state["manpowerRequestId"] || "");
+      if (manpowerRequestId) {
+        const [request] = await db.select({ state: entityRecords.state })
+          .from(entityRecords)
+          .where(and(
+            eq(entityRecords.id, manpowerRequestId),
+            eq(entityRecords.entity, "manpower-requests"),
+            eq(entityRecords.tenantId, actor.tenantId),
+          ))
+          .limit(1);
+        if (request) target = supervisorTargetForReleasedWork(request.state);
+      }
+    }
   } else if (entity === "hud-inspections") {
     target = String(current.createdBy ?? "");
   } else if (isHrEntity(entity)) {
@@ -2565,6 +2574,17 @@ router.post(
         typeof state["development"] === "string" ? state["development"] : "",
       ].filter(Boolean).join(" · ");
       await notify(actor, target, "New job assigned", detail || undefined, current.id);
+    } else if (
+      action === "release" &&
+      ["resident-reports", "building-violations", "manpower-requests"].includes(entity)
+    ) {
+      await notify(
+        actor,
+        target,
+        "Assignment released",
+        releaseUpdate || undefined,
+        current.id,
+      );
     } else {
       await notify(actor, target, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
     }
