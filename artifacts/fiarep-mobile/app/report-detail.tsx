@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { addResidentUpdate, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listElevatorJobsForMechanic, listResidentReportPhotoUrls } from '../lib/store';
+import { addResidentUpdate, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -183,25 +183,30 @@ export default function ReportDetail() {
             <Text style={ui.btnText}>View DOB / HPD for this address</Text>
           </Pressable>
         )}
-        {position === 'Elevator Service' && (
+        {r.assignedStaffId === actorId && r.status === 'assigned' && (
           <Pressable
-            style={[ui.btn, { marginTop: 10 }]}
+            disabled={completionBusy}
+            style={[ui.btn, { marginTop: 10 }, completionBusy && { opacity: 0.45 }]}
             onPress={async () => {
-              const act = await getCurrentActor();
-              const me = (act && act.name) || '';
-              const jobs = await listElevatorJobsForMechanic(me, act?.id).catch(() => []);
-              let match = jobs.find((j) => (j.address || '').trim().toLowerCase() === (r.address || '').trim().toLowerCase());
-              if (match) {
-                router.push('/project/elevator?projectId=' + encodeURIComponent(match.id));
-              } else {
-                Alert.alert(
-                  'Elevator job not dispatched',
-                  'This report has no supervisor-dispatched elevator job. Authorized management must assign the job before Elevator Service can begin work.',
+              setCompletionBusy(true);
+              try {
+                await addResidentUpdate(
+                  r.id,
+                  'in_progress',
+                  'Started job',
+                  actorName,
+                  [],
+                  await captureGeo(),
                 );
+                load();
+              } catch (error) {
+                Alert.alert('Error', error instanceof Error ? error.message : String(error));
+              } finally {
+                setCompletionBusy(false);
               }
             }}
           >
-            <Text style={ui.btnText}>Open Elevator Services</Text>
+            <Text style={ui.btnText}>Start job</Text>
           </Pressable>
         )}
         {mode === 'inspector' && (
