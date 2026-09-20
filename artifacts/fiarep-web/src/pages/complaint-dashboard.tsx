@@ -443,7 +443,7 @@ export default function ComplaintDashboard() {
             <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden relative shadow-sm min-h-[300px]">
               <iframe 
                 src="https://www.openstreetmap.org/export/embed.html?bbox=-74.25909%2C40.477399%2C-73.700181%2C40.916178&amp;layer=mapnik" 
-                className="w-full h-full border-0 absolute inset-0 pointer-events-none opacity-[0.7] filter contrast-[0.9] saturate-[0.7]" 
+                className="w-full h-full border-0 absolute inset-0 opacity-[0.7] filter contrast-[0.9] saturate-[0.7]" 
                 title="NYC Overview" 
               />
               <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
