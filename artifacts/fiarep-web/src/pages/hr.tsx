@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/form";
 import { useAuth } from "@/hooks/use-auth";
 import { useQueryClient } from "@tanstack/react-query";
+import { DevelopmentManagement } from "@/components/hr/development-management";
 
 const categories = [
   ["hr-employee-records", "Employee records"],
@@ -191,7 +192,7 @@ export default function HRWorkspace() {
   const [editingRecord, setEditingRecord] = useState<EntityRecord | null>(null);
   const [credentialBusy, setCredentialBusy] = useState("");
   
-  const [view, setView] = useState<"records" | "audit">("records");
+  const [view, setView] = useState<"records" | "audit" | "developments">("records");
   const [filterProcess, setFilterProcess] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -568,6 +569,16 @@ export default function HRWorkspace() {
                   <History className="w-4 h-4" />
                   Audit History
                 </button>
+                {actor?.role === "human_resources" && (
+                  <button
+                    onClick={() => setView("developments")}
+                    className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-all ${view === "developments" ? "bg-background shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                    data-testid="tab-developments"
+                  >
+                    <Folder className="w-4 h-4" />
+                    Developments
+                  </button>
+                )}
               </div>
 
               {view === "records" && (
@@ -727,7 +738,7 @@ export default function HRWorkspace() {
                     })
                   )}
                 </div>
-              ) : (
+              ) : view === "audit" ? (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm text-left">
                     <thead>
@@ -770,6 +781,8 @@ export default function HRWorkspace() {
                     </tbody>
                   </table>
                 </div>
+              ) : (
+                <DevelopmentManagement />
               )}
             </div>
           </div>

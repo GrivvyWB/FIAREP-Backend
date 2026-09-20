@@ -883,6 +883,16 @@ export interface StaffDevelopmentUpdate {
   developments: string[];
 }
 
+export interface StaffDevelopmentConfiguration {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     * @items.minLength 1
+     * @items.maxLength 200
+     */
+  developments: string[];
+}
+
 export type StaffAssignmentUpdateRole = typeof StaffAssignmentUpdateRole[keyof typeof StaffAssignmentUpdateRole];
 
 

@@ -26,12 +26,71 @@ import {
 } from "../lib/domain";
 import { allocateStaffCode, allocateTruckStaffCode } from "../lib/staffCodes";
 import { emailStaffAccessCode } from "../lib/staffEmail";
-import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
+import { addConfiguredDevelopmentName, getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
 const CODE_EMAIL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 router.use("/v1/staff", requireAuth);
+
+router.post("/v1/staff/developments", async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.role !== "human_resources") {
+    res.status(403).json({ error: "Only Human Resources may configure developments" });
+    return;
+  }
+  const values = req.body && typeof req.body === "object" &&
+    Array.isArray((req.body as { developments?: unknown }).developments)
+    ? (req.body as { developments: unknown[] }).developments
+    : null;
+  const developments = values
+    ? [...new Set(values
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.trim().replace(/\s+/g, " "))
+      .filter((value) => value.length > 0 && value.length <= 200))]
+    : [];
+  const validInput = values?.every((value) =>
+    typeof value === "string" &&
+    value.trim().length > 0 &&
+    value.trim().length <= 200
+  );
+  if (!values || !validInput || developments.length === 0 || developments.length > 500) {
+    res.status(400).json({ error: "Provide between 1 and 500 valid development names" });
+    return;
+  }
+  const configured = await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`organization-development:${actor.tenantId}`}))`);
+    const [organization] = await tx
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, actor.tenantId))
+      .limit(1);
+    if (!organization) return null;
+    const features = developments.reduce(
+      (current, development) => addConfiguredDevelopmentName(current, development),
+      organization.features,
+    );
+    const [updated] = await tx
+      .update(organizations)
+      .set({ features, updatedAt: new Date() })
+      .where(eq(organizations.id, actor.tenantId))
+      .returning({ features: organizations.features });
+    if (!updated) return null;
+    await auditInTransaction(
+      tx,
+      actor,
+      "organization.developments_configured",
+      `Added ${developments.length} organization development${developments.length === 1 ? "" : "s"}`,
+      actor.tenantId,
+    );
+    return getConfiguredDevelopmentNames(updated.features) ?? [];
+  });
+  if (!configured) {
+    res.status(404).json({ error: "Organization not found" });
+    return;
+  }
+  res.json(configured);
+});
 
 function safe(
   staff: typeof staffAccounts.$inferSelect,

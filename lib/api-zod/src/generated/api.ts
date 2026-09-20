@@ -890,6 +890,23 @@ export const ListStaffDevelopmentsResponseItem = zod.string()
 export const ListStaffDevelopmentsResponse = zod.array(ListStaffDevelopmentsResponseItem)
 
 
+/**
+ * @summary Add organization developments from the official catalog or CSV
+ */
+export const configureStaffDevelopmentsBodyDevelopmentsItemMax = 200;
+
+export const configureStaffDevelopmentsBodyDevelopmentsMax = 500;
+
+
+
+export const ConfigureStaffDevelopmentsBody = zod.object({
+  "developments": zod.array(zod.string().min(1).max(configureStaffDevelopmentsBodyDevelopmentsItemMax)).min(1).max(configureStaffDevelopmentsBodyDevelopmentsMax)
+})
+
+export const ConfigureStaffDevelopmentsResponseItem = zod.string()
+export const ConfigureStaffDevelopmentsResponse = zod.array(ConfigureStaffDevelopmentsResponseItem)
+
+
 export const ResetStaffCodeParams = zod.object({
   "id": zod.coerce.string()
 })

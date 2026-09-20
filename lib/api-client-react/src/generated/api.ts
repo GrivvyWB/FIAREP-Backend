@@ -90,6 +90,7 @@ import type {
   Staff,
   StaffAssignmentUpdate,
   StaffCodeUpdate,
+  StaffDevelopmentConfiguration,
   StaffDevelopmentUpdate,
   StaffInput,
   StaffIssueResponse,
@@ -2840,6 +2841,77 @@ export function useListStaffDevelopments<TData = Awaited<ReturnType<typeof listS
 
 
 
+
+export const getConfigureStaffDevelopmentsUrl = () => {
+
+
+
+
+  return `/api/v1/staff/developments`
+}
+
+/**
+ * @summary Add organization developments from the official catalog or CSV
+ */
+export const configureStaffDevelopments = async (staffDevelopmentConfiguration: StaffDevelopmentConfiguration, options?: Parameters<typeof customFetch>[1]): Promise<string[]> => {
+
+  return customFetch<string[]>(getConfigureStaffDevelopmentsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(staffDevelopmentConfiguration)
+  }
+);}
+
+
+
+
+
+export const getConfigureStaffDevelopmentsMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof configureStaffDevelopments>>, TError,{data: BodyType<StaffDevelopmentConfiguration>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof configureStaffDevelopments>>, TError,{data: BodyType<StaffDevelopmentConfiguration>}, TContext> => {
+
+const mutationKey = ['configureStaffDevelopments'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof configureStaffDevelopments>>, {data: BodyType<StaffDevelopmentConfiguration>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  configureStaffDevelopments(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ConfigureStaffDevelopmentsMutationResult = NonNullable<Awaited<ReturnType<typeof configureStaffDevelopments>>>
+    export type ConfigureStaffDevelopmentsMutationBody = BodyType<StaffDevelopmentConfiguration>
+    export type ConfigureStaffDevelopmentsMutationError = ErrorType<Error>
+
+    /**
+ * @summary Add organization developments from the official catalog or CSV
+ */
+export const useConfigureStaffDevelopments = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof configureStaffDevelopments>>, TError,{data: BodyType<StaffDevelopmentConfiguration>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof configureStaffDevelopments>>,
+        TError,
+        {data: BodyType<StaffDevelopmentConfiguration>},
+        TContext
+      > => {
+      return useMutation(getConfigureStaffDevelopmentsMutationOptions(options));
+    }
 
 export const getResetStaffCodeUrl = (id: string,) => {
 

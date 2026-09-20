@@ -740,6 +740,34 @@ paths:
                 items: { type: string }
         "401":
           $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: configureStaffDevelopments
+      tags: [staff]
+      security: [{ bearerAuth: [] }]
+      summary: Add organization developments from the official catalog or CSV
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StaffDevelopmentConfiguration" }
+      responses:
+        "200":
+          description: Updated organization development names
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { type: string }
+        "400":
+          description: Invalid development names
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Only Human Resources may configure developments
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/staff/{id}/reset-code:
     post:
       operationId: resetStaffCode
@@ -2036,6 +2064,19 @@ components:
         developments:
           type: array
           items: { type: string }
+    StaffDevelopmentConfiguration:
+      type: object
+      additionalProperties: false
+      required: [developments]
+      properties:
+        developments:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: string
+            minLength: 1
+            maxLength: 200
     StaffAssignmentUpdate:
       type: object
       additionalProperties: false
