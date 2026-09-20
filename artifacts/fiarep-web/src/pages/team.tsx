@@ -11,7 +11,6 @@ import {
   useResetStaffCode,
   useRevokeStaff,
   useUpdateStaffAssignment,
-  useUpdateStaffDevelopments,
   useListStaffDevelopments,
   getListStaffQueryKey,
   getGetHrWorkspaceQueryKey,
@@ -31,7 +30,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Checkbox } from "@/components/ui/checkbox";
-import { groupTeamDirectoryByTitleAndLocation, type StaffAssignmentTarget } from "@/lib/staff-assignment";
+import { groupTeamDirectoryByTitleAndLocation, roleForPosition, type StaffAssignmentTarget } from "@/lib/staff-assignment";
 import { invalidateStaffQueries } from "@/lib/query-invalidation";
 import { useLocation } from "wouter";
 
@@ -75,15 +74,6 @@ function namesFromFile(contents: string) {
     .filter((value) => value && !["name", "employee name", "employee"].includes(value.toLowerCase())))];
 }
 
-function roleForPosition(position: string) {
-  if (position === "CPM" || position === "Inspector") return "inspector";
-  if (
-    position.includes("Supervisor") ||
-    ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager", "Superintendent", "Superintendent Ⓔ", "Assistant Superintendent", "Housing Assistant", "Director"].includes(position)
-  ) return "management";
-  return "worker";
-}
-
 export default function Team() {
   const { staff: actor } = useAuth();
   const [, navigate] = useLocation();
@@ -121,7 +111,6 @@ export default function Team() {
   const revoke = useRevokeStaff();
   const deleteStaff = useDeleteStaff();
   const updateStaffAssignment = useUpdateStaffAssignment();
-  const updateStaffDevelopments = useUpdateStaffDevelopments();
   const [search, setSearch] = useState("");
   const [directoryDevelopment, setDirectoryDevelopment] = useState("");
   const [directoryStaffId, setDirectoryStaffId] = useState("");
@@ -150,7 +139,10 @@ export default function Team() {
   const [draftCompleting, setDraftCompleting] = useState(false);
   const [completedDraft, setCompletedDraft] = useState<{ name: string; employeeNumber: string; code: string } | null>(null);
   const [moveTarget, setMoveTarget] = useState<{ id: string; name: string } | null>(null);
+  const [movePosition, setMovePosition] = useState("");
   const [moveDevelopments, setMoveDevelopments] = useState<string[]>([]);
+  const [moveAnnualSalary, setMoveAnnualSalary] = useState("");
+  const [moveHourlyRate, setMoveHourlyRate] = useState("");
   const [draggedMember, setDraggedMember] = useState<string | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
 
@@ -416,14 +408,30 @@ export default function Team() {
   async function moveMember() {
     if (!moveTarget) return;
     setActionError("");
+    const annualSalary = moveAnnualSalary.trim() ? Number(moveAnnualSalary) : null;
+    const hourlyRate = moveHourlyRate.trim() ? Number(moveHourlyRate) : null;
+    if ((annualSalary !== null && (!Number.isFinite(annualSalary) || annualSalary < 0)) ||
+      (hourlyRate !== null && (!Number.isFinite(hourlyRate) || hourlyRate < 0))) {
+      setActionError("Enter a valid compensation amount.");
+      return;
+    }
     try {
-      await updateStaffDevelopments.mutateAsync({
+      await updateStaffAssignment.mutateAsync({
         id: moveTarget.id,
-        data: { developments: moveDevelopments },
+        data: {
+          position: movePosition,
+          role: roleForPosition(movePosition) as typeof StaffAssignmentUpdateRole[keyof typeof StaffAssignmentUpdateRole],
+          developments: moveDevelopments,
+          annualSalary,
+          hourlyRate,
+        },
       });
       await refresh();
       setMoveTarget(null);
+      setMovePosition("");
       setMoveDevelopments([]);
+      setMoveAnnualSalary("");
+      setMoveHourlyRate("");
     } catch (e) {
       setActionError(errorMessage(e));
     }
@@ -517,6 +525,9 @@ export default function Team() {
   }
   const teamGroups = groupTeamDirectoryByTitleAndLocation(sorted || [], HR_DISPLAY_MEMBER_IDS);
   const memberCard = (member: NonNullable<typeof staff>[number]) => {
+    const hrMember = hrDraftsQuery.data?.staff.find((candidate) => candidate.id === member.id);
+    const compensationMember = member as typeof member & { totalAnnualSalary?: number | null };
+    const totalAnnualSalary = hrMember?.totalAnnualSalary ?? compensationMember.totalAnnualSalary;
     const isSupervisorOrManagement =
       member.role === "administrator" ||
       member.role === "management" ||
@@ -540,7 +551,15 @@ export default function Team() {
           : "bg-gradient-to-br from-[#3d6fa8] to-[#185FA5] text-white"
       }`}>{member.name.split(" ").map((n) => n[0]).join("").substring(0, 2).toUpperCase()}</div>
       <div className="flex-1 min-w-0">
-        <h4 className="font-bold truncate">{member.name}</h4>
+         <h4 className="font-bold truncate">{member.name}</h4>
+         {actor && (actor.role === "human_resources" || actor.role === "administrator") &&
+           totalAnnualSalary != null && (
+             <div className="text-sm text-muted-foreground">
+               Total annual salary: {new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(
+                 totalAnnualSalary,
+               )}
+             </div>
+           )}
         <div className="text-sm text-muted-foreground">{member.position}</div>
         {member.developments.length > 3 ? (
           <Collapsible>
@@ -565,8 +584,16 @@ export default function Team() {
             size="sm"
             variant="outline"
             onClick={() => {
+              const compensationMember = member as typeof member & {
+                annualSalary?: number | null;
+                hourlyRate?: number | null;
+              };
+              const hrMember = hrDraftsQuery.data?.staff.find((candidate) => candidate.id === member.id);
               setMoveTarget({ id: member.id, name: member.name });
+              setMovePosition(member.position);
               setMoveDevelopments(member.developments);
+              setMoveAnnualSalary(String(hrMember?.annualSalary ?? compensationMember.annualSalary ?? ""));
+              setMoveHourlyRate(String(hrMember?.hourlyRate ?? compensationMember.hourlyRate ?? ""));
               setActionError("");
             }}
             data-testid={`button-move-member-${member.id}`}
@@ -793,10 +820,13 @@ export default function Team() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={Boolean(moveTarget)} onOpenChange={(value) => {
+       <Dialog open={Boolean(moveTarget)} onOpenChange={(value) => {
         if (!value) {
           setMoveTarget(null);
+           setMovePosition("");
           setMoveDevelopments([]);
+           setMoveAnnualSalary("");
+           setMoveHourlyRate("");
           setActionError("");
         }
       }}>
@@ -805,6 +835,12 @@ export default function Team() {
             <DialogTitle>Move {moveTarget?.name}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+             <div>
+               <Label htmlFor="member-position">Position</Label>
+               <select id="member-position" className="w-full rounded-md border bg-background p-2" value={movePosition} onChange={(event) => setMovePosition(event.target.value)}>
+                 {positions.map((candidate) => <option key={candidate} value={candidate}>{candidate}</option>)}
+               </select>
+             </div>
             {developmentsLoading ? <p className="text-sm text-muted-foreground">Loading developments...</p> :
               developmentsError ? <p className="text-sm text-destructive">{errorMessage(developmentsError)}</p> :
               !availableDevelopments?.length ? <p className="text-sm text-muted-foreground">No active developments available.</p> :
@@ -823,6 +859,18 @@ export default function Team() {
                   </label>
                 ))}
               </div>}
+             <div className="grid grid-cols-2 gap-3">
+               <div><Label htmlFor="member-salary">Salary</Label><Input id="member-salary" type="number" min="0" value={moveAnnualSalary} onChange={(event) => {
+                 const value = event.target.value;
+                 setMoveAnnualSalary(value);
+                 if (Number(value) > 0) setMoveHourlyRate("");
+               }} /></div>
+               <div><Label htmlFor="member-hourly-rate">Paid per hour</Label><Input id="member-hourly-rate" type="number" min="0" value={moveHourlyRate} onChange={(event) => {
+                 const value = event.target.value;
+                 setMoveHourlyRate(value);
+                 if (Number(value) > 0) setMoveAnnualSalary("");
+               }} /></div>
+             </div>
             {actionError && <p className="text-sm text-destructive">{actionError}</p>}
           </div>
           <DialogFooter>
@@ -830,10 +878,10 @@ export default function Team() {
             <Button
               type="button"
               onClick={moveMember}
-              disabled={updateStaffDevelopments.isPending || developmentsLoading}
+               disabled={updateStaffAssignment.isPending || developmentsLoading || !movePosition}
               data-testid="button-save-member-move"
             >
-              {updateStaffDevelopments.isPending ? "Saving..." : "Save"}
+               {updateStaffAssignment.isPending ? "Saving..." : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

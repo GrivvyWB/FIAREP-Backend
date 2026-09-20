@@ -7,12 +7,12 @@ export type StaffModule =
   | "clients" | "team" | "violations" | "procurement" | "scope-review"
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
-  | "hud-inspections" | "trade-requests";
+   | "hud-inspections" | "trade-requests" | "my-jobs";
 
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
 const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "shared-data"]);
 const ELEVATOR_POSITIONS = new Set(["Elevator Supervisor", "Elevator Service"]);
-const HUD_REVIEW_POSITIONS = new Set(["Supervisor Inspector", "CPM Supervisor", "Supervisor CPM"]);
+const HUD_REVIEW_POSITIONS = new Set(["Supervisor Inspector"]);
 const CPM_ONLY_MODULES = new Set<StaffModule>([
   "estimates",
   "repairs",
@@ -39,6 +39,12 @@ export function canReadSharedDefaultRates(staff: Staff | null | undefined): bool
  * mounting and issuing requests in the first place. */
 export function hasModuleAccess(staff: Staff | null | undefined, module: StaffModule): boolean {
   if (!staff) return false;
+  if (
+    staff.position?.trim().toLowerCase() === "cpm supervisor" &&
+    (module === "violations" || module === "hud-inspections")
+  ) {
+    return false;
+  }
   const isEmergencyMaintenance =
     staff.role === "emergency" && staff.position === "Maintenance Worker";
   if (
@@ -60,14 +66,16 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
   if (module === "trade-requests") {
     return MANAGEMENT_ROLES.has(staff.role) || isSupervisor(staff);
   }
+  if (module === "my-jobs") {
+    return ["worker", "inspector", "emergency"].includes(staff.role);
+  }
   if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
   if (module === "hr") return false;
   if (module === "elevators") {
     return staff.role === "administrator" || ELEVATOR_POSITIONS.has(staff.position || "");
   }
   if (module === "scope-review") {
-    return staff.role === "management" &&
-      !["Borough Director", "Regional Director", "Superintendent"].includes(staff.position || "");
+    return staff.role === "management" && staff.position === "CPM Supervisor";
   }
   if (MANAGEMENT_ROLES.has(staff.role)) {
     if (module === "scope-writing") return false;

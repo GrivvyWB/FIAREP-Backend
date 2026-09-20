@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, Modal, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { listLoggedInspections, listActiveInspections, clearInspectionForStaff, approveAndRouteViolation, listStaffAccounts, displayStaffPosition, getCurrentActor, getCurrentPosition, type BuildingViolation, type StaffAccount } from '../lib/store';
+import { listLoggedInspections, listActiveInspections, clearInspectionForStaff, approveAndRouteViolation, handoffViolationToCpmSupervisor, listStaffAccounts, displayStaffPosition, getCurrentActor, getCurrentPosition, type BuildingViolation, type StaffAccount } from '../lib/store';
 import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
@@ -21,6 +21,8 @@ export default function InspectionApprovals() {
   const [routeFor, setRouteFor] = useState<BuildingViolation | null>(null);
   const [openPos, setOpenPos] = useState<Record<string, boolean>>({});
   const [active, setActive] = useState<BuildingViolation[]>([]);
+  const [handoffFor, setHandoffFor] = useState<BuildingViolation | null>(null);
+  const [cpmSupervisors, setCpmSupervisors] = useState<StaffAccount[]>([]);
   useEffect(() => {
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
       if (actor.role === 'management' && position.trim().toLowerCase() === 'supervisor inspector') setAuthorized(true);
@@ -45,6 +47,17 @@ export default function InspectionApprovals() {
       Alert.alert('Approved & routed', 'Sent to ' + s.name + (s.position ? ' (' + s.position + ')' : '') + '.');
     } catch (e: any) {
       Alert.alert('Error', String(e && e.message ? e.message : e));
+    }
+  }
+
+  async function handoff(v: BuildingViolation, supervisor: StaffAccount) {
+    try {
+      await handoffViolationToCpmSupervisor(v.id, supervisor.id);
+      setHandoffFor(null);
+      load();
+      Alert.alert('Sent to CPM Supervisor', 'The approved violation is now in the CPM Supervisor scope-review queue.');
+    } catch (e: any) {
+      Alert.alert('Handoff failed', String(e?.message || e || 'Could not send this violation.'));
     }
   }
 
@@ -111,6 +124,17 @@ export default function InspectionApprovals() {
               <Text style={{ fontSize: 14 }}>{v.building}</Text>
               <Text style={ui.listSub}>Assigned to {v.routedTo || '\u2014'}{v.routedToPosition ? ' (' + v.routedToPosition + ')' : ''}</Text>
               {!!v.completionNote && <Text style={ui.listSub}>Note: {v.completionNote}</Text>}
+              {v.status === 'routed' && (
+                <Pressable style={[ui.btnOutline, { marginTop: 6 }]} onPress={() => {
+                  const eligible = staff.filter((s) => String(s.position || '').trim().toLowerCase() === 'cpm supervisor'
+                    && (!v.development || (s.developments || []).some((d) => d.trim().toLowerCase() === v.development!.trim().toLowerCase())));
+                  setCpmSupervisors(eligible);
+                  setHandoffFor(v);
+                }}>
+                  <Text style={ui.btnOutlineText}>Send to CPM Supervisor</Text>
+                </Pressable>
+              )}
+              {v.status === 'cpm_review' && <Text style={{ color: '#1a8f4c', fontWeight: '700', marginTop: 6 }}>Sent to CPM Supervisor</Text>}
               {!v.clearedByMgmt && (
                 <Pressable onPress={() => clearForStaff(v)} style={{ marginTop: 4 }}>
                   <Text style={{ color: ACCENT, fontWeight: '600' }}>Clear for staff</Text>
@@ -146,6 +170,24 @@ export default function InspectionApprovals() {
             <Pressable onPress={() => setRouteFor(null)} style={{ padding: 16 }}>
               <Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Cancel</Text>
             </Pressable>
+          </View>
+        </View>
+      </Modal>
+      <Modal visible={!!handoffFor} transparent animationType="slide" onRequestClose={() => setHandoffFor(null)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
+            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>Select CPM Supervisor</Text>
+            {handoffFor && <Text style={[ui.listSub, { paddingHorizontal: 16, paddingBottom: 8 }]}>Approved exact match for {handoffFor.development || 'this violation’s development'}.</Text>}
+            <ScrollView>
+              {cpmSupervisors.map((s) => (
+                <Pressable key={s.id} onPress={() => handoffFor && handoff(handoffFor, s)} style={{ paddingVertical: 14, paddingHorizontal: 20, borderTopWidth: 1, borderTopColor: '#eee' }}>
+                  <Text style={{ fontSize: 15, fontWeight: '700' }}>{s.name}</Text>
+                  <Text style={ui.listSub}>{s.position}{s.developments?.length ? ' · ' + s.developments.join(', ') : ''}</Text>
+                </Pressable>
+              ))}
+              {cpmSupervisors.length === 0 && <Text style={[ui.empty, { padding: 16 }]}>No approved CPM Supervisor is available for this violation’s development.</Text>}
+            </ScrollView>
+            <Pressable onPress={() => setHandoffFor(null)} style={{ padding: 16 }}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Cancel</Text></Pressable>
           </View>
         </View>
       </Modal>

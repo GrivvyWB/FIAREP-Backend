@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, Alert } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, Alert, Modal } from 'react-native';
 import * as Sharing from 'expo-sharing';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -11,6 +11,8 @@ import {
   listProcurementRequests,
   performEntityAction,
   type ProcurementRequest,
+  listStaffAccounts,
+  type StaffAccount,
 } from '../lib/store';
 import { COST_CATEGORIES } from '../lib/costEstimate';
 import { lineAmount, sectionTotal, grandTotal as scopeGrandTotal, costPerDU, type VendorScope } from '../lib/vendorScope';
@@ -32,18 +34,20 @@ export default function ScopeReview() {
   const [divScope, setDivScope] = useState<VendorScope | null>(null);
   const [queue, setQueue] = useState<ProcurementRequest[]>([]);
   const [note, setNote] = useState('');
+  const [trade, setTrade] = useState('');
+  const [receiver, setReceiver] = useState<StaffAccount | null>(null);
+  const [receiverOpen, setReceiverOpen] = useState(false);
+  const [receivers, setReceivers] = useState<StaffAccount[]>([]);
 
   useEffect(() => {
     let mounted = true;
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
       if (!mounted) return;
        const allowed = actor?.role === 'management' &&
-         position !== 'Borough Director' &&
-         position !== 'Regional Director' &&
-         position !== 'Superintendent';
+          position.trim().toLowerCase() === 'cpm supervisor';
       setAuthorized(allowed);
       if (!allowed) {
-         Alert.alert('Access denied', 'Scope review is available only to ordinary Management.');
+          Alert.alert('Access denied', 'Scope review is available only to the CPM Supervisor.');
          router.replace('/management-home');
       }
     }).catch(() => {
@@ -73,6 +77,9 @@ export default function ScopeReview() {
       const e = await getCostEstimate(key).catch(() => null);
       setEst(e || null);
     });
+     // The server remains authoritative for eligibility; this list is only a
+     // picker and the handoff action is still validated by the API.
+     listStaffAccounts('approved').then((all) => setReceivers(all.filter((a) => /supervisor/i.test(a.position || '')))).catch(() => setReceivers([]));
   }, [authorized, id]);
   useFocusEffect(() => { void load(); });
 
@@ -87,13 +94,16 @@ export default function ScopeReview() {
   if (!id) {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
-        <Text style={ui.h}>Scope Review</Text>
-        <Text style={ui.label}>Submitted scopes awaiting Management approval.</Text>
+        <Text style={ui.h}>CPM Supervisor Scope Review</Text>
+        <Text style={ui.label}>Submitted scopes awaiting CPM Supervisor approval.</Text>
         {queue.length === 0 && <Text style={ui.empty}>No submitted scopes.</Text>}
-        {queue.map((item) => (
+          {queue.map((item) => (
           <Pressable key={item.id} style={ui.card} onPress={() => router.push(`/scope-review?id=${encodeURIComponent(item.id)}`)}>
+            {item.sourceEntity === 'building-violations' && <Text style={{ color: ACCENT, fontWeight: '700' }}>Source: Inspector violation</Text>}
+            {item.sourceEntity === 'building-violations' && !!item.violationNo && <Text style={ui.listSub}>Violation {item.violationNo}</Text>}
             <Text style={{ fontWeight: '700' }}>{item.address || 'Scope'}</Text>
             <Text style={ui.listSub}>{item.scope}</Text>
+            {item.sourceEntity === 'building-violations' && !!item.violationNotes && <Text style={ui.listSub}>Inspector notes: {item.violationNotes}</Text>}
             <Text style={ui.listSub}>Submitted {fmt(item.requestedAt)}</Text>
           </Pressable>
         ))}
@@ -157,24 +167,65 @@ export default function ScopeReview() {
     }
   }
 
+  async function handOffInHouse() {
+    if (!req) return;
+    if (!trade.trim() || !receiver?.id) {
+      Alert.alert('Handoff details required', 'Select the requested trade and an eligible receiving supervisor.');
+      return;
+    }
+    try {
+      const updated = await performEntityAction('procurement', req.id, 'handoff-inhouse', {
+        requestedTrade: trade.trim(),
+        receiverSupervisorId: receiver.id,
+      });
+      setReq({ ...(updated.state as object), id: updated.id } as ProcurementRequest);
+      Alert.alert('Handed off', 'The in-house manpower request was sent to the receiving supervisor.');
+      router.back();
+    } catch (e: any) {
+      Alert.alert('Handoff failed', e?.message || 'The server did not accept this handoff.');
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
-      <Text style={ui.h}>Scope Review</Text>
+      <Text style={ui.h}>CPM Supervisor Scope Review</Text>
       <Text style={ui.label}>Full scope and quote, read-only.</Text>
       <TextInput style={ui.input} placeholder="Optional review note" value={note} onChangeText={setNote} multiline />
-      <View style={{ flexDirection: 'row', gap: 8 }}>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
         <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => review('approve')}><Text style={ui.btnText}>Approve for Procurement</Text></Pressable>
         <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => review('reject')}><Text style={ui.btnOutlineText}>Return to CPM</Text></Pressable>
+        <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => setReceiverOpen(true)}><Text style={ui.btnOutlineText}>Hand off in-house</Text></Pressable>
       </View>
+      <Text style={[ui.label, { marginTop: 8 }]}>In-house requested trade</Text>
+      <TextInput style={ui.input} value={trade} onChangeText={setTrade} placeholder="e.g. Plumber" />
+      <Pressable style={ui.input} onPress={() => setReceiverOpen(true)}>
+        <Text style={{ color: receiver ? '#000' : '#999' }}>{receiver?.name || 'Select receiving trade supervisor'}</Text>
+      </Pressable>
+      <Modal visible={receiverOpen} animationType="slide" onRequestClose={() => setReceiverOpen(false)}>
+        <ScrollView contentContainerStyle={ui.wrap}>
+          <Text style={ui.h}>Receiving trade supervisor</Text>
+          {receivers.map((person) => (
+            <Pressable key={person.id} style={ui.card} onPress={() => { setReceiver(person); setReceiverOpen(false); }}>
+              <Text style={{ fontWeight: '700' }}>{person.name}</Text>
+              <Text style={ui.listSub}>{person.position || 'Supervisor'}</Text>
+            </Pressable>
+          ))}
+          {receivers.length === 0 && <Text style={ui.empty}>No eligible supervisors available offline.</Text>}
+          <Pressable style={ui.btnOutline} onPress={() => setReceiverOpen(false)}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
+        </ScrollView>
+      </Modal>
 
       <Pressable style={[ui.btnOutline, { marginTop: 4 }]} onPress={exportExcel}>
         <Text style={[ui.btnOutlineText, { color: ACCENT }]}>Export to Excel</Text>
       </Pressable>
 
       <View style={[ui.card, { gap: 6 }]}>
+        {req.sourceEntity === 'building-violations' && <Text style={{ color: ACCENT, fontWeight: '700' }}>Source: Inspector violation</Text>}
+        {req.sourceEntity === 'building-violations' && !!req.violationNo && <View style={ui.line}><Text style={ui.lineK}>Violation number</Text><Text style={ui.lineV}>{req.violationNo}</Text></View>}
         <View style={ui.line}><Text style={ui.lineK}>Address</Text><Text style={ui.lineV}>{displayAddress}</Text></View>
         <Text style={ui.label}>Scope</Text>
         <Text>{req.scope}</Text>
+        {req.sourceEntity === 'building-violations' && !!req.violationNotes && <><Text style={ui.label}>Inspector notes</Text><Text>{req.violationNotes}</Text></>}
         {!!req.scopeFileName && (
           <Pressable onPress={openFile}>
             <Text style={[ui.listSub, { color: ACCENT, fontWeight: '600' }]}>Open file: {req.scopeFileName}</Text>

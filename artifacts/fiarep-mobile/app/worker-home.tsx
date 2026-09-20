@@ -11,6 +11,7 @@ import {
   listResidentReports,
   listRoutedInspectionsFor,
   displayStaffPosition,
+  listManpowerRequests,
 } from '../lib/store';
 import { ui } from '../lib/ui';
 
@@ -36,16 +37,18 @@ export default function WorkerHome() {
           const value = (development || '').trim().toLowerCase();
           return !value || developments.length === 0 || developments.includes(value);
         };
-        const [repairs, reports] = await Promise.all([
+        const [repairs, reports, inHouse] = await Promise.all([
           listRoutedInspectionsFor(actor.name),
           listResidentReports(),
+          listManpowerRequests(),
         ]);
         const residentJobs = reports.filter((report) =>
           report.status !== 'resolved' &&
           report.assignedStaffId === actor.id &&
           inAssignedDevelopment(report.development)
         );
-        setJobCount(repairs.length + residentJobs.length);
+        const manpowerJobs = inHouse.filter((job) => job.assignedStaffId === actor.id && ['dispatched', 'in_progress'].includes(job.status) && inAssignedDevelopment(job.development));
+        setJobCount(repairs.length + residentJobs.length + manpowerJobs.length);
       } else {
         setJobCount(0);
       }

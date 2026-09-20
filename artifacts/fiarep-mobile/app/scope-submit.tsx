@@ -10,14 +10,17 @@ import {
   type ViolationLookup,
   getProcurementRequest,
   getCurrentActor,
+  getCurrentPosition,
   type ProcurementRequest,
 } from '../lib/store';
 import { pickDocument } from '../lib/files';
 import { ui, ACCENT } from '../lib/ui';
 import AddressInput from '../components/AddressInput';
+import { useAppMode } from './_layout';
 
 export default function ScopeSubmit() {
   const router = useRouter();
+  const { mode } = useAppMode();
   const { openId, preAddress, preScope } = useLocalSearchParams<{ openId?: string; preAddress?: string; preScope?: string }>();
   const [prefilled, setPrefilled] = useState(false);
   const [address, setAddress] = useState('');
@@ -28,6 +31,15 @@ export default function ScopeSubmit() {
   const [returned, setReturned] = useState<ProcurementRequest[]>([]);
   const [violations, setViolations] = useState<ViolationLookup[]>([]);
   const [busy, setBusy] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    getCurrentPosition().then((position) => {
+       const allowed = position.trim().toLowerCase() === 'cpm';
+      if (!allowed) router.replace(mode === 'management' ? '/management-home' : '/cpm-home');
+      setAuthorized(allowed);
+    }).catch(() => router.replace(mode === 'management' ? '/management-home' : '/cpm-home'));
+  }, [mode, router]));
 
   const load = useCallback(() => {
     getCurrentActor().then(async (a) => {
@@ -92,6 +104,7 @@ export default function ScopeSubmit() {
     }
   }
 
+  if (!authorized) return null;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">

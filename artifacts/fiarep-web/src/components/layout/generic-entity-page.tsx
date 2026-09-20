@@ -99,6 +99,7 @@ export function GenericEntityPage({
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [selectedBid, setSelectedBid] = useState<Record<string, string>>({});
   const [selectedRouteStaff, setSelectedRouteStaff] = useState<Record<string, string>>({});
+  const [selectedCpmSupervisor, setSelectedCpmSupervisor] = useState<Record<string, string>>({});
 
   // Protected entities manage their own workflow/status via other actions
   const protectedEntities = [
@@ -110,6 +111,17 @@ export function GenericEntityPage({
     'emergency-jobs',
   ];
   const isProtected = protectedEntities.includes(entity);
+  const canSendInspectorViolationToCpm =
+    entity === "building-violations" &&
+    staff?.role === "management" &&
+    staff?.position === "Supervisor Inspector";
+  const cpmSupervisors = (item: EntityRecord) => operationalStaff.filter((member) =>
+    member.status === "approved" &&
+    member.role === "management" &&
+    member.position === "CPM Supervisor" &&
+    Boolean(item.development) &&
+    member.developments.includes(item.development || ""),
+  );
 
   const form = useForm<FormValues>({
     resolver: zodResolver(formSchema),
@@ -229,6 +241,35 @@ export function GenericEntityPage({
     }
   };
 
+  const handoffInspectorViolation = async (record: EntityRecord) => {
+    const receiverSupervisorId = selectedCpmSupervisor[record.id];
+    if (!receiverSupervisorId) {
+      toast({
+        variant: "destructive",
+        title: "Unable to send to CPM Supervisor",
+        description: "Select an approved CPM Supervisor assigned to this development.",
+      });
+      return;
+    }
+    try {
+      await actionMutation.mutateAsync({
+        entity,
+        id: record.id,
+        action: "handoff-cpm-supervisor",
+        data: { receiverSupervisorId },
+      });
+      await invalidateOperationalQueries(queryClient, entity, record.id);
+      toast({ title: "Sent to CPM Supervisor" });
+      setSelectedCpmSupervisor((selected) => ({ ...selected, [record.id]: "" }));
+    } catch (err: any) {
+      toast({
+        variant: "destructive",
+        title: "Unable to send to CPM Supervisor",
+        description: err?.message || "The server rejected this handoff.",
+      });
+    }
+  };
+
   const filtered = data?.filter(i => {
     if (!search) return true;
     const itemTitle = (i.state as any)?.title?.toLowerCase() || i.id.toLowerCase();
@@ -338,6 +379,7 @@ export function GenericEntityPage({
                                  : entity === "building-violations"
                                    ? [
                                        ...(canApproveWork(staff) ? [["submitted", "approve"], ["approved", "route"], ["done", "approve-work"]] : []),
+                                        ...(canSendInspectorViolationToCpm ? [["approved", "handoff-cpm-supervisor"]] : []),
                                        ...(!canApproveWork(staff) ? [["routed", "complete"]] : []),
                                      ]
                                    : []
@@ -356,6 +398,37 @@ export function GenericEntityPage({
                                    <Button size="sm" variant="outline" disabled={!selectedRouteStaff[item.id]} onClick={() => performAction(item, action)}>Route</Button>
                                  </span>;
                                }
+                                if (action === "handoff-cpm-supervisor") {
+                                  const eligibleCpmSupervisors = cpmSupervisors(item);
+                                  return <span key={action} className="flex flex-col gap-1 items-end">
+                                    <select
+                                      className="h-9 rounded-md border px-2 text-sm"
+                                      value={selectedCpmSupervisor[item.id] || ""}
+                                      onChange={(e) => setSelectedCpmSupervisor((selected) => ({ ...selected, [item.id]: e.target.value }))}
+                                      disabled={eligibleCpmSupervisors.length === 0 || actionMutation.isPending}
+                                      aria-label="CPM Supervisor"
+                                    >
+                                      <option value="">
+                                        {eligibleCpmSupervisors.length ? "Select CPM Supervisor" : "No eligible CPM Supervisor"}
+                                      </option>
+                                      {eligibleCpmSupervisors.map((member) => (
+                                        <option key={member.id} value={member.id}>{member.name} · {member.position}</option>
+                                      ))}
+                                    </select>
+                                    <Button
+                                      key={`${action}-button`}
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={!selectedCpmSupervisor[item.id] || actionMutation.isPending}
+                                      onClick={() => handoffInspectorViolation(item)}
+                                    >
+                                      Send to CPM Supervisor
+                                    </Button>
+                                    {eligibleCpmSupervisors.length === 0 && (
+                                      <span className="text-xs text-destructive">No approved CPM Supervisor is assigned to this development.</span>
+                                    )}
+                                  </span>;
+                                }
                                if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => performAction(item, action)}>{action === "approve-work" ? "Approve Work" : action}</Button>;
                               const bids = (bidData || []).filter((b: any) => (b.state as any)?.requestId === item.id);
                               return <span key={action} className="flex gap-1 items-center">

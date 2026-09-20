@@ -211,7 +211,13 @@ export function canReadSharedDefaultRates(actor: Actor): boolean {
 export function isOrdinaryManagement(actor: Actor): boolean {
   return actor.role === "management" &&
     !isBoroughDirector(actor) &&
-    !SPECIALIZED_MANAGEMENT_POSITIONS.has(actor.position);
+    !SPECIALIZED_MANAGEMENT_POSITIONS.has(actor.position) &&
+    actor.position !== "CPM Supervisor";
+}
+
+/** CPM Supervisors may author their own scope drafts, but are not procurement reviewers. */
+export function isCpmSupervisor(actor: Pick<Actor, "role" | "position">): boolean {
+  return actor.role === "management" && actor.position === "CPM Supervisor";
 }
 
 /**
@@ -278,14 +284,17 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
   if (VIOLATION_ENTITIES.has(entity)) {
     return (
       actor.role === "inspector" ||
-      isViolationAuthority(actor)
+      isViolationAuthority(actor) ||
+      (entity === "building-violations" && isCpmSupervisor(actor))
     );
   }
   if (entity === "procurement" || entity === "procurement-bids") {
+    if (isCpmSupervisor(actor) && entity === "procurement-bids") return false;
     return actor.role === "procurement" ||
-      isOrdinaryManagement(actor) ||
+      (entity === "procurement" && isCpmSupervisor(actor)) ||
       (entity === "procurement" && actor.role === "inspector" && actor.position === "CPM");
   }
+  if (isCpmSupervisor(actor) && entity === "vendor-quotes") return false;
   if (actor.role === "emergency" && !isEmergencyMaintenance) {
     return entity === "emergency-jobs" || entity === "emergency-units";
   }
@@ -330,8 +339,15 @@ export function procurementRecordAllowed(
     return row.entity === "procurement-bids" ||
       ["approved", "bidding", "awarded", "closed"].includes(status);
   }
-  if (isOrdinaryManagement(actor)) {
-    return row.entity === "procurement" && status === "submitted";
+  if (isCpmSupervisor(actor)) {
+    // CPM Supervisors are reviewers, not scope authors. They may inspect only
+    // submitted scopes in their covered developments.
+    const handoffTarget = typeof row.state["handoffTargetId"] === "string"
+      ? row.state["handoffTargetId"]
+      : "";
+    if (handoffTarget && handoffTarget !== actor.id) return false;
+    return row.entity === "procurement" &&
+      (status === "submitted" || status === "in_house" || status === "in_house_completed");
   }
   return actor.role === "inspector" && actor.position === "CPM" &&
     row.entity === "procurement" && row.createdBy === actor.id &&
@@ -438,6 +454,7 @@ const STAFF_ASSIGNMENT_SCOPED_ENTITIES = new Set([
   "change-orders",
   "elevator-jobs",
   "emergency-jobs",
+  "manpower-requests",
 ]);
 
 function staffAssignmentRecordAllowed(
@@ -465,7 +482,17 @@ function staffAssignmentRecordAllowed(
       : "";
     return requesterStaffId ? requesterStaffId === actor.id : row.createdBy === actor.id;
   }
+  if (row.entity === "manpower-requests") {
+    return row.state["receiverSupervisorId"] === actor.id ||
+      normalizeAssignment(row.state).assignedStaffId === actor.id;
+  }
   if (!STAFF_ASSIGNMENT_SCOPED_ENTITIES.has(row.entity)) return true;
+  if (
+    actor.role === "inspector" &&
+    ["violations", "building-violations", "priority-violations", "route-assignments"]
+      .includes(row.entity) &&
+    row.createdBy === actor.id
+  ) return true;
   return normalizeAssignment(row.state).assignedStaffId === actor.id;
 }
 
@@ -482,6 +509,11 @@ export function canReadEntityRecord(
   // here prevents synchronous consumers from accidentally bypassing the
   // supervisory scope boundary.
   if (isHrEntity(row.entity)) return false;
+  if (
+    row.entity === "building-violations" &&
+    isCpmSupervisor(actor) &&
+    row.state["cpmSupervisorId"] !== actor.id
+  ) return false;
   return !row.deleted &&
     canReadEntity(actor, row.entity) &&
     entityDevelopmentAllowed(actor, row.entity, row.development) &&
@@ -912,6 +944,19 @@ export function canPerformEntityAction(
       ["advance", "close"].includes(action);
   }
   if (entity === "manpower-requests") {
+    if (["start", "complete"].includes(action)) {
+      const requestedTrade = typeof state["requestedTrade"] === "string"
+        ? state["requestedTrade"].trim() : "";
+      const actorTrade = supervisedTradeForPosition(actor.position) ||
+        (actor.position === "Maintenance Worker" ? "Maintenance Worker" : actor.position);
+      const development = typeof state["development"] === "string"
+        ? state["development"].trim().toLowerCase() : "";
+      return ["worker", "inspector", "emergency"].includes(actor.role) &&
+        actorTrade === requestedTrade &&
+        (!development || actor.developments.some((item) =>
+          item.trim().toLowerCase() === development)) &&
+        canPerformAssignedWorkflowAction(actor, entity, action, state);
+    }
     if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     return (
       state["receiverSupervisorId"] === actor.id &&
@@ -949,11 +994,13 @@ export function canPerformEntityAction(
 
   if (entity === "procurement") {
     if (action === "submit") {
-      return actor.role === "inspector" && actor.position === "CPM";
+      // Only the exact CPM field position may submit a scope it owns.
+      return actor.role === "inspector" &&
+        actor.position === "CPM";
     }
-     if (action === "approve" || action === "reject") return isOrdinaryManagement(actor);
+      if (action === "approve" || action === "reject" || action === "handoff-inhouse") return isCpmSupervisor(actor);
      if (action === "return") {
-       return (isOrdinaryManagement(actor) && state["status"] === "submitted") ||
+        return (isCpmSupervisor(actor) && state["status"] === "submitted") ||
          (actor.role === "procurement" && state["status"] === "approved");
      }
     return (
@@ -982,6 +1029,7 @@ export function canPerformEntityAction(
   }
 
   if (entity === "building-violations") {
+    if (action === "handoff-cpm-supervisor") return isViolationAuthority(actor);
     if (["approve", "route", "clear"].includes(action)) return isViolationAuthority(actor);
     if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     return action === "complete" &&
@@ -1025,6 +1073,7 @@ export function canPerformEntityAction(
 
 const WORKFLOW_ENTITIES = new Set([
   "procurement",
+  "manpower-requests",
   "resident-reports",
   "building-violations",
   "leave-requests",
@@ -1135,6 +1184,7 @@ export function isValidEntityTransition(
     procurement: {
       submit: ["draft", "returned"],
       approve: ["submitted"],
+      "handoff-inhouse": ["submitted"],
       reject: ["submitted"],
       return: ["submitted", "approved"],
       broadcast: ["approved"],
@@ -1152,6 +1202,7 @@ export function isValidEntityTransition(
     },
     "building-violations": {
       approve: ["submitted"],
+      "handoff-cpm-supervisor": ["approved"],
       route: ["approved"],
       complete: ["routed"],
       clear: ["done"],
@@ -1161,6 +1212,8 @@ export function isValidEntityTransition(
     "manpower-requests": {
       assign: ["pending"],
       dispatch: ["assigned"],
+      start: ["dispatched"],
+      complete: ["in_progress"],
       release: ["assigned", "dispatched"],
     },
     "leave-requests": {
@@ -1280,14 +1333,47 @@ export function isHrProtectedField(field: string): boolean {
 export function serializeHrStaff<T extends Record<string, unknown>>(
   staff: T,
   includeHrNotes: boolean,
-): Omit<T, "code" | "sessionVersion" | "hrNotes"> & Partial<Pick<T, "hrNotes">> {
+): Omit<T, "code" | "sessionVersion" | "hrNotes"> &
+  Partial<Pick<T, "hrNotes">> & {
+    annualSalary?: number | null;
+    hourlyRate?: number | null;
+    totalAnnualSalary?: number | null;
+  } {
   const {
     code: _code,
     sessionVersion: _sessionVersion,
     hrNotes,
+    annualSalaryCents,
+    hourlyRateCents,
     ...safe
   } = staff;
-  return (includeHrNotes ? { ...safe, hrNotes } : safe) as Omit<T, "code" | "sessionVersion" | "hrNotes"> & Partial<Pick<T, "hrNotes">>;
+  if (!includeHrNotes) {
+    return safe as Omit<T, "code" | "sessionVersion" | "hrNotes"> &
+      Partial<Pick<T, "hrNotes">>;
+  }
+  const annualSalary = typeof annualSalaryCents === "number"
+    ? annualSalaryCents / 100
+    : null;
+  const hourlyRate = typeof hourlyRateCents === "number"
+    ? hourlyRateCents / 100
+    : null;
+  const totalAnnualSalary = annualSalary !== null && annualSalary > 0
+    ? annualSalary
+    : hourlyRate !== null && hourlyRate > 0
+      ? Math.round(hourlyRate * 2080 * 100) / 100
+      : annualSalary ?? hourlyRate;
+  return {
+    ...safe,
+    hrNotes,
+    annualSalary,
+    hourlyRate,
+    totalAnnualSalary,
+  } as Omit<T, "code" | "sessionVersion" | "hrNotes"> &
+    Partial<Pick<T, "hrNotes">> & {
+      annualSalary?: number | null;
+      hourlyRate?: number | null;
+      totalAnnualSalary?: number | null;
+    };
 }
 
 const HR_PROTECTED_FIELDS = new Set([
@@ -1297,6 +1383,12 @@ const HR_PROTECTED_FIELDS = new Set([
   "approvalPurpose",
   "status",
   "exitType",
+  "position",
+  "role",
+  "assignedDevelopments",
+  "annualSalary",
+  "hourlyRate",
+  "totalAnnualSalary",
 ]);
 
 export function canReadHrEntityRecord(

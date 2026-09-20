@@ -31,6 +31,7 @@ const TABLES: Array<{ table: string; entity: string; key: string; column?: 'stat
   { table: 'priority_violations', entity: 'priority-violations', key: 'id' },
   { table: 'route_assignments', entity: 'route-assignments', key: 'id' },
   { table: 'procurement', entity: 'procurement', key: 'id' },
+  { table: 'manpower_requests', entity: 'manpower-requests', key: 'id' },
   { table: 'procurement_bids', entity: 'procurement-bids', key: 'id' },
   { table: 'vendor_contacts', entity: 'vendor-contacts', key: 'id' },
   { table: 'vendor_quotes', entity: 'vendor-quotes', key: 'key' },
@@ -44,13 +45,13 @@ const TABLES: Array<{ table: string; entity: string; key: string; column?: 'stat
 const ROLE_ENTITIES: Record<string, Set<string>> = {
   administrator: new Set(TABLES.map((item) => item.entity)),
   management: new Set(TABLES.map((item) => item.entity)),
-  inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'hud-inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'priority-violations', 'route-assignments', 'procurement', 'global-settings']),
-  worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'violations', 'building-violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests', 'global-settings']),
+  inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'hud-inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes', 'project-notes', 'project-reviews', 'resident-reports', 'building-violations', 'manpower-requests', 'violations', 'priority-violations', 'route-assignments', 'procurement', 'global-settings']),
+  worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'building-violations', 'manpower-requests', 'violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests', 'global-settings']),
   vendor: new Set(['projects', 'project-scopes', 'project-notes', 'project-reviews', 'building-violations', 'route-assignments', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes']),
   resident: new Set(['resident-reports']),
   // Emergency devices only request the emergency tables. The server still
   // applies assignment filtering to each returned record.
-  emergency: new Set(['emergency-units', 'emergency-jobs']),
+  emergency: new Set(['emergency-units', 'emergency-jobs', 'manpower-requests']),
 };
 const PROJECT_KEYED = new Set(['checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes']);
 function normalizeLocalState(mapping: any, state: any) {

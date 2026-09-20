@@ -74,6 +74,9 @@ export default function TradeRequests() {
   const violationsQuery = useListEntityRecords("building-violations", undefined, {
     query: { queryKey: getListEntityRecordsQueryKey("building-violations"), refetchOnMount: "always" },
   });
+  const procurementQuery = useListEntityRecords("procurement", undefined, {
+    query: { queryKey: getListEntityRecordsQueryKey("procurement"), refetchOnMount: "always" },
+  });
   const { data: staff = [] } = useListStaff({ status: "approved" }, {
     query: {
       queryKey: getListStaffQueryKey({ status: "approved" }),
@@ -100,6 +103,9 @@ export default function TradeRequests() {
     [requestsQuery.data],
   );
   const selectedSource = sourceRecords.find((record) => record.id === sourceRecordId);
+  const procurementSources = useMemo(() => new Map(
+    (procurementQuery.data || []).map((record) => [record.id, record]),
+  ), [procurementQuery.data]);
   const selectedSourceSent = Boolean(selectedSource && sentSourceIds.has(selectedSource.id));
   const supervisors = useMemo(() => staff.filter((member) =>
     member.id !== actor?.id &&
@@ -223,20 +229,32 @@ export default function TradeRequests() {
               const state = request.state || {};
               const status = String(state.status || "pending");
               const isReceiver = state.receiverSupervisorId === actor?.id;
+              const source = String(state.sourceEntity || "");
+              const procurementSource = source === "procurement" ? procurementSources.get(String(state.sourceRecordId || "")) : undefined;
+              const sourceDescription = String(
+                state.sourceAddress || state.address || state.scope ||
+                procurementSource?.state?.address || procurementSource?.state?.scope || "",
+              );
+              const sourceTitle = String(
+                state.sourceTitle || procurementSource?.state?.address || procurementSource?.state?.scope || "Work request",
+              );
               return (
                 <div key={request.id} className="p-4">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold">{String(state.sourceTitle || "Work request")}</h3>
+                         <h3 className="font-semibold">{sourceTitle}</h3>
                         <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold capitalize text-primary">{statusLabel(status)}</span>
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {String(state.requestedTrade || "Trade")} · {request.development || "No development"}
                       </p>
-                      <p className="mt-1 text-sm">
+                       <p className="mt-1 text-sm">
                         Sent by {String(state.requestedByName || "Management")} to {String(state.receiverSupervisorName || "Supervisor")}
                       </p>
+                       <p className="mt-1 text-xs text-muted-foreground">
+                         Source: {source || "trade request"}{sourceDescription ? ` · ${sourceDescription}` : ""}
+                       </p>
                       {!!String(state.note || "") && <p className="mt-2 text-sm">{String(state.note)}</p>}
                       {!!String(state.assignedTo || "") && <p className="mt-2 text-sm font-medium">Assigned to {String(state.assignedTo)}</p>}
                     </div>
@@ -355,6 +373,7 @@ export default function TradeRequests() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
     </div>
   );
 }

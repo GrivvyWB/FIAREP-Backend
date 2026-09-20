@@ -50,6 +50,7 @@ import { getStoredPersona, setStoredPersona, evaluateAccess, Persona, hasModuleA
 import { useState } from 'react';
 import HRWorkspace from '@/pages/hr';
 import TradeRequests from '@/pages/trade-requests';
+import MyJobs from '@/pages/my-jobs';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -206,6 +207,7 @@ function AppRouter() {
           <Route path="/hr" component={HRRoute} />
           <Route path="/violations" component={ViolationsRoute} />
           <Route path="/trade-requests" component={TradeRequestsRoute} />
+          <Route path="/my-jobs" component={MyJobsRoute} />
           <Route path="/scope-review" component={ScopeReviewRoute} />
           <Route path="/scope-writing" component={ScopeWritingRoute} />
           <Route path="/procurement" component={Procurement} />
@@ -251,6 +253,7 @@ const TeamRoute = () => <ModuleRoute module="team"><Team /></ModuleRoute>;
 const HRRoute = () => <ModuleRoute module="hr"><HRWorkspace /></ModuleRoute>;
 const ViolationsRoute = () => <ModuleRoute module="violations"><Violations /></ModuleRoute>;
 const TradeRequestsRoute = () => <ModuleRoute module="trade-requests"><TradeRequests /></ModuleRoute>;
+const MyJobsRoute = () => <ModuleRoute module="my-jobs"><MyJobs /></ModuleRoute>;
 const ScopeReviewRoute = () => <ModuleRoute module="scope-review"><ScopeReview /></ModuleRoute>;
 const ScopeWritingRoute = () => <ModuleRoute module="scope-writing"><ScopeWriting /></ModuleRoute>;
 const EmergencyRoute = () => <ModuleRoute module="emergency"><Emergency /></ModuleRoute>;

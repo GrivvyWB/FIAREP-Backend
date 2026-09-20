@@ -1,8 +1,8 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, type BuildingViolation, type ResidentReport } from '../lib/store';
-import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
+import { getCurrentActor, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, listManpowerRequests, performEntityAction, type BuildingViolation, type ResidentReport, type ManpowerRequest } from '../lib/store';
+import { takePhotoWithGeo, pickPhotoWithGeo, uploadPhoto, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
@@ -18,7 +18,9 @@ export default function MyJobs() {
   const router = useRouter();
   const [jobs, setJobs] = useState<BuildingViolation[]>([]);
   const [resJobs, setResJobs] = useState<ResidentReport[]>([]);
+  const [inHouseJobs, setInHouseJobs] = useState<ManpowerRequest[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
+  const [inHouseOpenId, setInHouseOpenId] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [photos, setPhotos] = useState<PhotoEvidence[]>([]);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
@@ -38,6 +40,7 @@ export default function MyJobs() {
       const inMyDevs = (dev?: string) => { const d = (dev || '').trim().toLowerCase(); return !d || myDevs.length === 0 || myDevs.includes(d); };
       const all = await listResidentReports();
        setResJobs(all.filter((r) => r.status !== 'resolved' && r.assignedStaffId === a.id && inMyDevs(r.development)));
+       setInHouseJobs((await listManpowerRequests()).filter((r) => r.assignedStaffId === a.id && ['dispatched', 'in_progress'].includes(r.status) && inMyDevs(r.development)));
     });
   }, []);
   useFocusEffect(load);
@@ -100,7 +103,53 @@ export default function MyJobs() {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
       <Text style={ui.h}>My Jobs</Text>
-      <Text style={ui.label}>Repairs assigned to you. Open one, do the repair, then mark it done with a note and a photo.</Text>
+       <Text style={ui.label}>Repairs assigned to you. Open one, do the repair, then mark it done with a note and a photo.</Text>
+       {inHouseJobs.length > 0 && <>
+         <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>In-house procurement requests ({inHouseJobs.length})</Text>
+         {inHouseJobs.map((job) => <View key={job.id} style={[ui.card, { gap: 7, marginTop: 8 }]}>
+           <Text style={{ fontWeight: '700' }}>{job.requestedTrade} · {job.sourceTitle || 'Assigned work'}</Text>
+           <Text style={ui.listSub}>{job.development || 'Development not specified'} · {job.status}</Text>
+           {job.status === 'dispatched' && <Pressable style={ui.btn} onPress={async () => {
+             try { await performEntityAction('manpower-requests', job.id, 'start', {}); load(); }
+             catch (e: any) { Alert.alert('Could not start', e?.message || 'The server did not accept this action.'); }
+           }}><Text style={ui.btnText}>Start work</Text></Pressable>}
+           {job.status === 'in_progress' && inHouseOpenId !== job.id && <Pressable style={ui.btn} onPress={() => { setInHouseOpenId(job.id); setNote(''); setPhotos([]); }}>
+             <Text style={ui.btnText}>Complete work</Text>
+           </Pressable>}
+           {job.status === 'in_progress' && inHouseOpenId === job.id && <View style={{ gap: 8 }}>
+             <Text style={ui.label}>Completion note</Text>
+             <TextInput style={[ui.input, { minHeight: 60, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder="What was completed" multiline />
+             <Text style={ui.label}>Photo evidence of finished work</Text>
+             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+               {photos.map((photo, i) => <TouchableOpacity key={`${photo.uri}-${i}`} onPress={() => setViewerUri(photo.uri)}>
+                 <RemotePhoto localUri={photo.uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+               </TouchableOpacity>)}
+             </View>
+             <View style={{ flexDirection: 'row', gap: 8 }}>
+               <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={addTake}><Text style={ui.btnOutlineText}>Take photo</Text></Pressable>
+               <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={addPick}><Text style={ui.btnOutlineText}>Add from library</Text></Pressable>
+             </View>
+             <Pressable style={[ui.btn, busy && { opacity: 0.6 }]} disabled={busy} onPress={async () => {
+               if (!note.trim() || photos.length === 0) {
+                 Alert.alert('Evidence required', 'Add a completion note and at least one actual photo before completing this work.');
+                 return;
+               }
+               setBusy(true);
+               try {
+                 // Upload first; an offline/device upload failure must not be
+                 // presented as a successful completion.
+                 await Promise.all(photos.map((photo) => uploadPhoto(photo.uri, 'completion-photo', { entity: 'manpower-requests', recordId: job.id }, { capturedAt: photo.capturedAt, geo: photo.geo })));
+                 await performEntityAction('manpower-requests', job.id, 'complete', { completionNote: note.trim(), photoEvidence: photos });
+                 setInHouseOpenId(null); setNote(''); setPhotos([]); load();
+                 Alert.alert('Completed', 'The server accepted the completion and evidence.');
+               } catch (e: any) {
+                 Alert.alert('Could not complete', e?.message || 'The completion or evidence upload was not accepted.');
+               } finally { setBusy(false); }
+             }}><Text style={ui.btnText}>Submit completion</Text></Pressable>
+             <Pressable onPress={() => { setInHouseOpenId(null); setNote(''); setPhotos([]); }}><Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>Cancel</Text></Pressable>
+           </View>}
+         </View>)}
+       </>}
 
       {resJobs.length > 0 && (
         <>

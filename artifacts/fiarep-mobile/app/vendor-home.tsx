@@ -15,6 +15,7 @@ import type { VendorWalkthroughCheckIn } from '@workspace/api-client-react';
 
 const STATUS_LABEL: Record<ProcurementRequest['status'], string> = {
   draft: 'Draft',
+  returned: 'Returned for revision',
   submitted: 'Submitted',
   approved: 'Approved',
   pending: 'Pending',

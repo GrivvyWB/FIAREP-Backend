@@ -637,6 +637,21 @@ export interface Staff {
   position: StaffPosition;
   status: string;
   developments: string[];
+  /**
+     * HR/administrator compensation view; omitted from ordinary staff responses.
+     * @nullable
+     */
+  annualSalary?: number | null;
+  /**
+     * HR/administrator compensation view; omitted from ordinary staff responses.
+     * @nullable
+     */
+  hourlyRate?: number | null;
+  /**
+     * Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.
+     * @nullable
+     */
+  totalAnnualSalary?: number | null;
   canManage?: boolean;
   canResetCode?: boolean;
   canRevoke?: boolean;
@@ -686,6 +701,12 @@ export interface PlatformLicenseAudit {
 
 export type HRStaff = Staff & ({
   hrNotes?: string | null;
+  /** @nullable */
+  annualSalary?: number | null;
+  /** @nullable */
+  hourlyRate?: number | null;
+  /** @nullable */
+  totalAnnualSalary?: number | null;
   /**
      * @minLength 4
      * @maxLength 4
@@ -840,6 +861,20 @@ export interface StaffAssignmentUpdate {
   position: string;
   role: StaffAssignmentUpdateRole;
   developments: string[];
+  /**
+     * Optional nullable annual compensation in dollars; at most one of annualSalary or hourlyRate may be positive.
+     * @minimum 0
+     * @maximum 10000000
+     * @nullable
+     */
+  annualSalary?: number | null;
+  /**
+     * Optional nullable hourly compensation in dollars; at most one of annualSalary or hourlyRate may be positive.
+     * @minimum 0
+     * @maximum 10000000
+     * @nullable
+     */
+  hourlyRate?: number | null;
 }
 
 export interface StaffCodeUpdate { [key: string]: unknown }

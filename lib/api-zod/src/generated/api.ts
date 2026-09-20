@@ -199,6 +199,9 @@ export const LoginResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -239,6 +242,9 @@ export const ProcurementLoginResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -309,6 +315,9 @@ export const BootstrapAdministratorResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -344,6 +353,9 @@ export const RefreshSessionResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -373,6 +385,9 @@ export const GetCurrentStaffResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -757,6 +772,9 @@ export const ListStaffResponseItem = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -800,6 +818,9 @@ export const CreateStaffResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -840,6 +861,9 @@ export const ResetStaffCodeResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -869,6 +893,9 @@ export const ApproveStaffResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -904,6 +931,9 @@ export const UpdateStaffDevelopmentsResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -916,10 +946,20 @@ export const UpdateStaffAssignmentParams = zod.object({
   "id": zod.coerce.string()
 })
 
+export const updateStaffAssignmentBodyAnnualSalaryMin = 0;
+export const updateStaffAssignmentBodyAnnualSalaryMax = 10000000;
+
+export const updateStaffAssignmentBodyHourlyRateMin = 0;
+export const updateStaffAssignmentBodyHourlyRateMax = 10000000;
+
+
+
 export const UpdateStaffAssignmentBody = zod.object({
   "position": zod.string(),
   "role": zod.enum(['administrator', 'human_resources', 'management', 'worker', 'inspector', 'procurement', 'vendor', 'emergency']),
-  "developments": zod.array(zod.string())
+  "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().min(updateStaffAssignmentBodyAnnualSalaryMin).max(updateStaffAssignmentBodyAnnualSalaryMax).nullish().describe('Optional nullable annual compensation in dollars; at most one of annualSalary or hourlyRate may be positive.'),
+  "hourlyRate": zod.number().min(updateStaffAssignmentBodyHourlyRateMin).max(updateStaffAssignmentBodyHourlyRateMax).nullish().describe('Optional nullable hourly compensation in dollars; at most one of annualSalary or hourlyRate may be positive.')
 })
 
 export const UpdateStaffAssignmentResponse = zod.object({
@@ -932,6 +972,9 @@ export const UpdateStaffAssignmentResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -954,6 +997,9 @@ export const RevokeStaffResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -983,6 +1029,9 @@ export const GetHrWorkspaceResponse = zod.object({
   "position": zod.enum(['Borough Director', 'Regional Director', 'Assistant Regional Director', 'Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Supervisor Inspector', 'Plumbing Supervisor', 'Electrical Supervisor', 'Maintenance Supervisor', 'CPM Supervisor', 'Grounds Supervisor', 'Inspector', 'Plumber', 'Electrician', 'Maintenance Worker', 'Caretaker', 'Porter', 'Laborer', 'Groundskeeper', 'Administrative Staff', 'Other Support Staff', 'Human Resources', 'Assistant Property Manager', 'Housing Assistant', 'Janitorial Staff', 'CPM', 'Elevator Service', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Other']),
   "status": zod.string(),
   "developments": zod.array(zod.string()),
+  "annualSalary": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "hourlyRate": zod.number().nullish().describe('HR\/administrator compensation view; omitted from ordinary staff responses.'),
+  "totalAnnualSalary": zod.number().nullish().describe('Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.'),
   "canManage": zod.boolean().optional(),
   "canResetCode": zod.boolean().optional(),
   "canRevoke": zod.boolean().optional(),
@@ -990,6 +1039,9 @@ export const GetHrWorkspaceResponse = zod.object({
   "canApprove": zod.boolean().optional()
 }).and(zod.object({
   "hrNotes": zod.string().nullish(),
+  "annualSalary": zod.number().nullish(),
+  "hourlyRate": zod.number().nullish(),
+  "totalAnnualSalary": zod.number().nullish(),
   "code": zod.string().min(getHrWorkspaceResponseStaffItemTwoCodeMin).max(getHrWorkspaceResponseStaffItemTwoCodeMax).optional(),
   "codeVisibleUntil": zod.coerce.date().optional(),
   "codeEmailedAt": zod.coerce.date().nullish()

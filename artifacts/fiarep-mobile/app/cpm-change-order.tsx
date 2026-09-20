@@ -1,13 +1,16 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, Image, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { getCurrentActor, listProjects, listProcurementRequests, createChangeOrder } from '../lib/store';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { getCurrentActor, getCurrentPosition, listProjects, listProcurementRequests, createChangeOrder } from '../lib/store';
+import { useAppMode } from './_layout';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 
 export default function CpmChangeOrder() {
+  const router = useRouter();
+  const { mode } = useAppMode();
   const [addresses, setAddresses] = useState<string[]>([]);
   const [picker, setPicker] = useState(false);
   const [address, setAddress] = useState('');
@@ -16,6 +19,15 @@ export default function CpmChangeOrder() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [viewer, setViewer] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
+
+  useFocusEffect(useCallback(() => {
+    getCurrentPosition().then((position) => {
+       const allowed = position.trim().toLowerCase() === 'cpm';
+      if (!allowed) router.replace(mode === 'management' ? '/management-home' : '/cpm-home');
+      setAuthorized(allowed);
+    }).catch(() => router.replace(mode === 'management' ? '/management-home' : '/cpm-home'));
+  }, [mode, router]));
 
   const load = useCallback(() => {
     (async () => {
@@ -57,6 +69,7 @@ export default function CpmChangeOrder() {
     finally { setBusy(false); }
   }
 
+  if (!authorized) return null;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">

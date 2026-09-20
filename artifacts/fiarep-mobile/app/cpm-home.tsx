@@ -12,10 +12,27 @@ type Section = { heading: string; color: string; tiles: Tile[] };
 
 export default function CpmHome() {
   const router = useRouter();
-  const { refresh } = useAppMode();
+  const { mode, refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
-  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('inspector'); if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); setPosition(await getCurrentPosition()); })(); }, []));
+  useFocusEffect(useCallback(() => {
+    (async () => {
+      const a = await getCurrentActor();
+      const nextPosition = await getCurrentPosition();
+      const normalized = nextPosition.trim().toLowerCase();
+      let c = normalized === 'cpm supervisor' ? 0 : await unreadCount('inspector');
+      if (a.id) c += await unreadCount(a.id);
+      if (a.name) c += await unreadCount(a.name);
+      setUnread(c);
+      if (normalized !== 'cpm' && normalized !== 'cpm supervisor' && normalized !== 'inspector') {
+        router.replace(mode === 'management' ? '/management-home' : '/');
+        return;
+      }
+      setPosition(nextPosition);
+    })();
+  }, [mode, router]));
+  const normalizedPosition = position.trim().toLowerCase();
+  const isCpmSupervisor = normalizedPosition === 'cpm supervisor';
 
   async function onSignOut() {
     await logout();
@@ -28,19 +45,18 @@ export default function CpmHome() {
       heading: 'Inspections',
       color: '#1E7D4F',
       tiles: [
-        { label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone },
+        ...(!isCpmSupervisor ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
         { label: 'Projects', onPress: () => router.push('/'), tone: 'outline' as Tone },
-        ...(position === 'CPM' ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
+        ...(normalizedPosition === 'cpm' ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
         { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone },
-        { label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'outline' as Tone },
-        { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },
-        { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone },
+        ...(!isCpmSupervisor ? [{ label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'outline' as Tone }] : []),
+         ...(!isCpmSupervisor ? [{ label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone }, { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone }] : []),
       ],
     },
-    ...(position === 'CPM' ? [{
+    ...(normalizedPosition === 'cpm' ? [{
       heading: 'Scope',
       color: '#B4741A',
       tiles: [
@@ -58,7 +74,7 @@ export default function CpmHome() {
     },
   ];
 
-  const roleTitle = position === 'CPM' ? 'CPM' : position === 'Inspector' ? 'Inspector' : 'CPM / Inspector';
+  const roleTitle = normalizedPosition === 'cpm' ? 'CPM' : normalizedPosition === 'cpm supervisor' ? 'CPM Supervisor' : normalizedPosition === 'inspector' ? 'Inspector' : 'CPM / Inspector';
 
   return (
     <ScrollView contentContainerStyle={ui.wrap}>

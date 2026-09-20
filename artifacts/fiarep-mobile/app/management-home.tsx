@@ -29,10 +29,9 @@ export default function ManagementHome() {
   // may assign emergencies and register trucks. Everyone else (mgmt/supervisors)
   // gets a read-only Emergency Activity view for their development.
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
-  const ordinaryManagement = mode === 'management' &&
-    !['borough director', 'regional director', 'superintendent'].includes(_pos);
   const supervisorInspector = _pos === 'supervisor inspector';
   const canReviewInspections = supervisorInspector;
+  const cpmSupervisor = _pos === 'cpm supervisor';
   const director = _pos === 'borough director' || _pos === 'regional director';
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = isElevated ? await unreadCount('management') : 0; if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, [isElevated]));
 
@@ -59,13 +58,14 @@ export default function ManagementHome() {
       tiles: [
         ...(!restricted ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         { label: 'Assign a Job', onPress: () => router.push('/dispatch-job'), tone: 'solid' },
+        ...(isSup && !cpmSupervisor ? [{ label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone }] : []),
         { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' },
         ...(!restricted ? [{ label: 'Staff Member Jobs', onPress: () => router.push('/worker'), tone: 'tint' as Tone }] : []),
         ...(emergencyAdmin ? [{ label: 'Assign Emergency Unit', onPress: () => router.push('/assign-emergency'), tone: 'tint' as Tone }, { label: 'Manage Trucks', onPress: () => router.push('/manage-trucks'), tone: 'tint' as Tone }, { label: 'Truck Scores', onPress: () => router.push('/truck-scores'), tone: 'tint' as Tone }] : []),
         { label: 'Emergency Activity', onPress: () => router.push('/emergency-activity'), tone: 'tint' },
         ...(!restricted && _pos !== 'borough director' ? [{ label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' as Tone }] : []),
-        { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' },
-        { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' },
+         ...(!cpmSupervisor ? [{ label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' as Tone }, { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' as Tone }] : []),
+        ...(cpmSupervisor ? [{ label: 'CPM Supervisor', onPress: () => router.push('/scope-review'), tone: 'solid' as Tone }] : []),
         ...(position === 'Elevator Supervisor' ? [{ label: 'Elevator Dashboard', onPress: () => router.push('/elevator-dashboard'), tone: 'tint' as Tone }] : []),
       ],
     },
@@ -73,7 +73,6 @@ export default function ManagementHome() {
       heading: 'Purchasing',
       color: '#B4741A',
       tiles: restricted ? [] : [
-        ...(ordinaryManagement ? [{ label: 'Scope Review', onPress: () => router.push('/scope-review'), tone: 'solid' as Tone }] : []),
         { label: 'Change Orders', onPress: () => router.push('/change-orders'), tone: 'outline' as Tone },
         { label: 'Vendor Score', onPress: () => router.push('/contractor-scores'), tone: 'tint' as Tone },
         { label: 'Development Scores', onPress: () => router.push('/dev-scores'), tone: 'tint' as Tone },

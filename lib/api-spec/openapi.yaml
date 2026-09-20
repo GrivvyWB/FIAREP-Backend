@@ -1856,6 +1856,15 @@ components:
         developments:
           type: array
           items: { type: string }
+        annualSalary:
+          type: ["number", "null"]
+          description: HR/administrator compensation view; omitted from ordinary staff responses.
+        hourlyRate:
+          type: ["number", "null"]
+          description: HR/administrator compensation view; omitted from ordinary staff responses.
+        totalAnnualSalary:
+          type: ["number", "null"]
+          description: Annual salary when set, otherwise hourly rate multiplied by 2080; at most one of annualSalary or hourlyRate may be positive.
         canManage: { type: boolean }
         canResetCode: { type: boolean }
         canRevoke: { type: boolean }
@@ -1867,6 +1876,9 @@ components:
         - type: object
           properties:
             hrNotes: { type: string, nullable: true }
+            annualSalary: { type: ["number", "null"] }
+            hourlyRate: { type: ["number", "null"] }
+            totalAnnualSalary: { type: ["number", "null"] }
             code: { type: string, minLength: 4, maxLength: 4 }
             codeVisibleUntil: { type: string, format: date-time }
             codeEmailedAt: { type: string, format: date-time, nullable: true }
@@ -1956,6 +1968,16 @@ components:
         developments:
           type: array
           items: { type: string }
+        annualSalary:
+          type: ["number", "null"]
+          minimum: 0
+          maximum: 10000000
+          description: Optional nullable annual compensation in dollars; at most one of annualSalary or hourlyRate may be positive.
+        hourlyRate:
+          type: ["number", "null"]
+          minimum: 0
+          maximum: 10000000
+          description: Optional nullable hourly compensation in dollars; at most one of annualSalary or hourlyRate may be positive.
     StaffCodeUpdate:
       type: object
       additionalProperties: false

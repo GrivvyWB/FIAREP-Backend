@@ -83,7 +83,7 @@ async function rotateActorCache(staff: Staff) {
   ) as { value: string } | null;
   const cacheChanged = Boolean(prior?.value && prior.value !== fingerprint);
   if (cacheChanged) {
-    for (const table of ['projects','rooms','checklists','roofplans','inspections','cost_estimates','intakes','elevators','resident_reports','violations','building_violations','priority_violations','route_assignments','procurement','procurement_bids','vendor_contacts','vendor_quotes','change_orders','elevator_jobs','emergency_jobs','emergency_units','leave_requests']) {
+    for (const table of ['projects','rooms','checklists','roofplans','inspections','cost_estimates','intakes','elevators','resident_reports','violations','building_violations','priority_violations','route_assignments','procurement','manpower_requests','procurement_bids','vendor_contacts','vendor_quotes','change_orders','elevator_jobs','emergency_jobs','emergency_units','leave_requests']) {
       try { await d.runAsync(`DELETE FROM ${table}`); } catch {}
     }
   }
@@ -156,6 +156,9 @@ export async function db() {
       key TEXT PRIMARY KEY NOT NULL, value TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS global_settings (
+      id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS manpower_requests (
       id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL
     );
     CREATE TABLE IF NOT EXISTS checklists (
@@ -1112,7 +1115,7 @@ export async function setRolePin(role: StaffRole, pin: string): Promise<void> {
 
 export type StaffStatus = 'pending' | 'approved' | 'revoked';
 
-export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Supervisor Inspector', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Superintendent Ⓔ'] as const;
+export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Supervisor Inspector', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'CPM Supervisor', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Superintendent Ⓔ'] as const;
 export type StaffPosition = typeof STAFF_POSITIONS[number] | 'Other';
 /** User-facing label for the legacy catch-all position. Keep stored/API value compatible. */
 export function displayStaffPosition(position?: string): string {
@@ -2602,12 +2605,13 @@ export async function developmentsForManager(name: string): Promise<string[]> {
 // procurement with a tracking id and address. Procurement clears it and sends
 // it back to the same supervisor, same id and address, with the winning vendor.
 
-export type ProcurementStatus = 'draft' | 'submitted' | 'approved' | 'pending' | 'bidding' | 'awarded' | 'closed';
+export type ProcurementStatus = 'draft' | 'returned' | 'submitted' | 'approved' | 'pending' | 'bidding' | 'awarded' | 'closed';
 
 export type ProcurementRequest = {
   id: string;
   trackingId: string;
   projectId: string;
+  development?: string;
   address: string;
   scope: string;
   status: ProcurementStatus;
@@ -2619,7 +2623,9 @@ export type ProcurementRequest = {
   approvedBy?: string;
   approvedAt?: string;
   returnNote?: string;
+  reviewNote?: string;
   returnedAt?: string;
+  rejectAt?: string;
   vendor?: string;
   awardedBy?: string;
   awardedAt?: string;
@@ -2632,12 +2638,44 @@ export type ProcurementRequest = {
   deductionReason?: string;
   finalAmount?: number;
   cpmNotes?: string;  // CPM's own notes, separate from the inspector's violation notes
+  sourceEntity?: string;
+  sourceRecordId?: string;
+  sourceTitle?: string;
+  violationNo?: string;
+  violationNotes?: string;
   closedAt?: string;
   walkthroughAt?: string;
   walkthroughNote?: string;
   bidCloseAt?: string;
   walkthroughCheckIns?: VendorWalkthroughCheckIn[];
 };
+
+export type ManpowerRequest = {
+  id: string;
+  status: 'pending' | 'assigned' | 'dispatched' | 'in_progress' | 'completed' | 'released';
+  requestedTrade: string;
+  receiverSupervisorId: string;
+  sourceEntity: string;
+  sourceRecordId: string;
+  sourceTitle?: string;
+  development?: string;
+  assignedStaffId?: string;
+  assignedTo?: string;
+  [key: string]: any;
+};
+
+async function ensureManpowerTable(d: any) {
+  try { await d.execAsync('CREATE TABLE IF NOT EXISTS manpower_requests (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch {}
+}
+
+export async function listManpowerRequests(): Promise<ManpowerRequest[]> {
+  const d = await db();
+  await ensureManpowerTable(d);
+  const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM manpower_requests');
+  return rows.flatMap((row) => {
+    try { return [JSON.parse(row.state) as ManpowerRequest]; } catch { return []; }
+  });
+}
 
 export type VendorPerformance = 'good' | 'fair' | 'poor';
 
@@ -2649,30 +2687,45 @@ async function ensureDraftOnServer(r: ProcurementRequest): Promise<ProcurementRe
   if (!(await getAccessToken())) {
     throw new Error('Submit requires an online connection. Save the draft and reconnect before submitting.');
   }
-  const data = {
-    id: r.id,
-    projectId: r.projectId || undefined,
-    state: { ...r, status: 'draft' },
-    version: 1,
-  } as any;
-  try {
-    const created = await createEntityRecord('procurement', data);
-    const localDb = await db();
-    await localDb.runAsync("DELETE FROM sync_queue WHERE entity=? AND id=?", "procurement", r.id);
-    return { ...(created.state as object), id: created.id } as ProcurementRequest;
-  } catch (error: any) {
-    if (error?.status !== 409 && error?.status !== 404) throw error;
-    const version = Number((r as any)?._meta?.serverVersion || 0);
-    if (!version) throw new Error('Could not synchronize the draft before submission. Reconnect and try again.');
+  const version = Number((r as any)?._meta?.serverVersion || 0);
+  const editable = {
+    address: r.address,
+    scope: r.scope,
+    scopeFile: r.scopeFile,
+    scopeFileName: r.scopeFileName,
+    cpmNotes: r.cpmNotes,
+  };
+  if (version) {
     const updated = await updateEntityRecord('procurement', r.id, {
       id: r.id,
-      state: { ...r, status: 'draft' },
+      state: editable,
       version,
     } as any);
     const localDb = await db();
     await localDb.runAsync("DELETE FROM sync_queue WHERE entity=? AND id=?", "procurement", r.id);
     return { ...(updated.state as object), id: updated.id } as ProcurementRequest;
   }
+  const data = {
+    id: r.id,
+    projectId: r.projectId || undefined,
+    development: r.development || undefined,
+    state: { ...r, status: 'draft' },
+    version: 1,
+  } as any;
+  // A newly-created local draft has no server version, so create it once. Do
+  // not use POST as an update path: the API may return 200 for an existing
+  // record, in which case the latest local edits must still be PATCHed below.
+  const created = await createEntityRecord('procurement', data);
+  const createdVersion = Number((created as any).version || (created.state as any)?._meta?.serverVersion || 0);
+  if (!createdVersion) throw new Error('Could not synchronize the draft before submission. Reconnect and try again.');
+  const updated = await updateEntityRecord('procurement', r.id, {
+    id: r.id,
+    state: editable,
+    version: createdVersion,
+  } as any);
+  const localDb = await db();
+  await localDb.runAsync("DELETE FROM sync_queue WHERE entity=? AND id=?", "procurement", r.id);
+  return { ...(updated.state as object), id: updated.id } as ProcurementRequest;
 }
 
 function newTrackingId(): string {
@@ -2691,10 +2744,27 @@ export async function createProcurementRequest(
 ): Promise<ProcurementRequest> {
   const d = await db();
   await ensureProcurementTable(d);
+  const developmentRow = await d.getFirstAsync<{ value: string }>(
+    'SELECT value FROM settings WHERE key = ?',
+    'auth_developments',
+  );
+  let assignedDevelopments: string[] = [];
+  try {
+    assignedDevelopments = developmentRow?.value
+      ? JSON.parse(developmentRow.value).filter((value: unknown): value is string => typeof value === 'string' && Boolean(value.trim()))
+      : [];
+  } catch {
+    assignedDevelopments = [];
+  }
+  const development = projectId.trim() ? undefined : assignedDevelopments[0]?.trim();
+  if (!projectId.trim() && !development) {
+    throw new Error('An assigned development is required to create a scope.');
+  }
   const r: ProcurementRequest = {
     id: uid(),
     trackingId: '',
     projectId: (projectId || '').trim(),
+    development,
     address: (address || '').trim(),
     scope: (scope || '').trim(),
     scopeFile: (scopeFile || '').trim() || undefined,
@@ -2728,6 +2798,29 @@ export async function updateScopeDraft(
   r.scope = (scope || '').trim();
   if (cpmNotes !== undefined) r.cpmNotes = cpmNotes.trim() || undefined;
   await d.runAsync('UPDATE procurement SET state=? WHERE id=?', JSON.stringify(r), r.id);
+  if (await getAccessToken()) {
+    const version = Number((r as any)?._meta?.serverVersion || 0);
+    if (version) {
+      const updated = await updateEntityRecord('procurement', r.id, {
+        id: r.id,
+        state: {
+          address: r.address,
+          scope: r.scope,
+          scopeFile: r.scopeFile,
+          scopeFileName: r.scopeFileName,
+          cpmNotes: r.cpmNotes,
+        },
+        version,
+      } as any);
+      const server = { ...(updated.state as object), id: updated.id } as ProcurementRequest;
+      await d.runAsync('UPDATE procurement SET state=? WHERE id=?', JSON.stringify(server), r.id);
+      await d.runAsync("DELETE FROM sync_queue WHERE entity=? AND id=?", "procurement", r.id);
+      return server;
+    }
+    await queueMutation('procurement', r.id, r);
+  } else {
+    await queueMutation('procurement', r.id, r);
+  }
   return r;
 }
 
@@ -2938,11 +3031,16 @@ export async function rejectScope(id: string, note: string = ''): Promise<Procur
 // Scopes returned to a specific CPM for revision: drafts that carry a
 // returnedAt marker. New unsent drafts have no returnedAt and are excluded.
 export async function listReturnedScopes(cpmName: string): Promise<ProcurementRequest[]> {
-  const nm = (cpmName || '').trim().toLowerCase();
-  const all = await listProcurementRequests('draft');
+  if (await getAccessToken()) {
+    await import('./sync').then(({ syncAllEntities }) => syncAllEntities()).catch(() => undefined);
+  }
+  const all = await listProcurementRequests('returned');
   return all
-    .filter(r => !!r.returnedAt && (r.requestedBy || '').trim().toLowerCase() === nm)
-    .sort((a, b) => (b.returnedAt || '').localeCompare(a.returnedAt || ''));
+    .map((r) => ({
+      ...r,
+      returnNote: r.reviewNote || r.returnNote,
+    }))
+    .sort((a, b) => (b.rejectAt || b.requestedAt || '').localeCompare(a.rejectAt || a.requestedAt || ''));
 }
 
 export async function listProcurementRequests(status?: ProcurementStatus): Promise<ProcurementRequest[]> {
@@ -3669,7 +3767,7 @@ export function sortByUrgency(list: ResidentReport[], now: Date = new Date()): R
 // Inspector is sent a building + violation number by their supervisor, walks
 // the building, and logs each violation they find: code, description, the
 // hazard class they assign (A/B/C), and free-text notes. Stored per building.
-export type BuildingViolationStatus = 'logged' | 'approved' | 'routed' | 'done';
+export type BuildingViolationStatus = 'logged' | 'approved' | 'routed' | 'cpm_review' | 'done';
 export type BuildingViolation = {
   id: string;
   building: string;        // address / building identifier
@@ -3681,6 +3779,7 @@ export type BuildingViolation = {
   photos?: string[];
   loggedBy: string;
   loggedAt: string;
+  development?: string;
   // Workflow chain: inspector logs -> management approves -> routes to a staff
   // member (CPM builds a scope; a trade does the work). Data carries forward.
   status?: BuildingViolationStatus;
@@ -3729,6 +3828,7 @@ export async function addBuildingViolation(
     photos: Array.isArray(photos) ? photos : [],
     loggedBy: (a && a.name) || '',
     loggedAt: new Date().toISOString(),
+    development: ((a as any)?.developments || []).length === 1 ? (a as any).developments[0] : undefined,
     status: 'logged',
   };
   await d.runAsync('INSERT INTO building_violations (id,state) VALUES (?,?)', v.id, JSON.stringify(v));
@@ -3738,6 +3838,40 @@ export async function addBuildingViolation(
     v.building + '  \u00b7 ' + v.violationNo + '  (Class ' + v.hazardClass + ')', v.id);
   await logAudit('inspector', v.loggedBy, 'Inspection logged', v.building + ' \u00b7 ' + v.violationNo + ' (Class ' + v.hazardClass + ')', v.id);
   return v;
+}
+
+// Supervisor Inspector sends an already-approved violation to one exact CPM
+// Supervisor. The API remains authoritative for role/development eligibility;
+// the local mutation makes the handoff visible immediately while offline.
+export async function handoffViolationToCpmSupervisor(
+  id: string,
+  receiverSupervisorId: string,
+): Promise<BuildingViolation | null> {
+  const d = await db();
+  await ensureBuildingViolTable(d);
+  const actor = await getCurrentActor();
+  const position = (await getCurrentPosition()).trim().toLowerCase();
+  if (actor.role !== 'management' || position !== 'supervisor inspector') {
+    throw new Error('Only a Supervisor Inspector may send violations to a CPM Supervisor.');
+  }
+  if (!receiverSupervisorId.trim()) throw new Error('Select an approved CPM Supervisor.');
+  const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM building_violations WHERE id=?', id);
+  if (!row) throw new Error('Violation was not found.');
+  let v: BuildingViolation;
+  try { v = JSON.parse(row.state) as BuildingViolation; } catch { throw new Error('Violation data is invalid.'); }
+  if (v.status === 'cpm_review') throw new Error('This violation was already sent to a CPM Supervisor.');
+  if (v.status !== 'routed') throw new Error('Approve and route this violation before sending it to a CPM Supervisor.');
+  const next = { ...v, status: 'cpm_review' as const, routedAt: v.routedAt || new Date().toISOString() };
+  await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(next), id);
+  await queueMutation('building-violations', id, next);
+  try {
+    await performEntityAction('building-violations', id, 'handoff-cpm-supervisor', { receiverSupervisorId: receiverSupervisorId.trim() });
+  } catch {
+    const queued = { ...next, _pendingWorkflowActions: [{ action: 'handoff-cpm-supervisor', body: { receiverSupervisorId: receiverSupervisorId.trim() } }] };
+    await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(queued), id);
+    await queueMutation('building-violations', id, queued);
+  }
+  return next;
 }
 
 // Management approves a logged inspection, then routes it to a specific staff
@@ -3814,7 +3948,7 @@ export async function listActiveInspections(): Promise<BuildingViolation[]> {
   await ensureBuildingViolTable(d);
   const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
   const items = rows.map((r: any) => { try { return JSON.parse(r.state) as BuildingViolation; } catch { return null; } }).filter(Boolean) as BuildingViolation[];
-  return items.filter(v => v.status === 'routed' || v.status === 'done')
+  return items.filter(v => v.status === 'routed' || v.status === 'cpm_review' || v.status === 'done')
     .sort((a, b) => (b.routedAt || b.loggedAt || '').localeCompare(a.routedAt || a.loggedAt || ''));
 }
 

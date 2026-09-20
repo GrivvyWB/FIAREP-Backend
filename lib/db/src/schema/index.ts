@@ -35,6 +35,8 @@ export const staffAccounts = pgTable(
     createdBy: text("created_by"),
     issuerName: text("issuer_name"),
     hrNotes: text("hr_notes"),
+    annualSalaryCents: integer("annual_salary_cents"),
+    hourlyRateCents: integer("hourly_rate_cents"),
     sessionVersion: integer("session_version").notNull().default(1),
     requestedAt: timestamp("requested_at", { withTimezone: true }),
     ...timestamps,
@@ -43,6 +45,9 @@ export const staffAccounts = pgTable(
     uniqueIndex("staff_login_unique").on(table.tenantId, table.name, table.code),
     index("staff_tenant_idx").on(table.tenantId),
     index("staff_status_idx").on(table.status),
+    check("staff_annual_salary_range", sql`${table.annualSalaryCents} IS NULL OR (${table.annualSalaryCents} >= 0 AND ${table.annualSalaryCents} <= 1000000000)`),
+    check("staff_hourly_rate_range", sql`${table.hourlyRateCents} IS NULL OR (${table.hourlyRateCents} >= 0 AND ${table.hourlyRateCents} <= 1000000000)`),
+    check("staff_single_compensation_mode", sql`NOT (COALESCE(${table.annualSalaryCents}, 0) > 0 AND COALESCE(${table.hourlyRateCents}, 0) > 0)`),
   ],
 );
 

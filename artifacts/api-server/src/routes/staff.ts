@@ -11,7 +11,7 @@ import {
   organizations,
   organizationProperties,
 } from "@workspace/db";
-import { audit, notify } from "../lib/audit";
+import { audit, auditInTransaction, notify } from "../lib/audit";
 import {
   STAFF_POSITIONS,
   canIssueStaffAccountRole,
@@ -858,6 +858,24 @@ router.put("/v1/staff/:id/developments", async (req, res) => {
   }
   const updated = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`staff-assignment:${actor.tenantId}:${target.id}`}))`);
+    const [currentTarget] = await tx
+      .select()
+      .from(staffAccounts)
+      .where(and(
+        eq(staffAccounts.id, target.id),
+        eq(staffAccounts.tenantId, actor.tenantId),
+      ))
+      .limit(1);
+    if (
+      !currentTarget ||
+      currentTarget.position !== target.position ||
+      currentTarget.role !== target.role ||
+      currentTarget.annualSalaryCents !== target.annualSalaryCents ||
+      currentTarget.hourlyRateCents !== target.hourlyRateCents ||
+      JSON.stringify(currentTarget.developments) !== JSON.stringify(target.developments)
+    ) {
+      throw new StaffAssignmentIntegrityError();
+    }
     const linkedHrRows = await tx
       .select()
       .from(entityRecords)
@@ -917,7 +935,13 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
     return;
   }
   const input = req.body && typeof req.body === "object"
-    ? req.body as { position?: unknown; role?: unknown; developments?: unknown }
+    ? req.body as {
+      position?: unknown;
+      role?: unknown;
+      developments?: unknown;
+      annualSalary?: unknown;
+      hourlyRate?: unknown;
+    }
     : {};
   const position = typeof input.position === "string" ? input.position.trim() : "";
   const role = typeof input.role === "string" ? input.role.trim() : "";
@@ -926,6 +950,25 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
       (item: unknown): item is string => typeof item === "string",
     ).map((item) => item.trim()).filter(Boolean))]
     : null;
+  const hasAnnualSalary = Object.prototype.hasOwnProperty.call(input, "annualSalary");
+  const hasHourlyRate = Object.prototype.hasOwnProperty.call(input, "hourlyRate");
+  const parseCompensation = (value: unknown): number | null | undefined => {
+    if (value === null) return null;
+    if (value === undefined) return undefined;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 ||
+      value > 10_000_000) return undefined;
+    const cents = Math.round(value * 100);
+    return Number.isSafeInteger(cents) ? cents : undefined;
+  };
+  const annualSalaryCents = hasAnnualSalary
+    ? parseCompensation(input.annualSalary) : undefined;
+  const hourlyRateCents = hasHourlyRate
+    ? parseCompensation(input.hourlyRate) : undefined;
+  if ((hasAnnualSalary && annualSalaryCents === undefined) ||
+    (hasHourlyRate && hourlyRateCents === undefined)) {
+    res.status(400).json({ error: "Compensation must be a finite, nonnegative amount no greater than $10,000,000" });
+    return;
+  }
   if (
     !position ||
     !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number]) ||
@@ -949,6 +992,12 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
   }
   if (!canManageStaff(actor, target)) {
     res.status(403).json({ error: "Not allowed to change this staff member" });
+    return;
+  }
+  const nextAnnualSalaryCents = hasAnnualSalary ? annualSalaryCents! : target.annualSalaryCents;
+  const nextHourlyRateCents = hasHourlyRate ? hourlyRateCents! : target.hourlyRateCents;
+  if ((nextAnnualSalaryCents ?? 0) > 0 && (nextHourlyRateCents ?? 0) > 0) {
+    res.status(400).json({ error: "Set at most one positive compensation amount" });
     return;
   }
   const developmentRequiredPositions = new Set([
@@ -981,6 +1030,24 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
   }
   const updated = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`staff-assignment:${actor.tenantId}:${target.id}`}))`);
+    const [currentTarget] = await tx
+      .select()
+      .from(staffAccounts)
+      .where(and(
+        eq(staffAccounts.id, target.id),
+        eq(staffAccounts.tenantId, actor.tenantId),
+      ))
+      .limit(1);
+    if (
+      !currentTarget ||
+      currentTarget.position !== target.position ||
+      currentTarget.role !== target.role ||
+      currentTarget.annualSalaryCents !== target.annualSalaryCents ||
+      currentTarget.hourlyRateCents !== target.hourlyRateCents ||
+      JSON.stringify(currentTarget.developments) !== JSON.stringify(target.developments)
+    ) {
+      throw new StaffAssignmentIntegrityError();
+    }
     const linkedHrRows = await tx
       .select()
       .from(entityRecords)
@@ -994,7 +1061,14 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
     const now = new Date();
     const [staff] = await tx
       .update(staffAccounts)
-      .set({ position, role, developments, updatedAt: now })
+      .set({
+        position,
+        role,
+        developments,
+        ...(hasAnnualSalary ? { annualSalaryCents: nextAnnualSalaryCents } : {}),
+        ...(hasHourlyRate ? { hourlyRateCents: nextHourlyRateCents } : {}),
+        updatedAt: now,
+      })
       .where(and(
         eq(staffAccounts.id, target.id),
         eq(staffAccounts.tenantId, actor.tenantId),
@@ -1017,6 +1091,13 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
       eq(entityRecords.tenantId, actor.tenantId),
     )).returning({ id: entityRecords.id });
     if (!hrRecord) throw new StaffAssignmentIntegrityError();
+    await auditInTransaction(
+      tx,
+      actor,
+      "staff.assignment_updated",
+      `Changed ${target.name} position from ${currentTarget.position} to ${position} (${role}) in ${developments.length ? developments.join(", ") : "no assigned developments"}`,
+      target.id,
+    );
     return staff;
   }).catch((error: unknown) => {
     if (error instanceof StaffAssignmentIntegrityError) return null;
@@ -1026,12 +1107,6 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
     res.status(409).json({ error: "Staff assignment requires exactly one linked HR employee record" });
     return;
   }
-  await audit(
-    actor,
-    "staff.assignment_updated",
-    `Updated ${target.name} assignment to ${position} (${role}) in ${developments.length ? developments.join(", ") : "no assigned developments"}`,
-    target.id,
-  );
   res.json(safe(updated, actor));
 });
 

@@ -188,6 +188,7 @@ function AdministratorStack() {
       <Stack.Screen name="admin-home" options={{ title: 'Administrator', headerBackVisible: false }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
+      <Stack.Screen name="in-house-assignments" options={{ title: 'In-house assignments' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="admin-job" options={{ title: 'Add Job' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
@@ -265,6 +266,7 @@ function ManagementStack() {
   return (
     <Stack initialRouteName="management-home">
       <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false }} />
+      <Stack.Screen name="cpm-home" options={{ title: 'CPM Supervisor', headerBackVisible: false }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
       <Stack.Screen name="index" options={{ title: 'Projects' }} />
@@ -301,7 +303,9 @@ function ManagementStack() {
       <Stack.Screen name="emergency-activity" options={{ title: 'Emergency Activity' }} />
       <Stack.Screen name="elevator-dashboard" options={{ title: 'Elevator Dashboard' }} />
       <Stack.Screen name="inspection-approvals" options={{ title: 'Inspection Approvals' }} />
-      <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
+      <Stack.Screen name="scope-review" options={{ title: 'CPM Supervisor Scope Review' }} />
+      <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
+      <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="assign-route" options={{ title: 'Assign a Route' }} />
     </Stack>
   );

@@ -35,6 +35,7 @@ import {
   isHrProtectedField,
   serializeHrStaff,
   serializeStaffIssueResponse,
+  isCpmSupervisor,
 } from "./domain";
 
 function actor(overrides: Partial<Actor> = {}): Actor {
@@ -187,20 +188,29 @@ test("HR linkage and workflow fields cannot be patched directly", () => {
     sessionVersion: 3,
     hrNotes: "restricted",
     name: "Employee",
+    annualSalaryCents: null,
+    hourlyRateCents: 2550,
   }, false);
   assert.equal("code" in managementView, false);
   assert.equal("sessionVersion" in managementView, false);
   assert.equal("hrNotes" in managementView, false);
+  assert.equal("annualSalaryCents" in managementView, false);
+  assert.equal("hourlyRateCents" in managementView, false);
+  assert.equal("totalAnnualSalary" in managementView, false);
   const hrView = serializeHrStaff({
     id: "staff-1",
     code: "AB12",
     sessionVersion: 3,
     hrNotes: "restricted",
     name: "Employee",
+    annualSalaryCents: null,
+    hourlyRateCents: 2550,
   }, true);
   assert.equal("code" in hrView, false);
   assert.equal("sessionVersion" in hrView, false);
   assert.equal(hrView.hrNotes, "restricted");
+  assert.equal(hrView.hourlyRate, 25.5);
+  assert.equal(hrView.totalAnnualSalary, 53040);
   const administratorView = serializeHrStaff({
     id: "staff-1",
     code: "AB12",
@@ -209,6 +219,10 @@ test("HR linkage and workflow fields cannot be patched directly", () => {
     name: "Employee",
   }, true);
   assert.equal(administratorView.hrNotes, "restricted");
+  assert.equal(isHrProtectedField("position"), true);
+  assert.equal(isHrProtectedField("assignedDevelopments"), true);
+  assert.equal(isHrProtectedField("annualSalary"), true);
+  assert.equal(isHrProtectedField("hourlyRate"), true);
   const issuedView = serializeStaffIssueResponse({
     id: "staff-1",
     code: "AB12",
@@ -555,7 +569,7 @@ test("ordinary staff can read only their own leave requests", () => {
   );
 });
 
-test("procurement file access remains isolated from administrator and Borough Director roles", () => {
+test("procurement scopes are isolated from ordinary management and administrators", () => {
   const procurement = {
     entity: "procurement",
     development: "Development A",
@@ -563,7 +577,11 @@ test("procurement file access remains isolated from administrator and Borough Di
     createdBy: "cpm-1",
     deleted: false,
   };
-  assert.equal(canReadEntityRecord(actor(), procurement), true);
+  assert.equal(canReadEntity(actor(), "procurement"), false);
+  assert.equal(canReadEntityRecord(actor(), procurement), false);
+  const cpm = actor({ id: "cpm-1", role: "inspector", position: "CPM" });
+  assert.equal(canReadEntity(cpm, "procurement"), true);
+  assert.equal(canReadEntityRecord(cpm, procurement), true);
   assert.equal(
     canReadEntityRecord(
       actor({ role: "administrator", position: "Administrator" }),
@@ -581,7 +599,7 @@ test("procurement file access remains isolated from administrator and Borough Di
   assert.equal(
     canUploadToEntityRecord(actor(), procurement),
     false,
-    "ordinary management can read a submitted scope but cannot attach procurement files",
+    "ordinary management cannot read or attach procurement files",
   );
 });
 
@@ -615,8 +633,76 @@ test("procurement entity boundary is role- and ownership-specific", () => {
   assert.equal(canDeleteEntity(procurement, "procurement", {}), false);
 });
 
+test("CPM Supervisors review submitted procurement scopes but cannot author or submit them", () => {
+  const supervisor = actor({
+    role: "management",
+    position: "CPM Supervisor",
+    developments: ["Development A"],
+  });
+  assert.equal(isCpmSupervisor(supervisor), true);
+  assert.equal(canCreateEntity(supervisor, "procurement"), false);
+  assert.equal(canReadEntity(supervisor, "procurement"), true);
+  assert.equal(canMutateEntity(supervisor, "procurement"), false);
+  assert.equal(canReadEntity(supervisor, "procurement-bids"), false);
+  assert.equal(canReadEntity(supervisor, "vendor-quotes"), false);
+
+  const ownDraft = {
+    entity: "procurement",
+    development: "Development A",
+    state: { status: "draft" },
+    createdBy: supervisor.id,
+    deleted: false,
+  };
+  const otherDraft = { ...ownDraft, createdBy: "another-cpm" };
+  const submitted = { ...ownDraft, state: { status: "submitted" } };
+  const outOfCoverage = { ...submitted, development: "Development B" };
+  assert.equal(canReadEntityRecord(supervisor, ownDraft), false);
+  assert.equal(canReadEntityRecord(supervisor, otherDraft), false);
+  assert.equal(canReadEntityRecord(supervisor, submitted), true);
+  assert.equal(canReadEntityRecord(supervisor, outOfCoverage), false);
+  assert.equal(canPerformEntityAction(supervisor, "procurement", "submit", ownDraft.state), false);
+  assert.equal(canPerformEntityAction(supervisor, "procurement", "approve", submitted.state), true);
+  assert.equal(canPerformEntityAction(supervisor, "procurement", "reject", submitted.state), true);
+});
+
+test("in-house manpower workflow permits only the assigned eligible trade subordinate", () => {
+  const request = {
+    assignmentMode: "in_house",
+    requestedTrade: "Plumber",
+    development: "Development A",
+    assignedStaffId: "worker-1",
+  };
+  const plumber = actor({
+    id: "worker-1",
+    role: "worker",
+    position: "Plumber",
+    developments: ["Development A"],
+  });
+  const inspector = actor({
+    id: "inspector-1",
+    role: "inspector",
+    position: "Inspector",
+    developments: ["Development A"],
+  });
+  assert.equal(canPerformEntityAction(plumber, "manpower-requests", "start", request), true);
+  assert.equal(canPerformEntityAction(plumber, "manpower-requests", "complete", {
+    ...request,
+    status: "in_progress",
+  }), true);
+  assert.equal(canPerformEntityAction(inspector, "manpower-requests", "start", request), false);
+  assert.equal(canPerformEntityAction(actor({
+    ...plumber,
+    id: "worker-2",
+  }), "manpower-requests", "start", request), false);
+  assert.equal(canPerformEntityAction(actor({
+    ...plumber,
+    id: "worker-1",
+    developments: ["Development B"],
+  }), "manpower-requests", "start", request), false);
+});
+
 test("restricted management roles cannot synchronize procurement records", () => {
-  assert.equal(canReadEntity(actor(), "procurement"), true);
+  assert.equal(canReadEntity(actor(), "procurement"), false);
   assert.equal(canReadEntity(actor({ position: "Regional Director" }), "procurement"), false);
 });
 
@@ -720,6 +806,16 @@ test("workflow actions require their explicit management or specialist role", ()
     canPerformEntityAction(procurement, "procurement", "submit", {}),
     false,
   );
+  const submitted = { status: "submitted" };
+  const cpmSupervisor = actor({ role: "management", position: "CPM Supervisor" });
+  const ordinaryManagement = actor({ role: "management", position: "Property Manager" });
+  const administrator = actor({ role: "administrator", position: "Administrator" });
+  assert.equal(canPerformEntityAction(cpmSupervisor, "procurement", "approve", submitted), true);
+  assert.equal(canPerformEntityAction(cpmSupervisor, "procurement", "reject", submitted), true);
+  for (const reviewer of [ordinaryManagement, manager, administrator, cpm, procurement]) {
+    assert.equal(canPerformEntityAction(reviewer, "procurement", "approve", submitted), false);
+  }
+  assert.equal(canPerformEntityAction(cpmSupervisor, "procurement", "submit", { status: "draft" }), false);
 });
 
 test("approve-work completes assigned staff work only for supervisors", () => {
@@ -778,7 +874,7 @@ test("procurement visibility follows the lifecycle", () => {
   const row = (status: string, createdBy = cpm.id) => ({ entity: "procurement", createdBy, state: { status } });
   assert.equal(procurementRecordAllowed(cpm, row("draft")), true);
   assert.equal(procurementRecordAllowed(cpm, row("approved")), false);
-  assert.equal(procurementRecordAllowed(manager, row("submitted")), true);
+  assert.equal(procurementRecordAllowed(manager, row("submitted")), false);
   assert.equal(procurementRecordAllowed(manager, row("approved")), false);
   assert.equal(procurementRecordAllowed(procurement, row("approved")), true);
   assert.equal(procurementRecordAllowed(procurement, row("submitted")), false);
