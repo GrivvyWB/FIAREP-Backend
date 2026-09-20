@@ -22,6 +22,7 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(organizationsRouter);
 router.use(publicAccessRouter);
+router.use(nychaRouter);
 router.use(staffRouter);
 router.use(notificationRouter);
 router.use(syncRouter);
@@ -32,7 +33,6 @@ router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);
 router.use(propertyRouter);
-router.use(nychaRouter);
 router.use(timeClockRouter);
 
 export default router;

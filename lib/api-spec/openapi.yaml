@@ -170,7 +170,6 @@ paths:
       operationId: listNychaDevelopments
       tags: [property]
       summary: List the official ordered NYCHA development catalog
-      security: [{ bearerAuth: [] }]
       responses:
         "200":
           description: Official NYCHA developments
@@ -179,14 +178,11 @@ paths:
               schema:
                 type: array
                 items: { $ref: "#/components/schemas/NychaDevelopment" }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
   /v1/nycha/addresses:
     get:
       operationId: searchNychaAddresses
       tags: [property]
       summary: Search official NYCHA addresses
-      security: [{ bearerAuth: [] }]
       parameters:
         - in: query
           name: query
@@ -217,8 +213,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
-        "401":
-          $ref: "#/components/responses/Unauthorized"
   /v1/auth/login:
     post:
       operationId: login

@@ -6,11 +6,10 @@ import {
   SearchNychaAddressesQueryParams,
   SearchNychaAddressesResponse,
 } from "@workspace/api-zod";
-import { requireAuth } from "../middlewares/auth";
 
 const router: IRouter = Router();
 
-router.get("/v1/nycha/developments", requireAuth, async (_req, res): Promise<void> => {
+router.get("/v1/nycha/developments", async (_req, res): Promise<void> => {
   const rows = await db
     .select({
       id: nychaDevelopments.id,
@@ -26,7 +25,7 @@ router.get("/v1/nycha/developments", requireAuth, async (_req, res): Promise<voi
   res.json(ListNychaDevelopmentsResponse.parse(rows));
 });
 
-router.get("/v1/nycha/addresses", requireAuth, async (req, res): Promise<void> => {
+router.get("/v1/nycha/addresses", async (req, res): Promise<void> => {
   const parsed = SearchNychaAddressesQueryParams.safeParse(req.query);
   if (!parsed.success) {
     res.status(400).json({ error: "Enter a valid address search." });

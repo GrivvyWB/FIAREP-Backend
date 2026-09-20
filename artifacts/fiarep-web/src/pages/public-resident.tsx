@@ -11,8 +11,11 @@ import { useToast } from '@/hooks/use-toast';
 import {
   confirmPublicResidentPhoto,
   getLookupPublicResidentReportsQueryKey,
+  getSearchNychaAddressesQueryKey,
   requestPublicResidentPhotoUpload,
+  useListNychaDevelopments,
   useLookupPublicResidentReports,
+  useSearchNychaAddresses,
   useSubmitPublicResidentReport,
 } from '@workspace/api-client-react';
 import { ArrowLeft } from 'lucide-react';
@@ -36,6 +39,7 @@ export default function PublicResident() {
   const [lookupData, setLookupData] = useState<{ complaintNo: string } | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
+  const [addressFocused, setAddressFocused] = useState(false);
   
   const { toast } = useToast();
   
@@ -55,6 +59,20 @@ export default function PublicResident() {
   const reportForm = useForm<z.infer<typeof reportSchema>>({
     resolver: zodResolver(reportSchema),
     defaultValues: { development: '', address: '', unit: '', description: '', reporterName: '', reporterPhone: '', reporterEmail: '' },
+  });
+  const selectedDevelopment = reportForm.watch('development');
+  const addressSearch = reportForm.watch('address') || '';
+  const { data: developmentOptions = [] } = useListNychaDevelopments();
+  const addressParams = {
+    development: selectedDevelopment.trim() || undefined,
+    query: addressSearch.trim() || undefined,
+    limit: 50,
+  };
+  const { data: addressOptions = [] } = useSearchNychaAddresses(addressParams, {
+    query: {
+      enabled: Boolean(selectedDevelopment.trim()),
+      queryKey: getSearchNychaAddressesQueryKey(addressParams),
+    },
   });
 
   const lookupForm = useForm<z.infer<typeof lookupSchema>>({
@@ -197,14 +215,47 @@ export default function PublicResident() {
                   <FormField control={reportForm.control} name="development" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Development</FormLabel>
-                      <FormControl><Input {...field} /></FormControl>
+                      <FormControl><Input {...field} list="resident-development-options" /></FormControl>
+                      <datalist id="resident-development-options">
+                        {developmentOptions.map((development) => (
+                          <option key={development.id} value={development.name} />
+                        ))}
+                      </datalist>
                       <FormMessage />
                     </FormItem>
                   )} />
                    <FormField control={reportForm.control} name="address" render={({ field }) => (
                      <FormItem>
                        <FormLabel>Address (Optional)</FormLabel>
-                       <FormControl><Input {...field} /></FormControl>
+                        <FormControl>
+                          <Input
+                            {...field}
+                            autoComplete="off"
+                            onFocus={() => setAddressFocused(true)}
+                            onBlur={() => window.setTimeout(() => setAddressFocused(false), 150)}
+                          />
+                        </FormControl>
+                        {addressFocused && selectedDevelopment.trim() && (
+                          <div className="max-h-52 overflow-y-auto rounded-md border bg-popover shadow-md">
+                            {addressOptions.map((option) => (
+                              <button
+                                key={option.id}
+                                type="button"
+                                className="block w-full border-b px-3 py-2 text-left text-sm last:border-b-0 hover:bg-muted"
+                                onMouseDown={(event) => event.preventDefault()}
+                                onClick={() => {
+                                  field.onChange(option.address);
+                                  setAddressFocused(false);
+                                }}
+                              >
+                                {option.address}
+                              </button>
+                            ))}
+                            {addressOptions.length === 0 && (
+                              <div className="px-3 py-2 text-sm text-muted-foreground">No addresses found.</div>
+                            )}
+                          </div>
+                        )}
                        <FormMessage />
                      </FormItem>
                    )} />
