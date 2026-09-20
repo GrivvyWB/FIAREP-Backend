@@ -14,10 +14,15 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import {
+  DEVELOPMENT_ROTATION_MS,
+  getComplaintPulseLevel,
+  getDevelopmentPageCount,
+  getVisibleDevelopmentPage,
+  updateDevelopmentPage,
+} from "@/lib/complaint-dashboard-rotation";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
-const DEVELOPMENTS_PER_ROTATION = 10;
-const DEVELOPMENT_ROTATION_MS = 30 * 60 * 1000;
 const NYC_MAP_URL = "https://www.openstreetmap.org/export/embed.html?bbox=-74.25909%2C40.477399%2C-73.700181%2C40.916178&layer=mapnik";
 
 function normalizedDevelopmentName(development: string | null | undefined) {
@@ -270,24 +275,24 @@ export default function ComplaintDashboard() {
     return { devStats: activeDevs, bldgStats: activeBldgs, globalStats: glob };
   }, [filteredReports, sortOrder, developmentCatalogLookup]);
 
-  const developmentPageCount = Math.max(
-    1,
-    Math.ceil(devStats.length / DEVELOPMENTS_PER_ROTATION),
-  );
-  const visibleDevelopments = devStats.slice(
-    developmentPage * DEVELOPMENTS_PER_ROTATION,
-    (developmentPage + 1) * DEVELOPMENTS_PER_ROTATION,
-  );
+  const developmentPageCount = getDevelopmentPageCount(devStats.length);
+  const visibleDevelopments = getVisibleDevelopmentPage(devStats, developmentPage);
 
   useEffect(() => {
-    setDevelopmentPage(0);
+    setDevelopmentPage((current) => updateDevelopmentPage(current, { type: "filtersChanged" }));
   }, [search, boroughFilter, fromDate, toDate, sortOrder]);
 
   useEffect(() => {
-    setDevelopmentPage((current) => Math.min(current, developmentPageCount - 1));
+    setDevelopmentPage((current) => updateDevelopmentPage(current, {
+      type: "countChanged",
+      pageCount: developmentPageCount,
+    }));
     if (developmentPageCount <= 1) return;
     const timer = window.setInterval(() => {
-      setDevelopmentPage((current) => (current + 1) % developmentPageCount);
+      setDevelopmentPage((current) => updateDevelopmentPage(current, {
+        type: "next",
+        pageCount: developmentPageCount,
+      }));
     }, DEVELOPMENT_ROTATION_MS);
     return () => window.clearInterval(timer);
   }, [developmentPageCount]);
@@ -423,9 +428,10 @@ export default function ComplaintDashboard() {
                   <div className="space-y-2">
                     {visibleDevelopments.map(dev => {
                       const isSelected = selectedDev === dev.name;
-                      const intensity = dev.activeCount >= 20
+                      const pulseLevel = getComplaintPulseLevel(dev.activeCount);
+                      const intensity = pulseLevel === "red"
                         ? "bg-red-600 text-white shadow-md shadow-red-600/30 ring-2 ring-red-500 ring-offset-1 animate-pulse"
-                        : dev.activeCount >= 10
+                        : pulseLevel === "orange"
                           ? "bg-orange-500 text-white shadow-sm shadow-orange-500/20 animate-pulse"
                           : "bg-red-500 text-white shadow-sm shadow-red-500/20";
                       
@@ -464,7 +470,10 @@ export default function ComplaintDashboard() {
                 <div className="flex items-center justify-between border-t border-slate-100 bg-slate-50 px-3 py-2">
                   <button
                     type="button"
-                    onClick={() => setDevelopmentPage((current) => (current - 1 + developmentPageCount) % developmentPageCount)}
+                    onClick={() => setDevelopmentPage((current) => updateDevelopmentPage(current, {
+                      type: "previous",
+                      pageCount: developmentPageCount,
+                    }))}
                     className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors shadow-sm"
                     data-testid="button-previous-development-rotation"
                   >
@@ -475,7 +484,10 @@ export default function ComplaintDashboard() {
                   </span>
                   <button
                     type="button"
-                    onClick={() => setDevelopmentPage((current) => (current + 1) % developmentPageCount)}
+                    onClick={() => setDevelopmentPage((current) => updateDevelopmentPage(current, {
+                      type: "next",
+                      pageCount: developmentPageCount,
+                    }))}
                     className="rounded border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-600 hover:bg-slate-100 hover:text-slate-900 transition-colors shadow-sm"
                     data-testid="button-next-development-rotation"
                   >
