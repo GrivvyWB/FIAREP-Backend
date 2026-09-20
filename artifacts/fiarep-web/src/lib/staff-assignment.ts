@@ -142,13 +142,17 @@ export function roleForPosition(position: string): Staff["role"] {
 /** Converts rendered title families into canonical API assignment values. */
 export function assignmentForTitle(title: string): StaffAssignmentTarget {
   const canonicalPosition = title === "Emergency Maintenance"
-    ? "Superintendent Ⓔ"
+    ? "Maintenance Worker"
     : title === "All developments"
       ? null
       : TITLE_FAMILIES.find((family) => family.label === title)?.positions.at(-1) || title;
   return {
     position: canonicalPosition,
-    role: canonicalPosition ? roleForPosition(canonicalPosition) : null,
+    role: title === "Emergency Maintenance"
+      ? "emergency"
+      : canonicalPosition
+        ? roleForPosition(canonicalPosition)
+        : null,
     developments: null,
   };
 }

@@ -876,7 +876,7 @@ router.put("/v1/staff/:id/developments", async (req, res) => {
     ) {
       throw new StaffAssignmentIntegrityError();
     }
-    const linkedHrRows = await tx
+    let linkedHrRows = await tx
       .select()
       .from(entityRecords)
       .where(and(
@@ -885,6 +885,36 @@ router.put("/v1/staff/:id/developments", async (req, res) => {
         eq(entityRecords.deleted, false),
         sql`(${entityRecords.id} = ${`hr-employee:${target.id}`} OR ${entityRecords.state}->>'employeeStaffId' = ${target.id})`,
       ));
+    if (linkedHrRows.length === 0) {
+      await tx.insert(entityRecords).values({
+        id: `hr-employee:${target.id}`,
+        tenantId: actor.tenantId,
+        entity: "hr-employee-records",
+        development: target.developments.length === 1 ? target.developments[0]! : null,
+        state: withInitialWorkflowState("hr-employee-records", {
+          employeeStaffId: target.id,
+          firstName: target.firstName || undefined,
+          lastName: target.lastName || undefined,
+          position: target.position,
+          role: target.role,
+          employmentStatus: target.status,
+          title: `${target.name} employee record`,
+          assignedDevelopments: target.developments,
+        }),
+        createdBy: actor.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+      linkedHrRows = await tx
+        .select()
+        .from(entityRecords)
+        .where(and(
+          eq(entityRecords.tenantId, actor.tenantId),
+          eq(entityRecords.entity, "hr-employee-records"),
+          eq(entityRecords.deleted, false),
+          sql`(${entityRecords.id} = ${`hr-employee:${target.id}`} OR ${entityRecords.state}->>'employeeStaffId' = ${target.id})`,
+        ));
+    }
     if (linkedHrRows.length !== 1) throw new StaffAssignmentIntegrityError();
     const [staff] = await tx
       .update(staffAccounts)
@@ -1048,7 +1078,7 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
     ) {
       throw new StaffAssignmentIntegrityError();
     }
-    const linkedHrRows = await tx
+    let linkedHrRows = await tx
       .select()
       .from(entityRecords)
       .where(and(
@@ -1057,6 +1087,36 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
         eq(entityRecords.deleted, false),
         sql`(${entityRecords.id} = ${`hr-employee:${target.id}`} OR ${entityRecords.state}->>'employeeStaffId' = ${target.id})`,
       ));
+    if (linkedHrRows.length === 0) {
+      await tx.insert(entityRecords).values({
+        id: `hr-employee:${target.id}`,
+        tenantId: actor.tenantId,
+        entity: "hr-employee-records",
+        development: target.developments.length === 1 ? target.developments[0]! : null,
+        state: withInitialWorkflowState("hr-employee-records", {
+          employeeStaffId: target.id,
+          firstName: target.firstName || undefined,
+          lastName: target.lastName || undefined,
+          position: target.position,
+          role: target.role,
+          employmentStatus: target.status,
+          title: `${target.name} employee record`,
+          assignedDevelopments: target.developments,
+        }),
+        createdBy: actor.id,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).onConflictDoNothing();
+      linkedHrRows = await tx
+        .select()
+        .from(entityRecords)
+        .where(and(
+          eq(entityRecords.tenantId, actor.tenantId),
+          eq(entityRecords.entity, "hr-employee-records"),
+          eq(entityRecords.deleted, false),
+          sql`(${entityRecords.id} = ${`hr-employee:${target.id}`} OR ${entityRecords.state}->>'employeeStaffId' = ${target.id})`,
+        ));
+    }
     if (linkedHrRows.length !== 1) throw new StaffAssignmentIntegrityError();
     const now = new Date();
     const [staff] = await tx
