@@ -1281,6 +1281,39 @@ test("trade supervisors can assign only their own non-supervisor crew", () => {
   assert.equal(canAssignStaff(plumberSupervisor, otherSupervisor, "Development A"), false);
 });
 
+test("Superintendent E can hand resident complaints to supervisors or operational staff", () => {
+  const superintendentE = actor({
+    id: "superintendent-e",
+    role: "management",
+    position: "Superintendent Ⓔ",
+    developments: [],
+  });
+  assert.equal(
+    canSuperintendentEAssignResidentReport(superintendentE, {
+      id: "amsterdam-supervisor",
+      role: "management",
+      position: "Maintenance Supervisor",
+    }),
+    true,
+  );
+  assert.equal(
+    canSuperintendentEAssignResidentReport(superintendentE, {
+      id: "worker",
+      role: "worker",
+      position: "Maintenance Worker",
+    }),
+    true,
+  );
+  assert.equal(
+    canSuperintendentEAssignResidentReport(superintendentE, {
+      id: "borough-director",
+      role: "administrator",
+      position: "Borough Director",
+    }),
+    false,
+  );
+});
+
 test("canonical emergency and elevator assignments authorize only their staff id", () => {
   const emergency = actor({
     id: "emergency-1",

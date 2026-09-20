@@ -863,6 +863,21 @@ export function canAssignStaff(
   return true;
 }
 
+export function canSuperintendentEAssignResidentReport(
+  actor: Actor,
+  target: {
+    id: string;
+    role: string;
+    position: string | null;
+  },
+): boolean {
+  return actor.role === "management" &&
+    actor.position === "Superintendent Ⓔ" &&
+    target.id !== actor.id &&
+    target.position !== "Borough Director" &&
+    ASSIGNABLE_STAFF_ROLES.has(target.role);
+}
+
 /**
  * Assignment identity is deliberately separate from the display name.  Older
  * records may only have assignedTo (or another mutable label); those records

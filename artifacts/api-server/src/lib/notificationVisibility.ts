@@ -6,7 +6,6 @@ import {
   staffAccounts,
 } from "@workspace/db";
 import type { Actor } from "./auth";
-import { isBoroughDirector } from "./domain";
 import { canReadEntityRecordForActor } from "./hrAuthorization";
 import { repairLegacyResidentDevelopment } from "./legacyResidentDevelopment";
 
@@ -77,25 +76,9 @@ export async function residentReportRecipientIds(
     );
   const wanted = normalize(development);
   return staff
-    .filter((account) => {
-      const actor: Actor = {
-        id: account.id,
-        tenantId: account.tenantId,
-        name: account.name,
-        role: account.role,
-        position: account.position,
-        developments: account.developments,
-        sessionVersion: account.sessionVersion,
-      };
-      if (
-        account.role === "management" &&
-        account.position === "Superintendent Ⓔ"
-      ) {
-        return true;
-      }
-      if (isBoroughDirector(actor)) return true;
-      return Boolean(wanted) &&
-        account.developments.some((item) => normalize(item) === wanted);
-    })
+    .filter((account) =>
+      account.role === "management" &&
+      account.position === "Superintendent Ⓔ"
+    )
     .map((account) => account.id);
 }

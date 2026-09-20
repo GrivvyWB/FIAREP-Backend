@@ -8,6 +8,7 @@ import {
   STAFF_POSITIONS,
   canIssueStaffAccountRole,
   canAssignStaff,
+  canSuperintendentEAssignResidentReport,
   canApproveLeaveForEmployee,
   canApproveLeaveDuration,
   canDeleteOperationalRecords,
@@ -199,7 +200,10 @@ async function canonicalizeAssignment(
   // covered developments.  Do not let the ordinary Superintendent title
   // acquire this authority, and do not let the emergency title assign work
   // in unrelated modules.
-  if (actor.position === "Superintendent Ⓔ" && entity !== "emergency-jobs") {
+  if (
+    actor.position === "Superintendent Ⓔ" &&
+    !["emergency-jobs", "resident-reports"].includes(entity)
+  ) {
     return { state: null, error: "Emergency Unit assignments are limited to emergency jobs" };
   }
   if (entity === "emergency-jobs" && actor.position === "Superintendent") {
@@ -242,6 +246,7 @@ async function canonicalizeAssignment(
     target?.id === actor.id;
   if (
     actor.position === "Superintendent Ⓔ" &&
+    entity === "emergency-jobs" &&
     (target?.role !== "emergency" || target.position !== "Maintenance Worker")
   ) {
     return {
@@ -249,7 +254,18 @@ async function canonicalizeAssignment(
       error: "The Emergency Unit superintendent may assign only emergency maintenance workers",
     };
   }
-  if (!target || (!canAssignStaff(actor, target, development) && !inspectorSelfAssignment)) {
+  const superintendentEResidentAssignment =
+    entity === "resident-reports" &&
+    Boolean(target) &&
+    canSuperintendentEAssignResidentReport(actor, target!);
+  if (
+    !target ||
+    (
+      !canAssignStaff(actor, target, development) &&
+      !inspectorSelfAssignment &&
+      !superintendentEResidentAssignment
+    )
+  ) {
     return {
       state: null,
       error: "Select an operational staff member from your authorized group",
@@ -1644,7 +1660,8 @@ router.post(
   if (
     action === "assign" &&
     ["resident-reports", "building-violations", "manpower-requests"].includes(entity) &&
-    normalizeAssignment(current.state).assignedStaffId
+    normalizeAssignment(current.state).assignedStaffId &&
+    !(entity === "resident-reports" && actor.position === "Superintendent Ⓔ")
   ) {
     res.status(409).json({
       error: "This record is already assigned. The current assignee must release it with an update before reassignment.",
@@ -1679,7 +1696,13 @@ router.post(
           eq(staffAccounts.status, "approved"),
         )).limit(1)
       : [];
-    if (!target || !canAssignStaff(actor, target, current.development)) {
+    if (
+      !target ||
+      (
+        !canAssignStaff(actor, target, current.development) &&
+        !canSuperintendentEAssignResidentReport(actor, target)
+      )
+    ) {
       res.status(403).json({ error: "Select an operational staff member from your authorized group" });
       return;
     }

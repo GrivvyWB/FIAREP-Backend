@@ -1420,9 +1420,16 @@ async function syncApprovedLocalStaffToServerOnce(remoteAccounts: Staff[]): Prom
 export async function listStaffByPosition(position?: string): Promise<StaffAccount[]> {
   const all = await listStaffAccounts('approved');
   const identity = await getSessionIdentity();
-  const staff = all.filter(a => a.role === 'worker' || a.role === 'inspector');
+  const superintendentEHandoff = identity?.position === 'Superintendent Ⓔ';
+  const staff = superintendentEHandoff
+    ? all.filter((a) =>
+        ['management', 'worker', 'inspector', 'emergency'].includes(a.role) &&
+        a.id !== identity.staffId &&
+        a.position !== 'Borough Director'
+      )
+    : all.filter(a => a.role === 'worker' || a.role === 'inspector');
   const mine = new Set((identity?.developments || []).map(d => d.trim().toLowerCase()));
-  const scoped = identity?.position === 'Borough Director'
+  const scoped = identity?.position === 'Borough Director' || superintendentEHandoff
     ? staff
     : staff.filter(a => (a.developments || []).some(d => mine.has(d.trim().toLowerCase())));
   const out = position ? scoped.filter(a => (a.position || '') === position) : scoped;

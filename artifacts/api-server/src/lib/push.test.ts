@@ -411,22 +411,22 @@ test("notification creation persists an unambiguous staff target by id", async (
   }
 });
 
-test("resident report recipients follow management development scope", async () => {
+test("resident reports initially notify only Superintendent E", async () => {
   const tenantId = tenant();
   try {
-    const propertyManager = await addScopedStaff(
+    await addScopedStaff(
       tenantId, "Jefferson PM", "management", "Property Manager", ["Jefferson"],
     );
-    const supervisor = await addScopedStaff(
+    await addScopedStaff(
       tenantId, "Jefferson Supervisor", "management", "Maintenance Supervisor", ["Jefferson"],
     );
-    const regionalDirector = await addScopedStaff(
+    await addScopedStaff(
       tenantId, "Jefferson Regional", "management", "Regional Director", ["Jefferson"],
     );
-    const scopedAdministrator = await addScopedStaff(
+    await addScopedStaff(
       tenantId, "Jefferson Admin", "administrator", "Director", ["Jefferson"],
     );
-    const boroughDirector = await addScopedStaff(
+    await addScopedStaff(
       tenantId, "Borough Director", "administrator", "Borough Director", [],
     );
     const emergencySuperintendent = await addScopedStaff(
@@ -444,17 +444,7 @@ test("resident report recipients follow management development scope", async () 
     );
 
     const recipients = await residentReportRecipientIds(tenantId, "Jefferson");
-    assert.deepEqual(
-      new Set(recipients),
-      new Set([
-        propertyManager,
-        supervisor,
-        regionalDirector,
-        scopedAdministrator,
-        boroughDirector,
-        emergencySuperintendent,
-      ]),
-    );
+    assert.deepEqual(recipients, [emergencySuperintendent]);
   } finally {
     await cleanup(tenantId);
   }
