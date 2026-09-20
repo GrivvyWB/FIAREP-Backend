@@ -1851,7 +1851,7 @@ components:
         retrievedAt: { type: string, format: date-time }
     NychaDevelopment:
       type: object
-      required: [id, sequence, name, program]
+      required: [id, sequence, name, program, address, latitude, longitude]
       properties:
         id: { type: string }
         sequence: { type: integer }
@@ -1859,6 +1859,9 @@ components:
         program: { type: string, enum: [CONVENTIONAL, PACT] }
         borough: { type: ["string", "null"] }
         tds: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        latitude: { type: ["number", "null"] }
+        longitude: { type: ["number", "null"] }
     NychaAddress:
       type: object
       required: [id, developmentId, development, address, zipcode]

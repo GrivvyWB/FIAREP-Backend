@@ -494,6 +494,12 @@ export interface NychaDevelopment {
   borough?: string | null;
   /** @nullable */
   tds?: string | null;
+  /** @nullable */
+  address: string | null;
+  /** @nullable */
+  latitude: number | null;
+  /** @nullable */
+  longitude: number | null;
 }
 
 export interface NychaAddress {

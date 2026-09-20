@@ -179,7 +179,10 @@ export const ListNychaDevelopmentsResponseItem = zod.object({
   "name": zod.string(),
   "program": zod.enum(['CONVENTIONAL', 'PACT']),
   "borough": zod.string().nullish(),
-  "tds": zod.string().nullish()
+  "tds": zod.string().nullish(),
+  "address": zod.string().nullable(),
+  "latitude": zod.number().nullable(),
+  "longitude": zod.number().nullable()
 })
 export const ListNychaDevelopmentsResponse = zod.array(ListNychaDevelopmentsResponseItem)
 

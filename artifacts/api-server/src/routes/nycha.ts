@@ -10,7 +10,8 @@ import {
 const router: IRouter = Router();
 
 router.get("/v1/nycha/developments", async (_req, res): Promise<void> => {
-  const rows = await db
+  const [developments, addresses] = await Promise.all([
+    db
     .select({
       id: nychaDevelopments.id,
       sequence: nychaDevelopments.sequence,
@@ -20,7 +21,42 @@ router.get("/v1/nycha/developments", async (_req, res): Promise<void> => {
       tds: nychaDevelopments.tds,
     })
     .from(nychaDevelopments)
-    .orderBy(asc(nychaDevelopments.sequence));
+    .orderBy(asc(nychaDevelopments.sequence)),
+    db
+      .select({
+        developmentId: nychaAddresses.developmentId,
+        address: nychaAddresses.address,
+        latitude: nychaAddresses.latitude,
+        longitude: nychaAddresses.longitude,
+      })
+      .from(nychaAddresses)
+      .orderBy(asc(nychaAddresses.address)),
+  ]);
+
+  const representativeAddressByDevelopment = new Map<
+    string,
+    (typeof addresses)[number]
+  >();
+
+  for (const address of addresses) {
+    const current = representativeAddressByDevelopment.get(address.developmentId);
+    const hasCoordinates = address.latitude !== null && address.longitude !== null;
+    const currentHasCoordinates = current?.latitude !== null && current?.longitude !== null;
+
+    if (!current || (hasCoordinates && !currentHasCoordinates)) {
+      representativeAddressByDevelopment.set(address.developmentId, address);
+    }
+  }
+
+  const rows = developments.map((development) => {
+    const representativeAddress = representativeAddressByDevelopment.get(development.id);
+    return {
+      ...development,
+      address: representativeAddress?.address ?? null,
+      latitude: representativeAddress?.latitude ?? null,
+      longitude: representativeAddress?.longitude ?? null,
+    };
+  });
 
   res.json(ListNychaDevelopmentsResponse.parse(rows));
 });

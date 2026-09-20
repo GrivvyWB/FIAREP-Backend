@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { getListEntityRecordsQueryKey, useListEntityRecords } from "@workspace/api-client-react";
+import {
+  getListEntityRecordsQueryKey,
+  getListNychaDevelopmentsQueryKey,
+  useListEntityRecords,
+  useListNychaDevelopments,
+  type NychaDevelopment,
+} from "@workspace/api-client-react";
 import { 
   Building2, ChevronDown, ChevronRight, Clock, 
   Flame, Loader2, MapPin, Search, 
   Siren, Target, X, AlertOctagon, CheckSquare, Building,
-  ShieldAlert, Users, CheckCircle, AlertCircle, Layers, Wrench, Calendar, ArrowDownUp, Trophy
+  ShieldAlert, Users, CheckCircle, AlertCircle, Calendar, ArrowDownUp, Trophy
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -13,44 +19,54 @@ type Report = { id: string; development?: string | null; state?: Record<string, 
 const DEVELOPMENTS_PER_ROTATION = 10;
 const DEVELOPMENT_ROTATION_MS = 30 * 60 * 1000;
 const NYC_MAP_URL = "https://www.openstreetmap.org/export/embed.html?bbox=-74.25909%2C40.477399%2C-73.700181%2C40.916178&layer=mapnik";
-const DEVELOPMENT_MAP_LOCATIONS: Record<string, { latitude: number; longitude: number }> = {
-  "amsterdam houses": { latitude: 40.7736392, longitude: -73.9864462 },
-};
-const DEVELOPMENT_ADDRESSES: Record<string, string> = {
-  "amsterdam houses": "210 WEST 64TH STREET",
-};
 
 function normalizedDevelopmentName(development: string | null | undefined) {
-  return development?.trim().toLowerCase() || "";
+  return development
+    ?.trim()
+    .toLowerCase()
+    .replace(/\b(houses?|developments?|apartments?)\b/g, "")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ") || "";
 }
 
-function developmentAddressFor(development: string | null | undefined) {
-  const normalizedName = normalizedDevelopmentName(development);
-  return DEVELOPMENT_ADDRESSES[normalizedName]
-    || (normalizedName.includes("amsterdam") ? DEVELOPMENT_ADDRESSES["amsterdam houses"] : null);
+function buildDevelopmentCatalogLookup(developments: NychaDevelopment[]) {
+  const exact = new Map<string, NychaDevelopment>();
+  const normalized = new Map<string, NychaDevelopment | null>();
+
+  for (const development of developments) {
+    exact.set(development.name.trim().toLowerCase(), development);
+    const normalizedName = normalizedDevelopmentName(development.name);
+    normalized.set(
+      normalizedName,
+      normalized.has(normalizedName) ? null : development,
+    );
+  }
+
+  return { exact, normalized };
 }
 
-function mapLocationFor(development: string | null) {
+function findCatalogDevelopment(
+  development: string | null | undefined,
+  lookup: ReturnType<typeof buildDevelopmentCatalogLookup>,
+) {
   if (!development) return null;
-  const normalizedName = normalizedDevelopmentName(development);
-  return DEVELOPMENT_MAP_LOCATIONS[normalizedName]
-    || (normalizedName.includes("amsterdam") ? DEVELOPMENT_MAP_LOCATIONS["amsterdam houses"] : null);
+  return lookup.exact.get(development.trim().toLowerCase())
+    || lookup.normalized.get(normalizedDevelopmentName(development))
+    || null;
 }
 
-function mapUrlFor(development: string | null) {
-  const location = mapLocationFor(development);
-  if (!location) return NYC_MAP_URL;
-
+function mapUrlFor(latitude: number, longitude: number) {
   const longitudeSpan = 0.012;
   const latitudeSpan = 0.009;
   const bbox = [
-    location.longitude - longitudeSpan,
-    location.latitude - latitudeSpan,
-    location.longitude + longitudeSpan,
-    location.latitude + latitudeSpan,
+    longitude - longitudeSpan,
+    latitude - latitudeSpan,
+    longitude + longitudeSpan,
+    latitude + latitudeSpan,
   ].join(",");
 
-  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${location.latitude}%2C${location.longitude}`;
+  return `https://www.openstreetmap.org/export/embed.html?bbox=${encodeURIComponent(bbox)}&layer=mapnik&marker=${latitude}%2C${longitude}`;
 }
 
 function getField(r: Report, aliases: string[], fallback: string = ""): string {
@@ -67,12 +83,8 @@ function statusOf(r: Report) { return String(r.state?.status || "submitted").toL
 function isCorrected(status: string) { 
   return ["done", "resolved", "work_approved", "approved", "completed", "in_house_completed", "closed"].includes(status); 
 }
-function addressOf(r: Report) {
-  return getField(
-    r,
-    ["address", "buildingAddress", "building"],
-    developmentAddressFor(r.development) || "Unknown Address",
-  );
+function addressOf(r: Report, developmentAddress?: string | null) {
+  return getField(r, ["address", "buildingAddress", "building"], developmentAddress || "Unknown Address");
 }
 function categoryOf(r: Report) { return getField(r, ["category", "type", "complaintType"], "Uncategorized"); }
 function boroughOf(r: Report) { return getField(r, ["borough"], "Unknown"); }
@@ -129,12 +141,24 @@ export default function ComplaintDashboard() {
   });
 
   const reports = (reportsQuery.data || []) as Report[];
+  const developmentCatalogQuery = useListNychaDevelopments({
+    query: {
+      queryKey: getListNychaDevelopmentsQueryKey(),
+      staleTime: 30 * 60 * 1000,
+    },
+  });
+  const developmentCatalogLookup = useMemo(
+    () => buildDevelopmentCatalogLookup(developmentCatalogQuery.data || []),
+    [developmentCatalogQuery.data],
+  );
+  const verifiedDevelopmentFor = (development: string | null | undefined) =>
+    findCatalogDevelopment(development, developmentCatalogLookup);
+  const reportAddress = (report: Report) =>
+    addressOf(report, verifiedDevelopmentFor(report.development)?.address);
   
   // Filters
   const [search, setSearch] = useState("");
   const [boroughFilter, setBoroughFilter] = useState("all");
-  const [categoryFilter, setCategoryFilter] = useState("all");
-  const [tradeFilter, setTradeFilter] = useState("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
@@ -143,38 +167,32 @@ export default function ComplaintDashboard() {
   // Detail View State
   const [selectedDev, setSelectedDev] = useState<string | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
-  const selectedMapLocation = mapLocationFor(selectedDev);
-  const mapUrl = mapUrlFor(selectedDev);
+  const selectedCatalogDevelopment = verifiedDevelopmentFor(selectedDev);
+  const selectedHasCoordinates = selectedCatalogDevelopment?.latitude != null
+    && selectedCatalogDevelopment.longitude != null;
+  const mapUrl = selectedHasCoordinates
+    ? mapUrlFor(selectedCatalogDevelopment.latitude!, selectedCatalogDevelopment.longitude!)
+    : NYC_MAP_URL;
 
   const filterOptions = useMemo(() => {
     const boroughs = new Set<string>();
-    const categories = new Set<string>();
-    const trades = new Set<string>();
     
     reports.forEach(r => {
       const boro = boroughOf(r);
-      const cat = categoryOf(r);
-      const trd = tradeOf(r);
       
       if (boro) boroughs.add(boro);
-      if (cat) categories.add(cat);
-      if (trd) trades.add(trd);
     });
     
     return {
       boroughs: Array.from(boroughs).sort(),
-      categories: Array.from(categories).sort(),
-      trades: Array.from(trades).sort(),
     };
   }, [reports]);
 
   const filteredReports = useMemo(() => {
     return reports.filter(r => {
       const dev = r.development || "";
-      const addr = addressOf(r).toLowerCase();
+      const addr = reportAddress(r).toLowerCase();
       const boro = boroughOf(r).toLowerCase();
-      const cat = categoryOf(r).toLowerCase();
-      const trd = tradeOf(r).toLowerCase();
       
       if (search) {
         const q = search.toLowerCase();
@@ -182,8 +200,6 @@ export default function ComplaintDashboard() {
       }
       
       if (boroughFilter !== "all" && boro !== boroughFilter.toLowerCase()) return false;
-      if (categoryFilter !== "all" && cat !== categoryFilter.toLowerCase()) return false;
-      if (tradeFilter !== "all" && trd !== tradeFilter.toLowerCase()) return false;
       
       const time = new Date(r.createdAt).getTime();
       if (fromDate && time < new Date(fromDate).getTime()) return false;
@@ -191,7 +207,7 @@ export default function ComplaintDashboard() {
       
       return true;
     });
-  }, [reports, search, boroughFilter, categoryFilter, tradeFilter, fromDate, toDate]);
+  }, [reports, search, boroughFilter, fromDate, toDate, developmentCatalogLookup]);
 
   const { devStats, bldgStats, globalStats } = useMemo(() => {
     const devs = new Map<string, Stats>();
@@ -201,7 +217,7 @@ export default function ComplaintDashboard() {
     
     filteredReports.forEach(r => {
       const devName = r.development || "Unassigned";
-      const bldgName = addressOf(r);
+      const bldgName = reportAddress(r);
       const status = statusOf(r);
       const corrected = isCorrected(status);
       const time = new Date(r.createdAt).getTime();
@@ -252,7 +268,7 @@ export default function ComplaintDashboard() {
     activeBldgs.sort(sortFn);
 
     return { devStats: activeDevs, bldgStats: activeBldgs, globalStats: glob };
-  }, [filteredReports, sortOrder]);
+  }, [filteredReports, sortOrder, developmentCatalogLookup]);
 
   const developmentPageCount = Math.max(
     1,
@@ -265,7 +281,7 @@ export default function ComplaintDashboard() {
 
   useEffect(() => {
     setDevelopmentPage(0);
-  }, [search, boroughFilter, categoryFilter, tradeFilter, fromDate, toDate, sortOrder]);
+  }, [search, boroughFilter, fromDate, toDate, sortOrder]);
 
   useEffect(() => {
     setDevelopmentPage((current) => Math.min(current, developmentPageCount - 1));
@@ -358,24 +374,6 @@ export default function ComplaintDashboard() {
                <select value={boroughFilter} onChange={e => setBoroughFilter(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Borough" data-testid="filter-borough">
                 <option value="all">All Boroughs</option>
                 {filterOptions.boroughs.map(b => <option key={b} value={b}>{b}</option>)}
-              </select>
-            </div>
-             <div className="relative flex min-w-[150px] items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm hover:border-blue-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-colors">
-               <Layers className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 pointer-events-none" />
-               <span className="flex-1 text-xs text-slate-700 pointer-events-none truncate">{categoryFilter === "all" ? "All Categories" : categoryFilter}</span>
-               <ChevronDown className="w-3.5 h-3.5 text-slate-500 ml-2 pointer-events-none" />
-               <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Category" data-testid="filter-category">
-                <option value="all">All Categories</option>
-                {filterOptions.categories.map(c => <option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-             <div className="relative flex min-w-[135px] items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm hover:border-blue-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-colors">
-               <Wrench className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 pointer-events-none" />
-               <span className="flex-1 text-xs text-slate-700 pointer-events-none truncate">{tradeFilter === "all" ? "All Trades" : tradeFilter}</span>
-               <ChevronDown className="w-3.5 h-3.5 text-slate-500 ml-2 pointer-events-none" />
-               <select value={tradeFilter} onChange={e => setTradeFilter(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Trade" data-testid="filter-trade">
-                <option value="all">All Trades</option>
-                {filterOptions.trades.map(t => <option key={t} value={t}>{t}</option>)}
               </select>
             </div>
             <div className="flex items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm">
@@ -489,31 +487,47 @@ export default function ComplaintDashboard() {
 
             {/* Column 2: Interactive Map Surface */}
             <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden relative shadow-sm min-h-[300px]">
-              <iframe 
-                src={mapUrl}
-                className="w-full h-full border-0 absolute inset-0 opacity-[0.7] filter contrast-[0.9] saturate-[0.7]" 
-                title="NYC Overview" 
-              />
-              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                 {!selectedMapLocation && (
-                   <div className="relative flex flex-col items-center justify-center mt-[-40px]">
-                      <div className="w-24 h-24 bg-red-500/20 rounded-full animate-ping absolute" />
-                      <div className="w-12 h-12 bg-red-500/10 rounded-full animate-pulse absolute" />
-                      <div className="w-8 h-8 bg-red-600 rounded-full flex items-center justify-center z-10 shadow-lg border-2 border-white">
-                         <MapPin className="w-4 h-4 text-white" />
-                      </div>
-                   </div>
-                 )}
-                 {selectedDev && (
-                    <div className="mt-4 bg-white px-4 py-1.5 rounded-full shadow-lg border border-slate-200 font-bold text-sm text-slate-800 pointer-events-auto shadow-red-500/10 ring-1 ring-red-100">
-                      {selectedDev}
+              {selectedDev && developmentCatalogQuery.isLoading ? (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
+                  <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
+                </div>
+              ) : selectedDev && !selectedHasCoordinates ? (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-50 px-6 text-center">
+                  <AlertCircle className="h-8 w-8 text-amber-500" />
+                  <div className="font-bold text-slate-900">Location unavailable</div>
+                  {selectedCatalogDevelopment?.address && (
+                    <div className="text-sm font-semibold text-slate-600">
+                      {selectedCatalogDevelopment.address}
                     </div>
-                 )}
-              </div>
-              <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur border border-slate-200 rounded-lg p-2 shadow-sm flex items-center gap-2 pointer-events-none">
-                 <div className="w-2.5 h-2.5 rounded-full bg-red-600 shadow-sm shadow-red-500/50" />
-                 <span className="text-[10px] font-bold text-slate-700 tracking-wider uppercase">Active Development</span>
-              </div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <iframe
+                    src={mapUrl}
+                    className="w-full h-full border-0 absolute inset-0 opacity-[0.7] filter contrast-[0.9] saturate-[0.7]"
+                    title={selectedDev ? `${selectedDev} map` : "NYC Overview"}
+                  />
+                  {selectedDev && selectedCatalogDevelopment && (
+                    <>
+                      <div className="absolute inset-x-0 top-4 flex justify-center px-4 pointer-events-none">
+                        <div className="max-w-full rounded-full border border-slate-200 bg-white px-4 py-1.5 text-center shadow-lg shadow-red-500/10 ring-1 ring-red-100">
+                          <div className="truncate text-sm font-bold text-slate-800">{selectedDev}</div>
+                          {selectedCatalogDevelopment.address && (
+                            <div className="truncate text-[10px] font-semibold text-slate-500">
+                              {selectedCatalogDevelopment.address}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                      <div className="absolute bottom-4 left-4 bg-white/95 backdrop-blur border border-slate-200 rounded-lg p-2 shadow-sm flex items-center gap-2 pointer-events-none">
+                        <div className="w-2.5 h-2.5 rounded-full bg-red-600 shadow-sm shadow-red-500/50" />
+                        <span className="text-[10px] font-bold text-slate-700 tracking-wider uppercase">Active Development</span>
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
 
             {/* Column 3: Top 10 OR Drill-down Panel */}
