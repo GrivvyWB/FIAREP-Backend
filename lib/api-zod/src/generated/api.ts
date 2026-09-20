@@ -1141,6 +1141,23 @@ export const GetHrWorkspaceResponse = zod.object({
 
 
 /**
+ * @summary Delete an HR lifecycle record
+ */
+export const DeleteHrRecordParams = zod.object({
+  "id": zod.coerce.string()
+})
+
+
+
+
+export const DeleteHrRecordBody = zod.object({
+  "version": zod.number().int().min(1)
+})
+
+export const DeleteHrRecordResponse = zod.void()
+
+
+/**
  * @summary Generate the employee number, sign-in code, and linked Team account
  */
 export const CompleteHrEmployeeIntakeParams = zod.object({

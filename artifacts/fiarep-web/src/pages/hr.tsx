@@ -6,6 +6,8 @@ import {
   getListStaffQueryKey,
   useListStaffDevelopments,
   useCreateEntityRecord,
+  useDeleteHrRecord,
+  useDeleteStaff,
   useGetHrWorkspace,
   usePerformEntityAction,
   useUpdateEntityRecord,
@@ -14,7 +16,7 @@ import {
 } from "@workspace/api-client-react";
 import { 
   BriefcaseBusiness, Check, Clock3, Pencil, Plus, ShieldCheck,
-  History, Search, FileText, User, AlertCircle, Folder, Mail, KeyRound
+  History, Search, FileText, User, AlertCircle, Folder, Mail, KeyRound, Trash2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -179,6 +181,8 @@ export default function HRWorkspace() {
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
   const action = usePerformEntityAction();
+  const deleteHrRecord = useDeleteHrRecord();
+  const deleteStaff = useDeleteStaff();
   
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
@@ -267,6 +271,31 @@ export default function HRWorkspace() {
       queryClient.invalidateQueries({ queryKey: getGetHrWorkspaceQueryKey() }),
       queryClient.invalidateQueries({ queryKey: getListStaffQueryKey({ status: "approved" }) }),
     ]);
+  }
+
+  async function deleteRecord(row: EntityRecord) {
+    const employeeStaffId = row.entity === "hr-employee-records" &&
+      typeof row.state?.employeeStaffId === "string"
+      ? row.state.employeeStaffId
+      : "";
+    const message = employeeStaffId
+      ? "Delete this employee record and staff account? This cannot be undone."
+      : "Delete this HR record? This cannot be undone.";
+    if (!window.confirm(message)) return;
+    setError("");
+    try {
+      if (employeeStaffId) {
+        await deleteStaff.mutateAsync({ id: employeeStaffId });
+      } else {
+        await deleteHrRecord.mutateAsync({
+          id: row.id,
+          data: { version: row.version },
+        });
+      }
+      await refresh();
+    } catch (reason) {
+      setError(errorMessage(reason));
+    }
   }
 
   async function submit(values: Draft) {
@@ -709,6 +738,18 @@ export default function HRWorkspace() {
                                     Edit
                                  </Button>
                                )}
+                                {actor?.role === "human_resources" && (
+                                  <Button
+                                    size="sm"
+                                    variant="destructive"
+                                    data-testid={`button-delete-hr-record-${row.id}`}
+                                    onClick={() => void deleteRecord(row)}
+                                    disabled={deleteHrRecord.isPending || deleteStaff.isPending}
+                                  >
+                                    <Trash2 className="mr-1.5 h-3.5 w-3.5" />
+                                    Delete
+                                  </Button>
+                                )}
                                {status === "draft" && row.entity !== "hr-employee-records" && (
                                 <Button size="sm" variant="outline" data-testid={`button-advance-hr-record-${row.id}`} onClick={() => requestAction(row, "advance")} disabled={action.isPending}>
                                   Advance

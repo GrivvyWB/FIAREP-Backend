@@ -1278,6 +1278,11 @@ export type ListStaffParams = {
 status?: string;
 };
 
+export type DeleteHrRecordBody = {
+  /** @minimum 1 */
+  version: number;
+};
+
 export type CompleteHrEmployeeIntakeBodyMaintenanceAssignment = typeof CompleteHrEmployeeIntakeBodyMaintenanceAssignment[keyof typeof CompleteHrEmployeeIntakeBodyMaintenanceAssignment];
 
 

@@ -806,7 +806,7 @@ router.delete("/v1/staff/:id", async (req, res) => {
     .from(organizations)
     .where(eq(organizations.id, actor.tenantId))
     .limit(1);
-  if (organization?.features?.["deletionEnabled"] !== true) {
+  if (actor.role !== "human_resources" && organization?.features?.["deletionEnabled"] !== true) {
     res.status(403).json({ error: "Deletion is disabled for this organization" });
     return;
   }

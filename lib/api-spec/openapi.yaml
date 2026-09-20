@@ -920,6 +920,47 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/hr/records/{id}:
+    delete:
+      operationId: deleteHrRecord
+      tags: [hr]
+      summary: Delete an HR lifecycle record
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: string } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [version]
+              properties:
+                version: { type: integer, minimum: 1 }
+      responses:
+        "204":
+          description: HR record deleted
+        "400":
+          description: A current record version is required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "403":
+          description: Human Resources access required
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "404":
+          description: HR record not found
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "409":
+          description: The HR record changed before deletion
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
   /v1/hr/employee-records/{id}/complete:
     post:
       operationId: completeHrEmployeeIntake

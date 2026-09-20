@@ -26,6 +26,7 @@ import type {
   CreateOrganizationAdministratorBody,
   CreatePushSmokeTest202,
   DeleteEntityRecordBody,
+  DeleteHrRecordBody,
   DeletionPolicy,
   DeviceToken,
   EntityInput,
@@ -3383,6 +3384,78 @@ export function useGetHrWorkspace<TData = Awaited<ReturnType<typeof getHrWorkspa
 
 
 
+
+export const getDeleteHrRecordUrl = (id: string,) => {
+
+
+
+
+  return `/api/v1/hr/records/${id}`
+}
+
+/**
+ * @summary Delete an HR lifecycle record
+ */
+export const deleteHrRecord = async (id: string,
+    deleteHrRecordBody: DeleteHrRecordBody, options?: Parameters<typeof customFetch>[1]): Promise<void> => {
+
+  return customFetch<void>(getDeleteHrRecordUrl(id),
+  {
+    ...options,
+    method: 'DELETE',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(deleteHrRecordBody)
+  }
+);}
+
+
+
+
+
+export const getDeleteHrRecordMutationOptions = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteHrRecord>>, TError,{id: string;data: BodyType<DeleteHrRecordBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteHrRecord>>, TError,{id: string;data: BodyType<DeleteHrRecordBody>}, TContext> => {
+
+const mutationKey = ['deleteHrRecord'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteHrRecord>>, {id: string;data: BodyType<DeleteHrRecordBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  deleteHrRecord(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteHrRecordMutationResult = NonNullable<Awaited<ReturnType<typeof deleteHrRecord>>>
+    export type DeleteHrRecordMutationBody = BodyType<DeleteHrRecordBody>
+    export type DeleteHrRecordMutationError = ErrorType<Error>
+
+    /**
+ * @summary Delete an HR lifecycle record
+ */
+export const useDeleteHrRecord = <TError = ErrorType<Error>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteHrRecord>>, TError,{id: string;data: BodyType<DeleteHrRecordBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteHrRecord>>,
+        TError,
+        {id: string;data: BodyType<DeleteHrRecordBody>},
+        TContext
+      > => {
+      return useMutation(getDeleteHrRecordMutationOptions(options));
+    }
 
 export const getCompleteHrEmployeeIntakeUrl = (id: string,) => {
 

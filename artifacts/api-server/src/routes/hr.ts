@@ -98,9 +98,10 @@ router.get("/v1/hr/workspace", async (_req, res): Promise<void> => {
     const actionEntity = row.action.split(".", 1)[0] || "";
     const isHrLifecycleAudit = isHrEntity(actionEntity);
     const isStaffLifecycleAudit = row.action.startsWith("staff.");
+    const isDeletionAudit = row.action.endsWith(".deleted");
     return (
-      (isHrLifecycleAudit && visibleRecordIds.has(reportId)) ||
-      (isStaffLifecycleAudit && visibleStaffIds.has(reportId))
+      (isHrLifecycleAudit && (visibleRecordIds.has(reportId) || isDeletionAudit)) ||
+      (isStaffLifecycleAudit && (visibleStaffIds.has(reportId) || isDeletionAudit))
     );
   });
   res.json({
@@ -119,6 +120,45 @@ router.get("/v1/hr/workspace", async (_req, res): Promise<void> => {
       at: row.at,
     })),
   });
+});
+
+router.delete("/v1/hr/records/:id", async (req, res): Promise<void> => {
+  const actor = requireHr(res);
+  if (!actor) return;
+  const expectedVersion = (req.body as { version?: unknown } | undefined)?.version;
+  if (!Number.isInteger(expectedVersion) || Number(expectedVersion) < 1) {
+    res.status(400).json({ error: "version is required" });
+    return;
+  }
+  const [record] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, req.params["id"]!),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!record || !isHrEntity(record.entity)) {
+    res.status(404).json({ error: "HR record not found" });
+    return;
+  }
+  if (record.version !== expectedVersion) {
+    res.status(409).json({ error: "Concurrent update detected" });
+    return;
+  }
+  const [deleted] = await db.update(entityRecords).set({
+    deleted: true,
+    version: sql`${entityRecords.version} + 1`,
+    updatedAt: new Date(),
+  }).where(and(
+    eq(entityRecords.id, record.id),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+    eq(entityRecords.version, expectedVersion),
+  )).returning({ id: entityRecords.id });
+  if (!deleted) {
+    res.status(409).json({ error: "Concurrent update detected" });
+    return;
+  }
+  await audit(actor, `${record.entity}.deleted`, `Deleted ${record.entity} record`, record.id);
+  res.status(204).send();
 });
 
 router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<void> => {
