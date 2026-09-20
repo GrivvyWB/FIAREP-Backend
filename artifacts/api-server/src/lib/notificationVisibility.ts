@@ -74,7 +74,6 @@ export async function residentReportRecipientIds(
         inArray(staffAccounts.role, ["management", "administrator"]),
       ),
     );
-  const wanted = normalize(development);
   return staff
     .filter((account) =>
       account.role === "management" &&

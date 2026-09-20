@@ -155,6 +155,7 @@ export default function ReportDetail() {
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
         {(mode === 'management' || mode === 'administrator') && r.status !== 'resolved' && (() => {
           const base = 'preAddress=' + encodeURIComponent(r.address || '')
+            + '&preReportId=' + encodeURIComponent(r.id)
             + '&preUnit=' + encodeURIComponent(r.unit || '')
             + '&preNote=' + encodeURIComponent(r.description || '')
             + '&preComplaintNo=' + encodeURIComponent(r.complaintNo || '')

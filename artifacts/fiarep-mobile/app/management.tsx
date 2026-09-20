@@ -228,6 +228,7 @@ export default function Management() {
   // Management with assigned developments edits only reports in those developments; others are read-only.
   function canEdit(r: ResidentReport): boolean {
     if (mode === 'administrator') return true;
+    if (currentPosition === 'Superintendent Ⓔ') return true;
     if (myDevs.length === 0) return true;
     const dev = (r.development || '').trim().toLowerCase();
     return myDevs.some((d) => (d || '').trim().toLowerCase() === dev);
@@ -272,10 +273,12 @@ export default function Management() {
     const report = reports.find((item) => item.id === assignFor);
     const development = (report?.development || '').trim().toLowerCase();
     const candidates = await listStaffByPosition(pos);
-    setStaffList(candidates.filter((staff) =>
-      Boolean(development) &&
-      (staff.developments || []).some((item) => item.trim().toLowerCase() === development)
-    ));
+    setStaffList(currentPosition === 'Superintendent Ⓔ'
+      ? candidates
+      : candidates.filter((staff) =>
+          Boolean(development) &&
+          (staff.developments || []).some((item) => item.trim().toLowerCase() === development)
+        ));
   }
 
   async function assignStaff(a: StaffAccount) {
@@ -390,6 +393,12 @@ export default function Management() {
 
       {showReports && visible.map((r) => (
         <View key={r.id} style={[ui.card, { gap: 8 }]}>
+          {!!r.complaintNo && (
+            <View style={ui.line}>
+              <Text style={ui.lineK}>Complaint #</Text>
+              <Text style={[ui.lineV, { color: ACCENT, fontWeight: '700' }]}>{r.complaintNo}</Text>
+            </View>
+          )}
           {!!r.location && (
             <View style={ui.line}>
               <Text style={ui.lineK}>Location</Text>
@@ -504,7 +513,10 @@ export default function Management() {
           </View>
           {!assignPos ? (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {MANAGEMENT_WORK_ORDER_POSITIONS.map((pos) => (
+              {(currentPosition === 'Superintendent Ⓔ'
+                ? STAFF_POSITIONS.filter((pos) => !['Borough Director', 'Superintendent Ⓔ'].includes(pos))
+                : MANAGEMENT_WORK_ORDER_POSITIONS
+              ).map((pos) => (
                 <Pressable key={pos} style={ui.btnOutline} onPress={() => pickPosition(pos)}>
                   <Text style={ui.btnOutlineText}>{pos}</Text>
                 </Pressable>

@@ -16,6 +16,7 @@ import {
   validateLeaveRequestSchedule,
   canReadStaffDirectoryEmployee,
   canAssignStaff,
+  canSuperintendentEAssignResidentReport,
   isAssignmentAuthority,
   normalizeAssignment,
   entityDevelopmentAllowed,
@@ -1311,6 +1312,14 @@ test("Superintendent E can hand resident complaints to supervisors or operationa
       position: "Borough Director",
     }),
     false,
+  );
+  assert.equal(
+    entityDevelopmentAllowed(
+      superintendentE,
+      "resident-reports",
+      "Amsterdam",
+    ),
+    true,
   );
 });
 

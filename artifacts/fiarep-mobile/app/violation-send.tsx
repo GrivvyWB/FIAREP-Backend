@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingVi
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   createViolationInspectionAssignment,
+  assignResidentReport,
   listViolationLookups,
   deleteViolationLookup,
   listStaffAccounts,
@@ -21,13 +22,14 @@ function fmt(iso: string): string {
 
 export default function ViolationSend() {
   const router = useRouter();
-  const { preAddress, preUnit, preNote, preComplaintNo, preResident, preDevelopment, filter } = useLocalSearchParams<{ preAddress?: string; preUnit?: string; preNote?: string; preComplaintNo?: string; preResident?: string; preDevelopment?: string; filter?: string }>();
+  const { preAddress, preReportId, preUnit, preNote, preComplaintNo, preResident, preDevelopment, filter } = useLocalSearchParams<{ preAddress?: string; preReportId?: string; preUnit?: string; preNote?: string; preComplaintNo?: string; preResident?: string; preDevelopment?: string; filter?: string }>();
   const [violationNumber, setViolationNumber] = useState('');
   const [address, setAddress] = useState(preAddress ? String(preAddress) : '');
   const [unit, setUnit] = useState(preUnit ? String(preUnit) : '');
   const [note, setNote] = useState(preNote ? String(preNote) : '');
   // Resident complaint context carried through so the inspector gets it too.
   const preComplaint = preComplaintNo ? String(preComplaintNo) : '';
+  const reportId = preReportId ? String(preReportId) : '';
   const preResidentName = preResident ? String(preResident) : '';
   const preDev = preDevelopment ? String(preDevelopment) : '';
   const [sentTo, setSentTo] = useState('');
@@ -41,13 +43,20 @@ export default function ViolationSend() {
   const canDelete = useDeletionPolicy();
   const [authorized, setAuthorized] = useState(false);
   const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
+  const complaintMode = String(filter || '').toLowerCase() === 'worker';
+  const [currentPosition, setCurrentPosition] = useState('');
 
   useEffect(() => {
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
-      if (actor.role === 'management' && position.trim().toLowerCase() === 'supervisor inspector') setAuthorized(true);
+      setCurrentPosition(position);
+      if (
+        complaintMode
+          ? actor.role === 'management' || actor.role === 'administrator'
+          : actor.role === 'management' && position.trim().toLowerCase() === 'supervisor inspector'
+      ) setAuthorized(true);
       else router.replace('/management-home');
     }).catch(() => router.replace('/management-home'));
-  }, [router]);
+  }, [complaintMode, router]);
 
   const load = useCallback(() => {
     listStaffAccounts('approved').then(setStaff);
@@ -64,8 +73,15 @@ export default function ViolationSend() {
   }, [authorized, load]));
 
   // Inspectors and contractors are the people who go look a violation up.
-  const _filter = (filter ? String(filter) : '').toLowerCase();
   const recipients = staff.filter((s) => {
+    if (complaintMode) {
+      const eligibleRole = ['management', 'worker', 'inspector', 'emergency'].includes(s.role);
+      const eligiblePosition = s.position !== 'Borough Director' && s.position !== 'Superintendent Ⓔ';
+      const inDevelopment = !!development &&
+        (s.developments || []).some((d) => d.trim().toLowerCase() === development.trim().toLowerCase());
+      return eligibleRole && eligiblePosition &&
+        (currentPosition === 'Superintendent Ⓔ' || inDevelopment);
+    }
     return s.role === 'inspector' &&
       String(s.position || '').trim().toLowerCase() === 'inspector' &&
       !!development &&
@@ -73,24 +89,34 @@ export default function ViolationSend() {
   });
 
   async function submit() {
-    if (!violationNumber.trim()) { Alert.alert('Missing', 'Enter a violation number.'); return; }
+    if (!complaintMode && !violationNumber.trim()) { Alert.alert('Missing', 'Enter a violation number.'); return; }
     if (!address.trim()) { Alert.alert('Missing', 'Enter an address.'); return; }
-    if (!sentTo.trim() || !sentStaffId.trim()) { Alert.alert('Missing', 'Choose an approved Inspector.'); return; }
+    if (!sentTo.trim() || !sentStaffId.trim()) {
+      Alert.alert('Missing', complaintMode ? 'Choose an approved staff member.' : 'Choose an approved Inspector.');
+      return;
+    }
+    if (complaintMode && (!reportId || !preComplaint)) {
+      Alert.alert('Missing', 'The complaint ID is unavailable.');
+      return;
+    }
     try {
       const to = sentTo;
-      const assignment = await createViolationInspectionAssignment({
-        assignedStaffId: sentStaffId,
-        development: development || undefined,
-        address: address.trim() + (unit.trim() ? ' Unit ' + unit.trim() : ''),
-        instructions: [violationNumber.trim(), note.trim()].filter(Boolean).join(' — '),
-        sourceInspectionRef: preComplaint || undefined,
-      });
+      const assignment = complaintMode
+        ? await assignResidentReport(reportId, sentStaffId, to)
+        : await createViolationInspectionAssignment({
+            assignedStaffId: sentStaffId,
+            development: development || undefined,
+            address: address.trim() + (unit.trim() ? ' Unit ' + unit.trim() : ''),
+            instructions: [violationNumber.trim(), note.trim()].filter(Boolean).join(' — '),
+            sourceInspectionRef: preComplaint || undefined,
+          });
       // Keep the violation details so you can immediately send the same job to
       // another person (e.g. a plumber to meet the inspector). Only clear the
       // recipient and show a persistent confirmation.
       setSentTo('');
       setSentStaffId('');
-      setLastSent((assignment.pendingSync ? 'Queued pending sync to ' : 'Sent to ') + to + ' \u00b7 ' + new Date().toLocaleTimeString());
+      const queued = !complaintMode && Boolean((assignment as any)?.pendingSync);
+      setLastSent((queued ? 'Queued pending sync to ' : 'Sent to ') + to + ' \u00b7 ' + new Date().toLocaleTimeString());
       load();
     } catch (e: any) {
       Alert.alert('Error', String(e && e.message ? e.message : e));
@@ -101,16 +127,25 @@ export default function ViolationSend() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={ui.wrap}>
-      <Text style={ui.h}>Send Violation</Text>
+      <Text style={ui.h}>{complaintMode ? 'Send Complaint' : 'Send Violation'}</Text>
 
-      <Text style={ui.label}>Violation number</Text>
-      <TextInput
-        style={ui.input}
-        value={violationNumber}
-        onChangeText={setViolationNumber}
-        placeholder="e.g. V-104882"
-        autoCapitalize="characters"
-      />
+      {complaintMode ? (
+        <>
+          <Text style={ui.label}>Complaint number</Text>
+          <View style={ui.input}><Text>{preComplaint}</Text></View>
+        </>
+      ) : (
+        <>
+          <Text style={ui.label}>Violation number</Text>
+          <TextInput
+            style={ui.input}
+            value={violationNumber}
+            onChangeText={setViolationNumber}
+            placeholder="e.g. V-104882"
+            autoCapitalize="characters"
+          />
+        </>
+      )}
 
       <Text style={[ui.label, { marginTop: 12 }]}>Address</Text>
       <TextInput
@@ -141,7 +176,7 @@ export default function ViolationSend() {
       ))}
       {assignedDevelopments.length === 0 && <Text style={ui.empty}>No assigned developments.</Text>}
       {recipients.length === 0 ? (
-        <Text style={ui.listSub}>No approved inspectors or workers yet.</Text>
+        <Text style={ui.listSub}>{complaintMode ? 'No approved staff yet.' : 'No approved inspectors yet.'}</Text>
       ) : (
         <View style={{ gap: 6 }}>
           {Array.from(new Set(recipients.map((r) => (r.position || 'Other')))).sort().map((pos) => {
@@ -182,12 +217,12 @@ export default function ViolationSend() {
       )}
 
       <Pressable style={[ui.btn, { marginTop: 16 }]} onPress={submit}>
-        <Text style={ui.btnText}>Send violation</Text>
+        <Text style={ui.btnText}>{complaintMode ? 'Send complaint' : 'Send violation'}</Text>
       </Pressable>
       {!!lastSent && <Text style={{ color: '#1a8f4c', fontWeight: '700', textAlign: 'center', marginTop: 8 }}>\u2713 {lastSent}. Pick another person to send again.</Text>}
 
-      <Text style={[ui.label, { marginTop: 24 }]}>Recently sent</Text>
-      {sent.length === 0 ? (
+      {!complaintMode && <Text style={[ui.label, { marginTop: 24 }]}>Recently sent</Text>}
+      {!complaintMode && (sent.length === 0 ? (
         <Text style={ui.listSub}>Nothing sent yet.</Text>
       ) : (
         sent.slice(0, 20).map((v) => (
@@ -209,7 +244,7 @@ export default function ViolationSend() {
             </Text>
           </Pressable>
         ))
-      )}
+      ))}
     </ScrollView>
     </KeyboardAvoidingView>
   );

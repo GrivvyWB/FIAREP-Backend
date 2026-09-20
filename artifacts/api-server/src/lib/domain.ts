@@ -384,6 +384,13 @@ export function entityDevelopmentAllowed(
   development: string | null,
 ): boolean {
   if (
+    entity === "resident-reports" &&
+    actor.role === "management" &&
+    actor.position === "Superintendent Ⓔ"
+  ) {
+    return true;
+  }
+  if (
     entity === "projects" &&
     !development &&
     actor.developments.length > 0
