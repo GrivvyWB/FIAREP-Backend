@@ -1,9 +1,10 @@
-import { MapPin, Image as ImageIcon, Map as MapIcon, Clock, Navigation, AlertCircle } from "lucide-react";
+import { MapPin, Image as ImageIcon, Map as MapIcon, Clock, Navigation, AlertCircle, MessageSquareText } from "lucide-react";
 import { format } from "date-fns";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { requestFileDownloadUrl, requestResidentReportPhotoDownload } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { extractFieldEvidenceNotes } from "@/lib/field-evidence-notes";
 
 interface FieldEvidenceDisplayProps {
   state: Record<string, any>;
@@ -40,6 +41,7 @@ export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayPr
   // Extract geo
   const arrivalGeo = state.arrivalGeo;
   const completionGeo = state.completionGeo;
+  const notes = extractFieldEvidenceNotes(state);
   
   // Extract remote files
   const remoteFiles = Array.isArray(state.remoteFiles) ? state.remoteFiles : [];
@@ -87,7 +89,7 @@ export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayPr
   }
 
   // If there's literally no field evidence to show, we hide the section (or return null)
-  if (!timestamps.length && !arrivalGeo && !completionGeo && !photos.length) {
+  if (!timestamps.length && !arrivalGeo && !completionGeo && !notes.length && !photos.length) {
     return null;
   }
 
@@ -114,6 +116,25 @@ export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayPr
         <div className="grid grid-cols-2 gap-3 text-sm border-t pt-3">
           {arrivalGeo && <GeoDisplay label={startedBy ? `Start location · ${startedBy}` : "Start location"} geo={arrivalGeo} />}
           {completionGeo && <GeoDisplay label={completedBy ? `Completion location · ${completedBy}` : "Completion location"} geo={completionGeo} />}
+        </div>
+      )}
+
+      {notes.length > 0 && (
+        <div className="space-y-2 border-t pt-3">
+          <p className="text-sm text-muted-foreground flex items-center gap-1">
+            <MessageSquareText className="w-3 h-3" /> Notes
+          </p>
+          {notes.map((note, index) => (
+            <div key={`${note.text}-${index}`} className="rounded-md border bg-muted/30 p-3 text-sm">
+              {note.by && <p className="font-medium">{note.by}</p>}
+              <p className="whitespace-pre-wrap text-foreground">{note.text}</p>
+              {note.at && !Number.isNaN(new Date(note.at).getTime()) && (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {new Date(note.at).toLocaleString()}
+                </p>
+              )}
+            </div>
+          ))}
         </div>
       )}
 

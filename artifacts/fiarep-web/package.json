@@ -8,6 +8,7 @@
     "build": "vite build --config vite.config.ts",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "test:complaint-dashboard-rotation": "node --test src/lib/complaint-dashboard-rotation.test.ts",
+    "test:field-evidence-notes": "node --test src/lib/field-evidence-notes.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "devDependencies": {
