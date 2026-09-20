@@ -1,5 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
+import { ensureNychaCatalog } from "./lib/nycha-catalog";
 import { startPushReceiptWorker } from "./lib/push";
 
 const rawPort = process.env["PORT"];
@@ -15,6 +16,8 @@ const port = Number(rawPort);
 if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
+
+await ensureNychaCatalog();
 
 app.listen(port, (err) => {
   if (err) {
