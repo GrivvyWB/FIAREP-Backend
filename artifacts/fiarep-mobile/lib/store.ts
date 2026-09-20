@@ -2643,6 +2643,10 @@ export type ProcurementRequest = {
   sourceTitle?: string;
   violationNo?: string;
   violationNotes?: string;
+  sourceHandoff?: string;
+  handoffTargetId?: string;
+  handoffTargetName?: string;
+  scopeSubmittedByCpm?: boolean;
   closedAt?: string;
   walkthroughAt?: string;
   walkthroughNote?: string;
@@ -2966,6 +2970,7 @@ export async function submitScopeForApproval(id: string, scopeFile: string = '',
     scopeFileName: (scopeFileName || '').trim() || r.scopeFileName,
     returnedAt: undefined,
     returnNote: undefined,
+    scopeSubmittedByCpm: true,
   };
   // Workflow state is server-owned. Do not queue a status PATCH: submit must
   // be an authorized action against the already-created server draft.
@@ -3767,7 +3772,7 @@ export function sortByUrgency(list: ResidentReport[], now: Date = new Date()): R
 // Inspector is sent a building + violation number by their supervisor, walks
 // the building, and logs each violation they find: code, description, the
 // hazard class they assign (A/B/C), and free-text notes. Stored per building.
-export type BuildingViolationStatus = 'logged' | 'approved' | 'routed' | 'cpm_review' | 'done';
+export type BuildingViolationStatus = 'logged' | 'approved' | 'routed' | 'cpm_review' | 'cpm_scope_assigned' | 'done';
 export type BuildingViolation = {
   id: string;
   building: string;        // address / building identifier
@@ -3780,12 +3785,18 @@ export type BuildingViolation = {
   loggedBy: string;
   loggedAt: string;
   development?: string;
+  routeAssignmentId?: string;
+  pendingSync?: boolean;
+  assignedCpmStaffId?: string;
+  handoffTargetId?: string;
+  handoffTargetName?: string;
   // Workflow chain: inspector logs -> management approves -> routes to a staff
   // member (CPM builds a scope; a trade does the work). Data carries forward.
   status?: BuildingViolationStatus;
   approvedBy?: string;
   approvedAt?: string;
   routedTo?: string;         // specific staff member's name
+  assignedStaffId?: string;  // canonical staff id
   routedToPosition?: string; // their position/trade (snapshot)
   routedAt?: string;
   completedBy?: string;
@@ -3813,10 +3824,18 @@ export async function addBuildingViolation(
   hazardClass: 'A' | 'B' | 'C',
   notes: string,
   photos: string[] = [],
+  routeAssignmentId?: string,
+  assignedDevelopment?: string,
 ): Promise<BuildingViolation> {
   const d = await db();
   await ensureBuildingViolTable(d);
   const a = await getCurrentActor();
+  if (routeAssignmentId) {
+    const existingRows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
+    if (existingRows.some((row) => { try { return (JSON.parse(row.state) as BuildingViolation).routeAssignmentId === routeAssignmentId; } catch { return false; } })) {
+      throw new Error('This inspector assignment already has a linked violation.');
+    }
+  }
   const v: BuildingViolation = {
     id: uid(),
     building: (building || '').trim(),
@@ -3828,16 +3847,31 @@ export async function addBuildingViolation(
     photos: Array.isArray(photos) ? photos : [],
     loggedBy: (a && a.name) || '',
     loggedAt: new Date().toISOString(),
-    development: ((a as any)?.developments || []).length === 1 ? (a as any).developments[0] : undefined,
+    development: assignedDevelopment?.trim() || (((a as any)?.developments || []).length === 1 ? (a as any).developments[0] : undefined),
+    routeAssignmentId: routeAssignmentId?.trim() || undefined,
     status: 'logged',
   };
-  await d.runAsync('INSERT INTO building_violations (id,state) VALUES (?,?)', v.id, JSON.stringify(v));
-  await queueMutation('building-violations', v.id, v);
+  let pendingSync = false;
+  if (routeAssignmentId && await getAccessToken()) {
+    try {
+      const result = await createEntityRecord('building-violations', { id: v.id, state: v, development: v.development });
+      const authoritative = { ...(result.state as object), id: result.id } as BuildingViolation;
+      await d.runAsync('INSERT OR REPLACE INTO building_violations (id,state) VALUES (?,?)', authoritative.id, JSON.stringify(authoritative));
+      return authoritative;
+    } catch (error: any) {
+      if (error?.status) throw error;
+      if (!/(network|offline|timeout|fetch|connection|unreachable)/i.test(String(error?.message || error))) throw error;
+      pendingSync = true;
+    }
+  }
+  const stored = pendingSync ? { ...v, pendingSync: true } : v;
+  await d.runAsync('INSERT OR REPLACE INTO building_violations (id,state) VALUES (?,?)', v.id, JSON.stringify(stored));
+  await queueMutation('building-violations', v.id, stored);
   // Auto-send to management for approval the moment the inspector saves it.
   await addNotification('management', 'Inspection logged \u2014 awaiting approval',
     v.building + '  \u00b7 ' + v.violationNo + '  (Class ' + v.hazardClass + ')', v.id);
   await logAudit('inspector', v.loggedBy, 'Inspection logged', v.building + ' \u00b7 ' + v.violationNo + ' (Class ' + v.hazardClass + ')', v.id);
-  return v;
+  return stored;
 }
 
 // Supervisor Inspector sends an already-approved violation to one exact CPM
@@ -3860,18 +3894,75 @@ export async function handoffViolationToCpmSupervisor(
   let v: BuildingViolation;
   try { v = JSON.parse(row.state) as BuildingViolation; } catch { throw new Error('Violation data is invalid.'); }
   if (v.status === 'cpm_review') throw new Error('This violation was already sent to a CPM Supervisor.');
-  if (v.status !== 'routed') throw new Error('Approve and route this violation before sending it to a CPM Supervisor.');
-  const next = { ...v, status: 'cpm_review' as const, routedAt: v.routedAt || new Date().toISOString() };
-  await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(next), id);
-  await queueMutation('building-violations', id, next);
+  if (v.status !== 'approved') throw new Error('Only an approved violation can be sent to a CPM Supervisor.');
+  const next = { ...v, status: 'cpm_review' as const };
   try {
     await performEntityAction('building-violations', id, 'handoff-cpm-supervisor', { receiverSupervisorId: receiverSupervisorId.trim() });
-  } catch {
+  } catch (error: any) {
+    if (error?.status && Number(error.status) >= 400 && Number(error.status) < 500) throw error;
     const queued = { ...next, _pendingWorkflowActions: [{ action: 'handoff-cpm-supervisor', body: { receiverSupervisorId: receiverSupervisorId.trim() } }] };
     await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(queued), id);
     await queueMutation('building-violations', id, queued);
+    return queued;
+  }
+  await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(next), id);
+  await queueMutation('building-violations', id, next);
+  return next;
+}
+
+export async function listCpmReviewViolations(): Promise<BuildingViolation[]> {
+  const d = await db();
+  await ensureBuildingViolTable(d);
+  const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
+  return rows.flatMap((r) => { try { const v = JSON.parse(r.state) as BuildingViolation; return v.status === 'cpm_review' ? [v] : []; } catch { return []; } });
+}
+
+export async function listAssignedCpmViolations(cpmId: string): Promise<BuildingViolation[]> {
+  const d = await db();
+  const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
+  return rows.flatMap((r) => { try { const v = JSON.parse(r.state) as BuildingViolation; return v.status === 'cpm_scope_assigned' && v.assignedCpmStaffId === cpmId ? [v] : []; } catch { return []; } });
+}
+
+export async function assignViolationToCpm(id: string, cpmId: string): Promise<BuildingViolation | null> {
+  const d = await db();
+  const v = await getBuildingViolation(id);
+  if (!v) throw new Error('Inspector violation was not found.');
+  if (v.status !== 'cpm_review') throw new Error('This violation is no longer awaiting CPM assignment.');
+  if (!cpmId.trim()) throw new Error('Select an approved CPM.');
+  const next = { ...v, status: 'cpm_scope_assigned' as const, assignedCpmStaffId: cpmId.trim() };
+  try {
+    const result = await performEntityAction('building-violations', id, 'assign-cpm', { cpmStaffId: cpmId.trim() });
+    const authoritative = { ...(result.state as object), id: result.id } as BuildingViolation;
+    await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(authoritative), id);
+    return authoritative;
+  } catch (error: any) {
+    if (error?.status && Number(error.status) >= 400 && Number(error.status) < 500) throw error;
+    const queued = { ...next, _pendingWorkflowActions: [{ action: 'assign-cpm', body: { cpmStaffId: cpmId.trim() } }] };
+    await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(queued), id);
+    await queueMutation('building-violations', id, queued);
+    return queued;
   }
   return next;
+}
+
+export async function getViolationScopeDraft(violationId: string, requestedBy: string): Promise<ProcurementRequest | null> {
+  const id = `violation-scope:${violationId}`;
+  const existing = await getProcurementRequest(id);
+  if (existing) return existing;
+  const v = await getBuildingViolation(violationId);
+  if (!v) return null;
+  const draft: ProcurementRequest = {
+    id, trackingId: '', projectId: '', development: v.development,
+    address: v.building, scope: [v.code, v.violationNo, v.notes].filter(Boolean).join(' - '),
+    status: 'draft', requestedBy, requestedAt: new Date().toISOString(),
+    sourceEntity: 'building-violations', sourceRecordId: violationId,
+    sourceTitle: 'Inspector violation', violationNo: v.violationNo, violationNotes: v.notes,
+  };
+  const d = await db();
+  await ensureProcurementTable(d);
+  await d.runAsync('INSERT OR IGNORE INTO procurement (id,state) VALUES (?,?)', id, JSON.stringify(draft));
+  await queueMutation('procurement', id, draft);
+  return draft;
 }
 
 // Management approves a logged inspection, then routes it to a specific staff
@@ -3894,14 +3985,18 @@ export async function approveAndRouteViolation(id: string, toStaffId: string, to
     routedTo: (toName || '').trim(),
     routedToPosition: (toPosition || '').trim(),
     routedAt: now,
+    assignedStaffId: toStaffId,
   };
-  await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(next), next.id);
-  await queueMutation('building-violations', id, next);
+  if (v.status === 'routed' && v.assignedStaffId) throw new Error('This violation has already been sent to an Inspector.');
   try {
-    await performEntityAction('building-violations', id, 'route', {
+    const result = await performEntityAction('building-violations', id, 'route', {
       assignedStaffId: toStaffId,
     });
-  } catch {
+    const authoritative = { ...(result.state as object), id: result.id } as BuildingViolation;
+    await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(authoritative), id);
+    return authoritative;
+  } catch (error: any) {
+    if (error?.status && Number(error.status) >= 400 && Number(error.status) < 500) throw error;
     const queued = {
       ...next,
       _pendingWorkflowActions: [
@@ -3911,11 +4006,13 @@ export async function approveAndRouteViolation(id: string, toStaffId: string, to
     };
     await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(queued), id);
     await queueMutation('building-violations', id, queued);
+    return queued;
   }
   const flag = next.hazardClass === 'C' ? '\u26a0\ufe0f Class C \u2014 ' : '';
   const msg = (next.routedToPosition || '').toLowerCase() === 'cpm' ? 'Approved inspection \u2014 build scope' : 'Approved inspection \u2014 work assignment';
-  if (next.routedTo) {
-    await addNotification(next.routedTo, flag + msg,
+  const routedTo = next.routedTo || '';
+  if (routedTo) {
+    await addNotification(routedTo, flag + msg,
       next.building + '  \u00b7 ' + next.violationNo + '  (Class ' + next.hazardClass + ')', next.id);
   }
   await logAudit(a && a.role ? a.role : 'management', next.approvedBy || '', 'Inspection approved & routed', next.violationNo + ' \u2192 ' + (next.routedTo || '') + (next.routedToPosition ? ' (' + next.routedToPosition + ')' : ''), next.id);
@@ -3932,13 +4029,14 @@ export async function listLoggedInspections(): Promise<BuildingViolation[]> {
 }
 
 // Approved inspections routed to a specific person (for their inbox/list).
-export async function listRoutedInspectionsFor(name: string): Promise<BuildingViolation[]> {
+export async function listRoutedInspectionsFor(name: string, assignedStaffId?: string): Promise<BuildingViolation[]> {
   const d = await db();
   await ensureBuildingViolTable(d);
   const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
   const items = rows.map((r: any) => { try { return JSON.parse(r.state) as BuildingViolation; } catch { return null; } }).filter(Boolean) as BuildingViolation[];
   const nm = (name || '').trim().toLowerCase();
-  return items.filter(v => v.status === 'routed' && (v.routedTo || '').trim().toLowerCase() === nm)
+  const sid = (assignedStaffId || '').trim();
+  return items.filter(v => v.status === 'routed' && (sid ? v.assignedStaffId === sid : false))
     .sort((a, b) => (b.routedAt || '').localeCompare(a.routedAt || ''));
 }
 
@@ -3948,7 +4046,7 @@ export async function listActiveInspections(): Promise<BuildingViolation[]> {
   await ensureBuildingViolTable(d);
   const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
   const items = rows.map((r: any) => { try { return JSON.parse(r.state) as BuildingViolation; } catch { return null; } }).filter(Boolean) as BuildingViolation[];
-  return items.filter(v => v.status === 'routed' || v.status === 'cpm_review' || v.status === 'done')
+  return items.filter(v => v.status === 'approved' || v.status === 'routed' || v.status === 'cpm_review' || v.status === 'done')
     .sort((a, b) => (b.routedAt || b.loggedAt || '').localeCompare(a.routedAt || a.loggedAt || ''));
 }
 
@@ -4059,12 +4157,51 @@ export type RouteStopStatus = 'pending' | 'reached' | 'not_reached';
 export type RouteStop = { id: string; address: string; status: RouteStopStatus };
 export type RouteAssignment = {
   id: string;
+  clientRequestId?: string;
   inspector: string;      // assigned inspector's name
+  assignmentKind?: 'route' | 'violation-inspection';
+  assignedStaffId?: string;
+  development?: string;
+  location?: string;
+  instructions?: string;
+  sourceInspectionRef?: string;
+  pendingSync?: boolean;
   assignedBy: string;
   assignedAt: string;
   fileName: string;
   stops: RouteStop[];
 };
+
+export async function createViolationInspectionAssignment(input: {
+  assignedStaffId: string; development?: string; address: string; instructions?: string; sourceInspectionRef?: string;
+}): Promise<RouteAssignment> {
+  const d = await db();
+  await ensureRouteTable(d);
+  if (!input.assignedStaffId.trim() || !input.address.trim()) throw new Error('Inspector and address are required.');
+  const a = await getCurrentActor();
+  const r: RouteAssignment = {
+    id: uid(), clientRequestId: uid(), inspector: '', assignmentKind: 'violation-inspection',
+    assignedStaffId: input.assignedStaffId.trim(), development: input.development?.trim() || undefined,
+    location: input.address.trim(), instructions: input.instructions?.trim() || undefined,
+    sourceInspectionRef: input.sourceInspectionRef?.trim() || undefined,
+    assignedBy: a.name || '', assignedAt: new Date().toISOString(), fileName: '',
+    stops: [{ id: uid(), address: input.address.trim(), status: 'pending' }],
+  };
+  try {
+    const result = await createEntityRecord('route-assignments', { id: r.id, state: r, development: r.development });
+    const authoritative = { ...(result.state as object), id: result.id } as RouteAssignment;
+    await d.runAsync('INSERT OR REPLACE INTO route_assignments(id,state) VALUES(?,?)', authoritative.id, JSON.stringify(authoritative));
+    await addNotification(input.assignedStaffId.trim(), 'New inspector violation assignment', input.address.trim(), authoritative.id);
+    return authoritative;
+  } catch (error: any) {
+    if (error?.status && Number(error.status) >= 400 && Number(error.status) < 500) throw error;
+    if (error?.status || !/(network|offline|timeout|fetch|connection|unreachable)/i.test(String(error?.message || error))) throw error;
+    await d.runAsync('INSERT OR REPLACE INTO route_assignments(id,state) VALUES(?,?)', r.id, JSON.stringify(r));
+    await queueMutation('route-assignments', r.id, r);
+    await addNotification(input.assignedStaffId.trim(), 'New inspector violation assignment', input.address.trim(), r.id);
+    return { ...r, pendingSync: true };
+  }
+}
 
 async function ensureRouteTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS route_assignments (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
@@ -4115,14 +4252,17 @@ export async function getRouteAssignment(id: string): Promise<RouteAssignment | 
 }
 
 // Lists for an inspector (their own name), newest first.
-export async function listRouteAssignments(inspector: string): Promise<RouteAssignment[]> {
+export async function listRouteAssignments(inspector: string, assignedStaffId?: string): Promise<RouteAssignment[]> {
   const d = await db();
   await ensureRouteTable(d);
   const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM route_assignments');
   const items = rows.map((r: any) => { try { return JSON.parse(r.state) as RouteAssignment; } catch { return null; } }).filter(Boolean) as RouteAssignment[];
   const nm = (inspector || '').trim().toLowerCase();
+  const sid = (assignedStaffId || '').trim();
   return items
-    .filter(r => (r.inspector || '').trim().toLowerCase() === nm)
+    .filter(r => r.assignmentKind === 'violation-inspection'
+      ? r.assignedStaffId === sid
+      : (!sid && (r.inspector || '').trim().toLowerCase() === nm))
     .sort((a, b) => (b.assignedAt || '').localeCompare(a.assignedAt || ''));
 }
 

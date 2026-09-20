@@ -25,6 +25,7 @@ import {
   isAssignmentAuthority,
   isSupervisorPosition,
   isCpmSupervisor,
+  isViolationAuthority,
   isLeaveApprovalAuthority,
   leaveRequestDurationDays,
   isValidEntityTransition,
@@ -65,6 +66,12 @@ const HR_SENSITIVE_ACTIONS = new Set([
 
 function normalizeStatus(value: unknown): string {
   return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function normalizeLocation(value: unknown): string {
+  return typeof value === "string"
+    ? value.trim().toLowerCase().replace(/\s+/g, " ")
+    : "";
 }
 
 function purposeForTarget(entity: string, state: Record<string, unknown>): string | null {
@@ -397,6 +404,95 @@ router.post("/v1/:entity", async (req, res, next) => {
     return;
   }
   let id = recordId(body["id"]);
+  let linkedAssignment: typeof entityRecords.$inferSelect | undefined;
+  if (entity === "route-assignments") {
+    if (!isViolationAuthority(actor)) {
+      res.status(403).json({ error: "Only the Supervisor Inspector may create route assignments" });
+      return;
+    }
+    const assignmentKind = typeof rawState["assignmentKind"] === "string"
+      ? rawState["assignmentKind"].trim() : "";
+    const clientRequestId = typeof rawState["clientRequestId"] === "string"
+      ? rawState["clientRequestId"].trim() : "";
+    const development = typeof rawState["development"] === "string"
+      ? rawState["development"].trim() : "";
+    const location = typeof rawState["address"] === "string"
+      ? rawState["address"].trim()
+      : typeof rawState["location"] === "string" ? rawState["location"].trim() : "";
+    const instructions = typeof rawState["instructions"] === "string"
+      ? rawState["instructions"].trim() : "";
+    const assignedStaffId = typeof rawState["assignedStaffId"] === "string"
+      ? rawState["assignedStaffId"].trim() : "";
+    if (assignmentKind !== "violation-inspection" || !clientRequestId ||
+        !development || !location || !instructions || !assignedStaffId) {
+      res.status(400).json({ error: "assignmentKind, clientRequestId, development, address/location, instructions, and assignedStaffId are required" });
+      return;
+    }
+    const [target] = await db.select().from(staffAccounts).where(and(
+        eq(staffAccounts.id, assignedStaffId),
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.status, "approved"),
+        eq(staffAccounts.role, "inspector"),
+        eq(staffAccounts.position, "Inspector"),
+      )).limit(1);
+    if (!target || target.id === actor.id ||
+        !target.developments.some((value) => value.trim().toLowerCase() === development.toLowerCase())) {
+      res.status(403).json({ error: "Select an approved Inspector covering this development" });
+      return;
+    }
+    id = `route-assignment:${clientRequestId}`;
+    rawState["assignedStaffId"] = target.id;
+    rawState["assignedTo"] = target.name;
+    rawState["assignmentSource"] = "supervisor-inspector";
+    rawState["assignmentStatus"] = "pending";
+    rawState["development"] = development;
+    rawState["address"] = location;
+    rawState["location"] = location;
+  }
+  if (entity === "building-violations") {
+    const assignmentId = typeof rawState["routeAssignmentId"] === "string"
+      ? rawState["routeAssignmentId"].trim()
+      : typeof rawState["assignmentId"] === "string"
+        ? rawState["assignmentId"].trim() : "";
+    if (assignmentId) {
+      const [assignment] = await db.select().from(entityRecords).where(and(
+        eq(entityRecords.id, assignmentId),
+        eq(entityRecords.entity, "route-assignments"),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+        sql`${entityRecords.state}->>'assignedStaffId' = ${actor.id}`,
+        sql`${entityRecords.state}->>'assignmentKind' = 'violation-inspection'`,
+        sql`${entityRecords.state}->>'assignmentStatus' = 'pending'`,
+      )).limit(1);
+      if (!assignment) {
+        res.status(403).json({ error: "This route assignment is not assigned to you" });
+        return;
+      }
+      rawState["routeAssignmentId"] = assignment.id;
+      rawState["sourceAssignmentId"] = assignment.id;
+      rawState["sourceRecordId"] = assignment.id;
+      linkedAssignment = assignment;
+      const violationDevelopment = typeof rawState["development"] === "string"
+        ? rawState["development"].trim() : "";
+      if (!violationDevelopment ||
+          normalizeLocation(violationDevelopment) !== normalizeLocation(
+            assignment.development || assignment.state["development"] || "",
+          )) {
+        res.status(403).json({ error: "Violation development must match the route assignment" });
+        return;
+      }
+      const assignmentLocation = assignment.state["address"] ?? assignment.state["location"];
+      const violationLocation = rawState["address"] ?? rawState["location"];
+      if (!normalizeLocation(violationLocation) ||
+          normalizeLocation(violationLocation) !== normalizeLocation(assignmentLocation)) {
+        res.status(403).json({ error: "Violation address/location must match the route assignment" });
+        return;
+      }
+      rawState["development"] = assignment.development || assignment.state["development"];
+      rawState["address"] = assignmentLocation;
+      rawState["location"] = assignmentLocation;
+    }
+  }
   const [existing] = await db
     .select()
     .from(entityRecords)
@@ -436,6 +532,11 @@ router.post("/v1/:entity", async (req, res, next) => {
       : typeof rawState["development"] === "string"
         ? rawState["development"]
         : null;
+  if (linkedAssignment) {
+    development = linkedAssignment.development ||
+      (typeof linkedAssignment.state["development"] === "string"
+        ? linkedAssignment.state["development"] : development);
+  }
   if (entity === "manpower-requests") {
     if (
       actor.role !== "management" &&
@@ -705,22 +806,71 @@ router.post("/v1/:entity", async (req, res, next) => {
     persistedCreatedState["cpmName"] = actor.name;
     persistedCreatedState["cpmId"] = actor.id;
   }
-  const insert = db
-    .insert(entityRecords)
-    .values({
-      id,
-      tenantId: actor.tenantId,
-      entity,
-      projectId,
-      development,
-      state: withGeneratedFields(entity, persistedCreatedState),
-      createdBy: actor.id,
-      createdAt: now,
-      updatedAt: now,
-    });
-  const [created] = entity === "manpower-requests"
-    ? await insert.onConflictDoNothing().returning()
-    : await insert.returning();
+  let created: typeof entityRecords.$inferSelect | undefined;
+  if (linkedAssignment) {
+    try {
+      created = await db.transaction(async (tx) => {
+        const [existingViolation] = await tx.select({ id: entityRecords.id })
+          .from(entityRecords)
+          .where(and(
+            eq(entityRecords.tenantId, actor.tenantId),
+            eq(entityRecords.entity, "building-violations"),
+            eq(entityRecords.deleted, false),
+            sql`${entityRecords.state}->>'routeAssignmentId' = ${linkedAssignment!.id}`,
+          )).limit(1);
+        if (existingViolation) {
+          throw Object.assign(new Error("This route assignment already has a building violation"), { status: 409 });
+        }
+        const [inserted] = await tx.insert(entityRecords).values({
+          id,
+          tenantId: actor.tenantId,
+          entity,
+          projectId,
+          development,
+          state: withGeneratedFields(entity, persistedCreatedState),
+          createdBy: actor.id,
+          createdAt: now,
+          updatedAt: now,
+        }).returning();
+        if (!inserted) throw Object.assign(new Error("Could not create building violation"), { status: 409 });
+        const [completed] = await tx.update(entityRecords).set({
+          state: { ...linkedAssignment!.state, assignmentStatus: "completed", returnedToSupervisor: true, resultRecordId: inserted.id },
+          version: sql`${entityRecords.version} + 1`,
+          updatedAt: now,
+        }).where(and(
+          eq(entityRecords.id, linkedAssignment!.id),
+          eq(entityRecords.version, linkedAssignment!.version),
+          eq(entityRecords.tenantId, actor.tenantId),
+          eq(entityRecords.deleted, false),
+        )).returning();
+        if (!completed) throw Object.assign(new Error("The route assignment changed before completion"), { status: 409 });
+        return inserted;
+      });
+    } catch (error: any) {
+      if (error?.status === 409) {
+        res.status(409).json({ error: error.message });
+        return;
+      }
+      throw error;
+    }
+  } else {
+    const insert = db
+      .insert(entityRecords)
+      .values({
+        id,
+        tenantId: actor.tenantId,
+        entity,
+        projectId,
+        development,
+        state: withGeneratedFields(entity, persistedCreatedState),
+        createdBy: actor.id,
+        createdAt: now,
+        updatedAt: now,
+      });
+    [created] = entity === "manpower-requests"
+      ? await insert.onConflictDoNothing().returning()
+      : await insert.returning();
+  }
   if (!created) {
     res.status(409).json({ error: "This complaint or violation has already been sent" });
     return;
@@ -1129,6 +1279,7 @@ router.post(
     "building-violations": {
       approve: "approved",
       "handoff-cpm-supervisor": "cpm_review",
+      "assign-cpm": "cpm_scope_assigned",
       route: "routed",
       complete: "done",
       release: "approved",
@@ -1390,6 +1541,7 @@ router.post(
   }
   let inHouseReceiver: typeof staffAccounts.$inferSelect | undefined;
   let cpmSupervisorReceiver: typeof staffAccounts.$inferSelect | undefined;
+  let cpmStaffReceiver: typeof staffAccounts.$inferSelect | undefined;
   if (entity === "building-violations" && action === "handoff-cpm-supervisor") {
     const receiverSupervisorId = typeof body["receiverSupervisorId"] === "string"
       ? body["receiverSupervisorId"].trim() : "";
@@ -1414,6 +1566,35 @@ router.post(
       res.status(403).json({
         error: "Select an approved CPM Supervisor covering this development",
       });
+      return;
+    }
+  }
+  if (entity === "building-violations" && action === "assign-cpm") {
+    const cpmStaffId = typeof body["cpmStaffId"] === "string"
+      ? body["cpmStaffId"].trim() : "";
+    if (Object.keys(body).some((key) => key !== "cpmStaffId")) {
+      res.status(400).json({ error: "assign-cpm accepts only cpmStaffId" });
+      return;
+    }
+    if (!cpmStaffId) {
+      res.status(400).json({ error: "cpmStaffId is required" });
+      return;
+    }
+    [cpmStaffReceiver] = await db.select().from(staffAccounts).where(and(
+      eq(staffAccounts.id, cpmStaffId),
+      eq(staffAccounts.tenantId, actor.tenantId),
+      eq(staffAccounts.status, "approved"),
+      eq(staffAccounts.role, "inspector"),
+      eq(staffAccounts.position, "CPM"),
+    )).limit(1);
+    if (
+      !cpmStaffReceiver ||
+      cpmStaffReceiver.id === actor.id ||
+      !current.development ||
+      !cpmStaffReceiver.developments.some((value) =>
+        value.trim().toLowerCase() === current.development!.trim().toLowerCase())
+    ) {
+      res.status(403).json({ error: "Select an approved CPM covering this development" });
       return;
     }
   }
@@ -1672,6 +1853,12 @@ router.post(
     state["handoffByStaffId"] = actor.id;
     state["handoffByName"] = actor.name;
     state["handoffAt"] = now.toISOString();
+  }
+  if (entity === "building-violations" && action === "assign-cpm") {
+    state["assignedCpmStaffId"] = cpmStaffReceiver?.id || "";
+    state["assignedCpmStaffName"] = cpmStaffReceiver?.name || "";
+    state["requestedBy"] = cpmStaffReceiver?.name || "";
+    state["assignedCpmAt"] = now.toISOString();
   }
   if (action === "start") {
     state["startedByStaffId"] = actor.id;
@@ -2004,9 +2191,18 @@ router.post(
           await auditInTransaction(tx, actor, "manpower-requests.created", "Created in-house manpower request", requestId);
         }
         if (entity === "building-violations" && action === "handoff-cpm-supervisor") {
-          const receiver = cpmSupervisorReceiver;
+          await auditInTransaction(
+            tx,
+            actor,
+            "building-violations.handoff-cpm-supervisor",
+            "Handed building violation to CPM Supervisor",
+            current.id,
+          );
+        }
+        if (entity === "building-violations" && action === "assign-cpm") {
+          const receiver = cpmStaffReceiver;
           if (!receiver) {
-            throw Object.assign(new Error("The receiving CPM Supervisor is no longer available"), { status: 409 });
+            throw Object.assign(new Error("The receiving CPM is no longer available"), { status: 409 });
           }
           const source = current.state;
           const code = String(source["violationCode"] ?? source["code"] ?? "").trim();
@@ -2020,19 +2216,22 @@ router.post(
             source["tradeType"],
           ].find((value): value is string => typeof value === "string" && Boolean(value.trim()));
           const reviewState: Record<string, unknown> = {
-            status: "submitted",
+            status: "draft",
             sourceEntity: "building-violations",
             sourceRecordId: current.id,
             sourceHandoff: "supervisor-inspector-to-cpm-supervisor",
             scope,
+            scopeDescription: scope,
             ...(requestedTradeValue ? { requestedTrade: requestedTradeValue.trim() } : {}),
             ...(source["address"] !== undefined ? { address: source["address"] } : {}),
             ...(source["evidence"] !== undefined ? { evidence: source["evidence"] } : {}),
             ...(source["photoEvidence"] !== undefined ? { photoEvidence: source["photoEvidence"] } : {}),
             ...(source["fileRefs"] !== undefined ? { fileRefs: source["fileRefs"] } : {}),
             ...(source["files"] !== undefined ? { files: source["files"] } : {}),
-            handoffTargetId: receiver.id,
-            handoffTargetName: receiver.name,
+            handoffTargetId: String(current.state["cpmSupervisorId"] || ""),
+            handoffTargetName: String(current.state["cpmSupervisorName"] || ""),
+            requestedBy: receiver.name,
+            requestedByName: receiver.name,
           };
           await tx.insert(entityRecords).values({
             id: `violation-scope:${current.id}`,
@@ -2041,17 +2240,11 @@ router.post(
             projectId: current.projectId,
             development: current.development,
             state: reviewState,
-            createdBy: current.createdBy || actor.id,
+            createdBy: receiver.id,
             createdAt: now,
             updatedAt: now,
           }).onConflictDoNothing();
-          await auditInTransaction(
-            tx,
-            actor,
-            "building-violations.handoff-cpm-supervisor",
-            "Handed building violation to CPM Supervisor",
-            current.id,
-          );
+          await auditInTransaction(tx, actor, "procurement.created", "Created CPM procurement draft", `violation-scope:${current.id}`);
         }
         if (entity === "manpower-requests" && action === "complete" &&
             current.state["assignmentMode"] === "in_house") {
@@ -2268,12 +2461,19 @@ router.post(
     }
   } else if (entity === "building-violations" && action === "handoff-cpm-supervisor") {
     target = String(state["cpmSupervisorId"] || "");
+  } else if (entity === "building-violations" && action === "assign-cpm") {
+    target = String(state["assignedCpmStaffId"] || "");
   } else {
     target = "management";
   }
   if (target) {
     if (entity === "procurement" && action === "submit") {
-      const reviewers = await db.select({
+      const targetedSupervisorId = typeof current.state["handoffTargetId"] === "string"
+        ? current.state["handoffTargetId"] : "";
+      if (targetedSupervisorId) {
+        await notify(actor, targetedSupervisorId, "Scope submitted for CPM Supervisor review", undefined, current.id);
+      } else {
+        const reviewers = await db.select({
           id: staffAccounts.id,
           position: staffAccounts.position,
           developments: staffAccounts.developments,
@@ -2284,14 +2484,15 @@ router.post(
           eq(staffAccounts.role, "management"),
           eq(staffAccounts.status, "approved"),
         ));
-      for (const reviewer of reviewers) {
-        // Scope review is reserved for the exact CPM Supervisor position and
-        // must remain within the supervisor's development coverage.
-        const development = current.development?.trim().toLowerCase() || "";
-        const covered = development &&
-          reviewer.developments.some((item) => item.trim().toLowerCase() === development);
-        if (reviewer.position !== "CPM Supervisor" || !covered) continue;
-        await notify(actor, reviewer.id, "Scope submitted for CPM Supervisor review", undefined, current.id);
+        for (const reviewer of reviewers) {
+          // Scope review is reserved for the exact CPM Supervisor position and
+          // must remain within the supervisor's development coverage.
+          const development = current.development?.trim().toLowerCase() || "";
+          const covered = development &&
+            reviewer.developments.some((item) => item.trim().toLowerCase() === development);
+          if (reviewer.position !== "CPM Supervisor" || !covered) continue;
+          await notify(actor, reviewer.id, "Scope submitted for CPM Supervisor review", undefined, current.id);
+        }
       }
     } else if (entity === "procurement" && action === "approve") {
       const recipients = await db.select({ name: staffAccounts.name })
@@ -2311,6 +2512,14 @@ router.post(
         actor,
         target,
         "Building violation handed off for CPM review",
+        current.development || undefined,
+        current.id,
+      );
+    } else if (entity === "building-violations" && action === "assign-cpm") {
+      await notify(
+        actor,
+        target,
+        "Building violation assigned to CPM",
         current.development || undefined,
         `violation-scope:${current.id}`,
       );

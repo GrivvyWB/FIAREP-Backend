@@ -32,6 +32,8 @@ export default function ManagementHome() {
   const supervisorInspector = _pos === 'supervisor inspector';
   const canReviewInspections = supervisorInspector;
   const cpmSupervisor = _pos === 'cpm supervisor';
+  const tradeSupervisor = /^(plumber|electric|electrician|elevator|painter|carpenter|roofer|heating|general construction|cctv installation)( service)? supervisor$/.test(_pos)
+    || ['plumbing supervisor', 'electrical supervisor', 'electrician supervisor', 'elevator service supervisor'].includes(_pos);
   const director = _pos === 'borough director' || _pos === 'regional director';
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = isElevated ? await unreadCount('management') : 0; if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, [isElevated]));
 
@@ -41,6 +43,39 @@ export default function ManagementHome() {
     refresh();
   }
 
+  // These positions are deliberately allow-listed.  Do not let the broad
+  // management sections leak into a supervisor's mobile home.
+  const personalTiles: Tile[] = [
+    { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
+    { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' },
+    { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' },
+  ];
+  if (supervisorInspector) {
+    return <ScrollView contentContainerStyle={ui.wrap}>
+      <AlertBanner count={unread} /><Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>Supervisor Inspector</Text>
+      <Text style={{ color: '#1E7D4F', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8 }}>Inspections & Compliance</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[
+        { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' as Tone },
+        { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone },
+        ...personalTiles,
+      ].map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
+      <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
+    </ScrollView>;
+  }
+  if (cpmSupervisor || tradeSupervisor) {
+    const title = cpmSupervisor ? 'CPM Supervisor' : displayStaffPosition(position);
+    const workflow: Tile[] = cpmSupervisor
+      ? [{ label: 'CPM Supervisor Scope Review', onPress: () => router.push('/scope-review'), tone: 'solid' }]
+      : [
+        { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' },
+        { label: 'Assign a Job', onPress: () => router.push('/dispatch-job'), tone: 'solid' },
+      ];
+    return <ScrollView contentContainerStyle={ui.wrap}>
+      <AlertBanner count={unread} /><Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{title}</Text>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[...workflow, ...personalTiles].map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: ACCENT, backgroundColor: t.tone === 'solid' ? ACCENT : '#1E7D4F22', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : ACCENT, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
+      <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
+    </ScrollView>;
+  }
   const sections: Section[] = [
     {
       heading: 'Inspections & Compliance',

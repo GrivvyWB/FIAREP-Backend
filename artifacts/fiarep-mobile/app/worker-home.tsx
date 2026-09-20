@@ -21,6 +21,7 @@ export default function WorkerHome() {
   const [jobCount, setJobCount] = useState(0);
   const [position, setPosition] = useState('');
   const [isEmergencyMaintenance, setIsEmergencyMaintenance] = useState(false);
+  const isTradeWorker = /^(plumber|electrician|electric|elevator service|painter|carpenter|roofer|heating service|general construction|cctv installation)$/.test((position || '').trim().toLowerCase());
   useFocusEffect(useCallback(() => {
     void (async () => {
       const actor = await getCurrentActor();
@@ -71,6 +72,9 @@ export default function WorkerHome() {
       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
       </Pressable>
+      <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
+        <Text style={ui.btnOutlineText}>Inbox</Text>
+      </Pressable>
       {isEmergencyMaintenance && (
         <Pressable style={ui.btnOutline} onPress={() => router.push('/emergency-units')}>
           <Text style={ui.btnOutlineText}>Emergency Units</Text>
@@ -79,15 +83,15 @@ export default function WorkerHome() {
       <Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
         <Text style={ui.btnOutlineText}>Attendance</Text>
       </Pressable>
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
+      {!isTradeWorker && <Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
         <Text style={ui.btnOutlineText}>Change Work Order</Text>
-      </Pressable>
+      </Pressable>}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
         <Text style={ui.btnOutlineText}>Request Time Off</Text>
       </Pressable>
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/resident-lookup')}>
+      {!isTradeWorker && <Pressable style={ui.btnOutline} onPress={() => router.push('/resident-lookup')}>
         <Text style={ui.btnOutlineText}>Check Report Status</Text>
-      </Pressable>
+      </Pressable>}
 
       <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onSignOut}>
         <Text style={ui.btnOutlineText}>Sign out</Text>

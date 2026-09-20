@@ -124,7 +124,7 @@ export default function InspectionApprovals() {
               <Text style={{ fontSize: 14 }}>{v.building}</Text>
               <Text style={ui.listSub}>Assigned to {v.routedTo || '\u2014'}{v.routedToPosition ? ' (' + v.routedToPosition + ')' : ''}</Text>
               {!!v.completionNote && <Text style={ui.listSub}>Note: {v.completionNote}</Text>}
-              {v.status === 'routed' && (
+              {v.status === 'approved' && (
                 <Pressable style={[ui.btnOutline, { marginTop: 6 }]} onPress={() => {
                   const eligible = staff.filter((s) => String(s.position || '').trim().toLowerCase() === 'cpm supervisor'
                     && (!v.development || (s.developments || []).some((d) => d.trim().toLowerCase() === v.development!.trim().toLowerCase())));

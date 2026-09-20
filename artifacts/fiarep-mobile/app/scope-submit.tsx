@@ -11,6 +11,8 @@ import {
   getProcurementRequest,
   getCurrentActor,
   getCurrentPosition,
+  getViolationScopeDraft,
+  listAssignedCpmViolations,
   type ProcurementRequest,
 } from '../lib/store';
 import { pickDocument } from '../lib/files';
@@ -21,7 +23,7 @@ import { useAppMode } from './_layout';
 export default function ScopeSubmit() {
   const router = useRouter();
   const { mode } = useAppMode();
-  const { openId, preAddress, preScope } = useLocalSearchParams<{ openId?: string; preAddress?: string; preScope?: string }>();
+  const { openId, preAddress, preScope, violationId } = useLocalSearchParams<{ openId?: string; preAddress?: string; preScope?: string; violationId?: string }>();
   const [prefilled, setPrefilled] = useState(false);
   const [address, setAddress] = useState('');
   const [scope, setScope] = useState('');
@@ -30,6 +32,7 @@ export default function ScopeSubmit() {
   const [draft, setDraft] = useState<ProcurementRequest | null>(null);
   const [returned, setReturned] = useState<ProcurementRequest[]>([]);
   const [violations, setViolations] = useState<ViolationLookup[]>([]);
+  const [assignedViolations, setAssignedViolations] = useState<any[]>([]);
   const [busy, setBusy] = useState(false);
   const [authorized, setAuthorized] = useState(false);
 
@@ -45,11 +48,15 @@ export default function ScopeSubmit() {
     getCurrentActor().then(async (a) => {
       const nm = (a && a.name) || '';
       setMe(nm);
+      if (a?.id) setAssignedViolations(await listAssignedCpmViolations(a.id));
       if (nm) setReturned(await listReturnedScopes(nm));
       if (nm) setViolations(await listViolationLookups(nm));
     });
     if (openId) {
-      getProcurementRequest(openId).then((r) => { if (r) setDraft(r); });
+      getProcurementRequest(openId).then(async (r) => {
+        if (r) setDraft(r);
+        else if (violationId) setDraft(await getViolationScopeDraft(String(violationId), me));
+      });
     } else if (!prefilled && (preAddress || preScope)) {
       if (preAddress) setAddress(String(preAddress));
       if (preScope) setScope(String(preScope));
@@ -112,6 +119,23 @@ export default function ScopeSubmit() {
 
       {!draft ? (
         <>
+          {assignedViolations.length > 0 && (
+            <View style={{ marginBottom: 18 }}>
+              <Text style={[ui.label, { fontWeight: '700' }]}>Assigned inspector violation scopes</Text>
+              {assignedViolations.map((v) => (
+                <Pressable key={v.id} style={{ borderWidth: 1, borderColor: ACCENT, borderRadius: 10, padding: 12, marginTop: 8 }}
+                  onPress={async () => {
+                    const r = await getViolationScopeDraft(v.id, me);
+                    if (r) setDraft(r);
+                  }}>
+                  <Text style={{ fontWeight: '700', color: ACCENT }}>Violation {v.violationNo || '(no number)'}</Text>
+                  <Text>{v.building}</Text>
+                  {!!v.notes && <Text style={ui.listSub}>{v.notes}</Text>}
+                  <Text style={ui.listSub}>Tap to build and submit this assigned scope</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
           {violations.length > 0 && (
             <View style={{ marginBottom: 18 }}>
               <Text style={[ui.label, { fontWeight: '700' }]}>Start from an inspection</Text>

@@ -68,24 +68,20 @@ export default function MyJobs() {
       });
       if (!response.ok) throw new Error("Could not upload completion evidence.");
       const state = completionJob.state || {};
-      const capturedAt = new Date().toISOString();
       await action.mutateAsync({
         entity: "manpower-requests",
         id: completionJob.id,
         action: "complete",
         data: {
           completionNote: completionNote.trim(),
-          remoteFiles: [
-            ...(Array.isArray(state.remoteFiles) ? state.remoteFiles : []),
-            { ...uploaded.file, capturedAt },
-          ],
-          completionPhotos: [
-            ...(Array.isArray(state.completionPhotos) ? state.completionPhotos : []),
-            uploaded.file.objectPath,
-          ],
-          completionPhotoEvidence: [
-            ...(Array.isArray(state.completionPhotoEvidence) ? state.completionPhotoEvidence : []),
-            { uri: uploaded.file.objectPath, capturedAt },
+          photoEvidence: [
+            ...(Array.isArray(state.photoEvidence) ? state.photoEvidence : []),
+            {
+              objectPath: uploaded.file.objectPath,
+              id: uploaded.file.id || uploaded.file.name,
+              name: uploaded.file.name,
+              contentType: uploaded.file.contentType || completionPhoto.type || "image/jpeg",
+            },
           ],
         },
       });

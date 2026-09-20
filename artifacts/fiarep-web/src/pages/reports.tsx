@@ -356,22 +356,18 @@ export default function Reports() {
       });
       if (!response.ok) throw new Error("Could not upload the completed-work photo.");
       const state = report.state || {};
-      const capturedAt = completionGeo.at;
       await perform(report, "complete", {
         completionNote: completionNote.trim(),
         completionGeo,
-        remoteFiles: [
-          ...(Array.isArray(state.remoteFiles) ? state.remoteFiles : []),
-          { ...uploaded.file, capturedAt },
-        ],
-        completionPhotos: [
-          ...(Array.isArray(state.completionPhotos) ? state.completionPhotos : []),
-          uploaded.file.objectPath,
-        ],
-        completionPhotoEvidence: [
-          ...(Array.isArray(state.completionPhotoEvidence) ? state.completionPhotoEvidence : []),
-          { uri: uploaded.file.objectPath, capturedAt, geo: completionGeo },
-        ],
+         photoEvidence: [
+           ...(Array.isArray(state.photoEvidence) ? state.photoEvidence : []),
+           {
+             objectPath: uploaded.file.objectPath,
+             id: uploaded.file.id || uploaded.file.name,
+             name: uploaded.file.name,
+             contentType: uploaded.file.contentType || completionPhoto.type || "image/jpeg",
+           },
+         ],
       });
     } catch (error) {
       toast({

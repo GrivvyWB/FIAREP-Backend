@@ -1,11 +1,13 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { lookupNycProperty, type NycPropertyLookup } from '@workspace/api-client-react';
 import {
   addBuildingViolation,
   listBuildingViolations,
   deleteBuildingViolation,
+  getCurrentActor,
+  getCurrentPosition,
   type BuildingViolation,
 } from '../lib/store';
 import { VIOLATION_CODES, HAZARD_CLASSES, type HazardClass } from '../lib/violationCodes';
@@ -19,11 +21,15 @@ function fmt(iso: string): string {
 const CLASS_COLOR: Record<HazardClass, string> = { A: '#1E7D4F', B: '#B4741A', C: '#C0392B' };
 
 export default function InspectorViolations() {
-  const { preBuilding, preUnit, preViolationNo, preNote } = useLocalSearchParams<{ preBuilding?: string; preUnit?: string; preViolationNo?: string; preNote?: string }>();
+  const { preBuilding, preUnit, preViolationNo, preNote, preDevelopment, routeAssignmentId } = useLocalSearchParams<{ preBuilding?: string; preUnit?: string; preViolationNo?: string; preNote?: string; preDevelopment?: string; routeAssignmentId?: string }>();
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
   const [building, setBuilding] = useState('');
   const [assignedUnit, setAssignedUnit] = useState('');
   const [violationNo, setViolationNo] = useState('');
   const [prefilled, setPrefilled] = useState(false);
+  const routeLocked = !!routeAssignmentId;
+  const routeDevelopment = preDevelopment ? String(preDevelopment) : '';
 
   const [query, setQuery] = useState('');
   const [pickedCode, setPickedCode] = useState<string>('');
@@ -37,6 +43,14 @@ export default function InspectorViolations() {
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string>('');
   const canDelete = useDeletionPolicy();
+
+  useFocusEffect(useCallback(() => {
+    Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
+      const allowed = actor.role === 'inspector' && position.trim().toLowerCase() === 'inspector';
+      if (!allowed) router.replace('/cpm-home');
+      setAuthorized(allowed);
+    }).catch(() => router.replace('/cpm-home'));
+  }, [router]));
 
   const load = useCallback(() => {
     if (building.trim()) listBuildingViolations(building, violationNo).then(setItems);
@@ -103,7 +117,8 @@ export default function InspectorViolations() {
     if (!pickedCode) { Alert.alert('Missing', 'Search and pick a violation code.'); return; }
     if (!hazard) { Alert.alert('Missing', 'Pick a hazard class (A, B, or C).'); return; }
     try {
-      await addBuildingViolation(building, violationNo, pickedCode, pickedDesc, hazard, notes);
+      const created = await addBuildingViolation(building, violationNo, pickedCode, pickedDesc, hazard, notes, [], routeAssignmentId ? String(routeAssignmentId) : undefined, routeDevelopment || undefined);
+      if (routeAssignmentId) Alert.alert(created.pendingSync ? 'Violation queued' : 'Violation returned', created.pendingSync ? 'Saved locally and pending sync; it has not been sent yet.' : 'The server accepted the linked inspector violation and returned it to the supervisor.');
       setPickedCode(''); setPickedDesc(''); setHazard(null); setNotes(''); setQuery('');
       load();
     } catch (e: any) {
@@ -118,17 +133,19 @@ export default function InspectorViolations() {
     ]);
   }
 
+  if (!authorized) return null;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
       <Text style={ui.h}>Log Violations</Text>
       <Text style={ui.label}>Building the supervisor assigned</Text>
       <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-        <TextInput style={[ui.input, { flex: 1 }]} value={building} onChangeText={setBuilding} placeholder="Building / address" autoCapitalize="words" />
+        <TextInput style={[ui.input, { flex: 1 }]} value={building} onChangeText={setBuilding} editable={!routeLocked} placeholder="Building / address" autoCapitalize="words" />
         <Pressable style={building.trim() ? [ui.btn, { padding: 10 }] : [ui.btn, ui.btnMuted, { padding: 10 }]} onPress={handleLookup} disabled={!building.trim() || lookupLoading}>
           <Text style={ui.btnText}>{lookupLoading ? 'Wait' : 'Lookup'}</Text>
         </Pressable>
       </View>
+      {routeLocked && !!routeDevelopment && <Text style={ui.listSub}>Assigned development: {routeDevelopment}</Text>}
       {!!assignedUnit && (
         <Text style={{ color: ACCENT, fontWeight: '700', marginTop: 6 }}>
           Assigned apartment/unit: {assignedUnit}

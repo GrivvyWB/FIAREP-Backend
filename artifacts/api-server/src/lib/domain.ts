@@ -488,9 +488,14 @@ function staffAssignmentRecordAllowed(
   }
   if (!STAFF_ASSIGNMENT_SCOPED_ENTITIES.has(row.entity)) return true;
   if (
+    row.entity === "building-violations" &&
     actor.role === "inspector" &&
-    ["violations", "building-violations", "priority-violations", "route-assignments"]
-      .includes(row.entity) &&
+    actor.position === "CPM" &&
+    row.state["assignedCpmStaffId"] === actor.id
+  ) return true;
+  if (
+    row.entity === "building-violations" &&
+    actor.role === "inspector" &&
     row.createdBy === actor.id
   ) return true;
   return normalizeAssignment(row.state).assignedStaffId === actor.id;
@@ -513,6 +518,13 @@ export function canReadEntityRecord(
     row.entity === "building-violations" &&
     isCpmSupervisor(actor) &&
     row.state["cpmSupervisorId"] !== actor.id
+  ) return false;
+  if (
+    row.entity === "building-violations" &&
+    actor.role === "inspector" &&
+    actor.position === "CPM" &&
+    row.state["assignedCpmStaffId"] !== actor.id &&
+    row.createdBy !== actor.id
   ) return false;
   return !row.deleted &&
     canReadEntity(actor, row.entity) &&
@@ -1030,6 +1042,10 @@ export function canPerformEntityAction(
 
   if (entity === "building-violations") {
     if (action === "handoff-cpm-supervisor") return isViolationAuthority(actor);
+    if (action === "assign-cpm") {
+      return isCpmSupervisor(actor) &&
+        state["cpmSupervisorId"] === actor.id;
+    }
     if (["approve", "route", "clear"].includes(action)) return isViolationAuthority(actor);
     if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     return action === "complete" &&
@@ -1203,6 +1219,7 @@ export function isValidEntityTransition(
     "building-violations": {
       approve: ["submitted"],
       "handoff-cpm-supervisor": ["approved"],
+      "assign-cpm": ["cpm_review"],
       route: ["approved"],
       complete: ["routed"],
       clear: ["done"],

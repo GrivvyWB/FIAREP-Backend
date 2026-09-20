@@ -12,6 +12,9 @@ import {
   performEntityAction,
   type ProcurementRequest,
   listStaffAccounts,
+  listCpmReviewViolations,
+  assignViolationToCpm,
+  type BuildingViolation,
   type StaffAccount,
 } from '../lib/store';
 import { COST_CATEGORIES } from '../lib/costEstimate';
@@ -38,6 +41,8 @@ export default function ScopeReview() {
   const [receiver, setReceiver] = useState<StaffAccount | null>(null);
   const [receiverOpen, setReceiverOpen] = useState(false);
   const [receivers, setReceivers] = useState<StaffAccount[]>([]);
+  const [violations, setViolations] = useState<BuildingViolation[]>([]);
+  const [violationCpm, setViolationCpm] = useState<BuildingViolation | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -79,7 +84,8 @@ export default function ScopeReview() {
     });
      // The server remains authoritative for eligibility; this list is only a
      // picker and the handoff action is still validated by the API.
-     listStaffAccounts('approved').then((all) => setReceivers(all.filter((a) => /supervisor/i.test(a.position || '')))).catch(() => setReceivers([]));
+      listStaffAccounts('approved').then(setReceivers).catch(() => setReceivers([]));
+      listCpmReviewViolations().then(setViolations).catch(() => setViolations([]));
   }, [authorized, id]);
   useFocusEffect(() => { void load(); });
 
@@ -96,8 +102,18 @@ export default function ScopeReview() {
       <ScrollView contentContainerStyle={ui.wrap}>
         <Text style={ui.h}>CPM Supervisor Scope Review</Text>
         <Text style={ui.label}>Submitted scopes awaiting CPM Supervisor approval.</Text>
-        {queue.length === 0 && <Text style={ui.empty}>No submitted scopes.</Text>}
-          {queue.map((item) => (
+        {violations.length > 0 && <>
+          <Text style={[ui.label, { fontWeight: '700', marginTop: 12 }]}>Inspector violations</Text>
+          {violations.map((v) => <View key={v.id} style={[ui.card, { gap: 4, marginTop: 8 }]}>
+            <Text style={{ color: ACCENT, fontWeight: '700' }}>Violation {v.violationNo || '(no number)'}</Text>
+            <Text style={{ fontWeight: '700' }}>{v.building}</Text>
+            {!!v.notes && <Text style={ui.listSub}>{v.notes}</Text>}
+            <Text style={ui.listSub}>Development: {v.development || '—'}</Text>
+            <Pressable style={ui.btn} onPress={() => setViolationCpm(v)}><Text style={ui.btnText}>Assign to CPM</Text></Pressable>
+          </View>)}
+        </>}
+        {queue.filter((item) => item.sourceEntity !== 'building-violations' || item.scopeSubmittedByCpm).length === 0 && <Text style={ui.empty}>No submitted scopes.</Text>}
+          {queue.filter((item) => item.sourceEntity !== 'building-violations' || item.scopeSubmittedByCpm).map((item) => (
           <Pressable key={item.id} style={ui.card} onPress={() => router.push(`/scope-review?id=${encodeURIComponent(item.id)}`)}>
             {item.sourceEntity === 'building-violations' && <Text style={{ color: ACCENT, fontWeight: '700' }}>Source: Inspector violation</Text>}
             {item.sourceEntity === 'building-violations' && !!item.violationNo && <Text style={ui.listSub}>Violation {item.violationNo}</Text>}
@@ -186,6 +202,17 @@ export default function ScopeReview() {
     }
   }
 
+  async function assignCpm(v: BuildingViolation, cpm: StaffAccount) {
+    try {
+      await assignViolationToCpm(v.id, cpm.id);
+      setViolationCpm(null);
+      setViolations((all) => all.filter((item) => item.id !== v.id));
+      Alert.alert('Assigned to CPM', 'The CPM can now build and submit the violation scope.');
+    } catch (e: any) {
+      Alert.alert('Assignment failed', e?.message || 'Could not assign this violation.');
+    }
+  }
+
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>CPM Supervisor Scope Review</Text>
@@ -204,7 +231,7 @@ export default function ScopeReview() {
       <Modal visible={receiverOpen} animationType="slide" onRequestClose={() => setReceiverOpen(false)}>
         <ScrollView contentContainerStyle={ui.wrap}>
           <Text style={ui.h}>Receiving trade supervisor</Text>
-          {receivers.map((person) => (
+          {receivers.filter((person) => /supervisor/i.test(person.position || '')).map((person) => (
             <Pressable key={person.id} style={ui.card} onPress={() => { setReceiver(person); setReceiverOpen(false); }}>
               <Text style={{ fontWeight: '700' }}>{person.name}</Text>
               <Text style={ui.listSub}>{person.position || 'Supervisor'}</Text>
@@ -213,6 +240,22 @@ export default function ScopeReview() {
           {receivers.length === 0 && <Text style={ui.empty}>No eligible supervisors available offline.</Text>}
           <Pressable style={ui.btnOutline} onPress={() => setReceiverOpen(false)}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
         </ScrollView>
+      </Modal>
+      <Modal visible={!!violationCpm} transparent animationType="slide" onRequestClose={() => setViolationCpm(null)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
+            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>Select assigned CPM</Text>
+            <ScrollView>
+              {violationCpm && receivers
+                .filter((s) => s.role === 'inspector' && String(s.position || '').trim().toLowerCase() === 'cpm'
+                  && (!violationCpm.development || (s.developments || []).some((d) => d.trim().toLowerCase() === violationCpm!.development!.trim().toLowerCase())))
+                .map((person) => <Pressable key={person.id} style={ui.card} onPress={() => assignCpm(violationCpm, person)}>
+                  <Text style={{ fontWeight: '700' }}>{person.name}</Text><Text style={ui.listSub}>CPM · {person.developments?.join(', ') || '—'}</Text>
+                </Pressable>)}
+            </ScrollView>
+            <Pressable style={ui.btnOutline} onPress={() => setViolationCpm(null)}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
+          </View>
+        </View>
       </Modal>
 
       <Pressable style={[ui.btnOutline, { marginTop: 4 }]} onPress={exportExcel}>

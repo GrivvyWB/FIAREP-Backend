@@ -6,18 +6,125 @@ import { useAuth } from "@/hooks/use-auth";
 import { canApproveWork } from "@/lib/access-policy";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { getLookupNycPropertyQueryKey, useLookupNycProperty } from "@workspace/api-client-react";
+import { getLookupNycPropertyQueryKey, useLookupNycProperty, getListEntityRecordsQueryKey, useListEntityRecords, useCreateEntityRecord, useListStaff, getListStaffQueryKey } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useToast } from "@/hooks/use-toast";
 
 export default function Violations() {
   const { staff } = useAuth();
+  const { toast } = useToast();
   const [searchInput, setSearchInput] = useState("");
   const [addressToSearch, setAddressToSearch] = useState("");
+  const [assignmentDraft, setAssignmentDraft] = useState({ development: "", address: "", instructions: "", assignedStaffId: "" });
+  const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
+  const [linkedViolation, setLinkedViolation] = useState({ number: "", notes: "" });
+  const assignmentFilter = staff?.role === "inspector" && staff.position === "Inspector"
+    ? { assignedStaffId: staff.id } as any
+    : undefined;
+  const assignmentsQuery = useListEntityRecords("route-assignments", assignmentFilter, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("route-assignments", assignmentFilter),
+      enabled: (staff?.role === "management" && staff?.position === "Supervisor Inspector") ||
+        (staff?.role === "inspector" && staff.position === "Inspector"),
+      refetchOnMount: "always",
+    },
+  });
+  const { data: approvedInspectors = [] } = useListStaff({ status: "approved" }, {
+    query: { queryKey: getListStaffQueryKey({ status: "approved" }), enabled: staff?.role === "management" && staff?.position === "Supervisor Inspector" },
+  });
+  const createAssignment = useCreateEntityRecord();
+  const canAssignInspectors = staff?.role === "management" && staff?.position === "Supervisor Inspector";
+  const inspectorsFor = (development?: string | null) => approvedInspectors.filter((member) =>
+    member.role === "inspector" && member.position === "Inspector" && Boolean(development) &&
+    member.developments.includes(development || ""),
+  );
+  async function assignInspector() {
+    const inspectorId = assignmentDraft.assignedStaffId;
+    if (!inspectorId || !assignmentDraft.development.trim() || !assignmentDraft.address.trim() || !assignmentDraft.instructions.trim()) {
+      toast({
+        variant: "destructive",
+        title: "Instructions required",
+        description: "Add assignment instructions before assigning an Inspector.",
+      });
+      return;
+    }
+    const clientRequestId = [assignmentDraft.development, assignmentDraft.address, inspectorId, assignmentDraft.instructions]
+      .map((value) => value.trim().toLowerCase().replace(/\s+/g, "-")).join(":");
+    const duplicate = (assignmentsQuery.data || []).some((assignment) =>
+      (assignment.state as any)?.clientRequestId === clientRequestId,
+    );
+    if (duplicate) {
+      toast({ variant: "destructive", title: "Inspector already assigned", description: "This violation already has that durable assignment." });
+      return;
+    }
+    try {
+      await createAssignment.mutateAsync({
+        entity: "route-assignments",
+        data: {
+          id: `route-assignment:${clientRequestId}`,
+          version: 1,
+          development: assignmentDraft.development.trim(),
+          state: {
+            assignmentKind: "violation-inspection",
+            clientRequestId,
+            address: assignmentDraft.address.trim(),
+            location: assignmentDraft.address.trim(),
+            instructions: assignmentDraft.instructions.trim(),
+            assignedStaffId: inspectorId,
+            development: assignmentDraft.development.trim(),
+            status: "pending",
+          },
+        },
+      });
+      await assignmentsQuery.refetch();
+      setAssignmentDraft({ development: "", address: "", instructions: "", assignedStaffId: "" });
+      toast({ title: "Violation assigned to Inspector" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Unable to assign Inspector", description: error?.message || "The server rejected this assignment." });
+    }
+  }
+  const inspectorAssignments = (assignmentsQuery.data || []).filter((assignment) => {
+    const state = assignment.state as any;
+    return staff?.role === "inspector" && staff.position === "Inspector" &&
+      state?.assignedStaffId === staff.id && ["pending", "assigned"].includes(String(state?.status || "pending"));
+  });
+  const createViolation = useCreateEntityRecord();
+  async function createLinkedViolation() {
+    if (!selectedAssignment || !linkedViolation.notes.trim()) return;
+    const state = selectedAssignment.state as any;
+    try {
+      await createViolation.mutateAsync({
+        entity: "building-violations",
+        data: {
+          id: crypto.randomUUID(),
+          version: 1,
+          development: selectedAssignment.development,
+          state: {
+            status: "submitted",
+            title: linkedViolation.number || "Inspector violation",
+            violationNumber: linkedViolation.number,
+            address: state.address || state.location,
+            notes: linkedViolation.notes,
+            instructions: state.instructions,
+            routeAssignmentId: selectedAssignment.id,
+          },
+        },
+      });
+      await assignmentsQuery.refetch();
+      setSelectedAssignment(null);
+      setLinkedViolation({ number: "", notes: "" });
+      toast({ title: "Linked violation submitted to Supervisor Inspector" });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Unable to create linked violation", description: error?.message || "The server rejected this violation." });
+    }
+  }
 
   const { data, isLoading, isError } = useLookupNycProperty(
     { address: addressToSearch, limit: 100 },
@@ -360,6 +467,31 @@ export default function Violations() {
 
       {/* Internal Violations Management Section */}
       <section>
+        {staff?.role === "inspector" && staff.position === "Inspector" && inspectorAssignments.length > 0 && <Card className="mb-6 border-primary/30">
+          <CardHeader><CardTitle>Pending Inspector assignments</CardTitle></CardHeader>
+          <CardContent className="space-y-3">{inspectorAssignments.map((assignment) => {
+            const state = assignment.state as any;
+            return <div key={assignment.id} className="flex flex-wrap items-center gap-3 rounded-md border p-3">
+              <div className="min-w-0 flex-1"><p className="font-medium">{state.address || state.location}</p><p className="text-sm text-muted-foreground">{assignment.development} · {state.instructions || "No instructions"}</p></div>
+              <Button size="sm" onClick={() => setSelectedAssignment(assignment)}>Create linked violation</Button>
+            </div>;
+          })}</CardContent>
+        </Card>}
+        {canAssignInspectors && <Card className="mb-6 border-primary/30">
+          <CardHeader><CardTitle>Inspector assignments</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2">
+              <Input placeholder="Development" value={assignmentDraft.development} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, development: event.target.value, assignedStaffId: "" })} />
+              <Input placeholder="Address / location" value={assignmentDraft.address} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, address: event.target.value })} />
+              <Textarea placeholder="Instructions" value={assignmentDraft.instructions} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, instructions: event.target.value })} />
+              <select className="h-10 rounded-md border px-2 text-sm" value={assignmentDraft.assignedStaffId} onChange={(event) => setAssignmentDraft({ ...assignmentDraft, assignedStaffId: event.target.value })}>
+                <option value="">Select approved Inspector</option>
+                {inspectorsFor(assignmentDraft.development).map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}
+              </select>
+            </div>
+            <Button onClick={assignInspector} disabled={!assignmentDraft.development.trim() || !assignmentDraft.address.trim() || !assignmentDraft.instructions.trim() || !assignmentDraft.assignedStaffId || createAssignment.isPending}>Assign Inspector</Button>
+          </CardContent>
+        </Card>}
         <GenericEntityPage
           entity="building-violations"
           title="Internal Violations"
@@ -368,6 +500,12 @@ export default function Violations() {
            workflow
         />
       </section>
+      <Dialog open={Boolean(selectedAssignment)} onOpenChange={(open) => !open && setSelectedAssignment(null)}>
+        <DialogContent><DialogHeader><DialogTitle>Create linked violation</DialogTitle></DialogHeader>
+          <div className="space-y-3"><Input placeholder="Violation number (optional)" value={linkedViolation.number} onChange={(event) => setLinkedViolation({ ...linkedViolation, number: event.target.value })} /><Textarea placeholder="Violation notes" value={linkedViolation.notes} onChange={(event) => setLinkedViolation({ ...linkedViolation, notes: event.target.value })} /></div>
+          <DialogFooter><Button variant="outline" onClick={() => setSelectedAssignment(null)}>Cancel</Button><Button onClick={createLinkedViolation} disabled={!linkedViolation.notes.trim() || createViolation.isPending}>Create violation</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

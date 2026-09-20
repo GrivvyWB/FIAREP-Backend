@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import {
   getCurrentActor,
   listRouteAssignments,
@@ -20,6 +20,7 @@ const STATUS_COLOR: Record<RouteStopStatus, string> = { pending: '#4A5560', reac
 const STATUS_LABEL: Record<RouteStopStatus, string> = { pending: 'Pending', reached: 'Reached', not_reached: 'Not reached' };
 
 export default function InspectorRoutes() {
+  const router = useRouter();
   const [me, setMe] = useState('');
   const [routes, setRoutes] = useState<RouteAssignment[]>([]);
 
@@ -27,7 +28,7 @@ export default function InspectorRoutes() {
     getCurrentActor().then(async (a) => {
       const nm = (a && a.name) || '';
       setMe(nm);
-      if (nm) setRoutes(await listRouteAssignments(nm));
+      if (nm) setRoutes(await listRouteAssignments(nm, a.id));
     });
   }, []);
   useFocusEffect(load);
@@ -72,6 +73,11 @@ export default function InspectorRoutes() {
                     <Text style={{ color: '#fff', fontSize: 12, fontWeight: '700' }}>{STATUS_LABEL[s.status]}</Text>
                   </View>
                 </View>
+                {r.assignmentKind === 'violation-inspection' && (
+                  <Pressable style={ui.btn} onPress={() => router.push('/inspector-violations?routeAssignmentId=' + encodeURIComponent(r.id) + '&preBuilding=' + encodeURIComponent(r.location || s.address) + '&preDevelopment=' + encodeURIComponent(r.development || '') + '&preNote=' + encodeURIComponent(r.instructions || ''))}>
+                    <Text style={ui.btnText}>Open inspector violation</Text>
+                  </Pressable>
+                )}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <Pressable onPress={() => mark(r.id, s, 'reached')} style={{ flex: 1, borderWidth: 1.5, borderColor: '#1E7D4F', borderRadius: 10, paddingVertical: 10, alignItems: 'center', backgroundColor: s.status === 'reached' ? '#1E7D4F' : '#fff' }}>
                     <Text style={{ fontWeight: '700', color: s.status === 'reached' ? '#fff' : '#1E7D4F' }}>Reached</Text>

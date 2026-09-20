@@ -90,6 +90,17 @@ export function GenericEntityPage({
       staleTime: 15_000,
     },
   });
+  const routeAssignmentFilter = staff?.role === "inspector" && staff?.position === "Inspector"
+    ? { assignedStaffId: staff.id } as any
+    : undefined;
+  const { data: routeAssignments = [] } = useListEntityRecords("route-assignments", routeAssignmentFilter, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("route-assignments", routeAssignmentFilter),
+      enabled: entity === "building-violations" && staff?.role === "inspector" && staff?.position === "Inspector",
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
 
   const [search, setSearch] = useState("");
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -270,7 +281,12 @@ export function GenericEntityPage({
     }
   };
 
+  const assignedInspectorViolationIds = new Set(routeAssignments
+    .filter((assignment) => (assignment.state as any)?.assignedStaffId === staff?.id)
+    .map((assignment) => String((assignment.state as any)?.sourceRecordId || "")));
   const filtered = data?.filter(i => {
+    if (entity === "building-violations" && staff?.role === "inspector" && staff?.position === "Inspector" &&
+        !assignedInspectorViolationIds.has(i.id)) return false;
     if (!search) return true;
     const itemTitle = (i.state as any)?.title?.toLowerCase() || i.id.toLowerCase();
     const q = search.toLowerCase();

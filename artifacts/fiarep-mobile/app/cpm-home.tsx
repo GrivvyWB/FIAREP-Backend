@@ -24,7 +24,11 @@ export default function CpmHome() {
       if (a.id) c += await unreadCount(a.id);
       if (a.name) c += await unreadCount(a.name);
       setUnread(c);
-      if (normalized !== 'cpm' && normalized !== 'cpm supervisor' && normalized !== 'inspector') {
+      if (normalized === 'cpm supervisor') {
+        router.replace('/management-home');
+        return;
+      }
+      if (normalized !== 'cpm' && normalized !== 'inspector') {
         router.replace(mode === 'management' ? '/management-home' : '/');
         return;
       }
@@ -45,15 +49,15 @@ export default function CpmHome() {
       heading: 'Inspections',
       color: '#1E7D4F',
       tiles: [
-        ...(!isCpmSupervisor ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
-        { label: 'Projects', onPress: () => router.push('/'), tone: 'outline' as Tone },
+        ...(normalizedPosition === 'inspector' ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
+        ...(normalizedPosition === 'cpm' ? [{ label: 'Projects', onPress: () => router.push('/'), tone: 'outline' as Tone }] : []),
         ...(normalizedPosition === 'cpm' ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
-        { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone },
-        ...(!isCpmSupervisor ? [{ label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'outline' as Tone }] : []),
-         ...(!isCpmSupervisor ? [{ label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone }, { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone }] : []),
+        ...(normalizedPosition === 'inspector' ? [{ label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone }] : []),
+        { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },
+        { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone },
       ],
     },
     ...(normalizedPosition === 'cpm' ? [{

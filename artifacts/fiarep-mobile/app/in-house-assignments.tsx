@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
-import { useFocusEffect } from 'expo-router';
-import { getCurrentActor, listManpowerRequests, listStaffAccounts, performEntityAction, type ManpowerRequest, type StaffAccount } from '../lib/store';
+import { useFocusEffect, useRouter } from 'expo-router';
+import { getCurrentActor, getCurrentPosition, listManpowerRequests, listStaffAccounts, performEntityAction, type ManpowerRequest, type StaffAccount } from '../lib/store';
 import { ui } from '../lib/ui';
 
 const workerPositions: Record<string, string[]> = {
@@ -10,6 +10,8 @@ const workerPositions: Record<string, string[]> = {
 };
 
 export default function InHouseAssignments() {
+  const router = useRouter();
+  const [authorized, setAuthorized] = useState(false);
   const [requests, setRequests] = useState<ManpowerRequest[]>([]);
   const [people, setPeople] = useState<StaffAccount[]>([]);
   const load = useCallback(async () => {
@@ -18,7 +20,15 @@ export default function InHouseAssignments() {
     setRequests(all.filter((r) => r.receiverSupervisorId === actor.id && ['pending', 'assigned', 'dispatched'].includes(r.status)));
     setPeople((await listStaffAccounts('approved')).filter((p) => p.role === 'worker' || p.role === 'inspector'));
   }, []);
-  useFocusEffect(useCallback(() => { void load(); }, [load]));
+  useFocusEffect(useCallback(() => {
+    void Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
+      const p = position.trim().toLowerCase();
+      const allowed = actor.role === 'management' && /^(plumber|electric|electrician|elevator|painter|carpenter|roofer|heating|general construction|cctv installation)( service)? supervisor$/.test(p);
+      if (!allowed) { router.replace('/management-home'); return; }
+      setAuthorized(true);
+      void load();
+    }).catch(() => router.replace('/management-home'));
+  }, [load, router]));
 
   async function act(request: ManpowerRequest, action: 'assign' | 'dispatch', assignedStaffId?: string) {
     try {
@@ -31,6 +41,7 @@ export default function InHouseAssignments() {
     }
   }
 
+  if (!authorized) return null;
   return <ScrollView contentContainerStyle={ui.wrap}>
     <Text style={ui.h}>In-house assignments</Text>
     <Text style={ui.label}>Requests addressed to your receiving trade supervisor account.</Text>

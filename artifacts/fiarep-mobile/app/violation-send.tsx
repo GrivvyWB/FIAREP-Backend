@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
-  sendViolationLookup,
+  createViolationInspectionAssignment,
   listViolationLookups,
   deleteViolationLookup,
   listStaffAccounts,
@@ -31,6 +31,8 @@ export default function ViolationSend() {
   const preResidentName = preResident ? String(preResident) : '';
   const preDev = preDevelopment ? String(preDevelopment) : '';
   const [sentTo, setSentTo] = useState('');
+  const [sentStaffId, setSentStaffId] = useState('');
+  const [development, setDevelopment] = useState(preDev);
   const [lastSent, setLastSent] = useState('');
   const [openGroup, setOpenGroup] = useState<string>('');
   const [staff, setStaff] = useState<StaffAccount[]>([]);
@@ -38,6 +40,7 @@ export default function ViolationSend() {
   const [me, setMe] = useState('');
   const canDelete = useDeletionPolicy();
   const [authorized, setAuthorized] = useState(false);
+  const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
 
   useEffect(() => {
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
@@ -49,7 +52,12 @@ export default function ViolationSend() {
   const load = useCallback(() => {
     listStaffAccounts('approved').then(setStaff);
     listViolationLookups().then(setSent);
-    getCurrentActor().then((a) => setMe((a && a.name) || ''));
+    getCurrentActor().then((a) => {
+      setMe((a && a.name) || '');
+      const devs = ((a as any)?.developments || []).filter((d: any) => typeof d === 'string' && d.trim());
+      setAssignedDevelopments(devs);
+      setDevelopment((current) => devs.some((d: string) => d.trim().toLowerCase() === String(current || '').trim().toLowerCase()) ? current : '');
+    });
   }, []);
   useFocusEffect(useCallback(() => {
     if (authorized) load();
@@ -58,25 +66,31 @@ export default function ViolationSend() {
   // Inspectors and contractors are the people who go look a violation up.
   const _filter = (filter ? String(filter) : '').toLowerCase();
   const recipients = staff.filter((s) => {
-    // Inspection routes to inspectors only. Complaints (and the default) can go to
-    // ANY trade OR an inspector — whoever can check it out / take a photo.
-    if (_filter === 'inspector') return s.role === 'inspector';
-    return s.role === 'inspector' || s.role === 'worker' ||
-      (s.role === 'emergency' && s.position === 'Maintenance Worker');
+    return s.role === 'inspector' &&
+      String(s.position || '').trim().toLowerCase() === 'inspector' &&
+      !!development &&
+      (s.developments || []).some((d) => d.trim().toLowerCase() === development.trim().toLowerCase());
   });
 
   async function submit() {
     if (!violationNumber.trim()) { Alert.alert('Missing', 'Enter a violation number.'); return; }
     if (!address.trim()) { Alert.alert('Missing', 'Enter an address.'); return; }
-    if (!sentTo.trim()) { Alert.alert('Missing', 'Choose who to send this to.'); return; }
+    if (!sentTo.trim() || !sentStaffId.trim()) { Alert.alert('Missing', 'Choose an approved Inspector.'); return; }
     try {
       const to = sentTo;
-      await sendViolationLookup(violationNumber, address, sentTo, me, unit, note, { complaintNo: preComplaint || undefined, residentName: preResidentName || undefined, development: preDev || undefined });
+      const assignment = await createViolationInspectionAssignment({
+        assignedStaffId: sentStaffId,
+        development: development || undefined,
+        address: address.trim() + (unit.trim() ? ' Unit ' + unit.trim() : ''),
+        instructions: [violationNumber.trim(), note.trim()].filter(Boolean).join(' — '),
+        sourceInspectionRef: preComplaint || undefined,
+      });
       // Keep the violation details so you can immediately send the same job to
       // another person (e.g. a plumber to meet the inspector). Only clear the
       // recipient and show a persistent confirmation.
       setSentTo('');
-      setLastSent('Sent to ' + to + ' \u00b7 ' + new Date().toLocaleTimeString());
+      setSentStaffId('');
+      setLastSent((assignment.pendingSync ? 'Queued pending sync to ' : 'Sent to ') + to + ' \u00b7 ' + new Date().toLocaleTimeString());
       load();
     } catch (e: any) {
       Alert.alert('Error', String(e && e.message ? e.message : e));
@@ -119,6 +133,13 @@ export default function ViolationSend() {
       />
 
       <Text style={[ui.label, { marginTop: 12 }]}>Send to</Text>
+      <Text style={ui.label}>Development</Text>
+      {assignedDevelopments.map((d) => (
+        <Pressable key={d} style={[ui.input, development === d && { borderColor: ACCENT, borderWidth: 2 }]} onPress={() => { setDevelopment(d); setSentTo(''); setSentStaffId(''); }}>
+          <Text style={{ color: development === d ? ACCENT : '#000', fontWeight: '600' }}>{d}</Text>
+        </Pressable>
+      ))}
+      {assignedDevelopments.length === 0 && <Text style={ui.empty}>No assigned developments.</Text>}
       {recipients.length === 0 ? (
         <Text style={ui.listSub}>No approved inspectors or workers yet.</Text>
       ) : (
@@ -146,7 +167,7 @@ export default function ViolationSend() {
                         <Pressable
                           key={s.id}
                           style={[ui.input, active ? { borderColor: ACCENT, borderWidth: 2 } : null]}
-                          onPress={() => setSentTo(active ? '' : s.name)}
+                           onPress={() => { setSentTo(active ? '' : s.name); setSentStaffId(active ? '' : s.id); }}
                         >
                           <Text style={{ color: active ? ACCENT : '#000' }}>{s.name}</Text>
                         </Pressable>

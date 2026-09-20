@@ -25,15 +25,24 @@ export default function MyJobs() {
   const [photos, setPhotos] = useState<PhotoEvidence[]>([]);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [authorized, setAuthorized] = useState(false);
   const [releaseOpenId, setReleaseOpenId] = useState<string | null>(null);
   const [releaseNote, setReleaseNote] = useState('');
   const canDelete = useDeletionPolicy();
+
+  useFocusEffect(useCallback(() => {
+    getCurrentActor().then((actor) => {
+      const allowed = actor.role === 'worker' || actor.role === 'inspector' || actor.role === 'emergency';
+      if (!allowed) { router.replace('/worker-home'); return; }
+      setAuthorized(true);
+    }).catch(() => router.replace('/worker-home'));
+  }, [router]));
 
   const load = useCallback(() => {
     getCurrentActor().then(async (a) => {
        const nm = (a && a.name) || '';
        if (!nm || !a?.id) return;
-       setJobs(await listRoutedInspectionsFor(nm));
+       setJobs(await listRoutedInspectionsFor(nm, a.id));
       // Lenient development filter: show jobs in my assigned developments PLUS
       // any untagged job (no development) so nothing assigned to me vanishes.
       const myDevs = (await developmentsForStaff(a.name || '').catch(() => [])).map((d) => (d || '').trim().toLowerCase()).filter(Boolean);
@@ -99,6 +108,7 @@ export default function MyJobs() {
     } finally { setBusy(false); }
   }
 
+  if (!authorized) return null;
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
@@ -138,8 +148,17 @@ export default function MyJobs() {
                try {
                  // Upload first; an offline/device upload failure must not be
                  // presented as a successful completion.
-                 await Promise.all(photos.map((photo) => uploadPhoto(photo.uri, 'completion-photo', { entity: 'manpower-requests', recordId: job.id }, { capturedAt: photo.capturedAt, geo: photo.geo })));
-                 await performEntityAction('manpower-requests', job.id, 'complete', { completionNote: note.trim(), photoEvidence: photos });
+                  const uploaded = await Promise.all(photos.map((photo) => uploadPhoto(photo.uri, 'completion-photo', { entity: 'manpower-requests', recordId: job.id }, { capturedAt: photo.capturedAt, geo: photo.geo })));
+                  const photoEvidence = uploaded.map((file, index) => ({
+                    uri: file.objectPath,
+                    objectPath: file.objectPath,
+                    id: file.id,
+                    name: file.name,
+                    contentType: file.contentType,
+                    capturedAt: photos[index].capturedAt,
+                    geo: photos[index].geo,
+                  }));
+                  await performEntityAction('manpower-requests', job.id, 'complete', { completionNote: note.trim(), photoEvidence });
                  setInHouseOpenId(null); setNote(''); setPhotos([]); load();
                  Alert.alert('Completed', 'The server accepted the completion and evidence.');
                } catch (e: any) {
