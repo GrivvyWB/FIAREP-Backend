@@ -1,0 +1,128 @@
+🚨 RED BLOCK - UPPER MANAGEMENT DEVELOPMENT COMPLAINT DASHBOARD
+
+Add this as a dedicated RED dashboard section visible ONLY to Upper Management.
+
+Development Complaint Overview
+
+Display ALL developments that currently have active complaints. Do not limit the display to only the top 10 developments.
+
+Instead, organize the developments into rows of 10 developments per row so that all active developments can be viewed easily.
+
+Example:
+
+Row 1:
+
+Adams (10)
+Jefferson (23)
+Red Hook East (10)
+Polo Grounds (8)
+Queensbridge (15)
+Castle Hill (6)
+Soundview (12)
+Patterson (17)
+Howard (4)
+Breukelen (3)
+
+Row 2:
+
+Development 11 (9)
+Development 12 (5)
+Development 13 (18)
+Development 14 (7)
+Development 15 (11)
+Development 16 (2)
+Development 17 (14)
+Development 18 (20)
+Development 19 (6)
+Development 20 (8)
+
+Continue this format until every development with active complaints is displayed.
+
+Active Complaint Logic
+Show only developments with 1 or more active complaints.
+Do not display developments with 0 active complaints.
+Complaint totals should update automatically in real time.
+When a complaint is corrected and closed, the count decreases.
+When a development reaches 0 active complaints, it automatically disappears from the dashboard.
+Click-to-View Development Details
+
+When Upper Management clicks on a development, open a detailed page showing all buildings within that development that currently have complaints.
+
+Example: Adams Houses (10)
+
+Building Address	Active Complaints721 Tinton Avenue	23
+710 Tinton Avenue	15
+700 Westchester Avenue	7
+
+Example: Jefferson Houses (23)
+
+Building Address	Active Complaints205 East 112th Street	22
+2065 3rd Avenue	12
+Building Ranking
+
+Sort buildings from highest complaint count to lowest complaint count so management can immediately identify problem buildings.
+
+Display:
+
+Building Address
+Active Complaint Count
+Complaint Categories
+Oldest Open Complaint
+Most Recent Complaint
+Number of Corrected Complaints
+Dashboard Summary Panels
+
+Above the development list, display:
+
+Total Active Complaints
+Total Developments with Complaints
+Total Buildings with Complaints
+Development with Most Complaints
+Building with Most Complaints
+Oldest Open Complaint
+Recently Corrected Complaints
+Search & Filters
+
+Allow Upper Management to:
+
+Search by Development Name
+Search by Address
+Filter by Borough
+Filter by Complaint Type
+Filter by Trade
+Filter by Date Range
+Sort High-to-Low Complaint Count
+Sort Low-to-High Complaint Count
+Top Analytics Section
+
+Display:
+
+Top 10 Developments with the Most Complaints
+
+Jefferson (23)
+Adams (10)
+Queensbridge (15)
+etc.
+
+Top 10 Buildings with the Most Complaints
+
+721 Tinton Avenue (23)
+205 East 112th Street (22)
+710 Tinton Avenue (15)
+etc.
+Access Restrictions
+
+This dashboard is for Upper Management ONLY.
+
+The following roles must not have access:
+
+HR
+Supervisors
+CPMs
+Inspectors
+Superintendents
+Staff Members
+Trades Personnel
+Purpose
+
+This dashboard will give Upper Management a real-time view of every development and building with active complaints, allowing them to quickly identify trends, allocate resources, monitor performance, and track complaint reductions as violations and complaints are corrected and closed. It should display all developments with active complaints, organized in easy-to-read rows of 10, while automatically hiding any development that has no active complaints.

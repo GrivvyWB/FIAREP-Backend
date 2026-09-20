@@ -38,6 +38,7 @@ import ScopeReview from '@/pages/scope-review';
 import ScopeWriting from '@/pages/scope-writing';
 import Scores from '@/pages/scores';
 import HudInspections from '@/pages/hud-inspections';
+import ComplaintDashboard from '@/pages/complaint-dashboard';
 
 // Owner Pages
 import Access from '@/pages/access';
@@ -219,6 +220,7 @@ function AppRouter() {
           <Route path="/notifications" component={NotificationsRoute} />
           <Route path="/settings" component={SettingsRoute} />
           <Route path="/shared-data" component={SharedDataRoute} />
+          <Route path="/complaint-dashboard" component={ComplaintDashboardRoute} />
           <Route path="/platform" component={Platform} />
           <Route component={NotFound} />
         </Switch>
@@ -262,6 +264,7 @@ const LeaveRoute = () => <ModuleRoute module="leave"><Leave /></ModuleRoute>;
 const NotificationsRoute = () => <ModuleRoute module="notifications"><Notifications /></ModuleRoute>;
 const SettingsRoute = () => <ModuleRoute module="settings"><Settings /></ModuleRoute>;
 const SharedDataRoute = () => <ModuleRoute module="shared-data"><SharedData /></ModuleRoute>;
+const ComplaintDashboardRoute = () => <ModuleRoute module="complaint-dashboard"><ComplaintDashboard /></ModuleRoute>;
 
 function ManagementRoute({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
