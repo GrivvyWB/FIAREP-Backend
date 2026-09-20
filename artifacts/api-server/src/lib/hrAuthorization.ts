@@ -1,5 +1,3 @@
-import { and, eq, sql } from "drizzle-orm";
-import { db, entityRecords } from "@workspace/db";
 import type { Actor } from "./auth";
 import {
   canReadEntity,
@@ -35,19 +33,7 @@ export async function canReadEntityRecordForActor(
       ) {
         return false;
       }
-      if (row.state["assignedStaffId"] === actor.id) return true;
-      const [routedRequest] = await db.select({ id: entityRecords.id })
-        .from(entityRecords)
-        .where(and(
-          eq(entityRecords.tenantId, actor.tenantId),
-          eq(entityRecords.entity, "manpower-requests"),
-          eq(entityRecords.deleted, false),
-          sql`${entityRecords.state}->>'sourceEntity' = ${row.entity}`,
-          sql`${entityRecords.state}->>'sourceRecordId' = ${String((row as { id?: string }).id || "")}`,
-          sql`${entityRecords.state}->>'receiverSupervisorId' = ${actor.id}`,
-        ))
-        .limit(1);
-      return Boolean(routedRequest);
+      return true;
     }
     return canReadEntityRecord(actor, row);
   }

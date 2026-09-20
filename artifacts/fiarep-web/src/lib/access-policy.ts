@@ -24,7 +24,9 @@ const CPM_ONLY_MODULES = new Set<StaffModule>([
 
 export function isSupervisor(staff: Staff | null | undefined): boolean {
   const position = staff?.position?.trim().toLowerCase() || "";
-  return position.includes("supervisor") || position === "superintendent";
+  return position.includes("supervisor") ||
+    position === "superintendent" ||
+    position === "superintendent Ⓔ";
 }
 
 export function canReviewHud(staff: Staff | null | undefined): boolean {
@@ -42,25 +44,28 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
   if (!staff) return false;
   const position = staff.position?.trim() || "";
   const exactWorkflowShell = new Set(["dashboard", "calendar", "notifications", "settings"]);
+  if (isSupervisor(staff) && (module === "reports" || module === "violations")) {
+    return true;
+  }
   // These field personas have deliberately separate workflow tabs.  Handoffs
   // connect records; they must not broaden the recipient's navigation.
   if (staff.role === "inspector" && position === "Inspector") {
     return exactWorkflowShell.has(module) || ["inspections", "inspection-create", "violations"].includes(module);
   }
   if (staff.role === "management" && position === "Supervisor Inspector") {
-    return exactWorkflowShell.has(module) || module === "violations" || module === "reports";
+    return exactWorkflowShell.has(module);
   }
   if (staff.role === "inspector" && position === "CPM") {
     return exactWorkflowShell.has(module) || module === "scope-writing";
   }
   if (staff.role === "management" && position === "CPM Supervisor") {
-    return exactWorkflowShell.has(module) || module === "scope-review" || module === "reports";
+    return exactWorkflowShell.has(module) || module === "scope-review";
   }
   const isTradeSupervisor =
     isSupervisor(staff) &&
     !["Supervisor Inspector", "CPM Supervisor"].includes(position);
   if (isTradeSupervisor) {
-    return exactWorkflowShell.has(module) || module === "trade-requests" || module === "reports";
+    return exactWorkflowShell.has(module) || module === "trade-requests";
   }
   if ((staff.role as string) === "worker") {
     return exactWorkflowShell.has(module) || module === "my-jobs";

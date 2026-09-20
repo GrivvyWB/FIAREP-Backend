@@ -17,11 +17,17 @@ function supervisor(position: string): Staff {
 test("trade supervisors can open resident complaints they receive", () => {
   assert.equal(hasModuleAccess(supervisor("Elevator Supervisor"), "reports"), true);
   assert.equal(hasModuleAccess(supervisor("Plumbing Supervisor"), "reports"), true);
+  assert.equal(hasModuleAccess(supervisor("Elevator Supervisor"), "violations"), true);
+  assert.equal(hasModuleAccess(supervisor("Plumbing Supervisor"), "violations"), true);
+  assert.equal(hasModuleAccess(supervisor("Superintendent Ⓔ"), "reports"), true);
+  assert.equal(hasModuleAccess(supervisor("Superintendent Ⓔ"), "violations"), true);
 });
 
 test("specialized supervisors can open resident complaints they receive", () => {
   assert.equal(hasModuleAccess(supervisor("Supervisor Inspector"), "reports"), true);
   assert.equal(hasModuleAccess(supervisor("CPM Supervisor"), "reports"), true);
+  assert.equal(hasModuleAccess(supervisor("Supervisor Inspector"), "violations"), true);
+  assert.equal(hasModuleAccess(supervisor("CPM Supervisor"), "violations"), true);
 });
 
 test("complaint access does not expose unrelated management modules", () => {

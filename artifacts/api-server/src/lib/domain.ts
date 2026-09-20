@@ -285,6 +285,7 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
     return (
       actor.role === "inspector" ||
       isViolationAuthority(actor) ||
+      (actor.role === "management" && isSupervisorPosition(actor)) ||
       (entity === "building-violations" && isCpmSupervisor(actor))
     );
   }
