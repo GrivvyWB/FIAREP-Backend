@@ -14,12 +14,25 @@ const DEVELOPMENTS_PER_ROTATION = 10;
 const DEVELOPMENT_ROTATION_MS = 30 * 60 * 1000;
 const NYC_MAP_URL = "https://www.openstreetmap.org/export/embed.html?bbox=-74.25909%2C40.477399%2C-73.700181%2C40.916178&layer=mapnik";
 const DEVELOPMENT_MAP_LOCATIONS: Record<string, { latitude: number; longitude: number }> = {
-  "amsterdam houses": { latitude: 40.773168, longitude: -73.9874639 },
+  "amsterdam houses": { latitude: 40.7736392, longitude: -73.9864462 },
 };
+const DEVELOPMENT_ADDRESSES: Record<string, string> = {
+  "amsterdam houses": "210 WEST 64TH STREET",
+};
+
+function normalizedDevelopmentName(development: string | null | undefined) {
+  return development?.trim().toLowerCase() || "";
+}
+
+function developmentAddressFor(development: string | null | undefined) {
+  const normalizedName = normalizedDevelopmentName(development);
+  return DEVELOPMENT_ADDRESSES[normalizedName]
+    || (normalizedName.includes("amsterdam") ? DEVELOPMENT_ADDRESSES["amsterdam houses"] : null);
+}
 
 function mapLocationFor(development: string | null) {
   if (!development) return null;
-  const normalizedName = development.trim().toLowerCase();
+  const normalizedName = normalizedDevelopmentName(development);
   return DEVELOPMENT_MAP_LOCATIONS[normalizedName]
     || (normalizedName.includes("amsterdam") ? DEVELOPMENT_MAP_LOCATIONS["amsterdam houses"] : null);
 }
@@ -54,7 +67,13 @@ function statusOf(r: Report) { return String(r.state?.status || "submitted").toL
 function isCorrected(status: string) { 
   return ["done", "resolved", "work_approved", "approved", "completed", "in_house_completed", "closed"].includes(status); 
 }
-function addressOf(r: Report) { return getField(r, ["address", "buildingAddress", "building"], "Unknown Address"); }
+function addressOf(r: Report) {
+  return getField(
+    r,
+    ["address", "buildingAddress", "building"],
+    developmentAddressFor(r.development) || "Unknown Address",
+  );
+}
 function categoryOf(r: Report) { return getField(r, ["category", "type", "complaintType"], "Uncategorized"); }
 function boroughOf(r: Report) { return getField(r, ["borough"], "Unknown"); }
 function tradeOf(r: Report) { return getField(r, ["trade", "assignedTrade", "tradeName"], "Unassigned"); }
