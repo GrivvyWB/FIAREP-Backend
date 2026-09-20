@@ -171,6 +171,58 @@ export const LookupNycPropertyResponse = zod.object({
 
 
 /**
+ * @summary List the official ordered NYCHA development catalog
+ */
+export const ListNychaDevelopmentsResponseItem = zod.object({
+  "id": zod.string(),
+  "sequence": zod.number().int(),
+  "name": zod.string(),
+  "program": zod.enum(['CONVENTIONAL', 'PACT']),
+  "borough": zod.string().nullish(),
+  "tds": zod.string().nullish()
+})
+export const ListNychaDevelopmentsResponse = zod.array(ListNychaDevelopmentsResponseItem)
+
+
+/**
+ * @summary Search official NYCHA addresses
+ */
+export const searchNychaAddressesQueryQueryMax = 200;
+
+export const searchNychaAddressesQueryDevelopmentIdMax = 80;
+
+export const searchNychaAddressesQueryDevelopmentMax = 200;
+
+export const searchNychaAddressesQueryLimitDefault = 10;
+export const searchNychaAddressesQueryLimitMax = 50;
+
+
+
+export const SearchNychaAddressesQueryParams = zod.object({
+  "query": zod.coerce.string().max(searchNychaAddressesQueryQueryMax).optional(),
+  "developmentId": zod.coerce.string().max(searchNychaAddressesQueryDevelopmentIdMax).optional(),
+  "development": zod.coerce.string().max(searchNychaAddressesQueryDevelopmentMax).optional(),
+  "limit": zod.coerce.number().int().min(1).max(searchNychaAddressesQueryLimitMax).default(searchNychaAddressesQueryLimitDefault)
+})
+
+export const SearchNychaAddressesResponseItem = zod.object({
+  "id": zod.string(),
+  "developmentId": zod.string(),
+  "development": zod.string(),
+  "address": zod.string(),
+  "zipcode": zod.string(),
+  "borough": zod.string().nullish(),
+  "city": zod.string().nullish(),
+  "state": zod.string().optional(),
+  "building": zod.string().nullish(),
+  "bin": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish()
+})
+export const SearchNychaAddressesResponse = zod.array(SearchNychaAddressesResponseItem)
+
+
+/**
  * @summary Staff login with issued code
  */
 export const loginBodyCodeMin = 4;

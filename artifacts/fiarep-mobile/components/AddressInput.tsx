@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable } from 'react-native';
 import * as Location from 'expo-location';
+import { searchNychaAddresses, type NychaAddress } from '@workspace/api-client-react';
 import { listAllAddresses, listAddressesForDevelopment } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -17,6 +18,7 @@ export default function AddressInput(props: {
   useCurrentLocation?: boolean;
 }) {
   const [all, setAll] = useState<string[]>([]);
+  const [official, setOfficial] = useState<NychaAddress[]>([]);
   const [focused, setFocused] = useState(false);
 
   useEffect(() => {
@@ -24,6 +26,33 @@ export default function AddressInput(props: {
     if (dev) { listAddressesForDevelopment(dev).then(setAll).catch(() => {}); }
     else { listAllAddresses().then(setAll).catch(() => {}); }
   }, [props.development]);
+
+  useEffect(() => {
+    const query = (props.value || '').trim();
+    const development = (props.development || '').trim();
+    if (!development && query.length < 2) {
+      setOfficial([]);
+      return;
+    }
+    let cancelled = false;
+    const timer = setTimeout(() => {
+      searchNychaAddresses({
+        query: query || undefined,
+        development: development || undefined,
+        limit: 10,
+      })
+        .then((rows) => {
+          if (!cancelled) setOfficial(rows);
+        })
+        .catch(() => {
+          if (!cancelled) setOfficial([]);
+        });
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [props.development, props.value]);
 
   useEffect(() => {
     if (!props.useCurrentLocation || props.value.trim()) return;
@@ -60,8 +89,10 @@ export default function AddressInput(props: {
   const hasDev = !!(props.development || '').trim();
   // With a development set, show its addresses on tap (even before typing);
   // otherwise require 2+ typed characters (general recent-address autocomplete).
+  const officialAddresses = official.map((item) => item.address);
+  const candidates = [...officialAddresses, ...all.filter((address) => !officialAddresses.some((officialAddress) => officialAddress.toLowerCase() === address.toLowerCase()))];
   const matches = focused && (hasDev || q.length >= 2)
-    ? all.filter(a => (!q || a.toLowerCase().includes(q)) && a.toLowerCase() !== q).slice(0, 10)
+    ? candidates.filter(a => (!q || a.toLowerCase().includes(q)) && a.toLowerCase() !== q).slice(0, 10)
     : [];
 
   return (

@@ -14,6 +14,7 @@ import organizationsRouter from "./organizations";
 import scoresRouter from "./scores";
 import timeClockRouter from "./timeClock";
 import hrRouter from "./hr";
+import nychaRouter from "./nycha";
 
 const router: IRouter = Router();
 
@@ -31,6 +32,7 @@ router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);
 router.use(propertyRouter);
+router.use(nychaRouter);
 router.use(timeClockRouter);
 
 export default router;

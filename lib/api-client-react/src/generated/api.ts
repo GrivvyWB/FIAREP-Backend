@@ -55,6 +55,8 @@ import type {
   LookupPublicVendorScopeParams,
   Notification,
   NycPropertyLookup,
+  NychaAddress,
+  NychaDevelopment,
   Organization,
   OrganizationCreateResponse,
   OrganizationDirectorCredentials,
@@ -84,6 +86,7 @@ import type {
   ResidentPhotoMetadata,
   ResidentPhotoUpdate,
   ScoresResponse,
+  SearchNychaAddressesParams,
   Staff,
   StaffAssignmentUpdate,
   StaffCodeUpdate,
@@ -499,6 +502,167 @@ export function useLookupNycProperty<TData = Awaited<ReturnType<typeof lookupNyc
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getLookupNycPropertyQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getListNychaDevelopmentsUrl = () => {
+
+
+
+
+  return `/api/v1/nycha/developments`
+}
+
+/**
+ * @summary List the official ordered NYCHA development catalog
+ */
+export const listNychaDevelopments = async ( options?: Parameters<typeof customFetch>[1]): Promise<NychaDevelopment[]> => {
+
+  return customFetch<NychaDevelopment[]>(getListNychaDevelopmentsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListNychaDevelopmentsQueryKey = () => {
+    return [
+    `/api/v1/nycha/developments`
+    ] as const;
+    }
+
+
+export const getListNychaDevelopmentsQueryOptions = <TData = Awaited<ReturnType<typeof listNychaDevelopments>>, TError = ErrorType<UnauthorizedResponse>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNychaDevelopments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListNychaDevelopmentsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listNychaDevelopments>>> = ({ signal }) => listNychaDevelopments({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listNychaDevelopments>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListNychaDevelopmentsQueryResult = NonNullable<Awaited<ReturnType<typeof listNychaDevelopments>>>
+export type ListNychaDevelopmentsQueryError = ErrorType<UnauthorizedResponse>
+
+
+/**
+ * @summary List the official ordered NYCHA development catalog
+ */
+
+export function useListNychaDevelopments<TData = Awaited<ReturnType<typeof listNychaDevelopments>>, TError = ErrorType<UnauthorizedResponse>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listNychaDevelopments>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListNychaDevelopmentsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getSearchNychaAddressesUrl = (params?: SearchNychaAddressesParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/v1/nycha/addresses?${stringifiedParams}` : `/api/v1/nycha/addresses`
+}
+
+/**
+ * @summary Search official NYCHA addresses
+ */
+export const searchNychaAddresses = async (params?: SearchNychaAddressesParams, options?: Parameters<typeof customFetch>[1]): Promise<NychaAddress[]> => {
+
+  return customFetch<NychaAddress[]>(getSearchNychaAddressesUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getSearchNychaAddressesQueryKey = (params?: SearchNychaAddressesParams,) => {
+    return [
+    `/api/v1/nycha/addresses`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getSearchNychaAddressesQueryOptions = <TData = Awaited<ReturnType<typeof searchNychaAddresses>>, TError = ErrorType<Error | UnauthorizedResponse>>(params?: SearchNychaAddressesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchNychaAddresses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getSearchNychaAddressesQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof searchNychaAddresses>>> = ({ signal }) => searchNychaAddresses(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof searchNychaAddresses>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type SearchNychaAddressesQueryResult = NonNullable<Awaited<ReturnType<typeof searchNychaAddresses>>>
+export type SearchNychaAddressesQueryError = ErrorType<Error | UnauthorizedResponse>
+
+
+/**
+ * @summary Search official NYCHA addresses
+ */
+
+export function useSearchNychaAddresses<TData = Awaited<ReturnType<typeof searchNychaAddresses>>, TError = ErrorType<Error | UnauthorizedResponse>>(
+ params?: SearchNychaAddressesParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof searchNychaAddresses>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getSearchNychaAddressesQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

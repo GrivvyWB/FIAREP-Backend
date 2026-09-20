@@ -165,6 +165,60 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/Error" }
+  /v1/nycha/developments:
+    get:
+      operationId: listNychaDevelopments
+      tags: [property]
+      summary: List the official ordered NYCHA development catalog
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: Official NYCHA developments
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/NychaDevelopment" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /v1/nycha/addresses:
+    get:
+      operationId: searchNychaAddresses
+      tags: [property]
+      summary: Search official NYCHA addresses
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: query
+          name: query
+          required: false
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: developmentId
+          required: false
+          schema: { type: string, maxLength: 80 }
+        - in: query
+          name: development
+          required: false
+          schema: { type: string, maxLength: 200 }
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 50, default: 10 }
+      responses:
+        "200":
+          description: Matching official NYCHA addresses
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: "#/components/schemas/NychaAddress" }
+        "400":
+          description: Invalid search
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+        "401":
+          $ref: "#/components/responses/Unauthorized"
   /v1/auth/login:
     post:
       operationId: login
@@ -1732,6 +1786,32 @@ components:
           type: array
           items: { type: string }
         retrievedAt: { type: string, format: date-time }
+    NychaDevelopment:
+      type: object
+      required: [id, sequence, name, program]
+      properties:
+        id: { type: string }
+        sequence: { type: integer }
+        name: { type: string }
+        program: { type: string, enum: [CONVENTIONAL, PACT] }
+        borough: { type: ["string", "null"] }
+        tds: { type: ["string", "null"] }
+    NychaAddress:
+      type: object
+      required: [id, developmentId, development, address, zipcode]
+      properties:
+        id: { type: string }
+        developmentId: { type: string }
+        development: { type: string }
+        address: { type: string }
+        zipcode: { type: string }
+        borough: { type: ["string", "null"] }
+        city: { type: ["string", "null"] }
+        state: { type: string }
+        building: { type: ["string", "null"] }
+        bin: { type: ["string", "null"] }
+        latitude: { type: ["number", "null"] }
+        longitude: { type: ["number", "null"] }
     HealthStatus:
       type: object
       properties:

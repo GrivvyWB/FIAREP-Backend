@@ -1,0 +1,866 @@
+[
+  {
+    "development": "1162-1176 WASHINGTON AVENUE",
+    "addresses": "1"
+  },
+  {
+    "development": "1471 WATSON AVENUE",
+    "addresses": "1"
+  },
+  {
+    "development": "154 WEST 84TH STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "303 VERNON AVENUE",
+    "addresses": "1"
+  },
+  {
+    "development": "45 ALLEN STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "830 AMSTERDAM AVENUE",
+    "addresses": "1"
+  },
+  {
+    "development": "ADAMS",
+    "addresses": "7"
+  },
+  {
+    "development": "ALBANY",
+    "addresses": "6"
+  },
+  {
+    "development": "ALBANY II",
+    "addresses": "3"
+  },
+  {
+    "development": "AMSTERDAM",
+    "addresses": "24"
+  },
+  {
+    "development": "AMSTERDAM ADDITION",
+    "addresses": "1"
+  },
+  {
+    "development": "ASTORIA",
+    "addresses": "22"
+  },
+  {
+    "development": "ATLANTIC TERMINAL SITE 4B",
+    "addresses": "1"
+  },
+  {
+    "development": "BAISLEY PARK",
+    "addresses": "5"
+  },
+  {
+    "development": "BARUCH",
+    "addresses": "34"
+  },
+  {
+    "development": "BARUCH HOUSES ADDITION",
+    "addresses": "1"
+  },
+  {
+    "development": "BEACH 41ST STREET-BEACH CHANNEL DRIVE",
+    "addresses": "6"
+  },
+  {
+    "development": "BERRY",
+    "addresses": "16"
+  },
+  {
+    "development": "BLAND",
+    "addresses": "5"
+  },
+  {
+    "development": "BORINQUEN PLAZA I",
+    "addresses": "8"
+  },
+  {
+    "development": "BORINQUEN PLAZA II",
+    "addresses": "7"
+  },
+  {
+    "development": "BOYNTON AVENUE REHAB",
+    "addresses": "3"
+  },
+  {
+    "development": "BRACETTI PLAZA",
+    "addresses": "2"
+  },
+  {
+    "development": "BREUKELEN",
+    "addresses": "94"
+  },
+  {
+    "development": "BREVOORT",
+    "addresses": "26"
+  },
+  {
+    "development": "BRONX RIVER",
+    "addresses": "9"
+  },
+  {
+    "development": "BRONX RIVER ADDITION",
+    "addresses": "2"
+  },
+  {
+    "development": "BROWN",
+    "addresses": "2"
+  },
+  {
+    "development": "BROWNSVILLE",
+    "addresses": "46"
+  },
+  {
+    "development": "BRYANT AVENUE-EAST 174TH STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "BUSHWICK",
+    "addresses": "8"
+  },
+  {
+    "development": "BUTLER",
+    "addresses": "6"
+  },
+  {
+    "development": "CAREY GARDENS",
+    "addresses": "3"
+  },
+  {
+    "development": "CARLETON MANOR",
+    "addresses": "1"
+  },
+  {
+    "development": "CARVER",
+    "addresses": "13"
+  },
+  {
+    "development": "CASSIDY-LAFAYETTE",
+    "addresses": "4"
+  },
+  {
+    "development": "CASTLE HILL",
+    "addresses": "14"
+  },
+  {
+    "development": "CHELSEA",
+    "addresses": "4"
+  },
+  {
+    "development": "CHELSEA ADDITION",
+    "addresses": "1"
+  },
+  {
+    "development": "CLAREMONT REHAB (GROUP 2)",
+    "addresses": "6"
+  },
+  {
+    "development": "CLAREMONT REHAB (GROUP 3)",
+    "addresses": "5"
+  },
+  {
+    "development": "CLAREMONT REHAB (GROUP 4)",
+    "addresses": "9"
+  },
+  {
+    "development": "CLAREMONT REHAB (GROUP 5)",
+    "addresses": "3"
+  },
+  {
+    "development": "CLASON POINT GARDENS",
+    "addresses": "192"
+  },
+  {
+    "development": "CLINTON",
+    "addresses": "6"
+  },
+  {
+    "development": "COLLEGE AVENUE-EAST 165TH STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "CONEY ISLAND",
+    "addresses": "5"
+  },
+  {
+    "development": "CONEY ISLAND I (SITE 1B)",
+    "addresses": "1"
+  },
+  {
+    "development": "CONEY ISLAND I (SITE 8)",
+    "addresses": "2"
+  },
+  {
+    "development": "CONEY ISLAND I (SITES 4 & 5)",
+    "addresses": "5"
+  },
+  {
+    "development": "CONLON LIHFE TOWER",
+    "addresses": "1"
+  },
+  {
+    "development": "COOPER PARK",
+    "addresses": "13"
+  },
+  {
+    "development": "CYPRESS HILLS",
+    "addresses": "30"
+  },
+  {
+    "development": "DE HOSTOS APARTMENTS",
+    "addresses": "1"
+  },
+  {
+    "development": "DOUGLASS ADDITION",
+    "addresses": "1"
+  },
+  {
+    "development": "DOUGLASS I",
+    "addresses": "11"
+  },
+  {
+    "development": "DOUGLASS II",
+    "addresses": "6"
+  },
+  {
+    "development": "DREW-HAMILTON",
+    "addresses": "5"
+  },
+  {
+    "development": "DYCKMAN",
+    "addresses": "7"
+  },
+  {
+    "development": "EAST 165TH STREET-BRYANT AVENUE",
+    "addresses": "19"
+  },
+  {
+    "development": "EAST 173RD STREET-VYSE AVENUE",
+    "addresses": "28"
+  },
+  {
+    "development": "EAST NEW YORK CITY LINE",
+    "addresses": "33"
+  },
+  {
+    "development": "EAST RIVER",
+    "addresses": "29"
+  },
+  {
+    "development": "ELLIOTT",
+    "addresses": "8"
+  },
+  {
+    "development": "FARRAGUT",
+    "addresses": "10"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP I)",
+    "addresses": "23"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP II)",
+    "addresses": "11"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP III)",
+    "addresses": "11"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP IV)",
+    "addresses": "9"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP IX)",
+    "addresses": "27"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP V)",
+    "addresses": "32"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP VI)",
+    "addresses": "7"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP VII)",
+    "addresses": "5"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP VIII)",
+    "addresses": "7"
+  },
+  {
+    "development": "FHA REPOSSESSED HOUSES (GROUP X)",
+    "addresses": "17"
+  },
+  {
+    "development": "FIRST HOUSES",
+    "addresses": "8"
+  },
+  {
+    "development": "FOREST",
+    "addresses": "15"
+  },
+  {
+    "development": "FULTON",
+    "addresses": "11"
+  },
+  {
+    "development": "GARVEY (GROUP A)",
+    "addresses": "5"
+  },
+  {
+    "development": "GLEBE AVENUE-WESTCHESTER AVENUE",
+    "addresses": "1"
+  },
+  {
+    "development": "GLENMORE PLAZA",
+    "addresses": "4"
+  },
+  {
+    "development": "GLENWOOD",
+    "addresses": "40"
+  },
+  {
+    "development": "GOMPERS",
+    "addresses": "4"
+  },
+  {
+    "development": "GOWANUS",
+    "addresses": "24"
+  },
+  {
+    "development": "GRANT",
+    "addresses": "9"
+  },
+  {
+    "development": "GRAVESEND",
+    "addresses": "15"
+  },
+  {
+    "development": "GUN HILL",
+    "addresses": "6"
+  },
+  {
+    "development": "HABER",
+    "addresses": "3"
+  },
+  {
+    "development": "HAMMEL",
+    "addresses": "14"
+  },
+  {
+    "development": "HARBORVIEW TERRACE",
+    "addresses": "2"
+  },
+  {
+    "development": "HERNANDEZ",
+    "addresses": "1"
+  },
+  {
+    "development": "HIGHBRIDGE GARDENS",
+    "addresses": "6"
+  },
+  {
+    "development": "HOE AVENUE-EAST 173RD STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "HOLMES TOWERS",
+    "addresses": "2"
+  },
+  {
+    "development": "HOWARD",
+    "addresses": "16"
+  },
+  {
+    "development": "HUGHES APARTMENTS",
+    "addresses": "3"
+  },
+  {
+    "development": "HUNTS POINT AVENUE REHAB",
+    "addresses": "13"
+  },
+  {
+    "development": "HYLAN",
+    "addresses": "1"
+  },
+  {
+    "development": "INGERSOLL",
+    "addresses": "45"
+  },
+  {
+    "development": "INTERNATIONAL TOWER",
+    "addresses": "1"
+  },
+  {
+    "development": "ISAACS",
+    "addresses": "3"
+  },
+  {
+    "development": "JACKSON",
+    "addresses": "7"
+  },
+  {
+    "development": "JEFFERSON",
+    "addresses": "34"
+  },
+  {
+    "development": "JOHNSON",
+    "addresses": "17"
+  },
+  {
+    "development": "KINGSBOROUGH",
+    "addresses": "35"
+  },
+  {
+    "development": "KINGSBOROUGH EXTENSION",
+    "addresses": "1"
+  },
+  {
+    "development": "KING TOWERS",
+    "addresses": "10"
+  },
+  {
+    "development": "LAFAYETTE",
+    "addresses": "7"
+  },
+  {
+    "development": "LA GUARDIA",
+    "addresses": "9"
+  },
+  {
+    "development": "LA GUARDIA ADDITION",
+    "addresses": "1"
+  },
+  {
+    "development": "LATIMER GARDENS",
+    "addresses": "4"
+  },
+  {
+    "development": "LEAVITT STREET-34TH AVENUE",
+    "addresses": "1"
+  },
+  {
+    "development": "LEHMAN VILLAGE",
+    "addresses": "4"
+  },
+  {
+    "development": "LEXINGTON",
+    "addresses": "4"
+  },
+  {
+    "development": "LINCOLN",
+    "addresses": "20"
+  },
+  {
+    "development": "LONGFELLOW AVENUE REHAB",
+    "addresses": "2"
+  },
+  {
+    "development": "LONG ISLAND BAPTIST HOUSES",
+    "addresses": "4"
+  },
+  {
+    "development": "LOWER EAST SIDE II",
+    "addresses": "31"
+  },
+  {
+    "development": "LOWER EAST SIDE III",
+    "addresses": "2"
+  },
+  {
+    "development": "LOWER EAST SIDE I INFILL",
+    "addresses": "15"
+  },
+  {
+    "development": "LOWER EAST SIDE REHAB (GROUP 5)",
+    "addresses": "2"
+  },
+  {
+    "development": "LOW HOUSES",
+    "addresses": "4"
+  },
+  {
+    "development": "MARBLE HILL",
+    "addresses": "11"
+  },
+  {
+    "development": "MARCY",
+    "addresses": "70"
+  },
+  {
+    "development": "MARINER'S HARBOR",
+    "addresses": "32"
+  },
+  {
+    "development": "MARLBORO",
+    "addresses": "28"
+  },
+  {
+    "development": "MCKINLEY",
+    "addresses": "5"
+  },
+  {
+    "development": "MELROSE",
+    "addresses": "8"
+  },
+  {
+    "development": "MELTZER TOWER",
+    "addresses": "1"
+  },
+  {
+    "development": "MILL BROOK",
+    "addresses": "9"
+  },
+  {
+    "development": "MILL BROOK EXTENSION",
+    "addresses": "1"
+  },
+  {
+    "development": "MITCHEL",
+    "addresses": "10"
+  },
+  {
+    "development": "MONROE",
+    "addresses": "18"
+  },
+  {
+    "development": "MORRISANIA",
+    "addresses": "2"
+  },
+  {
+    "development": "MORRISANIA AIR RIGHTS",
+    "addresses": "5"
+  },
+  {
+    "development": "MORRIS I",
+    "addresses": "10"
+  },
+  {
+    "development": "MORRIS II",
+    "addresses": "7"
+  },
+  {
+    "development": "MOTT HAVEN",
+    "addresses": "8"
+  },
+  {
+    "development": "NEW LANE AREA",
+    "addresses": "2"
+  },
+  {
+    "development": "NOSTRAND",
+    "addresses": "32"
+  },
+  {
+    "development": "OCEAN BAY APARTMENTS (OCEANSIDE)",
+    "addresses": "14"
+  },
+  {
+    "development": "O'DWYER GARDENS",
+    "addresses": "6"
+  },
+  {
+    "development": "PARKSIDE",
+    "addresses": "20"
+  },
+  {
+    "development": "PATTERSON",
+    "addresses": "25"
+  },
+  {
+    "development": "PELHAM PARKWAY",
+    "addresses": "38"
+  },
+  {
+    "development": "PINK",
+    "addresses": "22"
+  },
+  {
+    "development": "POLO GROUNDS TOWERS",
+    "addresses": "8"
+  },
+  {
+    "development": "POMONOK",
+    "addresses": "121"
+  },
+  {
+    "development": "QUEENSBRIDGE NORTH",
+    "addresses": "47"
+  },
+  {
+    "development": "QUEENSBRIDGE SOUTH",
+    "addresses": "49"
+  },
+  {
+    "development": "RANDALL AVENUE-BALCOM AVENUE",
+    "addresses": "3"
+  },
+  {
+    "development": "RANGEL",
+    "addresses": "9"
+  },
+  {
+    "development": "RAVENSWOOD",
+    "addresses": "45"
+  },
+  {
+    "development": "REDFERN",
+    "addresses": "16"
+  },
+  {
+    "development": "RED HOOK EAST",
+    "addresses": "48"
+  },
+  {
+    "development": "RED HOOK WEST",
+    "addresses": "49"
+  },
+  {
+    "development": "REHAB PROGRAM (COLLEGE POINT)",
+    "addresses": "1"
+  },
+  {
+    "development": "REHAB PROGRAM (DOUGLASS REHABS)",
+    "addresses": "9"
+  },
+  {
+    "development": "REHAB PROGRAM (WISE REHAB)",
+    "addresses": "1"
+  },
+  {
+    "development": "RICHMOND TERRACE",
+    "addresses": "6"
+  },
+  {
+    "development": "RIIS",
+    "addresses": "18"
+  },
+  {
+    "development": "RIIS II",
+    "addresses": "8"
+  },
+  {
+    "development": "ROBBINS PLAZA",
+    "addresses": "1"
+  },
+  {
+    "development": "ROOSEVELT I",
+    "addresses": "6"
+  },
+  {
+    "development": "ROOSEVELT II",
+    "addresses": "3"
+  },
+  {
+    "development": "RUTGERS",
+    "addresses": "5"
+  },
+  {
+    "development": "SAINT MARY'S PARK",
+    "addresses": "6"
+  },
+  {
+    "development": "SAINT NICHOLAS",
+    "addresses": "14"
+  },
+  {
+    "development": "SEDGWICK",
+    "addresses": "7"
+  },
+  {
+    "development": "SEWARD PARK EXTENSION",
+    "addresses": "2"
+  },
+  {
+    "development": "SHEEPSHEAD BAY",
+    "addresses": "36"
+  },
+  {
+    "development": "SHELTON HOUSE",
+    "addresses": "1"
+  },
+  {
+    "development": "SMITH",
+    "addresses": "12"
+  },
+  {
+    "development": "SOTOMAYOR HOUSES",
+    "addresses": "28"
+  },
+  {
+    "development": "SOUNDVIEW",
+    "addresses": "26"
+  },
+  {
+    "development": "SOUTH BEACH",
+    "addresses": "15"
+  },
+  {
+    "development": "SOUTH JAMAICA I",
+    "addresses": "33"
+  },
+  {
+    "development": "SOUTH JAMAICA II",
+    "addresses": "27"
+  },
+  {
+    "development": "STANTON STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "STAPLETON",
+    "addresses": "12"
+  },
+  {
+    "development": "STRAUS",
+    "addresses": "2"
+  },
+  {
+    "development": "SUMNER",
+    "addresses": "24"
+  },
+  {
+    "development": "SURFSIDE GARDENS",
+    "addresses": "5"
+  },
+  {
+    "development": "TAFT",
+    "addresses": "9"
+  },
+  {
+    "development": "TAYLOR STREET-WYTHE AVENUE",
+    "addresses": "5"
+  },
+  {
+    "development": "TELLER AVENUE-EAST 166TH STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "THOMAS APARTMENTS",
+    "addresses": "1"
+  },
+  {
+    "development": "THROGGS NECK",
+    "addresses": "64"
+  },
+  {
+    "development": "THROGGS NECK ADDITION",
+    "addresses": "4"
+  },
+  {
+    "development": "TILDEN",
+    "addresses": "8"
+  },
+  {
+    "development": "TODT HILL",
+    "addresses": "14"
+  },
+  {
+    "development": "TOMPKINS",
+    "addresses": "12"
+  },
+  {
+    "development": "TWO BRIDGES URA (SITE 7)",
+    "addresses": "1"
+  },
+  {
+    "development": "UNITY PLAZA (SITES 17,24,25A)",
+    "addresses": "3"
+  },
+  {
+    "development": "UNITY PLAZA (SITES 4-27)",
+    "addresses": "13"
+  },
+  {
+    "development": "VANDALIA AVENUE",
+    "addresses": "2"
+  },
+  {
+    "development": "VAN DYKE I",
+    "addresses": "31"
+  },
+  {
+    "development": "VAN DYKE II",
+    "addresses": "1"
+  },
+  {
+    "development": "VLADECK",
+    "addresses": "46"
+  },
+  {
+    "development": "VLADECK II",
+    "addresses": "8"
+  },
+  {
+    "development": "WAGNER",
+    "addresses": "22"
+  },
+  {
+    "development": "WALD",
+    "addresses": "16"
+  },
+  {
+    "development": "WASHINGTON",
+    "addresses": "14"
+  },
+  {
+    "development": "WEBSTER",
+    "addresses": "5"
+  },
+  {
+    "development": "WEST FARMS ROAD REHAB",
+    "addresses": "7"
+  },
+  {
+    "development": "WEST FARMS SQUARE CONVENTIONAL",
+    "addresses": "1"
+  },
+  {
+    "development": "WEST TREMONT AVENUE-SEDGWICK AVENUE AREA",
+    "addresses": "1"
+  },
+  {
+    "development": "WHITMAN",
+    "addresses": "32"
+  },
+  {
+    "development": "WILSON",
+    "addresses": "3"
+  },
+  {
+    "development": "WOODSIDE",
+    "addresses": "55"
+  },
+  {
+    "development": "WOODSON",
+    "addresses": "2"
+  },
+  {
+    "development": "WSUR (BROWNSTONES)",
+    "addresses": "36"
+  },
+  {
+    "development": "WSUR (SITE A) 120 WEST 94TH STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "WSUR (SITE B) 74 WEST 92ND STREET",
+    "addresses": "1"
+  },
+  {
+    "development": "WSUR (SITE C) 589 AMSTERDAM AVENUE",
+    "addresses": "1"
+  },
+  {
+    "development": "WYCKOFF GARDENS",
+    "addresses": "3"
+  }
+]

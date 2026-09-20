@@ -477,6 +477,46 @@ export interface NycPropertyLookup {
   retrievedAt: string;
 }
 
+export type NychaDevelopmentProgram = typeof NychaDevelopmentProgram[keyof typeof NychaDevelopmentProgram];
+
+
+export const NychaDevelopmentProgram = {
+  CONVENTIONAL: 'CONVENTIONAL',
+  PACT: 'PACT',
+} as const;
+
+export interface NychaDevelopment {
+  id: string;
+  sequence: number;
+  name: string;
+  program: NychaDevelopmentProgram;
+  /** @nullable */
+  borough?: string | null;
+  /** @nullable */
+  tds?: string | null;
+}
+
+export interface NychaAddress {
+  id: string;
+  developmentId: string;
+  development: string;
+  address: string;
+  zipcode: string;
+  /** @nullable */
+  borough?: string | null;
+  /** @nullable */
+  city?: string | null;
+  state?: string;
+  /** @nullable */
+  building?: string | null;
+  /** @nullable */
+  bin?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+}
+
 export interface HealthStatus {
   status: string;
 }
@@ -1131,6 +1171,26 @@ address: string;
 /**
  * @minimum 1
  * @maximum 100
+ */
+limit?: number;
+};
+
+export type SearchNychaAddressesParams = {
+/**
+ * @maxLength 200
+ */
+query?: string;
+/**
+ * @maxLength 80
+ */
+developmentId?: string;
+/**
+ * @maxLength 200
+ */
+development?: string;
+/**
+ * @minimum 1
+ * @maximum 50
  */
 limit?: number;
 };
