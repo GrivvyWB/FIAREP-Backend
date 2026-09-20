@@ -317,9 +317,23 @@ export default function HRWorkspace() {
           : sectionEntries.filter(([, value]) => value !== ""),
       );
       if (editingRecord) {
-        const maintenanceAssignmentChanged =
+        const linkedEmployeeRecord =
           values.category === "hr-employee-records" &&
-          Boolean(editingRecord.state.employeeStaffId) &&
+          Boolean(editingRecord.state.employeeStaffId);
+        const editableSectionState = linkedEmployeeRecord
+          ? Object.fromEntries(Object.entries(sectionState).filter(([key]) => ![
+              "employeeStaffId",
+              "employeeNumber",
+              "status",
+              "exitType",
+              "position",
+              "role",
+              "assignedDevelopments",
+              "emergencyTruckDriver",
+            ].includes(key)))
+          : sectionState;
+        const maintenanceAssignmentChanged =
+          linkedEmployeeRecord &&
           sectionValues.position === "Maintenance Worker" &&
           (sectionValues.emergencyTruckDriver === "true") !==
             (editingRecord.state.emergencyTruckDriver === true);
@@ -338,8 +352,8 @@ export default function HRWorkspace() {
               development: employeeDevelopments?.length === 1
                 ? employeeDevelopments[0]
                 : values.development,
-              ...sectionState,
-              assignedDevelopments: employeeDevelopments,
+               ...editableSectionState,
+               ...(linkedEmployeeRecord ? {} : { assignedDevelopments: employeeDevelopments }),
             },
           },
         });
