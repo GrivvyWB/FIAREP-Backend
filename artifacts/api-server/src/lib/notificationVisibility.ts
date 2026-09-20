@@ -87,6 +87,12 @@ export async function residentReportRecipientIds(
         developments: account.developments,
         sessionVersion: account.sessionVersion,
       };
+      if (
+        account.role === "management" &&
+        account.position === "Superintendent Ⓔ"
+      ) {
+        return true;
+      }
       if (isBoroughDirector(actor)) return true;
       return Boolean(wanted) &&
         account.developments.some((item) => normalize(item) === wanted);

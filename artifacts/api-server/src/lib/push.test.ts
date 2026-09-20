@@ -429,6 +429,13 @@ test("resident report recipients follow management development scope", async () 
     const boroughDirector = await addScopedStaff(
       tenantId, "Borough Director", "administrator", "Borough Director", [],
     );
+    const emergencySuperintendent = await addScopedStaff(
+      tenantId,
+      "Emergency Superintendent",
+      "management",
+      "Superintendent Ⓔ",
+      ["Adams"],
+    );
     await addScopedStaff(
       tenantId, "Adams PM", "management", "Property Manager", ["Adams"],
     );
@@ -445,6 +452,7 @@ test("resident report recipients follow management development scope", async () 
         regionalDirector,
         scopedAdministrator,
         boroughDirector,
+        emergencySuperintendent,
       ]),
     );
   } finally {
