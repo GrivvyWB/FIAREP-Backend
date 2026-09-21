@@ -191,6 +191,30 @@ export function isBoroughDirector(actor: Actor): boolean {
   return normalizedPosition(actor.position) === "borough director";
 }
 
+/**
+ * Superintendent Ⓔ carries a special glyph (Ⓔ, U+24BA) that a data round-trip
+ * can mangle. Match tolerantly so a stored variant still resolves.
+ */
+export function isSuperintendentE(actor: Pick<Actor, "position">): boolean {
+  const p = normalizedPosition(actor.position || "");
+  if (!p.startsWith("superintendent")) return false;
+  const marker = p.slice("superintendent".length).trim();
+  return marker === "\u24ba" || marker === "e" || marker === "(e)" ||
+    marker === "[e]" || marker === "\u24d4";
+}
+
+/**
+ * Any management supervisor (a management-role account whose position is a
+ * supervisor or superintendent title) may view the full Resident Reports page
+ * across all developments.
+ */
+export function isManagementSupervisor(actor: Pick<Actor, "role" | "position">): boolean {
+  if (actor.role !== "management") return false;
+  const p = normalizedPosition(actor.position || "");
+  return p.includes("supervisor") ||
+    p.startsWith("superintendent");
+}
+
 export function isElevated(actor: Actor): boolean {
   const position = normalizedPosition(actor.position);
   return (
@@ -243,13 +267,13 @@ export function isElevatorFieldStaff(actor: Actor): boolean {
 export function isSupervisorPosition(actor: Actor): boolean {
   return actor.position.toLowerCase().includes("supervisor") ||
     actor.position === "Superintendent" ||
-    actor.position === "Superintendent Ⓔ";
+    isSuperintendentE(actor);
 }
 
 export function isComplaintHandlingSupervisor(
   actor: Pick<Actor, "role" | "position">,
 ): boolean {
-  if (actor.position === "Superintendent Ⓔ") return true;
+  if (isSuperintendentE(actor)) return true;
   return actor.role === "management" &&
     actor.position !== "CPM Supervisor" &&
     (
@@ -403,8 +427,7 @@ export function entityDevelopmentAllowed(
 ): boolean {
   if (
     entity === "resident-reports" &&
-    actor.role === "management" &&
-    actor.position === "Superintendent Ⓔ"
+    isManagementSupervisor(actor)
   ) {
     return true;
   }
@@ -868,7 +891,7 @@ export function isAssignmentAuthority(actor: Actor): boolean {
   return actor.role === "management" ||
     actor.role === "administrator" ||
     isBoroughDirector(actor) ||
-    actor.position === "Superintendent Ⓔ";
+    isSuperintendentE(actor);
 }
 
 export function canAssignStaff(
@@ -906,7 +929,7 @@ export function canSuperintendentEAssignResidentReport(
     position: string | null;
   },
 ): boolean {
-  return actor.position === "Superintendent Ⓔ" &&
+  return isSuperintendentE(actor) &&
     target.id !== actor.id &&
     target.position !== "Borough Director" &&
     ASSIGNABLE_STAFF_ROLES.has(target.role);
