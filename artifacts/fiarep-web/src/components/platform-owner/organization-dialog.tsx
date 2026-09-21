@@ -30,7 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { customFetch, LM_DEVELOPMENT_NAMES, NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useCreateOrganizationAdministrator, useListPlatformOrganizationProperties, getListPlatformOrganizationPropertiesQueryKey } from "@workspace/api-client-react";
+import { customFetch, LM_DEVELOPMENT_NAMES, NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useListPlatformOrganizationProperties, getListPlatformOrganizationPropertiesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
 
@@ -88,7 +88,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   const [generatedCode, setGeneratedCode] = useState("");
   const [generatedStaffCode, setGeneratedStaffCode] = useState("");
   const [issuedAdministratorName, setIssuedAdministratorName] = useState("");
-  const [administratorName, setAdministratorName] = useState("");
   const [copySucceeded, setCopySucceeded] = useState(false);
   const [copyError, setCopyError] = useState("");
   const [acknowledged, setAcknowledged] = useState(false);
@@ -122,7 +121,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   const createMutation = useCreateOrganization();
   const updateMutation = useUpdateOrganization();
   const updateTimeClockMutation = useUpdatePlatformOrganizationTimeClock();
-  const issueAdministratorCodeMutation = useCreateOrganizationAdministrator();
   const { data: organizationProperties = [] } = useListPlatformOrganizationProperties(
     organization?.id ?? "",
     {
@@ -192,7 +190,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       setGeneratedCode("");
       setGeneratedStaffCode("");
       setIssuedAdministratorName("");
-      setAdministratorName("");
       setCopySucceeded(false);
       setCopyError("");
       setAcknowledged(false);
@@ -340,28 +337,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       setCopyError("");
     } catch {
       setCopyError("Copy failed. Use the acknowledgment below after saving the code manually.");
-    }
-  };
-
-  const issueAdministratorCode = async () => {
-    if (!organization || !administratorName.trim()) return;
-    try {
-      const result = await issueAdministratorCodeMutation.mutateAsync({
-        id: organization.id,
-        data: { name: administratorName.trim() },
-      });
-      setGeneratedCode(organization.id);
-      setGeneratedStaffCode(result.code);
-      setIssuedAdministratorName(result.name || administratorName.trim());
-      setCopySucceeded(false);
-      setAcknowledged(false);
-      toast({ title: "Administrator code generated." });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Code generation failed",
-        description: error?.message || "Administrator code could not be generated.",
-      });
     }
   };
 
@@ -751,31 +726,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                       </FormItem>
                     )}
                   />
-                </div>
-              </div>
-            )}
-
-            {isEditing && (
-              <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
-                <h4 className="font-semibold text-slate-900">Administrator Login</h4>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <div className="flex-1 space-y-2">
-                    <label htmlFor="organization-administrator-name" className="text-sm font-medium text-slate-700">Administrator Name</label>
-                    <Input
-                      id="organization-administrator-name"
-                      value={administratorName}
-                      onChange={(event) => setAdministratorName(event.target.value)}
-                    />
-                  </div>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={issueAdministratorCode}
-                    disabled={!administratorName.trim() || issueAdministratorCodeMutation.isPending}
-                    className="sm:self-end"
-                  >
-                    {issueAdministratorCodeMutation.isPending ? "Generating..." : "Generate 4-Digit Code"}
-                  </Button>
                 </div>
               </div>
             )}

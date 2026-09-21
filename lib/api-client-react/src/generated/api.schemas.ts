@@ -1262,16 +1262,6 @@ export type ListPlatformLicenseAuditParams = {
 limit?: number;
 };
 
-export type IssueOrganizationDirectorCodeBody = {
-  /** @minLength 1 */
-  name: string;
-};
-
-export type CreateOrganizationAdministratorBody = {
-  /** @minLength 1 */
-  name: string;
-};
-
 export type ListTimeClockHistoryParams = {
 /**
  * @minimum 1

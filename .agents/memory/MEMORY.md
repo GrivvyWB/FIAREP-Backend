@@ -34,3 +34,4 @@
 - [FIAREP emergency maintenance unit](fiarep-emergency-maintenance-unit.md) — Superintendent Ⓔ manages Emergency-role maintenance staff; only truck drivers receive sequential TRK labels.
 - [FIAREP vendor check-in visibility](fiarep-vendor-check-in-visibility.md) — vendor site check-in timestamps and location are operationally visible only to Procurement.
 - [FIAREP role-specific surfaces](fiarep-role-specific-surfaces.md) — field roles and supervisors use separate guarded tabs; handoffs connect records, not navigation.
+- [FIAREP client administration boundary](fiarep-client-administration-boundary.md) — Platform Control creates only the first Borough Director; the client manages every later staff change.
