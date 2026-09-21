@@ -14,6 +14,17 @@ function supervisor(position: string): Staff {
   } as Staff;
 }
 
+function worker(position: string): Staff {
+  return {
+    id: "worker-1",
+    name: "Worker",
+    role: "worker",
+    position,
+    status: "approved",
+    developments: ["Amsterdam"],
+  } as Staff;
+}
+
 test("trade supervisors can open resident complaints they receive", () => {
   assert.equal(hasModuleAccess(supervisor("Elevator Supervisor"), "reports"), true);
   assert.equal(hasModuleAccess(supervisor("Plumbing Supervisor"), "reports"), true);
@@ -33,4 +44,10 @@ test("specialized supervisors can open resident complaints they receive", () => 
 test("complaint access does not expose unrelated management modules", () => {
   assert.equal(hasModuleAccess(supervisor("Elevator Supervisor"), "projects"), false);
   assert.equal(hasModuleAccess(supervisor("Elevator Supervisor"), "procurement"), false);
+});
+
+test("workers can open assigned complaint links without exposing management modules", () => {
+  assert.equal(hasModuleAccess(worker("Elevator Service"), "reports"), true);
+  assert.equal(hasModuleAccess(worker("Elevator Service"), "projects"), false);
+  assert.equal(hasModuleAccess(worker("Elevator Service"), "procurement"), false);
 });

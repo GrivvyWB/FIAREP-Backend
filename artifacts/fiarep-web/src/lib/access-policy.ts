@@ -68,7 +68,7 @@ export function hasModuleAccess(staff: Staff | null | undefined, module: StaffMo
     return exactWorkflowShell.has(module) || module === "trade-requests";
   }
   if ((staff.role as string) === "worker") {
-    return exactWorkflowShell.has(module) || module === "my-jobs";
+    return exactWorkflowShell.has(module) || module === "my-jobs" || module === "reports";
   }
   if (
     staff.position?.trim().toLowerCase() === "cpm supervisor" &&
