@@ -40,7 +40,7 @@ const positions = Object.values(StaffPosition).filter((position) => position !==
 const allRoles = Object.values(StaffRole).filter((r) => r !== "resident");
 const roleLabels: Record<string, string> = {
   administrator: "Administrator", human_resources: "Human Resources", management: "Management", worker: "Worker",
-  inspector: "Inspector", procurement: "Procurement", vendor: "Vendor",
+  inspector: "Inspector", cpm: "CPM", procurement: "Procurement", vendor: "Vendor",
   resident: "Resident", emergency: "Emergency",
 };
 
@@ -155,18 +155,21 @@ export default function Team() {
       return hasActiveHr ? ["administrator"] : ["human_resources", "administrator"];
     }
     if (actor.role === "human_resources") {
-      return ["management", "worker", "inspector", "procurement", "emergency"];
+      return ["management", "worker", "inspector", "cpm", "procurement", "emergency"];
     }
     if (actor.role === "administrator") {
-      return allRoles.filter((r) => !["administrator", "resident"].includes(r));
+      return allRoles
+        .filter((r) => !["administrator", "resident"].includes(r))
+        .flatMap((r) => r === "inspector" ? ["inspector", "cpm"] : [r]);
     }
     if (actor.role === "management" && actor.position === "Regional Director") {
-      return ["management", "worker", "inspector", "emergency"];
+      return ["management", "worker", "inspector", "cpm", "emergency"];
     }
-    if (actor.role === "management") return ["worker", "inspector", "emergency"];
+    if (actor.role === "management") return ["worker", "inspector", "cpm", "emergency"];
     return [];
   }, [actor, staff]);
   const canIssue = roleOptions.length > 0;
+  const selectedRoleOption = role === "inspector" && position === "CPM" ? "cpm" : role;
 
   const developmentStaff = staff?.filter((member) =>
     member.role !== "human_resources" &&
@@ -312,7 +315,7 @@ export default function Team() {
         await refresh();
         closeForm();
       } else {
-        setIssuedCode(result.code); setIssuedRole(role); setIssuedEmployee(name.trim()); await refresh();
+        setIssuedCode(result.code); setIssuedRole(selectedRoleOption); setIssuedEmployee(name.trim()); await refresh();
       }
     } catch (e) { setActionError(errorMessage(e)); }
   }
@@ -366,7 +369,7 @@ export default function Team() {
       ["Name", "Role", "Position", "Access Code", "Result"],
       ...bulkResults.map((result) => [
         result.name,
-        roleLabels[role] || role,
+        roleLabels[selectedRoleOption] || selectedRoleOption,
         position,
         result.code || "",
         result.error || "Created",
@@ -387,6 +390,12 @@ export default function Team() {
     if (roleOptions.includes(nextRole)) setRole(nextRole);
   }
   function selectRole(nextRole: string) {
+    if (nextRole === "cpm") {
+      setRole("inspector");
+      setPosition("CPM");
+      setEmergencyTruckDriver(false);
+      return;
+    }
     setRole(nextRole);
     if (nextRole === "human_resources") setPosition("Human Resources");
     if (nextRole === "administrator" && actor?.position === "Borough Director") {
@@ -803,7 +812,7 @@ export default function Team() {
               {createMode === "single" ? (
                 <form onSubmit={submit} className="space-y-4">
                   <div><Label htmlFor="employee-name">Name</Label><Input id="employee-name" required value={name} onChange={(e) => setName(e.target.value)} /></div>
-                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={selectedRoleOption} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
                   <div><Label htmlFor="employee-position">Position</Label><select id="employee-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
                   {role === "emergency" && position === "Maintenance Worker" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={emergencyTruckDriver} onCheckedChange={(checked) => setEmergencyTruckDriver(checked === true)} /><span>Emergency truck driver</span></label>}
                   {developmentSelector}
@@ -826,7 +835,7 @@ export default function Team() {
                 </div>
               ) : (
                 <form onSubmit={submitBulk} className="space-y-4">
-                  <div><Label htmlFor="employee-list-role">Role</Label><select id="employee-list-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-list-role">Role</Label><select id="employee-list-role" className="w-full border rounded-md p-2 bg-background" value={selectedRoleOption} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
                   <div><Label htmlFor="employee-list-position">Position</Label><select id="employee-list-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
                   {developmentSelector}
                    {actor?.role === "human_resources" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={waitingForDocuments} onCheckedChange={(checked) => setWaitingForDocuments(checked === true)} /><span>Waiting for documents</span></label>}
