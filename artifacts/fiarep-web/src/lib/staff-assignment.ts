@@ -62,10 +62,12 @@ export function assignableOperationalStaff(
   if (!actor) return [];
   const isBoroughDirector = actor.position === "Borough Director";
   const isRegionalDirector = actor.position === "Regional Director";
+  const isEmergencySuperintendent = actor.position === "Superintendent Ⓔ";
 
   return candidates.filter((candidate) => {
     if (candidate.id === actor.id || candidate.position === "Borough Director") return false;
     if (!OPERATIONAL_ROLES.has(candidate.role)) return false;
+    if (isEmergencySuperintendent) return true;
     if (development && !candidate.developments.includes(development)) return false;
     if (isBoroughDirector) return true;
     if (!withinDevelopments(candidate, actor.developments)) return false;

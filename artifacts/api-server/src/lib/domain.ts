@@ -896,8 +896,7 @@ export function canSuperintendentEAssignResidentReport(
     position: string | null;
   },
 ): boolean {
-  return actor.role === "management" &&
-    actor.position === "Superintendent Ⓔ" &&
+  return actor.position === "Superintendent Ⓔ" &&
     target.id !== actor.id &&
     target.position !== "Borough Director" &&
     ASSIGNABLE_STAFF_ROLES.has(target.role);
