@@ -6,9 +6,11 @@
   "scripts": {
     "preinstall": "sh -c 'rm -f package-lock.json yarn.lock; case \"$npm_config_user_agent\" in pnpm/*) ;; *) echo \"Use pnpm instead\" >&2; exit 1 ;; esac'",
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
-    "test": "pnpm run test:push && pnpm run test:hr-intake && pnpm run test:push-lifecycle",
+    "test": "pnpm run test:push && pnpm run test:hr-intake && pnpm run test:staff && pnpm run test:development-csv && pnpm run test:push-lifecycle",
     "test:push": "pnpm --filter @workspace/scripts exec tsx src/run-push-tests.ts",
     "test:hr-intake": "pnpm --filter @workspace/scripts exec tsx src/run-push-tests.ts ../artifacts/api-server/src/routes/hr-intake.route.test.ts",
+    "test:staff": "pnpm --filter @workspace/scripts exec tsx src/run-push-tests.ts ../artifacts/api-server/src/routes/staff.route.test.ts",
+    "test:development-csv": "pnpm --filter @workspace/scripts exec tsx --test ../artifacts/fiarep-web/src/lib/development-csv.test.ts",
     "test:push-lifecycle": "pnpm --filter @workspace/scripts exec tsx --test src/run-push-tests.lifecycle.test.ts",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck"
