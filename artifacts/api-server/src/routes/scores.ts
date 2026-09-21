@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { and, eq, inArray } from "drizzle-orm";
 import { db, entityRecords, organizationProperties } from "@workspace/db";
 import { GetScoresResponse } from "@workspace/api-zod";
-import { entityDevelopmentAllowed, isBoroughDirector } from "../lib/domain";
+import { entityDevelopmentAllowed, isBoroughDirector, isElevated } from "../lib/domain";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import {
   calculateBuildingScores,
@@ -84,7 +84,11 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
   const knownDevelopments = new Set(
     developments.map((score) => score.development.trim().toLowerCase()),
   );
-  for (const development of actor.developments) {
+  const baselineDevelopments =
+    actor.role === "administrator" || isElevated(actor)
+      ? activeProperties.map((property) => property.development ?? "")
+      : actor.developments;
+  for (const development of baselineDevelopments) {
     const name = development.trim();
     if (
       !name ||

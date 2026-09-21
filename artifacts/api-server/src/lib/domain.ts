@@ -183,15 +183,20 @@ const SPECIALIZED_MANAGEMENT_POSITIONS = new Set([
   "Superintendent Ⓔ",
 ]);
 
+function normalizedPosition(position: string): string {
+  return position.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export function isBoroughDirector(actor: Actor): boolean {
-  return actor.position === "Borough Director";
+  return normalizedPosition(actor.position) === "borough director";
 }
 
 export function isElevated(actor: Actor): boolean {
+  const position = normalizedPosition(actor.position);
   return (
     isBoroughDirector(actor) ||
     (actor.role === "management" &&
-      ELEVATED_POSITIONS.has(actor.position))
+      ["regional director", "superintendent"].includes(position))
   );
 }
 
@@ -359,7 +364,7 @@ export function developmentAllowed(
   actor: Actor,
   development: string | null,
 ): boolean {
-  if (isBoroughDirector(actor)) return true;
+  if (isElevated(actor)) return true;
   if (actor.role === "administrator") return true;
   if (actor.role === "human_resources") return true;
   const normalizedDevelopment = development?.trim().toLowerCase() || "";
