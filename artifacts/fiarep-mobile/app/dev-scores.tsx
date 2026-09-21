@@ -72,9 +72,25 @@ export default function DevScores() {
 
           {(
             <View style={{ borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 6, gap: 6 }}>
-              {!d.items || d.items.length === 0 ? (
-                <Text style={ui.listSub}>No items.</Text>
-              ) : d.items.map((it, i) => (
+              <View style={{ gap: 4 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={ui.listSub}>Base score</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700' }}>50</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={ui.listSub}>Completed: {d.completed} × +10</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: scoreColor(d.completed * 10) }}>+{d.completed * 10}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={ui.listSub}>Open: {d.open} × -5</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: scoreColor(d.open * -5) }}>{d.open * -5}</Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={ui.listSub}>Overdue: {d.overdue} × -10</Text>
+                  <Text style={{ fontSize: 13, fontWeight: '700', color: scoreColor(d.overdue * -10) }}>{d.overdue * -10}</Text>
+                </View>
+              </View>
+              {d.items && d.items.length > 0 && d.items.map((it, i) => (
                 <View key={i} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 14 }}><Text style={{ fontWeight: '700' }}>{kindLabel[it.kind]}:</Text> {it.label}</Text>

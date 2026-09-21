@@ -144,6 +144,7 @@ export default function Management() {
   const [currentPosition, setCurrentPosition] = useState('');
   const [scoreByName, setScoreByName] = useState<Record<string, number>>({});
   const [developmentScores, setDevelopmentScores] = useState<DevelopmentScore[]>([]);
+  const [scoresLoaded, setScoresLoaded] = useState(false);
   const [cwoPos, setCwoPos] = useState<string>('');
   const [cwoName, setCwoName] = useState<string>('');
   const [cwoDesc, setCwoDesc] = useState<string>('');
@@ -190,7 +191,10 @@ export default function Management() {
       }
     });
     getContractorScores().then((arr) => { const m: Record<string, number> = {}; for (const c of arr) m[c.name] = c.score; setScoreByName(m); });
-    getScores().then((snapshot) => setDevelopmentScores(snapshot.developments));
+    getScores()
+      .then((snapshot) => setDevelopmentScores(snapshot.developments))
+      .catch(() => setDevelopmentScores([]))
+      .finally(() => setScoresLoaded(true));
     (async () => {
       const a = await getCurrentActor();
       if (a.name) setMyDevs(await developmentsForManager(a.name));
@@ -248,7 +252,7 @@ export default function Management() {
       : score.development.trim().toLowerCase() === filterDev.trim().toLowerCase()
   );
   const score = visibleDevelopmentScores.length === 0
-    ? null
+    ? (scoresLoaded ? 50 : null)
     : filterDev === ALL
       ? Math.max(0, Math.min(100, 50 + visibleDevelopmentScores.reduce(
           (total, item) => total + (item.points ?? ((item.scorePercent ?? item.score) - 50)),
@@ -362,7 +366,7 @@ export default function Management() {
         </View>
         <View style={{ flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 14, backgroundColor: '#fafafa' }}>
           <Text style={{ fontSize: 28, fontWeight: '700', color: score !== null && score >= 50 ? '#2e7d32' : '#c0392b' }}>
-            {score === null ? '—' : `${score}%`}
+            {score === null ? '…' : `${score}%`}
           </Text>
           <Text style={{ fontSize: 13, color: '#666', marginTop: 2 }}>Score</Text>
         </View>
