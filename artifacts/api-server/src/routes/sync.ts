@@ -128,6 +128,25 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       version: row.version,
       updatedAt: row.updatedAt,
     }));
+  const responseRecords = [...visibleRecords.map((row) => ({
+    id: row.id,
+    entity: row.entity,
+    projectId: row.projectId,
+    development: row.development,
+    state: stripPricing(actor, row.state),
+    deleted: row.deleted,
+    version: row.version,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  })), ...tombstones];
+  console.info(JSON.stringify({
+    event: "sync_response",
+    role: actor.role,
+    position: actor.position,
+    recordCount: responseRecords.length,
+    residentReportCount: responseRecords.filter((row) => row.entity === "resident-reports").length,
+    notificationCount: visibleAlerts.length,
+  }));
   res.json({
     cursor: cursor.toISOString(),
     recordCursor: cursor.toISOString(),
@@ -135,17 +154,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
     recordCursors: Object.fromEntries(
       readable.map((entity) => [entity, cursor.toISOString()]),
     ),
-    records: [...visibleRecords.map((row) => ({
-      id: row.id,
-      entity: row.entity,
-      projectId: row.projectId,
-      development: row.development,
-      state: stripPricing(actor, row.state),
-      deleted: row.deleted,
-      version: row.version,
-      createdAt: row.createdAt,
-      updatedAt: row.updatedAt,
-    })), ...tombstones],
+    records: responseRecords,
     notifications: visibleAlerts,
   });
 });

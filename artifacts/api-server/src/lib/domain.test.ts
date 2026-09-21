@@ -618,6 +618,28 @@ test("administrator authority overrides a Borough Director position for procurem
   assert.equal(entityDevelopmentAllowed(director, "projects", null), true);
 });
 
+test("elevated management can sync resident reports across developments", () => {
+  for (const position of [
+    "  BOROUGH   director ",
+    "Regional Director",
+    "Superintendent",
+  ]) {
+    const elevated = actor({
+      role: "management",
+      position,
+      developments: ["Development A"],
+    });
+    assert.equal(
+      entityDevelopmentAllowed(
+        elevated,
+        "resident-reports",
+        "Development B",
+      ),
+      true,
+    );
+  }
+});
+
 test("procurement entity boundary is role- and ownership-specific", () => {
   const director = actor({ role: "administrator", position: "Borough Director", developments: [] });
   const admin = actor({ role: "administrator" });
