@@ -310,10 +310,6 @@ router.get("/v1/staff/developments", async (_req, res) => {
 
 router.post("/v1/staff", async (req, res) => {
   const actor = actorFrom(res);
-  if (actor.role) {
-    res.status(403).json({ error: "Start employee intake in HR Workspace" });
-    return;
-  }
   const input = req.body as Record<string, unknown>;
   const name = typeof input["name"] === "string" ? input["name"].trim() : "";
   const role = typeof input["role"] === "string" ? input["role"] : "";
@@ -341,6 +337,24 @@ router.post("/v1/staff", async (req, res) => {
     !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number])
   ) {
     res.status(400).json({ error: "Valid name, role, and position are required" });
+    return;
+  }
+  const isFirstHrBootstrap =
+    isBoroughDirector(actor) &&
+    role === "human_resources" &&
+    position === "Human Resources" &&
+    requestedStatus === "approved";
+  const isBoroughDirectorSuccession =
+    isBoroughDirector(actor) &&
+    role === "administrator" &&
+    position === "Borough Director" &&
+    requestedStatus === "approved";
+  if (
+    actor.role !== "human_resources" &&
+    !isFirstHrBootstrap &&
+    !isBoroughDirectorSuccession
+  ) {
+    res.status(403).json({ error: "Start employee intake in HR Workspace" });
     return;
   }
   if (requestedStatus === "pending" && actor.role !== "human_resources") {
@@ -390,6 +404,20 @@ router.post("/v1/staff", async (req, res) => {
   }
   const created = await db.transaction(async (tx) => {
     await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-limit:${actor.tenantId}`}))`);
+    if (isFirstHrBootstrap) {
+      const [existingHr] = await tx
+        .select({ id: staffAccounts.id })
+        .from(staffAccounts)
+        .where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.role, "human_resources"),
+          sql`${staffAccounts.status} <> 'revoked'`,
+        ))
+        .limit(1);
+      if (existingHr) {
+        throw Object.assign(new Error("Human Resources already exists for this organization"), { status: 409 });
+      }
+    }
     if (clientRequestId) {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-create:${actor.tenantId}:${clientRequestId}`}))`);
       const [existing] = await tx.select().from(staffAccounts).where(eq(staffAccounts.id, clientRequestId)).limit(1);

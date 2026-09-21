@@ -148,7 +148,12 @@ export default function Team() {
 
   const roleOptions = useMemo(() => {
     if (!actor) return [];
-    if (actor.position === "Borough Director") return allRoles;
+    if (actor.position === "Borough Director") {
+      const hasActiveHr = staff?.some(
+        (member) => member.role === "human_resources" && member.status !== "revoked",
+      );
+      return hasActiveHr ? ["administrator"] : ["human_resources", "administrator"];
+    }
     if (actor.role === "human_resources") {
       return ["management", "worker", "inspector", "procurement", "emergency"];
     }
@@ -160,7 +165,7 @@ export default function Team() {
     }
     if (actor.role === "management") return ["worker", "inspector", "emergency"];
     return [];
-  }, [actor]);
+  }, [actor, staff]);
   const canIssue = roleOptions.length > 0;
 
   const developmentStaff = staff?.filter((member) =>
@@ -247,9 +252,16 @@ export default function Team() {
   }
   function openAddEmployee() {
     void refetchDevelopments();
+    const initialRole = roleOptions.includes("worker") ? "worker" : (roleOptions[0] ?? "worker");
     setCreateMode("single");
-    setRole(roleOptions.includes("worker") ? "worker" : (roleOptions[0] ?? "worker"));
-    setPosition("Staff Worker");
+    setRole(initialRole);
+    setPosition(
+      initialRole === "human_resources"
+        ? "Human Resources"
+        : initialRole === "administrator" && actor?.position === "Borough Director"
+          ? "Borough Director"
+          : "Staff Worker",
+    );
     setName("");
     setDevelopments([]);
     setWaitingForDocuments(false);
@@ -266,7 +278,14 @@ export default function Team() {
     setOpen(true);
   }
   function closeForm() {
-    setOpen(false); setName(""); setRole(roleOptions.includes("worker") ? "worker" : (roleOptions[0] ?? "worker")); setPosition("Staff Worker");
+    const initialRole = roleOptions.includes("worker") ? "worker" : (roleOptions[0] ?? "worker");
+    setOpen(false); setName(""); setRole(initialRole); setPosition(
+      initialRole === "human_resources"
+        ? "Human Resources"
+        : initialRole === "administrator" && actor?.position === "Borough Director"
+          ? "Borough Director"
+          : "Staff Worker",
+    );
     setDevelopments([]); setDevelopmentsOpen(false);
     setWaitingForDocuments(false);
     setEmergencyTruckDriver(false);
@@ -366,6 +385,14 @@ export default function Team() {
     if (nextPosition !== "Maintenance Worker") setEmergencyTruckDriver(false);
     const nextRole = roleForPosition(nextPosition);
     if (roleOptions.includes(nextRole)) setRole(nextRole);
+  }
+  function selectRole(nextRole: string) {
+    setRole(nextRole);
+    if (nextRole === "human_resources") setPosition("Human Resources");
+    if (nextRole === "administrator" && actor?.position === "Borough Director") {
+      setPosition("Borough Director");
+    }
+    if (nextRole !== "emergency") setEmergencyTruckDriver(false);
   }
   async function resetCode() {
     if (!resetTarget) return;
@@ -776,7 +803,7 @@ export default function Team() {
               {createMode === "single" ? (
                 <form onSubmit={submit} className="space-y-4">
                   <div><Label htmlFor="employee-name">Name</Label><Input id="employee-name" required value={name} onChange={(e) => setName(e.target.value)} /></div>
-                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => { setRole(e.target.value); if (e.target.value !== "emergency") setEmergencyTruckDriver(false); }}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
                   <div><Label htmlFor="employee-position">Position</Label><select id="employee-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
                   {role === "emergency" && position === "Maintenance Worker" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={emergencyTruckDriver} onCheckedChange={(checked) => setEmergencyTruckDriver(checked === true)} /><span>Emergency truck driver</span></label>}
                   {developmentSelector}
@@ -799,7 +826,7 @@ export default function Team() {
                 </div>
               ) : (
                 <form onSubmit={submitBulk} className="space-y-4">
-                  <div><Label htmlFor="employee-list-role">Role</Label><select id="employee-list-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => setRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-list-role">Role</Label><select id="employee-list-role" className="w-full border rounded-md p-2 bg-background" value={role} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
                   <div><Label htmlFor="employee-list-position">Position</Label><select id="employee-list-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
                   {developmentSelector}
                    {actor?.role === "human_resources" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={waitingForDocuments} onCheckedChange={(checked) => setWaitingForDocuments(checked === true)} /><span>Waiting for documents</span></label>}
