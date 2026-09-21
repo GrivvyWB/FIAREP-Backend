@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { User, LogOut, Shield, Calculator } from "lucide-react";
+import { User, LogOut, Shield, Calculator, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -151,14 +151,17 @@ export default function Settings() {
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Shield className="w-4 h-4" /> Access & Security
             </h3>
-            <div className="bg-secondary/50 p-4 rounded-xl border border-border">
-              <div className="text-xs text-muted-foreground font-medium mb-1">Assigned Developments</div>
-              <div className="font-semibold">
-                {staff?.developments?.length 
-                  ? staff.developments.join(', ') 
+            <details className="group bg-secondary/50 rounded-xl border border-border">
+              <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-xs font-medium text-muted-foreground">
+                Assigned Developments
+                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="border-t border-border px-4 py-3 font-semibold">
+                {staff?.developments?.length
+                  ? staff.developments.join(', ')
                   : "All Access (System Wide)"}
               </div>
-            </div>
+            </details>
           </div>}
         </div>
 
