@@ -661,6 +661,7 @@ export default function Team() {
       <div className="flex items-start justify-between gap-4">
         <div><h1 className="text-2xl font-bold tracking-tight">Team Directory</h1>
           <p className="text-muted-foreground text-sm">View staff directory and authority.</p></div>
+        {canIssue && <Button onClick={openAddEmployee}>Add Employee</Button>}
       </div>
       {actor?.role === "human_resources" && pendingEmployeeDrafts.length > 0 && (
         <div className="rounded-[14px] border border-border bg-card p-4 shadow-sm">

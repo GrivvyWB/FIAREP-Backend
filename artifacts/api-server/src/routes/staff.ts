@@ -105,7 +105,9 @@ function safe(
         canManage: canManageStaff(actor, staff),
         canResetCode: actor.role === "human_resources" && canManageStaff(actor, staff),
         canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
-        canDelete: actor.id !== staff.id && canManageStaff(actor, staff),
+        canDelete:
+          actor.id !== staff.id &&
+          (actor.role === "administrator" || canManageStaff(actor, staff)),
         canApprove:
           actor.role === "human_resources" &&
           staff.status === "pending" &&
@@ -127,7 +129,9 @@ function issueSafe(
     canManage: canManageStaff(actor, staff),
     canResetCode: actor.role === "human_resources" && canManageStaff(actor, staff),
     canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
-    canDelete: actor.id !== staff.id && canManageStaff(actor, staff),
+    canDelete:
+      actor.id !== staff.id &&
+      (actor.role === "administrator" || canManageStaff(actor, staff)),
     canApprove:
       actor.role === "human_resources" &&
       staff.status === "pending" &&
@@ -833,6 +837,22 @@ router.delete("/v1/staff/:id", async (req, res) => {
   if (actor.role !== "administrator" && !canManageStaff(actor, target)) {
     res.status(403).json({ error: "Not allowed to delete this staff account" });
     return;
+  }
+  if (target.position === "Borough Director") {
+    const [replacement] = await db
+      .select({ id: staffAccounts.id })
+      .from(staffAccounts)
+      .where(and(
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.position, "Borough Director"),
+        sql`${staffAccounts.id} <> ${target.id}`,
+        sql`${staffAccounts.status} <> 'revoked'`,
+      ))
+      .limit(1);
+    if (!replacement) {
+      res.status(409).json({ error: "Add the new Borough Director before deleting the former Borough Director" });
+      return;
+    }
   }
   await db.transaction(async (tx) => {
     await tx.delete(refreshSessions).where(eq(refreshSessions.staffId, target.id));
