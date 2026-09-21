@@ -569,6 +569,9 @@ router.post("/v1/:entity", async (req, res, next) => {
       "Carpenter",
       "Electrician",
       "Elevator Service",
+      "Painter",
+      "Boiler Mechanic",
+      "Bricklayer",
     ]);
     const supervisorPositions: Record<string, readonly string[]> = {
       Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
@@ -577,6 +580,9 @@ router.post("/v1/:entity", async (req, res, next) => {
       Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
       Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
       "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
+      Painter: ["Painter Supervisor", "Supervisor Painter"],
+      "Boiler Mechanic": ["Boiler Supervisor", "Supervisor Boiler", "Heat Plant Supervisor"],
+      Bricklayer: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor"],
     };
     if (
       !["resident-reports", "building-violations"].includes(sourceEntity) ||

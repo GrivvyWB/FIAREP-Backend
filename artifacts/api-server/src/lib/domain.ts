@@ -708,6 +708,8 @@ const TRADE_SUPERVISOR_POSITIONS = new Set([
   "Elevator Supervisor",
   "Painter Supervisor",
   "Carpenter Supervisor",
+  "Boiler Supervisor",
+  "Bricklayer Supervisor",
 ]);
 
 const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
@@ -730,6 +732,12 @@ const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
   ["Supervisor Electrician", "Electrician"],
   ["Painter Supervisor", "Painter"],
   ["Supervisor Painter", "Painter"],
+  ["Boiler Supervisor", "Boiler Mechanic"],
+  ["Supervisor Boiler", "Boiler Mechanic"],
+  ["Heat Plant Supervisor", "Boiler Mechanic"],
+  ["Bricklayer Supervisor", "Bricklayer"],
+  ["Supervisor Bricklayer", "Bricklayer"],
+  ["Mason Supervisor", "Bricklayer"],
   ["Maintenance Supervisor", "Maintenance Worker"],
   ["Grounds Supervisor", "Groundskeeper"],
 ]);
@@ -766,6 +774,8 @@ const SUPERVISED_LEAVE_POSITIONS = new Map<string, Set<string>>([
   ["Elevator Supervisor", new Set(["Elevator Service"])],
   ["Painter Supervisor", new Set(["Painter"])],
   ["Carpenter Supervisor", new Set(["Carpenter"])],
+  ["Boiler Supervisor", new Set(["Boiler Mechanic"])],
+  ["Bricklayer Supervisor", new Set(["Bricklayer"])],
   ["Supervisor Inspector", new Set(["Inspector", "CPM"])],
 ]);
 
