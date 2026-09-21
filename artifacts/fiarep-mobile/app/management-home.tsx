@@ -8,6 +8,7 @@ import { unreadCount, getCurrentActor, displayStaffPosition } from '../lib/store
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
+import { useModuleAccess, moduleForTile } from '../lib/module-access';
 
 type Tone = 'solid' | 'outline' | 'tint';
 type Tile = { label: string; onPress: () => void; tone: Tone };
@@ -18,6 +19,11 @@ export default function ManagementHome() {
   const { mode, refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
+  const modules = useModuleAccess();
+  const enabledTiles = (tiles: Tile[]) => tiles.filter((tile) => {
+    const module = moduleForTile(tile.label);
+    return !module || modules[module];
+  });
   const _pos = (position || '').trim().toLowerCase();
   const isSup = _pos.includes('supervisor') || _pos === 'superintendent';
   // Elevated roles see every module. Regular supervisors are restricted.
@@ -58,7 +64,7 @@ export default function ManagementHome() {
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' as Tone },
         { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone },
         ...personalTiles,
-      ].map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
+       ].filter((t) => { const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
       <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
     </ScrollView>;
   }
@@ -72,7 +78,7 @@ export default function ManagementHome() {
       ];
     return <ScrollView contentContainerStyle={ui.wrap}>
       <AlertBanner count={unread} /><Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{title}</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[...workflow, ...personalTiles].map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: ACCENT, backgroundColor: t.tone === 'solid' ? ACCENT : '#1E7D4F22', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : ACCENT, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
+       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{enabledTiles([...workflow, ...personalTiles]).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: ACCENT, backgroundColor: t.tone === 'solid' ? ACCENT : '#1E7D4F22', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : ACCENT, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
       <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
     </ScrollView>;
   }
@@ -137,12 +143,13 @@ export default function ManagementHome() {
   const isSupervisor = /supervisor/i.test((position || '').trim()) || /superintendent/i.test((position || '').trim());
   const heading = position === 'Borough Director' ? 'Borough Director' : isSupervisor ? displayStaffPosition(position) : 'Management';
 
+  const filteredSections = sections.map((section) => ({ ...section, tiles: enabledTiles(section.tiles) })).filter((section) => section.tiles.length > 0);
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <AlertBanner count={unread} />
       <UpperManagementMuteToggle />
       <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{heading}</Text>
-      {sections.filter((sec) => sec.tiles.length > 0).map((sec, si) => (
+      {filteredSections.map((sec, si) => (
         <View key={si} style={{ marginBottom: 18 }}>
           <Text
             style={{

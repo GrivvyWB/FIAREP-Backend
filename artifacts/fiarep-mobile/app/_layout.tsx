@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Stack, useRouter } from 'expo-router';
+import { Stack, useRouter, usePathname } from 'expo-router';
 import {
   getAppMode, setAppMode,
   verifyStaffLogin,
@@ -13,6 +13,7 @@ import {
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
 import { clearBadge } from '../lib/push';
+import { loadModuleConfig, refreshModuleConfig, moduleForRoute, moduleEnabled } from '../lib/module-access';
 
 type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
@@ -60,6 +61,7 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
       const ok = await verifyStaffLogin(name.trim(), normCode(code));
       if (ok) {
         const actor = await restoreServerSession();
+        await refreshModuleConfig().catch(() => undefined);
         const supportedRoles: AppMode[] = ['administrator', 'management', 'worker', 'inspector', 'emergency'];
         const actualRole = actor?.role;
         if (!actualRole || !supportedRoles.includes(actualRole as AppMode)) {
@@ -374,6 +376,7 @@ function VendorStack() {
 
 export default function Layout() {
   const router = useRouter();
+  const pathname = usePathname();
   const [mode, setMode] = useState<AppMode | null>(null);
   const [persona, setPersona] = useState<InstallationPersona | null>(null);
   const [booting, setBooting] = useState(true);
@@ -385,6 +388,8 @@ export default function Layout() {
       const savedMode = await getAppMode().catch(() => null);
       const savedPersona = await getInstallationPersona().catch(() => null);
       const restored = await restoreServerSession().catch(() => null);
+      await loadModuleConfig().catch(() => null);
+      if (restored) await refreshModuleConfig().catch(() => undefined);
       const inferred = inferInstallationPersona(savedMode, restored?.role);
       const selected = savedPersona || inferred;
 
@@ -455,6 +460,16 @@ export default function Layout() {
       return () => clearTimeout(redirect);
     }
   }, [booting, mode, router]);
+
+  // A route can be opened from a notification or an old deep link without
+  // passing through a home-card click. Keep the tenant policy authoritative.
+  useEffect(() => {
+    if (booting || !mode || !pathname) return;
+    const module = moduleForRoute(pathname);
+    if (module && !moduleEnabled(module)) {
+      router.replace(HOME_FOR_MODE[mode] as never);
+    }
+  }, [booting, mode, pathname, router]);
 
   const refresh = useCallback(() => { setMode(null); }, []);
 

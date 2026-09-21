@@ -8,6 +8,7 @@ import { unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
+import { useModuleAccess, moduleForTile } from '../lib/module-access';
 
 type Tone = 'solid' | 'outline' | 'tint';
 type Tile = { label: string; onPress: () => void; tone: Tone };
@@ -29,6 +30,7 @@ export default function AdminHome() {
   }, [navigation]);
   const { refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
+  const modules = useModuleAccess();
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('administrator'); if (a.name) c += await unreadCount(a.name); setUnread(c); })(); }, []));
 
   async function onSignOut() {
@@ -110,7 +112,7 @@ export default function AdminHome() {
             {s.heading}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {s.tiles.map((t, i) => {
+            {s.tiles.filter((t) => { const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => {
               const solid = t.tone === 'solid';
               const tint = t.tone === 'tint';
               return (

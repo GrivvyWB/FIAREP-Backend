@@ -231,8 +231,8 @@ function AppRouter() {
 
 function ModuleRoute({ module, children }: { module: StaffModule; children: ReactNode }) {
   const [, setLocation] = useLocation();
-  const { staff } = useAuth();
-  const allowed = hasModuleAccess(staff, module);
+  const { staff, organizationModules } = useAuth();
+  const allowed = hasModuleAccess(staff, module, organizationModules);
   useEffect(() => {
     if (!allowed) setLocation(staff?.role === "procurement" ? "/procurement" : "/dashboard");
   }, [allowed, setLocation, staff?.role]);
@@ -283,7 +283,7 @@ function ManagementRouteChangeOrders() {
 }
 
 function ManagementRouteScores() {
-  return <ManagementRoute><Scores /></ManagementRoute>;
+  return <ModuleRoute module="scores"><ManagementRoute><Scores /></ManagementRoute></ModuleRoute>;
 }
 
 function OwnerAppRouter() {

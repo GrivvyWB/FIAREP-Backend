@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { db, staffAccounts } from "@workspace/db";
+import { db, organizations, staffAccounts } from "@workspace/db";
 import {
   issueSession,
   revokeRefreshToken,
@@ -255,6 +255,23 @@ router.post("/v1/auth/logout", async (req, res) => {
 
 router.get("/v1/auth/me", requireAuth, (_req, res) => {
   res.json(publicStaff(res.locals["staff"] as typeof staffAccounts.$inferSelect));
+});
+
+router.get("/v1/auth/organization-config", requireAuth, async (_req, res) => {
+  const staff = res.locals["staff"] as typeof staffAccounts.$inferSelect;
+  const [organization] = await db
+    .select({
+      propertyLimit: organizations.propertyLimit,
+      features: organizations.features,
+    })
+    .from(organizations)
+    .where(eq(organizations.id, staff.tenantId))
+    .limit(1);
+  if (!organization) {
+    res.status(404).json({ error: "Organization not found" });
+    return;
+  }
+  res.json(organization);
 });
 
 export default router;

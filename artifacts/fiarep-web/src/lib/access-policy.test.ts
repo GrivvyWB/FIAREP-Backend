@@ -51,3 +51,26 @@ test("workers can open assigned complaint links without exposing management modu
   assert.equal(hasModuleAccess(worker("Elevator Service"), "projects"), false);
   assert.equal(hasModuleAccess(worker("Elevator Service"), "procurement"), false);
 });
+
+test("organization module switches override role access", () => {
+  assert.equal(
+    hasModuleAccess(
+      supervisor("Superintendent"),
+      "reports",
+      { reports: false },
+    ),
+    false,
+  );
+  assert.equal(
+    hasModuleAccess(
+      supervisor("Superintendent"),
+      "reports",
+      { reports: true },
+    ),
+    true,
+  );
+  assert.equal(
+    hasModuleAccess(supervisor("Superintendent"), "reports", {}),
+    true,
+  );
+});

@@ -30,7 +30,7 @@ import {
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
-  const { staff } = useAuth();
+  const { staff, organizationModules } = useAuth();
   const closeOnMobile = () => {
     if (window.matchMedia("(max-width: 767px)").matches) setOpen(false);
   };
@@ -53,7 +53,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "My Jobs", href: "/my-jobs", icon: Wrench, module: "my-jobs" as const },
      ...(staff?.role === "management" && staff?.position === "CPM Supervisor" ? [{ name: "CPM Supervisor", href: "/scope-review", icon: UserRoundCheck, module: "scope-review" as const }] : []),
     ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart, module: "procurement" as const }] : []),
-    ...(hasModuleAccess(staff, "scope-writing") ? [{ name: "Scope Writing", href: "/scope-writing", icon: ClipboardCheck, module: "scope-writing" as const }] : []),
+    ...(hasModuleAccess(staff, "scope-writing", organizationModules) ? [{ name: "Scope Writing", href: "/scope-writing", icon: ClipboardCheck, module: "scope-writing" as const }] : []),
     ...((staff?.role === "management" || staff?.role === "administrator" || staff?.role === "emergency") ? [
       { name: "Emergency", href: "/emergency", icon: BellRing, module: "emergency" as const },
       ...(staff?.role === "emergency" ? [] : [
@@ -69,7 +69,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },
     { name: "Settings", href: "/settings", icon: Settings, module: "settings" as const },
     { name: "What is FIAREP?", href: "/platform", icon: Info, module: "dashboard" as const },
-  ].filter((item) => hasModuleAccess(staff, item.module));
+  ].filter((item) => hasModuleAccess(staff, item.module, organizationModules));
 
   return (
     <>
@@ -120,13 +120,13 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
 
         <div className="m-[8px_16px_18px] p-[16px] bg-[#12161d] border border-sidebar-border rounded-xl shrink-0">
           <h4 className="text-[11px] tracking-[.6px] text-[#8b94a1] mb-3 font-semibold uppercase">QUICK ACTION</h4>
-          {hasModuleAccess(staff, "inspection-create") && <Link href="/inspections/new" onClick={closeOnMobile}>
+          {hasModuleAccess(staff, "inspection-create", organizationModules) && <Link href="/inspections/new" onClick={closeOnMobile}>
             <div className="w-full border-none cursor-pointer p-[11px] rounded-[9px] text-[13.5px] font-semibold flex items-center justify-center gap-2 mb-2 bg-primary text-sidebar hover:bg-[#F5B301] transition-colors">
               <Plus className="w-4 h-4" />
               New Inspection
             </div>
           </Link>}
-          {hasModuleAccess(staff, "report-upload") && <Link href="/reports/upload" onClick={closeOnMobile}>
+          {hasModuleAccess(staff, "report-upload", organizationModules) && <Link href="/reports/upload" onClick={closeOnMobile}>
             <div className="w-full border border-[#2a323e] cursor-pointer p-[11px] rounded-[9px] text-[13.5px] font-semibold flex items-center justify-center gap-2 bg-transparent text-[#cfd6df] hover:bg-[#1a212b] transition-colors">
               <Upload className="w-4 h-4" />
               Upload Report

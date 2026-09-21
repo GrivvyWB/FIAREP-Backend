@@ -5,6 +5,8 @@ import { useLocation } from "wouter";
 
 interface AuthContextType {
   staff: Staff | null;
+  organizationModules: Record<string, boolean>;
+  propertyLimit: number | null;
   isLoading: boolean;
   login: (name: string, code: string, organizationId?: string) => Promise<
     { status: "authenticated" } |
@@ -21,7 +23,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
   const [staff, setStaff] = useState<Staff | null>(null);
+  const [organizationModules, setOrganizationModules] = useState<Record<string, boolean>>({});
+  const [propertyLimit, setPropertyLimit] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const loadOrganizationConfig = async (accessToken?: string) => {
+    const token = accessToken || localStorage.getItem("fiarep_access_token");
+    if (!token) {
+      setOrganizationModules({});
+      setPropertyLimit(null);
+      return;
+    }
+    const response = await fetch("/api/v1/auth/organization-config", {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!response.ok) throw new Error("Organization configuration could not be loaded");
+    const config = await response.json() as {
+      propertyLimit: number | null;
+      features?: { modules?: Record<string, unknown> };
+    };
+    const saved = config.features?.modules;
+    setOrganizationModules(
+      saved && typeof saved === "object" && !Array.isArray(saved)
+        ? Object.fromEntries(
+            Object.entries(saved).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
+          )
+        : {},
+    );
+    setPropertyLimit(config.propertyLimit ?? null);
+  };
 
   const refreshMutation = useRefreshSession();
   let refreshInFlight: Promise<string | null> | null = null;
@@ -81,6 +111,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { data, error } = await fetchCurrentStaff();
           if (data && !error) {
             setStaff(data);
+            await loadOrganizationConfig(accessToken);
             setIsLoading(false);
             return;
           }
@@ -93,6 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const { data: newStaff } = await fetchCurrentStaff();
           if (newStaff) {
             setStaff(newStaff);
+            await loadOrganizationConfig(res.accessToken);
           } else {
             throw new Error("Validation failed after refresh");
           }
@@ -110,6 +142,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     initAuth();
   }, []);
+
+  useEffect(() => {
+    if (!staff) return;
+    const interval = window.setInterval(() => {
+      void loadOrganizationConfig().catch(() => undefined);
+    }, 30_000);
+    return () => window.clearInterval(interval);
+  }, [staff?.id]);
 
   const login = async (
     name: string,
@@ -137,6 +177,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
     queryClient.clear();
     setStaff(payload.staff);
+    await loadOrganizationConfig(payload.accessToken);
     return { status: "authenticated" };
   };
 
@@ -151,6 +192,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
     queryClient.clear();
     setStaff(payload.staff);
+    await loadOrganizationConfig(payload.accessToken);
   };
 
   const logout = () => {
@@ -158,6 +200,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.removeItem("fiarep_refresh_token");
     queryClient.clear();
     setStaff(null);
+    setOrganizationModules({});
+    setPropertyLimit(null);
     setLocation("/login");
   };
 
@@ -165,6 +209,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider
       value={{
         staff,
+        organizationModules,
+        propertyLimit,
         isLoading,
         login,
         procurementLogin,

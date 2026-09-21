@@ -9,6 +9,8 @@ export type StaffModule =
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
    | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard";
 
+export type OrganizationModules = Record<string, boolean>;
+
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
 const UPPER_MANAGEMENT_POSITIONS = new Set(["Director", "Borough Director", "Regional Director", "Assistant Regional Director"]);
 const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "shared-data"]);
@@ -40,8 +42,13 @@ export function canReadSharedDefaultRates(staff: Staff | null | undefined): bool
 /** One client-side policy shared by navigation, routes, and data surfaces.
  * The API remains the final authority; this prevents unauthorized UI from
  * mounting and issuing requests in the first place. */
-export function hasModuleAccess(staff: Staff | null | undefined, module: StaffModule): boolean {
+export function hasModuleAccess(
+  staff: Staff | null | undefined,
+  module: StaffModule,
+  organizationModules?: OrganizationModules | null,
+): boolean {
   if (!staff) return false;
+  if (organizationModules?.[module] === false) return false;
   const position = staff.position?.trim() || "";
   const exactWorkflowShell = new Set(["dashboard", "calendar", "notifications", "settings"]);
   if (isSupervisor(staff) && (module === "reports" || module === "violations")) {

@@ -37,25 +37,44 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
+import type { StaffModule } from "@/lib/access-policy";
 
 type ModuleDefinition = {
-  id: string;
+  id: StaffModule;
   name: string;
   description: string;
   icon: LucideIcon;
 };
 
 const MODULES: ModuleDefinition[] = [
-  { id: "properties", name: "Properties", description: "Properties, buildings, units, asset tracking", icon: Building2 },
-  { id: "inspections", name: "Inspections", description: "Templates, reports, photos, field reviews", icon: ClipboardCheck },
-  { id: "violations", name: "Violations", description: "Notices, corrective actions, resolution", icon: AlertTriangle },
-  { id: "inspectors", name: "Inspectors", description: "Assignments, scheduling, certifications", icon: Users },
-  { id: "contractors", name: "Contractors", description: "Database, assignments, contracts, performance", icon: HardHat },
-  { id: "workOrders", name: "Work Orders", description: "Service requests, status, completion verification", icon: Wrench },
-  { id: "inventory", name: "Inventory", description: "Items, supply tracking, equipment", icon: Package },
-  { id: "bidding", name: "Bidding", description: "Bid requests, evaluation, vendor comparisons", icon: Gavel },
-  { id: "reports", name: "Reports", description: "Executive, inspection, compliance, financial", icon: FileBarChart },
-  { id: "compliance", name: "Compliance", description: "Requirements, controls, evidence", icon: ShieldCheck },
+  { id: "dashboard", name: "Dashboard", description: "Organization dashboard", icon: Home },
+  { id: "complaint-dashboard", name: "Complaint Dashboard", description: "Resident complaint management", icon: AlertTriangle },
+  { id: "inspections", name: "Inspections", description: "Inspection records", icon: ClipboardCheck },
+  { id: "inspection-create", name: "New Inspection", description: "Inspection creation", icon: ClipboardCheck },
+  { id: "hud-inspections", name: "HUD Inspections", description: "HUD inspection workflow", icon: ShieldCheck },
+  { id: "estimates", name: "Estimates", description: "Cost estimates", icon: FileBarChart },
+  { id: "repairs", name: "Repairs", description: "Repair workflow", icon: Wrench },
+  { id: "projects", name: "Projects", description: "Project management", icon: Building2 },
+  { id: "reports", name: "Reports", description: "Reports and records", icon: FileBarChart },
+  { id: "report-upload", name: "Upload Report", description: "Report uploads", icon: FileBarChart },
+  { id: "calendar", name: "Calendar", description: "Organization calendar", icon: Home },
+  { id: "clients", name: "Clients", description: "Client management", icon: Users },
+  { id: "team", name: "Team", description: "Staff management", icon: Users },
+  { id: "hr", name: "HR Workspace", description: "Human resources", icon: Users },
+  { id: "violations", name: "Violations", description: "Violation workflow", icon: AlertTriangle },
+  { id: "trade-requests", name: "Trade Requests", description: "Trade routing", icon: Wrench },
+  { id: "my-jobs", name: "My Jobs", description: "Assigned jobs", icon: Wrench },
+  { id: "scope-review", name: "Scope Review", description: "CPM scope review", icon: ClipboardCheck },
+  { id: "scope-writing", name: "Scope Writing", description: "CPM scope writing", icon: ClipboardCheck },
+  { id: "procurement", name: "Procurement", description: "Procurement workflow", icon: Gavel },
+  { id: "emergency", name: "Emergency", description: "Emergency work", icon: AlertTriangle },
+  { id: "change-orders", name: "Change Orders", description: "Change-order workflow", icon: FileBarChart },
+  { id: "scores", name: "Scores", description: "Performance scores", icon: FileBarChart },
+  { id: "elevators", name: "Elevators", description: "Elevator work", icon: Wrench },
+  { id: "leave", name: "Leave", description: "Leave requests", icon: Users },
+  { id: "notifications", name: "Notifications", description: "Notifications and requests", icon: AlertTriangle },
+  { id: "settings", name: "Settings", description: "Organization settings", icon: Settings },
+  { id: "shared-data", name: "Shared Data", description: "Shared platform data", icon: Package },
 ];
 
 function configuredModules(organization: OrganizationWithUsage): Record<string, boolean> {
@@ -239,7 +258,7 @@ export default function OwnerModules() {
             <Metric label="Active modules" value={`${enabledModules.length} of ${MODULES.length}`} />
             <Metric label="Navigation items" value={String(enabledModules.length + 2)} />
             <Metric label="Company status" value={organization.status} />
-            <Metric label="Organization code" value={organization.id} mono />
+            <Metric label="Development limit" value={organization.propertyLimit === null ? "Unlimited" : String(organization.propertyLimit)} />
           </div>
 
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.75fr)]">
