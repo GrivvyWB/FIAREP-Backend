@@ -7,6 +7,7 @@ import {
   type EntityRecord,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,7 +37,35 @@ export default function MyJobs() {
       refetchInterval: 15_000,
     },
   });
+  const residentQuery = useListEntityRecords("resident-reports", undefined, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("resident-reports"),
+      enabled: Boolean(staff?.id),
+      refetchOnMount: "always",
+      refetchInterval: 15_000,
+    },
+  });
   const jobs = query.data || [];
+  const residentJobs = (residentQuery.data || []).filter((record) => {
+    const state = record.state || {};
+    return String(state.assignedStaffId || "") === staff?.id &&
+      !["resolved", "done", "cleared"].includes(String(state.status || ""));
+  });
+  const loading = query.isLoading || residentQuery.isLoading;
+
+  const textList = (value: unknown): string[] => {
+    if (Array.isArray(value)) {
+      return value
+        .map((item) => typeof item === "string" ? item : item && typeof item === "object"
+          ? String((item as Record<string, unknown>).name || (item as Record<string, unknown>).description || "")
+          : "")
+        .filter(Boolean);
+    }
+    if (typeof value === "string") {
+      return value.split(/\r?\n|,/).map((item) => item.trim()).filter(Boolean);
+    }
+    return [];
+  };
 
   async function start(job: EntityRecord) {
     try {
@@ -96,8 +125,31 @@ export default function MyJobs() {
   }
 
   return <div className="space-y-6">
-    <div><h1 className="text-2xl font-bold">My Jobs</h1><p className="text-muted-foreground">Procurement-source manpower requests assigned to you.</p></div>
-    {query.isLoading ? <p>Loading assigned jobs...</p> : !jobs.length ? <p className="text-muted-foreground">No assigned jobs.</p> : <div className="space-y-3">
+    <div><h1 className="text-2xl font-bold">My Jobs</h1><p className="text-muted-foreground">Work assigned to you.</p></div>
+    {loading ? <p>Loading assigned jobs...</p> : !jobs.length && !residentJobs.length ? <p className="text-muted-foreground">No assigned jobs.</p> : <div className="space-y-3">
+      {residentJobs.map((job) => {
+        const state = job.state || {};
+        const materials = textList(
+          state.materialBreakdown ??
+          state.materials ??
+          state.materialList ??
+          state.partsNeeded ??
+          state.parts,
+        );
+        const work = String(state.scopeOfWork || state.workDescription || state.description || state.issue || "");
+        return <div key={job.id} className="rounded-xl border bg-card p-4">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="font-semibold">{String(state.complaintNo || state.title || "Assigned complaint")}</h2>
+              <p className="text-sm text-muted-foreground">{String(state.address || "No address")} · {job.development || "No development"} · {String(state.status || "assigned").replaceAll("_", " ")}</p>
+              {work && <div className="mt-3"><p className="text-sm font-semibold">Work to complete</p><p className="mt-1 whitespace-pre-wrap text-sm">{work}</p></div>}
+              {materials.length > 0 && <div className="mt-3"><p className="text-sm font-semibold">Material breakdown</p><ul className="mt-1 list-disc space-y-1 pl-5 text-sm">{materials.map((item, index) => <li key={`${item}-${index}`}>{item}</li>)}</ul></div>}
+            </div>
+            <Button size="sm" asChild><Link href={`/reports?id=${encodeURIComponent(job.id)}`}>Open job</Link></Button>
+          </div>
+          <FieldEvidenceDisplay state={state} reportId={job.id} />
+        </div>;
+      })}
       {jobs.map((job) => {
         const state = job.state || {};
         const status = String(state.status || "pending");
