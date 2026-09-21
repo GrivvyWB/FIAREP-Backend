@@ -7,6 +7,9 @@ import {
   type EntityRecordAuthorizationState,
 } from "./domain";
 
+const normalizeDevelopment = (value: string | null | undefined) =>
+  (value ?? "").trim().toLowerCase().replace(/\s+/g, " ");
+
 export async function canReadEntityRecordForActor(
   actor: Actor,
   row: EntityRecordAuthorizationState & { tenantId?: string },
@@ -29,7 +32,10 @@ export async function canReadEntityRecordForActor(
       if (
         actor.developments.length > 0 &&
         row.development &&
-        !actor.developments.includes(row.development)
+        !actor.developments.some(
+          (development) =>
+            normalizeDevelopment(development) === normalizeDevelopment(row.development),
+        )
       ) {
         return false;
       }

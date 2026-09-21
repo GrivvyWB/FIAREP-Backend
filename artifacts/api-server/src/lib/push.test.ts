@@ -411,13 +411,13 @@ test("notification creation persists an unambiguous staff target by id", async (
   }
 });
 
-test("resident reports initially notify only Superintendent E", async () => {
+test("resident reports notify development supervision and Superintendent E", async () => {
   const tenantId = tenant();
   try {
     await addScopedStaff(
       tenantId, "Jefferson PM", "management", "Property Manager", ["Jefferson"],
     );
-    await addScopedStaff(
+    const maintenanceSupervisor = await addScopedStaff(
       tenantId, "Jefferson Supervisor", "management", "Maintenance Supervisor", ["Jefferson"],
     );
     await addScopedStaff(
@@ -432,7 +432,7 @@ test("resident reports initially notify only Superintendent E", async () => {
     const emergencySuperintendent = await addScopedStaff(
       tenantId,
       "Emergency Superintendent",
-      "management",
+      "emergency",
       "Superintendent Ⓔ",
       ["Adams"],
     );
@@ -444,7 +444,10 @@ test("resident reports initially notify only Superintendent E", async () => {
     );
 
     const recipients = await residentReportRecipientIds(tenantId, "Jefferson");
-    assert.deepEqual(recipients, [emergencySuperintendent]);
+    assert.deepEqual(new Set(recipients), new Set([
+      maintenanceSupervisor,
+      emergencySuperintendent,
+    ]));
   } finally {
     await cleanup(tenantId);
   }

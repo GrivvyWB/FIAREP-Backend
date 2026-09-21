@@ -246,6 +246,18 @@ export function isSupervisorPosition(actor: Actor): boolean {
     actor.position === "Superintendent Ⓔ";
 }
 
+export function isComplaintHandlingSupervisor(
+  actor: Pick<Actor, "role" | "position">,
+): boolean {
+  if (actor.position === "Superintendent Ⓔ") return true;
+  return actor.role === "management" &&
+    actor.position !== "CPM Supervisor" &&
+    (
+      actor.position.toLowerCase().includes("supervisor") ||
+      ["Superintendent", "Assistant Superintendent"].includes(actor.position)
+    );
+}
+
 export function isHudReviewSupervisor(actor: Actor): boolean {
   return actor.position === "Supervisor Inspector";
 }
@@ -651,8 +663,8 @@ export function canDeleteEntity(
   entity: string,
   state: Record<string, unknown>,
 ): boolean {
+  if (entity === "resident-reports") return false;
   if (actor.role === "administrator") return true;
-  if (isBoroughDirector(actor)) return entity === "resident-reports";
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
   // entity deletion route.
@@ -1006,6 +1018,7 @@ export function canPerformEntityAction(
   }
   if (
     isBoroughDirector(actor) &&
+    entity !== "resident-reports" &&
     entity !== "procurement" &&
     entity !== "procurement-bids" &&
     entity !== "leave-requests" &&
@@ -1024,6 +1037,7 @@ export function canPerformEntityAction(
     ["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
       .includes(entity)
   ) {
+    if (entity === "resident-reports") return isComplaintHandlingSupervisor(actor);
     return isSupervisor;
   }
   if (actor.role === "emergency" && entity === "emergency-jobs") {
@@ -1059,9 +1073,9 @@ export function canPerformEntityAction(
   }
 
   if (entity === "resident-reports") {
-    if (action === "assign") return isAssignmentAuthority(actor);
+    if (action === "assign") return isComplaintHandlingSupervisor(actor);
     if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
-    if (action === "clear") return isManagement;
+    if (action === "clear") return isComplaintHandlingSupervisor(actor);
     if (action === "resolve") return false;
      return ["start", "complete"].includes(action) &&
        (isFieldStaff || isSupervisor) &&

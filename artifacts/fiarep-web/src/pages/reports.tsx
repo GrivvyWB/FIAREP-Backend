@@ -2,13 +2,11 @@ import {
   getListEntityRecordsQueryKey,
   getListResidentReportPhotosQueryKey,
   getListStaffQueryKey,
-  useGetDeletionPolicy,
   requestResidentReportPhotoDownload,
   useRequestFileUploadUrl,
   useListEntityRecords,
   useListResidentReportPhotos,
   useListStaff,
-  useDeleteEntityRecord,
   useClassifyResidentReportPhoto,
   useGetResidentReportPhotoAiConfig,
   usePerformEntityAction,
@@ -18,7 +16,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle, Camera, CheckCircle2, ChevronDown, FolderOpen, Image as ImageIcon,
-  MapPin, ScanLine, Search, Send, Trash2, UserRound, X,
+  MapPin, ScanLine, Search, Send, UserRound, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -31,7 +29,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/staff-assignment";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
-import { canApproveWork } from "@/lib/access-policy";
+import { canHandleResidentReports } from "@/lib/access-policy";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 
@@ -211,7 +209,7 @@ export default function Reports() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { staff: actor } = useAuth();
-  const { data: deletionPolicy } = useGetDeletionPolicy();
+  const canHandleComplaints = canHandleResidentReports(actor);
   const reportsQuery = useListEntityRecords("resident-reports", undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),
@@ -221,7 +219,7 @@ export default function Reports() {
   });
   const { data: staff = [] } = useListStaff({ status: "approved" }, {
     query: {
-      enabled: canApproveWork(actor),
+      enabled: canHandleComplaints,
       queryKey: getListStaffQueryKey({ status: "approved" }),
       staleTime: 15_000,
       refetchOnMount: "always",
@@ -229,7 +227,6 @@ export default function Reports() {
   });
   const action = usePerformEntityAction();
   const requestUpload = useRequestFileUploadUrl();
-  const deleteReport = useDeleteEntityRecord();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
   const [development, setDevelopment] = useState("all");
@@ -378,26 +375,6 @@ export default function Reports() {
     }
   };
 
-  const remove = async (report: Report) => {
-    if (!window.confirm("Permanently delete this resident report? This cannot be undone.")) return;
-    try {
-      await deleteReport.mutateAsync({
-        entity: "resident-reports",
-        id: report.id,
-        data: { version: report.version },
-      });
-      await invalidateOperationalQueries(queryClient, "resident-reports", report.id);
-      setSelected(null);
-      toast({ title: "Resident report deleted" });
-    } catch (error: any) {
-      toast({
-        variant: "destructive",
-        title: "Delete failed",
-        description: error?.message || "The server rejected this deletion.",
-      });
-    }
-  };
-
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -405,7 +382,7 @@ export default function Reports() {
           <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
           <p className="text-muted-foreground text-sm">Review and manage resident reports across your developments.</p>
         </div>
-        {canApproveWork(actor) && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
+        {canHandleComplaints && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
         <div className="p-4 border-b border-border flex flex-col lg:flex-row gap-3">
@@ -448,12 +425,11 @@ export default function Reports() {
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
                 {!!String(state.assignedTo || "") && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{String(state.assignedTo)}</span>}
-                {canApproveWork(actor) && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>Assign</Button>}
-                 {!canApproveWork(actor) && currentStatus === "in_progress" && <Button size="sm" onClick={() => openReport(report, "details")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
-                 {canApproveWork(actor) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
-                 {canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
+                {canHandleComplaints && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>Assign</Button>}
+                 {!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button size="sm" onClick={() => openReport(report, "details")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
+                 {canHandleComplaints && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
+                 {canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
                 <Button size="sm" variant="ghost" onClick={() => openReport(report, "details")}>View details</Button>
-                 {deletionPolicy?.enabled && deletionPolicy.canDelete && <Button size="sm" variant="outline" onClick={() => remove(report)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-3.5 w-3.5 mr-1" />Delete</Button>}
               </div>
             </div>;
           })}</div>}
@@ -512,9 +488,9 @@ export default function Reports() {
                      <Textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} />
                    </div>
                  )}
-                   {canApproveWork(actor) && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
+                   {canHandleComplaints && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
                   {actor?.position !== "Elevator Service" && String(state.assignedStaffId || "") === actor?.id && ["assigned", "in_progress"].includes(currentStatus) && <div className="border-t border-border pt-4 space-y-2"><p className="text-sm font-semibold">Release assignment</p><Textarea value={releaseUpdate} onChange={(event) => setReleaseUpdate(event.target.value)} placeholder="Provide an update before releasing this complaint" /><Button variant="outline" onClick={() => perform(selected, "release", { update: releaseUpdate })} disabled={action.isPending || releaseUpdate.trim().length < 3}>Release with update</Button></div>}
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{deletionPolicy?.enabled && deletionPolicy.canDelete && <Button variant="outline" onClick={() => remove(selected)} disabled={deleteReport.isPending} className="text-destructive"><Trash2 className="h-4 w-4 mr-1" />Delete</Button>}{!canApproveWork(actor) && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canApproveWork(actor) && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canApproveWork(actor) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canApproveWork(actor) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canHandleComplaints && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
               </div></>;
           })()}
         </DialogContent>

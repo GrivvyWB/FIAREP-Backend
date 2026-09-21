@@ -81,13 +81,23 @@ export async function residentReportRecipientIds(
       and(
         eq(staffAccounts.tenantId, tenantId),
         eq(staffAccounts.status, "approved"),
-        inArray(staffAccounts.role, ["management", "administrator"]),
       ),
     );
-  return staff
-    .filter((account) =>
-      account.role === "management" &&
-      account.position === "Superintendent Ⓔ"
-    )
-    .map((account) => account.id);
+  const reportDevelopment = normalize(development);
+  return [...new Set(staff
+    .filter((account) => {
+      if (account.position === "Superintendent Ⓔ") return true;
+      const isDevelopmentSupervisor =
+        account.role === "management" &&
+        account.position !== "CPM Supervisor" &&
+        (
+          account.position.toLowerCase().includes("supervisor") ||
+          ["Superintendent", "Assistant Superintendent"].includes(account.position)
+        );
+      if (!isDevelopmentSupervisor) return false;
+      return account.developments.some(
+        (assignedDevelopment) => normalize(assignedDevelopment) === reportDevelopment,
+      );
+    })
+    .map((account) => account.id))];
 }

@@ -144,6 +144,18 @@ export function canApproveWork(staff: Staff | null | undefined): boolean {
   return !!staff && (MANAGEMENT_ROLES.has(staff.role) || isSupervisor(staff));
 }
 
+export function canHandleResidentReports(staff: Staff | null | undefined): boolean {
+  if (!staff) return false;
+  if (staff.position === "Superintendent Ⓔ") return true;
+  const position = staff.position?.trim() || "";
+  return staff.role === "management" &&
+    position !== "CPM Supervisor" &&
+    (
+      position.toLowerCase().includes("supervisor") ||
+      ["Superintendent", "Assistant Superintendent"].includes(position)
+    );
+}
+
 export interface AccessEvaluation {
   redirect?: string;
   setPersona?: 'staff' | 'resident' | 'vendor';
