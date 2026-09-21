@@ -107,7 +107,7 @@ type Stats = {
   buildings: Map<string, Stats>;
 };
 
-function SummaryCard({ title, value, subValue, icon: Icon, colorClass, testId }: { title: string, value: string | number, subValue?: string, icon: React.ElementType, colorClass: string, testId: string }) {
+function SummaryCard({ title, value, subValue, icon: Icon, colorClass, testId, onClick }: { title: string, value: string | number, subValue?: string, icon: React.ElementType, colorClass: string, testId: string, onClick: () => void }) {
   const colorMap = {
     red: "border-l-red-500 text-red-500 bg-red-500",
     blue: "border-l-blue-600 text-blue-600 bg-blue-600",
@@ -123,16 +123,22 @@ function SummaryCard({ title, value, subValue, icon: Icon, colorClass, testId }:
   const bg = mapping.split(' ')[2];
   
   return (
-    <div className={`bg-white border-y border-r border-slate-200 ${borders} rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start gap-3 shadow-sm`} data-testid={testId}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`w-full bg-white border-y border-r border-slate-200 ${borders} rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start gap-3 shadow-sm text-left transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2`}
+      data-testid={testId}
+      aria-label={`${title}: ${value}`}
+    >
       <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full ${bg} flex items-center justify-center shrink-0 sm:mt-0.5`}>
         <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
       </div>
-      <div className="flex flex-col min-w-0">
+      <div className="flex flex-col min-w-0 w-full">
         <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{title}</div>
-        <div className="text-lg sm:text-2xl font-black text-slate-900 leading-none truncate">{value}</div>
-        {subValue && <div className="text-[9px] sm:text-[10px] font-semibold text-slate-500 truncate mt-1 sm:mt-1.5">{subValue}</div>}
+        <div className="text-lg sm:text-2xl font-black text-slate-900 leading-tight break-words" title={String(value)}>{value}</div>
+        {subValue && <div className="text-[9px] sm:text-[10px] font-semibold text-slate-500 mt-1 sm:mt-1.5">{subValue}</div>}
       </div>
-    </div>
+    </button>
   );
 }
 
@@ -142,6 +148,8 @@ export default function ComplaintDashboard() {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),
       refetchInterval: 15_000,
       staleTime: 10_000,
+      refetchOnWindowFocus: true,
+      refetchOnReconnect: true,
     }
   });
 
@@ -168,6 +176,7 @@ export default function ComplaintDashboard() {
   const [toDate, setToDate] = useState("");
   const [sortOrder, setSortOrder] = useState<"desc" | "asc">("desc");
   const [developmentPage, setDevelopmentPage] = useState(0);
+  const [now, setNow] = useState(() => Date.now());
 
   // Detail View State
   const [selectedDev, setSelectedDev] = useState<string | null>(null);
@@ -218,8 +227,6 @@ export default function ComplaintDashboard() {
     const devs = new Map<string, Stats>();
     const bldgs = new Map<string, Stats>();
     const glob = { active: 0, oldest: null as number | null, recentlyCorrected: 0 };
-    const now = Date.now();
-    
     filteredReports.forEach(r => {
       const devName = r.development || "Unassigned";
       const bldgName = reportAddress(r);
@@ -273,7 +280,12 @@ export default function ComplaintDashboard() {
     activeBldgs.sort(sortFn);
 
     return { devStats: activeDevs, bldgStats: activeBldgs, globalStats: glob };
-  }, [filteredReports, sortOrder, developmentCatalogLookup]);
+  }, [filteredReports, sortOrder, developmentCatalogLookup, now]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const developmentPageCount = getDevelopmentPageCount(devStats.length);
   const visibleDevelopments = getVisibleDevelopmentPage(devStats, developmentPage);
@@ -299,6 +311,41 @@ export default function ComplaintDashboard() {
 
   const topDev = devStats.length > 0 ? (sortOrder === "desc" ? devStats[0] : devStats[devStats.length - 1]) : null;
   const topBldg = bldgStats.length > 0 ? (sortOrder === "desc" ? bldgStats[0] : bldgStats[bldgStats.length - 1]) : null;
+  const oldestOpenReport = filteredReports
+    .filter((report) => !isCorrected(statusOf(report)))
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0] || null;
+
+  function resetDashboard() {
+    setSearch("");
+    setBoroughFilter("all");
+    setFromDate("");
+    setToDate("");
+    setSelectedDev(null);
+    setSelectedBuilding(null);
+    void reportsQuery.refetch();
+  }
+
+  function focusDevelopment(development: string | null | undefined, building?: string | null) {
+    if (!development) return;
+    setSelectedDev(development);
+    setSelectedBuilding(building || null);
+    window.requestAnimationFrame(() => {
+      document.getElementById("complaint-dashboard-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+
+  function focusRecentlyCorrected() {
+    const today = new Date(now);
+    const fourteenDaysAgo = new Date(now - 14 * 86400000);
+    setFromDate(fourteenDaysAgo.toISOString().slice(0, 10));
+    setToDate(today.toISOString().slice(0, 10));
+    setSelectedDev(null);
+    setSelectedBuilding(null);
+    void reportsQuery.refetch();
+    window.requestAnimationFrame(() => {
+      document.getElementById("complaint-dashboard-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
 
   const selectedDevData = selectedDev ? devStats.find(d => d.name === selectedDev) : null;
   const devBuildings = selectedDevData 
@@ -349,14 +396,14 @@ export default function ComplaintDashboard() {
 
       <div className="px-4 md:px-6 space-y-4">
         {/* 7 Summary Panels */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-3">
-          <SummaryCard title="Total Active" value={globalStats.active} icon={ShieldAlert} colorClass="red" testId="metric-total-active" />
-          <SummaryCard title="Devs w/ Active" value={devStats.length} icon={Users} colorClass="blue" testId="metric-devs-active" />
-          <SummaryCard title="Bldgs w/ Active" value={bldgStats.length} icon={Building2} colorClass="indigo" testId="metric-bldgs-active" />
-          <SummaryCard title="Most Active Dev" value={topDev?.name || "-"} subValue={topDev ? `${topDev.activeCount} active` : ""} icon={MapPin} colorClass="teal" testId="metric-top-dev" />
-          <SummaryCard title="Most Active Bldg" value={topBldg?.name || "-"} subValue={topBldg ? `${topBldg.activeCount} active` : ""} icon={Building} colorClass="orange" testId="metric-top-bldg" />
-          <SummaryCard title="Oldest Open" value={globalStats.oldest ? `${Math.floor((Date.now() - globalStats.oldest)/86400000)}d ago` : "-"} subValue={globalStats.oldest ? new Date(globalStats.oldest).toLocaleDateString() : ""} icon={Clock} colorClass="purple" testId="metric-oldest" />
-          <SummaryCard title="Recently Corrected" value={globalStats.recentlyCorrected} subValue="Last 14 days" icon={CheckCircle} colorClass="green" testId="metric-corrected" />
+        <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-7 gap-3">
+          <SummaryCard title="Total Active" value={globalStats.active} icon={ShieldAlert} colorClass="red" testId="metric-total-active" onClick={resetDashboard} />
+          <SummaryCard title="Devs w/ Active" value={devStats.length} icon={Users} colorClass="blue" testId="metric-devs-active" onClick={resetDashboard} />
+          <SummaryCard title="Bldgs w/ Active" value={bldgStats.length} icon={Building2} colorClass="indigo" testId="metric-bldgs-active" onClick={resetDashboard} />
+          <SummaryCard title="Most Active Dev" value={topDev?.name || "-"} subValue={topDev ? `${topDev.activeCount} active` : ""} icon={MapPin} colorClass="teal" testId="metric-top-dev" onClick={() => focusDevelopment(topDev?.name)} />
+          <SummaryCard title="Most Active Bldg" value={topBldg?.name || "-"} subValue={topBldg ? `${topBldg.activeCount} active` : ""} icon={Building} colorClass="orange" testId="metric-top-bldg" onClick={() => focusDevelopment(topBldg?.reports[0]?.development, topBldg?.name)} />
+          <SummaryCard title="Oldest Open" value={globalStats.oldest ? `${Math.floor((now - globalStats.oldest)/86400000)}d ago` : "-"} subValue={globalStats.oldest ? new Date(globalStats.oldest).toLocaleDateString() : ""} icon={Clock} colorClass="purple" testId="metric-oldest" onClick={() => focusDevelopment(oldestOpenReport?.development, oldestOpenReport ? reportAddress(oldestOpenReport) : null)} />
+          <SummaryCard title="Recently Corrected" value={globalStats.recentlyCorrected} subValue="Last 14 days" icon={CheckCircle} colorClass="green" testId="metric-corrected" onClick={focusRecentlyCorrected} />
         </div>
 
         {/* Filters */}
@@ -406,7 +453,7 @@ export default function ComplaintDashboard() {
             <Loader2 className="w-8 h-8 animate-spin" />
           </div>
         ) : (
-          <div className="flex flex-col xl:flex-row gap-4 xl:h-[calc(100vh-22rem)] min-h-[600px] xl:min-h-[500px]">
+          <div id="complaint-dashboard-results" className="flex flex-col xl:flex-row gap-4 xl:h-[calc(100vh-22rem)] min-h-[600px] xl:min-h-[500px] scroll-mt-4">
             
             {/* Column 1: Active Developments List */}
             <div className="w-full xl:w-[320px] 2xl:w-[350px] shrink-0 flex flex-col bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden min-h-0">
