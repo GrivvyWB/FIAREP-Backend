@@ -663,6 +663,13 @@ router.post("/v1/:entity", async (req, res, next) => {
       source.state["issue"] ||
       "",
     );
+    // Carry the location fields the assigned tradesperson needs to find and do
+    // the job (no pricing or procurement scope — just where and what).
+    rawState["address"] = String(
+      source.state["address"] || source.state["building"] || "",
+    );
+    rawState["unit"] = String(source.state["unit"] || "");
+    rawState["location"] = String(source.state["location"] || "");
     rawState["receiverSupervisorId"] = receiver.id;
     rawState["receiverSupervisorName"] = receiver.name;
     rawState["requestedByStaffId"] = actor.id;
