@@ -16,6 +16,7 @@ const UPPER_MANAGEMENT_POSITIONS = new Set(["Director", "Borough Director", "Reg
 const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "shared-data"]);
 const ELEVATOR_POSITIONS = new Set(["Elevator Supervisor", "Elevator Service"]);
 const HUD_REVIEW_POSITIONS = new Set(["Supervisor Inspector"]);
+const OPT_IN_MODULES = new Set<StaffModule>(["projects"]);
 const CPM_ONLY_MODULES = new Set<StaffModule>([
   "estimates",
   "repairs",
@@ -49,6 +50,9 @@ export function hasModuleAccess(
 ): boolean {
   if (!staff) return false;
   if (organizationModules?.[module] === false) return false;
+  // Opt-in modules are OFF until the platform owner enables them for the
+  // organization (Platform -> Module Management). Keeps parity with mobile.
+  if (OPT_IN_MODULES.has(module) && organizationModules?.[module] !== true) return false;
   const position = staff.position?.trim() || "";
   const exactWorkflowShell = new Set(["dashboard", "calendar", "notifications", "settings"]);
   if (isSupervisor(staff) && (module === "reports" || module === "violations")) {

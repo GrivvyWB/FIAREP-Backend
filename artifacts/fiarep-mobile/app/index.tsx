@@ -5,12 +5,14 @@ import { listProjects, createProject, deleteProject, type Project, listApprovedP
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
+import { useModuleAccess } from '../lib/module-access';
 
 export default function Projects() {
   const router = useRouter();
   const params = useLocalSearchParams<{ new?: string }>();
   const { mode } = useAppMode();
   const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
+  const modules = useModuleAccess();
 
   // '/' (this Projects screen) is only for inspector & administrator.
   // Any other role that lands here is redirected to their own home.
@@ -19,6 +21,9 @@ export default function Projects() {
   // here to start a new project (e.g. a CPM tapping "+ New Project"). The
   // create form itself is still gated by position below.
   if (mode === 'worker' && params.new !== '1') return <Redirect href="/worker-home" />;
+  // Projects is an opt-in module; a worker without it enabled cannot open the
+  // new-project workflow even via a direct link.
+  if (mode === 'worker' && !modules['projects']) return <Redirect href="/worker-home" />;
   const [projects, setProjects] = useState<Project[]>([]);
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const [name, setName] = useState('');

@@ -19,8 +19,14 @@ async function settingKey(): Promise<string> {
   return `organization_module_config:${identity?.tenantId || 'default'}:${identity?.staffId || ''}`;
 }
 
+// Modules that are OFF until the platform owner explicitly turns them on for a
+// client (opt-in). Everything else stays enabled unless explicitly disabled.
+const OPT_IN_MODULES = new Set<ModuleId>(['projects']);
+
 export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = cached): boolean {
-  return config?.features?.modules?.[module] !== false;
+  const value = config?.features?.modules?.[module];
+  if (OPT_IN_MODULES.has(module)) return value === true;
+  return value !== false;
 }
 
 export async function loadModuleConfig(): Promise<ModuleConfig | null> {
