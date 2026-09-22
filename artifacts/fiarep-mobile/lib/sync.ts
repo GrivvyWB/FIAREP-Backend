@@ -476,7 +476,7 @@ export async function syncAllEntities(options?: {
   });
   const alertsMuted = await getAlertsMuted().catch(() => false);
   for (const notification of newNotifications) {
-    const urgent = /emergency|priority|elevator|resident report/i.test(
+    const urgent = /emergency|priority|elevator|resident report|new job|job assigned|assigned|violation|change (work )?order|manpower|route|dispatch|submitted for review|sent back|needs your attention|urgent/i.test(
       `${notification.message} ${notification.detail || ''}`,
     );
     if (!alertsMuted) {
