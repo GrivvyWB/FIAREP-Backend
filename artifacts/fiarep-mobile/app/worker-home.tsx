@@ -72,6 +72,11 @@ export default function WorkerHome() {
       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
       </Pressable>
+      {(position || '').trim().toUpperCase() === 'CPM' && (
+        <Pressable style={ui.btn} onPress={() => router.push('/?new=1')}>
+          <Text style={ui.btnText}>+ New Project</Text>
+        </Pressable>
+      )}
       {position === 'Elevator Service' && (
         <Pressable style={ui.btn} onPress={() => router.push('/elevator-jobs')}>
           <Text style={ui.btnText}>Elevator Jobs</Text>

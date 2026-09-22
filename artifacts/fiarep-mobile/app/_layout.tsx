@@ -330,6 +330,19 @@ function WorkerStack() {
     <Stack initialRouteName="worker-home">
       <Stack.Screen name="elevator-jobs" options={{ title: 'My Elevator Jobs' }} />
       <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false }} />
+      <Stack.Screen name="index" options={{ title: 'Projects' }} />
+      <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
+      <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
+      <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
+      <Stack.Screen name="project/roof" options={{ title: 'Roof lookup', presentation: 'modal' }} />
+      <Stack.Screen name="project/checklist" options={{ title: 'Renovation checklist' }} />
+      <Stack.Screen name="project/project-scope" options={{ title: 'Scope of Work' }} />
+      <Stack.Screen name="project/photos" options={{ title: 'Photos' }} />
+      <Stack.Screen name="project/scans" options={{ title: 'Scans' }} />
+      <Stack.Screen name="project/roofplan" options={{ title: 'Roof plan sketch' }} />
+      <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
+      <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
+      <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
