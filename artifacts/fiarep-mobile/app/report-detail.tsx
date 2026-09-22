@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { addResidentUpdate, assessReportPhotos, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls } from '../lib/store';
+import { addResidentUpdate, approveResidentWork, rejectResidentWork, assessReportPhotos, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -37,6 +37,9 @@ export default function ReportDetail() {
   const [actorId, setActorId] = useState('');
   const [actorName, setActorName] = useState('');
   const [assessing, setAssessing] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewReason, setReviewReason] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
   const [completionNote, setCompletionNote] = useState('');
   const [completionPhotos, setCompletionPhotos] = useState<PhotoEvidence[]>([]);
   const [completionBusy, setCompletionBusy] = useState(false);
@@ -222,6 +225,33 @@ export default function ReportDetail() {
             </View>
           );
         })()}
+        {(mode === 'management' || mode === 'administrator') && (r as any).reviewStatus === 'done' && (
+          <View style={{ marginTop: 12, borderWidth: 1, borderColor: '#e0d3b0', backgroundColor: '#fbf6e9', borderRadius: 8, padding: 10, gap: 8 }}>
+            <Text style={{ fontWeight: '700', fontSize: 13 }}>Worker marked this complete — review the photo &amp; notes</Text>
+            {reviewOpen ? (
+              <View style={{ gap: 8 }}>
+                <TextInput style={[ui.input, { minHeight: 56, textAlignVertical: 'top' }]} value={reviewReason} onChangeText={setReviewReason} placeholder="What needs fixing? (sent to the worker)" multiline />
+                <Pressable style={[ui.btn, reviewBusy && { opacity: 0.5 }]} disabled={reviewBusy} onPress={async () => {
+                  setReviewBusy(true);
+                  try { await rejectResidentWork(r.id, reviewReason); const fresh = await getResidentReport(String(id)); if (fresh) setR(fresh); setReviewOpen(false); setReviewReason(''); }
+                  catch (e: any) { Alert.alert('Could not send back', e?.message ?? 'Failed.'); }
+                  finally { setReviewBusy(false); }
+                }}><Text style={ui.btnText}>Send back to worker</Text></Pressable>
+                <Pressable onPress={() => { setReviewOpen(false); setReviewReason(''); }}><Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>Cancel</Text></Pressable>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable style={[ui.btn, { flex: 1, backgroundColor: '#2e7d32' }, reviewBusy && { opacity: 0.5 }]} disabled={reviewBusy} onPress={async () => {
+                  setReviewBusy(true);
+                  try { await approveResidentWork(r.id); const fresh = await getResidentReport(String(id)); if (fresh) setR(fresh); }
+                  catch (e: any) { Alert.alert('Could not approve', e?.message ?? 'Failed.'); }
+                  finally { setReviewBusy(false); }
+                }}><Text style={ui.btnText}>Approve</Text></Pressable>
+                <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => { setReviewOpen(true); setReviewReason(''); }}><Text style={ui.btnOutlineText}>Send back</Text></Pressable>
+              </View>
+            )}
+          </View>
+        )}
         {(position === 'Inspector' || position === 'CPM') && (
           <Pressable
             style={[ui.btn, { marginTop: 10 }]}
