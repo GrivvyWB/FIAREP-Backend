@@ -6,6 +6,7 @@ import {
   staffAccounts,
 } from "@workspace/db";
 import type { Actor } from "./auth";
+import { isOfficeCraftSupervisor } from "./domain";
 import { canReadEntityRecordForActor } from "./hrAuthorization";
 import { repairLegacyResidentDevelopment } from "./legacyResidentDevelopment";
 
@@ -87,9 +88,12 @@ export async function residentReportRecipientIds(
   return [...new Set(staff
     .filter((account) => {
       if (account.position === "Superintendent Ⓔ") return true;
+      // Office/craft supervisors (CPM, CPM Supervisor, trade supervisors) have no
+      // base development and receive complaints only when work is transferred to
+      // them — never automatically. Only true development supervisors auto-receive.
       const isDevelopmentSupervisor =
         account.role === "management" &&
-        account.position !== "CPM Supervisor" &&
+        !isOfficeCraftSupervisor({ role: account.role, position: account.position }) &&
         (
           account.position.toLowerCase().includes("supervisor") ||
           ["Superintendent", "Assistant Superintendent"].includes(account.position)

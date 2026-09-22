@@ -47,16 +47,16 @@ export default function ViolationSend() {
   const [sending, setSending] = useState(false);
   const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
   const complaintMode = String(filter || '').toLowerCase() === 'worker';
+  // In violation mode the sender picks who receives it.
+  const [violationTarget, setViolationTarget] = useState<'inspector' | 'supervisor-inspector' | 'trade'>('inspector');
   const [currentPosition, setCurrentPosition] = useState('');
 
   useEffect(() => {
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
       setCurrentPosition(position);
-      if (
-        complaintMode
-          ? actor.role === 'management' || actor.role === 'administrator'
-          : actor.role === 'management' && position.trim().toLowerCase() === 'supervisor inspector'
-      ) setAuthorized(true);
+      // Complaints and violations may both be sent by management/administration
+      // (development supervisors, Superintendent E, Supervisor Inspector, etc.).
+      if (actor.role === 'management' || actor.role === 'administrator') setAuthorized(true);
       else router.replace('/management-home');
     }).catch(() => router.replace('/management-home'));
   }, [complaintMode, router]);
@@ -85,10 +85,20 @@ export default function ViolationSend() {
       return eligibleRole && eligiblePosition &&
         (currentPosition === 'Superintendent Ⓔ' || inDevelopment);
     }
-    return s.role === 'inspector' &&
-      String(s.position || '').trim().toLowerCase() === 'inspector' &&
-      !!development &&
+    // Violation mode: recipient set depends on the chosen target.
+    const pos = String(s.position || '').trim().toLowerCase();
+    const inDev = !!development &&
       (s.developments || []).some((d) => d.trim().toLowerCase() === development.trim().toLowerCase());
+    if (violationTarget === 'inspector') {
+      return s.role === 'inspector' && pos === 'inspector' &&
+        (currentPosition === 'Superintendent Ⓔ' || inDev);
+    }
+    if (violationTarget === 'supervisor-inspector') {
+      return s.role === 'management' && pos === 'supervisor inspector';
+    }
+    // Trade supervisors are office-based (no development requirement).
+    const TRADE_SUP = /^(plumber|plumbing|electric|electrical|electrician|elevator|elevator service|painter|carpenter|roofer|heating|heating service|bricklayer|mason|general construction|cctv installation)( service)? supervisor$/;
+    return s.role === 'management' && TRADE_SUP.test(pos);
   });
 
   async function submit() {
@@ -96,7 +106,7 @@ export default function ViolationSend() {
     if (!complaintMode && !violationNumber.trim()) { Alert.alert('Missing', 'Enter a violation number.'); return; }
     if (!address.trim()) { Alert.alert('Missing', 'Enter an address.'); return; }
     if (!sentTo.trim() || !sentStaffId.trim()) {
-      Alert.alert('Missing', complaintMode ? 'Choose an approved staff member.' : 'Choose an approved Inspector.');
+      Alert.alert('Missing', complaintMode ? 'Choose an approved staff member.' : (violationTarget === 'trade' ? 'Choose a trade supervisor.' : violationTarget === 'supervisor-inspector' ? 'Choose a Supervisor Inspector.' : 'Choose an approved Inspector.'));
       return;
     }
     if (complaintMode && (!reportId || !preComplaint)) {
@@ -126,8 +136,12 @@ export default function ViolationSend() {
             assignedStaffId: sentStaffId,
             development: development || undefined,
             address: address.trim() + (unit.trim() ? ' Unit ' + unit.trim() : ''),
-            instructions: [violationNumber.trim(), note.trim()].filter(Boolean).join(' — '),
-            sourceInspectionRef: preComplaint || undefined,
+            instructions: [
+              violationNumber.trim() ? 'Violation #: ' + violationNumber.trim() : '',
+              preComplaint ? 'Complaint #: ' + preComplaint : '',
+              note.trim() ? 'Note: ' + note.trim() : '',
+            ].filter(Boolean).join('\n'),
+            sourceInspectionRef: violationNumber.trim() || preComplaint || undefined,
           });
       // Keep the violation details so you can immediately send the same job to
       // another person (e.g. a plumber to meet the inspector). Only clear the
@@ -166,6 +180,12 @@ export default function ViolationSend() {
             placeholder="e.g. V-104882"
             autoCapitalize="characters"
           />
+          {!!preComplaint && (
+            <View style={{ marginTop: 8 }}>
+              <Text style={ui.label}>Complaint number (attached)</Text>
+              <View style={ui.input}><Text style={{ color: '#185FA5', fontWeight: '700' }}>{preComplaint}</Text></View>
+            </View>
+          )}
         </>
       )}
 
@@ -190,6 +210,19 @@ export default function ViolationSend() {
       />
 
       <Text style={[ui.label, { marginTop: 12 }]}>Send to</Text>
+      {!complaintMode && (
+        <View style={{ flexDirection: 'row', gap: 6, marginBottom: 6 }}>
+          {([['inspector','Inspector'],['supervisor-inspector','Supervisor Inspector'],['trade','Trade supervisor']] as const).map(([key,lbl]) => (
+            <Pressable
+              key={key}
+              style={[ui.btnOutline, { flex: 1, paddingVertical: 8 }, violationTarget === key && ui.btn]}
+              onPress={() => { setViolationTarget(key); setSentTo(''); setSentStaffId(''); }}
+            >
+              <Text style={[violationTarget === key ? ui.btnText : ui.btnOutlineText, { fontSize: 12, textAlign: 'center' }]}>{lbl}</Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
       <Text style={ui.label}>Development</Text>
       {assignedDevelopments.map((d) => (
         <Pressable key={d} style={[ui.input, development === d && { borderColor: ACCENT, borderWidth: 2 }]} onPress={() => { setDevelopment(d); setSentTo(''); setSentStaffId(''); }}>
@@ -198,7 +231,7 @@ export default function ViolationSend() {
       ))}
       {assignedDevelopments.length === 0 && <Text style={ui.empty}>No assigned developments.</Text>}
       {recipients.length === 0 ? (
-        <Text style={ui.listSub}>{complaintMode ? 'No approved staff yet.' : 'No approved inspectors yet.'}</Text>
+        <Text style={ui.listSub}>{complaintMode ? 'No approved staff yet.' : (violationTarget === 'trade' ? 'No approved trade supervisors yet.' : violationTarget === 'supervisor-inspector' ? 'No approved Supervisor Inspector yet.' : 'No approved inspectors yet.')}</Text>
       ) : (
         <View style={{ gap: 6 }}>
           {Array.from(new Set(recipients.map((r) => (r.position || 'Other')))).sort().map((pos) => {

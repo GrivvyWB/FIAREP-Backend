@@ -4332,14 +4332,14 @@ export async function createViolationInspectionAssignment(input: {
     const result = await createEntityRecord('route-assignments', { id: r.id, state: r, development: r.development });
     const authoritative = { ...(result.state as object), id: result.id } as RouteAssignment;
     await d.runAsync('INSERT OR REPLACE INTO route_assignments(id,state) VALUES(?,?)', authoritative.id, JSON.stringify(authoritative));
-    await addNotification(input.assignedStaffId.trim(), 'New inspector violation assignment', input.address.trim(), authoritative.id);
+    await addNotification(input.assignedStaffId.trim(), 'New inspector violation assignment', [input.sourceInspectionRef?.trim(), input.address.trim()].filter(Boolean).join(' \u00b7 '), authoritative.id);
     return authoritative;
   } catch (error: any) {
     if (error?.status && Number(error.status) >= 400 && Number(error.status) < 500) throw error;
     if (error?.status || !/(network|offline|timeout|fetch|connection|unreachable)/i.test(String(error?.message || error))) throw error;
     await d.runAsync('INSERT OR REPLACE INTO route_assignments(id,state) VALUES(?,?)', r.id, JSON.stringify(r));
     await queueMutation('route-assignments', r.id, r);
-    await addNotification(input.assignedStaffId.trim(), 'New inspector violation assignment', input.address.trim(), r.id);
+    await addNotification(input.assignedStaffId.trim(), 'New inspector violation assignment', [input.sourceInspectionRef?.trim(), input.address.trim()].filter(Boolean).join(' \u00b7 '), r.id);
     return { ...r, pendingSync: true };
   }
 }

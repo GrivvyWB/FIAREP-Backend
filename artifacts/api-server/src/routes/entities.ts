@@ -38,6 +38,7 @@ import {
   procurementRecordAllowed,
   normalizeAssignment,
   supervisedTradeForPosition,
+  isComplaintHandlingSupervisor,
 } from "../lib/domain";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -410,8 +411,15 @@ router.post("/v1/:entity", async (req, res, next) => {
   let id = recordId(body["id"]);
   let linkedAssignment: typeof entityRecords.$inferSelect | undefined;
   if (entity === "route-assignments") {
-    if (!isViolationAuthority(actor)) {
-      res.status(403).json({ error: "Only the Supervisor Inspector may create route assignments" });
+    // A violation may be sent by the Supervisor Inspector, by administration, or
+    // by a development/emergency complaint-handling supervisor (who forwards it
+    // to an inspector, the Supervisor Inspector, or a trade supervisor).
+    if (
+      !isViolationAuthority(actor) &&
+      actor.role !== "administrator" &&
+      !isComplaintHandlingSupervisor(actor)
+    ) {
+      res.status(403).json({ error: "Not allowed to send this violation" });
       return;
     }
     const assignmentKind = typeof rawState["assignmentKind"] === "string"
