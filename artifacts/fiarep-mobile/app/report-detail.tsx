@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { addResidentUpdate, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls } from '../lib/store';
+import { addResidentUpdate, approveResidentWork, rejectResidentWork, assessReportPhotos, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -36,6 +36,10 @@ export default function ReportDetail() {
   const [loading, setLoading] = useState(true);
   const [actorId, setActorId] = useState('');
   const [actorName, setActorName] = useState('');
+  const [assessing, setAssessing] = useState(false);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const [reviewReason, setReviewReason] = useState('');
+  const [reviewBusy, setReviewBusy] = useState(false);
   const [completionNote, setCompletionNote] = useState('');
   const [completionPhotos, setCompletionPhotos] = useState<PhotoEvidence[]>([]);
   const [completionBusy, setCompletionBusy] = useState(false);
@@ -63,6 +67,20 @@ export default function ReportDetail() {
         setRemotePhotoUris([]);
         setPhotosError(false);
         if (!report) return;
+        // Auto-run the violation assessment for staff so the code is ready
+        // without anyone pressing a button. Only when there are photos and no
+        // assessment yet, and only for management/admin/inspector.
+        try {
+          const staff = mode === 'management' || mode === 'administrator' || mode === 'inspector';
+          const already = (report as any).aiPhotoScans && Object.keys((report as any).aiPhotoScans).length > 0;
+          const hasPhoto = (report.photos && report.photos.length > 0);
+          if (staff && hasPhoto && !already) {
+            assessReportPhotos(String(id)).then(async () => {
+              const fresh = await getResidentReport(String(id));
+              if (active && fresh) setR(fresh);
+            }).catch(() => undefined);
+          }
+        } catch {}
         setPhotosLoading(true);
         try {
           // Resident report photos must use the report-scoped authorized endpoint.
@@ -126,11 +144,26 @@ export default function ReportDetail() {
   if (!r) {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
-        <Text style={ui.empty}>Report not found.</Text>
+        <Text style={ui.empty}>This complaint hasn't synced to this device yet.</Text>
+        <Pressable
+          style={[ui.btn, { marginTop: 12 }]}
+          onPress={async () => { setLoading(true); await syncAllEntities().catch(() => undefined); load(); }}
+        >
+          <Text style={ui.btnText}>Retry</Text>
+        </Pressable>
+        <Pressable style={[ui.btnOutline, { marginTop: 8 }]} onPress={() => router.back()}>
+          <Text style={ui.btnOutlineText}>Back to inbox</Text>
+        </Pressable>
       </ScrollView>
     );
   }
 
+  const norm = (v?: string) => (v || '').trim().toLowerCase();
+  const isMine = !!r && (
+    (r.assignedStaffId && r.assignedStaffId === actorId) ||
+    (!!actorName && norm(r.assignedTo) === norm(actorName)) ||
+    (!!actorName && norm((r as any).assignedStaffName) === norm(actorName))
+  );
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -153,6 +186,49 @@ export default function ReportDetail() {
           <Text>{r.description}</Text>
         </View>
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
+        {(mode === 'management' || mode === 'administrator' || mode === 'inspector') && (() => {
+          const scans = (r as any).aiPhotoScans && typeof (r as any).aiPhotoScans === 'object' ? Object.values((r as any).aiPhotoScans) : [];
+          const hasPhotos = (r.photos && r.photos.length > 0) || remotePhotoUris.length > 0;
+          if (!scans.length) {
+            if (!hasPhotos) return null;
+            return (
+              <View style={{ marginTop: 8, borderWidth: 1, borderColor: '#cdd9e6', backgroundColor: '#eef4fb', borderRadius: 8, padding: 10, gap: 8 }}>
+                <Text style={{ fontWeight: '700', fontSize: 13, color: '#1C4E86' }}>Violation assessment (from photo) · staff only</Text>
+                <Text style={ui.listSub}>Get a suggested HPD/DOB violation code and meaning from the resident's photo.</Text>
+                <Pressable style={[ui.btn, assessing && { opacity: 0.5 }]} disabled={assessing} onPress={async () => {
+                  setAssessing(true);
+                  try {
+                    const n = await assessReportPhotos(r.id);
+                    const fresh = await getResidentReport(String(id));
+                    if (fresh) setR(fresh);
+                    if (!n) Alert.alert('No assessment', 'The photo could not be assessed. Photo analysis may be turned off for your organization, or the image format is unsupported.');
+                  } catch (e: any) {
+                    Alert.alert('Assessment failed', e?.message ?? 'Could not assess the photo.');
+                  } finally { setAssessing(false); }
+                }}>
+                  <Text style={ui.btnText}>{assessing ? 'Assessing\u2026' : 'Assess photo \u2192 get code'}</Text>
+                </Pressable>
+              </View>
+            );
+          }
+          return (
+            <View style={{ marginTop: 8, borderWidth: 1, borderColor: '#cdd9e6', backgroundColor: '#eef4fb', borderRadius: 8, padding: 10, gap: 6 }}>
+              <Text style={{ fontWeight: '700', fontSize: 13, color: '#1C4E86' }}>Violation assessment (from photo) · staff only</Text>
+              {scans.map((sc: any, i: number) => (
+                <View key={i} style={{ gap: 2, paddingTop: i ? 6 : 0, borderTopWidth: i ? 1 : 0, borderTopColor: '#d5e0ec' }}>
+                  <Text style={{ fontSize: 14 }}>
+                    <Text style={{ fontWeight: '700', color: '#1C4E86' }}>Code {sc.hpCode || 'REVIEW REQUIRED'}</Text>
+                    {sc.classification ? '  ·  Class ' + sc.classification : ''}
+                    {sc.priority ? '  ·  ' + sc.priority + ' priority' : ''}
+                  </Text>
+                  {!!(sc.codeMeaning || sc.condition) && <Text style={{ fontSize: 13, color: '#333' }}>{sc.codeMeaning || sc.condition}</Text>}
+                  {!!sc.codeOrderText && <Text style={ui.listSub} numberOfLines={3}>{sc.codeOrderText}</Text>}
+                  {!!sc.trade && <Text style={ui.listSub}>Trade: {sc.trade}{typeof sc.confidence === 'number' ? '  ·  AI ' + sc.confidence + '%' : ''}</Text>}
+                </View>
+              ))}
+            </View>
+          );
+        })()}
         {(mode === 'management' || mode === 'administrator') && r.status !== 'resolved' && (() => {
           const base = 'preAddress=' + encodeURIComponent(r.address || '')
             + '&preReportId=' + encodeURIComponent(r.id)
@@ -172,6 +248,33 @@ export default function ReportDetail() {
             </View>
           );
         })()}
+        {(mode === 'management' || mode === 'administrator') && (r as any).reviewStatus === 'done' && (
+          <View style={{ marginTop: 12, borderWidth: 1, borderColor: '#e0d3b0', backgroundColor: '#fbf6e9', borderRadius: 8, padding: 10, gap: 8 }}>
+            <Text style={{ fontWeight: '700', fontSize: 13 }}>Worker marked this complete — review the photo &amp; notes</Text>
+            {reviewOpen ? (
+              <View style={{ gap: 8 }}>
+                <TextInput style={[ui.input, { minHeight: 56, textAlignVertical: 'top' }]} value={reviewReason} onChangeText={setReviewReason} placeholder="What needs fixing? (sent to the worker)" multiline />
+                <Pressable style={[ui.btn, reviewBusy && { opacity: 0.5 }]} disabled={reviewBusy} onPress={async () => {
+                  setReviewBusy(true);
+                  try { await rejectResidentWork(r.id, reviewReason); const fresh = await getResidentReport(String(id)); if (fresh) setR(fresh); setReviewOpen(false); setReviewReason(''); }
+                  catch (e: any) { Alert.alert('Could not send back', e?.message ?? 'Failed.'); }
+                  finally { setReviewBusy(false); }
+                }}><Text style={ui.btnText}>Send back to worker</Text></Pressable>
+                <Pressable onPress={() => { setReviewOpen(false); setReviewReason(''); }}><Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>Cancel</Text></Pressable>
+              </View>
+            ) : (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable style={[ui.btn, { flex: 1, backgroundColor: '#2e7d32' }, reviewBusy && { opacity: 0.5 }]} disabled={reviewBusy} onPress={async () => {
+                  setReviewBusy(true);
+                  try { await approveResidentWork(r.id); const fresh = await getResidentReport(String(id)); if (fresh) setR(fresh); }
+                  catch (e: any) { Alert.alert('Could not approve', e?.message ?? 'Failed.'); }
+                  finally { setReviewBusy(false); }
+                }}><Text style={ui.btnText}>Approve</Text></Pressable>
+                <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => { setReviewOpen(true); setReviewReason(''); }}><Text style={ui.btnOutlineText}>Send back</Text></Pressable>
+              </View>
+            )}
+          </View>
+        )}
         {(position === 'Inspector' || position === 'CPM') && (
           <Pressable
             style={[ui.btn, { marginTop: 10 }]}
@@ -183,7 +286,7 @@ export default function ReportDetail() {
             <Text style={ui.btnText}>View DOB / HPD for this address</Text>
           </Pressable>
         )}
-        {r.assignedStaffId === actorId && r.status === 'assigned' && (
+        {isMine && r.status === 'assigned' && (
           <Pressable
             disabled={completionBusy}
             style={[ui.btn, { marginTop: 10 }, completionBusy && { opacity: 0.45 }]}
@@ -234,7 +337,7 @@ export default function ReportDetail() {
               <Text style={ui.listSub}>No photos attached.</Text>
             )}
         </View>
-        {r.assignedStaffId === actorId && r.status === 'in_progress' && (
+        {isMine && r.status === 'in_progress' && (
           <View style={{ gap: 8, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 }}>
             <Text style={ui.label}>Completed work</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

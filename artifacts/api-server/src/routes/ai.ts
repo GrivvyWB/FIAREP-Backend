@@ -77,7 +77,7 @@ router.get("/v1/resident-report-photo-ai/config", requireAuth, async (_req, res)
     actor.role === "administrator" ||
     isBoroughDirector(actor) ||
     isSupervisorPosition(actor);
-  res.json({ enabled: authorized && await tenantResidentPhotoAiEnabled(actor.tenantId) });
+  res.json({ enabled: authorized && Boolean(process.env.OPENAI_API_KEY) });
 });
 
 router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, res) => {
@@ -89,10 +89,6 @@ router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, 
     !isSupervisorPosition(actor)
   ) {
     res.status(404).json({ error: "Photo not found" });
-    return;
-  }
-  if (!await tenantResidentPhotoAiEnabled(actor.tenantId)) {
-    res.status(404).json({ error: "Photo analysis is not enabled" });
     return;
   }
   const photoId = String(req.params["id"] ?? "");
@@ -134,7 +130,9 @@ router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, 
     const response = await fetch(downloadUrl);
     if (!response.ok) throw new Error("Photo download failed");
     const image = `data:${photo.contentType};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
-    const result = await classifyViolationImage(image, apiKey);
+    const issueText = [report.state["description"], report.state["details"], report.state["issue"]]
+      .find((v): v is string => typeof v === "string" && Boolean(v.trim())) || "";
+    const result = await classifyViolationImage(image, apiKey, fetch, issueText);
     const existingScans =
       report.state["aiPhotoScans"] &&
       typeof report.state["aiPhotoScans"] === "object" &&

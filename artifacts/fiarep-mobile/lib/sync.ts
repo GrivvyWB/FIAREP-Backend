@@ -1,6 +1,7 @@
 import {
   createEntityRecord,
   deleteEntityRecord,
+  getEntityRecord,
   pullSync,
   performEntityAction,
   updateEntityRecord,
@@ -214,8 +215,42 @@ async function pushQueue(d: any) {
       if (row.baseVersion) input.version = row.baseVersion;
       let result: any;
       if (row.operation === 'delete') {
-        if (!row.baseVersion) throw new Error('Cannot delete without a server version.');
-        await deleteEntityRecord(row.entity, row.id, { version: row.baseVersion });
+        // Deletes must actually land server-side, or the record comes back on
+        // the next pull. Resolve the current server version if we don't have
+        // one, and retry once with the server's version on a conflict. A record
+        // already gone (404) counts as a successful delete.
+        let delVersion = row.baseVersion as number | null;
+        const fetchServerVersion = async (): Promise<number | null> => {
+          try {
+            const rec: any = await getEntityRecord(row.entity, row.id);
+            return typeof rec?.version === 'number' ? rec.version : null;
+          } catch (e: any) {
+            if (e?.status === 404) return null; // already deleted server-side
+            throw e;
+          }
+        };
+        if (!delVersion) {
+          delVersion = await fetchServerVersion();
+          // Record not on the server (never synced, or already gone): the local
+          // delete already happened, so treat this as done.
+          if (delVersion == null) { row.__deleteResolved = true; }
+        }
+        if (!(row as any).__deleteResolved) {
+          try {
+            await deleteEntityRecord(row.entity, row.id, { version: delVersion! });
+          } catch (e: any) {
+            if (e?.status === 409) {
+              // Our version was stale; fetch the real one and retry once.
+              const fresh = await fetchServerVersion();
+              if (fresh == null) { /* gone now — done */ }
+              else await deleteEntityRecord(row.entity, row.id, { version: fresh });
+            } else if (e?.status === 404) {
+              // already gone — done
+            } else {
+              throw e;
+            }
+          }
+        }
       } else {
         try {
           result = await createEntityRecord(row.entity, input);
@@ -430,17 +465,29 @@ export async function syncAllEntities(options?: {
       } else await applyRecord(d, record, owner);
     }
     await d.execAsync('CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)');
+    // Notifications the user removed on this device never come back, even if
+    // the server re-sends them (e.g. a full re-sync after sign-in).
+    let removedIds = new Set<string>();
+    try {
+      const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'deleted_notification_ids');
+      removedIds = new Set<string>(row?.value ? JSON.parse(row.value) : []);
+    } catch { removedIds = new Set<string>(); }
     for (const notification of result.notifications || []) {
-      const existing = await d.getFirstAsync<{ id: string }>(
-        'SELECT id FROM notifications WHERE id=?',
+      if (removedIds.has(notification.id)) continue;
+      const existing = await d.getFirstAsync<{ id: string; state: string }>(
+        'SELECT id, state FROM notifications WHERE id=?',
         notification.id,
       );
+      // A notification read on this device stays read even if the server copy
+      // has not caught up yet.
+      let locallyRead = false;
+      try { locallyRead = Boolean(existing?.state && JSON.parse(existing.state).read); } catch { locallyRead = false; }
       const localNotification = {
         id: notification.id,
         target: notification.target,
         message: notification.message,
         detail: notification.detail || '',
-        read: Boolean(notification.read),
+        read: Boolean(notification.read) || locallyRead,
         at: notification.at || new Date().toISOString(),
         reportId: notification.reportId || undefined,
       };
@@ -476,7 +523,7 @@ export async function syncAllEntities(options?: {
   });
   const alertsMuted = await getAlertsMuted().catch(() => false);
   for (const notification of newNotifications) {
-    const urgent = /emergency|priority|elevator|resident report/i.test(
+    const urgent = /emergency|priority|elevator|resident report|new job|job assigned|assigned|violation|change (work )?order|manpower|route|dispatch|submitted for review|sent back|needs your attention|urgent/i.test(
       `${notification.message} ${notification.detail || ''}`,
     );
     if (!alertsMuted) {

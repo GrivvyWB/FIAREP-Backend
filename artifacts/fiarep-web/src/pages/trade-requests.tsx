@@ -28,8 +28,8 @@ const supervisorPositions: Record<(typeof trades)[number], readonly string[]> = 
   Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
   Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
   "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
-  Painter: ["Painter Supervisor", "Supervisor Painter"],
-  "Heating Service": ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor"],
+  Painter: ["Painter Supervisor", "Painting Supervisor", "Supervisor Painter"],
+  "Heating Service": ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor", "Heating Supervisor", "Boiler Supervisor"],
   Bricklayer: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor"],
 };
 

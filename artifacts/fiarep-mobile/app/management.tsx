@@ -20,6 +20,8 @@ import {
   type StaffAccount,
   type StaffPosition,
   clearResidentReportForStaff,
+  approveResidentWork,
+  rejectResidentWork,
   deleteResidentReport,
   getCurrentPosition,
   listResidentReportPhotoUrls,
@@ -138,6 +140,8 @@ export default function Management() {
   const [showReports, setShowReports] = useState(false);
   const [picker, setPicker] = useState<{ mode: 'filter' | 'tag'; id?: string } | null>(null);
   const [assignFor, setAssignFor] = useState<string | null>(null);
+  const [reviewFor, setReviewFor] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState('');
   const [assignPos, setAssignPos] = useState<StaffPosition | null>(null);
   const [staffList, setStaffList] = useState<StaffAccount[]>([]);
   const [cwoFor, setCwoFor] = useState<ResidentReport | null>(null);
@@ -461,6 +465,29 @@ export default function Management() {
                 <Pressable style={ui.btn} onPress={() => { setAssignFor(r.id); setAssignPos(null); setStaffList([]); }}>
                   <Text style={ui.btnText}>{r.assignedTo ? `Reassign complaint (now: ${r.assignedTo})` : 'Send complaint to staff'}</Text>
                 </Pressable>
+                {r.reviewStatus === 'done' && (
+                  <View style={{ gap: 8, marginTop: 6, borderWidth: 1, borderColor: '#e0d3b0', backgroundColor: '#fbf6e9', borderRadius: 8, padding: 10 }}>
+                    <Text style={{ fontWeight: '700', fontSize: 13 }}>Worker marked this complete — review the photo & notes</Text>
+                    {reviewFor === r.id ? (
+                      <View style={{ gap: 8 }}>
+                        <TextInput style={[ui.input, { minHeight: 56, textAlignVertical: 'top' }]} value={rejectReason} onChangeText={setRejectReason} placeholder="What needs fixing? (sent to the worker)" multiline />
+                        <Pressable style={ui.btn} onPress={async () => { try { await rejectResidentWork(r.id, rejectReason); setReviewFor(null); setRejectReason(''); load(); } catch (e: any) { Alert.alert('Could not send back', e?.message ?? 'Failed.'); } }}>
+                          <Text style={ui.btnText}>Send back to worker</Text>
+                        </Pressable>
+                        <Pressable onPress={() => { setReviewFor(null); setRejectReason(''); }}><Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>Cancel</Text></Pressable>
+                      </View>
+                    ) : (
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Pressable style={[ui.btn, { flex: 1, backgroundColor: '#2e7d32' }]} onPress={async () => { try { await approveResidentWork(r.id); load(); } catch (e: any) { Alert.alert('Could not approve', e?.message ?? 'Failed.'); } }}>
+                          <Text style={ui.btnText}>Approve</Text>
+                        </Pressable>
+                        <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => { setReviewFor(r.id); setRejectReason(''); }}>
+                          <Text style={ui.btnOutlineText}>Send back</Text>
+                        </Pressable>
+                      </View>
+                    )}
+                  </View>
+                )}
                 {r.status !== 'resolved' && (
                   <Pressable style={ui.btnOutline} onPress={() => onResolve(r)}>
                     <Text style={ui.btnOutlineText}>Mark Resolved</Text>

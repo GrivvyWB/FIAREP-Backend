@@ -24,6 +24,7 @@ import {
   createPublicVendorWalkthroughCheckIn,
   listResidentReportPhotos,
   requestResidentReportPhotoDownload,
+  classifyResidentReportPhoto,
   submitPublicVendorBid,
   unregisterDeviceToken,
   setAuthTokenGetter,
@@ -39,6 +40,7 @@ import {
   type TimeClockStatus,
   type TimeClockPunch,
   type VendorWalkthroughCheckIn,
+  customFetch,
 } from '@workspace/api-client-react';
 export type { TimeClockPunch, TimeClockStatus } from '@workspace/api-client-react';
 import type { Rates } from './takeoff';
@@ -553,6 +555,7 @@ export type ResidentReport = {
   completionNote?: string;
   completionPhotoUrl?: string;
   clearedByMgmt?: boolean;  // management cleared it so the worker may remove it from My Jobs
+  reviewStatus?: string;    // raw server status: 'done' = awaiting supervisor review, 'work_approved' = accepted
   _meta?: any;
 };
 
@@ -579,6 +582,7 @@ function normalizeResidentReport(r: any): ResidentReport {
   };
   return {
     ...r,
+    reviewStatus: String(r.status || '').toLowerCase(),
     address: r.address ?? '',
     status: normalizeStatus(r.status),
     assignedStaffId: r.assignedStaffId,
@@ -781,6 +785,26 @@ export async function listResidentReportPhotoUrls(reportId: string): Promise<str
   }));
 }
 
+// Management/inspector: run the AI violation assessment on a report's photo(s).
+// Populates aiPhotoScans on the report (real HPD/MDL or DOB code + meaning), which
+// the report screen then shows. Returns how many photos were assessed.
+export async function assessReportPhotos(reportId: string): Promise<number> {
+  const photos = await listResidentReportPhotos({ reportId }).catch(() => [] as any[]);
+  let done = 0;
+  for (const photo of photos) {
+    try {
+      await classifyResidentReportPhoto(photo.id);
+      done++;
+    } catch (e) {
+      // already-analyzed (409) or format errors are non-fatal; keep going.
+    }
+  }
+  // Pull the updated report (with aiPhotoScans) back down.
+  const { syncAllEntities } = await import('./sync');
+  await syncAllEntities().catch(() => undefined);
+  return done;
+}
+
 export async function findReportByRef(detail: string): Promise<ResidentReport | null> {
   // Best-effort match of a notification detail like "Unit 2B \u00b7 Clinton" or "Building \u00b7 Clinton" to a report.
   const all = await listResidentReports();
@@ -966,6 +990,20 @@ export async function releaseResidentReport(id: string, update: string): Promise
   const text = update.trim();
   if (!text) throw new Error('An update is required before releasing this assignment.');
   await performEntityAction('resident-reports', id, 'release', { update: text });
+}
+
+// Supervisor reviews a completed (done) resident report and accepts the work.
+export async function approveResidentWork(id: string): Promise<void> {
+  await performEntityAction('resident-reports', id, 'approve-work', {});
+}
+
+// Supervisor rejects the completed work and sends it back to the worker to redo.
+// The report returns to in_progress on the assigned worker's list; the reason is
+// recorded as an update the worker can see.
+export async function rejectResidentWork(id: string, reason: string): Promise<void> {
+  const text = (reason || '').trim();
+  if (!text) throw new Error('Add a reason so the worker knows what to fix.');
+  await performEntityAction('resident-reports', id, 'reject-work', { note: text });
 }
 
 export async function addResidentUpdate(
@@ -1185,6 +1223,26 @@ function clearWebTokens(): void {
 
 async function ensureStaffTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS staff_accounts (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
+}
+
+// Per-device "seen" markers for a worker's My Jobs list. Opening a job marks it
+// seen so it drops from the pending "Resident requests" count; the complaint
+// record itself is untouched and stays in the system for management.
+export async function markReportSeen(reportId: string): Promise<void> {
+  const id = (reportId || '').trim();
+  if (!id) return;
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'seen_report_ids');
+  let ids: string[] = [];
+  try { ids = row?.value ? JSON.parse(row.value) : []; } catch { ids = []; }
+  if (!ids.includes(id)) ids.push(id);
+  await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'seen_report_ids', JSON.stringify(ids.slice(-500)));
+}
+
+export async function getSeenReportIds(): Promise<Set<string>> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'seen_report_ids');
+  try { return new Set(row?.value ? JSON.parse(row.value) : []); } catch { return new Set(); }
 }
 
 export async function getAccessToken(): Promise<string | null> {
@@ -2246,7 +2304,11 @@ export async function markNotificationRead(id: string): Promise<void> {
   if (!row) return;
   try {
     const n = JSON.parse(row.state) as Notification;
-    if (!n.read) await d.runAsync('UPDATE notifications SET state = ? WHERE id = ?', JSON.stringify({ ...n, read: true }), id);
+    if (!n.read) {
+      await d.runAsync('UPDATE notifications SET state = ? WHERE id = ?', JSON.stringify({ ...n, read: true }), id);
+      // Persist the read state on the server so it survives re-syncs.
+      customFetch<unknown>('/api/v1/notifications/' + encodeURIComponent(id) + '/read', { method: 'POST' }).catch(() => undefined);
+    }
   } catch {}
 }
 
@@ -2627,6 +2689,21 @@ export async function deleteNotification(id: string): Promise<void> {
   const d = await db();
   await ensureNotifTable(d);
   await d.runAsync('DELETE FROM notifications WHERE id = ?', id);
+  // Remember the removal so a later sync cannot bring it back on this device.
+  try {
+    const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'deleted_notification_ids');
+    let ids: string[] = [];
+    try { ids = row?.value ? JSON.parse(row.value) : []; } catch { ids = []; }
+    if (!ids.includes(id)) ids.push(id);
+    await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'deleted_notification_ids', JSON.stringify(ids.slice(-1000)));
+  } catch {}
+  // Remove it on the server too so it is gone for good (and on other devices).
+  try {
+    await customFetch<void>('/api/v1/notifications/' + encodeURIComponent(id), { method: 'DELETE' });
+  } catch (e: any) {
+    // 404 = already gone. Anything else: the local tombstone still hides it here.
+    if (e?.status !== 404) console.warn('notification delete not synced', e?.message || e);
+  }
 }
 
 export async function listAllNotifications(): Promise<Notification[]> {

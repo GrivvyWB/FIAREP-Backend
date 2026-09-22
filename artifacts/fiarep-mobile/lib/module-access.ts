@@ -8,7 +8,11 @@ export type ModuleId =
   | 'violations' | 'procurement' | 'scope-review' | 'scope-writing' | 'emergency'
   | 'change-orders' | 'scores' | 'elevators' | 'leave' | 'hr' | 'notifications'
   | 'settings' | 'shared-data' | 'hud-inspections' | 'trade-requests' | 'my-jobs'
-  | 'complaint-dashboard';
+  | 'complaint-dashboard'
+  // Per-tool, per-client construction-PM switches (all opt-in / OFF by default).
+  | 'proj-new' | 'proj-room' | 'proj-rates' | 'proj-checklist' | 'proj-inspection'
+  | 'proj-estimate' | 'proj-scope' | 'proj-intake' | 'proj-elevator'
+  | 'proj-photos' | 'proj-scans' | 'proj-roofplan' | 'proj-compass';
 
 export type ModuleConfig = { propertyLimit?: number; features?: { modules?: Record<string, boolean> } };
 let cached: ModuleConfig | null = null;
@@ -19,8 +23,18 @@ async function settingKey(): Promise<string> {
   return `organization_module_config:${identity?.tenantId || 'default'}:${identity?.staffId || ''}`;
 }
 
+// Modules that are OFF until the platform owner explicitly turns them on for a
+// client (opt-in). Everything else stays enabled unless explicitly disabled.
+const OPT_IN_MODULES = new Set<ModuleId>([
+  'proj-new', 'proj-room', 'proj-rates', 'proj-checklist', 'proj-inspection',
+  'proj-estimate', 'proj-scope', 'proj-intake', 'proj-elevator',
+  'proj-photos', 'proj-scans', 'proj-roofplan', 'proj-compass',
+]);
+
 export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = cached): boolean {
-  return config?.features?.modules?.[module] !== false;
+  const value = config?.features?.modules?.[module];
+  if (OPT_IN_MODULES.has(module)) return value === true;
+  return value !== false;
 }
 
 export async function loadModuleConfig(): Promise<ModuleConfig | null> {

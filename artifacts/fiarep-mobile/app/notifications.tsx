@@ -19,17 +19,11 @@ export default function Notifications() {
   async function openFor(n: Notification) {
     const msg = (n.message || '').toLowerCase();
     if (msg.includes('new resident report') && n.reportId) {
-      let report = await getResidentReport(n.reportId);
-      if (!report) {
-        await syncAllEntities().catch(() => undefined);
-        report = await getResidentReport(n.reportId);
-      }
-      if (report) {
-        await markNotificationRead(n.id);
-        router.push('/report-detail?id=' + encodeURIComponent(report.id));
-      } else {
-        Alert.alert('Report unavailable', 'This report is not assigned to one of your developments.');
-      }
+      await markNotificationRead(n.id);
+      // Always open the report screen by id. report-detail re-syncs and fetches
+      // the record itself, so we never dead-end the user with an alert that
+      // leaves them unable to get back to the complaint.
+      router.push('/report-detail?id=' + encodeURIComponent(n.reportId));
       return;
     }
     await markNotificationRead(n.id);
@@ -126,7 +120,16 @@ export default function Notifications() {
     if (msg.includes('change work order') || msg.includes('change order')) { router.push('/change-orders'); return; }
     if (msg.includes('elevator update') || msg.includes('elevator job')) { router.push('/elevator-dashboard'); return; }
     if (msg.includes('emergency update') || msg.includes('emergency job') || msg.includes('emergency unit')) { router.push('/emergency-units'); return; }
-    if (msg.includes('new job assigned')) { router.push('/my-jobs'); return; }
+    if (msg.includes('new job assigned')) {
+      // Open the specific job when it is a resident report; otherwise (in-house
+      // manpower jobs) send them to My Jobs where it is listed.
+      if (n.reportId) {
+        let report = await getResidentReport(n.reportId);
+        if (!report) { await syncAllEntities().catch(() => undefined); report = await getResidentReport(n.reportId); }
+        if (report) { router.push('/report-detail?id=' + encodeURIComponent(n.reportId)); return; }
+      }
+      router.push('/my-jobs'); return;
+    }
     if (msg.includes('new route assigned')) { router.push('/worker'); return; }
     if (n.reportId) { router.push('/report-detail?id=' + n.reportId); return; }
     // Fallback for older notifications without a stored reportId: match by detail text.

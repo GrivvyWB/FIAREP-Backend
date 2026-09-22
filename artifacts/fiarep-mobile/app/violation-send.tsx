@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   createViolationInspectionAssignment,
   assignResidentReport,
+  createEmergencyJob,
   listViolationLookups,
   deleteViolationLookup,
   listStaffAccounts,
@@ -34,6 +35,7 @@ export default function ViolationSend() {
   const preDev = preDevelopment ? String(preDevelopment) : '';
   const [sentTo, setSentTo] = useState('');
   const [sentStaffId, setSentStaffId] = useState('');
+  const [sentRole, setSentRole] = useState('');
   const [development, setDevelopment] = useState(preDev);
   const [lastSent, setLastSent] = useState('');
   const [openGroup, setOpenGroup] = useState<string>('');
@@ -42,6 +44,7 @@ export default function ViolationSend() {
   const [me, setMe] = useState('');
   const canDelete = useDeletionPolicy();
   const [authorized, setAuthorized] = useState(false);
+  const [sending, setSending] = useState(false);
   const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
   const complaintMode = String(filter || '').toLowerCase() === 'worker';
   const [currentPosition, setCurrentPosition] = useState('');
@@ -89,6 +92,7 @@ export default function ViolationSend() {
   });
 
   async function submit() {
+    if (sending) return; // block double-tap while a send is in flight
     if (!complaintMode && !violationNumber.trim()) { Alert.alert('Missing', 'Enter a violation number.'); return; }
     if (!address.trim()) { Alert.alert('Missing', 'Enter an address.'); return; }
     if (!sentTo.trim() || !sentStaffId.trim()) {
@@ -99,8 +103,23 @@ export default function ViolationSend() {
       Alert.alert('Missing', 'The complaint ID is unavailable.');
       return;
     }
+    setSending(true);
     try {
       const to = sentTo;
+      // When a supervisor sends a complaint to an EMERGENCY worker, also create
+      // an emergency-unit job so it lands on that worker's Emergency Units
+      // screen (not only My Jobs).
+      if (complaintMode && sentRole === 'emergency') {
+        await createEmergencyJob(
+          '',                                   // truck: unknown from a complaint
+          development.trim(),
+          address.trim() + (unit.trim() ? ' Unit ' + unit.trim() : ''),
+          note.trim() || ('Complaint ' + preComplaint),
+          '',                                   // location in building
+          '',                                   // no registered unit id
+          sentStaffId,
+        ).catch(() => undefined);
+      }
       const assignment = complaintMode
         ? await assignResidentReport(reportId, sentStaffId, to)
         : await createViolationInspectionAssignment({
@@ -115,11 +134,14 @@ export default function ViolationSend() {
       // recipient and show a persistent confirmation.
       setSentTo('');
       setSentStaffId('');
+      setSentRole('');
       const queued = !complaintMode && Boolean((assignment as any)?.pendingSync);
       setLastSent((queued ? 'Queued pending sync to ' : 'Sent to ') + to + ' \u00b7 ' + new Date().toLocaleTimeString());
       load();
     } catch (e: any) {
       Alert.alert('Error', String(e && e.message ? e.message : e));
+    } finally {
+      setSending(false);
     }
   }
 
@@ -202,7 +224,7 @@ export default function ViolationSend() {
                         <Pressable
                           key={s.id}
                           style={[ui.input, active ? { borderColor: ACCENT, borderWidth: 2 } : null]}
-                           onPress={() => { setSentTo(active ? '' : s.name); setSentStaffId(active ? '' : s.id); }}
+                           onPress={() => { setSentTo(active ? '' : s.name); setSentStaffId(active ? '' : s.id); setSentRole(active ? '' : (s.role || '')); }}
                         >
                           <Text style={{ color: active ? ACCENT : '#000' }}>{s.name}</Text>
                         </Pressable>
@@ -216,8 +238,12 @@ export default function ViolationSend() {
         </View>
       )}
 
-      <Pressable style={[ui.btn, { marginTop: 16 }]} onPress={submit}>
-        <Text style={ui.btnText}>{complaintMode ? 'Send complaint' : 'Send violation'}</Text>
+      <Pressable
+        style={[ui.btn, { marginTop: 16 }, sending && { opacity: 0.5 }]}
+        onPress={submit}
+        disabled={sending}
+      >
+        <Text style={ui.btnText}>{sending ? 'Sending\u2026' : (complaintMode ? 'Send complaint' : 'Send violation')}</Text>
       </Pressable>
       {!!lastSent && <Text style={{ color: '#1a8f4c', fontWeight: '700', textAlign: 'center', marginTop: 8 }}>{lastSent}. Pick another person to send again.</Text>}
 
@@ -246,6 +272,14 @@ export default function ViolationSend() {
         ))
       ))}
     </ScrollView>
+    {sending && (
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.15)', alignItems: 'center', justifyContent: 'center' }} pointerEvents="auto">
+        <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, alignItems: 'center', gap: 10 }}>
+          <ActivityIndicator size="large" color={ACCENT} />
+          <Text style={{ fontWeight: '600', color: '#333' }}>Sending\u2026</Text>
+        </View>
+      </View>
+    )}
     </KeyboardAvoidingView>
   );
 }

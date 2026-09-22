@@ -81,6 +81,9 @@ export const STAFF_POSITIONS = [
   "Director",
   "Superintendent Ⓔ",
   "Other",
+  "Bricklayer",
+  "Bricklayer Supervisor",
+  "Heating Service Supervisor",
 ] as const;
 
 export const ENTITIES = new Set([
@@ -686,8 +689,18 @@ export function canDeleteEntity(
   entity: string,
   state: Record<string, unknown>,
 ): boolean {
-  if (entity === "resident-reports") return false;
+  // Resident complaints may be removed by an administrator or by higher
+  // management (Borough / Regional Director). The DELETE route already gates
+  // this with canDeleteOperationalRecords and the org deletionEnabled flag, so
+  // by the time we get here the actor is authorized to delete operational
+  // records; permit resident-reports for those roles.
+  if (entity === "resident-reports") {
+    return actor.role === "administrator" || canDeleteOperationalRecords(actor);
+  }
   if (actor.role === "administrator") return true;
+  // A Borough Director cleans up the complaint flow (reports, change orders)
+  // but remains read-only for dispatch, elevator, procurement and HR records.
+  if (isBoroughDirector(actor)) return entity === "change-orders";
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
   // entity deletion route.
@@ -907,11 +920,19 @@ export function canAssignStaff(
   if (!isAssignmentAuthority(actor)) return false;
   if (target.id === actor.id || target.position === "Borough Director") return false;
   if (!ASSIGNABLE_STAFF_ROLES.has(target.role) || !isOperationalAssignee(target)) return false;
-  if (development && !target.developments.includes(development)) return false;
+  // Emergency crews respond across developments, so don't gate them on a
+  // development match. For everyone else match tolerantly (case/spacing).
+  const devN = (development || "").trim().toLowerCase();
+  const targetCoversDev = target.developments.some(
+    (d) => (d || "").trim().toLowerCase() === devN,
+  );
+  if (development && target.role !== "emergency" && !targetCoversDev) return false;
   if (isBoroughDirector(actor) || actor.role === "administrator") return true;
   if (
-    !target.developments.length ||
-    !target.developments.every((value) => actor.developments.includes(value))
+    target.role !== "emergency" &&
+    (!target.developments.length ||
+     !target.developments.every((value) =>
+       actor.developments.some((a) => (a || "").trim().toLowerCase() === (value || "").trim().toLowerCase())))
   ) {
     return false;
   }
@@ -1063,13 +1084,21 @@ export function canPerformEntityAction(
     isSupervisorPosition(actor);
   const isFieldStaff =
     actor.role === "worker" || actor.role === "inspector" ||
-    (actor.role === "emergency" && actor.position === "Maintenance Worker");
+    actor.role === "emergency";
   if (
-    action === "approve-work" &&
+    (action === "approve-work" || action === "reject-work") &&
     ["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
       .includes(entity)
   ) {
-    if (entity === "resident-reports") return isComplaintHandlingSupervisor(actor);
+    if (entity === "resident-reports") {
+      // Administrators, Borough/Regional Directors, ordinary management and
+      // complaint-handling supervisors may approve or send back completed
+      // work. CPM Supervisors are scope reviewers, not complaint reviewers.
+      return actor.role === "administrator" ||
+        isBoroughDirector(actor) ||
+        isComplaintHandlingSupervisor(actor) ||
+        (actor.role === "management" && actor.position !== "CPM Supervisor");
+    }
     return isSupervisor;
   }
   if (actor.role === "emergency" && entity === "emergency-jobs") {
@@ -1289,6 +1318,7 @@ export function isValidEntityTransition(
       clear: ["resolved"],
       complete: ["in_progress"],
       "approve-work": ["done", "resolved"],
+      "reject-work": ["done"],
     },
     "building-violations": {
       approve: ["submitted"],

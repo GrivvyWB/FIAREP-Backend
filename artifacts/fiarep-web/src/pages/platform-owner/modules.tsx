@@ -54,7 +54,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "hud-inspections", name: "HUD Inspections", description: "HUD inspection workflow", icon: ShieldCheck },
   { id: "estimates", name: "Estimates", description: "Cost estimates", icon: FileBarChart },
   { id: "repairs", name: "Repairs", description: "Repair workflow", icon: Wrench },
-  { id: "projects", name: "Projects", description: "Project management", icon: Building2 },
+  { id: "projects", name: "Projects", description: "Project area (pick the individual tools below)", icon: Building2 },
   { id: "reports", name: "Reports", description: "Reports and records", icon: FileBarChart },
   { id: "report-upload", name: "Upload Report", description: "Report uploads", icon: FileBarChart },
   { id: "calendar", name: "Calendar", description: "Organization calendar", icon: Home },
@@ -77,14 +77,50 @@ const MODULES: ModuleDefinition[] = [
   { id: "shared-data", name: "Shared Data", description: "Shared platform data", icon: Package },
 ];
 
+// Per-tool, per-client construction-PM switches. Each is independent and OFF
+// by default; the platform owner turns on exactly the tools a client gets.
+type ProjectTool = { id: string; name: string };
+const PROJECT_TOOLS: ProjectTool[] = [
+  { id: "proj-new", name: "New Project (start a project)" },
+  { id: "proj-room", name: "Add room / area" },
+  { id: "proj-rates", name: "Project rates" },
+  { id: "proj-checklist", name: "Renovation checklist" },
+  { id: "proj-inspection", name: "Building inspection" },
+  { id: "proj-estimate", name: "Nature of Work & Cost Estimate" },
+  { id: "proj-scope", name: "Scope of Work (Divisions)" },
+  { id: "proj-intake", name: "Intake Report" },
+  { id: "proj-elevator", name: "Elevator Services" },
+  { id: "proj-photos", name: "Photos" },
+  { id: "proj-scans", name: "Scans" },
+  { id: "proj-roofplan", name: "Roof plan sketch" },
+  { id: "proj-compass", name: "Compass" },
+];
+
+function configuredProjectTools(organization: OrganizationWithUsage): Record<string, boolean> {
+  const value = organization.features?.modules;
+  const saved = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  return PROJECT_TOOLS.reduce<Record<string, boolean>>((result, tool) => {
+    result[tool.id] = saved[tool.id] === true; // opt-in: OFF unless explicitly on
+    return result;
+  }, {});
+}
+
 function configuredModules(organization: OrganizationWithUsage): Record<string, boolean> {
   const value = organization.features?.modules;
   const saved = value && typeof value === "object" && !Array.isArray(value)
     ? value as Record<string, unknown>
     : {};
 
+  // These modules are opt-in: they read as OFF until explicitly enabled for
+  // the client, so the switch reflects the true default.
+  const OPT_IN = new Set<string>([]);
   return MODULES.reduce<Record<string, boolean>>((result, module) => {
-    result[module.id] = typeof saved[module.id] === "boolean" ? saved[module.id] as boolean : true;
+    const value = saved[module.id];
+    result[module.id] = typeof value === "boolean"
+      ? value as boolean
+      : !OPT_IN.has(module.id);
     return result;
   }, {});
 }
@@ -96,6 +132,7 @@ export default function OwnerModules() {
   const { toast } = useToast();
   const [organizationId, setOrganizationId] = useState("");
   const [modules, setModules] = useState<Record<string, boolean>>({});
+  const [projectTools, setProjectTools] = useState<Record<string, boolean>>({});
   const [deletionEnabled, setDeletionEnabled] = useState(false);
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
   const [deletionSaving, setDeletionSaving] = useState(false);
@@ -118,6 +155,7 @@ export default function OwnerModules() {
   useEffect(() => {
     if (!organization) return;
     setModules(configuredModules(organization));
+    setProjectTools(configuredProjectTools(organization));
     setDeletionEnabled(organization.features?.deletionEnabled === true);
     const configured = organization.features?.modules;
     setResidentPhotoAiEnabled(
@@ -133,6 +171,11 @@ export default function OwnerModules() {
 
   const toggleModule = (moduleId: string, enabled: boolean) => {
     setModules((current) => ({ ...current, [moduleId]: enabled }));
+    setDirty(true);
+  };
+
+  const toggleProjectTool = (toolId: string, enabled: boolean) => {
+    setProjectTools((current) => ({ ...current, [toolId]: enabled }));
     setDirty(true);
   };
 
@@ -187,7 +230,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, residentPhotoAiViolationReader: residentPhotoAiEnabled },
+            modules: { ...modules, ...projectTools, residentPhotoAiViolationReader: residentPhotoAiEnabled },
             deletionEnabled,
           },
         },
@@ -393,6 +436,52 @@ export default function OwnerModules() {
               </div>
             </section>
           </div>
+
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="font-semibold text-slate-950">Project Tools</h2>
+                <p className="mt-0.5 text-xs text-slate-500">
+                  Turn on exactly the construction-PM tools this client gets. Each is independent and off until you enable it. Requires the Projects module.
+                </p>
+              </div>
+              <span className="rounded bg-blue-50 px-2 py-1 text-[10px] font-bold tracking-wider text-[#185FA5]">
+                {PROJECT_TOOLS.filter((tool) => projectTools[tool.id]).length} ENABLED
+              </span>
+            </div>
+            <div>
+              {PROJECT_TOOLS.map((tool) => {
+                const enabled = projectTools[tool.id] === true;
+                return (
+                  <div
+                    key={tool.id}
+                    className={`flex min-h-16 items-center gap-3 border-b border-slate-100 px-5 py-3 last:border-b-0 transition-colors hover:bg-slate-50 ${
+                      enabled ? "" : "opacity-60"
+                    }`}
+                  >
+                    <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                      enabled ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                    }`}>
+                      <HardHat className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900">{tool.name}</p>
+                    </div>
+                    <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                      enabled ? "text-emerald-700" : "text-slate-400"
+                    }`}>
+                      {enabled ? "Enabled" : "Disabled"}
+                    </span>
+                    <Switch
+                      checked={enabled}
+                      onCheckedChange={(checked) => toggleProjectTool(tool.id, checked)}
+                      aria-label={`${enabled ? "Disable" : "Enable"} ${tool.name}`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </section>
           <OrganizationDialog
             open={settingsOpen}
             onOpenChange={setSettingsOpen}

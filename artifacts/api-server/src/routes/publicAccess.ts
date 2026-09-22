@@ -19,6 +19,7 @@ import { fileStorage } from "../lib/fileStorage";
 import { isBoroughDirector } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { residentReportRecipientIds } from "../lib/notificationVisibility";
+import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
 import { rateLimit } from "../lib/rateLimit";
 import { lookupNychaResidentialAddress } from "../lib/nycProperty";
 import { UpdateResidentReportPhotoBody } from "@workspace/api-zod";
@@ -254,6 +255,10 @@ router.post("/v1/public/resident-reports/:complaintNo/photos/confirm", async (re
     return created ?? null;
   });
   if (!photo) { res.status(409).json({ error: "Photo confirmation is no longer available" }); return; }
+  // Automatically read the photo for a violation code the moment it lands, so
+  // supervisors/management see a real HPD/DOB code without pressing a button.
+  // Fire-and-forget: it must never delay or break the resident's upload.
+  void classifyResidentPhotoAndSave(auth.access.tenantId, photo.id);
   res.status(201).json({ id: photo.id, contentType: photo.contentType });
 });
 

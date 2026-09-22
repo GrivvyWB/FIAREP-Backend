@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, getCurrentPosition, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, listManpowerRequests, performEntityAction, type BuildingViolation, type ResidentReport, type ManpowerRequest } from '../lib/store';
+import { getCurrentActor, getCurrentPosition, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, listManpowerRequests, performEntityAction, markReportSeen, type BuildingViolation, type ResidentReport, type ManpowerRequest } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, uploadPhoto, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -50,6 +50,9 @@ export default function MyJobs() {
       const myDevs = (await developmentsForStaff(a.name || '').catch(() => [])).map((d) => (d || '').trim().toLowerCase()).filter(Boolean);
       const inMyDevs = (dev?: string) => { const d = (dev || '').trim().toLowerCase(); return !d || myDevs.length === 0 || myDevs.includes(d); };
       const all = await listResidentReports();
+       // NOTE: 'seen' only affects the unread count on the home screen. A job
+       // assigned to me must stay openable in My Jobs even after I've viewed it,
+       // so we do NOT filter it out here by seen-state.
        setResJobs(all.filter((r) => r.status !== 'resolved' && r.assignedStaffId === a.id && inMyDevs(r.development)));
        setInHouseJobs((await listManpowerRequests()).filter((r) => r.assignedStaffId === a.id && ['dispatched', 'in_progress'].includes(r.status) && inMyDevs(r.development)));
     });
@@ -180,25 +183,21 @@ export default function MyJobs() {
           <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>Resident requests ({resJobs.length})</Text>
           {resJobs.map((r) => (
             <View key={r.id} style={[ui.card, { gap: 4, marginTop: 8 }]}>
-              <Pressable onPress={() => router.push('/report-detail?id=' + encodeURIComponent(r.id))}>
+              <Pressable onPress={() => { markReportSeen(r.id).catch(() => undefined); router.push('/report-detail?id=' + encodeURIComponent(r.id)); }}>
                 <Text style={{ fontSize: 15, fontWeight: '600' }}>{r.location || r.unit || r.address || 'Request'}</Text>
+                {!!r.address && <Text style={ui.listSub}>{r.address}{r.unit ? ' \u00b7 ' + r.unit : ''}</Text>}
                 {!!r.description && <Text style={ui.listSub} numberOfLines={2}>{r.description}</Text>}
               </Pressable>
+              {position !== 'Elevator Service' && (
+                <Pressable style={[ui.btn, { marginTop: 6 }]} onPress={() => { markReportSeen(r.id).catch(() => undefined); router.push('/report-detail?id=' + encodeURIComponent(r.id)); }}>
+                  <Text style={ui.btnText}>{r.status === 'in_progress' ? 'Continue \u2014 add photo & complete' : 'Open job \u2014 start, photo, complete'}</Text>
+                </Pressable>
+              )}
               {r.clearedByMgmt && canDelete && (
                 <Pressable onPress={() => Alert.alert('Remove this job?', 'Management cleared it. Remove it from your list?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { await deleteResidentReport(r.id); load(); } }])} style={{ marginTop: 4 }}>
                   <Text style={{ color: '#c0392b', fontWeight: '600', fontSize: 13 }}>Remove (cleared by management)</Text>
                 </Pressable>
               )}
-              {position !== 'Elevator Service' && (releaseOpenId === r.id ? (
-                <View style={{ gap: 8, marginTop: 6 }}>
-                  <Text style={ui.label}>Update before release</Text>
-                  <TextInput style={[ui.input, { minHeight: 60, textAlignVertical: 'top' }]} value={releaseNote} onChangeText={setReleaseNote} placeholder="What is the current update?" multiline />
-                  <Pressable style={[ui.btn, busy && { opacity: 0.6 }]} onPress={() => releaseResident(r.id)} disabled={busy}><Text style={ui.btnText}>Release assignment</Text></Pressable>
-                  <Pressable onPress={() => { setReleaseOpenId(null); setReleaseNote(''); }}><Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>Cancel</Text></Pressable>
-                </View>
-              ) : (
-                <Pressable style={ui.btnOutline} onPress={() => { setReleaseOpenId(r.id); setReleaseNote(''); }}><Text style={ui.btnOutlineText}>Release with update</Text></Pressable>
-              ))}
             </View>
           ))}
           <Text style={[ui.label, { marginTop: 16, fontWeight: '700' }]}>Inspection repairs</Text>

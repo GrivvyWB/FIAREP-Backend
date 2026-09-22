@@ -14,10 +14,27 @@ import {
   listManpowerRequests,
 } from '../lib/store';
 import { ui } from '../lib/ui';
+import { useModuleAccess } from '../lib/module-access';
+
+// A staff member can start a construction-PM project when the org has the
+// Projects module enabled (controlled from Platform -> Module Management) AND
+// their position is one the company assigns to project work. CPM is the
+// primary one; construction/PM supervisor positions also qualify.
+const PROJECT_POSITIONS = new Set([
+  'CPM',
+  'CONSTRUCTION PROJECT MANAGER',
+  'PROJECT MANAGER',
+  'CONSTRUCTION SUPERVISOR',
+  'CPM SUPERVISOR',
+]);
+function canStartProject(position: string): boolean {
+  return PROJECT_POSITIONS.has((position || '').trim().toUpperCase());
+}
 
 export default function WorkerHome() {
   const router = useRouter();
   const { refresh } = useAppMode();
+  const modules = useModuleAccess();
   const [jobCount, setJobCount] = useState(0);
   const [position, setPosition] = useState('');
   const [isEmergencyMaintenance, setIsEmergencyMaintenance] = useState(false);
@@ -72,6 +89,11 @@ export default function WorkerHome() {
       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
       </Pressable>
+      {modules['proj-new'] && canStartProject(position) && (
+        <Pressable style={ui.btn} onPress={() => router.push('/?new=1')}>
+          <Text style={ui.btnText}>+ New Project</Text>
+        </Pressable>
+      )}
       {position === 'Elevator Service' && (
         <Pressable style={ui.btn} onPress={() => router.push('/elevator-jobs')}>
           <Text style={ui.btnText}>Elevator Jobs</Text>

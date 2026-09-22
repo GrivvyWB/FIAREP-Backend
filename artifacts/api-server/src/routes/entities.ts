@@ -1292,6 +1292,7 @@ router.post(
       clear: "resolved",
       complete: "done",
       "approve-work": "work_approved",
+      "reject-work": "in_progress",
     },
     "building-violations": {
       approve: "approved",
