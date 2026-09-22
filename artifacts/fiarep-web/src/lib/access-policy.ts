@@ -13,7 +13,7 @@ export type OrganizationModules = Record<string, boolean>;
 
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
 const UPPER_MANAGEMENT_POSITIONS = new Set(["Director", "Borough Director", "Regional Director", "Assistant Regional Director"]);
-const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "shared-data"]);
+const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "shared-data"]);
 const ELEVATOR_POSITIONS = new Set(["Elevator Supervisor", "Elevator Service"]);
 const HUD_REVIEW_POSITIONS = new Set(["Supervisor Inspector"]);
 // Modules that are OFF until the platform owner enables them (none today;
@@ -55,6 +55,9 @@ export function hasModuleAccess(
   // Opt-in modules are OFF until the platform owner enables them for the
   // organization (Platform -> Module Management). Keeps parity with mobile.
   if (OPT_IN_MODULES.has(module) && organizationModules?.[module] !== true) return false;
+  // The Team (staff management) page is restricted to Human Resources only —
+  // no other role, including Administrator or Borough Director, sees it.
+  if (module === "team") return staff.role === "human_resources";
   const position = staff.position?.trim() || "";
   const exactWorkflowShell = new Set(["dashboard", "calendar", "notifications", "settings"]);
   if (isSupervisor(staff) && (module === "reports" || module === "violations")) {
@@ -98,7 +101,8 @@ export function hasModuleAccess(
     return false;
   }
   if (staff.role === "human_resources") {
-    return module === "dashboard" || module === "team" ||
+    // "team" is handled by the HR-only rule above; excluded here to keep the type exhaustive.
+    return module === "dashboard" ||
       module === "leave" || module === "hr" || module === "notifications" || module === "settings";
   }
   if (staff.role === "procurement") return module === "procurement";
