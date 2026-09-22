@@ -1,0 +1,893 @@
+diff --git a/artifacts/api-server/src/lib/domain.ts b/artifacts/api-server/src/lib/domain.ts
+index e4455c8..49b7a09 100644
+--- a/artifacts/api-server/src/lib/domain.ts
++++ b/artifacts/api-server/src/lib/domain.ts
+@@ -191,6 +191,30 @@ export function isBoroughDirector(actor: Actor): boolean {
+   return normalizedPosition(actor.position) === "borough director";
+ }
+ 
++/**
++ * Superintendent Ⓔ carries a special glyph (Ⓔ, U+24BA) that a data round-trip
++ * can mangle. Match tolerantly so a stored variant still resolves.
++ */
++export function isSuperintendentE(actor: Pick<Actor, "position">): boolean {
++  const p = normalizedPosition(actor.position || "");
++  if (!p.startsWith("superintendent")) return false;
++  const marker = p.slice("superintendent".length).trim();
++  return marker === "\u24ba" || marker === "e" || marker === "(e)" ||
++    marker === "[e]" || marker === "\u24d4";
++}
++
++/**
++ * Any management supervisor (a management-role account whose position is a
++ * supervisor or superintendent title) may view the full Resident Reports page
++ * across all developments.
++ */
++export function isManagementSupervisor(actor: Pick<Actor, "role" | "position">): boolean {
++  if (actor.role !== "management") return false;
++  const p = normalizedPosition(actor.position || "");
++  return p.includes("supervisor") ||
++    p.startsWith("superintendent");
++}
++
+ export function isElevated(actor: Actor): boolean {
+   const position = normalizedPosition(actor.position);
+   return (
+@@ -243,13 +267,13 @@ export function isElevatorFieldStaff(actor: Actor): boolean {
+ export function isSupervisorPosition(actor: Actor): boolean {
+   return actor.position.toLowerCase().includes("supervisor") ||
+     actor.position === "Superintendent" ||
+-    actor.position === "Superintendent Ⓔ";
++    isSuperintendentE(actor);
+ }
+ 
+ export function isComplaintHandlingSupervisor(
+   actor: Pick<Actor, "role" | "position">,
+ ): boolean {
+-  if (actor.position === "Superintendent Ⓔ") return true;
++  if (isSuperintendentE(actor)) return true;
+   return actor.role === "management" &&
+     actor.position !== "CPM Supervisor" &&
+     (
+@@ -403,8 +427,7 @@ export function entityDevelopmentAllowed(
+ ): boolean {
+   if (
+     entity === "resident-reports" &&
+-    actor.role === "management" &&
+-    actor.position === "Superintendent Ⓔ"
++    isManagementSupervisor(actor)
+   ) {
+     return true;
+   }
+@@ -708,6 +731,8 @@ const TRADE_SUPERVISOR_POSITIONS = new Set([
+   "Elevator Supervisor",
+   "Painter Supervisor",
+   "Carpenter Supervisor",
++  "Heating Service Supervisor",
++  "Bricklayer Supervisor",
+ ]);
+ 
+ const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
+@@ -730,6 +755,12 @@ const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
+   ["Supervisor Electrician", "Electrician"],
+   ["Painter Supervisor", "Painter"],
+   ["Supervisor Painter", "Painter"],
++  ["Heating Service Supervisor", "Heating Service"],
++  ["Supervisor Heating Service", "Heating Service"],
++  ["Heat Plant Supervisor", "Heating Service"],
++  ["Bricklayer Supervisor", "Bricklayer"],
++  ["Supervisor Bricklayer", "Bricklayer"],
++  ["Mason Supervisor", "Bricklayer"],
+   ["Maintenance Supervisor", "Maintenance Worker"],
+   ["Grounds Supervisor", "Groundskeeper"],
+ ]);
+@@ -766,6 +797,8 @@ const SUPERVISED_LEAVE_POSITIONS = new Map<string, Set<string>>([
+   ["Elevator Supervisor", new Set(["Elevator Service"])],
+   ["Painter Supervisor", new Set(["Painter"])],
+   ["Carpenter Supervisor", new Set(["Carpenter"])],
++  ["Heating Service Supervisor", new Set(["Heating Service"])],
++  ["Bricklayer Supervisor", new Set(["Bricklayer"])],
+   ["Supervisor Inspector", new Set(["Inspector", "CPM"])],
+ ]);
+ 
+@@ -858,7 +891,7 @@ export function isAssignmentAuthority(actor: Actor): boolean {
+   return actor.role === "management" ||
+     actor.role === "administrator" ||
+     isBoroughDirector(actor) ||
+-    actor.position === "Superintendent Ⓔ";
++    isSuperintendentE(actor);
+ }
+ 
+ export function canAssignStaff(
+@@ -896,7 +929,7 @@ export function canSuperintendentEAssignResidentReport(
+     position: string | null;
+   },
+ ): boolean {
+-  return actor.position === "Superintendent Ⓔ" &&
++  return isSuperintendentE(actor) &&
+     target.id !== actor.id &&
+     target.position !== "Borough Director" &&
+     ASSIGNABLE_STAFF_ROLES.has(target.role);
+diff --git a/artifacts/api-server/src/lib/hrAuthorization.ts b/artifacts/api-server/src/lib/hrAuthorization.ts
+index 17f9275..04950e7 100644
+--- a/artifacts/api-server/src/lib/hrAuthorization.ts
++++ b/artifacts/api-server/src/lib/hrAuthorization.ts
+@@ -29,6 +29,10 @@ export async function canReadEntityRecordForActor(
+       (row.entity === "resident-reports" || row.entity === "building-violations")
+     ) {
+       if (row.deleted || !canReadEntity(actor, row.entity)) return false;
++      // Resident Reports are visible to every management supervisor across all
++      // developments (the Resident Reports page is org-wide for supervisors).
++      // Building violations stay scoped to the supervisor's own developments.
++      if (row.entity === "resident-reports") return true;
+       if (
+         actor.developments.length > 0 &&
+         row.development &&
+diff --git a/artifacts/api-server/src/routes/entities.ts b/artifacts/api-server/src/routes/entities.ts
+index 2212a29..d241169 100644
+--- a/artifacts/api-server/src/routes/entities.ts
++++ b/artifacts/api-server/src/routes/entities.ts
+@@ -569,6 +569,9 @@ router.post("/v1/:entity", async (req, res, next) => {
+       "Carpenter",
+       "Electrician",
+       "Elevator Service",
++      "Painter",
++      "Heating Service",
++      "Bricklayer",
+     ]);
+     const supervisorPositions: Record<string, readonly string[]> = {
+       Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
+@@ -577,6 +580,9 @@ router.post("/v1/:entity", async (req, res, next) => {
+       Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
+       Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
+       "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
++      Painter: ["Painter Supervisor", "Supervisor Painter"],
++      "Heating Service": ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor"],
++      Bricklayer: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor"],
+     };
+     if (
+       !["resident-reports", "building-violations"].includes(sourceEntity) ||
+@@ -663,6 +669,13 @@ router.post("/v1/:entity", async (req, res, next) => {
+       source.state["issue"] ||
+       "",
+     );
++    // Carry the location fields the assigned tradesperson needs to find and do
++    // the job (no pricing or procurement scope — just where and what).
++    rawState["address"] = String(
++      source.state["address"] || source.state["building"] || "",
++    );
++    rawState["unit"] = String(source.state["unit"] || "");
++    rawState["location"] = String(source.state["location"] || "");
+     rawState["receiverSupervisorId"] = receiver.id;
+     rawState["receiverSupervisorName"] = receiver.name;
+     rawState["requestedByStaffId"] = actor.id;
+diff --git a/artifacts/api-server/src/routes/scores.ts b/artifacts/api-server/src/routes/scores.ts
+index ad0a4d2..a568bb4 100644
+--- a/artifacts/api-server/src/routes/scores.ts
++++ b/artifacts/api-server/src/routes/scores.ts
+@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
+ import { and, eq, inArray } from "drizzle-orm";
+ import { db, entityRecords, organizationProperties } from "@workspace/db";
+ import { GetScoresResponse } from "@workspace/api-zod";
+-import { entityDevelopmentAllowed, isBoroughDirector, isElevated } from "../lib/domain";
++import { entityDevelopmentAllowed, isBoroughDirector, isElevated, isManagementSupervisor } from "../lib/domain";
+ import { actorFrom, requireAuth } from "../middlewares/auth";
+ import {
+   calculateBuildingScores,
+@@ -85,7 +85,7 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
+     developments.map((score) => score.development.trim().toLowerCase()),
+   );
+   const baselineDevelopments =
+-    actor.role === "administrator" || isElevated(actor)
++    actor.role === "administrator" || isElevated(actor) || isManagementSupervisor(actor)
+       ? activeProperties.map((property) => property.development ?? "")
+       : actor.developments;
+   for (const development of baselineDevelopments) {
+diff --git a/artifacts/fiarep-mobile/app/_layout.tsx b/artifacts/fiarep-mobile/app/_layout.tsx
+index e3dbc6e..6139ab1 100644
+--- a/artifacts/fiarep-mobile/app/_layout.tsx
++++ b/artifacts/fiarep-mobile/app/_layout.tsx
+@@ -211,6 +211,9 @@ function AdministratorStack() {
+       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
+       <Stack.Screen name="index" options={{ title: 'Projects' }} />
+       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
++      <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
++      <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
++      <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
+       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
+       <Stack.Screen name="settings" options={{ title: 'Default rates' }} />
+       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
+@@ -247,6 +250,9 @@ function InspectorStack() {
+       <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
+       <Stack.Screen name="index" options={{ title: 'Projects' }} />
+       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
++      <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
++      <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
++      <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
+       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
+       <Stack.Screen name="settings" options={{ title: 'Default rates' }} />
+       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
+@@ -273,6 +279,9 @@ function ManagementStack() {
+       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
+       <Stack.Screen name="index" options={{ title: 'Projects' }} />
+       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
++      <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
++      <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
++      <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
+       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
+       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
+       <Stack.Screen name="project/roof" options={{ title: 'Roof lookup', presentation: 'modal' }} />
+@@ -316,6 +325,7 @@ function ManagementStack() {
+ function WorkerStack() {
+   return (
+     <Stack initialRouteName="worker-home">
++      <Stack.Screen name="elevator-jobs" options={{ title: 'My Elevator Jobs' }} />
+       <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false }} />
+       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
+       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
+diff --git a/artifacts/fiarep-mobile/app/cpm-home.tsx b/artifacts/fiarep-mobile/app/cpm-home.tsx
+index 681727c..910ba9e 100644
+--- a/artifacts/fiarep-mobile/app/cpm-home.tsx
++++ b/artifacts/fiarep-mobile/app/cpm-home.tsx
+@@ -17,22 +17,26 @@ export default function CpmHome() {
+   const [position, setPosition] = useState('');
+   useFocusEffect(useCallback(() => {
+     (async () => {
+-      const a = await getCurrentActor();
+-      const nextPosition = await getCurrentPosition();
+-      const normalized = nextPosition.trim().toLowerCase();
+-      let c = normalized === 'cpm supervisor' ? 0 : await unreadCount('inspector');
+-      if (a.id) c += await unreadCount(a.id);
+-      if (a.name) c += await unreadCount(a.name);
+-      setUnread(c);
+-      if (normalized === 'cpm supervisor') {
+-        router.replace('/management-home');
+-        return;
++      try {
++        const a = await getCurrentActor();
++        const nextPosition = (await getCurrentPosition()) || '';
++        const normalized = nextPosition.trim().toLowerCase();
++        let c = normalized === 'cpm supervisor' ? 0 : await unreadCount('inspector').catch(() => 0);
++        if (a?.id) c += await unreadCount(a.id).catch(() => 0);
++        if (a?.name) c += await unreadCount(a.name).catch(() => 0);
++        setUnread(c);
++        if (normalized === 'cpm supervisor') {
++          router.replace('/management-home');
++          return;
++        }
++        if (normalized !== 'cpm' && normalized !== 'inspector') {
++          router.replace(mode === 'management' ? '/management-home' : '/');
++          return;
++        }
++        setPosition(nextPosition);
++      } catch (e) {
++        // Data not ready / offline — keep the screen usable rather than blank.
+       }
+-      if (normalized !== 'cpm' && normalized !== 'inspector') {
+-        router.replace(mode === 'management' ? '/management-home' : '/');
+-        return;
+-      }
+-      setPosition(nextPosition);
+     })();
+   }, [mode, router]));
+   const normalizedPosition = position.trim().toLowerCase();
+diff --git a/artifacts/fiarep-mobile/app/dispatch-job.tsx b/artifacts/fiarep-mobile/app/dispatch-job.tsx
+index fe4989b..69a9ca0 100644
+--- a/artifacts/fiarep-mobile/app/dispatch-job.tsx
++++ b/artifacts/fiarep-mobile/app/dispatch-job.tsx
+@@ -21,6 +21,7 @@ export default function DispatchJob() {
+   const [openTrade, setOpenTrade] = useState<string | null>(null);
+   const [developments, setDevelopments] = useState<string[]>([]);
+   const [development, setDevelopment] = useState('');
++  const [devQuery, setDevQuery] = useState('');
+ 
+   useFocusEffect(useCallback(() => { listAssignableByTrade().then(setAssignable); getSessionIdentity().then((i) => setDevelopments(i?.developments || [])); }, []));
+ 
+@@ -76,8 +77,22 @@ export default function DispatchJob() {
+       )}
+ 
+       <Text style={[ui.label, { marginTop: 12 }]}>Job address</Text>
+-      {developments.length > 1 && <View><Text style={ui.label}>Development</Text><ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ gap: 8 }} testID="dispatch-development-selector">{developments.map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</ScrollView></View>}
+-      <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 55 Hall St" />
++      {developments.length > 1 && (
++        <View testID="dispatch-development-selector">
++          <Text style={ui.label}>Development</Text>
++          <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments" autoCorrect={false} />
++          <ScrollView style={{ maxHeight: 200 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
++            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 }}>
++              {developments.filter((item) => item.toLowerCase().includes(devQuery.trim().toLowerCase())).map((item) => (
++                <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => { setDevelopment(item); setDevQuery(''); }}>
++                  <Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text>
++                </Pressable>
++              ))}
++            </View>
++          </ScrollView>
++        </View>
++      )}
++      <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 55 Hall St" development={development} />
+ 
+       <Text style={[ui.label, { marginTop: 12 }]}>Unit (optional)</Text>
+       <TextInput style={ui.input} value={unit} onChangeText={setUnit} placeholder="e.g. Apt 2B" />
+diff --git a/artifacts/fiarep-mobile/app/elevator-jobs.tsx b/artifacts/fiarep-mobile/app/elevator-jobs.tsx
+new file mode 100644
+index 0000000..f5761f2
+--- /dev/null
++++ b/artifacts/fiarep-mobile/app/elevator-jobs.tsx
+@@ -0,0 +1,85 @@
++import { useCallback, useState } from 'react';
++import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
++import { useFocusEffect, useRouter } from 'expo-router';
++import {
++  getCurrentActor,
++  listElevatorJobsForMechanic,
++  setElevatorProgress,
++  type ElevatorJob,
++} from '../lib/store';
++import { ui, ACCENT } from '../lib/ui';
++
++function fmt(iso?: string): string {
++  try { return iso ? new Date(iso).toLocaleString() : ''; } catch { return iso || ''; }
++}
++
++// Mechanic-facing list of the elevator jobs assigned to the signed-in
++// Elevator Service worker. Each job opens the (no-pricing) Elevator Services
++// inspection form keyed to that job, and carries the On my way / Started
++// progress stamps the Elevator Supervisor and management see.
++export default function ElevatorJobs() {
++  const router = useRouter();
++  const [jobs, setJobs] = useState<ElevatorJob[]>([]);
++
++  const load = useCallback(() => {
++    void (async () => {
++      const actor = await getCurrentActor().catch(() => null);
++      if (!actor) { setJobs([]); return; }
++      const list = await listElevatorJobsForMechanic(actor.name || '', actor.id).catch(() => []);
++      setJobs(list);
++    })();
++  }, []);
++  useFocusEffect(load);
++
++  const active = jobs.filter((j) => j.status !== 'done');
++
++  return (
++    <ScrollView contentContainerStyle={ui.wrap}>
++      <Text style={ui.h}>My Elevator Jobs</Text>
++      <Text style={ui.label}>Jobs assigned to you. Open one to fill the Elevator Services report, add photos, and mark it complete.</Text>
++
++      {active.length > 0 && (
++        <View style={{ backgroundColor: '#B4741A', borderRadius: 10, padding: 12, marginTop: 8 }}>
++          <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{active.length} ACTIVE ELEVATOR JOB{active.length > 1 ? 'S' : ''}</Text>
++          <Text style={{ color: '#fff', fontSize: 12, marginTop: 2 }}>Complete each job's report to close it out.</Text>
++        </View>
++      )}
++
++      {jobs.length === 0 && <Text style={[ui.empty, { marginTop: 20 }]}>No elevator jobs assigned to you yet.</Text>}
++
++      {jobs.map((j) => (
++        <View key={j.id} style={[ui.card, { gap: 6, marginTop: 10 }]}>
++          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
++            <Text style={{ fontSize: 16, fontWeight: '700', color: ACCENT }}>{j.elId}</Text>
++            <Text style={{ fontSize: 12, fontWeight: '700', color: j.status === 'done' ? '#1a8f4c' : '#B4741A' }}>{j.status === 'done' ? 'Done' : 'ACTIVE'}</Text>
++          </View>
++          <Text style={{ fontSize: 15 }}>{j.address}{j.unit ? ' · ' + j.unit : ''}</Text>
++          {!!j.issue && <Text style={ui.listSub}>Issue: {j.issue}</Text>}
++          {!!j.refNum && <Text style={ui.listSub}>Ref: {j.refNum}</Text>}
++          <Text style={ui.listSub}>Assigned by {j.assignedBy}  {fmt(j.assignedAt)}</Text>
++
++          <View style={{ gap: 3, marginTop: 4 }}>
++            {([['Assigned', j.assignedAt], ['On my way', j.onMyWayAt], ['Started', j.startedAt], ['Completed', j.completedAt]] as Array<[string, string | undefined]>).map(([label, ts]) => (
++              <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
++                <Text style={{ fontSize: 13, color: ts ? '#1a8f4c' : '#bbb' }}>{ts ? '✓ ' : '○ '}{label}</Text>
++                <Text style={{ fontSize: 12, color: '#999' }}>{ts ? fmt(ts) : 'pending'}</Text>
++              </View>
++            ))}
++          </View>
++
++          {j.status !== 'done' && (
++            <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
++              <Pressable disabled={!!j.onMyWayAt} style={[ui.btnOutline, { flex: 1 }, j.onMyWayAt && { opacity: 0.45 }]} onPress={async () => { await setElevatorProgress(j.id, 'onMyWay'); load(); }}><Text style={ui.btnOutlineText}>{j.onMyWayAt ? 'On my way ✓' : 'On my way'}</Text></Pressable>
++              <Pressable disabled={!!j.startedAt} style={[ui.btnOutline, { flex: 1 }, j.startedAt && { opacity: 0.45 }]} onPress={async () => { await setElevatorProgress(j.id, 'started'); load(); }}><Text style={ui.btnOutlineText}>{j.startedAt ? 'Started ✓' : 'Started'}</Text></Pressable>
++            </View>
++          )}
++
++          <Pressable style={[ui.btn, { marginTop: 6 }]} onPress={() => router.push('/project/elevator?projectId=' + encodeURIComponent(j.id))}>
++            <Text style={ui.btnText}>{j.status === 'done' ? 'View report' : 'Open Elevator Services report'}</Text>
++          </Pressable>
++        </View>
++      ))}
++      <View style={{ height: 40 }} />
++    </ScrollView>
++  );
++}
+diff --git a/artifacts/fiarep-mobile/app/index.tsx b/artifacts/fiarep-mobile/app/index.tsx
+index 62f8ac5..9aa54bb 100644
+--- a/artifacts/fiarep-mobile/app/index.tsx
++++ b/artifacts/fiarep-mobile/app/index.tsx
+@@ -23,6 +23,7 @@ export default function Projects() {
+   const [adding, setAdding] = useState(false);
+   const [developments, setDevelopments] = useState<string[]>([]);
+   const [development, setDevelopment] = useState('');
++  const [devQuery, setDevQuery] = useState('');
+   const [position, setPosition] = useState('');
+ 
+   const load = useCallback(() => {
+@@ -66,7 +67,10 @@ export default function Projects() {
+           <View><Text style={ui.label}>Client (optional)</Text>
+             <TextInput style={ui.input} value={client} onChangeText={setClient} placeholder="Jane Doe" /></View>
+           {developments.length > 1 && <View><Text style={ui.label}>Development</Text>
+-            <View style={ui.row}>{developments.map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</View>
++            <TextInput style={[ui.input, { marginBottom: 8 }]} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments" autoCapitalize="characters" />
++            <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
++            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{developments.filter((item) => !devQuery.trim() || item.toLowerCase().includes(devQuery.trim().toLowerCase())).map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</View>
++            </ScrollView>
+           </View>}
+           <View style={ui.row}>
+             <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => setAdding(false)}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
+diff --git a/artifacts/fiarep-mobile/app/management.tsx b/artifacts/fiarep-mobile/app/management.tsx
+index ef3e02d..5cdda44 100644
+--- a/artifacts/fiarep-mobile/app/management.tsx
++++ b/artifacts/fiarep-mobile/app/management.tsx
+@@ -232,7 +232,9 @@ export default function Management() {
+   // Management with assigned developments edits only reports in those developments; others are read-only.
+   function canEdit(r: ResidentReport): boolean {
+     if (mode === 'administrator') return true;
+-    if (currentPosition === 'Superintendent Ⓔ') return true;
++    const pos = (currentPosition || '').trim().toLowerCase();
++    // Any management supervisor / superintendent sees and edits all reports.
++    if (pos.includes('supervisor') || pos.startsWith('superintendent')) return true;
+     if (myDevs.length === 0) return true;
+     const dev = (r.development || '').trim().toLowerCase();
+     return myDevs.some((d) => (d || '').trim().toLowerCase() === dev);
+diff --git a/artifacts/fiarep-mobile/app/my-jobs.tsx b/artifacts/fiarep-mobile/app/my-jobs.tsx
+index 3c8b524..cef345c 100644
+--- a/artifacts/fiarep-mobile/app/my-jobs.tsx
++++ b/artifacts/fiarep-mobile/app/my-jobs.tsx
+@@ -117,9 +117,12 @@ export default function MyJobs() {
+       <Text style={ui.h}>My Jobs</Text>
+        <Text style={ui.label}>Repairs assigned to you. Open one, do the repair, then mark it done with a note and a photo.</Text>
+        {inHouseJobs.length > 0 && <>
+-         <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>In-house procurement requests ({inHouseJobs.length})</Text>
++         <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>Assigned trade work ({inHouseJobs.length})</Text>
+          {inHouseJobs.map((job) => <View key={job.id} style={[ui.card, { gap: 7, marginTop: 8 }]}>
+            <Text style={{ fontWeight: '700' }}>{job.requestedTrade} · {job.sourceTitle || 'Assigned work'}</Text>
++           {(!!job.address || !!job.unit) && <Text style={{ fontSize: 14 }}>{[job.address, job.unit].filter(Boolean).join(' · ')}</Text>}
++           {!!job.location && <Text style={ui.listSub}>Location: {job.location}</Text>}
++           {!!job.sourceDetails && <Text style={{ fontSize: 14, color: '#333' }}>{job.sourceDetails}</Text>}
+            <Text style={ui.listSub}>{job.development || 'Development not specified'} · {job.status}</Text>
+            {job.status === 'dispatched' && <Pressable style={ui.btn} onPress={async () => {
+              try { await performEntityAction('manpower-requests', job.id, 'start', {}); load(); }
+diff --git a/artifacts/fiarep-mobile/app/project/room.tsx b/artifacts/fiarep-mobile/app/project/room.tsx
+index 0213878..41f9c80 100644
+--- a/artifacts/fiarep-mobile/app/project/room.tsx
++++ b/artifacts/fiarep-mobile/app/project/room.tsx
+@@ -52,15 +52,18 @@ export default function RoomEditor() {
+   const [position, setPosition] = useState('');
+   const reloadRates = useCallback(() => {
+     (async () => {
+-      const p = projectId ? await getProject(projectId) : null;
+-      setRates(p?.rates ?? await getGlobalRates());
+-      setPosition(await getCurrentPosition());
++      try {
++        const p = projectId ? await getProject(projectId) : null;
++        setRates(p?.rates ?? await getGlobalRates());
++        setPosition(await getCurrentPosition());
++      } catch (e) {}
+     })();
+   }, [projectId]);
+   useFocusEffect(reloadRates);
+ 
+   useEffect(() => {
+     (async () => {
++     try {
+       const p = projectId ? await getProject(projectId) : null;
+       setRates(p?.rates ?? await getGlobalRates());
+       if (roomId) {
+@@ -86,6 +89,7 @@ export default function RoomEditor() {
+           }
+         }
+       }
++     } catch (e) {}
+     })();
+   }, [projectId, roomId]);
+ 
+diff --git a/artifacts/fiarep-mobile/app/worker-home.tsx b/artifacts/fiarep-mobile/app/worker-home.tsx
+index 552879f..df9ce70 100644
+--- a/artifacts/fiarep-mobile/app/worker-home.tsx
++++ b/artifacts/fiarep-mobile/app/worker-home.tsx
+@@ -21,15 +21,15 @@ export default function WorkerHome() {
+   const [jobCount, setJobCount] = useState(0);
+   const [position, setPosition] = useState('');
+   const [isEmergencyMaintenance, setIsEmergencyMaintenance] = useState(false);
+-  const isTradeWorker = /^(plumber|electrician|electric|elevator service|painter|carpenter|roofer|heating service|general construction|cctv installation)$/.test((position || '').trim().toLowerCase());
++  const isTradeWorker = /^(plumber|electrician|electric|elevator service|painter|carpenter|roofer|heating service|heat plant|bricklayer|brick layer|mason|general construction|cctv installation)$/.test((position || '').trim().toLowerCase());
+   useFocusEffect(useCallback(() => {
+     void (async () => {
+       const actor = await getCurrentActor();
+       const currentPosition = await getCurrentPosition().catch(() => '');
+       setPosition(currentPosition);
+-      setIsEmergencyMaintenance(
+-        actor.role === 'emergency' && currentPosition === 'Maintenance Worker'
+-      );
++      // Any emergency-role member gets the Emergency Units tools, regardless of
++      // their position title (some are 'Maintenance Worker', others are not).
++      setIsEmergencyMaintenance(actor.role === 'emergency');
+       if (actor.name && actor.id) {
+         const developments = (await developmentsForStaff(actor.name).catch(() => []))
+           .map((development) => development.trim().toLowerCase())
+@@ -72,6 +72,11 @@ export default function WorkerHome() {
+       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
+         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
+       </Pressable>
++      {position === 'Elevator Service' && (
++        <Pressable style={ui.btn} onPress={() => router.push('/elevator-jobs')}>
++          <Text style={ui.btnText}>Elevator Jobs</Text>
++        </Pressable>
++      )}
+       <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
+         <Text style={ui.btnOutlineText}>Inbox</Text>
+       </Pressable>
+@@ -83,9 +88,9 @@ export default function WorkerHome() {
+       <Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
+         <Text style={ui.btnOutlineText}>Attendance</Text>
+       </Pressable>
+-      {!isTradeWorker && <Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
++      <Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
+         <Text style={ui.btnOutlineText}>Change Work Order</Text>
+-      </Pressable>}
++      </Pressable>
+       <Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
+         <Text style={ui.btnOutlineText}>Request Time Off</Text>
+       </Pressable>
+diff --git a/artifacts/fiarep-mobile/components/AddressInput.tsx b/artifacts/fiarep-mobile/components/AddressInput.tsx
+index c1d163c..8b868f4 100644
+--- a/artifacts/fiarep-mobile/components/AddressInput.tsx
++++ b/artifacts/fiarep-mobile/components/AddressInput.tsx
+@@ -1,5 +1,5 @@
+ import { useEffect, useState } from 'react';
+-import { View, Text, TextInput, Pressable } from 'react-native';
++import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
+ import * as Location from 'expo-location';
+ import { searchNychaAddresses, type NychaAddress } from '@workspace/api-client-react';
+ import { listAllAddresses, listAddressesForDevelopment } from '../lib/store';
+@@ -92,7 +92,7 @@ export default function AddressInput(props: {
+   const officialAddresses = official.map((item) => item.address);
+   const candidates = [...officialAddresses, ...all.filter((address) => !officialAddresses.some((officialAddress) => officialAddress.toLowerCase() === address.toLowerCase()))];
+   const matches = focused && (hasDev || q.length >= 2)
+-    ? candidates.filter(a => (!q || a.toLowerCase().includes(q)) && a.toLowerCase() !== q).slice(0, 10)
++    ? candidates.filter(a => (!q || a.toLowerCase().includes(q)) && a.toLowerCase() !== q).slice(0, 40)
+     : [];
+ 
+   return (
+@@ -109,7 +109,8 @@ export default function AddressInput(props: {
+         onBlur={() => setTimeout(() => setFocused(false), 150)}
+       />
+       {matches.length > 0 && (
+-        <View style={{ borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, marginTop: 2, overflow: 'hidden' }}>
++        <View style={{ borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, marginTop: 2, overflow: 'hidden', maxHeight: 240 }}>
++          <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+           {matches.map((a, i) => (
+             <Pressable
+               key={i}
+@@ -119,6 +120,7 @@ export default function AddressInput(props: {
+               <Text style={{ fontSize: 14, color: ACCENT }}>{a}</Text>
+             </Pressable>
+           ))}
++          </ScrollView>
+         </View>
+       )}
+     </View>
+diff --git a/artifacts/fiarep-mobile/lib/store.ts b/artifacts/fiarep-mobile/lib/store.ts
+index b9f55db..ed760d4 100644
+--- a/artifacts/fiarep-mobile/lib/store.ts
++++ b/artifacts/fiarep-mobile/lib/store.ts
+@@ -47,7 +47,7 @@ import { touchMeta, getDeviceId, newMeta } from './syncmeta';
+ import { DEVELOPMENT_NAMES } from './developments.seed';
+ import { ensureQueue, recoverLegacyQueue } from './queue';
+ import { hydrateRemotePhotosFromDb } from './photoResolver';
+-import { photoUri } from './photos';
++import { photoUri, uploadPhoto } from './photos';
+ import {
+   inferInstallationPersona,
+   isModeAllowedForPersona,
+@@ -933,6 +933,33 @@ export async function assignResidentReport(
+   const _a = await getCurrentActor();
+   await logAudit(_a.role, _a.name, 'Report assigned', 'Unit ' + r.unit + ' \u2192 ' + displayName, id);
+   await addNotification(displayName, 'New job assigned', 'Unit ' + r.unit + (r.development ? ' \u00b7 ' + r.development : ''), id);
++  // When an EMERGENCY supervisor dispatches a resident complaint, treat it as an
++  // emergency job too: mirror it into emergency_jobs tied to the assignee's
++  // truck so it also surfaces under Emergency Units, not only My Jobs.
++  if (_a.role === 'emergency') {
++    try {
++      const unit = await unitForStaff(assignmentBody.assignedStaffId);
++      const already = (await listEmergencyJobs()).some(
++        (j) => (j as any).sourceReportId === id,
++      );
++      if (!already) {
++        const emJob = await createEmergencyJob(
++          unit?.name || '',
++          r.development || '',
++          r.address || '',
++          (r.complaintNo ? r.complaintNo + ' \u00b7 ' : '') + (r.description || 'Emergency dispatch'),
++          r.location || '',
++          unit?.id || '',
++          assignmentBody.assignedStaffId,
++        );
++        // Link the two records so completion/dedupe can find each other.
++        const linked = { ...emJob, sourceReportId: id } as EmergencyJob & { sourceReportId: string };
++        await _saveEmergencyJob(linked as EmergencyJob);
++      }
++    } catch (e) {
++      // Non-fatal: the resident report is already assigned; the mirror is a bonus view.
++    }
++  }
+ }
+ 
+ export async function releaseResidentReport(id: string, update: string): Promise<void> {
+@@ -1115,7 +1142,7 @@ export async function setRolePin(role: StaffRole, pin: string): Promise<void> {
+ 
+ export type StaffStatus = 'pending' | 'approved' | 'revoked';
+ 
+-export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Supervisor Inspector', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'CPM Supervisor', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Superintendent Ⓔ'] as const;
++export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Housing Assistant', 'Director', 'Supervisor Inspector', 'CPM Supervisor', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Heating Service Supervisor', 'Bricklayer Supervisor', 'Inspector', 'CPM', 'Plumber', 'Electrician', 'Elevator Service', 'Painter', 'Carpenter', 'Heating Service', 'Bricklayer', 'Roofer', 'General Construction', 'CCTV Installation', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'Staff Worker'] as const;
+ export type StaffPosition = typeof STAFF_POSITIONS[number] | 'Other';
+ /** User-facing label for the legacy catch-all position. Keep stored/API value compatible. */
+ export function displayStaffPosition(position?: string): string {
+@@ -1475,6 +1502,12 @@ export async function listAssignableByTrade(): Promise<TradeGroup[]> {
+     'supervisor electrician': 'Electrician',
+     'painter supervisor': 'Painter',
+     'supervisor painter': 'Painter',
++    'heating service supervisor': 'Heating Service',
++    'supervisor heating service': 'Heating Service',
++    'heat plant supervisor': 'Heating Service',
++    'bricklayer supervisor': 'Bricklayer',
++    'supervisor bricklayer': 'Bricklayer',
++    'mason supervisor': 'Bricklayer',
+     'maintenance supervisor': 'Maintenance Worker',
+     'grounds supervisor': 'Groundskeeper',
+   };
+@@ -1498,6 +1531,8 @@ export async function listAssignableByTrade(): Promise<TradeGroup[]> {
+     'Elevator Service Supervisor': 'Elevator Service',
+     'Painter Supervisor': 'Painter',
+     'Carpenter Supervisor': 'Carpenter',
++    'Heating Service Supervisor': 'Heating Service',
++    'Bricklayer Supervisor': 'Bricklayer',
+   };
+   const isSupervisor = normalizedPosition.includes('supervisor');
+   const tradeEligible = isSupervisor && !actorTrade
+@@ -2322,14 +2357,33 @@ export async function createWorkerChangeOrder(reportRef: string, description: st
+   const d = await db();
+   await ensureChangeTable(d);
+   const a = await getCurrentActor();
++  const coId = uid();
++  // Upload the photos so they resolve on management's device, not just the
++  // worker's. If an upload fails (offline), fall back to the local URI so the
++  // change order still submits and the photo syncs on the next attempt.
++  let storedPhotos: string[] = photos || [];
++  try {
++    const uploaded = await Promise.all(
++      (photos || []).map(async (uri) => {
++        try {
++          const f = await uploadPhoto(uri, 'completion-photo', { entity: 'change-orders', recordId: coId });
++          return f.objectPath;
++        } catch {
++          return uri;
++        }
++      }),
++    );
++    storedPhotos = uploaded;
++  } catch {}
+   const co: ChangeOrder = {
+-    id: uid(), reportId: '', reportRef: (reportRef || '').trim(),
++    id: coId, reportId: '', reportRef: (reportRef || '').trim(),
+     targetPosition: '', targetName: '', description: (description || '').trim(),
+-    cost: 0, photos: photos || [], isWorkerCO: true, status: 'submitted', reason: '',
++    cost: 0, photos: storedPhotos, isWorkerCO: true, status: 'submitted', reason: '',
+     createdByRole: a.role || 'worker', createdByName: a.name || '',
+     respondedByName: '', createdAt: new Date().toISOString(), respondedAt: '',
+   };
+   await d.runAsync('INSERT INTO change_orders (id,state) VALUES (?,?)', co.id, JSON.stringify(co));
++  await queueMutation('change-orders', co.id, co);
+   await addNotification('management', 'Worker change order to review', co.reportRef + (co.description ? ' \u00b7 ' + co.description.slice(0, 40) : ''), co.id);
+   await logAudit(co.createdByRole, co.createdByName, 'Worker change order created', co.reportRef, co.id);
+   return co;
+@@ -4969,6 +5023,14 @@ export async function createEmergencyUnit(name: string): Promise<EmergencyUnit>
+   return u;
+ }
+ 
++// Find the emergency unit (truck) that a given staff member is assigned to.
++export async function unitForStaff(staffId: string): Promise<EmergencyUnit | null> {
++  const sid = (staffId || '').trim();
++  if (!sid) return null;
++  const units = await listEmergencyUnits().catch(() => [] as EmergencyUnit[]);
++  return units.find((u) => (u.assignedStaffId || '').trim() === sid) || null;
++}
++
+ export async function listEmergencyUnits(): Promise<EmergencyUnit[]> {
+   const d = await db();
+   await ensureEmergencyUnitTable(d);
+diff --git a/artifacts/fiarep-mobile/lib/sync.ts b/artifacts/fiarep-mobile/lib/sync.ts
+index 7300cd8..fddc6a7 100644
+--- a/artifacts/fiarep-mobile/lib/sync.ts
++++ b/artifacts/fiarep-mobile/lib/sync.ts
+@@ -46,12 +46,12 @@ const ROLE_ENTITIES: Record<string, Set<string>> = {
+   administrator: new Set(TABLES.map((item) => item.entity)),
+   management: new Set(TABLES.map((item) => item.entity)),
+   inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'hud-inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes', 'project-notes', 'project-reviews', 'resident-reports', 'building-violations', 'manpower-requests', 'violations', 'priority-violations', 'route-assignments', 'procurement', 'global-settings']),
+-  worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'building-violations', 'manpower-requests', 'violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests', 'global-settings']),
++  worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'building-violations', 'manpower-requests', 'violations', 'elevator-jobs', 'emergency-jobs', 'change-orders', 'leave-requests', 'global-settings']),
+   vendor: new Set(['projects', 'project-scopes', 'project-notes', 'project-reviews', 'building-violations', 'route-assignments', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes']),
+   resident: new Set(['resident-reports']),
+   // Emergency devices only request the emergency tables. The server still
+   // applies assignment filtering to each returned record.
+-  emergency: new Set(['emergency-units', 'emergency-jobs', 'manpower-requests']),
++  emergency: new Set(['emergency-units', 'emergency-jobs', 'manpower-requests', 'resident-reports', 'building-violations', 'violations', 'route-assignments']),
+ };
+ const PROJECT_KEYED = new Set(['checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes']);
+ function normalizeLocalState(mapping: any, state: any) {
+@@ -292,6 +292,26 @@ async function pushQueue(d: any) {
+   }
+ }
+ 
++// Create every local table the sync writes into, before applying records.
++// Without this, a fresh install / post-logout sync can INSERT into a table that
++// was never created yet (e.g. resident_reports), the INSERT throws inside the
++// transaction, and the record is silently dropped.
++async function ensureAllSyncTables(d: any): Promise<void> {
++  // projects, rooms and roofplans have their own multi-column schemas and
++  // dedicated creators/INSERT branches in applyRecord — never create a generic
++  // 2-column version of them here.
++  const SKIP = new Set(['projects', 'rooms', 'roofplans']);
++  for (const mapping of TABLES) {
++    if (SKIP.has(mapping.table)) continue;
++    try {
++      await d.execAsync(
++        `CREATE TABLE IF NOT EXISTS ${mapping.table} (${mapping.key} TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)`,
++      );
++    } catch (e) {}
++  }
++  try { await d.execAsync('CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
++}
++
+ async function applyRecord(d: any, record: any, owner: string) {
+   const mapping = TABLES.find((item) => item.entity === record.entity);
+   if (!mapping) return;
+@@ -395,6 +415,7 @@ export async function syncAllEntities(options?: {
+   });
+   const newNotifications: Array<{ message: string; detail?: string; reportId?: string }> = [];
+   await d.withTransactionAsync(async () => {
++    await ensureAllSyncTables(d);
+     for (const record of result.records || []) {
+       const pending = await d.getFirstAsync(
+         'SELECT * FROM sync_queue WHERE owner=? AND entity=? AND id=? AND status IN (\'pending\',\'conflict\')',
+diff --git a/artifacts/fiarep-web/src/lib/staff-assignment.ts b/artifacts/fiarep-web/src/lib/staff-assignment.ts
+index cfaf42f..ec3a340 100644
+--- a/artifacts/fiarep-web/src/lib/staff-assignment.ts
++++ b/artifacts/fiarep-web/src/lib/staff-assignment.ts
+@@ -9,6 +9,8 @@ export const TRADE_CREW_SECTIONS = [
+   { label: "Elevator Supervisor & Crew", supervisor: "Elevator Supervisor", crew: "Elevator Service" },
+   { label: "Painter Supervisor & Crew", supervisor: "Painter Supervisor", crew: "Painter" },
+   { label: "Carpenter Supervisor & Crew", supervisor: "Carpenter Supervisor", crew: "Carpenter" },
++  { label: "Heating Service Supervisor & Crew", supervisor: "Heating Service Supervisor", crew: "Heating Service" },
++  { label: "Bricklayer Supervisor & Crew", supervisor: "Bricklayer Supervisor", crew: "Bricklayer" },
+ ] as const;
+ 
+ const TITLE_FAMILIES = [
+@@ -32,6 +34,14 @@ const TITLE_FAMILIES = [
+     label: "Carpenter",
+     positions: ["Carpenter Supervisor", "Supervisor Carpenter", "Carpenter"],
+   },
++  {
++    label: "Heating Service",
++    positions: ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor", "Heating Service"],
++  },
++  {
++    label: "Bricklayer",
++    positions: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor", "Bricklayer"],
++  },
+   {
+     label: "Inspector",
+     positions: ["Inspector Supervisor", "Inspection Supervisor", "Supervisor Inspector", "Inspector"],
+diff --git a/artifacts/fiarep-web/src/pages/scope-review.tsx b/artifacts/fiarep-web/src/pages/scope-review.tsx
+index 8d4a0d1..c0b31a6 100644
+--- a/artifacts/fiarep-web/src/pages/scope-review.tsx
++++ b/artifacts/fiarep-web/src/pages/scope-review.tsx
+@@ -41,7 +41,7 @@ export default function ScopeReview() {
+   const { data: approvedStaff = [] } = useListStaff({ status: "approved" }, {
+     query: { queryKey: getListStaffQueryKey({ status: "approved" }), refetchOnMount: "always" },
+   });
+-  const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service"] as const;
++  const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Heating Service", "Bricklayer"] as const;
+   const supervisorPositions: Record<string, string[]> = {
+     Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
+     CPM: ["CPM Supervisor", "Supervisor CPM"],
+diff --git a/artifacts/fiarep-web/src/pages/trade-requests.tsx b/artifacts/fiarep-web/src/pages/trade-requests.tsx
+index ef9a0aa..584dfa0 100644
+--- a/artifacts/fiarep-web/src/pages/trade-requests.tsx
++++ b/artifacts/fiarep-web/src/pages/trade-requests.tsx
+@@ -20,7 +20,7 @@ import { useAuth } from "@/hooks/use-auth";
+ import { useToast } from "@/hooks/use-toast";
+ import { invalidateOperationalQueries } from "@/lib/query-invalidation";
+ 
+-const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service"] as const;
++const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Heating Service", "Bricklayer"] as const;
+ const supervisorPositions: Record<(typeof trades)[number], readonly string[]> = {
+   Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
+   CPM: ["CPM Supervisor", "Supervisor CPM"],
+diff --git a/lib/api-client-react/src/generated/api.schemas.ts b/lib/api-client-react/src/generated/api.schemas.ts
+index fe5a39d..375740c 100644
+--- a/lib/api-client-react/src/generated/api.schemas.ts
++++ b/lib/api-client-react/src/generated/api.schemas.ts
+@@ -628,48 +628,55 @@ export type StaffPosition = typeof StaffPosition[keyof typeof StaffPosition];
+ 
+ 
+ export const StaffPosition = {
++  // — Leadership & management —
+   Borough_Director: 'Borough Director',
+   Regional_Director: 'Regional Director',
+   Assistant_Regional_Director: 'Assistant Regional Director',
+   Property_Manager: 'Property Manager',
++  Assistant_Property_Manager: 'Assistant Property Manager',
+   Superintendent: 'Superintendent',
+   'Superintendent_Ⓔ': 'Superintendent Ⓔ',
+   Assistant_Superintendent: 'Assistant Superintendent',
++  Housing_Assistant: 'Housing Assistant',
++  Director: 'Director',
++  // — Supervisors —
+   Supervisor_Inspector: 'Supervisor Inspector',
++  CPM_Supervisor: 'CPM Supervisor',
+   Plumbing_Supervisor: 'Plumbing Supervisor',
++  Plumber_Supervisor: 'Plumber Supervisor',
+   Electrical_Supervisor: 'Electrical Supervisor',
++  Electric_Supervisor: 'Electric Supervisor',
++  Elevator_Supervisor: 'Elevator Supervisor',
++  Painter_Supervisor: 'Painter Supervisor',
++  Carpenter_Supervisor: 'Carpenter Supervisor',
++  'Heating_Service_Supervisor': 'Heating Service Supervisor',
++  Bricklayer_Supervisor: 'Bricklayer Supervisor',
+   Maintenance_Supervisor: 'Maintenance Supervisor',
+-  CPM_Supervisor: 'CPM Supervisor',
+   Grounds_Supervisor: 'Grounds Supervisor',
++  // — Field & trade staff —
+   Inspector: 'Inspector',
++  CPM: 'CPM',
+   Plumber: 'Plumber',
+   Electrician: 'Electrician',
++  Elevator_Service: 'Elevator Service',
++  Painter: 'Painter',
++  Carpenter: 'Carpenter',
++  Heating_Service: 'Heating Service',
++  Bricklayer: 'Bricklayer',
++  Roofer: 'Roofer',
++  General_Construction: 'General Construction',
++  CCTV_Installation: 'CCTV Installation',
+   Maintenance_Worker: 'Maintenance Worker',
+   Caretaker: 'Caretaker',
+   Porter: 'Porter',
+   Laborer: 'Laborer',
+   Groundskeeper: 'Groundskeeper',
++  Staff_Worker: 'Staff Worker',
++  // — Support & other —
+   Administrative_Staff: 'Administrative Staff',
+   Other_Support_Staff: 'Other Support Staff',
+   Human_Resources: 'Human Resources',
+-  Assistant_Property_Manager: 'Assistant Property Manager',
+-  Housing_Assistant: 'Housing Assistant',
+   Janitorial_Staff: 'Janitorial Staff',
+-  CPM: 'CPM',
+-  Elevator_Service: 'Elevator Service',
+-  Painter: 'Painter',
+-  Plumber_Supervisor: 'Plumber Supervisor',
+-  Electric_Supervisor: 'Electric Supervisor',
+-  Elevator_Supervisor: 'Elevator Supervisor',
+-  Painter_Supervisor: 'Painter Supervisor',
+-  Carpenter_Supervisor: 'Carpenter Supervisor',
+-  Carpenter: 'Carpenter',
+-  Roofer: 'Roofer',
+-  General_Construction: 'General Construction',
+-  CCTV_Installation: 'CCTV Installation',
+-  Heating_Service: 'Heating Service',
+-  Staff_Worker: 'Staff Worker',
+-  Director: 'Director',
+   Other: 'Other',
+ } as const;
+ 
