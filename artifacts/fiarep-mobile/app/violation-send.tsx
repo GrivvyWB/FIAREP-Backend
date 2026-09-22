@@ -4,6 +4,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   createViolationInspectionAssignment,
   assignResidentReport,
+  createEmergencyJob,
   listViolationLookups,
   deleteViolationLookup,
   listStaffAccounts,
@@ -34,6 +35,7 @@ export default function ViolationSend() {
   const preDev = preDevelopment ? String(preDevelopment) : '';
   const [sentTo, setSentTo] = useState('');
   const [sentStaffId, setSentStaffId] = useState('');
+  const [sentRole, setSentRole] = useState('');
   const [development, setDevelopment] = useState(preDev);
   const [lastSent, setLastSent] = useState('');
   const [openGroup, setOpenGroup] = useState<string>('');
@@ -104,6 +106,20 @@ export default function ViolationSend() {
     setSending(true);
     try {
       const to = sentTo;
+      // When a supervisor sends a complaint to an EMERGENCY worker, also create
+      // an emergency-unit job so it lands on that worker's Emergency Units
+      // screen (not only My Jobs).
+      if (complaintMode && sentRole === 'emergency') {
+        await createEmergencyJob(
+          '',                                   // truck: unknown from a complaint
+          development.trim(),
+          address.trim() + (unit.trim() ? ' Unit ' + unit.trim() : ''),
+          note.trim() || ('Complaint ' + preComplaint),
+          '',                                   // location in building
+          '',                                   // no registered unit id
+          sentStaffId,
+        ).catch(() => undefined);
+      }
       const assignment = complaintMode
         ? await assignResidentReport(reportId, sentStaffId, to)
         : await createViolationInspectionAssignment({
@@ -118,6 +134,7 @@ export default function ViolationSend() {
       // recipient and show a persistent confirmation.
       setSentTo('');
       setSentStaffId('');
+      setSentRole('');
       const queued = !complaintMode && Boolean((assignment as any)?.pendingSync);
       setLastSent((queued ? 'Queued pending sync to ' : 'Sent to ') + to + ' \u00b7 ' + new Date().toLocaleTimeString());
       load();
@@ -207,7 +224,7 @@ export default function ViolationSend() {
                         <Pressable
                           key={s.id}
                           style={[ui.input, active ? { borderColor: ACCENT, borderWidth: 2 } : null]}
-                           onPress={() => { setSentTo(active ? '' : s.name); setSentStaffId(active ? '' : s.id); }}
+                           onPress={() => { setSentTo(active ? '' : s.name); setSentStaffId(active ? '' : s.id); setSentRole(active ? '' : (s.role || '')); }}
                         >
                           <Text style={{ color: active ? ACCENT : '#000' }}>{s.name}</Text>
                         </Pressable>
