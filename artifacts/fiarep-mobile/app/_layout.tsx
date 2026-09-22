@@ -274,6 +274,9 @@ function ManagementStack() {
   return (
     <Stack initialRouteName="management-home">
       <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false }} />
+      <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="manage-requests" options={{ title: 'Manage Requests' }} />
+      <Stack.Screen name="in-house-assignments" options={{ title: 'In-house assignments' }} />
       <Stack.Screen name="cpm-home" options={{ title: 'CPM Supervisor', headerBackVisible: false }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
