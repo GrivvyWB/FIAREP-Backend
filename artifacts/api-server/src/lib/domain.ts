@@ -1063,7 +1063,7 @@ export function canPerformEntityAction(
     isSupervisorPosition(actor);
   const isFieldStaff =
     actor.role === "worker" || actor.role === "inspector" ||
-    (actor.role === "emergency" && actor.position === "Maintenance Worker");
+    actor.role === "emergency";
   if (
     action === "approve-work" &&
     ["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
