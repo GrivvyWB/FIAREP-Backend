@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getScores, type ScoresSnapshot } from '../lib/store';
+import { syncAllEntities } from '../lib/sync';
 import { ui, ACCENT } from '../lib/ui';
 
 const scoreColor = (score: number) => score >= 80 ? '#1a8f4c' : score >= 55 ? '#b8860b' : '#c0392b';
@@ -19,7 +20,10 @@ export default function PropertyScores() {
   const [snapshot, setSnapshot] = useState<ScoresSnapshot | null>(null);
 
   const load = useCallback(() => {
-    getScores().then(setSnapshot);
+    void syncAllEntities({ refreshEntities: ['resident-reports'] })
+      .catch(() => undefined)
+      .then(() => getScores())
+      .then(setSnapshot);
   }, []);
   useFocusEffect(load);
 

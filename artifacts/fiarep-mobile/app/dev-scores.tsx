@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, Modal } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getScores, deleteScoreItem, type DevelopmentScore } from '../lib/store';
+import { syncAllEntities } from '../lib/sync';
 import { ui, ACCENT } from '../lib/ui';
 import { useAppMode } from './_layout';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
@@ -20,11 +21,18 @@ export default function DevScores() {
   const [isFallback, setIsFallback] = useState(false);
 
   const load = useCallback(() => {
-    getScores().then((snapshot) => {
+    void syncAllEntities({ refreshEntities: ['resident-reports'] })
+      .catch(() => undefined)
+      .then(() => getScores())
+      .then((snapshot) => {
       setScores(snapshot.developments);
       setIsFallback(snapshot.isFallback);
-      setSelectedDev((cur) => cur || (snapshot.developments[0] ? snapshot.developments[0].development : ''));
-    });
+      setSelectedDev((cur) =>
+        snapshot.developments.some((score) => score.development === cur)
+          ? cur
+          : (snapshot.developments[0]?.development || '')
+      );
+      });
   }, []);
   useFocusEffect(load);
 

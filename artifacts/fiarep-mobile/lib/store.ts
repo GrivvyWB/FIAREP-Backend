@@ -2607,6 +2607,9 @@ export async function deleteResidentReport(id: string): Promise<void> {
   await ensureResidentTable(d);
   await queueMutation('resident-reports', id, null, 'delete');
   await d.runAsync('DELETE FROM resident_reports WHERE id = ?', id);
+  await import('./sync').then(({ syncAllEntities }) =>
+    syncAllEntities({ refreshEntities: ['resident-reports'] })
+  );
   const a = await getCurrentActor();
   await logAudit(a.role || 'administrator', a.name, 'Report deleted', id);
 }
