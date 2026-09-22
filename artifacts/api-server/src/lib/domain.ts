@@ -570,6 +570,14 @@ export function canReadEntityRecord(
     isCpmSupervisor(actor) &&
     row.state["cpmSupervisorId"] !== actor.id
   ) return false;
+  // A CPM Supervisor never browses raw resident-report complaints for a
+  // development. A complaint reaches them only when a development or emergency
+  // supervisor explicitly sends it (assigns it to them).
+  if (
+    row.entity === "resident-reports" &&
+    isCpmSupervisor(actor) &&
+    row.state["assignedStaffId"] !== actor.id
+  ) return false;
   if (
     row.entity === "building-violations" &&
     actor.role === "inspector" &&
