@@ -686,7 +686,14 @@ export function canDeleteEntity(
   entity: string,
   state: Record<string, unknown>,
 ): boolean {
-  if (entity === "resident-reports") return false;
+  // Resident complaints may be removed by an administrator or by higher
+  // management (Borough / Regional Director). The DELETE route already gates
+  // this with canDeleteOperationalRecords and the org deletionEnabled flag, so
+  // by the time we get here the actor is authorized to delete operational
+  // records; permit resident-reports for those roles.
+  if (entity === "resident-reports") {
+    return actor.role === "administrator" || canDeleteOperationalRecords(actor);
+  }
   if (actor.role === "administrator") return true;
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic

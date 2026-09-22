@@ -56,7 +56,20 @@ export default function ManageRequests() {
   function confirmDelete(label: string, fn: () => Promise<void>) {
     Alert.alert('Delete ' + label + '?', 'This permanently removes it for everyone. This cannot be undone.', [
       { text: 'Cancel', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: async () => { await fn(); load(); } },
+      { text: 'Delete', style: 'destructive', onPress: async () => {
+        try {
+          await fn();
+          load();
+        } catch (e: any) {
+          const msg = String(e?.data?.error || e?.message || e || '');
+          Alert.alert(
+            'Could not delete',
+            /403|not allowed|disabled|permission/i.test(msg)
+              ? 'You do not have permission to delete this, or deletion is turned off for your organization.'
+              : (msg || 'The item could not be deleted. Please try again.'),
+          );
+        }
+      } },
     ]);
   }
 
