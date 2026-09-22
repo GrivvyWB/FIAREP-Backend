@@ -77,7 +77,7 @@ router.get("/v1/resident-report-photo-ai/config", requireAuth, async (_req, res)
     actor.role === "administrator" ||
     isBoroughDirector(actor) ||
     isSupervisorPosition(actor);
-  res.json({ enabled: authorized && await tenantResidentPhotoAiEnabled(actor.tenantId) });
+  res.json({ enabled: authorized && Boolean(process.env.OPENAI_API_KEY) });
 });
 
 router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, res) => {
@@ -89,10 +89,6 @@ router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, 
     !isSupervisorPosition(actor)
   ) {
     res.status(404).json({ error: "Photo not found" });
-    return;
-  }
-  if (!await tenantResidentPhotoAiEnabled(actor.tenantId)) {
-    res.status(404).json({ error: "Photo analysis is not enabled" });
     return;
   }
   const photoId = String(req.params["id"] ?? "");

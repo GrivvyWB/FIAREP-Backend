@@ -24,6 +24,7 @@ import {
   createPublicVendorWalkthroughCheckIn,
   listResidentReportPhotos,
   requestResidentReportPhotoDownload,
+  classifyResidentReportPhoto,
   submitPublicVendorBid,
   unregisterDeviceToken,
   setAuthTokenGetter,
@@ -781,6 +782,26 @@ export async function listResidentReportPhotoUrls(reportId: string): Promise<str
     const result = await requestResidentReportPhotoDownload(photo.id);
     return result.downloadUrl;
   }));
+}
+
+// Management/inspector: run the AI violation assessment on a report's photo(s).
+// Populates aiPhotoScans on the report (real HPD/MDL or DOB code + meaning), which
+// the report screen then shows. Returns how many photos were assessed.
+export async function assessReportPhotos(reportId: string): Promise<number> {
+  const photos = await listResidentReportPhotos({ reportId }).catch(() => [] as any[]);
+  let done = 0;
+  for (const photo of photos) {
+    try {
+      await classifyResidentReportPhoto(photo.id);
+      done++;
+    } catch (e) {
+      // already-analyzed (409) or format errors are non-fatal; keep going.
+    }
+  }
+  // Pull the updated report (with aiPhotoScans) back down.
+  const { syncAllEntities } = await import('./sync');
+  await syncAllEntities().catch(() => undefined);
+  return done;
 }
 
 export async function findReportByRef(detail: string): Promise<ResidentReport | null> {

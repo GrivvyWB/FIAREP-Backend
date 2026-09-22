@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { addResidentUpdate, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls } from '../lib/store';
+import { addResidentUpdate, assessReportPhotos, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -36,6 +36,7 @@ export default function ReportDetail() {
   const [loading, setLoading] = useState(true);
   const [actorId, setActorId] = useState('');
   const [actorName, setActorName] = useState('');
+  const [assessing, setAssessing] = useState(false);
   const [completionNote, setCompletionNote] = useState('');
   const [completionPhotos, setCompletionPhotos] = useState<PhotoEvidence[]>([]);
   const [completionBusy, setCompletionBusy] = useState(false);
@@ -161,7 +162,29 @@ export default function ReportDetail() {
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
         {(mode === 'management' || mode === 'administrator' || mode === 'inspector') && (() => {
           const scans = (r as any).aiPhotoScans && typeof (r as any).aiPhotoScans === 'object' ? Object.values((r as any).aiPhotoScans) : [];
-          if (!scans.length) return null;
+          const hasPhotos = (r.photos && r.photos.length > 0) || remotePhotoUris.length > 0;
+          if (!scans.length) {
+            if (!hasPhotos) return null;
+            return (
+              <View style={{ marginTop: 8, borderWidth: 1, borderColor: '#cdd9e6', backgroundColor: '#eef4fb', borderRadius: 8, padding: 10, gap: 8 }}>
+                <Text style={{ fontWeight: '700', fontSize: 13, color: '#1C4E86' }}>Violation assessment (from photo) · staff only</Text>
+                <Text style={ui.listSub}>Get a suggested HPD/DOB violation code and meaning from the resident's photo.</Text>
+                <Pressable style={[ui.btn, assessing && { opacity: 0.5 }]} disabled={assessing} onPress={async () => {
+                  setAssessing(true);
+                  try {
+                    const n = await assessReportPhotos(r.id);
+                    const fresh = await getResidentReport(String(id));
+                    if (fresh) setR(fresh);
+                    if (!n) Alert.alert('No assessment', 'The photo could not be assessed. Photo analysis may be turned off for your organization, or the image format is unsupported.');
+                  } catch (e: any) {
+                    Alert.alert('Assessment failed', e?.message ?? 'Could not assess the photo.');
+                  } finally { setAssessing(false); }
+                }}>
+                  <Text style={ui.btnText}>{assessing ? 'Assessing\u2026' : 'Assess photo \u2192 get code'}</Text>
+                </Pressable>
+              </View>
+            );
+          }
           return (
             <View style={{ marginTop: 8, borderWidth: 1, borderColor: '#cdd9e6', backgroundColor: '#eef4fb', borderRadius: 8, padding: 10, gap: 6 }}>
               <Text style={{ fontWeight: '700', fontSize: 13, color: '#1C4E86' }}>Violation assessment (from photo) · staff only</Text>
