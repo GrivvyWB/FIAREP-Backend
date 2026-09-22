@@ -47,7 +47,7 @@ import { touchMeta, getDeviceId, newMeta } from './syncmeta';
 import { DEVELOPMENT_NAMES } from './developments.seed';
 import { ensureQueue, recoverLegacyQueue } from './queue';
 import { hydrateRemotePhotosFromDb } from './photoResolver';
-import { photoUri } from './photos';
+import { photoUri, uploadPhoto } from './photos';
 import {
   inferInstallationPersona,
   isModeAllowedForPersona,
@@ -933,6 +933,33 @@ export async function assignResidentReport(
   const _a = await getCurrentActor();
   await logAudit(_a.role, _a.name, 'Report assigned', 'Unit ' + r.unit + ' \u2192 ' + displayName, id);
   await addNotification(displayName, 'New job assigned', 'Unit ' + r.unit + (r.development ? ' \u00b7 ' + r.development : ''), id);
+  // When an EMERGENCY supervisor dispatches a resident complaint, treat it as an
+  // emergency job too: mirror it into emergency_jobs tied to the assignee's
+  // truck so it also surfaces under Emergency Units, not only My Jobs.
+  if (_a.role === 'emergency') {
+    try {
+      const unit = await unitForStaff(assignmentBody.assignedStaffId);
+      const already = (await listEmergencyJobs()).some(
+        (j) => (j as any).sourceReportId === id,
+      );
+      if (!already) {
+        const emJob = await createEmergencyJob(
+          unit?.name || '',
+          r.development || '',
+          r.address || '',
+          (r.complaintNo ? r.complaintNo + ' \u00b7 ' : '') + (r.description || 'Emergency dispatch'),
+          r.location || '',
+          unit?.id || '',
+          assignmentBody.assignedStaffId,
+        );
+        // Link the two records so completion/dedupe can find each other.
+        const linked = { ...emJob, sourceReportId: id } as EmergencyJob & { sourceReportId: string };
+        await _saveEmergencyJob(linked as EmergencyJob);
+      }
+    } catch (e) {
+      // Non-fatal: the resident report is already assigned; the mirror is a bonus view.
+    }
+  }
 }
 
 export async function releaseResidentReport(id: string, update: string): Promise<void> {
@@ -1115,7 +1142,7 @@ export async function setRolePin(role: StaffRole, pin: string): Promise<void> {
 
 export type StaffStatus = 'pending' | 'approved' | 'revoked';
 
-export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Assistant Superintendent', 'Supervisor Inspector', 'Housing Assistant', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'CPM', 'CPM Supervisor', 'Inspector', 'Elevator Service', 'Plumber', 'Electrician', 'Painter', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Carpenter', 'Roofer', 'General Construction', 'CCTV Installation', 'Heating Service', 'Staff Worker', 'Director', 'Superintendent Ⓔ'] as const;
+export const STAFF_POSITIONS = ['Borough Director', 'Regional Director', 'Property Manager', 'Assistant Property Manager', 'Superintendent', 'Superintendent Ⓔ', 'Assistant Superintendent', 'Housing Assistant', 'Director', 'Supervisor Inspector', 'CPM Supervisor', 'Plumber Supervisor', 'Electric Supervisor', 'Elevator Supervisor', 'Painter Supervisor', 'Carpenter Supervisor', 'Heating Service Supervisor', 'Bricklayer Supervisor', 'Inspector', 'CPM', 'Plumber', 'Electrician', 'Elevator Service', 'Painter', 'Carpenter', 'Heating Service', 'Bricklayer', 'Roofer', 'General Construction', 'CCTV Installation', 'Maintenance Worker', 'Caretaker', 'Groundskeeper', 'Janitorial Staff', 'Staff Worker'] as const;
 export type StaffPosition = typeof STAFF_POSITIONS[number] | 'Other';
 /** User-facing label for the legacy catch-all position. Keep stored/API value compatible. */
 export function displayStaffPosition(position?: string): string {
@@ -1475,6 +1502,12 @@ export async function listAssignableByTrade(): Promise<TradeGroup[]> {
     'supervisor electrician': 'Electrician',
     'painter supervisor': 'Painter',
     'supervisor painter': 'Painter',
+    'heating service supervisor': 'Heating Service',
+    'supervisor heating service': 'Heating Service',
+    'heat plant supervisor': 'Heating Service',
+    'bricklayer supervisor': 'Bricklayer',
+    'supervisor bricklayer': 'Bricklayer',
+    'mason supervisor': 'Bricklayer',
     'maintenance supervisor': 'Maintenance Worker',
     'grounds supervisor': 'Groundskeeper',
   };
@@ -1498,6 +1531,8 @@ export async function listAssignableByTrade(): Promise<TradeGroup[]> {
     'Elevator Service Supervisor': 'Elevator Service',
     'Painter Supervisor': 'Painter',
     'Carpenter Supervisor': 'Carpenter',
+    'Heating Service Supervisor': 'Heating Service',
+    'Bricklayer Supervisor': 'Bricklayer',
   };
   const isSupervisor = normalizedPosition.includes('supervisor');
   const tradeEligible = isSupervisor && !actorTrade
@@ -2322,14 +2357,33 @@ export async function createWorkerChangeOrder(reportRef: string, description: st
   const d = await db();
   await ensureChangeTable(d);
   const a = await getCurrentActor();
+  const coId = uid();
+  // Upload the photos so they resolve on management's device, not just the
+  // worker's. If an upload fails (offline), fall back to the local URI so the
+  // change order still submits and the photo syncs on the next attempt.
+  let storedPhotos: string[] = photos || [];
+  try {
+    const uploaded = await Promise.all(
+      (photos || []).map(async (uri) => {
+        try {
+          const f = await uploadPhoto(uri, 'completion-photo', { entity: 'change-orders', recordId: coId });
+          return f.objectPath;
+        } catch {
+          return uri;
+        }
+      }),
+    );
+    storedPhotos = uploaded;
+  } catch {}
   const co: ChangeOrder = {
-    id: uid(), reportId: '', reportRef: (reportRef || '').trim(),
+    id: coId, reportId: '', reportRef: (reportRef || '').trim(),
     targetPosition: '', targetName: '', description: (description || '').trim(),
-    cost: 0, photos: photos || [], isWorkerCO: true, status: 'submitted', reason: '',
+    cost: 0, photos: storedPhotos, isWorkerCO: true, status: 'submitted', reason: '',
     createdByRole: a.role || 'worker', createdByName: a.name || '',
     respondedByName: '', createdAt: new Date().toISOString(), respondedAt: '',
   };
   await d.runAsync('INSERT INTO change_orders (id,state) VALUES (?,?)', co.id, JSON.stringify(co));
+  await queueMutation('change-orders', co.id, co);
   await addNotification('management', 'Worker change order to review', co.reportRef + (co.description ? ' \u00b7 ' + co.description.slice(0, 40) : ''), co.id);
   await logAudit(co.createdByRole, co.createdByName, 'Worker change order created', co.reportRef, co.id);
   return co;
@@ -4967,6 +5021,14 @@ export async function createEmergencyUnit(name: string): Promise<EmergencyUnit> 
   const a = await getCurrentActor();
   await logAudit(a.role || 'administrator', a.name || '', 'Emergency unit created', u.name + ' \u00b7 ' + u.code, u.id);
   return u;
+}
+
+// Find the emergency unit (truck) that a given staff member is assigned to.
+export async function unitForStaff(staffId: string): Promise<EmergencyUnit | null> {
+  const sid = (staffId || '').trim();
+  if (!sid) return null;
+  const units = await listEmergencyUnits().catch(() => [] as EmergencyUnit[]);
+  return units.find((u) => (u.assignedStaffId || '').trim() === sid) || null;
 }
 
 export async function listEmergencyUnits(): Promise<EmergencyUnit[]> {

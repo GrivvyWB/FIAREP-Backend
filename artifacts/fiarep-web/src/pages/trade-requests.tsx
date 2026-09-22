@@ -20,7 +20,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
-const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Boiler Mechanic", "Bricklayer"] as const;
+const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Heating Service", "Bricklayer"] as const;
 const supervisorPositions: Record<(typeof trades)[number], readonly string[]> = {
   Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
   CPM: ["CPM Supervisor", "Supervisor CPM"],

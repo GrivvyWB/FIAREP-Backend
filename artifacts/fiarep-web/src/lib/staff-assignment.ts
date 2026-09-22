@@ -9,7 +9,7 @@ export const TRADE_CREW_SECTIONS = [
   { label: "Elevator Supervisor & Crew", supervisor: "Elevator Supervisor", crew: "Elevator Service" },
   { label: "Painter Supervisor & Crew", supervisor: "Painter Supervisor", crew: "Painter" },
   { label: "Carpenter Supervisor & Crew", supervisor: "Carpenter Supervisor", crew: "Carpenter" },
-  { label: "Boiler Supervisor & Crew", supervisor: "Boiler Supervisor", crew: "Boiler Mechanic" },
+  { label: "Heating Service Supervisor & Crew", supervisor: "Heating Service Supervisor", crew: "Heating Service" },
   { label: "Bricklayer Supervisor & Crew", supervisor: "Bricklayer Supervisor", crew: "Bricklayer" },
 ] as const;
 
@@ -35,8 +35,8 @@ const TITLE_FAMILIES = [
     positions: ["Carpenter Supervisor", "Supervisor Carpenter", "Carpenter"],
   },
   {
-    label: "Boiler Mechanic",
-    positions: ["Boiler Supervisor", "Supervisor Boiler", "Heat Plant Supervisor", "Boiler Mechanic", "Heating Service"],
+    label: "Heating Service",
+    positions: ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor", "Heating Service"],
   },
   {
     label: "Bricklayer",
