@@ -67,6 +67,20 @@ export default function ReportDetail() {
         setRemotePhotoUris([]);
         setPhotosError(false);
         if (!report) return;
+        // Auto-run the violation assessment for staff so the code is ready
+        // without anyone pressing a button. Only when there are photos and no
+        // assessment yet, and only for management/admin/inspector.
+        try {
+          const staff = mode === 'management' || mode === 'administrator' || mode === 'inspector';
+          const already = (report as any).aiPhotoScans && Object.keys((report as any).aiPhotoScans).length > 0;
+          const hasPhoto = (report.photos && report.photos.length > 0);
+          if (staff && hasPhoto && !already) {
+            assessReportPhotos(String(id)).then(async () => {
+              const fresh = await getResidentReport(String(id));
+              if (active && fresh) setR(fresh);
+            }).catch(() => undefined);
+          }
+        } catch {}
         setPhotosLoading(true);
         try {
           // Resident report photos must use the report-scoped authorized endpoint.

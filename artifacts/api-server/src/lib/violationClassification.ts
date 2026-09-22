@@ -18,11 +18,15 @@ Return only JSON matching the supplied schema. Use:
 - classification A for non-hazardous conditions
 - classification B for hazardous conditions
 - classification C for immediately hazardous conditions
-You MUST set hpCode to the single best-matching code NUMBER from the official HPD/MDL
-code list below (return just the code, e.g. "574" or "081B"). Pick the closest real
-code the image supports. Only if truly nothing in the list could apply, use "REVIEW REQUIRED".
-Never invent a code that is not in the list. Never claim certainty about concealed
-conditions. Keep the description concise and factual.
+You MUST set hpCode to the single best-matching code NUMBER from the official HPD/MDL/DOB
+code list below (return just the code, e.g. "574", "081B", or "DOB-12"). Use BOTH the
+resident's reported words and the photo. The reported words describe the real problem, so
+when the photo is dark, blurry, or unclear, choose the code that fits the WORDS
+(e.g. "no light"/"lights out"/"no power" -> an electrical/lighting code, "no heat"/"no hot
+water" -> heat/hot water, "leak"/"water" -> plumbing/water, "mold" -> mold). Only use
+"REVIEW REQUIRED" if neither the words nor the photo point to any code in the list.
+Never invent a code that is not in the list. Keep the description concise and factual, and
+set classification A/B/C by the actual hazard the words+photo describe, not by image quality.
 
 OFFICIAL HPD/MDL and DOB CODE LIST (code: meaning [class]) — DOB codes are prefixed "DOB-":
 ${violationCodeCatalog()}`;
@@ -63,6 +67,7 @@ export async function classifyViolationImage(
   image: string,
   apiKey: string,
   fetchImpl: FetchLike = fetch,
+  issueText: string = "",
 ): Promise<ViolationClassification> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -82,7 +87,9 @@ export async function classifyViolationImage(
             content: [
               {
                 type: "text",
-                text: "Classify the visible violation in this field photo.",
+                text: (issueText && issueText.trim()
+                  ? `The resident reported this problem: "${issueText.trim()}". Use BOTH that description and the photo to choose the code. The words describe the actual problem, so lean on them when the photo is dark, blurry, or does not clearly show the condition — do not fall back to "REVIEW REQUIRED" if the reported words point to a real code.\n\n`
+                  : "") + "Classify the reported housing-maintenance violation.",
               },
               { type: "image_url", image_url: { url: image, detail: "low" } },
             ],

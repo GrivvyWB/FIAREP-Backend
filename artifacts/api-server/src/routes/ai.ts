@@ -130,7 +130,9 @@ router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, 
     const response = await fetch(downloadUrl);
     if (!response.ok) throw new Error("Photo download failed");
     const image = `data:${photo.contentType};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
-    const result = await classifyViolationImage(image, apiKey);
+    const issueText = [report.state["description"], report.state["details"], report.state["issue"]]
+      .find((v): v is string => typeof v === "string" && Boolean(v.trim())) || "";
+    const result = await classifyViolationImage(image, apiKey, fetch, issueText);
     const existingScans =
       report.state["aiPhotoScans"] &&
       typeof report.state["aiPhotoScans"] === "object" &&
