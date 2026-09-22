@@ -15,7 +15,10 @@ export default function Projects() {
   // '/' (this Projects screen) is only for inspector & administrator.
   // Any other role that lands here is redirected to their own home.
   if (mode === 'resident') return <Redirect href="/resident-home" />;
-  if (mode === 'worker') return <Redirect href="/worker-home" />;
+  // A worker-role account is redirected home, EXCEPT when it explicitly came
+  // here to start a new project (e.g. a CPM tapping "+ New Project"). The
+  // create form itself is still gated by position below.
+  if (mode === 'worker' && params.new !== '1') return <Redirect href="/worker-home" />;
   const [projects, setProjects] = useState<Project[]>([]);
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const [name, setName] = useState('');
