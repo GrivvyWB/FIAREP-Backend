@@ -570,13 +570,15 @@ export function canReadEntityRecord(
     isCpmSupervisor(actor) &&
     row.state["cpmSupervisorId"] !== actor.id
   ) return false;
-  // A CPM Supervisor never browses raw resident-report complaints for a
-  // development. A complaint reaches them only when a development or emergency
-  // supervisor explicitly sends it (assigns it to them).
+  // Office/craft supervisors (CPM, CPM Supervisor, and the trade supervisors —
+  // plumbing, electrical, carpentry, heating, painting, bricklaying, elevator)
+  // have no base development. They never browse a development's raw complaints;
+  // a complaint reaches them only when a development or emergency supervisor
+  // transfers/assigns it to them.
   if (
     row.entity === "resident-reports" &&
-    isCpmSupervisor(actor) &&
-    row.state["assignedStaffId"] !== actor.id
+    isOfficeCraftSupervisor(actor) &&
+    normalizeAssignment(row.state).assignedStaffId !== actor.id
   ) return false;
   if (
     row.entity === "building-violations" &&
@@ -788,6 +790,25 @@ const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
 
 export function supervisedTradeForPosition(position: string | null | undefined): string | null {
   return TRADE_ASSIGNMENT_BY_SUPERVISOR.get(position || "") || null;
+}
+
+// Craft/office supervisors and CPM roles work from the office, not from a base
+// development. They receive complaints and violations only when a development
+// or emergency supervisor transfers/assigns the work to them — they never
+// browse a development's complaints. (Superintendents, Assistant
+// Superintendents, Maintenance and Grounds supervisors remain development-based.)
+const OFFICE_CRAFT_TRADES = new Set<string>([
+  "Plumber", "Electrician", "Carpenter", "Painter",
+  "Heating Service", "Bricklayer", "Elevator Service", "CPM",
+]);
+
+export function isOfficeCraftSupervisor(
+  actor: Pick<Actor, "role" | "position">,
+): boolean {
+  if (actor.role === "inspector" && actor.position === "CPM") return true;
+  if (actor.role !== "management") return false;
+  const trade = supervisedTradeForPosition(actor.position || "");
+  return !!trade && OFFICE_CRAFT_TRADES.has(trade);
 }
 
 function isOperationalAssignee(target: { role: string; position: string | null }) {
