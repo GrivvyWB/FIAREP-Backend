@@ -52,15 +52,18 @@ export default function RoomEditor() {
   const [position, setPosition] = useState('');
   const reloadRates = useCallback(() => {
     (async () => {
-      const p = projectId ? await getProject(projectId) : null;
-      setRates(p?.rates ?? await getGlobalRates());
-      setPosition(await getCurrentPosition());
+      try {
+        const p = projectId ? await getProject(projectId) : null;
+        setRates(p?.rates ?? await getGlobalRates());
+        setPosition(await getCurrentPosition());
+      } catch (e) {}
     })();
   }, [projectId]);
   useFocusEffect(reloadRates);
 
   useEffect(() => {
     (async () => {
+     try {
       const p = projectId ? await getProject(projectId) : null;
       setRates(p?.rates ?? await getGlobalRates());
       if (roomId) {
@@ -86,6 +89,7 @@ export default function RoomEditor() {
           }
         }
       }
+     } catch (e) {}
     })();
   }, [projectId, roomId]);
 

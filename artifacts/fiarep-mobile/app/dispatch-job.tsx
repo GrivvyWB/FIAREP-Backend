@@ -21,6 +21,7 @@ export default function DispatchJob() {
   const [openTrade, setOpenTrade] = useState<string | null>(null);
   const [developments, setDevelopments] = useState<string[]>([]);
   const [development, setDevelopment] = useState('');
+  const [devQuery, setDevQuery] = useState('');
 
   useFocusEffect(useCallback(() => { listAssignableByTrade().then(setAssignable); getSessionIdentity().then((i) => setDevelopments(i?.developments || [])); }, []));
 
@@ -76,8 +77,22 @@ export default function DispatchJob() {
       )}
 
       <Text style={[ui.label, { marginTop: 12 }]}>Job address</Text>
-      {developments.length > 1 && <View><Text style={ui.label}>Development</Text><ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={{ gap: 8 }} testID="dispatch-development-selector">{developments.map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</ScrollView></View>}
-      <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 55 Hall St" />
+      {developments.length > 1 && (
+        <View testID="dispatch-development-selector">
+          <Text style={ui.label}>Development</Text>
+          <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments" autoCorrect={false} />
+          <ScrollView style={{ maxHeight: 200 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingVertical: 4 }}>
+              {developments.filter((item) => item.toLowerCase().includes(devQuery.trim().toLowerCase())).map((item) => (
+                <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => { setDevelopment(item); setDevQuery(''); }}>
+                  <Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </ScrollView>
+        </View>
+      )}
+      <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 55 Hall St" development={development} />
 
       <Text style={[ui.label, { marginTop: 12 }]}>Unit (optional)</Text>
       <TextInput style={ui.input} value={unit} onChangeText={setUnit} placeholder="e.g. Apt 2B" />
