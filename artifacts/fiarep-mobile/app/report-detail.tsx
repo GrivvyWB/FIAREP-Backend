@@ -131,6 +131,12 @@ export default function ReportDetail() {
     );
   }
 
+  const norm = (v?: string) => (v || '').trim().toLowerCase();
+  const isMine = !!r && (
+    (r.assignedStaffId && r.assignedStaffId === actorId) ||
+    (!!actorName && norm(r.assignedTo) === norm(actorName)) ||
+    (!!actorName && norm((r as any).assignedStaffName) === norm(actorName))
+  );
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
@@ -183,7 +189,7 @@ export default function ReportDetail() {
             <Text style={ui.btnText}>View DOB / HPD for this address</Text>
           </Pressable>
         )}
-        {r.assignedStaffId === actorId && r.status === 'assigned' && (
+        {isMine && r.status === 'assigned' && (
           <Pressable
             disabled={completionBusy}
             style={[ui.btn, { marginTop: 10 }, completionBusy && { opacity: 0.45 }]}
@@ -234,7 +240,7 @@ export default function ReportDetail() {
               <Text style={ui.listSub}>No photos attached.</Text>
             )}
         </View>
-        {r.assignedStaffId === actorId && r.status === 'in_progress' && (
+        {isMine && r.status === 'in_progress' && (
           <View style={{ gap: 8, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 }}>
             <Text style={ui.label}>Completed work</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

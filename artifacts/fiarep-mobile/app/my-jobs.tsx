@@ -182,8 +182,14 @@ export default function MyJobs() {
             <View key={r.id} style={[ui.card, { gap: 4, marginTop: 8 }]}>
               <Pressable onPress={() => router.push('/report-detail?id=' + encodeURIComponent(r.id))}>
                 <Text style={{ fontSize: 15, fontWeight: '600' }}>{r.location || r.unit || r.address || 'Request'}</Text>
+                {!!r.address && <Text style={ui.listSub}>{r.address}{r.unit ? ' \u00b7 ' + r.unit : ''}</Text>}
                 {!!r.description && <Text style={ui.listSub} numberOfLines={2}>{r.description}</Text>}
               </Pressable>
+              {position !== 'Elevator Service' && (
+                <Pressable style={[ui.btn, { marginTop: 6 }]} onPress={() => router.push('/report-detail?id=' + encodeURIComponent(r.id))}>
+                  <Text style={ui.btnText}>{r.status === 'in_progress' ? 'Continue \u2014 add photo & complete' : 'Open job \u2014 start, photo, complete'}</Text>
+                </Pressable>
+              )}
               {r.clearedByMgmt && canDelete && (
                 <Pressable onPress={() => Alert.alert('Remove this job?', 'Management cleared it. Remove it from your list?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { await deleteResidentReport(r.id); load(); } }])} style={{ marginTop: 4 }}>
                   <Text style={{ color: '#c0392b', fontWeight: '600', fontSize: 13 }}>Remove (cleared by management)</Text>
@@ -197,7 +203,7 @@ export default function MyJobs() {
                   <Pressable onPress={() => { setReleaseOpenId(null); setReleaseNote(''); }}><Text style={{ color: ACCENT, fontWeight: '600', textAlign: 'center' }}>Cancel</Text></Pressable>
                 </View>
               ) : (
-                <Pressable style={ui.btnOutline} onPress={() => { setReleaseOpenId(r.id); setReleaseNote(''); }}><Text style={ui.btnOutlineText}>Release with update</Text></Pressable>
+                <Pressable onPress={() => { setReleaseOpenId(r.id); setReleaseNote(''); }} style={{ marginTop: 6 }}><Text style={{ color: ACCENT, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>Release with update</Text></Pressable>
               ))}
             </View>
           ))}
