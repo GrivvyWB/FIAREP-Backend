@@ -1073,7 +1073,7 @@ export function canPerformEntityAction(
     actor.role === "worker" || actor.role === "inspector" ||
     actor.role === "emergency";
   if (
-    action === "approve-work" &&
+    (action === "approve-work" || action === "reject-work") &&
     ["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
       .includes(entity)
   ) {
@@ -1297,6 +1297,7 @@ export function isValidEntityTransition(
       clear: ["resolved"],
       complete: ["in_progress"],
       "approve-work": ["done", "resolved"],
+      "reject-work": ["done"],
     },
     "building-violations": {
       approve: ["submitted"],

@@ -553,6 +553,7 @@ export type ResidentReport = {
   completionNote?: string;
   completionPhotoUrl?: string;
   clearedByMgmt?: boolean;  // management cleared it so the worker may remove it from My Jobs
+  reviewStatus?: string;    // raw server status: 'done' = awaiting supervisor review, 'work_approved' = accepted
   _meta?: any;
 };
 
@@ -579,6 +580,7 @@ function normalizeResidentReport(r: any): ResidentReport {
   };
   return {
     ...r,
+    reviewStatus: String(r.status || '').toLowerCase(),
     address: r.address ?? '',
     status: normalizeStatus(r.status),
     assignedStaffId: r.assignedStaffId,
@@ -966,6 +968,20 @@ export async function releaseResidentReport(id: string, update: string): Promise
   const text = update.trim();
   if (!text) throw new Error('An update is required before releasing this assignment.');
   await performEntityAction('resident-reports', id, 'release', { update: text });
+}
+
+// Supervisor reviews a completed (done) resident report and accepts the work.
+export async function approveResidentWork(id: string): Promise<void> {
+  await performEntityAction('resident-reports', id, 'approve-work', {});
+}
+
+// Supervisor rejects the completed work and sends it back to the worker to redo.
+// The report returns to in_progress on the assigned worker's list; the reason is
+// recorded as an update the worker can see.
+export async function rejectResidentWork(id: string, reason: string): Promise<void> {
+  const text = (reason || '').trim();
+  if (!text) throw new Error('Add a reason so the worker knows what to fix.');
+  await performEntityAction('resident-reports', id, 'reject-work', { note: text });
 }
 
 export async function addResidentUpdate(
