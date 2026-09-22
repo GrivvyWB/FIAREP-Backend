@@ -764,7 +764,9 @@ test("violation modules are restricted to inspectors and supervisors", () => {
   for (const position of ["CPM Supervisor", "Plumbing Supervisor", "Carpenter Supervisor", "Elevator Supervisor"]) {
     const supervisor = actor({ role: "management", position });
     assert.equal(isViolationAuthority(supervisor), false);
-    assert.equal(canReadEntity(supervisor, "violations"), false);
+    // Trade supervisors receive violations dispatched to their trade, so they
+    // can read them; they still cannot author or edit violation records.
+    assert.equal(canReadEntity(supervisor, "violations"), true);
     assert.equal(canCreateEntity(supervisor, "building-violations"), false);
     assert.equal(canMutateEntity(supervisor, "priority-violations"), false);
   }

@@ -28,6 +28,9 @@ const supervisorPositions: Record<(typeof trades)[number], readonly string[]> = 
   Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
   Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
   "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
+  Painter: ["Painter Supervisor", "Painting Supervisor", "Supervisor Painter"],
+  "Heating Service": ["Heating Service Supervisor", "Heating Supervisor", "Boiler Supervisor"],
+  Bricklayer: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor"],
 };
 
 type SourceEntity = "resident-reports" | "building-violations";

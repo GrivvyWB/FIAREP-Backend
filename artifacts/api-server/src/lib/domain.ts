@@ -81,6 +81,9 @@ export const STAFF_POSITIONS = [
   "Director",
   "Superintendent Ⓔ",
   "Other",
+  "Bricklayer",
+  "Bricklayer Supervisor",
+  "Heating Service Supervisor",
 ] as const;
 
 export const ENTITIES = new Set([
@@ -695,6 +698,9 @@ export function canDeleteEntity(
     return actor.role === "administrator" || canDeleteOperationalRecords(actor);
   }
   if (actor.role === "administrator") return true;
+  // A Borough Director cleans up the complaint flow (reports, change orders)
+  // but remains read-only for dispatch, elevator, procurement and HR records.
+  if (isBoroughDirector(actor)) return entity === "change-orders";
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
   // entity deletion route.
@@ -1084,7 +1090,15 @@ export function canPerformEntityAction(
     ["resident-reports", "building-violations", "elevator-jobs", "emergency-jobs"]
       .includes(entity)
   ) {
-    if (entity === "resident-reports") return isComplaintHandlingSupervisor(actor);
+    if (entity === "resident-reports") {
+      // Administrators, Borough/Regional Directors, ordinary management and
+      // complaint-handling supervisors may approve or send back completed
+      // work. CPM Supervisors are scope reviewers, not complaint reviewers.
+      return actor.role === "administrator" ||
+        isBoroughDirector(actor) ||
+        isComplaintHandlingSupervisor(actor) ||
+        (actor.role === "management" && actor.position !== "CPM Supervisor");
+    }
     return isSupervisor;
   }
   if (actor.role === "emergency" && entity === "emergency-jobs") {
