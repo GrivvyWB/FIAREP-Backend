@@ -120,7 +120,16 @@ export default function Notifications() {
     if (msg.includes('change work order') || msg.includes('change order')) { router.push('/change-orders'); return; }
     if (msg.includes('elevator update') || msg.includes('elevator job')) { router.push('/elevator-dashboard'); return; }
     if (msg.includes('emergency update') || msg.includes('emergency job') || msg.includes('emergency unit')) { router.push('/emergency-units'); return; }
-    if (msg.includes('new job assigned')) { router.push('/my-jobs'); return; }
+    if (msg.includes('new job assigned')) {
+      // Open the specific job when it is a resident report; otherwise (in-house
+      // manpower jobs) send them to My Jobs where it is listed.
+      if (n.reportId) {
+        let report = await getResidentReport(n.reportId);
+        if (!report) { await syncAllEntities().catch(() => undefined); report = await getResidentReport(n.reportId); }
+        if (report) { router.push('/report-detail?id=' + encodeURIComponent(n.reportId)); return; }
+      }
+      router.push('/my-jobs'); return;
+    }
     if (msg.includes('new route assigned')) { router.push('/worker'); return; }
     if (n.reportId) { router.push('/report-detail?id=' + n.reportId); return; }
     // Fallback for older notifications without a stored reportId: match by detail text.

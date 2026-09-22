@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, getCurrentPosition, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, listManpowerRequests, performEntityAction, markReportSeen, getSeenReportIds, type BuildingViolation, type ResidentReport, type ManpowerRequest } from '../lib/store';
+import { getCurrentActor, getCurrentPosition, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, listManpowerRequests, performEntityAction, markReportSeen, type BuildingViolation, type ResidentReport, type ManpowerRequest } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, uploadPhoto, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -49,9 +49,11 @@ export default function MyJobs() {
       // any untagged job (no development) so nothing assigned to me vanishes.
       const myDevs = (await developmentsForStaff(a.name || '').catch(() => [])).map((d) => (d || '').trim().toLowerCase()).filter(Boolean);
       const inMyDevs = (dev?: string) => { const d = (dev || '').trim().toLowerCase(); return !d || myDevs.length === 0 || myDevs.includes(d); };
-      const seen = await getSeenReportIds();
       const all = await listResidentReports();
-       setResJobs(all.filter((r) => r.status !== 'resolved' && r.assignedStaffId === a.id && inMyDevs(r.development) && !seen.has(r.id)));
+       // NOTE: 'seen' only affects the unread count on the home screen. A job
+       // assigned to me must stay openable in My Jobs even after I've viewed it,
+       // so we do NOT filter it out here by seen-state.
+       setResJobs(all.filter((r) => r.status !== 'resolved' && r.assignedStaffId === a.id && inMyDevs(r.development)));
        setInHouseJobs((await listManpowerRequests()).filter((r) => r.assignedStaffId === a.id && ['dispatched', 'in_progress'].includes(r.status) && inMyDevs(r.development)));
     });
   }, []);
