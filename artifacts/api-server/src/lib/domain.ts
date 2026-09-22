@@ -907,11 +907,19 @@ export function canAssignStaff(
   if (!isAssignmentAuthority(actor)) return false;
   if (target.id === actor.id || target.position === "Borough Director") return false;
   if (!ASSIGNABLE_STAFF_ROLES.has(target.role) || !isOperationalAssignee(target)) return false;
-  if (development && !target.developments.includes(development)) return false;
+  // Emergency crews respond across developments, so don't gate them on a
+  // development match. For everyone else match tolerantly (case/spacing).
+  const devN = (development || "").trim().toLowerCase();
+  const targetCoversDev = target.developments.some(
+    (d) => (d || "").trim().toLowerCase() === devN,
+  );
+  if (development && target.role !== "emergency" && !targetCoversDev) return false;
   if (isBoroughDirector(actor) || actor.role === "administrator") return true;
   if (
-    !target.developments.length ||
-    !target.developments.every((value) => actor.developments.includes(value))
+    target.role !== "emergency" &&
+    (!target.developments.length ||
+     !target.developments.every((value) =>
+       actor.developments.some((a) => (a || "").trim().toLowerCase() === (value || "").trim().toLowerCase())))
   ) {
     return false;
   }
