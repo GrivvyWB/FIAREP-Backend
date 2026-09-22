@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   createViolationInspectionAssignment,
@@ -42,6 +42,7 @@ export default function ViolationSend() {
   const [me, setMe] = useState('');
   const canDelete = useDeletionPolicy();
   const [authorized, setAuthorized] = useState(false);
+  const [sending, setSending] = useState(false);
   const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
   const complaintMode = String(filter || '').toLowerCase() === 'worker';
   const [currentPosition, setCurrentPosition] = useState('');
@@ -89,6 +90,7 @@ export default function ViolationSend() {
   });
 
   async function submit() {
+    if (sending) return; // block double-tap while a send is in flight
     if (!complaintMode && !violationNumber.trim()) { Alert.alert('Missing', 'Enter a violation number.'); return; }
     if (!address.trim()) { Alert.alert('Missing', 'Enter an address.'); return; }
     if (!sentTo.trim() || !sentStaffId.trim()) {
@@ -99,6 +101,7 @@ export default function ViolationSend() {
       Alert.alert('Missing', 'The complaint ID is unavailable.');
       return;
     }
+    setSending(true);
     try {
       const to = sentTo;
       const assignment = complaintMode
@@ -120,6 +123,8 @@ export default function ViolationSend() {
       load();
     } catch (e: any) {
       Alert.alert('Error', String(e && e.message ? e.message : e));
+    } finally {
+      setSending(false);
     }
   }
 
@@ -216,8 +221,12 @@ export default function ViolationSend() {
         </View>
       )}
 
-      <Pressable style={[ui.btn, { marginTop: 16 }]} onPress={submit}>
-        <Text style={ui.btnText}>{complaintMode ? 'Send complaint' : 'Send violation'}</Text>
+      <Pressable
+        style={[ui.btn, { marginTop: 16 }, sending && { opacity: 0.5 }]}
+        onPress={submit}
+        disabled={sending}
+      >
+        <Text style={ui.btnText}>{sending ? 'Sending\u2026' : (complaintMode ? 'Send complaint' : 'Send violation')}</Text>
       </Pressable>
       {!!lastSent && <Text style={{ color: '#1a8f4c', fontWeight: '700', textAlign: 'center', marginTop: 8 }}>{lastSent}. Pick another person to send again.</Text>}
 
@@ -246,6 +255,14 @@ export default function ViolationSend() {
         ))
       ))}
     </ScrollView>
+    {sending && (
+      <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.15)', alignItems: 'center', justifyContent: 'center' }} pointerEvents="auto">
+        <View style={{ backgroundColor: '#fff', borderRadius: 12, padding: 20, alignItems: 'center', gap: 10 }}>
+          <ActivityIndicator size="large" color={ACCENT} />
+          <Text style={{ fontWeight: '600', color: '#333' }}>Sending\u2026</Text>
+        </View>
+      </View>
+    )}
     </KeyboardAvoidingView>
   );
 }

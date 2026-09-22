@@ -144,7 +144,16 @@ export default function ReportDetail() {
   if (!r) {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
-        <Text style={ui.empty}>Report not found.</Text>
+        <Text style={ui.empty}>This complaint hasn't synced to this device yet.</Text>
+        <Pressable
+          style={[ui.btn, { marginTop: 12 }]}
+          onPress={async () => { setLoading(true); await syncAllEntities().catch(() => undefined); load(); }}
+        >
+          <Text style={ui.btnText}>Retry</Text>
+        </Pressable>
+        <Pressable style={[ui.btnOutline, { marginTop: 8 }]} onPress={() => router.back()}>
+          <Text style={ui.btnOutlineText}>Back to inbox</Text>
+        </Pressable>
       </ScrollView>
     );
   }

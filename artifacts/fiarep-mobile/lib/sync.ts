@@ -1,6 +1,7 @@
 import {
   createEntityRecord,
   deleteEntityRecord,
+  getEntityRecord,
   pullSync,
   performEntityAction,
   updateEntityRecord,
@@ -214,8 +215,42 @@ async function pushQueue(d: any) {
       if (row.baseVersion) input.version = row.baseVersion;
       let result: any;
       if (row.operation === 'delete') {
-        if (!row.baseVersion) throw new Error('Cannot delete without a server version.');
-        await deleteEntityRecord(row.entity, row.id, { version: row.baseVersion });
+        // Deletes must actually land server-side, or the record comes back on
+        // the next pull. Resolve the current server version if we don't have
+        // one, and retry once with the server's version on a conflict. A record
+        // already gone (404) counts as a successful delete.
+        let delVersion = row.baseVersion as number | null;
+        const fetchServerVersion = async (): Promise<number | null> => {
+          try {
+            const rec: any = await getEntityRecord(row.entity, row.id);
+            return typeof rec?.version === 'number' ? rec.version : null;
+          } catch (e: any) {
+            if (e?.status === 404) return null; // already deleted server-side
+            throw e;
+          }
+        };
+        if (!delVersion) {
+          delVersion = await fetchServerVersion();
+          // Record not on the server (never synced, or already gone): the local
+          // delete already happened, so treat this as done.
+          if (delVersion == null) { row.__deleteResolved = true; }
+        }
+        if (!(row as any).__deleteResolved) {
+          try {
+            await deleteEntityRecord(row.entity, row.id, { version: delVersion! });
+          } catch (e: any) {
+            if (e?.status === 409) {
+              // Our version was stale; fetch the real one and retry once.
+              const fresh = await fetchServerVersion();
+              if (fresh == null) { /* gone now — done */ }
+              else await deleteEntityRecord(row.entity, row.id, { version: fresh });
+            } else if (e?.status === 404) {
+              // already gone — done
+            } else {
+              throw e;
+            }
+          }
+        }
       } else {
         try {
           result = await createEntityRecord(row.entity, input);
