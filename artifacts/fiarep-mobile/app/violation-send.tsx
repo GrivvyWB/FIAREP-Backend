@@ -136,8 +136,12 @@ export default function ViolationSend() {
             assignedStaffId: sentStaffId,
             development: development || undefined,
             address: address.trim() + (unit.trim() ? ' Unit ' + unit.trim() : ''),
-            instructions: [violationNumber.trim(), note.trim()].filter(Boolean).join(' — '),
-            sourceInspectionRef: preComplaint || undefined,
+            instructions: [
+              violationNumber.trim() ? 'Violation #: ' + violationNumber.trim() : '',
+              preComplaint ? 'Complaint #: ' + preComplaint : '',
+              note.trim() ? 'Note: ' + note.trim() : '',
+            ].filter(Boolean).join('\n'),
+            sourceInspectionRef: violationNumber.trim() || preComplaint || undefined,
           });
       // Keep the violation details so you can immediately send the same job to
       // another person (e.g. a plumber to meet the inspector). Only clear the
@@ -176,6 +180,12 @@ export default function ViolationSend() {
             placeholder="e.g. V-104882"
             autoCapitalize="characters"
           />
+          {!!preComplaint && (
+            <View style={{ marginTop: 8 }}>
+              <Text style={ui.label}>Complaint number (attached)</Text>
+              <View style={ui.input}><Text style={{ color: '#185FA5', fontWeight: '700' }}>{preComplaint}</Text></View>
+            </View>
+          )}
         </>
       )}
 
