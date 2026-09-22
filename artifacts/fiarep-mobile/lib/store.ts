@@ -1224,6 +1224,26 @@ async function ensureStaffTable(d: any) {
   try { await d.execAsync('CREATE TABLE IF NOT EXISTS staff_accounts (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
 }
 
+// Per-device "seen" markers for a worker's My Jobs list. Opening a job marks it
+// seen so it drops from the pending "Resident requests" count; the complaint
+// record itself is untouched and stays in the system for management.
+export async function markReportSeen(reportId: string): Promise<void> {
+  const id = (reportId || '').trim();
+  if (!id) return;
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'seen_report_ids');
+  let ids: string[] = [];
+  try { ids = row?.value ? JSON.parse(row.value) : []; } catch { ids = []; }
+  if (!ids.includes(id)) ids.push(id);
+  await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'seen_report_ids', JSON.stringify(ids.slice(-500)));
+}
+
+export async function getSeenReportIds(): Promise<Set<string>> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'seen_report_ids');
+  try { return new Set(row?.value ? JSON.parse(row.value) : []); } catch { return new Set(); }
+}
+
 export async function getAccessToken(): Promise<string | null> {
   const webToken = getWebToken('access');
   if (webToken) return maybeRefresh(webToken);
