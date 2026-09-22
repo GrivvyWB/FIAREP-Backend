@@ -580,6 +580,12 @@ export function canReadEntityRecord(
     isOfficeCraftSupervisor(actor) &&
     normalizeAssignment(row.state).assignedStaffId !== actor.id
   ) return false;
+  // The person a violation assignment was sent to can always read it, even
+  // though they work from the office and have no matching base development.
+  if (
+    row.entity === "route-assignments" &&
+    normalizeAssignment(row.state).assignedStaffId === actor.id
+  ) return !row.deleted;
   if (
     row.entity === "building-violations" &&
     actor.role === "inspector" &&

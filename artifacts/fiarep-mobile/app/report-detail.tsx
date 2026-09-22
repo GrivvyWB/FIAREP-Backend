@@ -243,7 +243,7 @@ export default function ReportDetail() {
                 <Text style={ui.btnText}>Send as Complaint</Text>
               </Pressable>
               <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => router.push('/violation-send?' + base + '&filter=inspector')}>
-                <Text style={ui.btnText}>Send as Inspection</Text>
+                <Text style={ui.btnText}>Send as Violation</Text>
               </Pressable>
             </View>
           );
