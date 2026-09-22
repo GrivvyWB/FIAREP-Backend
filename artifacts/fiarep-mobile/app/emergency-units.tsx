@@ -112,7 +112,6 @@ export default function EmergencyUnits() {
         <Text style={[ui.empty, { marginTop: 20 }]}>No emergency units registered yet. Register a truck in Manage Trucks first.</Text>
       )}
 
-      {!!loadedTruck && <Text style={[ui.h, { marginTop: 16 }]}>{loadedTruck}</Text>}
       {!!loadedTruck && jobs.length === 0 && <Text style={[ui.empty, { marginTop: 20 }]}>No jobs for {loadedTruck}.</Text>}
 
       {jobs.map((j) => (
