@@ -23,7 +23,7 @@ export default function Projects() {
   if (mode === 'worker' && params.new !== '1') return <Redirect href="/worker-home" />;
   // Projects is an opt-in module; a worker without it enabled cannot open the
   // new-project workflow even via a direct link.
-  if (mode === 'worker' && !modules['projects']) return <Redirect href="/worker-home" />;
+  if (mode === 'worker' && !modules['proj-new']) return <Redirect href="/worker-home" />;
   const [projects, setProjects] = useState<Project[]>([]);
   const [approved, setApproved] = useState<Set<string>>(new Set());
   const [name, setName] = useState('');

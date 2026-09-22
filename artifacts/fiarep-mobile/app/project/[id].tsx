@@ -7,11 +7,13 @@ import { exportQuote } from '../../lib/quote';
 import { ui, money, ACCENT } from '../../lib/ui';
 import { useAppMode } from '../_layout';
 import { useDeletionPolicy } from '../../lib/useDeletionPolicy';
+import { useModuleAccess } from '../../lib/module-access';
 
 export default function ProjectDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { mode } = useAppMode();
   const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
+  const modules = useModuleAccess();
   const [locked, setLocked] = useState(false);
   const readOnly = mode === 'administrator' || locked;
   const [notes, setNotes] = useState<ProjectNote[]>([]);
@@ -151,12 +153,12 @@ export default function ProjectDetail() {
         </View>
       )}
 
-{!readOnly && jobTools && (
+{!readOnly && jobTools && modules['proj-room'] && (
             <Pressable style={ui.btn} onPress={() => router.push(`/project/room?projectId=${id}`)}>
         <Text style={ui.btnText}>+ Add room / area</Text>
       </Pressable>
       )}
-      {!noPricing && (
+      {!noPricing && modules['proj-rates'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/rates?projectId=${id}`)}>
         <Text style={ui.btnOutlineText}>{project?.rates ? 'Project rates (custom)' : 'Project rates (default)'}</Text>
       </Pressable>
@@ -166,32 +168,32 @@ export default function ProjectDetail() {
         <Text style={ui.btnOutlineText}>Roof from aerial (Solar API)</Text>
       </Pressable>
       */}
-      {jobTools && (
+      {jobTools && modules['proj-checklist'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/checklist?projectId=${id}`)}>
         <Text style={ui.btnOutlineText}>Renovation checklist</Text>
       </Pressable>
       )}
-      {jobTools && (
+      {jobTools && modules['proj-inspection'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/inspection?projectId=${id}`)}>
         <Text style={ui.btnOutlineText}>Building inspection</Text>
       </Pressable>
       )}
-      {!noPricing && (
+      {!noPricing && modules['proj-estimate'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/estimate?projectId=${id}`)}>
         <Text style={ui.btnOutlineText}>Nature of Work & Cost Estimate</Text>
       </Pressable>
       )}
-      {!noPricing && (
+      {!noPricing && modules['proj-scope'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/project-scope?projectId=${id}`)}>
         <Text style={ui.btnOutlineText}>Scope of Work (Divisions)</Text>
       </Pressable>
       )}
-      {jobTools && (
+      {jobTools && modules['proj-intake'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/intake?projectId=${id}`)}>
         <Text style={ui.btnOutlineText}>Intake Report</Text>
       </Pressable>
       )}
-      {isElevatorMech && (
+      {isElevatorMech && modules['proj-elevator'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/elevator?projectId=${id}`)}>
         <Text style={ui.btnOutlineText}>Elevator Services</Text>
       </Pressable>
@@ -201,22 +203,22 @@ export default function ProjectDetail() {
         <Text style={ui.btnOutlineText}>Change Order</Text>
       </Pressable>
       )}
-      {jobTools && (
+      {jobTools && modules['proj-photos'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/photos?id=${id}`)}>
         <Text style={ui.btnOutlineText}>Photos</Text>
       </Pressable>
       )}
-      {jobTools && (
+      {jobTools && modules['proj-scans'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/scans?id=${id}`)}>
         <Text style={ui.btnOutlineText}>Scans</Text>
       </Pressable>
       )}
-      {jobTools && (
+      {jobTools && modules['proj-roofplan'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/roofplan?projectId=${id}`)}>
         <Text style={ui.btnOutlineText}>Roof plan sketch</Text>
       </Pressable>
       )}
-      {jobTools && (
+      {jobTools && modules['proj-compass'] && (
       <Pressable style={ui.btnOutline} onPress={() => router.push(`/project/compass?id=${id}`)}>
         <Text style={ui.btnOutlineText}>Compass</Text>
       </Pressable>

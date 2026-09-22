@@ -89,7 +89,7 @@ export default function WorkerHome() {
       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
       </Pressable>
-      {modules['projects'] && canStartProject(position) && (
+      {modules['proj-new'] && canStartProject(position) && (
         <Pressable style={ui.btn} onPress={() => router.push('/?new=1')}>
           <Text style={ui.btnText}>+ New Project</Text>
         </Pressable>
