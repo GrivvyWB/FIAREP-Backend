@@ -232,7 +232,9 @@ export default function Management() {
   // Management with assigned developments edits only reports in those developments; others are read-only.
   function canEdit(r: ResidentReport): boolean {
     if (mode === 'administrator') return true;
-    if (currentPosition === 'Superintendent Ⓔ') return true;
+    const pos = (currentPosition || '').trim().toLowerCase();
+    // Any management supervisor / superintendent sees and edits all reports.
+    if (pos.includes('supervisor') || pos.startsWith('superintendent')) return true;
     if (myDevs.length === 0) return true;
     const dev = (r.development || '').trim().toLowerCase();
     return myDevs.some((d) => (d || '').trim().toLowerCase() === dev);

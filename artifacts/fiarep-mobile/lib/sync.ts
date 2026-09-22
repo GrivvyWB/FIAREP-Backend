@@ -46,12 +46,12 @@ const ROLE_ENTITIES: Record<string, Set<string>> = {
   administrator: new Set(TABLES.map((item) => item.entity)),
   management: new Set(TABLES.map((item) => item.entity)),
   inspector: new Set(['projects', 'rooms', 'checklists', 'roofplans', 'inspections', 'hud-inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes', 'project-notes', 'project-reviews', 'resident-reports', 'building-violations', 'manpower-requests', 'violations', 'priority-violations', 'route-assignments', 'procurement', 'global-settings']),
-  worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'building-violations', 'manpower-requests', 'violations', 'elevator-jobs', 'emergency-jobs', 'leave-requests', 'global-settings']),
+  worker: new Set(['projects', 'rooms', 'project-notes', 'project-reviews', 'resident-reports', 'building-violations', 'manpower-requests', 'violations', 'elevator-jobs', 'emergency-jobs', 'change-orders', 'leave-requests', 'global-settings']),
   vendor: new Set(['projects', 'project-scopes', 'project-notes', 'project-reviews', 'building-violations', 'route-assignments', 'procurement', 'procurement-bids', 'vendor-contacts', 'vendor-quotes']),
   resident: new Set(['resident-reports']),
   // Emergency devices only request the emergency tables. The server still
   // applies assignment filtering to each returned record.
-  emergency: new Set(['emergency-units', 'emergency-jobs', 'manpower-requests']),
+  emergency: new Set(['emergency-units', 'emergency-jobs', 'manpower-requests', 'resident-reports', 'building-violations', 'violations', 'route-assignments']),
 };
 const PROJECT_KEYED = new Set(['checklists', 'roofplans', 'inspections', 'cost-estimates', 'intakes', 'elevators', 'project-scopes']);
 function normalizeLocalState(mapping: any, state: any) {
@@ -292,6 +292,26 @@ async function pushQueue(d: any) {
   }
 }
 
+// Create every local table the sync writes into, before applying records.
+// Without this, a fresh install / post-logout sync can INSERT into a table that
+// was never created yet (e.g. resident_reports), the INSERT throws inside the
+// transaction, and the record is silently dropped.
+async function ensureAllSyncTables(d: any): Promise<void> {
+  // projects, rooms and roofplans have their own multi-column schemas and
+  // dedicated creators/INSERT branches in applyRecord — never create a generic
+  // 2-column version of them here.
+  const SKIP = new Set(['projects', 'rooms', 'roofplans']);
+  for (const mapping of TABLES) {
+    if (SKIP.has(mapping.table)) continue;
+    try {
+      await d.execAsync(
+        `CREATE TABLE IF NOT EXISTS ${mapping.table} (${mapping.key} TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)`,
+      );
+    } catch (e) {}
+  }
+  try { await d.execAsync('CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)'); } catch (e) {}
+}
+
 async function applyRecord(d: any, record: any, owner: string) {
   const mapping = TABLES.find((item) => item.entity === record.entity);
   if (!mapping) return;
@@ -395,6 +415,7 @@ export async function syncAllEntities(options?: {
   });
   const newNotifications: Array<{ message: string; detail?: string; reportId?: string }> = [];
   await d.withTransactionAsync(async () => {
+    await ensureAllSyncTables(d);
     for (const record of result.records || []) {
       const pending = await d.getFirstAsync(
         'SELECT * FROM sync_queue WHERE owner=? AND entity=? AND id=? AND status IN (\'pending\',\'conflict\')',

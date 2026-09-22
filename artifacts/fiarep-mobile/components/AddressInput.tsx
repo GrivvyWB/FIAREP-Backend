@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView } from 'react-native';
 import * as Location from 'expo-location';
 import { searchNychaAddresses, type NychaAddress } from '@workspace/api-client-react';
 import { listAllAddresses, listAddressesForDevelopment } from '../lib/store';
@@ -92,7 +92,7 @@ export default function AddressInput(props: {
   const officialAddresses = official.map((item) => item.address);
   const candidates = [...officialAddresses, ...all.filter((address) => !officialAddresses.some((officialAddress) => officialAddress.toLowerCase() === address.toLowerCase()))];
   const matches = focused && (hasDev || q.length >= 2)
-    ? candidates.filter(a => (!q || a.toLowerCase().includes(q)) && a.toLowerCase() !== q).slice(0, 10)
+    ? candidates.filter(a => (!q || a.toLowerCase().includes(q)) && a.toLowerCase() !== q).slice(0, 40)
     : [];
 
   return (
@@ -109,7 +109,8 @@ export default function AddressInput(props: {
         onBlur={() => setTimeout(() => setFocused(false), 150)}
       />
       {matches.length > 0 && (
-        <View style={{ borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, marginTop: 2, overflow: 'hidden' }}>
+        <View style={{ borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, marginTop: 2, overflow: 'hidden', maxHeight: 240 }}>
+          <ScrollView keyboardShouldPersistTaps="handled" nestedScrollEnabled>
           {matches.map((a, i) => (
             <Pressable
               key={i}
@@ -119,6 +120,7 @@ export default function AddressInput(props: {
               <Text style={{ fontSize: 14, color: ACCENT }}>{a}</Text>
             </Pressable>
           ))}
+          </ScrollView>
         </View>
       )}
     </View>

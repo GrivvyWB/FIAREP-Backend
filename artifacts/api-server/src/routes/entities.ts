@@ -569,6 +569,9 @@ router.post("/v1/:entity", async (req, res, next) => {
       "Carpenter",
       "Electrician",
       "Elevator Service",
+      "Painter",
+      "Heating Service",
+      "Bricklayer",
     ]);
     const supervisorPositions: Record<string, readonly string[]> = {
       Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
@@ -577,6 +580,9 @@ router.post("/v1/:entity", async (req, res, next) => {
       Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
       Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
       "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
+      Painter: ["Painter Supervisor", "Supervisor Painter"],
+      "Heating Service": ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor"],
+      Bricklayer: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor"],
     };
     if (
       !["resident-reports", "building-violations"].includes(sourceEntity) ||
@@ -663,6 +669,13 @@ router.post("/v1/:entity", async (req, res, next) => {
       source.state["issue"] ||
       "",
     );
+    // Carry the location fields the assigned tradesperson needs to find and do
+    // the job (no pricing or procurement scope — just where and what).
+    rawState["address"] = String(
+      source.state["address"] || source.state["building"] || "",
+    );
+    rawState["unit"] = String(source.state["unit"] || "");
+    rawState["location"] = String(source.state["location"] || "");
     rawState["receiverSupervisorId"] = receiver.id;
     rawState["receiverSupervisorName"] = receiver.name;
     rawState["requestedByStaffId"] = actor.id;

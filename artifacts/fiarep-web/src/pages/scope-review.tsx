@@ -41,7 +41,7 @@ export default function ScopeReview() {
   const { data: approvedStaff = [] } = useListStaff({ status: "approved" }, {
     query: { queryKey: getListStaffQueryKey({ status: "approved" }), refetchOnMount: "always" },
   });
-  const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service"] as const;
+  const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Heating Service", "Bricklayer"] as const;
   const supervisorPositions: Record<string, string[]> = {
     Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
     CPM: ["CPM Supervisor", "Supervisor CPM"],

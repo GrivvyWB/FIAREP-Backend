@@ -211,6 +211,9 @@ function AdministratorStack() {
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
       <Stack.Screen name="index" options={{ title: 'Projects' }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
+      <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
+      <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
+      <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
       <Stack.Screen name="settings" options={{ title: 'Default rates' }} />
       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
@@ -247,6 +250,9 @@ function InspectorStack() {
       <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
       <Stack.Screen name="index" options={{ title: 'Projects' }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
+      <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
+      <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
+      <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
       <Stack.Screen name="settings" options={{ title: 'Default rates' }} />
       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
@@ -273,6 +279,9 @@ function ManagementStack() {
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
       <Stack.Screen name="index" options={{ title: 'Projects' }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
+      <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
+      <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
+      <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
       <Stack.Screen name="project/roof" options={{ title: 'Roof lookup', presentation: 'modal' }} />
@@ -316,6 +325,7 @@ function ManagementStack() {
 function WorkerStack() {
   return (
     <Stack initialRouteName="worker-home">
+      <Stack.Screen name="elevator-jobs" options={{ title: 'My Elevator Jobs' }} />
       <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />

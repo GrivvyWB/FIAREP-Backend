@@ -21,15 +21,15 @@ export default function WorkerHome() {
   const [jobCount, setJobCount] = useState(0);
   const [position, setPosition] = useState('');
   const [isEmergencyMaintenance, setIsEmergencyMaintenance] = useState(false);
-  const isTradeWorker = /^(plumber|electrician|electric|elevator service|painter|carpenter|roofer|heating service|general construction|cctv installation)$/.test((position || '').trim().toLowerCase());
+  const isTradeWorker = /^(plumber|electrician|electric|elevator service|painter|carpenter|roofer|heating service|heat plant|bricklayer|brick layer|mason|general construction|cctv installation)$/.test((position || '').trim().toLowerCase());
   useFocusEffect(useCallback(() => {
     void (async () => {
       const actor = await getCurrentActor();
       const currentPosition = await getCurrentPosition().catch(() => '');
       setPosition(currentPosition);
-      setIsEmergencyMaintenance(
-        actor.role === 'emergency' && currentPosition === 'Maintenance Worker'
-      );
+      // Any emergency-role member gets the Emergency Units tools, regardless of
+      // their position title (some are 'Maintenance Worker', others are not).
+      setIsEmergencyMaintenance(actor.role === 'emergency');
       if (actor.name && actor.id) {
         const developments = (await developmentsForStaff(actor.name).catch(() => []))
           .map((development) => development.trim().toLowerCase())
@@ -72,6 +72,11 @@ export default function WorkerHome() {
       <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
       </Pressable>
+      {position === 'Elevator Service' && (
+        <Pressable style={ui.btn} onPress={() => router.push('/elevator-jobs')}>
+          <Text style={ui.btnText}>Elevator Jobs</Text>
+        </Pressable>
+      )}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
         <Text style={ui.btnOutlineText}>Inbox</Text>
       </Pressable>
@@ -83,9 +88,9 @@ export default function WorkerHome() {
       <Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
         <Text style={ui.btnOutlineText}>Attendance</Text>
       </Pressable>
-      {!isTradeWorker && <Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
+      <Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
         <Text style={ui.btnOutlineText}>Change Work Order</Text>
-      </Pressable>}
+      </Pressable>
       <Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
         <Text style={ui.btnOutlineText}>Request Time Off</Text>
       </Pressable>

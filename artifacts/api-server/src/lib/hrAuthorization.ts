@@ -29,6 +29,10 @@ export async function canReadEntityRecordForActor(
       (row.entity === "resident-reports" || row.entity === "building-violations")
     ) {
       if (row.deleted || !canReadEntity(actor, row.entity)) return false;
+      // Resident Reports are visible to every management supervisor across all
+      // developments (the Resident Reports page is org-wide for supervisors).
+      // Building violations stay scoped to the supervisor's own developments.
+      if (row.entity === "resident-reports") return true;
       if (
         actor.developments.length > 0 &&
         row.development &&

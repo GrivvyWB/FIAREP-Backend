@@ -23,6 +23,7 @@ export default function Projects() {
   const [adding, setAdding] = useState(false);
   const [developments, setDevelopments] = useState<string[]>([]);
   const [development, setDevelopment] = useState('');
+  const [devQuery, setDevQuery] = useState('');
   const [position, setPosition] = useState('');
 
   const load = useCallback(() => {
@@ -66,7 +67,10 @@ export default function Projects() {
           <View><Text style={ui.label}>Client (optional)</Text>
             <TextInput style={ui.input} value={client} onChangeText={setClient} placeholder="Jane Doe" /></View>
           {developments.length > 1 && <View><Text style={ui.label}>Development</Text>
-            <View style={ui.row}>{developments.map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</View>
+            <TextInput style={[ui.input, { marginBottom: 8 }]} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments" autoCapitalize="characters" />
+            <ScrollView style={{ maxHeight: 260 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>{developments.filter((item) => !devQuery.trim() || item.toLowerCase().includes(devQuery.trim().toLowerCase())).map((item) => <Pressable key={item} style={[ui.btnOutline, development === item && ui.btn]} onPress={() => setDevelopment(item)}><Text style={development === item ? ui.btnText : ui.btnOutlineText}>{item}</Text></Pressable>)}</View>
+            </ScrollView>
           </View>}
           <View style={ui.row}>
             <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => setAdding(false)}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>

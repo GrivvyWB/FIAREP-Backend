@@ -117,9 +117,12 @@ export default function MyJobs() {
       <Text style={ui.h}>My Jobs</Text>
        <Text style={ui.label}>Repairs assigned to you. Open one, do the repair, then mark it done with a note and a photo.</Text>
        {inHouseJobs.length > 0 && <>
-         <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>In-house procurement requests ({inHouseJobs.length})</Text>
+         <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>Assigned trade work ({inHouseJobs.length})</Text>
          {inHouseJobs.map((job) => <View key={job.id} style={[ui.card, { gap: 7, marginTop: 8 }]}>
            <Text style={{ fontWeight: '700' }}>{job.requestedTrade} · {job.sourceTitle || 'Assigned work'}</Text>
+           {(!!job.address || !!job.unit) && <Text style={{ fontSize: 14 }}>{[job.address, job.unit].filter(Boolean).join(' · ')}</Text>}
+           {!!job.location && <Text style={ui.listSub}>Location: {job.location}</Text>}
+           {!!job.sourceDetails && <Text style={{ fontSize: 14, color: '#333' }}>{job.sourceDetails}</Text>}
            <Text style={ui.listSub}>{job.development || 'Development not specified'} · {job.status}</Text>
            {job.status === 'dispatched' && <Pressable style={ui.btn} onPress={async () => {
              try { await performEntityAction('manpower-requests', job.id, 'start', {}); load(); }

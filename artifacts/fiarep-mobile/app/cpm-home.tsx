@@ -17,22 +17,26 @@ export default function CpmHome() {
   const [position, setPosition] = useState('');
   useFocusEffect(useCallback(() => {
     (async () => {
-      const a = await getCurrentActor();
-      const nextPosition = await getCurrentPosition();
-      const normalized = nextPosition.trim().toLowerCase();
-      let c = normalized === 'cpm supervisor' ? 0 : await unreadCount('inspector');
-      if (a.id) c += await unreadCount(a.id);
-      if (a.name) c += await unreadCount(a.name);
-      setUnread(c);
-      if (normalized === 'cpm supervisor') {
-        router.replace('/management-home');
-        return;
+      try {
+        const a = await getCurrentActor();
+        const nextPosition = (await getCurrentPosition()) || '';
+        const normalized = nextPosition.trim().toLowerCase();
+        let c = normalized === 'cpm supervisor' ? 0 : await unreadCount('inspector').catch(() => 0);
+        if (a?.id) c += await unreadCount(a.id).catch(() => 0);
+        if (a?.name) c += await unreadCount(a.name).catch(() => 0);
+        setUnread(c);
+        if (normalized === 'cpm supervisor') {
+          router.replace('/management-home');
+          return;
+        }
+        if (normalized !== 'cpm' && normalized !== 'inspector') {
+          router.replace(mode === 'management' ? '/management-home' : '/');
+          return;
+        }
+        setPosition(nextPosition);
+      } catch (e) {
+        // Data not ready / offline — keep the screen usable rather than blank.
       }
-      if (normalized !== 'cpm' && normalized !== 'inspector') {
-        router.replace(mode === 'management' ? '/management-home' : '/');
-        return;
-      }
-      setPosition(nextPosition);
     })();
   }, [mode, router]));
   const normalizedPosition = position.trim().toLowerCase();

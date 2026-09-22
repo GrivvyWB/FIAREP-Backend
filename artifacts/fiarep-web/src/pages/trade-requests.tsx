@@ -20,7 +20,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 
-const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service"] as const;
+const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Heating Service", "Bricklayer"] as const;
 const supervisorPositions: Record<(typeof trades)[number], readonly string[]> = {
   Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
   CPM: ["CPM Supervisor", "Supervisor CPM"],
@@ -28,6 +28,9 @@ const supervisorPositions: Record<(typeof trades)[number], readonly string[]> = 
   Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
   Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
   "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
+  Painter: ["Painter Supervisor", "Supervisor Painter"],
+  "Heating Service": ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor"],
+  Bricklayer: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor"],
 };
 
 type SourceEntity = "resident-reports" | "building-violations";
