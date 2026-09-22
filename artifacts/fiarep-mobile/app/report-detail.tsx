@@ -159,6 +159,27 @@ export default function ReportDetail() {
           <Text>{r.description}</Text>
         </View>
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
+        {(mode === 'management' || mode === 'administrator' || mode === 'inspector') && (() => {
+          const scans = (r as any).aiPhotoScans && typeof (r as any).aiPhotoScans === 'object' ? Object.values((r as any).aiPhotoScans) : [];
+          if (!scans.length) return null;
+          return (
+            <View style={{ marginTop: 8, borderWidth: 1, borderColor: '#cdd9e6', backgroundColor: '#eef4fb', borderRadius: 8, padding: 10, gap: 6 }}>
+              <Text style={{ fontWeight: '700', fontSize: 13, color: '#1C4E86' }}>Violation assessment (from photo) · staff only</Text>
+              {scans.map((sc: any, i: number) => (
+                <View key={i} style={{ gap: 2, paddingTop: i ? 6 : 0, borderTopWidth: i ? 1 : 0, borderTopColor: '#d5e0ec' }}>
+                  <Text style={{ fontSize: 14 }}>
+                    <Text style={{ fontWeight: '700', color: '#1C4E86' }}>Code {sc.hpCode || 'REVIEW REQUIRED'}</Text>
+                    {sc.classification ? '  ·  Class ' + sc.classification : ''}
+                    {sc.priority ? '  ·  ' + sc.priority + ' priority' : ''}
+                  </Text>
+                  {!!(sc.codeMeaning || sc.condition) && <Text style={{ fontSize: 13, color: '#333' }}>{sc.codeMeaning || sc.condition}</Text>}
+                  {!!sc.codeOrderText && <Text style={ui.listSub} numberOfLines={3}>{sc.codeOrderText}</Text>}
+                  {!!sc.trade && <Text style={ui.listSub}>Trade: {sc.trade}{typeof sc.confidence === 'number' ? '  ·  AI ' + sc.confidence + '%' : ''}</Text>}
+                </View>
+              ))}
+            </View>
+          );
+        })()}
         {(mode === 'management' || mode === 'administrator') && r.status !== 'resolved' && (() => {
           const base = 'preAddress=' + encodeURIComponent(r.address || '')
             + '&preReportId=' + encodeURIComponent(r.id)

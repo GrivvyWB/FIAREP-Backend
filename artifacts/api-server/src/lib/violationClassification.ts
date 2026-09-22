@@ -1,4 +1,5 @@
 import { ClassifyViolationResponse } from "@workspace/api-zod";
+import { lookupViolationCode, violationCodeCatalog } from "./violationCodes";
 
 export type ViolationClassification = {
   classification: "A" | "B" | "C";
@@ -12,13 +13,19 @@ export type ViolationClassification = {
 
 type FetchLike = typeof fetch;
 
-const SYSTEM_PROMPT = `You classify visible housing-maintenance violations for FIAREP field staff.
+const SYSTEM_PROMPT = `You classify visible NYC housing-maintenance violations for FIAREP field staff.
 Return only JSON matching the supplied schema. Use:
 - classification A for non-hazardous conditions
 - classification B for hazardous conditions
 - classification C for immediately hazardous conditions
-Choose a likely HPD code only when the image supports it; otherwise use "REVIEW REQUIRED".
-Never claim certainty about concealed conditions. Keep the description concise and factual.`;
+You MUST set hpCode to the single best-matching code NUMBER from the official HPD/MDL
+code list below (return just the code, e.g. "574" or "081B"). Pick the closest real
+code the image supports. Only if truly nothing in the list could apply, use "REVIEW REQUIRED".
+Never invent a code that is not in the list. Never claim certainty about concealed
+conditions. Keep the description concise and factual.
+
+OFFICIAL HPD/MDL and DOB CODE LIST (code: meaning [class]) — DOB codes are prefixed "DOB-":
+${violationCodeCatalog()}`;
 
 function responseText(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
@@ -122,6 +129,14 @@ export async function classifyViolationImage(
     const classification = parseViolationClassification(await response.json());
     if (!classification) {
       throw new Error("OpenAI returned an invalid violation classification");
+    }
+    // Enrich with the official code meaning so management/inspectors see a real
+    // code and its HPD/MDL order text, not just a class letter.
+    const matched = lookupViolationCode(classification.hpCode);
+    if (matched) {
+      (classification as Record<string, unknown>)["codeMeaning"] =
+        matched.abstract || matched.full || matched.desc;
+      (classification as Record<string, unknown>)["codeOrderText"] = matched.desc;
     }
     return classification;
   } finally {
