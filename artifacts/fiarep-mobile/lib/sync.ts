@@ -465,17 +465,29 @@ export async function syncAllEntities(options?: {
       } else await applyRecord(d, record, owner);
     }
     await d.execAsync('CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)');
+    // Notifications the user removed on this device never come back, even if
+    // the server re-sends them (e.g. a full re-sync after sign-in).
+    let removedIds = new Set<string>();
+    try {
+      const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'deleted_notification_ids');
+      removedIds = new Set<string>(row?.value ? JSON.parse(row.value) : []);
+    } catch { removedIds = new Set<string>(); }
     for (const notification of result.notifications || []) {
-      const existing = await d.getFirstAsync<{ id: string }>(
-        'SELECT id FROM notifications WHERE id=?',
+      if (removedIds.has(notification.id)) continue;
+      const existing = await d.getFirstAsync<{ id: string; state: string }>(
+        'SELECT id, state FROM notifications WHERE id=?',
         notification.id,
       );
+      // A notification read on this device stays read even if the server copy
+      // has not caught up yet.
+      let locallyRead = false;
+      try { locallyRead = Boolean(existing?.state && JSON.parse(existing.state).read); } catch { locallyRead = false; }
       const localNotification = {
         id: notification.id,
         target: notification.target,
         message: notification.message,
         detail: notification.detail || '',
-        read: Boolean(notification.read),
+        read: Boolean(notification.read) || locallyRead,
         at: notification.at || new Date().toISOString(),
         reportId: notification.reportId || undefined,
       };

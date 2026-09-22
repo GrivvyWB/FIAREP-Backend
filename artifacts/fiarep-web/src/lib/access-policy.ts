@@ -16,7 +16,9 @@ const UPPER_MANAGEMENT_POSITIONS = new Set(["Director", "Borough Director", "Reg
 const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "team", "shared-data"]);
 const ELEVATOR_POSITIONS = new Set(["Elevator Supervisor", "Elevator Service"]);
 const HUD_REVIEW_POSITIONS = new Set(["Supervisor Inspector"]);
-const OPT_IN_MODULES = new Set<StaffModule>(["projects"]);
+// Modules that are OFF until the platform owner enables them (none today;
+// the per-tool Project switches are handled in Module Management).
+const OPT_IN_MODULES = new Set<StaffModule>([]);
 const CPM_ONLY_MODULES = new Set<StaffModule>([
   "estimates",
   "repairs",

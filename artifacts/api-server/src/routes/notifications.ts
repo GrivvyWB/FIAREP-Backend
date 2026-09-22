@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import { db, notifications, staffAccounts } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { visibleNotificationsFor } from "../lib/notificationVisibility";
+import { canDeleteOperationalRecords } from "../lib/domain";
 
 const router: IRouter = Router();
 router.use("/v1/notifications", requireAuth);
@@ -105,6 +106,29 @@ router.post("/v1/notifications/:id/read", async (req, res) => {
     return;
   }
   res.json(updated);
+});
+
+// Permanently remove a notification so it does not return on the next sync.
+// A person may remove notifications addressed to them; administrators and
+// higher management may remove any notification in the organization.
+router.delete("/v1/notifications/:id", async (req, res) => {
+  const actor = actorFrom(res);
+  const ownTargets = [actor.id, actor.name, actor.role];
+  const [deleted] = await db
+    .delete(notifications)
+    .where(
+      and(
+        eq(notifications.id, req.params["id"]!),
+        eq(notifications.tenantId, actor.tenantId),
+        ...(canDeleteOperationalRecords(actor) ? [] : [inArray(notifications.target, ownTargets)]),
+      ),
+    )
+    .returning({ id: notifications.id });
+  if (!deleted) {
+    res.status(404).json({ error: "Notification not found" });
+    return;
+  }
+  res.status(204).end();
 });
 
 router.post("/v1/notifications/read-all", async (_req, res) => {

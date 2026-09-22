@@ -40,6 +40,7 @@ import {
   type TimeClockStatus,
   type TimeClockPunch,
   type VendorWalkthroughCheckIn,
+  customFetch,
 } from '@workspace/api-client-react';
 export type { TimeClockPunch, TimeClockStatus } from '@workspace/api-client-react';
 import type { Rates } from './takeoff';
@@ -2303,7 +2304,11 @@ export async function markNotificationRead(id: string): Promise<void> {
   if (!row) return;
   try {
     const n = JSON.parse(row.state) as Notification;
-    if (!n.read) await d.runAsync('UPDATE notifications SET state = ? WHERE id = ?', JSON.stringify({ ...n, read: true }), id);
+    if (!n.read) {
+      await d.runAsync('UPDATE notifications SET state = ? WHERE id = ?', JSON.stringify({ ...n, read: true }), id);
+      // Persist the read state on the server so it survives re-syncs.
+      customFetch<unknown>('/api/v1/notifications/' + encodeURIComponent(id) + '/read', { method: 'POST' }).catch(() => undefined);
+    }
   } catch {}
 }
 
@@ -2681,6 +2686,21 @@ export async function deleteNotification(id: string): Promise<void> {
   const d = await db();
   await ensureNotifTable(d);
   await d.runAsync('DELETE FROM notifications WHERE id = ?', id);
+  // Remember the removal so a later sync cannot bring it back on this device.
+  try {
+    const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'deleted_notification_ids');
+    let ids: string[] = [];
+    try { ids = row?.value ? JSON.parse(row.value) : []; } catch { ids = []; }
+    if (!ids.includes(id)) ids.push(id);
+    await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'deleted_notification_ids', JSON.stringify(ids.slice(-1000)));
+  } catch {}
+  // Remove it on the server too so it is gone for good (and on other devices).
+  try {
+    await customFetch<void>('/api/v1/notifications/' + encodeURIComponent(id), { method: 'DELETE' });
+  } catch (e: any) {
+    // 404 = already gone. Anything else: the local tombstone still hides it here.
+    if (e?.status !== 404) console.warn('notification delete not synced', e?.message || e);
+  }
 }
 
 export async function listAllNotifications(): Promise<Notification[]> {

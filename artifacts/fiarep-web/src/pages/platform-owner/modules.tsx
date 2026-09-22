@@ -54,7 +54,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "hud-inspections", name: "HUD Inspections", description: "HUD inspection workflow", icon: ShieldCheck },
   { id: "estimates", name: "Estimates", description: "Cost estimates", icon: FileBarChart },
   { id: "repairs", name: "Repairs", description: "Repair workflow", icon: Wrench },
-  { id: "projects", name: "Projects (Construction PM)", description: "CPM new-project workflow: checklist, inspection, cost estimate, intake, elevator, compass", icon: Building2 },
+  { id: "projects", name: "Projects", description: "Project area (pick the individual tools below)", icon: Building2 },
   { id: "reports", name: "Reports", description: "Reports and records", icon: FileBarChart },
   { id: "report-upload", name: "Upload Report", description: "Report uploads", icon: FileBarChart },
   { id: "calendar", name: "Calendar", description: "Organization calendar", icon: Home },
@@ -115,7 +115,7 @@ function configuredModules(organization: OrganizationWithUsage): Record<string, 
 
   // These modules are opt-in: they read as OFF until explicitly enabled for
   // the client, so the switch reflects the true default.
-  const OPT_IN = new Set<string>(["projects"]);
+  const OPT_IN = new Set<string>([]);
   return MODULES.reduce<Record<string, boolean>>((result, module) => {
     const value = saved[module.id];
     result[module.id] = typeof value === "boolean"

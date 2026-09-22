@@ -26,7 +26,6 @@ async function settingKey(): Promise<string> {
 // Modules that are OFF until the platform owner explicitly turns them on for a
 // client (opt-in). Everything else stays enabled unless explicitly disabled.
 const OPT_IN_MODULES = new Set<ModuleId>([
-  'projects',
   'proj-new', 'proj-room', 'proj-rates', 'proj-checklist', 'proj-inspection',
   'proj-estimate', 'proj-scope', 'proj-intake', 'proj-elevator',
   'proj-photos', 'proj-scans', 'proj-roofplan', 'proj-compass',
