@@ -26,6 +26,7 @@ export default function ManagementHome() {
   });
   const _pos = (position || '').trim().toLowerCase();
   const isSup = _pos.includes('supervisor') || _pos === 'superintendent';
+  const coverageEligible = _pos.includes('supervisor') || _pos.startsWith('superintendent');
   // Elevated roles see every module. Regular supervisors are restricted.
   const isElevated = mode === 'administrator'
     || _pos === 'regional director' || _pos === 'borough director' || _pos === 'superintendent'
@@ -75,6 +76,7 @@ export default function ManagementHome() {
       : [
         { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' },
         { label: 'Assign a Job', onPress: () => router.push('/dispatch-job'), tone: 'solid' },
+        ...(coverageEligible ? [{ label: 'Cover a Site', onPress: () => router.push('/cover-site'), tone: 'tint' as Tone }] : []),
       ];
     return <ScrollView contentContainerStyle={ui.wrap}>
       <AlertBanner count={unread} /><Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{title}</Text>
@@ -99,6 +101,7 @@ export default function ManagementHome() {
       tiles: [
         ...(!restricted ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         { label: 'Assign a Job', onPress: () => router.push('/dispatch-job'), tone: 'solid' },
+        ...(coverageEligible ? [{ label: 'Cover a Site', onPress: () => router.push('/cover-site'), tone: 'tint' as Tone }] : []),
         ...(isSup && !cpmSupervisor ? [{ label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone }] : []),
         { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' },
         ...(!restricted ? [{ label: 'Staff Member Jobs', onPress: () => router.push('/worker'), tone: 'tint' as Tone }] : []),

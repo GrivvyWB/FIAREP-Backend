@@ -40,6 +40,7 @@ export default function PublicResident() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [addressFocused, setAddressFocused] = useState(false);
+  const [waterType, setWaterType] = useState('');
   
   const { toast } = useToast();
   
@@ -62,6 +63,8 @@ export default function PublicResident() {
   });
   const selectedDevelopment = reportForm.watch('development');
   const addressSearch = reportForm.watch('address') || '';
+  const descriptionText = reportForm.watch('description') || '';
+  const showWater = /(leak|water|flood|stoppage)/i.test(descriptionText);
   const { data: developmentOptions = [] } = useListNychaDevelopments();
   const addressParams = {
     development: selectedDevelopment.trim() || undefined,
@@ -83,10 +86,14 @@ export default function PublicResident() {
   });
 
   const onReportSubmit = (values: z.infer<typeof reportSchema>) => {
+    const includeWater = waterType && /(leak|water|flood|stoppage)/i.test(values.description || '');
+    const state = includeWater
+      ? { ...values, description: `${waterType}. ${(values.description || '').trim()}`.trim() }
+      : values;
     submitReport.mutate({
       data: {
         id: crypto.randomUUID(),
-        state: values
+        state
       }
     }, {
       onSuccess: async (res) => {
@@ -277,6 +284,23 @@ export default function PublicResident() {
                       <FormMessage />
                     </FormItem>
                   )} />
+                  {showWater && (
+                    <div className="space-y-1.5">
+                      <FormLabel>Water — is it hot or cold?</FormLabel>
+                      <div className="flex gap-2">
+                        {['Hot water', 'Cold water'].map((w) => (
+                          <Button
+                            type="button"
+                            key={w}
+                            variant={waterType === w ? 'default' : 'outline'}
+                            onClick={() => setWaterType((cur) => (cur === w ? '' : w))}
+                          >
+                            {w}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                    <div>
                      <input
                        id="resident-report-photo"
