@@ -22,12 +22,17 @@ import { ArrowLeft } from 'lucide-react';
 
 const reportSchema = z.object({
   development: z.string().min(1, 'Development is required'),
-  address: z.string().optional(),
+  address: z.string().min(1, 'Building address is required'),
+  location: z.enum(['Apartment/Unit', 'Building', 'Hallways', 'Compactor', 'Elevator', 'Other']),
   unit: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
   reporterName: z.string().optional(),
   reporterPhone: z.string().optional(),
   reporterEmail: z.string().email('Invalid email').optional().or(z.literal('')),
+}).superRefine((value, context) => {
+  if (value.location === 'Apartment/Unit' && !value.unit?.trim()) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['unit'], message: 'Apartment / unit is required for an apartment issue' });
+  }
 });
 
 const lookupSchema = z.object({
@@ -59,12 +64,13 @@ export default function PublicResident() {
   
   const reportForm = useForm<z.infer<typeof reportSchema>>({
     resolver: zodResolver(reportSchema),
-    defaultValues: { development: '', address: '', unit: '', description: '', reporterName: '', reporterPhone: '', reporterEmail: '' },
+    defaultValues: { development: '', address: '', location: 'Apartment/Unit', unit: '', description: '', reporterName: '', reporterPhone: '', reporterEmail: '' },
   });
   const selectedDevelopment = reportForm.watch('development');
   const addressSearch = reportForm.watch('address') || '';
   const descriptionText = reportForm.watch('description') || '';
   const showWater = /(leak|water|flood|stoppage)/i.test(descriptionText);
+  const selectedLocation = reportForm.watch('location');
   const { data: developmentOptions = [] } = useListNychaDevelopments();
   const addressParams = {
     development: selectedDevelopment.trim() || undefined,
@@ -235,9 +241,9 @@ export default function PublicResident() {
                       <FormMessage />
                     </FormItem>
                   )} />
-                   <FormField control={reportForm.control} name="address" render={({ field }) => (
+                    <FormField control={reportForm.control} name="address" render={({ field }) => (
                      <FormItem>
-                       <FormLabel>Address (Optional)</FormLabel>
+                        <FormLabel>Building Address</FormLabel>
                         <FormControl>
                           <Input
                             {...field}
@@ -270,9 +276,25 @@ export default function PublicResident() {
                        <FormMessage />
                      </FormItem>
                    )} />
+                   <FormField control={reportForm.control} name="location" render={({ field }) => (
+                     <FormItem>
+                       <FormLabel>Issue Location</FormLabel>
+                       <FormControl>
+                         <select {...field} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                           <option value="Apartment/Unit">Apartment / Unit</option>
+                           <option value="Building">Building</option>
+                           <option value="Hallways">Hallway</option>
+                           <option value="Compactor">Compactor</option>
+                           <option value="Elevator">Elevator</option>
+                           <option value="Other">Other building area</option>
+                         </select>
+                       </FormControl>
+                       <FormMessage />
+                     </FormItem>
+                   )} />
                   <FormField control={reportForm.control} name="unit" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Unit (Optional)</FormLabel>
+                       <FormLabel>{selectedLocation === 'Apartment/Unit' ? 'Apartment / Unit' : 'Apartment / Unit (Optional)'}</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>

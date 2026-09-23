@@ -162,6 +162,8 @@ export default function Notifications() {
                             ? `/team?staffId=${encodeURIComponent(notification.reportId)}`
                             : notification.message === "Leave request"
                               ? "/leave?view=team"
+                                : /violation repair completed/i.test(notification.message)
+                                  ? `/inspections?id=${encodeURIComponent(notification.reportId)}`
                               : `/reports?id=${encodeURIComponent(notification.reportId)}`
                         }
                         className="flex min-w-0 flex-1 items-start gap-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"

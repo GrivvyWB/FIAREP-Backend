@@ -69,17 +69,19 @@ export default function MyJobs() {
     try { const photo = await pickPhotoWithGeo(); if (photo) setPhotos((p) => [...p, photo]); } catch (e: any) { Alert.alert('Photos', String(e && e.message ? e.message : e)); }
   }
   async function markDone(v: BuildingViolation) {
-    if (!note.trim() && photos.length === 0) {
-      Alert.alert('Add detail', 'Add a completion note or a photo of the finished repair before marking done.');
+    if (photos.length === 0) {
+      Alert.alert('Completion photo required', 'Take or select a photo of the finished repair before marking this violation done.');
       return;
     }
     setBusy(true);
     try {
       const completionGeo = await captureGeo();
-      await completeRoutedViolation(v.id, note.trim(), photos, completionGeo);
+      const completed = await completeRoutedViolation(v.id, note.trim(), photos, completionGeo);
       setOpenId(null); setNote(''); setPhotos([]);
       load();
-      Alert.alert('Marked complete', 'Management has been notified the repair is complete.');
+      Alert.alert('Marked complete', completed && (completed as any)._pendingWorkflowActions?.length
+        ? 'Saved on this device. The repair photo and notification will be sent when you are back online.'
+        : 'The repair photo was sent to the supervisor for review.');
     } catch (e: any) {
       Alert.alert('Error', String(e && e.message ? e.message : e));
     } finally { setBusy(false); }

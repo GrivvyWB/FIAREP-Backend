@@ -120,6 +120,7 @@ async function prepareUploadState(
           entity,
           recordId,
          }, evidenceFor(localUri))),
+        kind: uploadKind,
         localUri,
       });
     } catch { /* retained for retry */ }
@@ -252,19 +253,81 @@ async function pushQueue(d: any) {
           }
         }
       } else {
+        let recoveredExisting = false;
         try {
           result = await createEntityRecord(row.entity, input);
         } catch (error: any) {
+          // A locally queued completion can be discovered after its public
+          // report/violation was already created by another sync pass. The
+          // create endpoint correctly returns 409, but this is recoverable
+          // only for the two evidence-bearing workflows and only when an
+          // action is still pending. Never broaden this into a general
+          // unversioned overwrite fallback.
+          if (
+            error?.status === 409 &&
+            !row.baseVersion &&
+            pendingActions.length &&
+            ['resident-reports', 'building-violations'].includes(row.entity)
+          ) {
+            const existing: any = await getEntityRecord(row.entity, row.id);
+            const serverState = existing?.state && typeof existing.state === 'object'
+              ? existing.state
+              : {};
+            const localCompletionPhotos = Array.isArray(state.completionPhotos)
+              ? state.completionPhotos
+              : [];
+            const localCompletionEvidence = Array.isArray(state.completionPhotoEvidence)
+              ? state.completionPhotoEvidence
+              : [];
+            const localRemoteFiles = Array.isArray(state.remoteFiles)
+              ? state.remoteFiles
+              : [];
+            const mergeUnique = (serverValues: unknown, localValues: unknown[]) => [
+              ...(Array.isArray(serverValues) ? serverValues : []),
+              ...localValues.filter((value) => !Array.isArray(serverValues) || !serverValues.some((item) =>
+                JSON.stringify(item) === JSON.stringify(value),
+              )),
+            ];
+            // Start from server authority so stale local status/assignment
+            // cannot overwrite a reassignment or workflow transition.
+            Object.assign(state, {
+              ...serverState,
+              completionPhotos: mergeUnique(serverState.completionPhotos, localCompletionPhotos),
+              completionPhotoEvidence: mergeUnique(serverState.completionPhotoEvidence, localCompletionEvidence),
+              remoteFiles: mergeUnique(serverState.remoteFiles, localRemoteFiles),
+            });
+            result = existing;
+            recoveredExisting = true;
+          }
           // A create collision is only safely recoverable with an optimistic
           // version supplied by the local record. Never issue an unversioned
           // PATCH that could overwrite another device's work.
-          if (error?.status !== 409 || !row.baseVersion) throw error;
-          result = await updateEntityRecord(row.entity, row.id, input);
+          if (!recoveredExisting) {
+            if (error?.status !== 409 || !row.baseVersion) throw error;
+            result = await updateEntityRecord(row.entity, row.id, input);
+          }
         }
         // A new record must exist before an object URL can be issued. This
         // also binds retries for existing records to the same authorization
         // boundary used by the API.
         const uploadedState = await prepareUploadState(row.entity, row.id, state);
+        // A completion notification must never get ahead of its repair photo.
+        // If a local completion URI is still present after the upload attempt,
+        // leave the queue pending so the next sync retries the upload and the
+        // workflow action is replayed only after a remote object exists.
+        const completionUris = [
+          ...(Array.isArray(state.completionPhotos) ? state.completionPhotos : []),
+        ].filter((uri): uri is string => typeof uri === 'string' && uri.length > 0);
+        if (
+          completionUris.length &&
+          ['resident-reports', 'building-violations'].includes(row.entity) &&
+          !completionUris.every((uri) =>
+            Array.isArray(uploadedState.remoteFiles) &&
+            uploadedState.remoteFiles.some((file: any) => file.localUri === uri && typeof file.objectPath === 'string' && file.objectPath.length > 0),
+          )
+        ) {
+          throw new Error('Completion photo is still uploading; retrying before notifying the supervisor.');
+        }
         if (uploadedState.remoteFiles) {
           registerRemotePhotos(uploadedState.remoteFiles);
           if (localMapping) {
@@ -275,15 +338,22 @@ async function pushQueue(d: any) {
             }
             await d.runAsync('UPDATE sync_queue SET state=? WHERE owner=? AND entity=? AND id=?', JSON.stringify(uploadedState), row.owner, row.entity, row.id);
           }
-          result = await updateEntityRecord(row.entity, row.id, {
-            id: row.id,
-            state: writableState(row.entity, uploadedState),
-            ...(uploadedState.projectId ? { projectId: uploadedState.projectId } : {}),
-            ...(uploadedState.development || uploadedState.meta?.development
-              ? { development: uploadedState.development || uploadedState.meta.development }
-              : {}),
-            version: result.version,
-          });
+          const evidenceInput = recoveredExisting
+            ? {
+                id: row.id,
+                state: writableState(row.entity, uploadedState),
+                version: result.version,
+              }
+            : {
+                id: row.id,
+                state: writableState(row.entity, uploadedState),
+                ...(uploadedState.projectId ? { projectId: uploadedState.projectId } : {}),
+                ...(uploadedState.development || uploadedState.meta?.development
+                  ? { development: uploadedState.development || uploadedState.meta.development }
+                  : {}),
+                version: result.version,
+              };
+          result = await updateEntityRecord(row.entity, row.id, evidenceInput);
         }
         for (const pending of pendingActions) {
           const action = row.entity === 'resident-reports' && pending.action === 'resolve'
@@ -411,8 +481,8 @@ async function applyRecord(d: any, record: any, owner: string) {
 
 export async function syncAllEntities(options?: {
   refreshEntities?: string[];
-}): Promise<void> {
-  if (!(await getAccessToken())) return;
+}): Promise<boolean> {
+  if (!(await getAccessToken())) return false;
   const d = await db();
   await ensureQueue(d);
   const actor = await getCurrentActor();
@@ -537,4 +607,5 @@ export async function syncAllEntities(options?: {
       );
     }
   }
+  return true;
 }

@@ -52,8 +52,8 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
       
       <div className="flex items-center gap-5 md:gap-[22px]">
         {isCoverageEligible(staff) && <CoverSiteButton />}
-        <Link href="/notifications" className="relative text-muted-foreground cursor-pointer hover:text-foreground transition-colors block">
-          <Bell className="w-[22px] h-[22px]" />
+        <Link href="/notifications" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"} className="relative text-muted-foreground cursor-pointer hover:text-foreground transition-colors block">
+          <Bell className={`w-[22px] h-[22px] ${unreadCount > 0 ? "notification-bell-unread text-[#b77900]" : ""}`} />
           {unreadCount > 0 && (
             <span className="absolute -top-1.5 -right-1.5 bg-[#F5B301] text-sidebar text-[10px] font-bold min-w-[17px] h-[17px] px-1 rounded-full grid place-items-center">
               {unreadCount > 99 ? "99+" : unreadCount}

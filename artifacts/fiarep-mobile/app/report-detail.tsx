@@ -114,7 +114,7 @@ export default function ReportDetail() {
     if (!r || !actorId || completionPhotos.length === 0) return;
     setCompletionBusy(true);
     try {
-      await addResidentUpdate(
+      const delivery = await addResidentUpdate(
         r.id,
         'resolved',
         completionNote,
@@ -125,7 +125,9 @@ export default function ReportDetail() {
       setCompletionNote('');
       setCompletionPhotos([]);
       load();
-      Alert.alert('Completed', 'The completed-work photo was sent to the supervisor.');
+      Alert.alert('Completed', delivery === 'sent'
+        ? 'The completed-work photo was sent to the supervisor.'
+        : 'Saved on this device. It will be uploaded and sent to the supervisor when you are back online.');
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : String(error));
     } finally {

@@ -16,6 +16,7 @@ import { useRouter } from 'expo-router';
 import { createResidentReport, LOCATION_CATEGORIES } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
+import AddressInput from '../components/AddressInput';
 
 export default function ResidentScreen() {
   const router = useRouter();
@@ -29,6 +30,7 @@ export default function ResidentScreen() {
   const [locationOther, setLocationOther] = useState('');
   const [unit, setUnit] = useState('');
   const [development, setDevelopment] = useState('');
+  const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -62,6 +64,14 @@ export default function ResidentScreen() {
       Alert.alert('Development required', 'Please enter your development.');
       return;
     }
+    if (!address.trim()) {
+      Alert.alert('Building address required', 'Select the building address where the issue occurred.');
+      return;
+    }
+    if (location === 'Apartment/Unit' && !unit.trim()) {
+      Alert.alert('Apartment / unit required', 'Enter your apartment or unit for an apartment issue.');
+      return;
+    }
     if (!description.trim()) {
       Alert.alert('Description required', 'Please describe the issue.');
       return;
@@ -69,7 +79,7 @@ export default function ResidentScreen() {
     setSubmitting(true);
     try {
       const effLoc = location === 'Other' ? (locationOther.trim() || 'Other') : location;
-      const report = await createResidentReport(unit.trim(), development.trim(), description.trim(), photos, name.trim(), effLoc);
+      const report = await createResidentReport(unit.trim(), development.trim(), description.trim(), photos, name.trim(), effLoc, '', address.trim());
       const failures = (report as any).photoUploadFailures as string[] | undefined;
       Alert.alert('Report submitted', `Complaint number: ${report.complaintNo}\n\nThis report is saved on this device for status checks.${failures?.length ? `\n\n${failures.length} photo(s) could not be uploaded.` : ''}`, [
         { text: 'OK', onPress: () => router.back() },
@@ -114,7 +124,7 @@ export default function ResidentScreen() {
         )}
       </View>
 
-      <Text style={styles.label}>Unit / Apartment</Text>
+      <Text style={styles.label}>{location === 'Apartment/Unit' ? 'Unit / Apartment' : 'Unit / Apartment (Optional)'}</Text>
       <TextInput
         style={styles.input}
         value={unit}
@@ -130,6 +140,15 @@ export default function ResidentScreen() {
         onChangeText={setDevelopment}
         style={styles.input}
         autoCapitalize="words"
+      />
+
+      <Text style={styles.label}>Building Address</Text>
+      <AddressInput
+        value={address}
+        onChangeText={setAddress}
+        development={development}
+        placeholder="Select your building address"
+        style={styles.input}
       />
 
       <Text style={styles.label}>Description</Text>

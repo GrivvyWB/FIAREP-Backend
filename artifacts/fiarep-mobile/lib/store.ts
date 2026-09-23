@@ -593,7 +593,7 @@ function normalizeResidentReport(r: any): ResidentReport {
   } as ResidentReport;
 }
 
-export async function createResidentReport(unit: string, development: string, description: string, photos: string[] = [], residentName: string = '', location: string = '', contact: string = ''): Promise<ResidentReport> {
+export async function createResidentReport(unit: string, development: string, description: string, photos: string[] = [], residentName: string = '', location: string = '', contact: string = '', address: string = ''): Promise<ResidentReport> {
   const now = new Date().toISOString();
   const submitted = await submitPublicResidentReport({
     id: uid(),
@@ -603,7 +603,7 @@ export async function createResidentReport(unit: string, development: string, de
       contact: contact.trim() || undefined,
       location: location.trim(),
       unit: unit.trim(),
-      address: '',
+      address: address.trim(),
       development: development.trim(),
       description: description.trim(),
       photos: [],
@@ -623,7 +623,7 @@ export async function createResidentReport(unit: string, development: string, de
       const complaintNo = String((submitted.state as any).complaintNo ?? "");
       const upload = await requestPublicResidentPhotoUpload(complaintNo, {
         statusToken: submitted.statusToken,
-        address: '',
+        address: address.trim(),
         name,
         size: info.size,
         contentType: "image/jpeg",
@@ -636,7 +636,7 @@ export async function createResidentReport(unit: string, development: string, de
       const confirmed = await confirmPublicResidentPhoto(complaintNo, {
         grantId: (upload as any).grantId || upload.file.id,
         statusToken: submitted.statusToken,
-        address: '', objectPath: upload.file.objectPath,
+        address: address.trim(), objectPath: upload.file.objectPath,
         name, size: info.size, contentType: "image/jpeg",
       } as any);
       remotePhotos.push(local);
@@ -1013,10 +1013,10 @@ export async function addResidentUpdate(
   by: string,
   photoEvidence: import('./photos').PhotoEvidence[] = [],
   geo?: import('./geo').GeoStamp,
-): Promise<void> {
+): Promise<'sent' | 'pending'> {
   const d = await db();
   const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM resident_reports WHERE id = ?', id);
-  if (!row) return;
+  if (!row) return 'pending';
   const r = normalizeResidentReport(JSON.parse(row.state));
   const deviceId = await getDeviceId(d);
   const now = geo?.at || new Date().toISOString();
@@ -1039,8 +1039,7 @@ export async function addResidentUpdate(
     ...(status === 'resolved' ? { resolvedAt: now, completionGeo: geo } : {}),
     _meta: touchMeta(r._meta, deviceId),
   };
-  await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(next), id);
-  await queueMutation('resident-reports', id, next);
+  let queuedState: any = next;
   if (isArrival) {
     const pending = {
       action: 'start',
@@ -1049,14 +1048,7 @@ export async function addResidentUpdate(
       photoEvidence: photoEvidence.map(({ capturedAt, geo: photoGeo }) => ({ capturedAt, geo: photoGeo })),
       },
     };
-    try {
-      await performEntityAction('resident-reports', id, pending.action, pending.body);
-    } catch (error) {
-      const queued = { ...next, _pendingWorkflowActions: [...((r as any)._pendingWorkflowActions || []), pending] };
-      await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(queued), id);
-      await queueMutation('resident-reports', id, queued);
-      throw error;
-    }
+    queuedState = { ...next, _pendingWorkflowActions: [...((r as any)._pendingWorkflowActions || []), pending] };
   } else if (status === 'resolved') {
     const pending = {
       action: 'complete',
@@ -1066,14 +1058,19 @@ export async function addResidentUpdate(
         photoEvidence: photoEvidence.map(({ capturedAt, geo: photoGeo }) => ({ capturedAt, geo: photoGeo })),
       },
     };
-    try {
-      await performEntityAction('resident-reports', id, pending.action, pending.body);
-    } catch (error) {
-      const queued = { ...next, _pendingWorkflowActions: [...((r as any)._pendingWorkflowActions || []), pending] };
-      await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(queued), id);
-      await queueMutation('resident-reports', id, queued);
-      throw error;
-    }
+    queuedState = { ...next, _pendingWorkflowActions: [...((r as any)._pendingWorkflowActions || []), pending] };
+  }
+  await d.runAsync('UPDATE resident_reports SET state = ? WHERE id = ?', JSON.stringify(queuedState), id);
+  await queueMutation('resident-reports', id, queuedState);
+  try {
+    const { syncAllEntities } = await import('./sync');
+    if (!(await syncAllEntities({ refreshEntities: ['resident-reports'] }))) return 'pending';
+    const saved = await d.getFirstAsync<{ state: string }>('SELECT state FROM resident_reports WHERE id = ?', id);
+    return saved && !JSON.parse(saved.state)._pendingWorkflowActions?.length ? 'sent' : 'pending';
+  } catch {
+    // The local record and workflow action remain queued for the next online
+    // sync. Callers must tell the worker it is pending, not delivered.
+    return 'pending';
   }
 }
 
@@ -4282,6 +4279,9 @@ export async function completeRoutedViolation(
   photoEvidence: import('./photos').PhotoEvidence[] = [],
   completionGeo?: import('./geo').GeoStamp,
 ): Promise<BuildingViolation | null> {
+  if (!photoEvidence.length) {
+    throw new Error('Take at least one photo of the completed repair before marking this violation done.');
+  }
   const d = await db();
   await ensureBuildingViolTable(d);
   const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM building_violations WHERE id = ?', id);
@@ -4300,7 +4300,6 @@ export async function completeRoutedViolation(
     completionPhotoEvidence: photoEvidence,
   };
   await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(next), next.id);
-  await queueMutation('building-violations', id, next);
   const pending = {
     action: 'complete',
     body: {
@@ -4309,16 +4308,17 @@ export async function completeRoutedViolation(
       completionPhotoEvidence: photoEvidence.map(({ capturedAt, geo }) => ({ capturedAt, geo })),
     },
   };
+  const queued = { ...next, _pendingWorkflowActions: [...((v as any)._pendingWorkflowActions || []), pending] };
+  await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(queued), id);
+  await queueMutation('building-violations', id, queued);
   try {
-    await performEntityAction('building-violations', id, pending.action, pending.body);
-  } catch (error) {
-    const queued = { ...next, _pendingWorkflowActions: [...((v as any)._pendingWorkflowActions || []), pending] };
-    await d.runAsync('UPDATE building_violations SET state=? WHERE id=?', JSON.stringify(queued), id);
-    await queueMutation('building-violations', id, queued);
-    throw error;
+    const { syncAllEntities } = await import('./sync');
+    if (!(await syncAllEntities({ refreshEntities: ['building-violations'] }))) return queued;
+    const saved = await d.getFirstAsync<{ state: string }>('SELECT state FROM building_violations WHERE id = ?', id);
+    if (!saved || JSON.parse(saved.state)._pendingWorkflowActions?.length) return queued;
+  } catch {
+    return queued;
   }
-  await addNotification('management', 'Repair complete',
-    (next.completedBy || 'Worker') + ' \u00b7 ' + next.building + '  \u00b7 ' + next.violationNo, next.id);
   await logAudit('worker', next.completedBy || '', 'Repair complete', next.building + ' \u00b7 ' + next.violationNo, next.id);
   return next;
 }

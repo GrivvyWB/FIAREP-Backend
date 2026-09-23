@@ -6,6 +6,8 @@ import {
   auditLog,
   entityRecords,
   notifications,
+  nychaAddresses,
+  nychaDevelopments,
   organizationProperties,
   organizations,
   publicAccessCodes,
@@ -49,8 +51,14 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   const requestedDevelopment = String(rawState.development ?? "").trim();
   const normalizedAddress = normalize(address);
   const description = String(rawState.description ?? "").trim();
-  if (!requestedDevelopment || !description) {
-    res.status(400).json({ error: "Development and complaint description are required" });
+  const location = String(rawState.location ?? "Apartment/Unit").trim();
+  const unit = String(rawState.unit ?? "").trim();
+  if (!requestedDevelopment || !description || !address) {
+    res.status(400).json({ error: "Development, building address, and complaint description are required" });
+    return;
+  }
+  if (location === "Apartment/Unit" && !unit) {
+    res.status(400).json({ error: "Apartment or unit is required for an apartment issue" });
     return;
   }
   const properties = address
@@ -64,8 +72,19 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     if (licenseAllows(org, property.organizationId)) valid.push({ property, org });
   }
   const property = valid.length === 1 ? valid[0]!.property : null;
+  const catalogMatches = !property
+    ? await db.select({ address: nychaAddresses.address, development: nychaDevelopments.name })
+      .from(nychaAddresses)
+      .innerJoin(nychaDevelopments, eq(nychaAddresses.developmentId, nychaDevelopments.id))
+      .where(and(
+        eq(nychaAddresses.normalizedAddress, normalizedAddress),
+        eq(nychaDevelopments.normalizedName, normalize(requestedDevelopment)),
+      ))
+      .limit(1)
+    : [];
+  const catalogAddress = catalogMatches[0] ?? null;
   let nychaAddress: Awaited<ReturnType<typeof lookupNychaResidentialAddress>> = null;
-  if (!property && address) {
+  if (!property && !catalogAddress && address) {
     try {
       nychaAddress = await lookupNychaResidentialAddress(address);
     } catch (error) {
@@ -74,6 +93,18 @@ router.post("/v1/public/resident-reports", async (req, res) => {
         "NYCHA address lookup failed",
       );
     }
+  }
+  // New public complaints must use an address returned by the property or
+  // NYCHA catalog. This keeps the selected building tied to its development
+  // instead of accepting arbitrary text that could route a report incorrectly.
+  if (!property && !catalogAddress && !nychaAddress) {
+    res.status(400).json({ error: "Select a valid building address for this development" });
+    return;
+  }
+  const resolvedDevelopment = property?.development ?? catalogAddress?.development ?? nychaAddress?.development;
+  if (resolvedDevelopment && normalize(resolvedDevelopment) !== normalize(requestedDevelopment)) {
+    res.status(400).json({ error: "The selected building address does not belong to this development" });
+    return;
   }
   let tenantId = property?.organizationId ?? "default";
   if (!property) {
@@ -92,9 +123,10 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       tenantId = licensedCustomerIds[0]!;
     }
   }
-  const reportAddress = property?.displayAddress ?? address;
+  const reportAddress = property?.displayAddress ?? catalogAddress?.address ?? address;
   const reportDevelopment =
     property?.development ??
+    catalogAddress?.development ??
     nychaAddress?.development ??
     requestedDevelopment;
   const now = new Date();

@@ -68,6 +68,19 @@ export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayPr
       geo: f.geo || meta?.geo,
     };
   });
+  // Browser completion uploads are saved as photoEvidence in the workflow
+  // action, rather than as an entity remoteFile. Include those for review.
+  for (const evidence of evidenceArrays) {
+    if (typeof evidence?.objectPath !== "string" || !evidence.objectPath) continue;
+    if (photos.some((photo) => photo.objectPath === evidence.objectPath)) continue;
+    photos.push({
+      id: evidence.id || evidence.objectPath,
+      objectPath: evidence.objectPath,
+      name: evidence.name || "Photo Evidence",
+      capturedAt: evidence.capturedAt,
+      geo: evidence.geo,
+    });
+  }
   
   // Some legacy data might just have `photos` or `completionPhotos` array of strings
   const stringPhotos = [

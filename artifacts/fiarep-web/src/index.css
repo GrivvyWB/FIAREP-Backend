@@ -3,6 +3,17 @@
 @import 'tw-animate-css';
 @plugin "@tailwindcss/typography";
 
+@keyframes notification-bell-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .notification-bell-unread {
+    animation: notification-bell-blink 1.8s ease-in-out infinite;
+  }
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

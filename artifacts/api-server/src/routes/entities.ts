@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
 import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
@@ -51,6 +51,7 @@ import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopmen
 import { rateLimit } from "../lib/rateLimit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
+import { residentReportRecipientIds } from "../lib/notificationVisibility";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -1848,6 +1849,22 @@ router.post(
     }
     body["development"] = development;
   }
+  if (entity === "building-violations" && action === "complete") {
+    const remoteFiles = Array.isArray(current.state["remoteFiles"])
+      ? current.state["remoteFiles"]
+      : [];
+    const hasCompletionPhoto = remoteFiles.some((item) =>
+      item &&
+      typeof item === "object" &&
+      typeof (item as Record<string, unknown>)["objectPath"] === "string" &&
+      String((item as Record<string, unknown>)["objectPath"]).trim().length > 0 &&
+      String((item as Record<string, unknown>)["kind"] || "").toLowerCase() === "completion-photo",
+    );
+    if (!hasCompletionPhoto) {
+      res.status(400).json({ error: "A completed-repair photo must finish uploading before this violation can be marked done" });
+      return;
+    }
+  }
   if (patchesWorkflowManagedFields(entity, body)) {
     res.status(403).json({
       error: "Workflow-managed fields are controlled by the selected action",
@@ -2536,7 +2553,55 @@ router.post(
   } else {
     target = "management";
   }
-  if (target) {
+  if (
+    action === "complete" &&
+    (entity === "resident-reports" || entity === "building-violations")
+  ) {
+    const development = String(state["development"] || current.development || "").trim();
+    const photoReady = (
+      (Array.isArray(state["remoteFiles"]) && state["remoteFiles"].some((file) =>
+        file && typeof file === "object" && file["kind"] === "completion-photo" && typeof file["objectPath"] === "string",
+      )) ||
+      (Array.isArray(state["photoEvidence"]) && state["photoEvidence"].some((file) =>
+        file && typeof file === "object" && typeof file["objectPath"] === "string",
+      ))
+    );
+    const completionDetail = [
+      String(state["complaintNo"] || state["violationNo"] || entity.replaceAll("-", " ")),
+      String(state["address"] || state["building"] || development),
+      photoReady ? "Repair photo ready for review" : "Repair completed for review",
+    ].filter(Boolean).join(" · ");
+    let recipients: string[] = await residentReportRecipientIds(actor.tenantId, development);
+    if (entity === "building-violations") {
+      const candidateIds = [
+        String(state["dispatchingSupervisorId"] || ""),
+        String(state["receiverSupervisorId"] || ""),
+        String(state["cpmSupervisorId"] || ""),
+      ].filter(Boolean);
+      const validCandidates = candidateIds.length
+        ? await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+            eq(staffAccounts.tenantId, actor.tenantId),
+            eq(staffAccounts.status, "approved"),
+            inArray(staffAccounts.id, candidateIds),
+          ))
+        : [];
+      recipients = [...new Set([...recipients, ...validCandidates.map((row) => row.id)])];
+    }
+    const uniqueRecipients = [...new Set(recipients)].filter((recipient) => recipient !== actor.id);
+    if (uniqueRecipients.length) {
+      for (const recipient of uniqueRecipients) {
+        await notify(
+          actor,
+          recipient,
+          entity === "building-violations"
+            ? `Violation repair completed — ${photoReady ? "photo ready for review" : "ready for review"}`
+            : `Complaint repair completed — ${photoReady ? "photo ready for review" : "ready for review"}`,
+          completionDetail,
+          current.id,
+        );
+      }
+    }
+  } else if (target) {
     if (entity === "procurement" && action === "submit") {
       const targetedSupervisorId = typeof current.state["handoffTargetId"] === "string"
         ? current.state["handoffTargetId"] : "";
