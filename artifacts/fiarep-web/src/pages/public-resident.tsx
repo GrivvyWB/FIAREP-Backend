@@ -97,7 +97,11 @@ export default function PublicResident() {
           setIsUploadingPhoto(true);
           try {
             const address = values.address?.trim() || '';
-            const contentType = photo.type as 'image/jpeg' | 'image/png' | 'image/heic' | 'image/heif' | 'image/webp';
+            const allowedPhotoTypes = ['image/jpeg', 'image/png', 'image/heic', 'image/heif', 'image/webp'];
+            const extPhotoTypes: Record<string, string> = { jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', heif: 'image/heif', webp: 'image/webp' };
+            const rawPhotoType = (photo.type || '').toLowerCase();
+            const photoExt = (photo.name.split('.').pop() || '').toLowerCase();
+            const contentType = (allowedPhotoTypes.includes(rawPhotoType) ? rawPhotoType : (extPhotoTypes[photoExt] || 'image/jpeg')) as 'image/jpeg' | 'image/png' | 'image/heic' | 'image/heif' | 'image/webp';
             const upload = await requestPublicResidentPhotoUpload(returnedComplaintNo, {
               statusToken: res.statusToken,
               address,
@@ -277,7 +281,7 @@ export default function PublicResident() {
                      <input
                        id="resident-report-photo"
                        type="file"
-                       accept="image/jpeg,image/png,image/heic,image/heif,image/webp"
+                       accept="image/jpeg,image/png,image/webp"
                        capture="environment"
                         disabled={Boolean(photo) || submitReport.isPending || isUploadingPhoto}
                        className="sr-only"
