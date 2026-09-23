@@ -34,6 +34,21 @@ export function isSupervisor(staff: Staff | null | undefined): boolean {
     position === "superintendent Ⓔ";
 }
 
+/**
+ * Supervisors/superintendents who float between developments. They may view
+ * every development, and may unlock the ability to act on a development they
+ * don't normally cover ("Cover a site"). Mirrors the server's isCoverageEligible.
+ * HR, procurement, workers, emergency and public roles are never eligible.
+ */
+export function isCoverageEligible(staff: Staff | null | undefined): boolean {
+  if (!staff) return false;
+  if (staff.role === "administrator") return true;
+  if (["human_resources", "procurement", "vendor", "resident", "worker", "emergency"].includes(staff.role)) {
+    return false;
+  }
+  return isSupervisor(staff);
+}
+
 export function canReviewHud(staff: Staff | null | undefined): boolean {
   return !!staff && HUD_REVIEW_POSITIONS.has(staff.position || "");
 }
