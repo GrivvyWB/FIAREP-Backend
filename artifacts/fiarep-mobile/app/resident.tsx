@@ -32,8 +32,10 @@ export default function ResidentScreen() {
   const [development, setDevelopment] = useState('');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
+  const [waterType, setWaterType] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const showWater = /(leak|water|flood|stoppage)/i.test(description);
 
   async function onTakePhoto() {
     if (submitting) return;
@@ -79,7 +81,10 @@ export default function ResidentScreen() {
     setSubmitting(true);
     try {
       const effLoc = location === 'Other' ? (locationOther.trim() || 'Other') : location;
-      const report = await createResidentReport(unit.trim(), development.trim(), description.trim(), photos, name.trim(), effLoc, '', address.trim());
+      const reportDescription = showWater && waterType
+        ? `${waterType}. ${description.trim()}`
+        : description.trim();
+      const report = await createResidentReport(unit.trim(), development.trim(), reportDescription, photos, name.trim(), effLoc, '', address.trim());
       const failures = (report as any).photoUploadFailures as string[] | undefined;
       Alert.alert('Report submitted', `Complaint number: ${report.complaintNo}\n\nThis report is saved on this device for status checks.${failures?.length ? `\n\n${failures.length} photo(s) could not be uploaded.` : ''}`, [
         { text: 'OK', onPress: () => router.back() },
@@ -163,6 +168,24 @@ export default function ResidentScreen() {
         textAlignVertical="top"
       />
 
+      {showWater && (
+        <>
+          <Text style={styles.label}>Water — is it hot or cold?</Text>
+          <View style={styles.waterOptions}>
+            {['Hot water', 'Cold water'].map((option) => (
+              <TouchableOpacity
+                key={option}
+                testID={option === 'Hot water' ? 'resident-hot-water' : 'resident-cold-water'}
+                style={[styles.waterOption, waterType === option && styles.waterOptionSelected]}
+                onPress={() => setWaterType((current) => current === option ? '' : option)}
+              >
+                <Text style={[styles.waterOptionText, waterType === option && styles.waterOptionTextSelected]}>{option}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
+
       <Text style={styles.label}>Photos</Text>
       <View style={styles.photoRow}>
         <TouchableOpacity style={[styles.photoBtn, submitting && styles.photoBtnDisabled]} onPress={onTakePhoto} disabled={submitting}>
@@ -227,6 +250,11 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   textArea: { minHeight: 120 },
+  waterOptions: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  waterOption: { borderWidth: 1, borderColor: '#ddd', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: '#fafafa' },
+  waterOptionSelected: { borderColor: '#0a7ea4', backgroundColor: '#0a7ea4' },
+  waterOptionText: { color: '#333', fontWeight: '600' },
+  waterOptionTextSelected: { color: '#fff' },
   photoRow: { flexDirection: 'row', gap: 12, marginBottom: 12 },
   photoBtn: {
     flex: 1,
