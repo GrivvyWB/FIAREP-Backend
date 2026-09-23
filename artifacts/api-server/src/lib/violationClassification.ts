@@ -25,8 +25,18 @@ when the photo is dark, blurry, or unclear, choose the code that fits the WORDS
 (e.g. "no light"/"lights out"/"no power" -> an electrical/lighting code, "no heat"/"no hot
 water" -> heat/hot water, "leak"/"water" -> plumbing/water, "mold" -> mold). Only use
 "REVIEW REQUIRED" if neither the words nor the photo point to any code in the list.
-Never invent a code that is not in the list. Keep the description concise and factual, and
-set classification A/B/C by the actual hazard the words+photo describe, not by image quality.
+Never invent a code that is not in the list. Keep the description concise and factual. Set classification A/B/C by the actual hazard the
+words+photo describe, not by image quality. When a code lists more than one allowed class
+(e.g. [ABC] or [BC]), you MUST choose within that range by how severe the condition really is —
+never default to the mildest just because the code permits it. Severity guide:
+- A (non-hazardous): minor, contained, or cosmetic. A slow drip, a small stain, one loose fixture.
+- B (hazardous): an active, spreading, or standing hazard. Water actively running/flowing, water
+  pooling or on the floor, a leak actively wetting the area, mold, pests, or a slip hazard.
+- C (immediately hazardous): imminent danger. Active flooding, water reaching electrical outlets or
+  fixtures, sewage backup, no heat/hot water in cold weather, gas odor, exposed live wiring, or
+  structural/ceiling collapse.
+For water and plumbing specifically: a mere drip is A, but water that is actively running, flowing,
+or pooling on the floor is at least B, and active flooding or water contacting electricity is C.
 
 OFFICIAL HPD/MDL and DOB CODE LIST (code: meaning [class]) — DOB codes are prefixed "DOB-":
 ${violationCodeCatalog()}`;
@@ -91,7 +101,7 @@ export async function classifyViolationImage(
                   ? `The resident reported this problem: "${issueText.trim()}". Use BOTH that description and the photo to choose the code. The words describe the actual problem, so lean on them when the photo is dark, blurry, or does not clearly show the condition — do not fall back to "REVIEW REQUIRED" if the reported words point to a real code.\n\n`
                   : "") + "Classify the reported housing-maintenance violation.",
               },
-              { type: "image_url", image_url: { url: image, detail: "low" } },
+              { type: "image_url", image_url: { url: image, detail: "high" } },
             ],
           },
         ],
