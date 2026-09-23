@@ -198,7 +198,11 @@ async function residentAccess(complaintNo: string, statusToken: string, address:
     eq(entityRecords.id, access.recordId), eq(entityRecords.tenantId, access.tenantId),
     eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
   )).limit(1);
-  if (!row || normalize(row.state["address"]) !== normalize(address)) return null;
+  // The complaint number + secret status token already authenticate the
+  // resident to this exact report. The stored address is the canonical
+  // property.displayAddress, which differs from the raw address the client
+  // re-sends, so matching on it wrongly rejected photo uploads. Token is enough.
+  if (!row) return null;
   return { access };
 }
 
