@@ -40,7 +40,8 @@ import {
   supervisedTradeForPosition,
   isComplaintHandlingSupervisor,
 } from "../lib/domain";
-import { hasActiveCoverage, isHomeDevelopment } from "../lib/coverage";
+import { hasAnyActiveCoverage } from "../lib/coverage";
+import { isCoverageEligible } from "../lib/domain";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
@@ -1707,15 +1708,19 @@ router.post(
           eq(staffAccounts.status, "approved"),
         )).limit(1)
       : [];
-    // A supervisor with an active coverage unlock for this report's development
-    // may assign here as if it were one of their own developments (24h window).
+    // A supervisor with ANY active coverage unlock may assign across every
+    // development for the 24h window, so treat this report's development and the
+    // target's developments as within their scope for this assignment.
     let assigningActor = actor;
-    if (
-      current.development &&
-      !isHomeDevelopment(actor, current.development) &&
-      await hasActiveCoverage(actor, current.development)
-    ) {
-      assigningActor = { ...actor, developments: [...actor.developments, current.development] };
+    if (target && isCoverageEligible(actor) && await hasAnyActiveCoverage(actor)) {
+      assigningActor = {
+        ...actor,
+        developments: [
+          ...actor.developments,
+          ...target.developments,
+          ...(current.development ? [current.development] : []),
+        ],
+      };
     }
     if (
       !target ||

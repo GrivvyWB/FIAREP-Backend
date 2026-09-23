@@ -58,11 +58,34 @@ export async function hasActiveCoverage(actor: Actor, development: string): Prom
   return states.some((st) => normDev(String(st["development"] ?? "")) === target);
 }
 
+/** True if the actor holds ANY unexpired coverage unlock. One unlock grants
+ * cross-development access for the whole 24h window (a floating supervisor may
+ * bounce between sites), so callers use this rather than a per-site check. */
+export async function hasAnyActiveCoverage(actor: Actor): Promise<boolean> {
+  const states = await activeGrantStates(actor);
+  return states.length > 0;
+}
+
 /** Home development OR an active coverage unlock — i.e. may ACT on this site. */
 export async function canActOnDevelopment(actor: Actor, development: string): Promise<boolean> {
   if (!development) return true;
   if (isHomeDevelopment(actor, development)) return true;
   return hasActiveCoverage(actor, development);
+}
+
+/** Distinct development names the actor currently has an active unlock for. */
+export async function activeCoverageDevelopments(actor: Actor): Promise<string[]> {
+  const states = await activeGrantStates(actor);
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const st of states) {
+    const dev = String(st["development"] ?? "").trim();
+    if (dev && !seen.has(normDev(dev))) {
+      seen.add(normDev(dev));
+      out.push(dev);
+    }
+  }
+  return out;
 }
 
 /** The actor's active coverage unlocks, for display. */

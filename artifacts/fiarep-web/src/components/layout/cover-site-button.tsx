@@ -107,7 +107,7 @@ export function CoverSiteButton() {
       }
       toast({
         title: "Site unlocked",
-        description: `You can act on ${development.trim()} for 24 hours.`,
+        description: `Checked in at ${development.trim()} — you can assign across all developments for 24 hours.`,
       });
       setCode("");
       setDevelopment("");
@@ -137,13 +137,13 @@ export function CoverSiteButton() {
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Cover another site today</DialogTitle>
+          <DialogTitle>Cover a site today</DialogTitle>
         </DialogHeader>
         <div className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Working at a development that isn't yours today? Enter its 2-digit code to unlock
-            assignments there for 24 hours. You can always view every development — this only
-            grants the ability to act.
+            Working at a development that isn't yours today? Confirm the site's 2-digit code to
+            check in — that unlocks the ability to assign at every development for the next 24
+            hours. (You can always view other developments; this grants the ability to act.)
           </p>
           <div className="space-y-1.5">
             <Label htmlFor="cover-dev">Development</Label>

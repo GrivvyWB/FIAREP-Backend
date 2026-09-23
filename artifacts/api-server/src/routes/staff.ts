@@ -19,11 +19,13 @@ import {
   canDeleteStaffAccounts,
   canReadStaffDirectoryEmployee,
   isBoroughDirector,
+  isCoverageEligible,
   isElevated,
   serializeHrStaff,
   serializeStaffIssueResponse,
   withInitialWorkflowState,
 } from "../lib/domain";
+import { activeCoverageDevelopments } from "../lib/coverage";
 import { allocateStaffCode, allocateTruckStaffCode } from "../lib/staffCodes";
 import { emailStaffAccessCode } from "../lib/staffEmail";
 import { addConfiguredDevelopmentName, getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
@@ -261,7 +263,13 @@ router.get("/v1/staff", async (req, res) => {
         : eq(staffAccounts.tenantId, actor.tenantId),
     )
     .orderBy(asc(staffAccounts.name));
-  res.json(rows.filter((row) => canReadStaffDirectoryEmployee(actor, row))
+  // A supervisor with ANY active coverage unlock may SEE every development's
+  // workers for the 24h window (so they can assign anywhere they're covering).
+  // Visibility only — management powers still come from the real actor via safe().
+  const coverageAll =
+    isCoverageEligible(actor) && (await activeCoverageDevelopments(actor)).length > 0;
+  res.json(rows
+    .filter((row) => coverageAll || canReadStaffDirectoryEmployee(actor, row))
     .map((row) => safe(row, actor)));
 });
 
