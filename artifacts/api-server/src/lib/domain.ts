@@ -273,6 +273,22 @@ export function isSupervisorPosition(actor: Actor): boolean {
     isSuperintendentE(actor);
 }
 
+/**
+ * Floating-coverage eligibility. Supervisors and superintendents (management or
+ * inspector) commonly work at a different development day to day, so they may
+ * VIEW resident reports at any development, and may temporarily unlock the
+ * ability to ACT on a development they do not normally cover (see coverage
+ * grants). HR, procurement, plain workers, emergency and public roles are never
+ * coverage-eligible. Administrators are already fully unrestricted.
+ */
+export function isCoverageEligible(actor: Actor): boolean {
+  if (actor.role === "administrator") return true;
+  if (["human_resources", "procurement", "vendor", "resident", "worker", "emergency"].includes(actor.role)) {
+    return false;
+  }
+  return isManagementSupervisor(actor) || isSupervisorPosition(actor);
+}
+
 export function isComplaintHandlingSupervisor(
   actor: Pick<Actor, "role" | "position">,
 ): boolean {

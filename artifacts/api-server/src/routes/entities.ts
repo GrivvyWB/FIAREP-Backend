@@ -40,6 +40,7 @@ import {
   supervisedTradeForPosition,
   isComplaintHandlingSupervisor,
 } from "../lib/domain";
+import { hasActiveCoverage, isHomeDevelopment } from "../lib/coverage";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
@@ -1706,11 +1707,21 @@ router.post(
           eq(staffAccounts.status, "approved"),
         )).limit(1)
       : [];
+    // A supervisor with an active coverage unlock for this report's development
+    // may assign here as if it were one of their own developments (24h window).
+    let assigningActor = actor;
+    if (
+      current.development &&
+      !isHomeDevelopment(actor, current.development) &&
+      await hasActiveCoverage(actor, current.development)
+    ) {
+      assigningActor = { ...actor, developments: [...actor.developments, current.development] };
+    }
     if (
       !target ||
       (
-        !canAssignStaff(actor, target, current.development) &&
-        !canSuperintendentEAssignResidentReport(actor, target)
+        !canAssignStaff(assigningActor, target, current.development) &&
+        !canSuperintendentEAssignResidentReport(assigningActor, target)
       )
     ) {
       res.status(403).json({ error: "Select an operational staff member from your authorized group" });
