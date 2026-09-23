@@ -1059,7 +1059,7 @@ export async function addResidentUpdate(
     }
   } else if (status === 'resolved') {
     const pending = {
-      action: 'resolve',
+      action: 'complete',
       body: {
         completionGeo: geo,
         completionNote: note.trim() || undefined,

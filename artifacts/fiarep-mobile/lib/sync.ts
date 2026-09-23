@@ -286,7 +286,10 @@ async function pushQueue(d: any) {
           });
         }
         for (const pending of pendingActions) {
-          result = await performEntityAction(row.entity, row.id, String(pending.action), pending.body || {});
+          const action = row.entity === 'resident-reports' && pending.action === 'resolve'
+            ? 'complete'
+            : String(pending.action);
+          result = await performEntityAction(row.entity, row.id, action, pending.body || {});
         }
       }
       if (pendingActions.length) delete state._pendingWorkflowActions;
