@@ -4,13 +4,17 @@
 @plugin "@tailwindcss/typography";
 
 @keyframes notification-bell-blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.25; }
+  0%, 49% { opacity: 1; }
+  50%, 99% { opacity: 0; }
 }
 
-@media (prefers-reduced-motion: no-preference) {
+.notification-bell-unread {
+  animation: notification-bell-blink 1s step-end infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
   .notification-bell-unread {
-    animation: notification-bell-blink 1.8s ease-in-out infinite;
+    animation: none;
   }
 }
 
