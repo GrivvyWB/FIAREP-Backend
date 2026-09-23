@@ -156,6 +156,7 @@ export function canApproveWork(staff: Staff | null | undefined): boolean {
 
 export function canHandleResidentReports(staff: Staff | null | undefined): boolean {
   if (!staff) return false;
+  if (staff.role === "administrator") return true;
   if (staff.position === "Superintendent Ⓔ") return true;
   const position = staff.position?.trim() || "";
   return staff.role === "management" &&
