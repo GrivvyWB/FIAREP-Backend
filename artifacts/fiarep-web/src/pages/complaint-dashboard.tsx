@@ -109,34 +109,32 @@ type Stats = {
 
 function SummaryCard({ title, value, subValue, icon: Icon, colorClass, testId, onClick }: { title: string, value: string | number, subValue?: string, icon: React.ElementType, colorClass: string, testId: string, onClick: () => void }) {
   const colorMap = {
-    red: "border-l-red-500 text-red-500 bg-red-500",
-    blue: "border-l-blue-600 text-blue-600 bg-blue-600",
-    indigo: "border-l-indigo-500 text-indigo-500 bg-indigo-500",
-    teal: "border-l-teal-500 text-teal-500 bg-teal-500",
-    orange: "border-l-orange-500 text-orange-500 bg-orange-500",
-    purple: "border-l-purple-500 text-purple-500 bg-purple-500",
-    green: "border-l-emerald-500 text-emerald-500 bg-emerald-500",
+    red: { border: "border-l-red-500", background: "bg-red-500" },
+    blue: { border: "border-l-blue-600", background: "bg-blue-600" },
+    indigo: { border: "border-l-indigo-500", background: "bg-indigo-500" },
+    teal: { border: "border-l-teal-500", background: "bg-teal-500" },
+    orange: { border: "border-l-orange-500", background: "bg-orange-500" },
+    purple: { border: "border-l-purple-500", background: "bg-purple-500" },
+    green: { border: "border-l-emerald-500", background: "bg-emerald-500" },
   };
-  
   const mapping = colorMap[colorClass as keyof typeof colorMap] || colorMap.red;
-  const borders = `border-l-[4px] sm:border-l-[5px] ${mapping.split(' ')[0]}`;
-  const bg = mapping.split(' ')[2];
-  
+  const isPlace = title === "Most Active Dev" || title === "Most Active Bldg";
+
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`w-full bg-white border-y border-r border-slate-200 ${borders} rounded-xl p-3 sm:p-4 flex flex-col sm:flex-row items-start gap-3 shadow-sm text-left transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2`}
+      className={`grid h-[166px] min-w-0 w-full grid-cols-[34px_minmax(0,1fr)] grid-rows-[36px_minmax(0,1fr)] gap-x-2.5 rounded-[14px] border border-l-[5px] border-slate-200 ${mapping.border} bg-white px-2.5 py-2.5 text-left shadow-[0_2px_8px_rgba(15,23,42,0.12)] transition-all hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2`}
       data-testid={testId}
       aria-label={`${title}: ${value}`}
     >
-      <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full ${bg} flex items-center justify-center shrink-0 sm:mt-0.5`}>
-        <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
+      <div className={`flex h-[34px] w-[34px] items-center justify-center rounded-full ${mapping.background} shadow-[0_2px_6px_rgba(15,23,42,0.15)]`}>
+        <Icon className="h-[17px] w-[17px] text-white" aria-hidden="true" />
       </div>
-      <div className="flex flex-col min-w-0 w-full">
-        <div className="text-[9px] sm:text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-0.5">{title}</div>
-        <div className="text-lg sm:text-2xl font-black text-slate-900 leading-tight break-words" title={String(value)}>{value}</div>
-        {subValue && <div className="text-[9px] sm:text-[10px] font-semibold text-slate-500 mt-1 sm:mt-1.5">{subValue}</div>}
+      <div className="min-w-0 self-center text-[9px] font-extrabold uppercase leading-[12px] tracking-[0.025em] text-slate-500">{title}</div>
+      <div className="col-start-2 flex min-w-0 flex-col items-start">
+        <div className={`max-w-full break-words font-extrabold text-slate-900 ${isPlace ? "line-clamp-4 text-[16px] leading-[20px]" : "text-[25px] leading-[30px]"}`} title={String(value)}>{value}</div>
+        {subValue && <div className="mt-1 text-[10px] font-semibold leading-[13px] text-slate-500">{subValue}</div>}
       </div>
     </button>
   );
@@ -396,14 +394,16 @@ export default function ComplaintDashboard() {
 
       <div className="px-4 md:px-6 space-y-4">
         {/* 7 Summary Panels */}
-        <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-7 gap-3">
-          <SummaryCard title="Total Active" value={globalStats.active} icon={ShieldAlert} colorClass="red" testId="metric-total-active" onClick={resetDashboard} />
-          <SummaryCard title="Devs w/ Active" value={devStats.length} icon={Users} colorClass="blue" testId="metric-devs-active" onClick={resetDashboard} />
-          <SummaryCard title="Bldgs w/ Active" value={bldgStats.length} icon={Building2} colorClass="indigo" testId="metric-bldgs-active" onClick={resetDashboard} />
-          <SummaryCard title="Most Active Dev" value={topDev?.name || "-"} subValue={topDev ? `${topDev.activeCount} active` : ""} icon={MapPin} colorClass="teal" testId="metric-top-dev" onClick={() => focusDevelopment(topDev?.name)} />
-          <SummaryCard title="Most Active Bldg" value={topBldg?.name || "-"} subValue={topBldg ? `${topBldg.activeCount} active` : ""} icon={Building} colorClass="orange" testId="metric-top-bldg" onClick={() => focusDevelopment(topBldg?.reports[0]?.development, topBldg?.name)} />
-          <SummaryCard title="Oldest Open" value={globalStats.oldest ? `${Math.floor((now - globalStats.oldest)/86400000)}d ago` : "-"} subValue={globalStats.oldest ? new Date(globalStats.oldest).toLocaleDateString() : ""} icon={Clock} colorClass="purple" testId="metric-oldest" onClick={() => focusDevelopment(oldestOpenReport?.development, oldestOpenReport ? reportAddress(oldestOpenReport) : null)} />
-          <SummaryCard title="Recently Corrected" value={globalStats.recentlyCorrected} subValue="Last 14 days" icon={CheckCircle} colorClass="green" testId="metric-corrected" onClick={focusRecentlyCorrected} />
+        <div className="overflow-x-auto pb-1">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-7 lg:min-w-[980px]">
+            <SummaryCard title="Total Active" value={globalStats.active} icon={ShieldAlert} colorClass="red" testId="metric-total-active" onClick={resetDashboard} />
+            <SummaryCard title="Devs w/ Active" value={devStats.length} icon={Users} colorClass="blue" testId="metric-devs-active" onClick={resetDashboard} />
+            <SummaryCard title="Bldgs w/ Active" value={bldgStats.length} icon={Building2} colorClass="indigo" testId="metric-bldgs-active" onClick={resetDashboard} />
+            <SummaryCard title="Most Active Dev" value={topDev?.name || "-"} subValue={topDev ? `${topDev.activeCount} active` : ""} icon={MapPin} colorClass="teal" testId="metric-top-dev" onClick={() => focusDevelopment(topDev?.name)} />
+            <SummaryCard title="Most Active Bldg" value={topBldg?.name || "-"} subValue={topBldg ? `${topBldg.activeCount} active` : ""} icon={Building} colorClass="orange" testId="metric-top-bldg" onClick={() => focusDevelopment(topBldg?.reports[0]?.development, topBldg?.name)} />
+            <SummaryCard title="Oldest Open" value={globalStats.oldest ? `${Math.floor((now - globalStats.oldest)/86400000)}d ago` : "-"} subValue={globalStats.oldest ? new Date(globalStats.oldest).toLocaleDateString() : ""} icon={Clock} colorClass="purple" testId="metric-oldest" onClick={() => focusDevelopment(oldestOpenReport?.development, oldestOpenReport ? reportAddress(oldestOpenReport) : null)} />
+            <SummaryCard title="Recently Corrected" value={globalStats.recentlyCorrected} subValue="Last 14 days" icon={CheckCircle} colorClass="green" testId="metric-corrected" onClick={focusRecentlyCorrected} />
+          </div>
         </div>
 
         {/* Filters */}
