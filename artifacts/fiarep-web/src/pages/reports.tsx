@@ -209,6 +209,32 @@ export default function Reports() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { staff: actor } = useAuth();
+  // Developments this supervisor has an active coverage unlock for. They may
+  // assign at those sites for 24h, so treat them as part of the actor's scope
+  // for the assignment picker (server enforces the same on the assign action).
+  const [coverageDevs, setCoverageDevs] = useState<string[]>([]);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const r = await fetch("/api/v1/coverage/active", {
+          headers: { Authorization: `Bearer ${localStorage.getItem("fiarep_access_token") || ""}` },
+        });
+        if (r.ok && active) {
+          const rows = await r.json();
+          setCoverageDevs(Array.isArray(rows) ? rows.map((x: { development: string }) => x.development) : []);
+        }
+      } catch {
+        /* best effort */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [actor?.id]);
+  const assignActor = actor
+    ? { ...actor, developments: [...(actor.developments || []), ...coverageDevs] }
+    : actor;
   const canHandleComplaints = canHandleResidentReports(actor);
   const reportsQuery = useListEntityRecords("resident-reports", undefined, {
     query: {
@@ -325,7 +351,7 @@ export default function Reports() {
   };
 
   const assign = (report: Report, staffId: string) => {
-    const person = assignableOperationalStaff(actor, staff, report.development)
+    const person = assignableOperationalStaff(assignActor, staff, report.development, coverageDevs.length > 0)
       .find((member) => member.id === staffId);
     if (!person) return;
     setAssigning(report.id);
@@ -488,7 +514,7 @@ export default function Reports() {
                      <Textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} />
                    </div>
                  )}
-                   {canHandleComplaints && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(actor, staff, selected.development)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
+                   {canHandleComplaints && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(assignActor, staff, selected.development, coverageDevs.length > 0)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
                   {actor?.position !== "Elevator Service" && String(state.assignedStaffId || "") === actor?.id && ["assigned", "in_progress"].includes(currentStatus) && <div className="border-t border-border pt-4 space-y-2"><p className="text-sm font-semibold">Release assignment</p><Textarea value={releaseUpdate} onChange={(event) => setReleaseUpdate(event.target.value)} placeholder="Provide an update before releasing this complaint" /><Button variant="outline" onClick={() => perform(selected, "release", { update: releaseUpdate })} disabled={action.isPending || releaseUpdate.trim().length < 3}>Release with update</Button></div>}
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canHandleComplaints && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
               </div></>;

@@ -60,14 +60,18 @@ const TRADE_SUPERVISOR_POSITIONS = new Set(
 );
 
 function withinDevelopments(candidate: Staff, developments: string[]) {
+  // Development names vary in case across the data (staff store UPPERCASE,
+  // reports/coverage may be title case), so match case-insensitively.
+  const scope = new Set(developments.map((d) => (d || "").trim().toLowerCase()));
   return candidate.developments.length > 0 &&
-    candidate.developments.every((development) => developments.includes(development));
+    candidate.developments.every((development) => scope.has((development || "").trim().toLowerCase()));
 }
 
 export function assignableOperationalStaff(
   actor: Staff | null,
   candidates: Staff[],
   development?: string | null,
+  coverageAllAccess = false,
 ) {
   if (!actor) return [];
   const isBoroughDirector = actor.position === "Borough Director";
@@ -85,7 +89,10 @@ export function assignableOperationalStaff(
         (value) => value.trim().toLowerCase() === development.trim().toLowerCase(),
       )
     ) return false;
-    if (isBoroughDirector || isAdministrator) return true;
+    // An active coverage unlock lets a supervisor assign across every
+    // development for 24h; the candidate must still serve this report's site
+    // (checked above), but the actor's own development scope is bypassed.
+    if (isBoroughDirector || isAdministrator || coverageAllAccess) return true;
     if (!withinDevelopments(candidate, actor.developments)) return false;
     if (candidate.role === "management") {
       return isRegionalDirector || TRADE_SUPERVISOR_POSITIONS.has(candidate.position as never);
