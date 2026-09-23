@@ -276,6 +276,7 @@ export function isSupervisorPosition(actor: Actor): boolean {
 export function isComplaintHandlingSupervisor(
   actor: Pick<Actor, "role" | "position">,
 ): boolean {
+  if (actor.role === "administrator") return true;
   if (isSuperintendentE(actor)) return true;
   return actor.role === "management" &&
     actor.position !== "CPM Supervisor" &&
