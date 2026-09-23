@@ -16,7 +16,7 @@ import {
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { evaluateLicense, licenseAllows } from "../lib/auth";
 import { fileStorage } from "../lib/fileStorage";
-import { isBoroughDirector } from "../lib/domain";
+import { isBoroughDirector, isCoverageEligible } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { residentReportRecipientIds } from "../lib/notificationVisibility";
 import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
@@ -276,9 +276,13 @@ function canReadReport(actor: ReturnType<typeof actorFrom>, report: typeof entit
     ["worker", "emergency"].includes(role) &&
     String(report.state["assignedStaffId"] || "") === actor.id;
   if (isCanonicalAssignee) return true;
-  return ["administrator", "management", "inspector", "borough-director"].includes(role) &&
-    (!report.development || isBoroughDirector(actor) ||
-      actor.developments.some((d) => d.toLowerCase() === report.development!.toLowerCase()));
+  if (!["administrator", "management", "inspector", "borough-director"].includes(role)) return false;
+  // Supervisors/superintendents who float between developments may VIEW reports
+  // at any development. Acting on them still requires an active coverage unlock,
+  // which is enforced at the action endpoints, not here.
+  if (isCoverageEligible(actor)) return true;
+  return !report.development || isBoroughDirector(actor) ||
+    actor.developments.some((d) => d.toLowerCase() === report.development!.toLowerCase());
 }
 router.get("/v1/resident-report-photos", async (req, res) => {
   const actor = actorFrom(res);

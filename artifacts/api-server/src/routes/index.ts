@@ -15,6 +15,7 @@ import scoresRouter from "./scores";
 import timeClockRouter from "./timeClock";
 import hrRouter from "./hr";
 import nychaRouter from "./nycha";
+import coverageRouter from "./coverage";
 
 const router: IRouter = Router();
 
@@ -23,6 +24,7 @@ router.use(authRouter);
 router.use(organizationsRouter);
 router.use(publicAccessRouter);
 router.use(nychaRouter);
+router.use(coverageRouter);
 router.use(staffRouter);
 router.use(notificationRouter);
 router.use(syncRouter);
