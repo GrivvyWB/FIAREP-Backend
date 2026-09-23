@@ -1245,6 +1245,65 @@ export async function getSeenReportIds(): Promise<Set<string>> {
   try { return new Set(row?.value ? JSON.parse(row.value) : []); } catch { return new Set(); }
 }
 
+/** Base URL for raw API calls (coverage endpoints have no generated client). */
+function apiBase(): string {
+  return backendDomain ? `https://${backendDomain}` : '';
+}
+
+async function coverageFetch(path: string, init?: RequestInit): Promise<Response> {
+  const token = await getAccessToken();
+  return fetch(`${apiBase()}${path}`, {
+    ...init,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(init?.headers || {}),
+    },
+  });
+}
+
+/** The stable 2-digit code for a development (so the picker can show it). */
+export async function getDevelopmentCoverageCode(development: string): Promise<string> {
+  const r = await coverageFetch(`/api/v1/coverage/development-code?development=${encodeURIComponent(development.trim())}`);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Could not load the code.');
+  return (await r.json()).code as string;
+}
+
+/** Confirm a development's code to unlock cross-development assignment for 24h. */
+export async function unlockCoverage(development: string, code: string): Promise<{ development: string; expiresAt: string }> {
+  const r = await coverageFetch('/api/v1/coverage/unlock', {
+    method: 'POST',
+    body: JSON.stringify({ development: development.trim(), code: code.trim() }),
+  });
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'Could not unlock.');
+  return r.json();
+}
+
+/** The signed-in supervisor's active coverage unlocks. */
+export async function listActiveCoverage(): Promise<{ development: string; expiresAt: string }[]> {
+  const r = await coverageFetch('/api/v1/coverage/active');
+  if (!r.ok) return [];
+  const rows = await r.json();
+  return Array.isArray(rows) ? rows : [];
+}
+
+/** Coverage eligibility from the locally-cached session identity. Mirrors the
+ * server predicate: management/inspector supervisors + superintendents. */
+export async function isCoverageEligibleActor(): Promise<boolean> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'session_identity');
+  let role = '', position = '';
+  try {
+    const i = row?.value ? JSON.parse(row.value) : null;
+    role = String(i?.role || '');
+    position = String(i?.position || '');
+  } catch {}
+  if (role === 'administrator') return true;
+  if (['human_resources', 'procurement', 'vendor', 'resident', 'worker', 'emergency'].includes(role)) return false;
+  const p = position.trim().toLowerCase();
+  return p.includes('supervisor') || p.startsWith('superintendent');
+}
+
 export async function getAccessToken(): Promise<string | null> {
   const webToken = getWebToken('access');
   if (webToken) return maybeRefresh(webToken);
