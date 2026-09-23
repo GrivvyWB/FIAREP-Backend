@@ -973,7 +973,14 @@ export function canAssignStaff(
     return false;
   }
   const actorTrade = supervisedTradeForPosition(actor.position);
-  if (isSupervisorPosition(actor) && !actorTrade) return false;
+  // General development superintendents oversee every trade on their
+  // developments, so they aren't gated to a single trade the way a trade
+  // supervisor is. Trade supervisors keep their trade scoping below.
+  const isGeneralSuperintendent =
+    actor.position === "Superintendent" ||
+    actor.position === "Assistant Superintendent" ||
+    isSuperintendentE(actor);
+  if (isSupervisorPosition(actor) && !actorTrade && !isGeneralSuperintendent) return false;
   if (actorTrade && target.position !== actorTrade) return false;
   return true;
 }
