@@ -205,10 +205,13 @@ async function residentAccess(complaintNo: string, statusToken: string, address:
 router.post("/v1/public/resident-reports/:complaintNo/photos/upload-url", async (req, res) => {
   const body = req.body ?? {};
   const size = Number(body.size);
-  const contentType = String(body.contentType ?? "");
   const name = String(body.name ?? "").trim().slice(0, 200);
+  const rawContentType = String(body.contentType ?? "").toLowerCase();
+  const extContentType: Record<string, string> = { jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", heic: "image/heic", heif: "image/heif", webp: "image/webp" };
+  const nameExt = name.split(".").pop()?.toLowerCase() ?? "";
+  const contentType = residentPhotoTypes.has(rawContentType) ? rawContentType : (extContentType[nameExt] ?? "image/jpeg");
   const auth = await residentAccess(req.params.complaintNo!, String(body.statusToken ?? ""), String(body.address ?? ""));
-  if (!auth || !name || !residentPhotoTypes.has(contentType) || !Number.isInteger(size) || size <= 0 || size > MAX_RESIDENT_PHOTO_BYTES) {
+  if (!auth || !name || !Number.isInteger(size) || size <= 0 || size > MAX_RESIDENT_PHOTO_BYTES) {
     res.status(404).json({ error: "Report not found" }); return;
   }
   try {
