@@ -1,5 +1,5 @@
-import * as XLSX from 'xlsx-js-style';
-import * as FileSystem from 'expo-file-system/legacy';
+import ExcelJS from 'exceljs';
+import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { COST_CATEGORIES, COST_DISCLAIMER, type CostEstimateState } from './costEstimate';
 import { lineAmount, sectionTotal, grandTotal as scopeGrand, costPerDU as scopeCostPerDU, type VendorScope } from './vendorScope';
@@ -12,14 +12,29 @@ const allBorders = { top: border1, bottom: border1, left: border1, right: border
 
 // Build an .xlsx of the scope. If a Divisions scope is supplied (contract
 // layout) it is exported with Division/Section/line rows; otherwise the legacy
-// Nature-of-Work cost estimate is exported. Uses xlsx-js-style so cell styles
-// are written. Runs on-device.
+// Nature-of-Work cost estimate is exported. Runs on-device with styled cells.
 export async function exportScopeExcel(req: ProcurementRequest, est: CostEstimateState | any, divScope?: VendorScope | null): Promise<void> {
-  const ws: any = {};
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('Scope');
   const merges: any[] = [];
   let R = 0;
-  const set = (r: number, c: number, v: any, s?: any, t: string = 's') => {
-    ws[XLSX.utils.encode_cell({ r, c })] = { v, t, ...(s ? { s } : {}) };
+  const argb = (rgb: string) => `FF${rgb}`;
+  const set = (r: number, c: number, v: any, s?: any, _t: string = 's') => {
+    const cell = ws.getCell(r + 1, c + 1);
+    cell.value = v;
+    if (s) {
+      cell.style = {
+        ...s,
+        ...(s.font ? { font: { ...s.font, ...(s.font.sz ? { size: s.font.sz } : {}) } } : {}),
+        ...(s.fill ? { fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: argb(s.fill.fgColor.rgb) } } } : {}),
+        ...(s.border ? {
+          border: Object.fromEntries(Object.entries(s.border).map(([side, value]) => [
+            side,
+            { ...(value as object), color: { argb: argb((value as any).color.rgb) } },
+          ])),
+        } : {}),
+      } as ExcelJS.Style;
+    }
   };
 
   let lastCol = 2;
@@ -109,7 +124,7 @@ export async function exportScopeExcel(req: ProcurementRequest, est: CostEstimat
     set(R, 4, scopeCostPerDU(divScope!), { border: allBorders, alignment: { horizontal: 'right' }, numFmt: money, font: { italic: true } }, 'n');
     noteRow = R;
 
-    ws['!cols'] = [{ wch: 60 }, { wch: 12 }, { wch: 10 }, { wch: 14 }, { wch: 16 }];
+    ws.columns = [{ width: 60 }, { width: 12 }, { width: 10 }, { width: 14 }, { width: 16 }];
   } else {
     // ── Legacy Nature of Work & Estimate of Cost layout ──
     const h = (est && est.header) || {};
@@ -183,25 +198,22 @@ export async function exportScopeExcel(req: ProcurementRequest, est: CostEstimat
     merges.push({ s: { r: R, c: 0 }, e: { r: R, c: 2 } });
     noteRow = R;
 
-    ws['!cols'] = [{ wch: 32 }, { wch: 58 }, { wch: 16 }];
+    ws.columns = [{ width: 32 }, { width: 58 }, { width: 16 }];
   }
 
-  ws['!ref'] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: noteRow, c: lastCol } });
-  ws['!merges'] = merges;
-  ws['!rows'] = [];
-  if (headerRow >= 0) ws['!rows'][headerRow] = { hpt: 40 };
-  if (noteRow >= 0) ws['!rows'][noteRow] = { hpt: 60 };
+  for (const merge of merges) {
+    ws.mergeCells(merge.s.r + 1, merge.s.c + 1, merge.e.r + 1, merge.e.c + 1);
+  }
+  if (headerRow >= 0) ws.getRow(headerRow + 1).height = 40;
+  if (noteRow >= 0) ws.getRow(noteRow + 1).height = 60;
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, 'Scope');
-
-  const b64 = XLSX.write(wb, { type: 'base64', bookType: 'xlsx' });
+  const contents = await wb.xlsx.writeBuffer();
   const safe = (req.address || 'scope').replace(/[^a-z0-9]+/gi, '_').slice(0, 40);
-  const uri = FileSystem.documentDirectory + 'scope_' + safe + '.xlsx';
-  await FileSystem.writeAsStringAsync(uri, b64, { encoding: FileSystem.EncodingType.Base64 });
+  const file = new File(Paths.document, 'scope_' + safe + '.xlsx');
+  file.write(new Uint8Array(contents));
 
   if (await Sharing.isAvailableAsync()) {
-    await Sharing.shareAsync(uri, {
+    await Sharing.shareAsync(file.uri, {
       mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       dialogTitle: 'Scope of Work',
       UTI: 'org.openxmlformats.spreadsheetml.sheet',

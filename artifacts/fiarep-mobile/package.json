@@ -64,12 +64,11 @@
     "react-native-worklets": "0.10.1",
     "three": "^0.185.1",
     "typescript": "~6.0.3",
-    "xlsx": "^0.18.5",
-    "xlsx-js-style": "^1.2.0",
     "zod": "catalog:",
     "zod-validation-error": "^3.4.0"
   },
   "dependencies": {
+    "exceljs": "4.4.0",
     "expo-secure-store": "~57.0.4"
   }
 }
