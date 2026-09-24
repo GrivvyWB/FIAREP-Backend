@@ -41,7 +41,7 @@ import {
   isComplaintHandlingSupervisor,
 } from "../lib/domain";
 import { hasAnyActiveCoverage } from "../lib/coverage";
-import { isCoverageEligible } from "../lib/domain";
+import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
@@ -237,7 +237,7 @@ async function canonicalizeAssignment(
       .includes(entity) &&
     target?.id === actor.id;
   if (
-    actor.position === "Superintendent Ⓔ" &&
+    isSuperintendentE(actor) &&
     entity === "emergency-jobs" &&
     (target?.role !== "emergency" || target.position !== "Maintenance Worker")
   ) {
@@ -1674,7 +1674,7 @@ router.post(
     action === "assign" &&
     ["resident-reports", "building-violations", "manpower-requests"].includes(entity) &&
     normalizeAssignment(current.state).assignedStaffId &&
-    !(entity === "resident-reports" && actor.position === "Superintendent Ⓔ")
+    !(entity === "resident-reports" && isSuperintendentE(actor))
   ) {
     res.status(409).json({
       error: "This record is already assigned. The current assignee must release it with an update before reassignment.",
