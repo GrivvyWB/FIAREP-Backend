@@ -27,6 +27,7 @@ channel = "stable-25_05"
 [userenv.development]
 FIAREP_ENABLE_STAGING_PUSH_SMOKE_TESTS = "true"
 FIAREP_STAGING_TENANT_ID = "staging-smoke"
+FIAREP_EXPO_API_DOMAIN = "fiarep.com"
 
 [userenv.shared]
 FIAREP_PLATFORM_OWNER_NAME = "FIAREP Platform Owner"
