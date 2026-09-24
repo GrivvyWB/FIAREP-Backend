@@ -9,6 +9,7 @@ import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
+import { requestFileDownloadUrl } from '@workspace/api-client-react';
 
 const STATUS_LABEL: Record<ResidentReport['status'], string> = {
   submitted: 'Submitted',
@@ -31,6 +32,7 @@ export default function ReportDetail() {
   const [r, setR] = useState<ResidentReport | null>(null);
   const [viewerUri, setViewerUri] = useState<string | null>(null);
   const [remotePhotoUris, setRemotePhotoUris] = useState<string[]>([]);
+  const [completedPhotoUris, setCompletedPhotoUris] = useState<string[]>([]);
   const [photosLoading, setPhotosLoading] = useState(false);
   const [photosError, setPhotosError] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -65,6 +67,7 @@ export default function ReportDetail() {
         if (!active) return;
         setR(report);
         setRemotePhotoUris([]);
+        setCompletedPhotoUris([]);
         setPhotosError(false);
         if (!report) return;
         // Auto-run the violation assessment for staff so the code is ready
@@ -84,8 +87,31 @@ export default function ReportDetail() {
         setPhotosLoading(true);
         try {
           // Resident report photos must use the report-scoped authorized endpoint.
-          const urls = await listResidentReportPhotoUrls(String(id));
-          if (active) setRemotePhotoUris(urls);
+          // Staff completion photos are separate, record-owned files and need
+          // their own authorized download URLs.
+          const completionPaths = [...new Set([
+            ...(Array.isArray(report.remoteFiles) ? report.remoteFiles : [])
+              .filter((file) => file.kind === 'completion-photo')
+              .map((file) => file.objectPath),
+            ...(Array.isArray(report.photoEvidence) ? report.photoEvidence : [])
+              .map((photo) => (photo as { objectPath?: string }).objectPath),
+            ...(Array.isArray(report.completionPhotoEvidence) ? report.completionPhotoEvidence : [])
+              .map((photo) => (photo as { objectPath?: string }).objectPath),
+          ].filter((path): path is string => typeof path === 'string' && path.length > 0))];
+          const [residentPhotos, completionPhotos] = await Promise.all([
+            listResidentReportPhotoUrls(String(id)).then(
+              (urls) => ({ urls, failed: false }),
+              () => ({ urls: [] as string[], failed: true }),
+            ),
+            Promise.allSettled(completionPaths.map((objectPath) => requestFileDownloadUrl({ objectPath }))),
+          ]);
+          if (active) {
+            setRemotePhotoUris(residentPhotos.urls);
+            setCompletedPhotoUris(completionPhotos.flatMap((result) =>
+              result.status === 'fulfilled' ? [result.value.downloadUrl] : [],
+            ));
+            if (residentPhotos.failed || completionPhotos.some((result) => result.status === 'rejected')) setPhotosError(true);
+          }
         } catch {
           if (active) setPhotosError(true);
         } finally {
@@ -323,7 +349,9 @@ export default function ReportDetail() {
           </Pressable>
         )}
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {r.photos.map((uri, i) => (
+            {r.photos.filter((uri) => !(Array.isArray(r.remoteFiles) ? r.remoteFiles : []).some((file) =>
+              file.kind === 'completion-photo' && file.objectPath && file.localUri === uri,
+            )).map((uri, i) => (
               <Pressable key={`${uri}-${i}`} onPress={() => setViewerUri(uri)}>
                 <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
               </Pressable>
@@ -333,9 +361,14 @@ export default function ReportDetail() {
                 <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
               </Pressable>
             ))}
+            {completedPhotoUris.map((uri, i) => (
+              <Pressable key={`completion-${i}`} onPress={() => setViewerUri(uri)}>
+                <RemotePhoto localUri={uri} style={{ width: 72, height: 72, borderRadius: 8, backgroundColor: '#eee' }} />
+              </Pressable>
+            ))}
             {photosLoading && <Text style={ui.listSub}>Loading photos…</Text>}
             {!photosLoading && photosError && <Text style={ui.listSub}>Photos could not be loaded.</Text>}
-            {!photosLoading && !photosError && r.photos.length === 0 && remotePhotoUris.length === 0 && (
+            {!photosLoading && !photosError && r.photos.length === 0 && remotePhotoUris.length === 0 && completedPhotoUris.length === 0 && (
               <Text style={ui.listSub}>No photos attached.</Text>
             )}
         </View>

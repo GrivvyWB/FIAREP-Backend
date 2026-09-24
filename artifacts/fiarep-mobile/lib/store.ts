@@ -551,6 +551,7 @@ export type ResidentReport = {
   photoEvidence?: import('./photos').PhotoEvidence[];
   completionPhotos?: string[];
   completionPhotoEvidence?: import('./photos').PhotoEvidence[];
+  remoteFiles?: { localUri?: string; objectPath?: string; kind?: string }[];
   completedAt?: string;
   completionNote?: string;
   completionPhotoUrl?: string;
