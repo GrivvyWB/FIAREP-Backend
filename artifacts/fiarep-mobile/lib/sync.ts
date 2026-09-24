@@ -75,13 +75,17 @@ function normalizeLocalState(mapping: any, state: any) {
 
 type QueueRow = { entity: string; id: string; state: string; operation: string; baseVersion?: number; status: string };
 const WORKFLOW_FIELDS = new Set(['status', 'clearedByMgmt', 'submitAt', 'approveAt', 'rejectAt', 'returnAt', 'broadcastAt', 'awardAt', 'rate_closeAt', 'assignAt', 'startAt', 'resolveAt', 'clearAt', 'completeAt', 'denyAt', 'cancelAt', 'on_my_wayAt', 'approvedAt', 'returnedAt', 'assignedAt', 'startedAt', 'resolvedAt', 'completedAt', 'cancelledAt']);
-function writableState(entity: string, state: Record<string, any>) {
+const ASSIGNMENT_PATCH_FIELDS = ['assignedStaffId', 'assignedUnitId', 'assignedTo', 'assignedStaffName', 'assignedToName'];
+function writableState(entity: string, state: Record<string, any>, forPatch = false) {
   const copy = { ...state };
   delete copy._meta;
   delete copy._pendingWorkflowActions;
   if (['procurement', 'resident-reports', 'building-violations', 'leave-requests', 'elevator-jobs', 'emergency-jobs', 'hud-inspections'].includes(entity)) {
     for (const key of WORKFLOW_FIELDS) delete copy[key];
     if (entity === 'hud-inspections') delete copy.review;
+  }
+  if (forPatch && ['resident-reports', 'building-violations', 'manpower-requests'].includes(entity)) {
+    for (const key of ASSIGNMENT_PATCH_FIELDS) delete copy[key];
   }
   return copy;
 }
@@ -304,7 +308,10 @@ async function pushQueue(d: any) {
           // PATCH that could overwrite another device's work.
           if (!recoveredExisting) {
             if (error?.status !== 409 || !row.baseVersion) throw error;
-            result = await updateEntityRecord(row.entity, row.id, input);
+            result = await updateEntityRecord(row.entity, row.id, {
+              ...input,
+              state: writableState(row.entity, state, true),
+            });
           }
         }
         // A new record must exist before an object URL can be issued. This
@@ -338,21 +345,14 @@ async function pushQueue(d: any) {
             }
             await d.runAsync('UPDATE sync_queue SET state=? WHERE owner=? AND entity=? AND id=?', JSON.stringify(uploadedState), row.owner, row.entity, row.id);
           }
-          const evidenceInput = recoveredExisting
-            ? {
-                id: row.id,
-                state: writableState(row.entity, uploadedState),
-                version: result.version,
-              }
-            : {
-                id: row.id,
-                state: writableState(row.entity, uploadedState),
-                ...(uploadedState.projectId ? { projectId: uploadedState.projectId } : {}),
-                ...(uploadedState.development || uploadedState.meta?.development
-                  ? { development: uploadedState.development || uploadedState.meta.development }
-                  : {}),
-                version: result.version,
-              };
+          // Only the uploaded file registry changed here. Replaying the full
+          // locally cached record would try to PATCH server-owned assignment
+          // and workflow fields, which the API correctly rejects.
+          const evidenceInput = {
+            id: row.id,
+            state: { remoteFiles: uploadedState.remoteFiles },
+            version: result.version,
+          };
           result = await updateEntityRecord(row.entity, row.id, evidenceInput);
         }
         for (const pending of pendingActions) {
