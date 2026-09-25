@@ -1262,7 +1262,30 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
   const note = rawNote || "Please assign this right away.";
   const development = report.development || String(report.state["development"] || "");
   const complaintNo = String(report.state["complaintNo"] || "");
-  const recipients = await residentReportRecipientIds(actor.tenantId, development);
+  const rawTarget = typeof req.body?.["targetStaffId"] === "string" ? req.body["targetStaffId"].trim() : "";
+  let recipients: string[];
+  let directedTo = "";
+  if (rawTarget) {
+    // Management picked a specific manager/supervisor to handle this (e.g. the
+    // usual superintendent is off). Direct the urgent note to that person only.
+    const [target] = await db.select().from(staffAccounts).where(and(
+      eq(staffAccounts.id, rawTarget),
+      eq(staffAccounts.tenantId, actor.tenantId),
+      eq(staffAccounts.status, "approved"),
+    )).limit(1);
+    if (!target || !(
+      target.role === "management" ||
+      target.role === "administrator" ||
+      /supervisor|superintendent|manager|director/i.test(String(target.position || ""))
+    )) {
+      res.status(400).json({ error: "Select a manager or supervisor from the list" });
+      return;
+    }
+    recipients = [target.id];
+    directedTo = target.name || "";
+  } else {
+    recipients = await residentReportRecipientIds(actor.tenantId, development);
+  }
   if (recipients.length) {
     await db.insert(notifications).values(recipients.map((target) => ({
       id: randomUUID(),
@@ -1274,7 +1297,7 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
     })));
   }
   await audit(actor, `${entity}.assignment-requested`, note, report.id);
-  res.json({ ok: true, notified: recipients.length });
+  res.json({ ok: true, notified: recipients.length, directedTo });
 });
 
 router.post(

@@ -268,11 +268,18 @@ export default function Reports() {
   const [nudgeNote, setNudgeNote] = useState("");
   const [nudging, setNudging] = useState(false);
   const [nudgeSent, setNudgeSent] = useState(false);
+  const [nudgeTargetId, setNudgeTargetId] = useState("");
+  const [nudgeTargetOpen, setNudgeTargetOpen] = useState(false);
+  const [nudgeSearch, setNudgeSearch] = useState("");
   const completionPhotoInput = useRef<HTMLInputElement>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
   const deepLinkHandled = useRef(false);
 
   const reports = (reportsQuery.data || []) as Report[];
+  const supervisorChoices = (staff as any[])
+    .filter((m) => m && (m.role === "management" || m.role === "administrator" || /supervisor|superintendent|manager|director/i.test(String(m.position || ""))))
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
+  const nudgeTarget = supervisorChoices.find((m) => m.id === nudgeTargetId) || null;
   // Keep an open report detail in sync when the list auto-refreshes, so status
   // and photos update live instead of sitting on the snapshot it was opened with.
   useEffect(() => {
@@ -317,6 +324,9 @@ export default function Reports() {
     setNudgeNote("");
     setNudging(false);
     setNudgeSent(false);
+    setNudgeTargetId("");
+    setNudgeTargetOpen(false);
+    setNudgeSearch("");
   };
 
   const requestAssignment = async (report: Report) => {
@@ -325,10 +335,10 @@ export default function Reports() {
       const note = nudgeNote.trim() || "Please answer this — assign right away.";
       await customFetch(`/api/v1/resident-reports/${report.id}/request-assignment`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note }), responseType: "json",
+        body: JSON.stringify({ note, ...(nudgeTargetId ? { targetStaffId: nudgeTargetId } : {}) }), responseType: "json",
       });
       setNudgeSent(true);
-      toast({ title: "Urgent request sent to supervisors" });
+      toast({ title: nudgeTarget ? `Urgent request sent to ${nudgeTarget.name}` : "Urgent request sent to supervisors" });
     } catch (error) {
       toast({ variant: "destructive", title: "Could not send request", description: error instanceof Error ? error.message : "Please try again." });
     } finally { setNudging(false); }
@@ -551,8 +561,35 @@ export default function Reports() {
                   {(actor?.role === "management" || actor?.role === "administrator") && currentStatus === "submitted" && (
                     <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 space-y-2">
                       <p className="text-sm font-bold text-red-700 flex items-center gap-1.5"><Send className="h-4 w-4" />Ask a supervisor to assign — urgent</p>
+                      <div className="relative">
+                        <button type="button" onClick={() => setNudgeTargetOpen((open) => !open)} className="flex w-full items-center justify-between rounded-md border border-input bg-white px-3 py-2 text-left text-sm">
+                          <span className={nudgeTarget ? "font-medium text-foreground" : "text-muted-foreground"}>{nudgeTarget ? `${nudgeTarget.name}${nudgeTarget.position ? ` · ${nudgeTarget.position}` : ""}` : "Send to the usual supervisors (default)"}</span>
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        </button>
+                        {nudgeTargetOpen && (
+                          <div className="absolute z-20 mt-1 w-full rounded-md border border-input bg-white shadow-lg">
+                            <div className="flex items-center gap-2 border-b px-2 py-1.5">
+                              <Search className="h-3.5 w-3.5 text-muted-foreground" />
+                              <input autoFocus value={nudgeSearch} onChange={(event) => setNudgeSearch(event.target.value)} placeholder="Search a manager or supervisor…" className="w-full bg-transparent text-sm outline-none" />
+                            </div>
+                            <div className="max-h-56 overflow-y-auto py-1">
+                              <button type="button" onClick={() => { setNudgeTargetId(""); setNudgeTargetOpen(false); setNudgeSearch(""); }} className="block w-full px-3 py-1.5 text-left text-sm hover:bg-muted">Send to the usual supervisors (default)</button>
+                              {supervisorChoices
+                                .filter((member) => `${member.name || ""} ${member.position || ""}`.toLowerCase().includes(nudgeSearch.trim().toLowerCase()))
+                                .map((member) => (
+                                  <button type="button" key={member.id} onClick={() => { setNudgeTargetId(member.id); setNudgeTargetOpen(false); setNudgeSearch(""); }} className={`block w-full px-3 py-1.5 text-left text-sm hover:bg-muted ${nudgeTargetId === member.id ? "bg-primary/10" : ""}`}>
+                                    <span className="font-medium">{member.name}</span>{member.position ? <span className="text-muted-foreground"> · {member.position}</span> : null}
+                                  </button>
+                                ))}
+                              {supervisorChoices.filter((member) => `${member.name || ""} ${member.position || ""}`.toLowerCase().includes(nudgeSearch.trim().toLowerCase())).length === 0 && (
+                                <p className="px-3 py-2 text-xs text-muted-foreground">No matching supervisor.</p>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
                       <Textarea value={nudgeNote} onChange={(event) => setNudgeNote(event.target.value)} placeholder="Please answer this — assign right away." className="bg-white" />
-                      <Button variant="destructive" className="w-full" disabled={nudging || nudgeSent} onClick={() => requestAssignment(selected)}>{nudgeSent ? "Sent \u2713" : nudging ? "Sending\u2026" : "Send urgent request"}</Button>
+                      <Button variant="destructive" className="w-full" disabled={nudging || nudgeSent} onClick={() => requestAssignment(selected)}>{nudgeSent ? "Sent \u2713" : nudging ? "Sending\u2026" : nudgeTarget ? `Send urgent request to ${nudgeTarget.name}` : "Send urgent request"}</Button>
                     </div>
                   )}
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canHandleComplaints && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
