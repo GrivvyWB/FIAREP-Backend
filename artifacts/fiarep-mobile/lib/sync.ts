@@ -308,10 +308,21 @@ async function pushQueue(d: any) {
           // PATCH that could overwrite another device's work.
           if (!recoveredExisting) {
             if (error?.status !== 409 || !row.baseVersion) throw error;
-            result = await updateEntityRecord(row.entity, row.id, {
-              ...input,
-              state: writableState(row.entity, state, true),
-            });
+            const patchInput = { ...input, state: writableState(row.entity, state, true) };
+            try {
+              result = await updateEntityRecord(row.entity, row.id, patchInput);
+            } catch (updateError: any) {
+              // Base version stale (e.g. the completion's inline workflow
+              // action bumped the server version between enqueue and push).
+              // Refresh to the server's current version and retry once, so the
+              // follow-up evidence PATCH still runs instead of stranding this
+              // record - and its completion photo - in a permanent conflict.
+              if (updateError?.status !== 409) throw updateError;
+              const fresh: any = await getEntityRecord(row.entity, row.id).catch(() => null);
+              const freshVersion = typeof fresh?.version === 'number' ? fresh.version : null;
+              if (freshVersion == null) throw updateError;
+              result = await updateEntityRecord(row.entity, row.id, { ...patchInput, version: freshVersion });
+            }
           }
         }
         // A new record must exist before an object URL can be issued. This
