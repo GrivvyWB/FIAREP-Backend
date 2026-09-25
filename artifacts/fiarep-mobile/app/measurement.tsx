@@ -29,6 +29,7 @@ export default function Measurement() {
   const [position, setPosition] = useState('');
   const [devs, setDevs] = useState<string[]>([]);
   const [development, setDevelopment] = useState('');
+  const [devQuery, setDevQuery] = useState('');
   const rawModules = useRawModules();
   useEffect(() => {
     getSessionIdentity().then((si: any) => {
@@ -262,13 +263,18 @@ export default function Measurement() {
         {(showCalculators || (catalog && selectedCount > 0)) && devs.length > 0 && (
           <View style={{ marginTop: 16 }}>
             <Text style={{ fontSize: 12, color: '#4A5560', marginBottom: 6 }}>Save to development</Text>
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
-              {devs.map((d) => (
-                <Pressable key={d} onPress={() => setDevelopment(d)} style={{ marginRight: 8, marginBottom: 8, borderRadius: 12, borderWidth: 1.5, borderColor: ACCENT, backgroundColor: development === d ? ACCENT : 'transparent', paddingVertical: 8, paddingHorizontal: 12 }}>
-                  <Text style={{ color: development === d ? '#fff' : ACCENT, fontWeight: '600', fontSize: 12 }}>{d}</Text>
-                </Pressable>
-              ))}
-            </View>
+            <TextInput value={devQuery} onChangeText={setDevQuery} placeholder="Search developments" autoCorrect={false} autoCapitalize="characters"
+              style={{ borderWidth: 1.5, borderColor: '#D3DAD5', borderRadius: 12, padding: 12, fontSize: 16, backgroundColor: '#fff', marginBottom: 8 }} />
+            {!!development && <Text style={{ fontSize: 13, marginBottom: 8 }}>Selected: <Text style={{ color: ACCENT, fontWeight: '700' }}>{development}</Text></Text>}
+            <ScrollView style={{ maxHeight: 220 }} keyboardShouldPersistTaps="handled" nestedScrollEnabled>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+                {devs.filter((d) => d.toLowerCase().includes(devQuery.trim().toLowerCase())).map((d) => (
+                  <Pressable key={d} onPress={() => { setDevelopment(d); setDevQuery(''); }} style={{ marginRight: 8, marginBottom: 8, borderRadius: 12, borderWidth: 1.5, borderColor: ACCENT, backgroundColor: development === d ? ACCENT : 'transparent', paddingVertical: 8, paddingHorizontal: 12 }}>
+                    <Text style={{ color: development === d ? '#fff' : ACCENT, fontWeight: '600', fontSize: 12 }}>{d}</Text>
+                  </Pressable>
+                ))}
+              </View>
+            </ScrollView>
           </View>
         )}
 
