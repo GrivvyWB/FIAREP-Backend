@@ -1,10 +1,11 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, ActivityIndicator, Image, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { customFetch } from '@workspace/api-client-react';
 import { computeMeasurement, MATERIAL_LABELS, type MaterialKind } from '../lib/measurements';
+import { isARMeasureSupported, measureArea } from '../modules/ar-measure/src';
 
 const ACCENT = '#1E7D4F';
 
@@ -39,6 +40,22 @@ export default function Measurement() {
   const [tileW, setTileW] = useState('12');
   const [tileH, setTileH] = useState('12');
   const [boxSqFt, setBoxSqFt] = useState('20');
+  const [arSupported, setArSupported] = useState(false);
+  const [arBusy, setArBusy] = useState(false);
+  useEffect(() => { try { setArSupported(isARMeasureSupported()); } catch { setArSupported(false); } }, []);
+
+  const runAR = async () => {
+    setArBusy(true);
+    try {
+      const r = await measureArea();
+      const round1 = (n?: number) => (typeof n === 'number' ? String(Math.round(n * 100) / 100) : '');
+      if (r.widthFt) setA(round1(r.widthFt));
+      if (r.heightFt) setB(round1(r.heightFt));
+      setAiNote(r.areaSqFt ? `AR measured ${Math.round(r.areaSqFt * 100) / 100} sq ft — adjust below if needed.` : 'AR measurement captured.');
+    } catch (e: any) {
+      Alert.alert('AR measure', e?.message ? String(e.message) : 'Could not measure. Enter the dimensions manually.');
+    } finally { setArBusy(false); }
+  };
 
   const result = useMemo(() => computeMeasurement({
     material,
@@ -97,6 +114,11 @@ export default function Measurement() {
         <Pressable onPress={capture} style={{ borderRadius: 16, backgroundColor: ACCENT, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{photo ? 'Retake photo' : 'Point camera & take photo'}</Text>
         </Pressable>
+        {arSupported && (
+          <Pressable onPress={runAR} disabled={arBusy} style={{ borderRadius: 16, borderWidth: 2, borderColor: ACCENT, paddingVertical: 14, alignItems: 'center', marginBottom: 12, opacity: arBusy ? 0.6 : 1 }}>
+            <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 15 }}>{arBusy ? 'Measuring…' : 'AR Measure (LiDAR) — tap the corners'}</Text>
+          </Pressable>
+        )}
         {photo && <Image source={{ uri: photo }} style={{ width: '100%', height: 200, borderRadius: 16, marginBottom: 12, backgroundColor: '#E4E9E6' }} resizeMode="cover" />}
         {classifying && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}><ActivityIndicator color={ACCENT} /><Text style={{ color: '#4A5560' }}>Identifying material…</Text></View>}
         {!!aiNote && <Text style={{ color: '#4A5560', marginBottom: 12, fontSize: 13 }}>{aiNote}</Text>}
