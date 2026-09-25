@@ -12,6 +12,7 @@ import {
   usePerformEntityAction,
   useUpdateResidentReportPhoto,
   type ViolationClassification,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -264,6 +265,9 @@ export default function Reports() {
   const [completionPhoto, setCompletionPhoto] = useState<File | null>(null);
   const [completionPreview, setCompletionPreview] = useState("");
   const [completionNote, setCompletionNote] = useState("");
+  const [nudgeNote, setNudgeNote] = useState("");
+  const [nudging, setNudging] = useState(false);
+  const [nudgeSent, setNudgeSent] = useState(false);
   const completionPhotoInput = useRef<HTMLInputElement>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
   const deepLinkHandled = useRef(false);
@@ -310,6 +314,24 @@ export default function Reports() {
     setCompletionPhoto(null);
     setCompletionPreview("");
     setCompletionNote("");
+    setNudgeNote("");
+    setNudging(false);
+    setNudgeSent(false);
+  };
+
+  const requestAssignment = async (report: Report) => {
+    setNudging(true);
+    try {
+      const note = nudgeNote.trim() || "Please answer this — assign right away.";
+      await customFetch(`/api/v1/resident-reports/${report.id}/request-assignment`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note }), responseType: "json",
+      });
+      setNudgeSent(true);
+      toast({ title: "Urgent request sent to supervisors" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not send request", description: error instanceof Error ? error.message : "Please try again." });
+    } finally { setNudging(false); }
   };
 
   const perform = async (report: Report, actionName: string, body?: Record<string, unknown>) => {
@@ -526,6 +548,13 @@ export default function Reports() {
                  )}
                    {canHandleComplaints && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(assignActor, staff, selected.development, coverageDevs.length > 0)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
                   {actor?.position !== "Elevator Service" && String(state.assignedStaffId || "") === actor?.id && ["assigned", "in_progress"].includes(currentStatus) && <div className="border-t border-border pt-4 space-y-2"><p className="text-sm font-semibold">Release assignment</p><Textarea value={releaseUpdate} onChange={(event) => setReleaseUpdate(event.target.value)} placeholder="Provide an update before releasing this complaint" /><Button variant="outline" onClick={() => perform(selected, "release", { update: releaseUpdate })} disabled={action.isPending || releaseUpdate.trim().length < 3}>Release with update</Button></div>}
+                  {(actor?.role === "management" || actor?.role === "administrator") && currentStatus === "submitted" && (
+                    <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 space-y-2">
+                      <p className="text-sm font-bold text-red-700 flex items-center gap-1.5"><Send className="h-4 w-4" />Ask a supervisor to assign — urgent</p>
+                      <Textarea value={nudgeNote} onChange={(event) => setNudgeNote(event.target.value)} placeholder="Please answer this — assign right away." className="bg-white" />
+                      <Button variant="destructive" className="w-full" disabled={nudging || nudgeSent} onClick={() => requestAssignment(selected)}>{nudgeSent ? "Sent \u2713" : nudging ? "Sending\u2026" : "Send urgent request"}</Button>
+                    </div>
+                  )}
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canHandleComplaints && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
               </div></>;
           })()}

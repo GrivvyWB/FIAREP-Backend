@@ -15,6 +15,8 @@ function isUrgent(notification: { message: string; detail?: string | null }) {
     "elevator is down",
     "new resident report",
     "resident report",
+    "urgent",
+    "assignment requested",
   ].some((term) => text.includes(term));
 }
 

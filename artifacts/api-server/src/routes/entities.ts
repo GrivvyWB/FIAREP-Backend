@@ -1238,6 +1238,45 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
   res.json(outward(actor, updated));
 });
 
+// Management nudge: request the development's supervisors assign a complaint or
+// violation right away, with a short note. Sends a notification (no status change).
+router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
+  const entity = req.params["entity"];
+  if (!validEntity(entity) || !["resident-reports", "building-violations"].includes(entity)) { next(); return; }
+  const actor = actorFrom(res);
+  if (!(actor.role === "administrator" || actor.role === "management" || isBoroughDirector(actor) || isCoverageEligible(actor))) {
+    res.status(403).json({ error: "Only management may request assignment" });
+    return;
+  }
+  const [report] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, req.params["id"]!),
+    eq(entityRecords.entity, entity),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!report || !(await canReadRecordForActor(actor, report))) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  const rawNote = typeof req.body?.["note"] === "string" ? req.body["note"].trim() : "";
+  const note = rawNote || "Please assign this right away.";
+  const development = report.development || String(report.state["development"] || "");
+  const complaintNo = String(report.state["complaintNo"] || "");
+  const recipients = await residentReportRecipientIds(actor.tenantId, development);
+  if (recipients.length) {
+    await db.insert(notifications).values(recipients.map((target) => ({
+      id: randomUUID(),
+      tenantId: actor.tenantId,
+      target,
+      message: "Urgent: assignment requested",
+      detail: `${actor.name || "Management"}: ${note}${complaintNo ? ` \u00b7 ${complaintNo}` : ""}`,
+      reportId: report.id,
+    })));
+  }
+  await audit(actor, `${entity}.assignment-requested`, note, report.id);
+  res.json({ ok: true, notified: recipients.length });
+});
+
 router.post(
   "/v1/:entity/:id/actions/:action",
   (req, res, next) => {

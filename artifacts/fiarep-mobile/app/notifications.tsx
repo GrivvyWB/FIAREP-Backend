@@ -191,7 +191,7 @@ export default function Notifications() {
     const message = (n.message || '').toLowerCase();
     // Operational alerts must be red immediately; age-based escalation is only
     // for ordinary unread work.
-    if (/emergency|priority|new resident report|new job assigned|elevator down/.test(message)) return 2;
+    if (/emergency|priority|urgent|assignment requested|new resident report|new job assigned|elevator down/.test(message)) return 2;
     if (message.includes('returned for revision')) return 1;
     const d = daysSince(n.at);
     if (d >= 5) return 2;
