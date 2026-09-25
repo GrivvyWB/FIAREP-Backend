@@ -88,7 +88,7 @@ export default function Measurement() {
         if (res?.material && allowed.includes(res.material)) {
           setMaterial(res.material);
           setAiNote(`Detected ${MATERIAL_LABELS[res.material]}${res.confidence ? ` (${Math.round(res.confidence * 100)}%)` : ''}. ${res.note || ''}`.trim());
-        } else if (res?.material && res.material !== 'unknown') {
+        } else if (res?.material && (res.material as string) !== 'unknown') {
           setAiNote(`Looks like ${MATERIAL_LABELS[res.material] || res.material}, but that's not enabled for you — pick below.`);
         } else { setAiNote("Couldn't identify the material — pick it below."); }
       } catch { setAiNote('Material auto-detect unavailable — pick it below.'); }

@@ -10,6 +10,8 @@ import {
   listStaffAccounts,
   getCurrentActor,
   getCurrentPosition,
+  getSessionIdentity,
+  listDevelopmentNames,
   type ViolationLookup,
   type StaffAccount,
   displayStaffPosition,
@@ -42,6 +44,7 @@ export default function ViolationSend() {
   const [staff, setStaff] = useState<StaffAccount[]>([]);
   const [sent, setSent] = useState<ViolationLookup[]>([]);
   const [me, setMe] = useState('');
+  const [myId, setMyId] = useState('');
   const canDelete = useDeletionPolicy();
   const [authorized, setAuthorized] = useState(false);
   const [sending, setSending] = useState(false);
@@ -64,9 +67,15 @@ export default function ViolationSend() {
   const load = useCallback(() => {
     listStaffAccounts('approved').then(setStaff);
     listViolationLookups().then(setSent);
-    getCurrentActor().then((a) => {
+    Promise.all([getCurrentActor(), getSessionIdentity()]).then(([a, si]) => {
       setMe((a && a.name) || '');
-      const devs = ((a as any)?.developments || []).filter((d: any) => typeof d === 'string' && d.trim());
+      setMyId((a && a.id) || (si as any)?.staffId || '');
+      // Developments live on the signed-in staff session, not the lightweight
+      // actor object (which omits them and left this list empty). Org-wide
+      // managers (no assigned developments) fall back to the full list so they
+      // can still pick a site.
+      const assigned = ((si as any)?.developments || []).filter((d: any) => typeof d === 'string' && d.trim());
+      const devs = assigned.length ? assigned : listDevelopmentNames();
       setAssignedDevelopments(devs);
       setDevelopment((current) => devs.some((d: string) => d.trim().toLowerCase() === String(current || '').trim().toLowerCase()) ? current : '');
     });
@@ -77,6 +86,7 @@ export default function ViolationSend() {
 
   // Inspectors and contractors are the people who go look a violation up.
   const recipients = staff.filter((s) => {
+    if (myId && s.id === myId) return false; // a supervisor cannot send work to themselves
     if (complaintMode) {
       const eligibleRole = ['management', 'worker', 'inspector', 'emergency'].includes(s.role);
       const eligiblePosition = s.position !== 'Borough Director' && s.position !== 'Superintendent Ⓔ';
