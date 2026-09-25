@@ -75,6 +75,15 @@ export function useModuleAccess(): Record<string, boolean> {
   return new Proxy({}, { get: (_target, key: string) => moduleEnabled(key as ModuleId, config) }) as Record<string, boolean>;
 }
 
+// Raw features.modules map (values exactly as saved). Use for opt-in keys such
+// as the per-trade measurement switches (meas.<trade>.<material>), which must be
+// read as `=== true` rather than through the default-on module proxy.
+export function useRawModules(): Record<string, boolean> {
+  const [cfg, setCfg] = useState<ModuleConfig | null>(cached);
+  useEffect(() => { loadModuleConfig().then(setCfg).catch(() => undefined); }, []);
+  return (cfg?.features?.modules || {}) as Record<string, boolean>;
+}
+
 const ROUTE_MODULES: Array<[string, ModuleId]> = [
   ['/hud-', 'hud-inspections'], ['/violation-', 'violations'], ['/inspector-violations', 'violations'],
   ['/create-report', 'inspection-create'], ['/report-detail', 'reports'], ['/worker', 'my-jobs'],

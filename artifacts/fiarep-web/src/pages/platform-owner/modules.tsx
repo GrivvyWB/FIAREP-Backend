@@ -97,6 +97,35 @@ const PROJECT_TOOLS: ProjectTool[] = [
   { id: "proj-compass", name: "Compass" },
 ];
 
+// Per-trade x per-material measurement access (control-panel matrix). Stored as
+// flat opt-in keys meas.<trade>.<material> inside features.modules.
+const MEASUREMENT_TRADES = [
+  { key: "inspector", label: "Inspector" },
+  { key: "cpm", label: "CPM / Scope" },
+  { key: "carpenter", label: "Carpenter" },
+  { key: "painter", label: "Painter" },
+  { key: "plumber", label: "Plumber" },
+  { key: "electrician", label: "Electrician" },
+  { key: "elevator", label: "Elevator Service" },
+  { key: "mason", label: "Mason / Concrete" },
+  { key: "roofer", label: "Roofer" },
+  { key: "heating", label: "Heating" },
+  { key: "general", label: "General Construction" },
+];
+const MEASUREMENT_MATERIALS = [
+  { key: "concrete", label: "Concrete" },
+  { key: "sheetrock", label: "Sheetrock" },
+  { key: "plywood", label: "Plyboard" },
+  { key: "floor-tile", label: "Floor tile" },
+  { key: "wall-tile", label: "Wall tile" },
+  { key: "wood-floor", label: "Wood floor" },
+  { key: "paint", label: "Paint" },
+  { key: "window", label: "Window" },
+  { key: "door", label: "Door" },
+  { key: "room", label: "Room" },
+];
+const measurementKey = (trade: string, material: string) => `meas.${trade}.${material}`;
+
 function configuredProjectTools(organization: OrganizationWithUsage): Record<string, boolean> {
   const value = organization.features?.modules;
   const saved = value && typeof value === "object" && !Array.isArray(value)
@@ -106,6 +135,21 @@ function configuredProjectTools(organization: OrganizationWithUsage): Record<str
     result[tool.id] = saved[tool.id] === true; // opt-in: OFF unless explicitly on
     return result;
   }, {});
+}
+
+function configuredMeasurementAccess(organization: OrganizationWithUsage): Record<string, boolean> {
+  const value = organization.features?.modules;
+  const saved = value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+  const result: Record<string, boolean> = {};
+  for (const trade of MEASUREMENT_TRADES) {
+    for (const material of MEASUREMENT_MATERIALS) {
+      const key = measurementKey(trade.key, material.key);
+      result[key] = saved[key] === true; // opt-in
+    }
+  }
+  return result;
 }
 
 function configuredModules(organization: OrganizationWithUsage): Record<string, boolean> {
@@ -134,6 +178,7 @@ export default function OwnerModules() {
   const [organizationId, setOrganizationId] = useState("");
   const [modules, setModules] = useState<Record<string, boolean>>({});
   const [projectTools, setProjectTools] = useState<Record<string, boolean>>({});
+  const [measurementAccess, setMeasurementAccess] = useState<Record<string, boolean>>({});
   const [deletionEnabled, setDeletionEnabled] = useState(false);
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
   const [deletionSaving, setDeletionSaving] = useState(false);
@@ -157,6 +202,7 @@ export default function OwnerModules() {
     if (!organization) return;
     setModules(configuredModules(organization));
     setProjectTools(configuredProjectTools(organization));
+    setMeasurementAccess(configuredMeasurementAccess(organization));
     setDeletionEnabled(organization.features?.deletionEnabled === true);
     const configured = organization.features?.modules;
     setResidentPhotoAiEnabled(
@@ -172,6 +218,11 @@ export default function OwnerModules() {
 
   const toggleModule = (moduleId: string, enabled: boolean) => {
     setModules((current) => ({ ...current, [moduleId]: enabled }));
+    setDirty(true);
+  };
+
+  const toggleMeasurement = (key: string, enabled: boolean) => {
+    setMeasurementAccess((current) => ({ ...current, [key]: enabled }));
     setDirty(true);
   };
 
@@ -231,7 +282,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, residentPhotoAiViolationReader: residentPhotoAiEnabled },
+            modules: { ...modules, ...projectTools, ...measurementAccess, residentPhotoAiViolationReader: residentPhotoAiEnabled },
             deletionEnabled,
           },
         },
@@ -305,6 +356,47 @@ export default function OwnerModules() {
             <Metric label="Development limit" value={organization.propertyLimit === null ? "Unlimited" : String(organization.propertyLimit)} />
           </div>
 
+          {modules["measurement"] === true && (
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="font-semibold text-slate-950">Measurement access by trade</h2>
+                <p className="text-xs text-slate-500">Turn on each material a trade may measure. Each worker sees only the materials switched on for their trade.</p>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="px-4 py-2 text-left font-semibold text-slate-700">Trade</th>
+                      {MEASUREMENT_MATERIALS.map((m) => (
+                        <th key={m.key} className="whitespace-nowrap px-2 py-2 text-center text-[11px] font-semibold text-slate-600">{m.label}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {MEASUREMENT_TRADES.map((t) => (
+                      <tr key={t.key} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+                        <td className="whitespace-nowrap px-4 py-2 font-medium text-slate-800">{t.label}</td>
+                        {MEASUREMENT_MATERIALS.map((m) => {
+                          const key = measurementKey(t.key, m.key);
+                          return (
+                            <td key={m.key} className="px-2 py-2 text-center">
+                              <input
+                                type="checkbox"
+                                className="h-4 w-4 accent-[#185FA5]"
+                                checked={measurementAccess[key] === true}
+                                onChange={(e) => toggleMeasurement(key, e.target.checked)}
+                                aria-label={`${t.label} ${m.label}`}
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.75fr)]">
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">

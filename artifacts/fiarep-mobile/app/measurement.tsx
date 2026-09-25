@@ -6,6 +6,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { customFetch } from '@workspace/api-client-react';
 import { computeMeasurement, MATERIAL_LABELS, type MaterialKind } from '../lib/measurements';
 import { isARMeasureSupported, measureArea } from '../modules/ar-measure/src';
+import { getCurrentPosition } from '../lib/store';
+import { useRawModules } from '../lib/module-access';
+import { allowedMaterialsForTrade } from '../lib/measurement-access';
 
 const ACCENT = '#1E7D4F';
 
@@ -43,6 +46,12 @@ export default function Measurement() {
   const [boxSqFt, setBoxSqFt] = useState('20');
   const [coats, setCoats] = useState('2');
   const [coverage, setCoverage] = useState('350');
+  const [position, setPosition] = useState('');
+  const rawModules = useRawModules();
+  useEffect(() => { getCurrentPosition().then((p: any) => setPosition(String(p || ''))).catch(() => {}); }, []);
+  const allowed = allowedMaterialsForTrade(position, rawModules);
+  const visibleMaterials = allowed.length ? allowed : MATERIALS;
+  useEffect(() => { if (visibleMaterials.length && !visibleMaterials.includes(material)) setMaterial(visibleMaterials[0]); }, [visibleMaterials.join(',')]);
   const [arSupported, setArSupported] = useState(false);
   const [arBusy, setArBusy] = useState(false);
   useEffect(() => { try { setArSupported(isARMeasureSupported()); } catch { setArSupported(false); } }, []);
@@ -130,7 +139,7 @@ export default function Measurement() {
 
         <Text style={{ fontSize: 12, color: '#4A5560', marginBottom: 6 }}>Material</Text>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 16 }}>
-          {MATERIALS.map((m, i) => (
+          {visibleMaterials.map((m, i) => (
             <Pressable key={m} onPress={() => setMaterial(m)}
               style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', marginBottom: 8, borderRadius: 12, borderWidth: 1.5, borderColor: ACCENT, backgroundColor: material === m ? ACCENT : 'transparent', paddingVertical: 10, alignItems: 'center' }}>
               <Text style={{ color: material === m ? '#fff' : ACCENT, fontWeight: '600', fontSize: 12 }}>{CHIP[m]}</Text>

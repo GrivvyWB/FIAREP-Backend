@@ -14,7 +14,8 @@ import {
   listManpowerRequests,
 } from '../lib/store';
 import { ui } from '../lib/ui';
-import { useModuleAccess } from '../lib/module-access';
+import { useModuleAccess, useRawModules } from '../lib/module-access';
+import { hasAnyMeasurementAccess } from '../lib/measurement-access';
 
 // A staff member can start a construction-PM project when the org has the
 // Projects module enabled (controlled from Platform -> Module Management) AND
@@ -35,6 +36,7 @@ export default function WorkerHome() {
   const router = useRouter();
   const { refresh } = useAppMode();
   const modules = useModuleAccess();
+  const rawModules = useRawModules();
   const [jobCount, setJobCount] = useState(0);
   const [position, setPosition] = useState('');
   const [isEmergencyMaintenance, setIsEmergencyMaintenance] = useState(false);
@@ -99,7 +101,7 @@ export default function WorkerHome() {
           <Text style={ui.btnText}>Elevator Jobs</Text>
         </Pressable>
       )}
-      {modules['measurement'] && /^(painter|carpenter)$/.test((position || '').trim().toLowerCase()) && (
+      {hasAnyMeasurementAccess(position, rawModules) && (
         <Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
           <Text style={ui.btnText}>Measurement</Text>
         </Pressable>
