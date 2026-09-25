@@ -6,7 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { customFetch } from '@workspace/api-client-react';
 import { computeMeasurement, MATERIAL_LABELS, type MaterialKind } from '../lib/measurements';
 import { isARMeasureSupported, measureArea } from '../modules/ar-measure/src';
-import { getCurrentPosition } from '../lib/store';
+import { getCurrentActor, getSessionIdentity } from '../lib/store';
 import { useRawModules } from '../lib/module-access';
 import { allowedMaterialsForTrade } from '../lib/measurement-access';
 
@@ -47,8 +47,20 @@ export default function Measurement() {
   const [coats, setCoats] = useState('2');
   const [coverage, setCoverage] = useState('350');
   const [position, setPosition] = useState('');
+  const [devs, setDevs] = useState<string[]>([]);
+  const [development, setDevelopment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
   const rawModules = useRawModules();
-  useEffect(() => { getCurrentPosition().then((p: any) => setPosition(String(p || ''))).catch(() => {}); }, []);
+  useEffect(() => {
+    getSessionIdentity().then((si: any) => {
+      setPosition(String(si?.position || ''));
+      const d: string[] = Array.isArray(si?.developments) ? si.developments : [];
+      setDevs(d);
+      if (d.length) setDevelopment(d[0]);
+    }).catch(() => {});
+  }, []);
+  useEffect(() => { setSaved(false); }, [material, a, b, thickness, tileW, tileH, boxSqFt, coats, coverage]);
   const allowed = allowedMaterialsForTrade(position, rawModules);
   const visibleMaterials = allowed.length ? allowed : MATERIALS;
   useEffect(() => { if (visibleMaterials.length && !visibleMaterials.includes(material)) setMaterial(visibleMaterials[0]); }, [visibleMaterials.join(',')]);
@@ -106,6 +118,33 @@ export default function Measurement() {
         setAiNote('Material auto-detect unavailable — pick it below.');
       } finally { setClassifying(false); }
     } catch { setClassifying(false); }
+  };
+
+  const saveMeasurement = async () => {
+    const dev = development.trim();
+    if (!dev) { Alert.alert('Development needed', 'Pick a development to save this measurement to.'); return; }
+    if (!result.areaSqFt) { Alert.alert('Nothing to save', 'Enter the dimensions first.'); return; }
+    setSaving(true);
+    try {
+      const actor = await getCurrentActor();
+      const state = {
+        material, materialLabel: MATERIAL_LABELS[material], development: dev,
+        lengthFt: parseFloat(a) || 0, widthFt: parseFloat(b) || 0, thicknessIn: parseFloat(thickness) || 0,
+        tileWidthIn: parseFloat(tileW) || 0, tileHeightIn: parseFloat(tileH) || 0, boxSqFt: parseFloat(boxSqFt) || 0,
+        coats: parseFloat(coats) || 0, coverageSqFt: parseFloat(coverage) || 0,
+        areaSqFt: result.areaSqFt, cubicYards: result.cubicYards, orderCubicYards: result.orderCubicYards,
+        sheets: result.sheets, tiles: result.tiles, boxes: result.boxes, gallons: result.gallons, doorSize: result.doorSize,
+        summary: result.summary, by: actor.name, byId: actor.id, position, status: 'saved',
+        createdAt: new Date().toISOString(),
+      };
+      await customFetch('/api/v1/measurements', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ development: dev, state }), responseType: 'json',
+      });
+      setSaved(true); setAiNote('Measurement saved.');
+    } catch (e: any) {
+      Alert.alert('Could not save', e?.message ? String(e.message) : 'Please try again.');
+    } finally { setSaving(false); }
   };
 
   const dims = DIM_LABELS[material];
@@ -170,6 +209,21 @@ export default function Measurement() {
           {material === 'door' && !!result.doorSize && <Text style={{ fontSize: 15 }}>Nearest standard door: <Text style={{ fontWeight: '700', color: ACCENT }}>{result.doorSize}</Text></Text>}
         </View>
 
+        {devs.length > 0 && (
+          <View style={{ marginTop: 16 }}>
+            <Text style={{ fontSize: 12, color: '#4A5560', marginBottom: 6 }}>Save to development</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 4 }}>
+              {devs.map((d) => (
+                <Pressable key={d} onPress={() => setDevelopment(d)} style={{ marginRight: 8, marginBottom: 8, borderRadius: 12, borderWidth: 1.5, borderColor: ACCENT, backgroundColor: development === d ? ACCENT : 'transparent', paddingVertical: 8, paddingHorizontal: 12 }}>
+                  <Text style={{ color: development === d ? '#fff' : ACCENT, fontWeight: '600', fontSize: 12 }}>{d}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </View>
+        )}
+        <Pressable onPress={saveMeasurement} disabled={saving || saved || !result.areaSqFt} style={{ borderRadius: 16, backgroundColor: saved ? '#8A928C' : ACCENT, paddingVertical: 14, alignItems: 'center', marginTop: 8, opacity: (saving || !result.areaSqFt) ? 0.6 : 1 }}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>{saved ? 'Saved ✓' : saving ? 'Saving…' : 'Save measurement'}</Text>
+        </Pressable>
         <Text style={{ color: '#8A928C', fontSize: 12, marginTop: 16, textAlign: 'center' }}>
           Auto-measure (point & tap the corners) arrives with LiDAR AR — for now enter the dimensions.
         </Text>

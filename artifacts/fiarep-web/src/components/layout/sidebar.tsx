@@ -25,8 +25,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info,
-} from "lucide-react";
+  Info, Ruler } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -44,6 +43,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Repairs", href: "/repairs", icon: Wrench, module: "repairs" as const },
     { name: "Projects", href: "/projects", icon: Briefcase, module: "projects" as const },
     { name: "Reports", href: "/reports", icon: FolderOpen, module: "reports" as const },
+    { name: "Measurements", href: "/measurements", icon: Ruler, module: "measurement" as const },
     { name: "Calendar", href: "/calendar", icon: CalendarDays, module: "calendar" as const },
     { name: "Clients", href: "/clients", icon: Users, module: "clients" as const },
     { name: "Team", href: "/team", icon: UsersRound, module: "team" as const },

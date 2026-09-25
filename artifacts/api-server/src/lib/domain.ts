@@ -105,6 +105,7 @@ export const ENTITIES = new Set([
   "priority-violations",
   "route-assignments",
   "manpower-requests",
+  "measurements",
   "procurement",
   "procurement-bids",
   "vendor-contacts",

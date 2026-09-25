@@ -19,6 +19,7 @@ import Estimates from '@/pages/estimates';
 import Repairs from '@/pages/repairs';
 import Projects from '@/pages/projects';
 import Reports from '@/pages/reports';
+import Measurements from '@/pages/measurements';
 import UploadReport from '@/pages/reports/upload';
 import Calendar from '@/pages/calendar';
 import Clients from '@/pages/clients';
@@ -201,6 +202,7 @@ function AppRouter() {
           <Route path="/repairs" component={RepairsRoute} />
           <Route path="/projects" component={ProjectsRoute} />
           <Route path="/reports" component={ReportsRoute} />
+          <Route path="/measurements" component={MeasurementsRoute} />
           <Route path="/reports/upload" component={UploadReportRoute} />
           <Route path="/calendar" component={CalendarRoute} />
           <Route path="/clients" component={ClientsRoute} />
@@ -247,6 +249,7 @@ const EstimatesRoute = () => <ModuleRoute module="estimates"><Estimates /></Modu
 const RepairsRoute = () => <ModuleRoute module="repairs"><Repairs /></ModuleRoute>;
 const ProjectsRoute = () => <ModuleRoute module="projects"><Projects /></ModuleRoute>;
 const ReportsRoute = () => <ModuleRoute module="reports"><Reports /></ModuleRoute>;
+const MeasurementsRoute = () => <ModuleRoute module="measurement"><Measurements /></ModuleRoute>;
 const UploadReportRoute = () => <ModuleRoute module="report-upload"><UploadReport /></ModuleRoute>;
 const CalendarRoute = () => <ModuleRoute module="calendar"><Calendar /></ModuleRoute>;
 const ClientsRoute = () => <ModuleRoute module="clients"><Clients /></ModuleRoute>;
