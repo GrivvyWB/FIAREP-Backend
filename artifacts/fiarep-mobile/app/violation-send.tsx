@@ -89,7 +89,7 @@ export default function ViolationSend() {
     if (myId && s.id === myId) return false; // a supervisor cannot send work to themselves
     if (complaintMode) {
       const eligibleRole = ['management', 'worker', 'inspector', 'emergency'].includes(s.role);
-      const eligiblePosition = s.position !== 'Borough Director' && s.position !== 'Superintendent Ⓔ';
+      const eligiblePosition = s.position !== 'Borough Director' && s.position !== 'Superintendent Ⓔ' && s.position !== 'Director';
       const inDevelopment = !!development &&
         (s.developments || []).some((d) => d.trim().toLowerCase() === development.trim().toLowerCase());
       return eligibleRole && eligiblePosition &&

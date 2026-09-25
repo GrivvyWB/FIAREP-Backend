@@ -132,6 +132,7 @@ export function assignableOperationalStaff(
 
   return candidates.filter((candidate) => {
     if (candidate.id === actor.id || candidate.position === "Borough Director") return false;
+    if (candidate.position === "Director") return false; // procurement director - PR only, never operational work
     if (!OPERATIONAL_ROLES.has(candidate.role)) return false;
     if (actorTrade && candidate.position !== actorTrade) return false;
     if (isEmergencySuperintendent) return true;
