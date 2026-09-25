@@ -40,7 +40,7 @@ import {
   supervisedTradeForPosition,
   isComplaintHandlingSupervisor,
 } from "../lib/domain";
-import { hasAnyActiveCoverage } from "../lib/coverage";
+import { hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
 import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -1275,6 +1275,24 @@ router.post(
 
   if (!current || !(await canReadRecordForActor(actor, current))) {
     res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  // Coverage gate: a coverage-eligible supervisor may VIEW any development's
+  // complaints/violations, but to ACT on one that is not a home development they
+  // must hold an active coverage unlock ("Cover a Site"). One unlock covers all
+  // developments for the 24h window. Administrators and non-eligible roles (the
+  // canonical worker/emergency assignees) are unaffected.
+  if (
+    actor.role !== "administrator" &&
+    (entity === "resident-reports" || entity === "building-violations") &&
+    isCoverageEligible(actor) &&
+    current.development &&
+    !isHomeDevelopment(actor, current.development) &&
+    !(await hasAnyActiveCoverage(actor))
+  ) {
+    res.status(403).json({
+      error: "Unlock this development with your coverage code (Cover a Site) before acting on it.",
+    });
     return;
   }
   if (
