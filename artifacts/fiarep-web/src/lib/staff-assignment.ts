@@ -59,6 +59,47 @@ const TRADE_SUPERVISOR_POSITIONS = new Set(
   TRADE_CREW_SECTIONS.map((section) => section.supervisor),
 );
 
+// Mirrors the server's TRADE_ASSIGNMENT_BY_SUPERVISOR (domain.ts). A trade
+// supervisor may only assign complaints to their own trade's crew, so the
+// assignable list must not surface other trades or general operational staff.
+const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
+  ["Plumbing Supervisor", "Plumber"],
+  ["Plumber Supervisor", "Plumber"],
+  ["Supervisor Plumber", "Plumber"],
+  ["Supervisor Inspector", "Inspector"],
+  ["Inspector Supervisor", "Inspector"],
+  ["Inspection Supervisor", "Inspector"],
+  ["CPM Supervisor", "CPM"],
+  ["Supervisor CPM", "CPM"],
+  ["Carpenter Supervisor", "Carpenter"],
+  ["Supervisor Carpenter", "Carpenter"],
+  ["Elevator Supervisor", "Elevator Service"],
+  ["Elevator Service Supervisor", "Elevator Service"],
+  ["Supervisor Elevator", "Elevator Service"],
+  ["Electrical Supervisor", "Electrician"],
+  ["Electric Supervisor", "Electrician"],
+  ["Electrician Supervisor", "Electrician"],
+  ["Supervisor Electrician", "Electrician"],
+  ["Painter Supervisor", "Painter"],
+  ["Supervisor Painter", "Painter"],
+  ["Heating Service Supervisor", "Heating Service"],
+  ["Supervisor Heating Service", "Heating Service"],
+  ["Heat Plant Supervisor", "Heating Service"],
+  ["Bricklayer Supervisor", "Bricklayer"],
+  ["Supervisor Bricklayer", "Bricklayer"],
+  ["Mason Supervisor", "Bricklayer"],
+  ["Maintenance Supervisor", "Maintenance Worker"],
+  ["Grounds Supervisor", "Groundskeeper"],
+]);
+function supervisedTradeForPosition(position?: string | null): string | null {
+  return TRADE_ASSIGNMENT_BY_SUPERVISOR.get(position || "") || null;
+}
+function isSupervisorPositionName(position: string): boolean {
+  return position.toLowerCase().includes("supervisor") ||
+    position === "Superintendent" ||
+    position === "Superintendent Ⓔ";
+}
+
 function withinDevelopments(candidate: Staff, developments: string[]) {
   // Development names vary in case across the data (staff store UPPERCASE,
   // reports/coverage may be title case), so match case-insensitively.
@@ -78,10 +119,21 @@ export function assignableOperationalStaff(
   const isRegionalDirector = actor.position === "Regional Director";
   const isEmergencySuperintendent = actor.position === "Superintendent Ⓔ";
   const isAdministrator = actor.role === "administrator";
+  // Trade supervisors may assign only within their own trade (server-enforced
+  // in canAssignStaff); mirror that here so the list never offers other trades.
+  const actorTrade = supervisedTradeForPosition(actor.position);
+  const isGeneralSuperintendent =
+    actor.position === "Superintendent" ||
+    actor.position === "Assistant Superintendent" ||
+    isEmergencySuperintendent;
+  if (isSupervisorPositionName(actor.position) && !actorTrade && !isGeneralSuperintendent && !isAdministrator) {
+    return [];
+  }
 
   return candidates.filter((candidate) => {
     if (candidate.id === actor.id || candidate.position === "Borough Director") return false;
     if (!OPERATIONAL_ROLES.has(candidate.role)) return false;
+    if (actorTrade && candidate.position !== actorTrade) return false;
     if (isEmergencySuperintendent) return true;
     if (
       development &&
