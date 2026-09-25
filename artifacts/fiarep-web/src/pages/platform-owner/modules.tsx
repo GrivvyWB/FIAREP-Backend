@@ -96,7 +96,17 @@ const PROJECT_TOOLS: ProjectTool[] = [
   { id: "proj-roofplan", name: "Roof plan sketch" },
   { id: "proj-compass", name: "Compass" },
 ];
-const projToolKey = (staffId: string, toolId: string) => `projtool.${staffId}.${toolId}`;
+const projToolKey = (trade: string, toolId: string) => `projtool.${trade}.${toolId}`;
+const PROJECT_TRADES = [
+  { key: "maintenance", label: "Maintenance Worker" },
+  { key: "superintendent", label: "Superintendent" },
+  { key: "cpm", label: "CPM" },
+  { key: "cpm-supervisor", label: "CPM Supervisor" },
+  { key: "property-manager", label: "Property Manager" },
+  { key: "inspector", label: "Inspector" },
+  { key: "supervisor-inspector", label: "Supervisor Inspector" },
+  { key: "director", label: "Director" },
+];
 
 // Per-trade x per-material measurement access (control-panel matrix). Stored as
 // flat opt-in keys meas.<trade>.<material> inside features.modules.
@@ -189,7 +199,6 @@ export default function OwnerModules() {
   const [projectTools, setProjectTools] = useState<Record<string, boolean>>({});
   const [measurementAccess, setMeasurementAccess] = useState<Record<string, boolean>>({});
   const [projToolAccess, setProjToolAccess] = useState<Record<string, boolean>>({});
-  const [orgStaff, setOrgStaff] = useState<Array<{ id: string; name: string; role: string; position: string; status: string }>>([]);
   const [deletionEnabled, setDeletionEnabled] = useState(false);
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
   const [deletionSaving, setDeletionSaving] = useState(false);
@@ -223,15 +232,6 @@ export default function OwnerModules() {
     );
     setDirty(false);
   }, [organization]);
-
-  useEffect(() => {
-    if (!organizationId) { setOrgStaff([]); return; }
-    let cancelled = false;
-    customFetch(`/api/v1/platform/organizations/${organizationId}/staff`, { responseType: "json" })
-      .then((rows: any) => { if (!cancelled) setOrgStaff(Array.isArray(rows) ? rows : []); })
-      .catch(() => { if (!cancelled) setOrgStaff([]); });
-    return () => { cancelled = true; };
-  }, [organizationId]);
 
   const selectOrganization = (nextId: string) => {
     setOrganizationId(nextId);
@@ -426,43 +426,36 @@ export default function OwnerModules() {
           {modules["projects"] === true && (
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-200 px-5 py-4">
-                <h2 className="font-semibold text-slate-950">Project tool access by worker</h2>
-                <p className="text-xs text-slate-500">Assign each construction-PM tool to the individual workers who should have it. A worker sees a tool only when it is both enabled for the client (above) and checked here for them.</p>
+                <h2 className="font-semibold text-slate-950">Project tool access by trade</h2>
+                <p className="text-xs text-slate-500">Assign each construction-PM tool to the trades that should have it. A worker sees a tool only when it is both enabled for the client (above) and checked here for their trade.</p>
               </div>
-              {orgStaff.filter((w) => w.status === "approved").length === 0 ? (
-                <p className="px-5 py-6 text-sm text-slate-500">No approved staff for this client yet.</p>
-              ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
-                        <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2 text-left font-semibold text-slate-700">Worker</th>
-                        {PROJECT_TOOLS.map((t) => (
-                          <th key={t.id} className="whitespace-nowrap px-2 py-2 text-center text-[11px] font-semibold text-slate-600">{t.name}</th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {orgStaff.filter((w) => w.status === "approved").map((w) => (
-                        <tr key={w.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
-                          <td className="sticky left-0 z-10 bg-white px-4 py-2 font-medium text-slate-800">
-                            <div className="whitespace-nowrap">{w.name}</div>
-                            <div className="text-[11px] text-slate-400">{w.position || w.role}</div>
-                          </td>
-                          {PROJECT_TOOLS.map((t) => {
-                            const key = projToolKey(w.id, t.id);
-                            return (
-                              <td key={t.id} className="px-2 py-2 text-center">
-                                <input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={projToolAccess[key] === true} onChange={(e) => toggleProjTool(key, e.target.checked)} aria-label={`${w.name} ${t.name}`} />
-                              </td>
-                            );
-                          })}
-                        </tr>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 bg-slate-50">
+                      <th className="sticky left-0 z-10 bg-slate-50 px-4 py-2 text-left font-semibold text-slate-700">Trade</th>
+                      {PROJECT_TOOLS.map((t) => (
+                        <th key={t.id} className="whitespace-nowrap px-2 py-2 text-center text-[11px] font-semibold text-slate-600">{t.name}</th>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {PROJECT_TRADES.map((tr) => (
+                      <tr key={tr.key} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
+                        <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-4 py-2 font-medium text-slate-800">{tr.label}</td>
+                        {PROJECT_TOOLS.map((t) => {
+                          const key = projToolKey(tr.key, t.id);
+                          return (
+                            <td key={t.id} className="px-2 py-2 text-center">
+                              <input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={projToolAccess[key] === true} onChange={(e) => toggleProjTool(key, e.target.checked)} aria-label={`${tr.label} ${t.name}`} />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </section>
           )}
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.75fr)]">

@@ -17,11 +17,13 @@ export type ModuleId =
 export type ModuleConfig = { propertyLimit?: number; features?: { modules?: Record<string, boolean> } };
 let cached: ModuleConfig | null = null;
 let cachedStaffId = '';
+let cachedPosition = '';
 let cachedOwner = '';
 
 async function settingKey(): Promise<string> {
   const identity = await getSessionIdentity();
   cachedStaffId = identity?.staffId || cachedStaffId;
+  cachedPosition = identity?.position || cachedPosition;
   return `organization_module_config:${identity?.tenantId || 'default'}:${identity?.staffId || ''}`;
 }
 
@@ -33,6 +35,22 @@ const OPT_IN_MODULES = new Set<ModuleId>([
   'proj-photos', 'proj-scans', 'proj-roofplan', 'proj-compass',
   'measurement',
 ]);
+
+// Map a worker's position to the project-tool trade key used by the control-panel
+// "Project tool access by trade" matrix.
+function projectRoleForPosition(position: string): string | null {
+  const p = (position || '').trim().toLowerCase();
+  if (!p) return null;
+  if (p.includes('cpm supervisor')) return 'cpm-supervisor';
+  if (p === 'cpm' || p.includes('cpm')) return 'cpm';
+  if (p.includes('supervisor inspector')) return 'supervisor-inspector';
+  if (p.includes('inspector')) return 'inspector';
+  if (p.includes('property manager')) return 'property-manager';
+  if (p.startsWith('superintendent')) return 'superintendent';
+  if (p.includes('director')) return 'director';
+  if (p.includes('maintenance')) return 'maintenance';
+  return null;
+}
 
 export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = cached): boolean {
   const modulesMap = config?.features?.modules || {};
@@ -46,7 +64,7 @@ export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = ca
       const anyAssigned = Object.keys(modulesMap).some(
         (k) => k.startsWith('projtool.') && k.endsWith('.' + module) && modulesMap[k] === true,
       );
-      if (anyAssigned) return modulesMap['projtool.' + cachedStaffId + '.' + module] === true;
+      if (anyAssigned) { const role = projectRoleForPosition(cachedPosition); return !!role && modulesMap['projtool.' + role + '.' + module] === true; }
     }
     return true;
   }
