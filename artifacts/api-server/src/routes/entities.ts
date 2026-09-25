@@ -1273,11 +1273,16 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
       eq(staffAccounts.tenantId, actor.tenantId),
       eq(staffAccounts.status, "approved"),
     )).limit(1);
-    if (!target || !(
-      target.role === "management" ||
-      target.role === "administrator" ||
-      /supervisor|superintendent|manager|director/i.test(String(target.position || ""))
-    )) {
+    const targetRole = String(target?.role || "");
+    const targetIsComplaintHandler =
+      !!target &&
+      !["procurement", "human_resources", "vendor", "resident"].includes(targetRole) &&
+      (
+        targetRole === "management" ||
+        targetRole === "administrator" ||
+        /supervisor|superintendent/i.test(String(target.position || ""))
+      );
+    if (!target || !targetIsComplaintHandler) {
       res.status(400).json({ error: "Select a manager or supervisor from the list" });
       return;
     }

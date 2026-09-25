@@ -277,7 +277,16 @@ export default function Reports() {
 
   const reports = (reportsQuery.data || []) as Report[];
   const supervisorChoices = (staff as any[])
-    .filter((m) => m && (m.role === "management" || m.role === "administrator" || /supervisor|superintendent|manager|director/i.test(String(m.position || ""))))
+    .filter((m) => {
+      if (!m) return false;
+      const role = String(m.role || "");
+      // Only people who can actually take a complaint and assign it. Exclude
+      // procurement, HR, vendors and residents (a procurement "Director" is not
+      // a complaint-handling supervisor).
+      if (["procurement", "human_resources", "vendor", "resident"].includes(role)) return false;
+      if (role === "management" || role === "administrator") return true;
+      return /supervisor|superintendent/i.test(String(m.position || ""));
+    })
     .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   const nudgeTarget = supervisorChoices.find((m) => m.id === nudgeTargetId) || null;
   // Keep an open report detail in sync when the list auto-refreshes, so status
