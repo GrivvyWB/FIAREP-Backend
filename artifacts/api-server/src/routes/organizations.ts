@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { randomUUID, randomInt } from "node:crypto";
-import { and, count, eq, inArray, desc, isNull, sql } from "drizzle-orm";
+import { and, asc, count, eq, inArray, desc, isNull, sql } from "drizzle-orm";
 import { db, entityRecords, organizationProperties, organizations, staffAccounts, refreshSessions, platformLicenseAudit } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
@@ -86,6 +86,23 @@ function propertyInput(body: Record<string, unknown>) {
 
 router.get("/v1/platform/organizations/:organizationId/properties", async (req, res) => {
   res.json(await db.select().from(organizationProperties).where(eq(organizationProperties.organizationId, req.params.organizationId!)));
+});
+
+// Platform owner: list a client's staff (minimal fields) so the control panel can
+// assign per-user access (e.g. project tools) to named workers.
+router.get("/v1/platform/organizations/:organizationId/staff", async (req, res) => {
+  const rows = await db
+    .select({
+      id: staffAccounts.id,
+      name: staffAccounts.name,
+      role: staffAccounts.role,
+      position: staffAccounts.position,
+      status: staffAccounts.status,
+    })
+    .from(staffAccounts)
+    .where(eq(staffAccounts.tenantId, req.params.organizationId!))
+    .orderBy(asc(staffAccounts.name));
+  res.json(rows);
 });
 
 router.post("/v1/platform/organizations/:organizationId/properties", async (req, res) => {
