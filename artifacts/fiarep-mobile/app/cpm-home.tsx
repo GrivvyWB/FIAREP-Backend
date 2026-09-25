@@ -62,6 +62,7 @@ export default function CpmHome() {
         ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
         ...(normalizedPosition === 'inspector' ? [{ label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone }] : []),
+        ...(normalizedPosition === 'inspector' && modules['measurement'] ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }] : []),
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },
         { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone },
       ],

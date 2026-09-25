@@ -99,6 +99,11 @@ export default function WorkerHome() {
           <Text style={ui.btnText}>Elevator Jobs</Text>
         </Pressable>
       )}
+      {modules['measurement'] && /^(painter|carpenter)$/.test((position || '').trim().toLowerCase()) && (
+        <Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
+          <Text style={ui.btnText}>Measurement</Text>
+        </Pressable>
+      )}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
         <Text style={ui.btnOutlineText}>Inbox</Text>
       </Pressable>

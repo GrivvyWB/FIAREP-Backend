@@ -10,11 +10,11 @@ import { isARMeasureSupported, measureArea } from '../modules/ar-measure/src';
 const ACCENT = '#1E7D4F';
 
 const MATERIALS: MaterialKind[] = [
-  'concrete', 'sheetrock', 'plywood', 'floor-tile', 'wall-tile', 'wood-floor', 'window', 'door', 'room',
+  'concrete', 'sheetrock', 'plywood', 'floor-tile', 'wall-tile', 'wood-floor', 'paint', 'window', 'door', 'room',
 ];
 const CHIP: Record<MaterialKind, string> = {
   concrete: 'Concrete', sheetrock: 'Sheetrock', plywood: 'Plyboard', 'floor-tile': 'Floor tile',
-  'wall-tile': 'Wall tile', 'wood-floor': 'Wood floor', window: 'Window', door: 'Door', room: 'Room',
+  'wall-tile': 'Wall tile', 'wood-floor': 'Wood floor', paint: 'Paint', window: 'Window', door: 'Door', room: 'Room',
 };
 const DIM_LABELS: Record<MaterialKind, { a: string; b: string }> = {
   concrete: { a: 'Length (ft)', b: 'Width (ft)' },
@@ -26,6 +26,7 @@ const DIM_LABELS: Record<MaterialKind, { a: string; b: string }> = {
   'floor-tile': { a: 'Length (ft)', b: 'Width (ft)' },
   'wall-tile': { a: 'Wall width (ft)', b: 'Wall height (ft)' },
   'wood-floor': { a: 'Length (ft)', b: 'Width (ft)' },
+  paint: { a: 'Surface width (ft)', b: 'Surface height (ft)' },
 };
 
 export default function Measurement() {
@@ -40,6 +41,8 @@ export default function Measurement() {
   const [tileW, setTileW] = useState('12');
   const [tileH, setTileH] = useState('12');
   const [boxSqFt, setBoxSqFt] = useState('20');
+  const [coats, setCoats] = useState('2');
+  const [coverage, setCoverage] = useState('350');
   const [arSupported, setArSupported] = useState(false);
   const [arBusy, setArBusy] = useState(false);
   useEffect(() => { try { setArSupported(isARMeasureSupported()); } catch { setArSupported(false); } }, []);
@@ -65,7 +68,9 @@ export default function Measurement() {
     tileWidthIn: parseFloat(tileW) || 0,
     tileHeightIn: parseFloat(tileH) || 0,
     boxSqFt: parseFloat(boxSqFt) || 0,
-  }), [material, a, b, thickness, tileW, tileH, boxSqFt]);
+    coats: parseFloat(coats) || 0,
+    coverageSqFt: parseFloat(coverage) || 0,
+  }), [material, a, b, thickness, tileW, tileH, boxSqFt, coats, coverage]);
 
   const capture = async () => {
     try {
@@ -140,6 +145,7 @@ export default function Measurement() {
         {material === 'concrete' && <View style={{ marginBottom: 12 }}>{field('Thickness / depth (inches)', thickness, setThickness)}</View>}
         {isTile && <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>{field('Tile width (in)', tileW, setTileW)}{field('Tile height (in)', tileH, setTileH)}</View>}
         {material === 'wood-floor' && <View style={{ marginBottom: 12 }}>{field('Box coverage (sq ft / box)', boxSqFt, setBoxSqFt)}</View>}
+        {material === 'paint' && <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>{field('Coats', coats, setCoats)}{field('Coverage (sq ft / gal)', coverage, setCoverage)}</View>}
 
         <View style={{ borderRadius: 16, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#D3DAD5', padding: 16, marginTop: 4 }}>
           <Text style={{ fontSize: 12, color: '#4A5560', marginBottom: 6 }}>Result</Text>
@@ -151,6 +157,7 @@ export default function Measurement() {
           {(material === 'sheetrock' || material === 'plywood') && <Text style={{ fontSize: 15 }}>Sheets (4×8): <Text style={{ fontWeight: '700', color: ACCENT }}>{result.sheets ?? 0}</Text></Text>}
           {isTile && <Text style={{ fontSize: 15 }}>Tiles (incl 10% waste): <Text style={{ fontWeight: '700', color: ACCENT }}>{result.tiles ?? 0}</Text></Text>}
           {material === 'wood-floor' && <Text style={{ fontSize: 15 }}>Boxes (incl 10% waste): <Text style={{ fontWeight: '700', color: ACCENT }}>{result.boxes ?? 0}</Text></Text>}
+          {material === 'paint' && <Text style={{ fontSize: 15 }}>Paint: <Text style={{ fontWeight: '700', color: ACCENT }}>{result.gallons ?? 0} gallon(s)</Text></Text>}
           {material === 'door' && !!result.doorSize && <Text style={{ fontSize: 15 }}>Nearest standard door: <Text style={{ fontWeight: '700', color: ACCENT }}>{result.doorSize}</Text></Text>}
         </View>
 

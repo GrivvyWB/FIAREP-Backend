@@ -4,7 +4,7 @@
 
 export type MaterialKind =
   | "concrete" | "sheetrock" | "plywood" | "window" | "door" | "room"
-  | "floor-tile" | "wall-tile" | "wood-floor" | "unknown";
+  | "floor-tile" | "wall-tile" | "wood-floor" | "paint" | "unknown";
 
 export type MaterialClassification = {
   material: MaterialKind;
@@ -26,6 +26,7 @@ Choose exactly one:
 - "floor-tile": floor tile / ceramic or porcelain tile on the floor.
 - "wall-tile": tile on a wall (backsplash, bathroom wall, shower surround).
 - "wood-floor": wood, laminate, or vinyl-plank flooring / floor boards / a flooring box.
+- "paint": a painted or to-be-painted wall or ceiling surface (bare/primed wall ready for paint).
 - "unknown": none of the above is clearly the subject.
 Judge by the dominant subject of the photo. Set confidence to how sure you are (0 to 1).
 Keep note to a short factual phrase describing what you see.`;
@@ -66,7 +67,7 @@ export async function classifyMaterialImage(
               additionalProperties: false,
               required: ["material", "confidence", "note"],
               properties: {
-                material: { type: "string", enum: ["concrete", "sheetrock", "plywood", "window", "door", "room", "floor-tile", "wall-tile", "wood-floor", "unknown"] },
+                material: { type: "string", enum: ["concrete", "sheetrock", "plywood", "window", "door", "room", "floor-tile", "wall-tile", "wood-floor", "paint", "unknown"] },
                 confidence: { type: "number" },
                 note: { type: "string" },
               },
@@ -86,7 +87,7 @@ export async function classifyMaterialImage(
         : null;
     if (!text) throw new Error("OpenAI returned an invalid material classification");
     const parsed = JSON.parse(text) as Partial<MaterialClassification>;
-    const material: MaterialKind = ["concrete", "sheetrock", "plywood", "window", "door", "room", "floor-tile", "wall-tile", "wood-floor", "unknown"].includes(
+    const material: MaterialKind = ["concrete", "sheetrock", "plywood", "window", "door", "room", "floor-tile", "wall-tile", "wood-floor", "paint", "unknown"].includes(
       String(parsed.material),
     )
       ? (parsed.material as MaterialKind)

@@ -13,7 +13,8 @@ export type MaterialKind =
   | 'room'
   | 'floor-tile'
   | 'wall-tile'
-  | 'wood-floor';
+  | 'wood-floor'
+  | 'paint';
 
 export const MATERIAL_LABELS: Record<MaterialKind, string> = {
   concrete: 'Concrete',
@@ -25,17 +26,20 @@ export const MATERIAL_LABELS: Record<MaterialKind, string> = {
   'floor-tile': 'Floor tile',
   'wall-tile': 'Wall tile',
   'wood-floor': 'Wood / laminate flooring',
+  paint: 'Paint',
 };
 
 /** Materials whose take-off is a coverage/count problem measured as area. */
 export const AREA_MATERIALS: MaterialKind[] = [
-  'sheetrock', 'plywood', 'window', 'door', 'room', 'floor-tile', 'wall-tile', 'wood-floor',
+  'sheetrock', 'plywood', 'window', 'door', 'room', 'floor-tile', 'wall-tile', 'wood-floor', 'paint',
 ];
 
 export const SHEET_SQFT = 32;        // 4 ft x 8 ft sheet (sheetrock, plywood)
 export const WASTE = 0.10;           // 10% overage for tile / flooring cuts
 export const DEFAULT_TILE_IN = 12;   // 12" square tile default
 export const DEFAULT_BOX_SQFT = 20;  // wood/laminate flooring box coverage
+export const PAINT_COVERAGE_SQFT = 350; // sq ft per gallon per coat
+export const DEFAULT_COATS = 2;
 
 const round = (value: number, dp = 2): number => {
   const f = 10 ** dp;
@@ -82,6 +86,12 @@ export function flooringBoxes(areaSqFt: number, boxSqFt = DEFAULT_BOX_SQFT, wast
   return Math.ceil((areaSqFt * (1 + waste)) / boxSqFt);
 }
 
+/** Gallons of paint for an area, given coats and coverage per gallon. */
+export function paintGallons(areaSqFt: number, coats = DEFAULT_COATS, coverageSqFt = PAINT_COVERAGE_SQFT): number {
+  if (!pos(areaSqFt) || !pos(coats) || !pos(coverageSqFt)) return 0;
+  return Math.ceil((areaSqFt * coats) / coverageSqFt);
+}
+
 /** Nearest standard door size for an opening (inches). */
 export function nearestStandardDoor(widthIn: number, heightIn: number): string {
   if (![widthIn, heightIn].every(pos)) return '';
@@ -100,6 +110,8 @@ export interface MeasurementInput {
   tileWidthIn?: number; // tiles
   tileHeightIn?: number; // tiles
   boxSqFt?: number;    // wood flooring
+  coats?: number;      // paint
+  coverageSqFt?: number; // paint
 }
 
 export interface MeasurementResult {
@@ -112,6 +124,7 @@ export interface MeasurementResult {
   tiles?: number;
   boxes?: number;
   doorSize?: string;
+  gallons?: number;
   summary: string;
 }
 
@@ -148,6 +161,13 @@ export function computeMeasurement(input: MeasurementInput): MeasurementResult {
       const boxes = flooringBoxes(area, boxSqFt);
       return { ...base, boxes, areaWithWasteSqFt: round(area * (1 + WASTE), 2),
         summary: boxes ? `${area} sq ft -> ${boxes} box(es) @ ${boxSqFt} sq ft (incl 10% waste)` : 'Enter the room dimensions.' };
+    }
+    case 'paint': {
+      const coats = input.coats ?? DEFAULT_COATS;
+      const cov = input.coverageSqFt ?? PAINT_COVERAGE_SQFT;
+      const gallons = paintGallons(area, coats, cov);
+      return { ...base, gallons,
+        summary: gallons ? `${area} sq ft x ${coats} coat(s) = ${gallons} gallon(s)` : 'Enter the surface dimensions.' };
     }
     case 'door': {
       const doorSize = nearestStandardDoor(L * 12, W * 12);
