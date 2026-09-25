@@ -10,6 +10,8 @@ import {
   useClassifyResidentReportPhoto,
   useGetResidentReportPhotoAiConfig,
   usePerformEntityAction,
+  useDeleteEntityRecord,
+  useGetDeletionPolicy,
   useUpdateResidentReportPhoto,
   type ViolationClassification,
   customFetch,
@@ -17,7 +19,7 @@ import {
 import { useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle, Camera, CheckCircle2, ChevronDown, FolderOpen, Image as ImageIcon,
-  MapPin, ScanLine, Search, Send, UserRound, X,
+  MapPin, ScanLine, Search, Send, Trash2, UserRound, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link } from "wouter";
@@ -25,6 +27,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/staff-assignment";
@@ -254,6 +257,8 @@ export default function Reports() {
     },
   });
   const action = usePerformEntityAction();
+  const deleteMutation = useDeleteEntityRecord();
+  const { data: deletionPolicy } = useGetDeletionPolicy();
   const requestUpload = useRequestFileUploadUrl();
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
@@ -271,6 +276,8 @@ export default function Reports() {
   const [nudgeTargetId, setNudgeTargetId] = useState("");
   const [nudgeTargetOpen, setNudgeTargetOpen] = useState(false);
   const [nudgeSearch, setNudgeSearch] = useState("");
+  const [deletingReportId, setDeletingReportId] = useState<string | null>(null);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const completionPhotoInput = useRef<HTMLInputElement>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
   const deepLinkHandled = useRef(false);
@@ -351,6 +358,22 @@ export default function Reports() {
     } catch (error) {
       toast({ variant: "destructive", title: "Could not send request", description: error instanceof Error ? error.message : "Please try again." });
     } finally { setNudging(false); }
+  };
+
+  const confirmDeleteReport = async () => {
+    if (!deletingReportId) return;
+    const target = reports.find((r) => r.id === deletingReportId);
+    try {
+      await deleteMutation.mutateAsync({ entity: "resident-reports", id: deletingReportId, ...(target ? { data: { version: (target as any).version } } : {}) });
+      toast({ title: "Report deleted" });
+      await invalidateOperationalQueries(queryClient, "resident-reports", deletingReportId);
+      if (selected?.id === deletingReportId) setSelected(null);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not delete", description: err instanceof Error ? err.message : "Please try again." });
+    } finally {
+      setIsDeleteDialogOpen(false);
+      setDeletingReportId(null);
+    }
   };
 
   const perform = async (report: Report, actionName: string, body?: Record<string, unknown>) => {
@@ -507,6 +530,7 @@ export default function Reports() {
                  {canHandleComplaints && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
                 <Button size="sm" variant="ghost" onClick={() => openReport(report, "details")}>View details</Button>
+                {deletionPolicy?.enabled && deletionPolicy.canDelete && <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingReportId(report.id); setIsDeleteDialogOpen(true); }} title="Delete report"><Trash2 className="h-3.5 w-3.5" /></Button>}
               </div>
             </div>;
           })}</div>}
@@ -605,6 +629,18 @@ export default function Reports() {
           })()}
         </DialogContent>
       </Dialog>
+      <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete this report?</AlertDialogTitle>
+            <AlertDialogDescription>This action cannot be undone. This will permanently delete this resident report.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDeleteReport} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">{deleteMutation.isPending ? "Deleting\u2026" : "Delete"}</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
