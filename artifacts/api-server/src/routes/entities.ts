@@ -1274,14 +1274,19 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
       eq(staffAccounts.status, "approved"),
     )).limit(1);
     const targetRole = String(target?.role || "");
-    const targetIsComplaintHandler =
-      !!target &&
-      !["procurement", "human_resources", "vendor", "resident"].includes(targetRole) &&
+    const targetPosition = String(target?.position || "");
+    const targetIsComplaintHandler = !!target && (
+      // The company/procurement "Director" (not Borough/Regional Director) never
+      // handles or assigns a resident complaint.
+      targetPosition !== "Director" &&
       (
-        targetRole === "management" ||
-        targetRole === "administrator" ||
-        /supervisor|superintendent/i.test(String(target.position || ""))
-      );
+        /supervisor|superintendent/i.test(targetPosition) ||
+        (
+          !["procurement", "human_resources", "vendor", "resident", "worker", "emergency"].includes(targetRole) &&
+          (targetRole === "management" || targetRole === "administrator")
+        )
+      )
+    );
     if (!target || !targetIsComplaintHandler) {
       res.status(400).json({ error: "Select a manager or supervisor from the list" });
       return;

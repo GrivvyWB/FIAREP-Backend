@@ -287,12 +287,18 @@ export default function Reports() {
     .filter((m) => {
       if (!m) return false;
       const role = String(m.role || "");
-      // Only people who can actually take a complaint and assign it. Exclude
-      // procurement, HR, vendors and residents (a procurement "Director" is not
-      // a complaint-handling supervisor).
-      if (["procurement", "human_resources", "vendor", "resident"].includes(role)) return false;
-      if (role === "management" || role === "administrator") return true;
-      return /supervisor|superintendent/i.test(String(m.position || ""));
+      const position = String(m.position || "");
+      // The company/procurement "Director" (not Borough/Regional Director) never
+      // handles or assigns a resident complaint, whatever role the account carries.
+      if (position === "Director") return false;
+      // Any trade or inspector supervisor, or a superintendent, can take a
+      // complaint - include them regardless of whether their role is management
+      // or worker (trade supervisors are sometimes stored as worker).
+      if (/supervisor|superintendent/i.test(position)) return true;
+      // Everyone else must be operational management/admin. Exclude procurement,
+      // HR, vendors, residents, plain workers and emergency crews.
+      if (["procurement", "human_resources", "vendor", "resident", "worker", "emergency"].includes(role)) return false;
+      return role === "management" || role === "administrator";
     })
     .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   const nudgeTarget = supervisorChoices.find((m) => m.id === nudgeTargetId) || null;
