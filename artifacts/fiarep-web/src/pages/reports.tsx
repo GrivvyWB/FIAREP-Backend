@@ -512,7 +512,7 @@ export default function Reports() {
                 <div className="grid grid-cols-2 gap-3 text-sm"><div><span className="text-muted-foreground">Status</span><p className="font-medium capitalize">{statusLabel(currentStatus)}</p></div><div><span className="text-muted-foreground">Development</span><p className="font-medium">{selected.development || "—"}</p></div><div><span className="text-muted-foreground">Complaint number</span><p className="font-medium">{String(state.complaintNo || "—")}</p></div><div><span className="text-muted-foreground">Address</span><p className="font-medium">{String(state.address || "—")}</p></div></div>
                  {!!String(state.description || "") && <div><p className="text-sm text-muted-foreground mb-1">Details</p><p className="text-sm whitespace-pre-wrap">{String(state.description)}</p></div>}
                 <div>
-                  <p className="text-sm text-muted-foreground mb-2">Photos</p>
+                  <p className="text-sm font-semibold text-foreground mb-2">Before — resident's photo</p>
                   <Photos
                     reportId={selected.id}
                     savedScans={
@@ -524,7 +524,7 @@ export default function Reports() {
                     }
                   />
                 </div>
-                <FieldEvidenceDisplay state={state} reportId={selected.id} />
+                <FieldEvidenceDisplay state={state} reportId={selected.id} photosLabel="After — completed work" />
                  {String(state.assignedStaffId || "") === actor?.id && currentStatus === "in_progress" && (
                    <div className="space-y-3 border-t border-border pt-4">
                      <input

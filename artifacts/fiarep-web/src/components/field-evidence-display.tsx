@@ -8,12 +8,13 @@ import { extractFieldEvidenceNotes } from "@/lib/field-evidence-notes";
 
 interface FieldEvidenceDisplayProps {
   state: Record<string, any>;
+  photosLabel?: string;
   reportId?: string; // If it's a resident report and we need to fetch photo IDs using useListResidentReportPhotos? 
   // wait, resident reports are handled differently in the photos section of reports page. But the prompt says:
   // "Integrate it into the existing generic entity details so emergency and repair records get it, and into resident reports, elevators, and inspections where those pages bypass generic details."
 }
 
-export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayProps) {
+export function FieldEvidenceDisplay({ state, reportId, photosLabel }: FieldEvidenceDisplayProps) {
   // Extract all useful timestamps
   const startedBy = state.startedByStaffName || state.assignedTo;
   const completedBy = state.completedByStaffName || state.assignedTo;
@@ -154,7 +155,7 @@ export function FieldEvidenceDisplay({ state, reportId }: FieldEvidenceDisplayPr
       {photos.length > 0 && (
         <div className="border-t pt-3">
           <p className="text-sm text-muted-foreground mb-2 flex items-center gap-1">
-            <ImageIcon className="w-3 h-3" /> Photos
+            <ImageIcon className="w-3 h-3" /> {photosLabel || "Photos"}
           </p>
           <div className="grid grid-cols-2 gap-3">
             {photos.map((photo, i) => (
