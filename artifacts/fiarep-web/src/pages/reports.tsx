@@ -247,7 +247,7 @@ export default function Reports() {
   });
   const { data: staff = [] } = useListStaff({ status: "approved" }, {
     query: {
-      enabled: canHandleComplaints,
+      enabled: canHandleComplaints || actor?.role === "management" || actor?.role === "administrator",
       queryKey: getListStaffQueryKey({ status: "approved" }),
       staleTime: 15_000,
       refetchOnMount: "always",
@@ -563,7 +563,7 @@ export default function Reports() {
                       <p className="text-sm font-bold text-red-700 flex items-center gap-1.5"><Send className="h-4 w-4" />Ask a supervisor to assign — urgent</p>
                       <div className="relative">
                         <button type="button" onClick={() => setNudgeTargetOpen((open) => !open)} className="flex w-full items-center justify-between rounded-md border border-input bg-white px-3 py-2 text-left text-sm">
-                          <span className={nudgeTarget ? "font-medium text-foreground" : "text-muted-foreground"}>{nudgeTarget ? `${nudgeTarget.name}${nudgeTarget.position ? ` · ${nudgeTarget.position}` : ""}` : "Send to the usual supervisors (default)"}</span>
+                          <span className={nudgeTarget ? "font-medium text-foreground" : "text-muted-foreground"}>{nudgeTarget ? `${nudgeTarget.name}${nudgeTarget.position ? ` · ${nudgeTarget.position}` : ""}` : "Choose a supervisor or manager…"}</span>
                           <ChevronDown className="h-4 w-4 text-muted-foreground" />
                         </button>
                         {nudgeTargetOpen && (
@@ -573,7 +573,6 @@ export default function Reports() {
                               <input autoFocus value={nudgeSearch} onChange={(event) => setNudgeSearch(event.target.value)} placeholder="Search a manager or supervisor…" className="w-full bg-transparent text-sm outline-none" />
                             </div>
                             <div className="max-h-56 overflow-y-auto py-1">
-                              <button type="button" onClick={() => { setNudgeTargetId(""); setNudgeTargetOpen(false); setNudgeSearch(""); }} className="block w-full px-3 py-1.5 text-left text-sm hover:bg-muted">Send to the usual supervisors (default)</button>
                               {supervisorChoices
                                 .filter((member) => `${member.name || ""} ${member.position || ""}`.toLowerCase().includes(nudgeSearch.trim().toLowerCase()))
                                 .map((member) => (
@@ -582,14 +581,14 @@ export default function Reports() {
                                   </button>
                                 ))}
                               {supervisorChoices.filter((member) => `${member.name || ""} ${member.position || ""}`.toLowerCase().includes(nudgeSearch.trim().toLowerCase())).length === 0 && (
-                                <p className="px-3 py-2 text-xs text-muted-foreground">No matching supervisor.</p>
+                                <p className="px-3 py-2 text-xs text-muted-foreground">{nudgeSearch.trim() ? "No matching supervisor." : "No supervisors available for your developments."}</p>
                               )}
                             </div>
                           </div>
                         )}
                       </div>
                       <Textarea value={nudgeNote} onChange={(event) => setNudgeNote(event.target.value)} placeholder="Please answer this — assign right away." className="bg-white" />
-                      <Button variant="destructive" className="w-full" disabled={nudging || nudgeSent} onClick={() => requestAssignment(selected)}>{nudgeSent ? "Sent \u2713" : nudging ? "Sending\u2026" : nudgeTarget ? `Send urgent request to ${nudgeTarget.name}` : "Send urgent request"}</Button>
+                      <Button variant="destructive" className="w-full" disabled={nudging || nudgeSent || !nudgeTargetId} onClick={() => requestAssignment(selected)}>{nudgeSent ? "Sent \u2713" : nudging ? "Sending\u2026" : nudgeTarget ? `Send urgent request to ${nudgeTarget.name}` : "Choose a supervisor first"}</Button>
                     </div>
                   )}
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canHandleComplaints && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
