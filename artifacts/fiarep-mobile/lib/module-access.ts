@@ -88,6 +88,7 @@ const ROUTE_MODULES: Array<[string, ModuleId]> = [
   ['/manage-requests', 'complaint-dashboard'], ['/resident', 'complaint-dashboard'],
   ['/admin-job', 'projects'], ['/?new=', 'projects'], ['/project', 'projects'],
   ['/index', 'projects'], ['/estimate', 'estimates'], ['/procurement', 'procurement'],
+  ['/measurement', 'measurement'],
 ];
 
 export function moduleForRoute(path: string): ModuleId | null {
@@ -114,7 +115,7 @@ export function moduleForTile(label: string): ModuleId | null {
     'CPM Supervisor': 'scope-review', 'CPM Supervisor Scope Review': 'scope-review',
     'Elevator Dashboard': 'elevators', 'Default rates': 'settings', 'Inbox': 'notifications',
     'Request Time Off': 'leave', 'Leave Calendar': 'leave', 'Attendance': 'calendar',
-    'Audit Log': 'reports', 'Assign Route': 'calendar',
+    'Audit Log': 'reports', 'Assign Route': 'calendar', 'Measurement': 'measurement',
   };
   return modules[value] || null;
 }

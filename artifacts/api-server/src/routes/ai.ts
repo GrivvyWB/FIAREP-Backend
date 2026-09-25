@@ -3,6 +3,7 @@ import { ClassifyViolationBody } from "@workspace/api-zod";
 import { and, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizations, residentReportPhotos } from "@workspace/db";
 import { classifyViolationImage } from "../lib/violationClassification";
+import { classifyMaterialImage } from "../lib/materialClassification";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { audit } from "../lib/audit";
 import { isBoroughDirector, isSupervisorPosition } from "../lib/domain";
@@ -67,6 +68,26 @@ router.post("/ai/classify-violation", requireAuth, async (req, res) => {
         ? "AI returned an unusable classification"
         : "AI classification is temporarily unavailable",
     });
+  }
+});
+
+router.post("/ai/classify-material", requireAuth, async (req, res) => {
+  const parsed = ClassifyViolationBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "A valid JPEG, PNG, or WebP image is required" });
+    return;
+  }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    req.log.error("OPENAI_API_KEY is not configured");
+    res.status(503).json({ error: "AI classification is unavailable" });
+    return;
+  }
+  try {
+    res.json(await classifyMaterialImage(parsed.data.image, apiKey));
+  } catch (error) {
+    req.log.warn({ err: error }, "Material classification failed");
+    res.status(503).json({ error: "AI classification is temporarily unavailable" });
   }
 });
 
