@@ -1,6 +1,0 @@
-{
-  "name": "ar-measure",
-  "version": "1.0.0",
-  "description": "ARKit tap-to-measure small areas",
-  "main": "src/index.ts"
-}
