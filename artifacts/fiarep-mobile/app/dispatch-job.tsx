@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
-import { dispatchJob, listAssignableByTrade, sendViolationLookup, getCurrentActor, getSessionIdentity, lookupComplaintOrViolation, createElevatorJob, type TradeGroup } from '../lib/store';
+import { dispatchJob, listAssignableByTrade, sendViolationLookup, getCurrentActor, getSessionIdentity, lookupComplaintOrViolation, createElevatorJob, listActiveCoverage, type TradeGroup } from '../lib/store';
 import { ui } from '../lib/ui';
 import AddressInput from '../components/AddressInput';
 
@@ -23,7 +23,15 @@ export default function DispatchJob() {
   const [development, setDevelopment] = useState('');
   const [devQuery, setDevQuery] = useState('');
 
-  useFocusEffect(useCallback(() => { listAssignableByTrade().then(setAssignable); getSessionIdentity().then((i) => setDevelopments(i?.developments || [])); }, []));
+  useFocusEffect(useCallback(() => {
+    listAssignableByTrade().then(setAssignable);
+    (async () => {
+      const i = await getSessionIdentity();
+      const cov = await listActiveCoverage().catch(() => []);
+      const merged = [...new Set([...(i?.developments || []), ...cov.map((c) => c.development)])];
+      setDevelopments(merged);
+    })();
+  }, []));
 
   async function onAssign() {
     if (!address.trim()) { Alert.alert('Address required', 'Enter the job address.'); return; }

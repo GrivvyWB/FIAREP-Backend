@@ -1631,7 +1631,10 @@ export async function listAssignableByTrade(): Promise<TradeGroup[]> {
     a.role === 'worker' || a.role === 'inspector' || a.role === 'emergency'
   ).filter(a => !String(a.position || '').toLowerCase().includes('supervisor'));
   const mine = new Set((identity?.developments || []).map(d => d.trim().toLowerCase()));
-  const eligible = identity?.position === 'Borough Director'
+  // A supervisor with an active coverage unlock may assign across every
+  // development for 24h, so they see all operational staff (like a director).
+  const hasCoverage = (await listActiveCoverage().catch(() => [])).length > 0;
+  const eligible = (identity?.position === 'Borough Director' || hasCoverage)
     ? operational
     : operational.filter(a => (a.developments || []).some(d => mine.has(d.trim().toLowerCase())));
   const sectionForPosition: Record<string, string> = {
