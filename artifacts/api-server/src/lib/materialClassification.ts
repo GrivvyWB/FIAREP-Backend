@@ -2,7 +2,9 @@
 // take-off calculator applies: concrete, sheetrock (drywall), or a window opening.
 // Mirrors the violation classifier's OpenAI wiring.
 
-export type MaterialKind = "concrete" | "sheetrock" | "window" | "unknown";
+export type MaterialKind =
+  | "concrete" | "sheetrock" | "plywood" | "window" | "door" | "room"
+  | "floor-tile" | "wall-tile" | "wood-floor" | "unknown";
 
 export type MaterialClassification = {
   material: MaterialKind;
@@ -14,10 +16,16 @@ type FetchLike = typeof fetch;
 
 const SYSTEM_PROMPT = `You identify the primary construction material or element in a field photo
 so the app can pick the correct take-off calculator. Return only JSON matching the schema.
-Choose exactly one material:
-- "concrete": a concrete slab, floor, sidewalk, footing, pour, or curing/formed concrete.
-- "sheetrock": drywall / gypsum board / sheetrock — flat wall or ceiling board, taped seams, or a hole cut in drywall.
-- "window": a window, window frame, or a rough window opening / cut-out in a wall.
+Choose exactly one:
+- "concrete": a concrete slab, floor, sidewalk, footing, pour, or formed/curing concrete.
+- "sheetrock": drywall / gypsum board on a wall or ceiling, taped seams, or a hole cut in drywall.
+- "plywood": plywood / plyboard / OSB sheet goods (subfloor, sheathing, a stack of sheets).
+- "window": a window, window frame, or a rough window opening / cut-out.
+- "door": a door, door slab, or a door opening / rough door frame.
+- "room": an empty room or floor area shown for square-footage (no single material dominates).
+- "floor-tile": floor tile / ceramic or porcelain tile on the floor.
+- "wall-tile": tile on a wall (backsplash, bathroom wall, shower surround).
+- "wood-floor": wood, laminate, or vinyl-plank flooring / floor boards / a flooring box.
 - "unknown": none of the above is clearly the subject.
 Judge by the dominant subject of the photo. Set confidence to how sure you are (0 to 1).
 Keep note to a short factual phrase describing what you see.`;
@@ -58,7 +66,7 @@ export async function classifyMaterialImage(
               additionalProperties: false,
               required: ["material", "confidence", "note"],
               properties: {
-                material: { type: "string", enum: ["concrete", "sheetrock", "window", "unknown"] },
+                material: { type: "string", enum: ["concrete", "sheetrock", "plywood", "window", "door", "room", "floor-tile", "wall-tile", "wood-floor", "unknown"] },
                 confidence: { type: "number" },
                 note: { type: "string" },
               },
@@ -78,7 +86,7 @@ export async function classifyMaterialImage(
         : null;
     if (!text) throw new Error("OpenAI returned an invalid material classification");
     const parsed = JSON.parse(text) as Partial<MaterialClassification>;
-    const material: MaterialKind = ["concrete", "sheetrock", "window", "unknown"].includes(
+    const material: MaterialKind = ["concrete", "sheetrock", "plywood", "window", "door", "room", "floor-tile", "wall-tile", "wood-floor", "unknown"].includes(
       String(parsed.material),
     )
       ? (parsed.material as MaterialKind)

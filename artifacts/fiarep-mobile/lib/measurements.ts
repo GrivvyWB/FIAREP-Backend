@@ -1,116 +1,162 @@
 // Material take-off calculators for the Measurement tab.
 //
 // Pure functions with no I/O so they can be unit-tested and reused by both the
-// manual-entry UI and (later) the AR/LiDAR capture, which simply supplies the
-// same Length / Width / Thickness numbers instead of the user typing them.
+// manual-entry UI and (later) the AR/LiDAR capture, which supplies the same
+// Length / Width / Thickness numbers instead of the user typing them.
 
-export type MaterialKind = 'concrete' | 'sheetrock' | 'window';
+export type MaterialKind =
+  | 'concrete'
+  | 'sheetrock'
+  | 'plywood'
+  | 'window'
+  | 'door'
+  | 'room'
+  | 'floor-tile'
+  | 'wall-tile'
+  | 'wood-floor';
 
 export const MATERIAL_LABELS: Record<MaterialKind, string> = {
   concrete: 'Concrete',
-  sheetrock: 'Sheetrock (drywall)',
+  sheetrock: 'Sheetrock',
+  plywood: 'Plyboard / plywood',
   window: 'Window opening',
+  door: 'Door opening',
+  room: 'Room area',
+  'floor-tile': 'Floor tile',
+  'wall-tile': 'Wall tile',
+  'wood-floor': 'Wood / laminate flooring',
 };
 
-/** Standard 4 ft x 8 ft drywall sheet = 32 sq ft. */
-export const SHEETROCK_SHEET_SQFT = 32;
+/** Materials whose take-off is a coverage/count problem measured as area. */
+export const AREA_MATERIALS: MaterialKind[] = [
+  'sheetrock', 'plywood', 'window', 'door', 'room', 'floor-tile', 'wall-tile', 'wood-floor',
+];
+
+export const SHEET_SQFT = 32;        // 4 ft x 8 ft sheet (sheetrock, plywood)
+export const WASTE = 0.10;           // 10% overage for tile / flooring cuts
+export const DEFAULT_TILE_IN = 12;   // 12" square tile default
+export const DEFAULT_BOX_SQFT = 20;  // wood/laminate flooring box coverage
 
 const round = (value: number, dp = 2): number => {
   const f = 10 ** dp;
   return Math.round((value + Number.EPSILON) * f) / f;
 };
+const pos = (n: number) => Number.isFinite(n) && n > 0;
+
+export const areaSqFtFromFt = (lengthFt: number, widthFt: number): number =>
+  pos(lengthFt) && pos(widthFt) ? round(lengthFt * widthFt, 2) : 0;
 
 /**
  * Concrete volume in cubic yards.
- * Cubic Yards = (Length ft x Width ft x Thickness in) / 324
- * (324 = 12 in/ft x 27 cu ft/cu yd)
+ * Cubic Yards = (Length ft x Width ft x Thickness in) / 324  (324 = 12 x 27)
  */
 export function concreteCubicYards(lengthFt: number, widthFt: number, thicknessIn: number): number {
-  if (![lengthFt, widthFt, thicknessIn].every((n) => Number.isFinite(n) && n > 0)) return 0;
+  if (![lengthFt, widthFt, thicknessIn].every(pos)) return 0;
   return round((lengthFt * widthFt * thicknessIn) / 324, 2);
 }
-
-/** Concrete volume from a known slab area (sq ft) + thickness (in). */
 export function concreteCubicYardsFromArea(areaSqFt: number, thicknessIn: number): number {
-  if (![areaSqFt, thicknessIn].every((n) => Number.isFinite(n) && n > 0)) return 0;
+  if (![areaSqFt, thicknessIn].every(pos)) return 0;
   return round((areaSqFt * (thicknessIn / 12)) / 27, 2);
 }
-
-/** What you'd actually order: round the raw cubic yards up to the next 0.5 yd. */
+/** What you'd order: round raw cubic yards up to the next 0.5 yd. */
 export function concreteOrderCubicYards(rawCubicYards: number): number {
-  if (!(rawCubicYards > 0)) return 0;
-  return Math.ceil(rawCubicYards * 2) / 2;
+  return rawCubicYards > 0 ? Math.ceil(rawCubicYards * 2) / 2 : 0;
 }
 
-/** Number of 4x8 (32 sq ft) sheets needed to cover an area, rounded up. */
-export function sheetrockSheets(areaSqFt: number, sheetSqFt = SHEETROCK_SHEET_SQFT): number {
-  if (!(areaSqFt > 0) || !(sheetSqFt > 0)) return 0;
-  return Math.ceil(areaSqFt / sheetSqFt);
+/** Sheets needed to cover an area (sheetrock, plywood), rounded up. */
+export function sheetsNeeded(areaSqFt: number, sheetSqFt = SHEET_SQFT): number {
+  return pos(areaSqFt) && pos(sheetSqFt) ? Math.ceil(areaSqFt / sheetSqFt) : 0;
 }
 
-/** Window / opening area in square feet from feet dimensions. */
-export function windowAreaSqFt(widthFt: number, heightFt: number): number {
-  if (![widthFt, heightFt].every((n) => Number.isFinite(n) && n > 0)) return 0;
-  return round(widthFt * heightFt, 2);
+/** Tiles needed for an area given tile size in inches, including waste. */
+export function tilesNeeded(areaSqFt: number, tileWidthIn: number, tileHeightIn: number, waste = WASTE): number {
+  if (![areaSqFt, tileWidthIn, tileHeightIn].every(pos)) return 0;
+  const tileSqFt = (tileWidthIn / 12) * (tileHeightIn / 12);
+  if (!pos(tileSqFt)) return 0;
+  return Math.ceil((areaSqFt * (1 + waste)) / tileSqFt);
 }
 
-/** Convert inches to feet (AR often returns inches). */
-export const inToFt = (inches: number): number => (Number.isFinite(inches) ? inches / 12 : 0);
-export const areaSqFtFromFt = (lengthFt: number, widthFt: number): number =>
-  round((lengthFt || 0) * (widthFt || 0), 2);
+/** Boxes of wood/laminate flooring for an area, including waste. */
+export function flooringBoxes(areaSqFt: number, boxSqFt = DEFAULT_BOX_SQFT, waste = WASTE): number {
+  if (![areaSqFt, boxSqFt].every(pos)) return 0;
+  return Math.ceil((areaSqFt * (1 + waste)) / boxSqFt);
+}
+
+/** Nearest standard door size for an opening (inches). */
+export function nearestStandardDoor(widthIn: number, heightIn: number): string {
+  if (![widthIn, heightIn].every(pos)) return '';
+  const widths = [24, 28, 30, 32, 36];
+  const heights = [80, 84];
+  const w = widths.reduce((best, x) => (Math.abs(x - widthIn) < Math.abs(best - widthIn) ? x : best), widths[0]);
+  const h = heights.reduce((best, x) => (Math.abs(x - heightIn) < Math.abs(best - heightIn) ? x : best), heights[0]);
+  return `${w}" x ${h}"`;
+}
 
 export interface MeasurementInput {
   material: MaterialKind;
-  lengthFt?: number;
-  widthFt?: number;
-  thicknessIn?: number; // concrete only
+  lengthFt?: number;   // primary dim
+  widthFt?: number;    // secondary dim
+  thicknessIn?: number; // concrete
+  tileWidthIn?: number; // tiles
+  tileHeightIn?: number; // tiles
+  boxSqFt?: number;    // wood flooring
 }
 
 export interface MeasurementResult {
   material: MaterialKind;
-  areaSqFt?: number;
+  areaSqFt: number;
+  areaWithWasteSqFt?: number;
   cubicYards?: number;
   orderCubicYards?: number;
   sheets?: number;
+  tiles?: number;
+  boxes?: number;
+  doorSize?: string;
   summary: string;
 }
 
-/** One entry point the UI (manual or AR) calls with the captured dimensions. */
+/** Single entry point the UI (manual or AR) calls with captured dimensions. */
 export function computeMeasurement(input: MeasurementInput): MeasurementResult {
   const L = input.lengthFt ?? 0;
   const W = input.widthFt ?? 0;
-  const T = input.thicknessIn ?? 0;
   const area = areaSqFtFromFt(L, W);
+  const base: MeasurementResult = { material: input.material, areaSqFt: area, summary: '' };
+
   switch (input.material) {
     case 'concrete': {
-      const cy = concreteCubicYards(L, W, T);
+      const cy = concreteCubicYards(L, W, input.thicknessIn ?? 0);
       const order = concreteOrderCubicYards(cy);
-      return {
-        material: 'concrete',
-        areaSqFt: area,
-        cubicYards: cy,
-        orderCubicYards: order,
-        summary: cy
-          ? `${area} sq ft x ${T}" = ${cy} cu yd (order ~${order} cu yd)`
-          : 'Enter length, width, and thickness.',
-      };
+      return { ...base, cubicYards: cy, orderCubicYards: order,
+        summary: cy ? `${area} sq ft x ${input.thicknessIn}" = ${cy} cu yd (order ~${order})` : 'Enter length, width, and thickness.' };
     }
-    case 'sheetrock': {
-      const sheets = sheetrockSheets(area);
-      return {
-        material: 'sheetrock',
-        areaSqFt: area,
-        sheets,
-        summary: sheets ? `${area} sq ft = ${sheets} sheet(s) of 4x8` : 'Enter width and height.',
-      };
+    case 'sheetrock':
+    case 'plywood': {
+      const sheets = sheetsNeeded(area);
+      return { ...base, sheets,
+        summary: sheets ? `${area} sq ft = ${sheets} sheet(s) of 4x8` : 'Enter width and height.' };
     }
-    case 'window': {
-      const a = windowAreaSqFt(L, W);
-      return {
-        material: 'window',
-        areaSqFt: a,
-        summary: a ? `${a} sq ft opening` : 'Enter width and height.',
-      };
+    case 'floor-tile':
+    case 'wall-tile': {
+      const tw = input.tileWidthIn ?? DEFAULT_TILE_IN;
+      const th = input.tileHeightIn ?? DEFAULT_TILE_IN;
+      const tiles = tilesNeeded(area, tw, th);
+      return { ...base, tiles, areaWithWasteSqFt: round(area * (1 + WASTE), 2),
+        summary: tiles ? `${area} sq ft -> ${tiles} tiles of ${tw}x${th}" (incl 10% waste)` : 'Enter the area and tile size.' };
     }
+    case 'wood-floor': {
+      const boxSqFt = input.boxSqFt ?? DEFAULT_BOX_SQFT;
+      const boxes = flooringBoxes(area, boxSqFt);
+      return { ...base, boxes, areaWithWasteSqFt: round(area * (1 + WASTE), 2),
+        summary: boxes ? `${area} sq ft -> ${boxes} box(es) @ ${boxSqFt} sq ft (incl 10% waste)` : 'Enter the room dimensions.' };
+    }
+    case 'door': {
+      const doorSize = nearestStandardDoor(L * 12, W * 12);
+      return { ...base, doorSize,
+        summary: doorSize ? `${area} sq ft opening -> nearest standard door ${doorSize}` : 'Enter the opening width and height.' };
+    }
+    case 'window':
+    case 'room':
+    default:
+      return { ...base, summary: area ? `${area} sq ft` : 'Enter width and height.' };
   }
 }
