@@ -598,6 +598,24 @@ export function canReadEntityRecord(
     isOfficeCraftSupervisor(actor) &&
     normalizeAssignment(row.state).assignedStaffId !== actor.id
   ) return false;
+  // Trade (office/craft) supervisors — plumbing, electrical, carpentry,
+  // heating, painting, bricklaying, elevator — work from the office with no
+  // base development. Like resident complaints, they see a raw building
+  // violation only when it is routed directly to them; their normal trade work
+  // arrives as a manpower-request (the Trade Request path), so this removes the
+  // development-wide violation clutter from their box. CPM roles keep their own
+  // visibility rules above.
+  if (
+    row.entity === "building-violations" &&
+    isOfficeCraftSupervisor(actor) &&
+    !isCpmSupervisor(actor) &&
+    !(actor.role === "inspector" && actor.position === "CPM") &&
+    normalizeAssignment(row.state).assignedStaffId !== actor.id &&
+    row.state["receiverSupervisorId"] !== actor.id &&
+    row.state["cpmSupervisorId"] !== actor.id &&
+    row.state["assignedCpmStaffId"] !== actor.id &&
+    row.createdBy !== actor.id
+  ) return false;
   // The person a violation assignment was sent to can always read it, even
   // though they work from the office and have no matching base development.
   if (
