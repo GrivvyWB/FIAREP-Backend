@@ -8,7 +8,7 @@ export type ModuleId =
   | 'violations' | 'procurement' | 'scope-review' | 'scope-writing' | 'emergency'
   | 'change-orders' | 'scores' | 'elevators' | 'leave' | 'hr' | 'notifications'
   | 'settings' | 'shared-data' | 'hud-inspections' | 'trade-requests' | 'my-jobs'
-  | 'complaint-dashboard'
+  | 'complaint-dashboard' | 'measurement'
   // Per-tool, per-client construction-PM switches (all opt-in / OFF by default).
   | 'proj-new' | 'proj-room' | 'proj-rates' | 'proj-checklist' | 'proj-inspection'
   | 'proj-estimate' | 'proj-scope' | 'proj-intake' | 'proj-elevator'
@@ -29,6 +29,7 @@ const OPT_IN_MODULES = new Set<ModuleId>([
   'proj-new', 'proj-room', 'proj-rates', 'proj-checklist', 'proj-inspection',
   'proj-estimate', 'proj-scope', 'proj-intake', 'proj-elevator',
   'proj-photos', 'proj-scans', 'proj-roofplan', 'proj-compass',
+  'measurement',
 ]);
 
 export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = cached): boolean {

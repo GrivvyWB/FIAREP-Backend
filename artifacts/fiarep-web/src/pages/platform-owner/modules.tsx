@@ -75,6 +75,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "notifications", name: "Notifications", description: "Notifications and requests", icon: AlertTriangle },
   { id: "settings", name: "Settings", description: "Organization settings", icon: Settings },
   { id: "shared-data", name: "Shared Data", description: "Shared platform data", icon: Package },
+  { id: "measurement", name: "Measurement", description: "AR/LiDAR material take-off (concrete, sheetrock, window openings)", icon: Building2 },
 ];
 
 // Per-tool, per-client construction-PM switches. Each is independent and OFF
@@ -115,7 +116,7 @@ function configuredModules(organization: OrganizationWithUsage): Record<string, 
 
   // These modules are opt-in: they read as OFF until explicitly enabled for
   // the client, so the switch reflects the true default.
-  const OPT_IN = new Set<string>([]);
+  const OPT_IN = new Set<string>(["measurement"]);
   return MODULES.reduce<Record<string, boolean>>((result, module) => {
     const value = saved[module.id];
     result[module.id] = typeof value === "boolean"
