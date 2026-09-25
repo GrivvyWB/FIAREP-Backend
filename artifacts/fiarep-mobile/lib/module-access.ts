@@ -16,10 +16,12 @@ export type ModuleId =
 
 export type ModuleConfig = { propertyLimit?: number; features?: { modules?: Record<string, boolean> } };
 let cached: ModuleConfig | null = null;
+let cachedStaffId = '';
 let cachedOwner = '';
 
 async function settingKey(): Promise<string> {
   const identity = await getSessionIdentity();
+  cachedStaffId = identity?.staffId || cachedStaffId;
   return `organization_module_config:${identity?.tenantId || 'default'}:${identity?.staffId || ''}`;
 }
 
@@ -33,8 +35,21 @@ const OPT_IN_MODULES = new Set<ModuleId>([
 ]);
 
 export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = cached): boolean {
-  const value = config?.features?.modules?.[module];
-  if (OPT_IN_MODULES.has(module)) return value === true;
+  const modulesMap = config?.features?.modules || {};
+  const value = modulesMap[module];
+  if (OPT_IN_MODULES.has(module)) {
+    if (value !== true) return false;
+    // Per-user project-tool assignment: if any worker is individually assigned
+    // this project tool, only assigned workers get it; otherwise it stays at the
+    // client-level toggle. (projtool.<staffId>.<toolId> keys from the control panel.)
+    if (typeof module === 'string' && module.startsWith('proj-')) {
+      const anyAssigned = Object.keys(modulesMap).some(
+        (k) => k.startsWith('projtool.') && k.endsWith('.' + module) && modulesMap[k] === true,
+      );
+      if (anyAssigned) return modulesMap['projtool.' + cachedStaffId + '.' + module] === true;
+    }
+    return true;
+  }
   return value !== false;
 }
 
