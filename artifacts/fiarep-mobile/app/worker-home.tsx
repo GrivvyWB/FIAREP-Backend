@@ -15,7 +15,8 @@ import {
 } from '../lib/store';
 import { ui } from '../lib/ui';
 import { useModuleAccess, useRawModules } from '../lib/module-access';
-import { hasAnyMeasurementAccess } from '../lib/measurement-access';
+import { hasAnyMeasurementAccess, tradeKeyForPosition } from '../lib/measurement-access';
+import { catalogForTrade } from '../lib/trade-catalogs';
 
 // A staff member can start a construction-PM project when the org has the
 // Projects module enabled (controlled from Platform -> Module Management) AND
@@ -101,7 +102,7 @@ export default function WorkerHome() {
           <Text style={ui.btnText}>Elevator Jobs</Text>
         </Pressable>
       )}
-      {hasAnyMeasurementAccess(position, rawModules) && (
+      {(hasAnyMeasurementAccess(position, rawModules) || (modules['measurement'] && !!catalogForTrade(tradeKeyForPosition(position)))) && (
         <Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
           <Text style={ui.btnText}>Measurement</Text>
         </Pressable>
