@@ -40,7 +40,7 @@ import {
   supervisedTradeForPosition,
   isComplaintHandlingSupervisor,
 } from "../lib/domain";
-import { hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
+import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
 import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -1357,6 +1357,29 @@ router.post(
     });
     return;
   }
+  // Approval is stricter than viewing or handling. A supervisor may sign off on
+  // completed work only when they are actually at that development — their home
+  // site, or one they hold an active coverage unlock for TODAY — or when they
+  // are the supervisor who assigned the work. A blanket "any unlock covers
+  // everything" is not enough to approve another site's or another supervisor's
+  // work. Administrators are unaffected.
+  if (
+    actor.role !== "administrator" &&
+    action === "approve-work" &&
+    (entity === "resident-reports" || entity === "building-violations") &&
+    isCoverageEligible(actor)
+  ) {
+    const approvalDev = current.development || String(current.state["development"] || "");
+    const isAssigner =
+      typeof current.state["assignedByStaffId"] === "string" &&
+      current.state["assignedByStaffId"] === actor.id;
+    if (!isAssigner && !(await canActOnDevelopment(actor, approvalDev))) {
+      res.status(403).json({
+        error: "You can approve work only at your own development, one you're covering today, or work you assigned.",
+      });
+      return;
+    }
+  }
   if (
     entity === "procurement" &&
      current.state["status"] === "closed"
@@ -2005,6 +2028,12 @@ router.post(
     state["assignedCpmStaffName"] = cpmStaffReceiver?.name || "";
     state["requestedBy"] = cpmStaffReceiver?.name || "";
     state["assignedCpmAt"] = now.toISOString();
+  }
+  if (action === "assign") {
+    // Record who assigned the work, so that supervisor can still approve it
+    // later even if their coverage for the site has since lapsed.
+    state["assignedByStaffId"] = actor.id;
+    state["assignedByStaffName"] = actor.name;
   }
   if (action === "start") {
     state["startedByStaffId"] = actor.id;
