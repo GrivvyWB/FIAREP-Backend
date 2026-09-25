@@ -3,6 +3,7 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
 import { useAppMode } from './_layout';
+import { useModuleAccess } from '../lib/module-access';
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 
@@ -12,6 +13,7 @@ type Section = { heading: string; color: string; tiles: Tile[] };
 
 export default function CpmHome() {
   const router = useRouter();
+  const modules = useModuleAccess();
   const { mode, refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
@@ -70,6 +72,7 @@ export default function CpmHome() {
       tiles: [
         { label: 'Submit Scope', onPress: () => router.push('/scope-submit'), tone: 'solid' as Tone },
         { label: 'Change Work Order', onPress: () => router.push('/cpm-change-order'), tone: 'outline' as Tone },
+        ...(modules['measurement'] ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }] : []),
       ],
     }] : []),
     {
