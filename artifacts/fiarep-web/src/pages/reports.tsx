@@ -240,6 +240,7 @@ export default function Reports() {
     query: {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),
       staleTime: 15_000,
+      refetchInterval: 15_000,
       refetchOnMount: "always",
     },
   });
@@ -268,6 +269,15 @@ export default function Reports() {
   const deepLinkHandled = useRef(false);
 
   const reports = (reportsQuery.data || []) as Report[];
+  // Keep an open report detail in sync when the list auto-refreshes, so status
+  // and photos update live instead of sitting on the snapshot it was opened with.
+  useEffect(() => {
+    if (!selected) return;
+    const fresh = reports.find((r) => r.id === selected.id);
+    if (fresh && (fresh as any).updatedAt !== (selected as any).updatedAt) {
+      setSelected(fresh);
+    }
+  }, [reports, selected]);
   const developments = [...new Set(reports.map((r) => r.development).filter(Boolean) as string[])].sort();
   const statuses = [...new Set(reports.map((r) => String(r.state?.status || "submitted")))].sort();
   const q = search.trim().toLowerCase();

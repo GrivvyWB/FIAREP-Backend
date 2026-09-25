@@ -162,7 +162,7 @@ export default function Notifications() {
                             ? `/team?staffId=${encodeURIComponent(notification.reportId)}`
                             : notification.message === "Leave request"
                               ? "/leave?view=team"
-                                : /violation repair completed/i.test(notification.message)
+                                : /violation/i.test(notification.message)
                                   ? `/inspections?id=${encodeURIComponent(notification.reportId)}`
                               : `/reports?id=${encodeURIComponent(notification.reportId)}`
                         }

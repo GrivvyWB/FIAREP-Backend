@@ -33,6 +33,7 @@ export default function Violations() {
       queryKey: getListEntityRecordsQueryKey("route-assignments", assignmentFilter),
       enabled: (staff?.role === "management" && staff?.position === "Supervisor Inspector") ||
         (staff?.role === "inspector" && staff.position === "Inspector"),
+      refetchInterval: 15_000,
       refetchOnMount: "always",
     },
   });
