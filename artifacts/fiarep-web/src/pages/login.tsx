@@ -17,9 +17,10 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 const loginSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
+  name: z.string().trim().min(2, "Name must be at least 2 characters"),
   code: z
     .string()
+    .trim()
     .min(4, "Code must be at least 4 characters")
     .max(16, "Code must be at most 16 characters")
     .regex(/^[a-zA-Z0-9-]+$/, "Code can only contain letters, numbers, and hyphens"),
