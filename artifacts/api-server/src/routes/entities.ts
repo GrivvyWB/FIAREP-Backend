@@ -37,7 +37,6 @@ import {
   withInitialWorkflowState,
   procurementRecordAllowed,
   normalizeAssignment,
-  supervisedTradeForPosition,
   isComplaintHandlingSupervisor,
 } from "../lib/domain";
 import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
@@ -628,11 +627,9 @@ router.post("/v1/:entity", async (req, res, next) => {
       res.status(400).json({ error: "Select a complaint or violation, trade, and receiving supervisor" });
       return;
     }
-    const actorTrade = supervisedTradeForPosition(actor.position);
-    if (actorTrade && !sameTitle(actorTrade, requestedTrade)) {
-      res.status(403).json({ error: "Supervisors may request manpower only for their own trade" });
-      return;
-    }
+    // Supervisors pass work to the supervisor of whichever trade is needed
+    // (CPM Supervisor -> Supervisor Inspector, Plumbing Supervisor, ...);
+    // that supervisor assigns their own crew.
     const [[source], [receiver]] = await Promise.all([
       db.select().from(entityRecords).where(and(
         eq(entityRecords.id, sourceRecordId),
