@@ -42,7 +42,7 @@ import {
 } from "../lib/domain";
 import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
 import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
-import { isCpmSupervisorTitle, isCrewForTrade, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "../lib/titles";
+import { isCpmSupervisorTitle, isCrewForTrade, isOfficeTradeSupervisorTitle, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "../lib/titles";
 import { APP_READ_ONLY_MESSAGE, appReadOnlyDecision, isAppReadOnlyActor, isMobileAppRequest } from "../lib/appReadOnly";
 import { snapshotScope } from "../lib/scopeSnapshot";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
@@ -1829,6 +1829,8 @@ router.post(
     if (!inHouseReceiver || inHouseReceiver.id === actor.id ||
         !isSupervisorForTrade(inHouseReceiver.position, requestedTrade) ||
         (current.development &&
+          // Office-based trade supervisors cover every development.
+          !isOfficeTradeSupervisorTitle(inHouseReceiver.position, inHouseReceiver.developments) &&
           !inHouseReceiver.developments.some((value) =>
             value.trim().toLowerCase() === current.development!.trim().toLowerCase()))) {
       res.status(403).json({ error: "Select an approved receiving supervisor for this trade and development" });

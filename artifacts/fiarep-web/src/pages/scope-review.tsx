@@ -1,5 +1,5 @@
 import { ScopeLines, ViolationCode } from "@/components/scope-lines";
-import { isCpmSupervisorTitle } from "@/lib/titles";
+import { isCpmSupervisorTitle, isOfficeTradeSupervisorTitle, isSupervisorForTrade, supervisedTradeForPosition } from "@/lib/titles";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -51,22 +51,24 @@ export default function ScopeReview() {
   const { data: approvedStaff = [] } = useListStaff({ status: "approved" }, {
     query: { queryKey: getListStaffQueryKey({ status: "approved" }), refetchOnMount: "always" },
   });
-  const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Heating Service", "Bricklayer"] as const;
-  const supervisorPositions: Record<string, string[]> = {
-    Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
-    CPM: ["CPM Supervisor", "Supervisor CPM"],
-    Plumber: ["Plumbing Supervisor", "Plumber Supervisor", "Supervisor Plumber"],
-    Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
-    Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
-    "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
-  };
+  // In-house trades come from the supervisors on staff, so a new supervisor
+  // title (e.g. "Glazier Supervisor") shows up with no code change.
+  const trades = useMemo(() => [...new Set(approvedStaff
+    .map((member) => supervisedTradeForPosition(member.position))
+    .filter((trade): trade is string => !!trade && trade !== "CPM" && trade !== "Inspector"))]
+    .sort((a, b) => a.localeCompare(b)), [approvedStaff]);
   const handoffDevelopment = handoffRow?.development || handoffRow?.state?.development || "";
+  const coversDevelopment = (developments: string[]) =>
+    developments.some((value) => value.trim().toLowerCase() === String(handoffDevelopment).trim().toLowerCase());
   const eligibleSupervisors = useMemo(() => approvedStaff.filter((member) =>
     member.id !== staff?.id &&
-    supervisorPositions[handoffTrade].includes(member.position) &&
-    Boolean(handoffDevelopment) &&
-    member.developments.includes(handoffDevelopment),
+    !!handoffTrade &&
+    isSupervisorForTrade(member.position, handoffTrade) &&
+    // Office-based trade supervisors cover every development.
+    (isOfficeTradeSupervisorTitle(member.position, member.developments) ||
+      (Boolean(handoffDevelopment) && coversDevelopment(member.developments))),
   ), [approvedStaff, handoffDevelopment, handoffTrade, staff?.id]);
+  const openHandoff = (row: any) => { setHandoffRow(row); setHandoffTrade(trades[0] || ""); setHandoffSupervisor(""); };
 
   useEffect(() => {
     if (staff && !allowed) setLocation("/dashboard");
@@ -138,7 +140,7 @@ export default function ScopeReview() {
       await invalidateOperationalQueries(queryClient, "procurement", handoffRow.id, ["manpower-requests"]);
       setHandoffRow(null);
       setHandoffSupervisor("");
-      toast({ title: "Scope handed off in-house" });
+      toast({ title: "Sent to in-house workers", description: "The trade supervisor was notified to assign a crew." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Unable to hand off scope", description: error?.message || "Please try again." });
     }
@@ -202,9 +204,9 @@ export default function ScopeReview() {
         {state.scopeFileName && <p className="text-sm text-muted-foreground">Attachment: {state.scopeFileName}</p>}
         <Textarea placeholder="Review note (required to return to the CPM)" value={notes[row.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))} />
          {state.sourceHandoff === "supervisor-inspector-to-cpm-supervisor" ? (
-           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Procure</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button><Button variant="secondary" onClick={() => { setHandoffRow(row); setHandoffTrade("Plumber"); setHandoffSupervisor(""); }} disabled={action.isPending}>Hand off in-house</Button></div>
+           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Approve &amp; send to Procurement</Button><Button variant="secondary" onClick={() => openHandoff(row)} disabled={action.isPending}>Send to in-house workers</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button></div>
          ) : (
-           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Approve for Procurement</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button><Button variant="secondary" onClick={() => { setHandoffRow(row); setHandoffTrade("Plumber"); setHandoffSupervisor(""); }} disabled={action.isPending}>Hand off in-house</Button></div>
+           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Approve &amp; send to Procurement</Button><Button variant="secondary" onClick={() => openHandoff(row)} disabled={action.isPending}>Send to in-house workers</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button></div>
          )}
       </CardContent></Card>;
     })}
@@ -236,13 +238,13 @@ export default function ScopeReview() {
     })()}
     <Dialog open={Boolean(handoffRow)} onOpenChange={(open) => !open && setHandoffRow(null)}>
       <DialogContent>
-        <DialogHeader><DialogTitle>Hand off in-house</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Send to in-house workers</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">Select the requested trade and an approved receiving supervisor assigned to {handoffDevelopment || "this development"}.</p>
+          <p className="text-sm text-muted-foreground">Instead of vendors, the job goes to a trade supervisor, who assigns it to their crew. The complaint / violation number goes with it.</p>
           <div className="space-y-2"><Label>Requested trade</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={handoffTrade} onChange={(event) => { setHandoffTrade(event.target.value); setHandoffSupervisor(""); }}><option value="">Select trade</option>{trades.map((trade) => <option key={trade}>{trade}</option>)}</select></div>
-          <div className="space-y-2"><Label>Receiving supervisor</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={handoffSupervisor} onChange={(event) => setHandoffSupervisor(event.target.value)} disabled={!handoffDevelopment}><option value="">{eligibleSupervisors.length ? "Select supervisor" : "No eligible approved supervisor"}</option>{eligibleSupervisors.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}</select></div>
+          <div className="space-y-2"><Label>Receiving supervisor</Label><select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={handoffSupervisor} onChange={(event) => setHandoffSupervisor(event.target.value)} disabled={!handoffTrade}><option value="">{eligibleSupervisors.length ? "Select supervisor" : `No approved ${handoffTrade || "trade"} supervisor covers ${handoffDevelopment || "this development"}`}</option>{eligibleSupervisors.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}</select></div>
         </div>
-        <DialogFooter><Button variant="outline" onClick={() => setHandoffRow(null)}>Cancel</Button><Button onClick={handoffInHouse} disabled={!handoffSupervisor || !handoffDevelopment || action.isPending}>Hand off in-house</Button></DialogFooter>
+        <DialogFooter><Button variant="outline" onClick={() => setHandoffRow(null)}>Cancel</Button><Button onClick={handoffInHouse} disabled={!handoffSupervisor || action.isPending}>Send to supervisor</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   </div>;
