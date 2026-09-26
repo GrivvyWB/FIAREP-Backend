@@ -2404,14 +2404,29 @@ router.post(
             throw Object.assign(new Error("The linked work record or assignment is missing"), { status: 409 });
           }
           const sourceStatus = normalizeStatus(source.state["status"]);
-          const sourceStatusAllowed =
-            (sourceEntity === "procurement" &&
-              normalizeStatus(source.state["status"]) === "in_house") ||
-            (sourceEntity === "resident-reports" && sourceStatus === "submitted") ||
-            (sourceEntity === "building-violations" && sourceStatus === "approved");
+          const sourceRef = String(source.state["complaintNo"] || source.state["violationNumber"] ||
+            source.state["violationNo"] || source.state["title"] || "The complaint or violation");
+          const sourceAssignee = normalizeAssignment(source.state).assignedStaffId;
+          // Already given to this same worker (e.g. assigned from the complaint
+          // itself): just link the request instead of refusing.
+          const alreadyWithWorker = sourceAssignee === assignedStaffId &&
+            ["assigned", "in_progress", "routed", "rework", "in_house"].includes(sourceStatus);
+          const sourceStatusAllowed = alreadyWithWorker ||
+            (sourceEntity === "procurement" && sourceStatus === "in_house") ||
+            (sourceEntity === "resident-reports" && ["submitted", "returned", "rework"].includes(sourceStatus) &&
+              (!sourceAssignee || sourceAssignee === assignedStaffId)) ||
+            (sourceEntity === "building-violations" && sourceStatus === "approved") ||
+            // The dispatching supervisor holds it themselves: hand it to the crew.
+            (sourceAssignee === actor.id && ["assigned", "routed"].includes(sourceStatus));
           if (!sourceStatusAllowed) {
+            const done = ["done", "resolved", "work_approved", "completed", "closed", "in_house_completed"].includes(sourceStatus);
+            const holder = String(source.state["assignedStaffName"] || source.state["assignedTo"] || "someone else");
             throw Object.assign(
-              new Error("The linked complaint or violation is no longer ready for dispatch"),
+              new Error(done
+                ? `${sourceRef} is already completed, so it can't be dispatched again.`
+                : sourceAssignee
+                  ? `${sourceRef} is already assigned to ${holder}. They need to release it first, or assign this request to ${holder}.`
+                  : `${sourceRef} is ${sourceStatus.replace(/_/g, " ") || "not ready"} and can't be dispatched right now.`),
               { status: 409 },
             );
           }
@@ -2421,9 +2436,11 @@ router.post(
             assignedTo,
             dispatchingSupervisorId: actor.id,
             dispatchingSupervisorName: actor.name,
-            status: sourceEntity === "procurement"
-              ? "in_house"
-              : sourceEntity === "building-violations" ? "routed" : "assigned",
+            status: alreadyWithWorker
+              ? source.state["status"]
+              : sourceEntity === "procurement"
+                ? "in_house"
+                : sourceEntity === "building-violations" ? "routed" : "assigned",
             dispatchedAt: now.toISOString(),
             manpowerRequestId: current.id,
           };
