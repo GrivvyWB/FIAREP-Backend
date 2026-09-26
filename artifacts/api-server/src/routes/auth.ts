@@ -14,6 +14,7 @@ import {
   revokePlatformOwnerSession,
   issueProcurementChallenge,
   verifyProcurementChallenge,
+  issueWebHandoff,
 } from "../lib/auth";
 import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
@@ -251,6 +252,13 @@ router.post("/v1/auth/logout", async (req, res) => {
   const refreshToken = (req.body as { refreshToken?: unknown }).refreshToken;
   if (typeof refreshToken === "string") await revokeRefreshToken(refreshToken);
   res.status(204).send();
+});
+
+// App -> website hand-off: a signed-in app user gets a single-use, 90-second
+// code; fiarep.com/#handoff=<code> redeems it via /v1/auth/refresh.
+router.post("/v1/auth/web-handoff", rateLimit("web-handoff", 30), requireAuth, async (_req, res) => {
+  const staff = res.locals["staff"] as typeof staffAccounts.$inferSelect;
+  res.json(await issueWebHandoff(staff));
 });
 
 router.get("/v1/auth/me", requireAuth, (_req, res) => {

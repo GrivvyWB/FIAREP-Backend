@@ -1,4 +1,5 @@
-import { View, Text, Pressable, Linking, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView } from 'react-native';
+import { openWebsiteSignedIn } from '../lib/webHandoff';
 import { useRouter } from 'expo-router';
 import { READ_ONLY_NOTE } from '../lib/useAppReadOnly';
 import { ui } from '../lib/ui';
@@ -8,8 +9,8 @@ export function ReadOnlyBanner() {
   return (
     <View style={{ borderWidth: 1, borderColor: '#c9d7ea', backgroundColor: '#eef4fb', borderRadius: 8, padding: 10, marginBottom: 10 }}>
       <Text style={{ color: '#1c3d66', fontSize: 13 }}>{READ_ONLY_NOTE}</Text>
-      <Pressable onPress={() => Linking.openURL('https://fiarep.com').catch(() => undefined)}>
-        <Text style={{ color: '#185FA5', fontWeight: '700', marginTop: 4 }}>Open fiarep.com</Text>
+      <Pressable onPress={() => { openWebsiteSignedIn().catch(() => undefined); }}>
+        <Text style={{ color: '#185FA5', fontWeight: '700', marginTop: 4 }}>Open fiarep.com (signed in)</Text>
       </Pressable>
     </View>
   );

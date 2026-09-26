@@ -103,6 +103,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
 
     const initAuth = async () => {
+      // Opened from the app ("Open fiarep.com"): #handoff=<single-use code>.
+      // The code is a 90-second refresh token; the normal refresh below redeems
+      // it once and gives this browser its own session. Replaces any other
+      // signed-in account and removes the code from the address bar.
+      try {
+        const url = new URL(window.location.href);
+        const handoff = new URLSearchParams(url.hash.replace(/^#/, "")).get("handoff");
+        if (handoff) {
+          window.history.replaceState(null, "", url.pathname + url.search);
+          localStorage.removeItem("fiarep_access_token");
+          localStorage.setItem("fiarep_refresh_token", handoff);
+          localStorage.setItem("fiarep_persona", "staff");
+          queryClient.clear();
+        }
+      } catch { /* no URL access: ignore */ }
       try {
         const accessToken = localStorage.getItem("fiarep_access_token");
         const refreshToken = localStorage.getItem("fiarep_refresh_token");

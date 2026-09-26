@@ -202,6 +202,27 @@ export async function issueSession(staff: StaffAccount) {
   };
 }
 
+/**
+ * One-time sign-in code for opening fiarep.com from the app. It is a
+ * refresh session that expires in 90 seconds; the website redeems it through
+ * the normal /v1/auth/refresh, which revokes it on first use (single-use) and
+ * issues the browser its own full session.
+ */
+export const WEB_HANDOFF_TTL_SECONDS = 90;
+export async function issueWebHandoff(staff: StaffAccount) {
+  const code = randomBytes(32).toString("base64url");
+  const now = new Date();
+  await db.insert(refreshSessions).values({
+    id: randomUUID(),
+    staffId: staff.id,
+    tokenHash: tokenHash(code),
+    expiresAt: new Date(now.getTime() + WEB_HANDOFF_TTL_SECONDS * 1000),
+    createdAt: now,
+    updatedAt: now,
+  });
+  return { code, expiresIn: WEB_HANDOFF_TTL_SECONDS };
+}
+
 export async function rotateSession(refreshToken: string) {
   const now = new Date();
   const [session] = await db
