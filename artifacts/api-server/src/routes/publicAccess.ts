@@ -36,6 +36,30 @@ const code = () => `RC-${randomBytes(4).readUInt32BE(0) % 90000 + 10000}`;
 const token = () => randomBytes(32).toString("base64url");
 const VENDOR_VISIBLE_STATUSES = new Set(["bidding", "eligible", "eligible-awarded", "awarded"]);
 
+// What a vendor may see of a released scope: the job, its reference and
+// violation code, the walk-through, and the CPM's scope lines WITHOUT prices.
+// Never the CPM's prices, internal notes, reviewers, or other vendors' data.
+const VENDOR_FIELDS = [
+  "trackingId", "status", "address", "scope", "scopeDescription", "scopeFileName",
+  "walkthroughAt", "walkthroughNote", "bidCloseAt",
+  "sourceRef", "complaintNo", "violationNo", "violationCode", "violationCodeDesc", "hazardClass",
+  "vendorScopeTemplate",
+] as const;
+function vendorRecord(row: typeof entityRecords.$inferSelect, vendorName: string) {
+  const state: Record<string, unknown> = {};
+  for (const key of VENDOR_FIELDS) if (row.state[key] !== undefined) state[key] = row.state[key];
+  const mine = normalize(row.state["vendor"]) === normalize(vendorName);
+  if (mine) {
+    for (const key of ["vendor", "startedAt", "completedAt", "vendorNote", "vendorStartedAt", "vendorCompletedAt"]) {
+      if (row.state[key] !== undefined) state[key] = row.state[key];
+    }
+  }
+  const checkIns = Array.isArray(row.state["walkthroughCheckIns"]) ? row.state["walkthroughCheckIns"] : [];
+  state["walkthroughCheckIns"] = checkIns.filter((item) =>
+    item && typeof item === "object" && normalize((item as Record<string, unknown>)["vendorName"]) === normalize(vendorName));
+  return { ...record(row), state };
+}
+
 function record(row: typeof entityRecords.$inferSelect) {
   return {
     id: row.id, entity: row.entity, projectId: row.projectId,
@@ -428,7 +452,7 @@ router.get("/v1/public/vendor-scopes/:trackingId", async (req, res) => {
   }
   const org = await evaluateLicense(scope.tenantId);
   if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
-  res.json(record(scope));
+  res.json(vendorRecord(scope, vendorName));
 });
 
 router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async (req, res) => {
@@ -636,7 +660,7 @@ router.post("/v1/public/vendor-scopes/:trackingId/progress", rateLimit("vendor-p
       detail: [ref, note ? `Note: ${note}` : ""].filter(Boolean).join(" — "), reportId: scope.id,
     });
   }
-  res.json(record(updated!));
+  res.json(vendorRecord(updated!, vendorName));
 });
 
 export default router;

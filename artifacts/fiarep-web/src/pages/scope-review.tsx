@@ -1,3 +1,4 @@
+import { ScopeLines, ViolationCode } from "@/components/scope-lines";
 import { isCpmSupervisorTitle } from "@/lib/titles";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -195,7 +196,9 @@ export default function ScopeReview() {
              <dt className="font-medium">Notes</dt><dd className="whitespace-pre-wrap">{violationNotes || "No notes provided."}</dd>
            </dl>
          </div>}
+        <ViolationCode state={state} />
         <p>{state.scope || state.description || "No scope description."}</p>
+        <ScopeLines scope={state.cpmScope} showPrices />
         {state.scopeFileName && <p className="text-sm text-muted-foreground">Attachment: {state.scopeFileName}</p>}
         <Textarea placeholder="Review note (required to return to the CPM)" value={notes[row.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))} />
          {state.sourceHandoff === "supervisor-inspector-to-cpm-supervisor" ? (

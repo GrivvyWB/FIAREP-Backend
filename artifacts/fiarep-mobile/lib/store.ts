@@ -2827,6 +2827,11 @@ export type ProcurementRequest = {
   violationNo?: string;
   violationNotes?: string;
   complaintNo?: string;      // resident complaint this scope came from (RC-…)
+  violationCode?: string;    // HPD violation code / type of work (e.g. 550)
+  violationCodeDesc?: string;
+  hazardClass?: string;
+  vendorScopeTemplate?: any; // CPM's CSI scope lines without prices (vendor view)
+  cpmScope?: any;            // CPM's CSI scope with prices (staff view)
   sourceRef?: string;        // complaint/violation number shown at every step
   sourceHandoff?: string;
   handoffTargetId?: string;

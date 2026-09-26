@@ -1,3 +1,4 @@
+import { ScopeLines, ViolationCode } from "@/components/scope-lines";
 import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -136,7 +137,9 @@ export default function Procurement() {
         </Button>
         {openScope[r.id] && (
           <div className="space-y-1 rounded-md border bg-muted/40 p-3 text-sm">
+            <ViolationCode state={s} />
             <p className="whitespace-pre-wrap">{s.scope || s.scopeDescription || "No scope description."}</p>
+            <ScopeLines scope={s.cpmScope} showPrices />
             {!!s.cpmNotes && <p className="whitespace-pre-wrap text-muted-foreground">CPM notes: {s.cpmNotes}</p>}
             {!!s.violationNotes && <p className="whitespace-pre-wrap text-muted-foreground">Violation notes: {s.violationNotes}</p>}
             {!!s.scopeFileName && <p className="text-muted-foreground">File: {s.scopeFileName}</p>}

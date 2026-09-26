@@ -187,6 +187,18 @@ export default function VendorHome() {
             <Text style={{ fontSize: 13, color: '#666' }}>{STATUS_LABEL[job.status]}</Text>
           </View>
 
+          {!!(job.sourceRef || job.complaintNo || job.violationNo) && (
+            <View>
+              <Text style={ui.label}>Reference</Text>
+              <Text style={{ fontSize: 15, fontWeight: '600' }}>{job.sourceRef || job.complaintNo || 'Violation ' + job.violationNo}</Text>
+            </View>
+          )}
+          {!!job.violationCode && (
+            <View>
+              <Text style={ui.label}>Violation code</Text>
+              <Text style={{ fontSize: 15 }}>{job.violationCode}{job.hazardClass ? ' \u00b7 Class ' + job.hazardClass : ''}{job.violationCodeDesc ? ' \u2014 ' + job.violationCodeDesc : ''}</Text>
+            </View>
+          )}
           <View>
             <Text style={ui.label}>Address</Text>
             <Text style={{ fontSize: 15 }}>{job.address || '\u2014'}</Text>

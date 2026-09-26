@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
 import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
@@ -44,6 +44,7 @@ import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "..
 import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
 import { isCpmSupervisorTitle, isCrewForTrade, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "../lib/titles";
 import { APP_READ_ONLY_MESSAGE, appReadOnlyDecision, isAppReadOnlyActor, isMobileAppRequest } from "../lib/appReadOnly";
+import { snapshotScope } from "../lib/scopeSnapshot";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
@@ -146,7 +147,14 @@ function scopeSourceRef(sourceEntity: string, state: Record<string, unknown>) {
   return {
     label: violationNo ? `Violation ${violationNo}` : (complaintNo || "Building violation"),
     title: "Inspector violation",
-    fields: { violationNo, ...(complaintNo ? { complaintNo } : {}) },
+    fields: {
+      violationNo,
+      ...(complaintNo ? { complaintNo } : {}),
+      // The HPD violation code / type of work, e.g. "550" · mold · Class B.
+      ...(String(state["violationCode"] ?? state["code"] ?? "").trim() ? { violationCode: String(state["violationCode"] ?? state["code"]).trim() } : {}),
+      ...(String(state["codeDesc"] ?? state["violationDescription"] ?? "").trim() ? { violationCodeDesc: String(state["codeDesc"] ?? state["violationDescription"]).trim() } : {}),
+      ...(String(state["hazardClass"] ?? state["class"] ?? "").trim() ? { hazardClass: String(state["hazardClass"] ?? state["class"]).trim() } : {}),
+    },
   };
 }
 
@@ -2069,6 +2077,22 @@ router.post(
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
   };
+  if (entity === "procurement" && ["submit", "approve", "broadcast"].includes(action)) {
+    // Carry the CPM's CSI scope (with prices for staff, without for vendors).
+    const keys = [current.id, String(current.projectId || "")].filter(Boolean);
+    const [scopeRow] = await db.select().from(entityRecords).where(and(
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.entity, "project-scopes"),
+      eq(entityRecords.deleted, false),
+      or(inArray(entityRecords.id, keys), inArray(entityRecords.projectId, keys)),
+    )).orderBy(desc(entityRecords.updatedAt)).limit(1);
+    const priced = scopeRow ? snapshotScope(scopeRow.state, true) : null;
+    if (priced) {
+      state["cpmScope"] = priced;
+      state["cpmScopeTotal"] = priced.total;
+      state["vendorScopeTemplate"] = snapshotScope(scopeRow!.state, false);
+    }
+  }
   if (entity === "procurement" && action === "handoff-inhouse") {
     state["handoffMode"] = "in_house";
     state["linkedManpowerRequestId"] = `manpower-request:${current.id}`;

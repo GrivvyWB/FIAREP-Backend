@@ -1,3 +1,4 @@
+import { ScopeLines, ViolationCode } from "@/components/scope-lines";
 import { useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -198,6 +199,7 @@ export default function PublicVendor() {
                   </div>
                 )}
                 <div>
+                  <ViolationCode state={(scopeResult.state as any) || {}} />
                   <h4 className="text-sm font-medium text-muted-foreground mb-1">Address</h4>
                   <p className="text-sm">{(scopeResult.state as any)?.address || 'N/A'}</p>
                 </div>
@@ -206,6 +208,8 @@ export default function PublicVendor() {
                   <div className="text-sm whitespace-pre-wrap bg-muted/30 p-3 rounded-md border border-border/50">
                     {(scopeResult.state as any)?.scope || 'No scope details provided.'}
                   </div>
+                  {/* The CPM's scope lines with section codes — enter your own pricing. */}
+                  <div className="mt-3"><ScopeLines scope={(scopeResult.state as any)?.vendorScopeTemplate} showPrices={false} /></div>
                 </div>
                 {((scopeResult.state as any)?.walkthroughAt || (scopeResult.state as any)?.bidCloseAt) && (
                    <div className="grid grid-cols-2 gap-4 pt-2">

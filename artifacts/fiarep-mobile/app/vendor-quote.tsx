@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { getVendorQuote, setVendorQuote, submitVendorQuoteAsBid, getProjectScopeForm } from '../lib/store';
+import { getVendorQuote, setVendorQuote, submitVendorQuoteAsBid, getProjectScopeForm, getProcurementByTracking } from '../lib/store';
 import {
   seedVendorScope, stripPrices, usedOnly, newLine,
   lineAmount, sectionTotal, grandTotal, costPerDU,
@@ -39,6 +39,28 @@ export default function VendorQuote() {
           setVendorQuote(String(trackingId), String(vendor), clean);
           return;
         }
+      }
+      // The CPM's scope as released by the server: same sections (with their
+      // CSI codes), descriptions, quantities and units — no CPM prices.
+      const released: any = await getProcurementByTracking(String(trackingId), String(vendor)).catch(() => null);
+      const template = released?.vendorScopeTemplate;
+      if (template && Array.isArray(template.divisions) && template.divisions.length > 0) {
+        const clean: any = {
+          header: { ...(template.header || {}), contractor: String(vendor || ''), address: template.header?.address || String(address || '') },
+          divisions: template.divisions.map((d: any, di: number) => ({
+            id: 'd' + di, title: d.title,
+            sections: (d.sections || []).map((sec: any, si: number) => ({
+              id: 'd' + di + 's' + si, code: sec.code,
+              lines: (sec.lines || []).map((l: any, li: number) => ({
+                id: 'd' + di + 's' + si + 'l' + li, description: l.description || '', quantity: l.quantity || '', unit: l.unit || '', unitCost: '',
+              })),
+            })),
+          })),
+          __locked: true,
+        };
+        setScope(clean); setLocked(true);
+        setVendorQuote(String(trackingId), String(vendor), clean);
+        return;
       }
       // Fallback: no CPM Divisions scope. Give the vendor the full skeleton to
       // fill themselves (descriptions/qty/unit/cost all editable).
