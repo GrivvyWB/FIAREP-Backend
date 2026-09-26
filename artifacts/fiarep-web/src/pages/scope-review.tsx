@@ -1,4 +1,4 @@
-import { ScopeLines, ViolationCode } from "@/components/scope-lines";
+import { CpmPackage, ScopeLines, ViolationCode } from "@/components/scope-lines";
 import { isCpmSupervisorTitle, isOfficeTradeSupervisorTitle, isSupervisorForTrade, supervisedTradeForPosition } from "@/lib/titles";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -201,7 +201,8 @@ export default function ScopeReview() {
         <ViolationCode state={state} />
         <p>{state.scope || state.description || "No scope description."}</p>
         <ScopeLines scope={state.cpmScope} showPrices />
-        {state.scopeFileName && <p className="text-sm text-muted-foreground">Attachment: {state.scopeFileName}</p>}
+        <CpmPackage state={state} />
+        {!!state.cpmNotes && <p className="whitespace-pre-wrap text-sm text-muted-foreground">CPM notes: {state.cpmNotes}</p>}
         <Textarea placeholder="Review note (required to return to the CPM)" value={notes[row.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))} />
          {state.sourceHandoff === "supervisor-inspector-to-cpm-supervisor" ? (
            <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Approve &amp; send to Procurement</Button><Button variant="secondary" onClick={() => openHandoff(row)} disabled={action.isPending}>Send to in-house workers</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button></div>

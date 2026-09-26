@@ -1,4 +1,4 @@
-import { ScopeLines, ViolationCode } from "@/components/scope-lines";
+import { CpmPackage, ScopeLines, ViolationCode } from "@/components/scope-lines";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -342,9 +342,9 @@ export default function Procurement() {
             <ViolationCode state={s} />
             <p className="whitespace-pre-wrap">{s.scope || s.scopeDescription || "No scope description."}</p>
             <ScopeLines scope={s.cpmScope} showPrices />
+            <CpmPackage state={s} />
             {!!s.cpmNotes && <p className="whitespace-pre-wrap text-slate-500">CPM notes: {s.cpmNotes}</p>}
             {!!s.violationNotes && <p className="whitespace-pre-wrap text-slate-500">Violation notes: {s.violationNotes}</p>}
-            {!!s.scopeFileName && <p className="text-slate-500">File: {s.scopeFileName}</p>}
             <p className="text-slate-500">Scoped by {s.cpmName || s.requestedBy || "CPM"}{s.handoffTargetName ? ` · approved by ${s.handoffTargetName}` : ""}</p>
           </div>
         )}

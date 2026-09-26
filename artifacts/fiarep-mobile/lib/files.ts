@@ -42,3 +42,46 @@ export function fileUri(stored: string): string {
   if (stored.startsWith('file:') || stored.startsWith('/')) return stored;
   return FileSystem.documentDirectory + stored;
 }
+
+const DOC_TYPES: Record<string, string> = {
+  pdf: 'application/pdf',
+  jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', heic: 'image/heic', heif: 'image/heif',
+  doc: 'application/msword',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  xls: 'application/vnd.ms-excel',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  csv: 'text/csv',
+};
+
+/**
+ * Upload an attached scope file so the CPM Supervisor and Procurement can open
+ * it (it was device-only before). Allowed: PDF, Word, Excel, CSV and photos.
+ */
+export async function uploadScopeFile(
+  stored: string,
+  name: string,
+  owner: { entity: string; recordId: string },
+): Promise<{ id: string; objectPath: string; name: string; contentType: string; size: number }> {
+  const { requestFileUploadUrl } = await import('@workspace/api-client-react');
+  const uri = fileUri(stored);
+  const info = await FileSystem.getInfoAsync(uri);
+  if (!info.exists || !('size' in info) || !info.size) throw new Error('The attached scope file is no longer on this phone. Attach it again.');
+  const ext = (name.split('.').pop() || '').toLowerCase();
+  const contentType = DOC_TYPES[ext];
+  if (!contentType) throw new Error('Attach the scope as a PDF, Word, Excel, CSV or photo file.');
+  const requested = await requestFileUploadUrl({
+    kind: 'procurement-scope',
+    name,
+    size: info.size,
+    contentType,
+    entity: owner.entity,
+    recordId: owner.recordId,
+  });
+  const result = await FileSystem.uploadAsync(requested.uploadUrl, uri, {
+    httpMethod: 'PUT',
+    uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+    mimeType: contentType,
+  });
+  if (result.status < 200 || result.status >= 300) throw new Error(`Scope file upload failed (${result.status}).`);
+  return { id: requested.file.id, objectPath: requested.file.objectPath, name, contentType, size: info.size };
+}

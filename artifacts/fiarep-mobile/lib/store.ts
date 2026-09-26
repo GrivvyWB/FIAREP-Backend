@@ -3162,14 +3162,65 @@ export async function submitScopeForApproval(id: string, scopeFile: string = '',
     returnNote: undefined,
     scopeSubmittedByCpm: true,
   };
+  // Send the quote tools (cost estimate, divisions, elevator) up first so the
+  // server's copy for the CPM Supervisor and Procurement is complete.
+  await import('./sync').then((m) => m.syncAllEntities()).catch(() => undefined);
   // Workflow state is server-owned. Do not queue a status PATCH: submit must
   // be an authorized action against the already-created server draft.
   const serverDraft = await ensureDraftOnServer({ ...next, status: 'draft' });
-  await performEntityAction('procurement', serverDraft.id, 'submit');
+  const pkg = await buildScopePackage(id, next, serverDraft.id);
+  await performEntityAction('procurement', serverDraft.id, 'submit', pkg);
   await d.runAsync('UPDATE procurement SET state=? WHERE id=?', JSON.stringify(next), id);
   await removeNotificationsByRef(next.id, 'Scope submitted for approval');
   await addNotification('management', 'Scope submitted for approval', next.address, next.id);
   return next;
+}
+
+/** What the CPM filled in, for a scope. At least one is required to submit. */
+export async function scopeQuoteParts(projectId: string): Promise<{ estimate: boolean; divisions: boolean; elevator: boolean }> {
+  const est = await getCostEstimate(projectId).catch(() => null);
+  const estimate = !!est && Object.values(est.rows || {}).some((row: any) =>
+    String(row?.cost || '').trim() || String(row?.description || '').trim());
+  const form = await getProjectScopeForm(projectId).catch(() => null);
+  const divisions = !!form && Array.isArray(form.divisions) && form.divisions.some((d: any) =>
+    (d?.sections || []).some((sec: any) => (sec?.lines || []).some((l: any) => String(l?.description || '').trim())));
+  const elev = await getElevator(projectId).catch(() => null);
+  const elevator = !!elev && Object.values(elev.items || {}).some((it: any) =>
+    (it?.condition && it.condition !== 'N/A') || String(it?.cost || '').trim() || String(it?.note || '').trim());
+  return { estimate, divisions, elevator };
+}
+
+// Readable copies of the CPM's estimate / elevator survey plus the uploaded
+// scope file, sent with the submit so the reviewer sees exactly what was filled.
+async function buildScopePackage(localId: string, r: ProcurementRequest, serverId: string): Promise<Record<string, unknown>> {
+  const out: Record<string, unknown> = {};
+  const { COST_CATEGORIES } = await import('./costEstimate');
+  const est = await getCostEstimate(localId).catch(() => null);
+  if (est) {
+    const categories = COST_CATEGORIES.map((c) => {
+      const row = (est.rows || {})[c.id] || {};
+      return { title: c.title, location: String(row.location || ''), description: String(row.description || ''), cost: String(row.cost || '') };
+    }).filter((c) => c.description.trim() || c.cost.trim() || c.location.trim());
+    if (categories.length) out.cpmEstimate = { header: est.header || {}, categories, totals: est.totals || {} };
+  }
+  const { ELEVATOR_SECTIONS } = await import('./elevator');
+  const elev = await getElevator(localId).catch(() => null);
+  if (elev) {
+    const items: Array<Record<string, string>> = [];
+    for (const sec of ELEVATOR_SECTIONS) for (const comp of sec.components) {
+      const it = (elev.items || {})[comp.id];
+      if (!it) continue;
+      if ((it.condition && it.condition !== 'N/A') || String(it.cost || '').trim() || String(it.note || '').trim()) {
+        items.push({ section: sec.title, label: comp.label, condition: String(it.condition || ''), cost: String(it.cost || ''), note: String(it.note || '') });
+      }
+    }
+    if (items.length) out.cpmElevator = { header: elev.header || {}, items };
+  }
+  if (r.scopeFile && !(r as any).scopeFileRemote) {
+    const { uploadScopeFile } = await import('./files');
+    out.scopeFileRemote = await uploadScopeFile(r.scopeFile, r.scopeFileName || 'scope', { entity: 'procurement', recordId: serverId });
+  }
+  return out;
 }
 
 // Management (supervisor) approves a CPM's scope+quote and forwards it to

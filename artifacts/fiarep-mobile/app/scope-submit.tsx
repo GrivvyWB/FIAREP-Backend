@@ -5,6 +5,7 @@ import {
   createProcurementRequest,
   updateScopeDraft,
   submitScopeForApproval,
+  scopeQuoteParts,
   listReturnedScopes,
   listViolationLookups,
   type ViolationLookup,
@@ -100,7 +101,7 @@ export default function ScopeSubmit() {
       const f = await pickDocument();
       if (!f) return;
       setDraft({ ...draft, scopeFile: f.path, scopeFileName: f.name });
-      Alert.alert('Attached', f.name + '\n\nStored on this device.');
+      Alert.alert('Attached', f.name + '\n\nIt uploads when you send the scope to the CPM Supervisor.');
     } catch (e: any) {
       Alert.alert('Attach failed', String(e && e.message ? e.message : e));
     }
@@ -108,6 +109,13 @@ export default function ScopeSubmit() {
 
   async function send() {
     if (!draft) return;
+    // The CPM Supervisor decides Procurement or in-house from what's filled in,
+    // so at least one quote tool (or a scope file) must be there.
+    const parts = await scopeQuoteParts(draft.id).catch(() => ({ estimate: false, divisions: false, elevator: false }));
+    if (!parts.estimate && !parts.divisions && !parts.elevator && !draft.scopeFile) {
+      Alert.alert('Add the scope details', 'Fill in at least one before sending:\n\n• Nature of Work & Cost Estimate\n• Scope of Work (Divisions)\n• Elevator Services\n• Attach scope file');
+      return;
+    }
     setBusy(true);
     try {
       await submitScopeForApproval(draft.id, draft.scopeFile || '', draft.scopeFileName || '', draft.address || '', draft.scope || '');
@@ -205,7 +213,7 @@ export default function ScopeSubmit() {
           <TextInput style={[ui.input, { height: 100, textAlignVertical: 'top' }]} value={scope} onChangeText={setScope} placeholder="Describe the work" multiline />
 
           <Text style={[ui.label, { marginTop: 12 }]}>CPM notes (your own)</Text>
-          <TextInput style={[ui.input, { height: 80, textAlignVertical: 'top' }]} value={cpmNotes} onChangeText={setCpmNotes} placeholder="Your notes \u2014 does not change the inspector's violation notes above" multiline />
+          <TextInput style={[ui.input, { height: 80, textAlignVertical: 'top' }]} value={cpmNotes} onChangeText={setCpmNotes} placeholder="Your notes (for the CPM Supervisor)" multiline />
 
           <Pressable style={[ui.btn, { marginTop: 16 }, busy && { opacity: 0.6 }]} onPress={saveDraft} disabled={busy}>
             <Text style={ui.btnText}>Save & build quote</Text>
@@ -228,7 +236,7 @@ export default function ScopeSubmit() {
           <TextInput style={[ui.input, { height: 100, textAlignVertical: 'top' }]} value={draft.scope} onChangeText={(t) => setDraft({ ...draft, scope: t })} placeholder="Describe the work" multiline />
 
           <Text style={[ui.label, { marginTop: 8 }]}>CPM notes (your own)</Text>
-          <TextInput style={[ui.input, { height: 80, textAlignVertical: 'top' }]} value={draft.cpmNotes || ''} onChangeText={(t) => setDraft({ ...draft, cpmNotes: t })} placeholder="Your notes \u2014 does not change the inspector's violation notes above" multiline />
+          <TextInput style={[ui.input, { height: 80, textAlignVertical: 'top' }]} value={draft.cpmNotes || ''} onChangeText={(t) => setDraft({ ...draft, cpmNotes: t })} placeholder="Your notes (for the CPM Supervisor)" multiline />
 
           <Text style={[ui.label, { marginTop: 10 }]}>Quote tools</Text>
           <Pressable style={ui.btnOutline} onPress={() => router.push('/project/checklist?projectId=' + draft.id)}>
