@@ -53,3 +53,48 @@ export function snapshotScope(raw: unknown, withPrices: boolean): ScopeSnapshot 
   }
   return withPrices ? { header, divisions, total: Math.round(total * 100) / 100 } : { header, divisions };
 }
+
+// Nature of Work & Cost Estimate categories (same list as the app).
+const COST_TITLES: Record<string, string> = {
+  generals: "GENERALS REQUIREMENTS", exterior: "BUILDING'S EXTERIOR", facades: "FACADES",
+  "apt-reno": "APARTMENT RENOVATION", "public-reno": "PUBLIC PARTS RENOVATION",
+  lead: "LEAD-BASED PAINT REMOVAL", mold: "MOLD ABATEMENT", windows: "WINDOWS",
+  "roof-acm": "ROOF/ACM REMOVAL", "fire-escape": "FIRE ESCAPE",
+  gutters: "GUTTERS & LEADERS, ROOF DRAINS", bulkhead: "ROOF BULKHEAD & SKYLIGHT",
+  "bldg-entrance": "BUILDING ENTRANCE", intercom: "INTERCOM SYSTEM",
+  "public-halls": "PUBLIC HALLS/APT. ENTRY DOORS", cellar: "STRUCTURAL PROBLEMS INTERIOR CELLAR",
+  "cellar-basement": "CELLAR / BASEMENT", electrical: "ELECTRICAL SERVICE", gas: "GAS SYSTEM",
+  boiler: "BOILER ROOM", heating: "HEATING", "hot-water": "HOT WATER HEATER",
+  "pipe-insul": "PIPE INSULATION", "domestic-water": "DOMESTIC WATER",
+  drainage: "DRAINAGE/WASTE SYSTEMS", pest: "PEST MANAGEMENT/EXTERMINATION",
+};
+const humanize = (id: string) => id.replace(/^[a-z]+-/, "").replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+/** Filled rows of the CPM's cost estimate, readable. */
+export function snapshotEstimate(raw: unknown): Record<string, unknown> | null {
+  const est = raw && typeof raw === "object" ? (raw as Record<string, any>) : null;
+  const rows = est && est["rows"] && typeof est["rows"] === "object" ? est["rows"] as Record<string, any> : null;
+  if (!rows) return null;
+  const categories = Object.entries(rows).map(([id, row]) => ({
+    title: COST_TITLES[id] || humanize(id),
+    location: text(row?.location), description: text(row?.description), cost: text(row?.cost),
+  })).filter((c) => c.location || c.description || c.cost);
+  if (!categories.length) return null;
+  return { header: est!["header"] || {}, categories, totals: est!["totals"] || {} };
+}
+
+/** Components the CPM marked on the elevator survey, readable. */
+export function snapshotElevator(raw: unknown): Record<string, unknown> | null {
+  const elev = raw && typeof raw === "object" ? (raw as Record<string, any>) : null;
+  const items = elev && elev["items"] && typeof elev["items"] === "object" ? elev["items"] as Record<string, any> : null;
+  if (!items) return null;
+  const list = Object.entries(items).filter(([, it]) =>
+    (it?.condition && it.condition !== "N/A") || text(it?.cost) || text(it?.note))
+    .map(([id, it]) => ({ section: "", label: humanize(id), condition: text(it?.condition), cost: text(it?.cost), note: text(it?.note) }));
+  return list.length ? { header: elev!["header"] || {}, items: list } : null;
+}
+
+/** Does the scope carry something priced / readable for the reviewer? */
+export function hasScopePackage(state: Record<string, unknown>): boolean {
+  return Boolean(state["cpmScope"] || state["cpmEstimate"] || state["cpmElevator"] || state["scopeFileRemote"]);
+}

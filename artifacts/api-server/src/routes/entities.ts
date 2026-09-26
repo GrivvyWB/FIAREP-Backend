@@ -43,7 +43,7 @@ import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "..
 import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
 import { isCpmSupervisorTitle, isCrewForTrade, isOfficeTradeSupervisorTitle, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "../lib/titles";
 import { APP_READ_ONLY_MESSAGE, appReadOnlyDecision, isAppReadOnlyActor, isMobileAppRequest } from "../lib/appReadOnly";
-import { snapshotScope } from "../lib/scopeSnapshot";
+import { hasScopePackage, snapshotElevator, snapshotEstimate, snapshotScope } from "../lib/scopeSnapshot";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
@@ -2093,6 +2093,32 @@ router.post(
       state["cpmScope"] = priced;
       state["cpmScopeTotal"] = priced.total;
       state["vendorScopeTemplate"] = snapshotScope(scopeRow!.state, false);
+    }
+    // The cost estimate and elevator survey, when the app didn't send a
+    // readable copy with the submit (older app versions).
+    for (const [sourceEntity, key, make] of [
+      ["cost-estimates", "cpmEstimate", snapshotEstimate],
+      ["elevators", "cpmElevator", snapshotElevator],
+    ] as const) {
+      if (state[key]) continue;
+      const [row] = await db.select().from(entityRecords).where(and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.entity, sourceEntity),
+        eq(entityRecords.deleted, false),
+        or(inArray(entityRecords.id, keys), inArray(entityRecords.projectId, keys)),
+      )).orderBy(desc(entityRecords.updatedAt)).limit(1);
+      const copy = row ? make(row.state) : null;
+      if (copy) state[key] = copy;
+    }
+    // The CPM Supervisor must be able to read the priced scope before it
+    // can be sent on, so a scope with nothing in it is refused.
+    if ((action === "submit" || action === "approve") && !hasScopePackage(state)) {
+      res.status(400).json({
+        error: action === "submit"
+          ? "Add the scope details before sending: Nature of Work & Cost Estimate, Scope of Work (Divisions), Elevator Services, or attach a scope file."
+          : "This scope has no prices or scope file to review. Return it to the CPM to add them.",
+      });
+      return;
     }
   }
   if (entity === "procurement" && action === "handoff-inhouse") {

@@ -202,12 +202,18 @@ export default function ScopeReview() {
         <p>{state.scope || state.description || "No scope description."}</p>
         <ScopeLines scope={state.cpmScope} showPrices />
         <CpmPackage state={state} />
+        {!(state.cpmScope || state.cpmEstimate || state.cpmElevator || state.scopeFileRemote) && (
+          <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+            <p className="font-semibold">No priced scope to review</p>
+            <p>{state.cpmName || "The CPM"} sent this without a cost estimate, divisions, elevator survey or scope file. Return it to the CPM with a note asking for the priced scope. It can't go to Procurement until you can read it.</p>
+          </div>
+        )}
         {!!state.cpmNotes && <p className="whitespace-pre-wrap text-sm text-muted-foreground">CPM notes: {state.cpmNotes}</p>}
         <Textarea placeholder="Review note (required to return to the CPM)" value={notes[row.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))} />
          {state.sourceHandoff === "supervisor-inspector-to-cpm-supervisor" ? (
-           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Approve &amp; send to Procurement</Button><Button variant="secondary" onClick={() => openHandoff(row)} disabled={action.isPending}>Send to in-house workers</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button></div>
+           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending || !(state.cpmScope || state.cpmEstimate || state.cpmElevator || state.scopeFileRemote)}>Approve &amp; send to Procurement</Button><Button variant="secondary" onClick={() => openHandoff(row)} disabled={action.isPending}>Send to in-house workers</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button></div>
          ) : (
-           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Approve &amp; send to Procurement</Button><Button variant="secondary" onClick={() => openHandoff(row)} disabled={action.isPending}>Send to in-house workers</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button></div>
+           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending || !(state.cpmScope || state.cpmEstimate || state.cpmElevator || state.scopeFileRemote)}>Approve &amp; send to Procurement</Button><Button variant="secondary" onClick={() => openHandoff(row)} disabled={action.isPending}>Send to in-house workers</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button></div>
          )}
       </CardContent></Card>;
     })}
