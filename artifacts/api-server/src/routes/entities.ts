@@ -2204,7 +2204,8 @@ router.post(
   const transitionAttempts = entity === "procurement" && action === "broadcast" ? 8 : 1;
   for (let attempt = 0; attempt < transitionAttempts && !updated; attempt++) {
     if (entity === "procurement" && action === "broadcast") {
-      state["trackingId"] = `RC-${randomBytes(4).readUInt32BE(0) % 90000 + 10000}`;
+      // Vendor code: SR- so it never looks like a complaint number (RC-).
+      state["trackingId"] = `SR-${randomBytes(4).readUInt32BE(0) % 90000 + 10000}`;
     }
     try {
       updated = await db.transaction(async (tx) => {

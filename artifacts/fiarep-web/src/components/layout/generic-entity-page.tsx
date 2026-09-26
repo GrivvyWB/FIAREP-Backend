@@ -1,3 +1,4 @@
+import { RateAndCloseDialog, ReleaseToVendorsDialog } from "@/components/procurement-dialogs";
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle, sameTitle } from "@/lib/titles";
 import { 
   useListEntityRecords, 
@@ -110,6 +111,8 @@ export function GenericEntityPage({
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [deletingRecordId, setDeletingRecordId] = useState<string | null>(null);
   const [selectedBid, setSelectedBid] = useState<Record<string, string>>({});
+  const [releaseFor, setReleaseFor] = useState<EntityRecord | null>(null);
+  const [closeFor, setCloseFor] = useState<EntityRecord | null>(null);
   const [selectedRouteStaff, setSelectedRouteStaff] = useState<Record<string, string>>({});
   const [selectedCpmSupervisor, setSelectedCpmSupervisor] = useState<Record<string, string>>({});
 
@@ -232,7 +235,7 @@ export function GenericEntityPage({
     }
   };
 
-  const performAction = async (record: EntityRecord, action: string, bid?: any) => {
+  const performAction = async (record: EntityRecord, action: string, bid?: any, extra?: Record<string, unknown>) => {
     try {
       if (action === "award" && !bid) throw new Error("Select an existing vendor bid before awarding.");
       if (action === "route" && !selectedRouteStaff[record.id]) throw new Error("Select a staff member before routing.");
@@ -244,7 +247,7 @@ export function GenericEntityPage({
           ? { vendor: bid.vendorName, bidAmount: bid.amount, bidNote: bid.note, bidId: bid.id }
           : action === "route"
             ? { assignedStaffId: selectedRouteStaff[record.id] }
-            : undefined,
+            : extra,
       });
       await invalidateOperationalQueries(queryClient, entity, record.id, isProcurement ? ["procurement-bids"] : []);
       toast({ title: `${action} completed` });
@@ -446,7 +449,11 @@ export function GenericEntityPage({
                                     )}
                                   </span>;
                                 }
-                               if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => performAction(item, action)}>{({ "approve-work": "Approve Work", broadcast: "Approve & send to vendors", return: "Return for review", "rate-close": "Rate & close", approve: "Approve", route: "Route", complete: "Complete" } as Record<string, string>)[action] || action}</Button>;
+                               if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => {
+                                 if (isProcurement && action === "broadcast") { setReleaseFor(item); return; }
+                                 if (isProcurement && action === "rate-close") { setCloseFor(item); return; }
+                                 performAction(item, action);
+                               }}>{({ "approve-work": "Approve Work", broadcast: "Approve & send to vendors", return: "Return for review", "rate-close": "Rate & close", approve: "Approve", route: "Route", complete: "Complete" } as Record<string, string>)[action] || action}</Button>;
                               const bids = (bidData || []).filter((b: any) => (b.state as any)?.requestId === item.id);
                               return <span key={action} className="flex gap-1 items-center">
                                 <select className="h-9 rounded-md border px-2 text-sm" value={selectedBid[item.id] || ""} onChange={(e) => setSelectedBid((s) => ({ ...s, [item.id]: e.target.value }))}>
@@ -569,6 +576,18 @@ export function GenericEntityPage({
         </DialogContent>
       </Dialog>
 
+      <ReleaseToVendorsDialog
+        scope={releaseFor}
+        pending={actionMutation.isPending}
+        onClose={() => setReleaseFor(null)}
+        onSubmit={async (data) => { if (releaseFor) { await performAction(releaseFor, "broadcast", undefined, data); setReleaseFor(null); } }}
+      />
+      <RateAndCloseDialog
+        scope={closeFor}
+        pending={actionMutation.isPending}
+        onClose={() => setCloseFor(null)}
+        onSubmit={async (data) => { if (closeFor) { await performAction(closeFor, "rate-close", undefined, data); setCloseFor(null); } }}
+      />
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>

@@ -166,7 +166,7 @@ export default function VendorHome() {
         style={ui.input}
         value={query}
         onChangeText={setQuery}
-        placeholder="e.g. RC-46789"
+        placeholder="e.g. SR-46789"
         autoCapitalize="none"
         autoCorrect={false}
         onSubmitEditing={lookup}
