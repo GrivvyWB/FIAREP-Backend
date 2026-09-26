@@ -23,7 +23,7 @@ import { deliverPushNotification } from "../lib/push";
 import { residentReportRecipientIds } from "../lib/notificationVisibility";
 import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
 import { rateLimit } from "../lib/rateLimit";
-import { lookupNychaResidentialAddress } from "../lib/nycProperty";
+import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
 import { UpdateResidentReportPhotoBody } from "@workspace/api-zod";
 import { audit } from "../lib/audit";
 
@@ -454,6 +454,10 @@ router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async 
   const org = await evaluateLicense(scope.tenantId);
   if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
 
+  // Where the building is, so Procurement can see the vendor was really there.
+  // Street address without the unit ("… Unit 4B").
+  const buildingAddress = String(scope.state["address"] ?? "").replace(/\s+(unit|apt|apartment|#)\s*\S+$/i, "").trim();
+  const building = await geocodeNycPoint(buildingAddress);
   const existing = await db.select().from(vendorWalkthroughCheckIns).where(eq(vendorWalkthroughCheckIns.id, id)).limit(1);
   if (existing[0]) {
     if (existing[0].procurementId !== scope.id || normalize(existing[0].vendorName) !== normalize(vendorName)) {
@@ -500,6 +504,13 @@ router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async 
       const previous = Array.isArray(locked.state["walkthroughCheckIns"])
         ? locked.state["walkthroughCheckIns"].filter((item) => item && typeof item === "object")
         : [];
+      const distance = building ? distanceMeters(building, { latitude, longitude }) : null;
+      // On site: within 150 m of the building, allowing for the phone's GPS accuracy.
+      const onSite = distance == null ? null : distance <= Math.max(150, (accuracy ?? 0) + 75);
+      const scheduled = new Date(String(locked.state["walkthroughAtIso"] ?? locked.state["walkthroughAt"] ?? ""));
+      const minutesFromSchedule = Number.isNaN(scheduled.getTime())
+        ? null
+        : Math.round((capturedAt.getTime() - scheduled.getTime()) / 60_000);
       const summary = {
         id,
         vendorName,
@@ -508,6 +519,10 @@ router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async 
         accuracy,
         capturedAt: capturedAt.toISOString(),
         receivedAt: receivedAt.toISOString(),
+        ...(building ? { buildingLatitude: building.latitude, buildingLongitude: building.longitude } : {}),
+        distanceMeters: distance,
+        onSite,
+        minutesFromSchedule,
       };
       await tx.update(entityRecords).set({
         state: { ...locked.state, walkthroughCheckIns: [...previous, summary] },
@@ -518,8 +533,14 @@ router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async 
         id: randomUUID(),
         tenantId: locked.tenantId,
         target: "procurement",
-        message: `Walk-through check-in: ${vendorName}`,
-        detail: `${String(locked.state["address"] ?? locked.development ?? "Scheduled site")} · ${receivedAt.toLocaleString("en-US")}`,
+        message: `Walk-through check-in: ${vendorName}${onSite === true ? " (at the building)" : onSite === false ? " (NOT at the building)" : ""}`,
+        detail: [
+          String(locked.state["sourceRef"] ?? ""),
+          String(locked.state["address"] ?? locked.development ?? "Scheduled site"),
+          capturedAt.toLocaleString("en-US", { timeZone: "America/New_York" }),
+          distance != null ? `${distance} m from the building` : "",
+          minutesFromSchedule != null ? (minutesFromSchedule > 0 ? `${minutesFromSchedule} min late` : `${Math.abs(minutesFromSchedule)} min early`) : "",
+        ].filter(Boolean).join(" · "),
         reportId: locked.id,
       });
       await tx.insert(auditLog).values({

@@ -24,6 +24,42 @@ export default function PublicVendor() {
   const [lookupData, setLookupData] = useState<{ trackingId: string, vendorName: string } | null>(null);
   const [progressNote, setProgressNote] = useState('');
   const [progressBusy, setProgressBusy] = useState(false);
+  const [checkedInAt, setCheckedInAt] = useState<string | null>(null);
+  // Walk-through check-in from the phone's browser: GPS + time go to
+  // Procurement, who see whether the vendor was at the building.
+  function walkthroughCheckIn() {
+    if (!lookupData) return;
+    if (!('geolocation' in navigator)) { toast({ variant: 'destructive', title: 'Location unavailable', description: 'Use a phone with location turned on.' }); return; }
+    setProgressBusy(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      try {
+        const capturedAt = new Date(position.timestamp || Date.now()).toISOString();
+        const response = await fetch(`/api/v1/public/vendor-scopes/${encodeURIComponent(lookupData.trackingId)}/walkthrough-check-ins`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`,
+            vendorName: lookupData.vendorName,
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+            accuracy: position.coords.accuracy,
+            capturedAt,
+          }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(payload?.error || 'Check-in failed');
+        setCheckedInAt(capturedAt);
+        toast({ title: 'Checked in', description: 'Your arrival time and location were sent to Procurement.' });
+      } catch (error: any) {
+        toast({ variant: 'destructive', title: 'Check-in failed', description: error?.message });
+      } finally {
+        setProgressBusy(false);
+      }
+    }, () => {
+      setProgressBusy(false);
+      toast({ variant: 'destructive', title: 'Location required', description: 'Allow location access to check in at the walk-through.' });
+    }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  }
   // Awarded vendor reports Start / Complete; Procurement, the CPM and the CPM
   // Supervisor are notified.
   async function reportProgress(step: 'start' | 'complete') {
@@ -176,7 +212,8 @@ export default function PublicVendor() {
                      {(scopeResult.state as any)?.walkthroughAt && (
                        <div>
                          <h4 className="text-sm font-medium text-muted-foreground mb-1">Walkthrough</h4>
-                         <p className="text-sm">{(scopeResult.state as any).walkthroughAt}</p>
+                         <p className="text-sm font-semibold">{(scopeResult.state as any).walkthroughAt}</p>
+                         {!!(scopeResult.state as any)?.walkthroughNote && <p className="text-sm mt-1">{(scopeResult.state as any).walkthroughNote}</p>}
                        </div>
                      )}
                      {(scopeResult.state as any)?.bidCloseAt && (
@@ -196,6 +233,19 @@ export default function PublicVendor() {
               </CardContent>
             </Card>
 
+            {!!(scopeResult.state as any)?.walkthroughAt && ['bidding', 'awarded'].includes((scopeResult.state as any)?.status) && (
+              <Card className="shadow-lg border-border/50">
+                <CardHeader><CardTitle>Walk-through check-in</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  <p className="text-sm text-muted-foreground">When you arrive at the building for the walk-through ({(scopeResult.state as any).walkthroughAt}), check in so Procurement has your arrival time.</p>
+                  {checkedInAt ? (
+                    <p className="text-sm font-medium">Checked in {new Date(checkedInAt).toLocaleString()}</p>
+                  ) : (
+                    <Button className="w-full" disabled={progressBusy} onClick={walkthroughCheckIn}>I'm at the building — check in</Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
             {(scopeResult.state as any)?.status === 'awarded' && !(scopeResult.state as any)?.completedAt && (
               <Card className="shadow-lg border-border/50">
                 <CardHeader><CardTitle>Your awarded job</CardTitle></CardHeader>

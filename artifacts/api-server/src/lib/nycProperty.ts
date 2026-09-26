@@ -61,6 +61,29 @@ async function geocodeNycAddress(address: string) {
   }) ?? null;
 }
 
+/** Building coordinates for an NYC address (null when it can't be matched). */
+export async function geocodeNycPoint(address: string): Promise<{ latitude: number; longitude: number } | null> {
+  if (!address.trim()) return null;
+  try {
+    const feature = await geocodeNycAddress(address);
+    const [longitude, latitude] = feature?.geometry?.coordinates || [];
+    return Number.isFinite(latitude) && Number.isFinite(longitude)
+      ? { latitude: Number(latitude), longitude: Number(longitude) }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Distance in meters between two GPS points. */
+export function distanceMeters(a: { latitude: number; longitude: number }, b: { latitude: number; longitude: number }): number {
+  const rad = (value: number) => (value * Math.PI) / 180;
+  const dLat = rad(b.latitude - a.latitude);
+  const dLng = rad(b.longitude - a.longitude);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(rad(a.latitude)) * Math.cos(rad(b.latitude)) * Math.sin(dLng / 2) ** 2;
+  return Math.round(2 * 6_371_000 * Math.asin(Math.sqrt(h)));
+}
+
 function developmentName(value: string): string {
   return value
     .toLocaleLowerCase("en-US")

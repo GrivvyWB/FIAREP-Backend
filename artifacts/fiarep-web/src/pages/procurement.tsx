@@ -29,6 +29,17 @@ const fmt = (value?: string) => {
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 };
+// Walk-through / bid-close times in the original app's style:
+// "08/31/2026 Monday 10:00 AM".
+const fmtSchedule = (value?: string) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  const date = d.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
+  const weekday = d.toLocaleDateString("en-US", { weekday: "long" });
+  const time = d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
+  return `${date} ${weekday} ${time}`;
+};
 const money = (value: unknown) => {
   const n = Number(value);
   return Number.isFinite(n) ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "";
@@ -186,9 +197,10 @@ export default function Procurement() {
               {canAct && (
                 <Button className="w-full" disabled={action.isPending || !closeAt[r.id]}
                   onClick={() => run(r, "broadcast", {
-                    ...(walk[r.id] ? { walkthroughAt: fmt(walk[r.id]) } : {}),
+                    ...(walk[r.id] ? { walkthroughAt: fmtSchedule(walk[r.id]), walkthroughAtIso: new Date(walk[r.id]!).toISOString() } : {}),
                     ...((walkNote[r.id] || "").trim() ? { walkthroughNote: walkNote[r.id]!.trim() } : {}),
-                    bidCloseAt: fmt(closeAt[r.id]),
+                    bidCloseAt: fmtSchedule(closeAt[r.id]),
+                    bidCloseAtIso: new Date(closeAt[r.id]!).toISOString(),
                   }, "Sent to all vendors")}>
                   Send to all vendors
                 </Button>
@@ -203,13 +215,12 @@ export default function Procurement() {
         {bidding.length === 0 ? <p className="text-sm text-muted-foreground">No open bids.</p> : bidding.map((r) => {
           const s = r.state || {};
           const rBids = bids.filter((b) => b.state?.requestId === r.id).sort((a, b) => Number(a.state?.amount || 0) - Number(b.state?.amount || 0));
-          const checkIns = Array.isArray(s.walkthroughCheckIns) ? s.walkthroughCheckIns : [];
           return (
             <Card key={r.id}><CardContent className="space-y-3 pt-6">
               {header(r)}
               <p className="text-xs text-muted-foreground">Open since {fmt(s.broadcastAt || s.invitedAt)}{s.walkthroughAt ? ` · walk-through ${s.walkthroughAt}` : ""}{s.bidCloseAt ? ` · bids close ${s.bidCloseAt}` : ""}</p>
               {scopeDetails(r)}
-              {checkIns.length > 0 && <p className="text-xs text-muted-foreground">Walk-through check-ins: {checkIns.map((c: any) => c.vendorName).join(", ")}</p>}
+              <WalkthroughArrivals scope={r} />
               <button type="button" className="text-sm font-semibold text-primary" onClick={() => setOpenBids((m) => ({ ...m, [r.id]: !m[r.id] }))}>
                 {openBids[r.id] ? "Hide" : "Show"} bids ({rBids.length})
               </button>
@@ -238,6 +249,7 @@ export default function Procurement() {
             <Card key={r.id}><CardContent className="space-y-3 pt-6">
               {header(r)}
               <Line label="Vendor">{s.vendor || "—"}{s.bidAmount ? ` · bid ${money(s.bidAmount)}` : ""}</Line>
+              <WalkthroughArrivals scope={r} />
               <p className="text-xs text-muted-foreground">Awarded {fmt(s.awardAt || s.awardedAt)}{s.vendorStartedAt ? ` · started ${fmt(s.vendorStartedAt)}` : ""}{s.vendorCompletedAt ? ` · completed ${fmt(s.vendorCompletedAt)}` : ""}</p>
               {scopeDetails(r)}
               {canAct && (
@@ -288,6 +300,45 @@ export default function Procurement() {
       <Section title="Vendor contacts" count={-1} open={open.contacts} onToggle={() => setOpen((m) => ({ ...m, contacts: !m.contacts }))}>
         <VendorContacts canEdit={canAct} />
       </Section>
+    </div>
+  );
+}
+
+/** Who checked in at the walk-through, when, and whether they were at the building. */
+function WalkthroughArrivals({ scope }: { scope: Rec }) {
+  const s = scope.state || {};
+  const checkIns = (Array.isArray(s.walkthroughCheckIns) ? s.walkthroughCheckIns : []) as any[];
+  if (!s.walkthroughAt && checkIns.length === 0) return null;
+  return (
+    <div className="space-y-2 rounded-md border p-3">
+      <p className="text-sm"><span className="font-semibold">Walk-through:</span> {s.walkthroughAt || "not scheduled"}</p>
+      {!!s.walkthroughNote && <p className="text-sm text-muted-foreground">{s.walkthroughNote}</p>}
+      {checkIns.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No vendor has checked in yet.</p>
+      ) : checkIns.map((c) => {
+        const onSite = c.onSite === true ? "At the building" : c.onSite === false ? "NOT at the building" : "Location recorded";
+        const tone = c.onSite === true ? "bg-green-100 text-green-800" : c.onSite === false ? "bg-red-100 text-red-800" : "bg-muted text-foreground";
+        const timing = typeof c.minutesFromSchedule === "number"
+          ? (c.minutesFromSchedule > 5 ? `${c.minutesFromSchedule} min late` : c.minutesFromSchedule < -5 ? `${Math.abs(c.minutesFromSchedule)} min early` : "on time")
+          : "";
+        return (
+          <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 border-t pt-2 text-sm">
+            <div>
+              <p className="font-medium">{c.vendorName}</p>
+              <p className="text-muted-foreground">
+                Arrived {fmtSchedule(c.capturedAt)}{timing ? ` · ${timing}` : ""}
+                {typeof c.distanceMeters === "number" ? ` · ${c.distanceMeters} m from the building` : ""}
+                {typeof c.accuracy === "number" ? ` (GPS ±${Math.round(c.accuracy)} m)` : ""}
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${tone}`}>{onSite}</span>
+              <a className="text-xs font-semibold text-primary underline" target="_blank" rel="noreferrer"
+                href={`https://www.google.com/maps?q=${c.latitude},${c.longitude}`}>Map</a>
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }
