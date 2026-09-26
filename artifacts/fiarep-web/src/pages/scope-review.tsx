@@ -24,6 +24,14 @@ export default function ScopeReview() {
       refetchOnMount: "always",
     },
   });
+  // Every scope routed to this supervisor, at any stage, to follow it through.
+  const { data: allScopes = [] } = useListEntityRecords("procurement", undefined, {
+    query: {
+      queryKey: getListEntityRecordsQueryKey("procurement"),
+      staleTime: 15_000,
+      refetchOnMount: "always",
+    },
+  });
   const { data: inspectorViolations = [] } = useListEntityRecords("building-violations", undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey("building-violations"),
@@ -98,6 +106,10 @@ export default function ScopeReview() {
     }
   }
   async function decide(id: string, name: "approve" | "reject") {
+    if (name === "reject" && !(notes[id] || "").trim()) {
+      toast({ variant: "destructive", title: "Add a note", description: "Tell the CPM what to correct before returning the scope." });
+      return;
+    }
     try {
       await action.mutateAsync({ entity: "procurement", id, action: name, data: notes[id] ? { note: notes[id] } : {} });
       await invalidateOperationalQueries(queryClient, "procurement", id, ["procurement-bids"]);
@@ -169,7 +181,12 @@ export default function ScopeReview() {
        const violationAddress = sourceState?.address || state.address || state.sourceAddress;
        const violationNotes = sourceState?.notes || sourceState?.note || sourceState?.description ||
          state.notes || state.note || state.sourceNotes || state.description;
-      return <Card key={row.id}><CardHeader><CardTitle>{state.address || "Scope"}</CardTitle></CardHeader><CardContent className="space-y-3">
+      const reference = state.sourceRef || state.complaintNo || (violationNumber ? `Violation ${violationNumber}` : "");
+      return <Card key={row.id}><CardHeader><CardTitle>{[reference, state.address].filter(Boolean).join(" · ") || "Scope"}</CardTitle></CardHeader><CardContent className="space-y-3">
+         {state.sourceEntity === "resident-reports" && <div className="rounded-md border border-sky-200 bg-sky-50 p-3 text-sm text-sky-950 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-100">
+           <div className="font-semibold">Scoped from resident complaint {state.complaintNo || ""}</div>
+           <div className="mt-1">Submitted by {state.cpmName || state.requestedBy || "CPM"}{state.address ? ` · ${state.address}` : ""}</div>
+         </div>}
          {inspectorViolationSource && <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-950 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100">
            <div className="font-semibold">Submitted from Supervisor Inspector violation</div>
            <dl className="mt-2 grid gap-1 sm:grid-cols-[auto_1fr] sm:gap-x-3">
@@ -180,14 +197,40 @@ export default function ScopeReview() {
          </div>}
         <p>{state.scope || state.description || "No scope description."}</p>
         {state.scopeFileName && <p className="text-sm text-muted-foreground">Attachment: {state.scopeFileName}</p>}
-        <Textarea placeholder="Optional review note" value={notes[row.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))} />
+        <Textarea placeholder="Review note (required to return to the CPM)" value={notes[row.id] || ""} onChange={(e) => setNotes((n) => ({ ...n, [row.id]: e.target.value }))} />
          {state.sourceHandoff === "supervisor-inspector-to-cpm-supervisor" ? (
-           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Procure</Button><Button variant="secondary" onClick={() => { setHandoffRow(row); setHandoffTrade("Plumber"); setHandoffSupervisor(""); }} disabled={action.isPending}>Hand off in-house</Button></div>
+           <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Procure</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button><Button variant="secondary" onClick={() => { setHandoffRow(row); setHandoffTrade("Plumber"); setHandoffSupervisor(""); }} disabled={action.isPending}>Hand off in-house</Button></div>
          ) : (
            <div className="flex flex-wrap gap-2"><Button onClick={() => decide(row.id, "approve")} disabled={action.isPending}>Approve for Procurement</Button><Button variant="outline" onClick={() => decide(row.id, "reject")} disabled={action.isPending}>Return to CPM</Button><Button variant="secondary" onClick={() => { setHandoffRow(row); setHandoffTrade("Plumber"); setHandoffSupervisor(""); }} disabled={action.isPending}>Hand off in-house</Button></div>
          )}
       </CardContent></Card>;
     })}
+    {(() => {
+      const followed = (allScopes as any[]).filter((row) => {
+        const state = row.state || {};
+        return state.handoffTargetId === staff?.id && !["submitted", "draft"].includes(String(state.status || ""));
+      });
+      if (!followed.length) return null;
+      const label: Record<string, string> = {
+        returned: "Returned to CPM for correction",
+        approved: "With Procurement",
+        bidding: "Released to vendors",
+        awarded: "Awarded to vendor",
+        closed: "Closed",
+        in_house: "Handed off in-house",
+        in_house_completed: "In-house work completed",
+      };
+      return <section className="space-y-2">
+        <h2 className="text-lg font-semibold">Scopes you've reviewed</h2>
+        {followed.map((row) => {
+          const state = row.state || {};
+          return <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 rounded-md border p-3 text-sm">
+            <span className="font-medium">{[state.sourceRef || state.complaintNo || state.violationNo, state.address].filter(Boolean).join(" · ") || "Scope"}</span>
+            <span className="text-muted-foreground">{label[String(state.status)] || String(state.status || "")}{state.trackingId ? ` · ${state.trackingId}` : ""}</span>
+          </div>;
+        })}
+      </section>;
+    })()}
     <Dialog open={Boolean(handoffRow)} onOpenChange={(open) => !open && setHandoffRow(null)}>
       <DialogContent>
         <DialogHeader><DialogTitle>Hand off in-house</DialogTitle></DialogHeader>

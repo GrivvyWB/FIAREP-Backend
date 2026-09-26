@@ -323,6 +323,14 @@ export default function ReportDetail() {
             <Text style={ui.btnText}>View DOB / HPD for this address</Text>
           </Pressable>
         )}
+        {position === 'CPM' && isMine && (
+          <Pressable
+            style={[ui.btn, { marginTop: 10 }]}
+            onPress={() => router.push('/scope-submit?complaintId=' + encodeURIComponent(r.id))}
+          >
+            <Text style={ui.btnText}>Write scope for {r.complaintNo || 'this complaint'}</Text>
+          </Pressable>
+        )}
         {position === 'CPM' && (
           <Pressable
             style={[ui.btnOutline, { marginTop: 10 }]}

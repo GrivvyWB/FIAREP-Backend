@@ -33,6 +33,8 @@ export async function emailReleasedScope(
   }
   const trackingId = String(scope["trackingId"] ?? "").trim();
   const address = String(scope["address"] ?? "").trim();
+  // The complaint / violation number this job came from.
+  const reference = String(scope["sourceRef"] ?? scope["complaintNo"] ?? scope["violationNo"] ?? "").trim();
   const work = String(scope["scope"] ?? "").trim();
   const walkthrough = String(scope["walkthroughAt"] ?? "").trim();
   const bidClose = String(scope["bidCloseAt"] ?? "").trim();
@@ -44,13 +46,14 @@ export async function emailReleasedScope(
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         message: {
-          subject: `FIAREP scope of work ${trackingId}`,
+          subject: `FIAREP scope of work ${trackingId}${reference ? ` · ${reference}` : ""}`,
           body: {
             contentType: "HTML",
             content: [
               `<p>Hello ${escapeHtml(name || "Vendor")},</p>`,
               "<p>FIAREP Procurement released a scope of work for bidding.</p>",
               `<p><strong>Code:</strong> ${escapeHtml(trackingId)}<br>`,
+              reference ? `<strong>Reference:</strong> ${escapeHtml(reference)}<br>` : "",
               `<strong>Address:</strong> ${escapeHtml(address)}</p>`,
               `<p><strong>Scope of work</strong><br>${escapeHtml(work).replaceAll("\n", "<br>")}</p>`,
               walkthrough ? `<p><strong>Walkthrough:</strong> ${escapeHtml(walkthrough)}</p>` : "",

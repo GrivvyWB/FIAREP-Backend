@@ -898,7 +898,9 @@ test("procurement visibility follows the lifecycle", () => {
   const procurement = actor({ role: "procurement" });
   const row = (status: string, createdBy = cpm.id) => ({ entity: "procurement", createdBy, state: { status } });
   assert.equal(procurementRecordAllowed(cpm, row("draft")), true);
-  assert.equal(procurementRecordAllowed(cpm, row("approved")), false);
+  // The CPM follows their own scope after approval (pricing stays procurement-only).
+  assert.equal(procurementRecordAllowed(cpm, row("approved")), true);
+  assert.equal(procurementRecordAllowed(cpm, row("approved", "someone-else")), false);
   assert.equal(procurementRecordAllowed(manager, row("submitted")), false);
   assert.equal(procurementRecordAllowed(manager, row("approved")), false);
   assert.equal(procurementRecordAllowed(procurement, row("approved")), true);
@@ -1304,6 +1306,22 @@ test("trade supervisors can assign only their own non-supervisor crew", () => {
   assert.equal(canAssignStaff(plumberSupervisor, plumber, "Development A"), true);
   assert.equal(canAssignStaff(plumberSupervisor, inspector, "Development A"), false);
   assert.equal(canAssignStaff(plumberSupervisor, otherSupervisor, "Development A"), false);
+});
+
+test("the CPM and the routed CPM Supervisor follow a scope through every stage", () => {
+  const cpm = actor({ id: "cpm-1", role: "inspector", position: "CPM", developments: ["Other"] });
+  const sup = actor({ id: "sup-1", role: "management", position: "CPM Supervisor", developments: [] });
+  const otherSup = actor({ id: "sup-2", role: "management", position: "CPM Supervisor", developments: ["CONEY ISLAND"] });
+  const scope = (status: string) => ({
+    entity: "procurement", development: "CONEY ISLAND", createdBy: "cpm-1", deleted: false,
+    state: { status, handoffTargetId: "sup-1", complaintNo: "RC-85441", sourceRef: "RC-85441" },
+  });
+  for (const status of ["submitted", "returned", "approved", "bidding", "awarded"]) {
+    assert.equal(canReadEntityRecord(cpm, scope(status)), true, `cpm ${status}`);
+    assert.equal(canReadEntityRecord(sup, scope(status)), true, `sup ${status}`);
+    assert.equal(canReadEntityRecord(otherSup, scope(status)), false, `other ${status}`);
+  }
+  assert.equal(canReadEntityRecord(sup, scope("draft")), false);
 });
 
 test("complaint-handling supervisors may send a complaint as a violation inspection", () => {

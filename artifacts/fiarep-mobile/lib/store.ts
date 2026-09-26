@@ -2826,6 +2826,8 @@ export type ProcurementRequest = {
   sourceTitle?: string;
   violationNo?: string;
   violationNotes?: string;
+  complaintNo?: string;      // resident complaint this scope came from (RC-…)
+  sourceRef?: string;        // complaint/violation number shown at every step
   sourceHandoff?: string;
   handoffTargetId?: string;
   handoffTargetName?: string;
@@ -4128,6 +4130,37 @@ export async function assignViolationToCpm(id: string, cpmId: string): Promise<B
   return next;
 }
 
+// A CPM's scope for a complaint assigned to them. The server confirms the
+// assignment, copies the complaint number and routes the scope back to the CPM
+// Supervisor who assigned it.
+export async function getComplaintScopeDraft(reportId: string, requestedBy: string): Promise<ProcurementRequest | null> {
+  const id = `complaint-scope:${reportId}`;
+  const existing = await getProcurementRequest(id);
+  if (existing) return existing;
+  const r = await getResidentReport(reportId);
+  if (!r) return null;
+  const complaintNo = r.complaintNo || '';
+  const draft: ProcurementRequest = {
+    id, trackingId: '', projectId: '', development: r.development,
+    address: [r.address, r.unit ? 'Unit ' + r.unit : ''].filter(Boolean).join(' '),
+    scope: r.description || '',
+    status: 'draft', requestedBy, requestedAt: new Date().toISOString(),
+    sourceEntity: 'resident-reports', sourceRecordId: reportId,
+    sourceTitle: 'Resident complaint', complaintNo, sourceRef: complaintNo || 'Resident complaint',
+  };
+  const d = await db();
+  await ensureProcurementTable(d);
+  await d.runAsync('INSERT OR IGNORE INTO procurement (id,state) VALUES (?,?)', id, JSON.stringify(draft));
+  await queueMutation('procurement', id, draft);
+  return draft;
+}
+
+/** Complaints assigned to this CPM that still need a scope. */
+export async function listComplaintsToScope(staffId: string): Promise<ResidentReport[]> {
+  const all = await listResidentReports();
+  return all.filter((r) => r.assignedStaffId === staffId && (r.status === 'assigned' || r.status === 'in_progress'));
+}
+
 export async function getViolationScopeDraft(violationId: string, requestedBy: string): Promise<ProcurementRequest | null> {
   const id = `violation-scope:${violationId}`;
   const existing = await getProcurementRequest(id);
@@ -4140,6 +4173,7 @@ export async function getViolationScopeDraft(violationId: string, requestedBy: s
     status: 'draft', requestedBy, requestedAt: new Date().toISOString(),
     sourceEntity: 'building-violations', sourceRecordId: violationId,
     sourceTitle: 'Inspector violation', violationNo: v.violationNo, violationNotes: v.notes,
+    sourceRef: v.violationNo ? 'Violation ' + v.violationNo : 'Inspector violation',
   };
   const d = await db();
   await ensureProcurementTable(d);

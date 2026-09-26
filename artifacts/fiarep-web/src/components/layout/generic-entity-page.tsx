@@ -446,7 +446,7 @@ export function GenericEntityPage({
                                     )}
                                   </span>;
                                 }
-                               if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => performAction(item, action)}>{action === "approve-work" ? "Approve Work" : action}</Button>;
+                               if (action !== "award") return <Button key={action} size="sm" variant="outline" onClick={() => performAction(item, action)}>{({ "approve-work": "Approve Work", broadcast: "Approve & send to vendors", return: "Return for review", "rate-close": "Rate & close", approve: "Approve", route: "Route", complete: "Complete" } as Record<string, string>)[action] || action}</Button>;
                               const bids = (bidData || []).filter((b: any) => (b.state as any)?.requestId === item.id);
                               return <span key={action} className="flex gap-1 items-center">
                                 <select className="h-9 rounded-md border px-2 text-sm" value={selectedBid[item.id] || ""} onChange={(e) => setSelectedBid((s) => ({ ...s, [item.id]: e.target.value }))}>

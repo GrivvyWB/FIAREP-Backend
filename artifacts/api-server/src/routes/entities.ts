@@ -135,6 +135,21 @@ router.get("/v1/deletion-policy", async (_req, res) => {
   });
 });
 
+/** Complaint / violation number carried on a scope from its source record. */
+function scopeSourceRef(sourceEntity: string, state: Record<string, unknown>) {
+  if (sourceEntity === "resident-reports") {
+    const complaintNo = String(state["complaintNo"] || "").trim();
+    return { label: complaintNo || "Resident complaint", title: "Resident complaint", fields: { complaintNo } };
+  }
+  const violationNo = String(state["violationNumber"] || state["violationNo"] || state["number"] || "").trim();
+  const complaintNo = String(state["complaintNo"] || "").trim();
+  return {
+    label: violationNo ? `Violation ${violationNo}` : (complaintNo || "Building violation"),
+    title: "Inspector violation",
+    fields: { violationNo, ...(complaintNo ? { complaintNo } : {}) },
+  };
+}
+
 function validEntity(value: string | undefined): value is string {
   return typeof value === "string" && ENTITIES.has(value);
 }
@@ -834,6 +849,49 @@ router.post("/v1/:entity", async (req, res, next) => {
     // to impersonate another CPM in workflow routing.
     persistedCreatedState["cpmName"] = actor.name;
     persistedCreatedState["cpmId"] = actor.id;
+    // A scope written from a complaint or violation carries its number through
+    // review, procurement and the vendor release. The server derives the
+    // number, development and reviewing CPM Supervisor from the source record.
+    const sourceEntity = String(persistedCreatedState["sourceEntity"] || "");
+    const sourceRecordId = String(persistedCreatedState["sourceRecordId"] || "");
+    if (["resident-reports", "building-violations"].includes(sourceEntity) && sourceRecordId) {
+      const [source] = await db.select().from(entityRecords).where(and(
+        eq(entityRecords.id, sourceRecordId),
+        eq(entityRecords.entity, sourceEntity),
+        eq(entityRecords.tenantId, actor.tenantId),
+        eq(entityRecords.deleted, false),
+      )).limit(1);
+      const assignedToMe = source && (
+        normalizeAssignment(source.state).assignedStaffId === actor.id ||
+        source.state["assignedCpmStaffId"] === actor.id
+      );
+      if (!source || !assignedToMe) {
+        res.status(403).json({ error: "Only the CPM assigned to this complaint or violation can scope it" });
+        return;
+      }
+      const ref = scopeSourceRef(sourceEntity, source.state);
+      Object.assign(persistedCreatedState, ref.fields, { sourceRef: ref.label, sourceTitle: ref.title });
+      if (!persistedCreatedState["address"]) {
+        persistedCreatedState["address"] = [source.state["address"] || source.state["building"], source.state["unit"] ? `Unit ${String(source.state["unit"])}` : ""]
+          .filter(Boolean).join(" ");
+      }
+      development = source.development || development;
+      const reviewerId = String(source.state["cpmSupervisorId"] || source.state["assignedByStaffId"] || "");
+      if (reviewerId) {
+        const [reviewer] = await db.select().from(staffAccounts).where(and(
+          eq(staffAccounts.id, reviewerId),
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+        )).limit(1);
+        if (reviewer && isCpmSupervisor(reviewer as never)) {
+          persistedCreatedState["handoffTargetId"] = reviewer.id;
+          persistedCreatedState["handoffTargetName"] = reviewer.name;
+        }
+      }
+    }
+    if (persistedCreatedState["sourceRef"]) {
+      persistedCreatedState["title"] = [persistedCreatedState["sourceRef"], persistedCreatedState["address"]].filter(Boolean).join(" · ");
+    }
   }
   let created: typeof entityRecords.$inferSelect | undefined;
   if (linkedAssignment) {
@@ -1697,14 +1755,16 @@ router.post(
       eq(staffAccounts.tenantId, actor.tenantId),
       eq(staffAccounts.status, "approved"),
       eq(staffAccounts.role, "management"),
-      eq(staffAccounts.position, "CPM Supervisor"),
     )).limit(1);
     if (
       !cpmSupervisorReceiver ||
+      !isCpmSupervisorTitle(cpmSupervisorReceiver.position) ||
       cpmSupervisorReceiver.id === actor.id ||
       !current.development ||
-      !cpmSupervisorReceiver.developments.some((value) =>
-        value.trim().toLowerCase() === current.development!.trim().toLowerCase())
+      // Office-based CPM Supervisors (no developments of their own) cover all.
+      (cpmSupervisorReceiver.developments.length > 0 &&
+        !cpmSupervisorReceiver.developments.some((value) =>
+          value.trim().toLowerCase() === current.development!.trim().toLowerCase()))
     ) {
       res.status(403).json({
         error: "Select an approved CPM Supervisor covering this development",
@@ -2435,6 +2495,12 @@ router.post(
             requestedBy: receiver.name,
             requestedByName: receiver.name,
           };
+          const violationRef = scopeSourceRef("building-violations", current.state);
+          Object.assign(reviewState, violationRef.fields, {
+            sourceRef: violationRef.label,
+            sourceTitle: violationRef.title,
+            title: [violationRef.label, source["address"]].filter(Boolean).join(" · "),
+          });
           await tx.insert(entityRecords).values({
             id: `violation-scope:${current.id}`,
             tenantId: actor.tenantId,
@@ -2749,11 +2815,18 @@ router.post(
       }
     }
   } else if (target) {
+    // Every scope notification names the complaint/violation it came from.
+    const scopeDetail = entity === "procurement"
+      ? [
+          [state["sourceRef"], state["address"]].filter(Boolean).join(" · "),
+          reviewNote ? `Note: ${reviewNote}` : "",
+        ].filter(Boolean).join(" — ") || undefined
+      : undefined;
     if (entity === "procurement" && action === "submit") {
       const targetedSupervisorId = typeof current.state["handoffTargetId"] === "string"
         ? current.state["handoffTargetId"] : "";
       if (targetedSupervisorId) {
-        await notify(actor, targetedSupervisorId, "Scope submitted for CPM Supervisor review", undefined, current.id);
+        await notify(actor, targetedSupervisorId, "Scope submitted for CPM Supervisor review", scopeDetail, current.id);
       } else {
         const reviewers = await db.select({
           id: staffAccounts.id,
@@ -2773,14 +2846,14 @@ router.post(
           const covered = development &&
             reviewer.developments.some((item) => item.trim().toLowerCase() === development);
           if (!isCpmSupervisorTitle(reviewer.position) || !covered) continue;
-          await notify(actor, reviewer.id, "Scope submitted for CPM Supervisor review", undefined, current.id);
+          await notify(actor, reviewer.id, "Scope submitted for CPM Supervisor review", scopeDetail, current.id);
         }
       }
     } else if (entity === "procurement" && action === "approve") {
       const recipients = await db.select({ name: staffAccounts.name })
         .from(staffAccounts)
         .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.role, "procurement"), eq(staffAccounts.status, "approved")));
-      for (const recipient of recipients) await notify(actor, recipient.name, "Scope approved for Procurement", undefined, current.id);
+      for (const recipient of recipients) await notify(actor, recipient.name, "Scope approved for Procurement", scopeDetail, current.id);
     } else if (entity === "procurement" && action === "handoff-inhouse") {
       await notify(
         actor,
@@ -2810,7 +2883,9 @@ router.post(
         .from(staffAccounts)
         .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.id, current.createdBy || "")))
         .limit(1);
-      if (origin && origin.position === "CPM") await notify(actor, origin.id, `Scope ${nextStatus}`, undefined, current.id);
+      if (origin && sameTitle(origin.position, "CPM")) {
+        await notify(actor, origin.id, nextStatus === "returned" ? "Scope returned — correct and resubmit" : `Scope ${nextStatus}`, scopeDetail, current.id);
+      }
     } else if (
       (entity === "resident-reports" && action === "assign") ||
       (entity === "manpower-requests" && action === "dispatch")

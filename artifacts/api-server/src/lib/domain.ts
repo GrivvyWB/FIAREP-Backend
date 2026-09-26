@@ -429,12 +429,15 @@ export function procurementRecordAllowed(
       ? row.state["handoffTargetId"]
       : "";
     if (handoffTarget && handoffTarget !== actor.id) return false;
+    // Scopes routed to this supervisor stay visible at every stage (returned,
+    // approved, with procurement, with vendors) so they can follow the job.
+    if (handoffTarget === actor.id) return row.entity === "procurement" && status !== "draft";
     return row.entity === "procurement" &&
       (status === "submitted" || status === "in_house" || status === "in_house_completed");
   }
+  // The CPM follows their own scope through every stage.
   return actor.role === "inspector" && actor.position === "CPM" &&
-    row.entity === "procurement" && row.createdBy === actor.id &&
-    ["draft", "submitted", "returned"].includes(status);
+    row.entity === "procurement" && row.createdBy === actor.id;
 }
 
 export function developmentAllowed(
@@ -608,6 +611,16 @@ export function canReadEntityRecord(
     isCpmSupervisor(actor) &&
     row.state["cpmSupervisorId"] !== actor.id
   ) return false;
+  // A scope's CPM, and the CPM Supervisor it was routed to, can always read it,
+  // even when their base developments don't list the site (office-based).
+  if (
+    row.entity === "procurement" &&
+    !row.deleted &&
+    canReadEntity(actor, row.entity) &&
+    procurementRecordAllowed(actor, row) &&
+    ((isCpmSupervisor(actor) && row.state["handoffTargetId"] === actor.id) ||
+      (actor.role === "inspector" && actor.position === "CPM" && row.createdBy === actor.id))
+  ) return true;
   // Whoever a complaint is assigned to, or who completed it, always keeps a
   // read copy (e.g. a CPM whose base developments don't list the complaint's
   // site, or after the work was sent for review).

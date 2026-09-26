@@ -12,7 +12,10 @@ import {
   getCurrentActor,
   getCurrentPosition,
   getViolationScopeDraft,
+  getComplaintScopeDraft,
+  listComplaintsToScope,
   listAssignedCpmViolations,
+  type ResidentReport,
   type ProcurementRequest,
 } from '../lib/store';
 import { pickDocument } from '../lib/files';
@@ -23,7 +26,8 @@ import { useAppMode } from './_layout';
 export default function ScopeSubmit() {
   const router = useRouter();
   const { mode } = useAppMode();
-  const { openId, preAddress, preScope, violationId } = useLocalSearchParams<{ openId?: string; preAddress?: string; preScope?: string; violationId?: string }>();
+  const { openId, preAddress, preScope, violationId, complaintId } = useLocalSearchParams<{ openId?: string; preAddress?: string; preScope?: string; violationId?: string; complaintId?: string }>();
+  const [complaints, setComplaints] = useState<ResidentReport[]>([]);
   const [prefilled, setPrefilled] = useState(false);
   const [address, setAddress] = useState('');
   const [scope, setScope] = useState('');
@@ -49,6 +53,12 @@ export default function ScopeSubmit() {
       const nm = (a && a.name) || '';
       setMe(nm);
       if (a?.id) setAssignedViolations(await listAssignedCpmViolations(a.id));
+      if (a?.id) setComplaints(await listComplaintsToScope(a.id));
+      // Opened from a complaint's "Write scope" button.
+      if (complaintId && !openId) {
+        const r = await getComplaintScopeDraft(String(complaintId), nm);
+        if (r) setDraft(r);
+      }
       if (nm) setReturned(await listReturnedScopes(nm));
       if (nm) setViolations(await listViolationLookups(nm));
     });
@@ -62,7 +72,7 @@ export default function ScopeSubmit() {
       if (preScope) setScope(String(preScope));
       setPrefilled(true);
     }
-  }, [openId, preAddress, preScope, prefilled]);
+  }, [openId, preAddress, preScope, prefilled, complaintId]);
   useFocusEffect(load);
 
   async function saveDraft() {
@@ -101,7 +111,7 @@ export default function ScopeSubmit() {
     setBusy(true);
     try {
       await submitScopeForApproval(draft.id, draft.scopeFile || '', draft.scopeFileName || '', draft.address || '', draft.scope || '');
-      Alert.alert('Sent for approval', 'Your scope was sent to management for approval.', [
+      Alert.alert('Sent for approval', `${draft.sourceRef ? draft.sourceRef + ': ' : ''}your scope was sent to ${draft.handoffTargetName || 'the CPM Supervisor'} for approval.`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (e: any) {
@@ -119,6 +129,23 @@ export default function ScopeSubmit() {
 
       {!draft ? (
         <>
+          {complaints.length > 0 && (
+            <View style={{ marginBottom: 18 }}>
+              <Text style={[ui.label, { fontWeight: '700' }]}>Complaints assigned to you</Text>
+              {complaints.map((c) => (
+                <Pressable key={c.id} style={{ borderWidth: 1, borderColor: ACCENT, borderRadius: 10, padding: 12, marginTop: 8 }}
+                  onPress={async () => {
+                    const r = await getComplaintScopeDraft(c.id, me);
+                    if (r) setDraft(r);
+                  }}>
+                  <Text style={{ fontWeight: '700', color: ACCENT }}>{c.complaintNo || 'Complaint'}</Text>
+                  <Text>{c.address}{c.unit ? '  Unit ' + c.unit : ''}</Text>
+                  {!!c.description && <Text style={ui.listSub}>{c.description}</Text>}
+                  <Text style={ui.listSub}>Tap to write and submit the scope</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
           {assignedViolations.length > 0 && (
             <View style={{ marginBottom: 18 }}>
               <Text style={[ui.label, { fontWeight: '700' }]}>Assigned inspector violation scopes</Text>
@@ -162,6 +189,7 @@ export default function ScopeSubmit() {
                   onPress={() => setDraft(r)}
                   style={{ borderWidth: 1, borderColor: '#c0392b', borderRadius: 10, padding: 12, marginTop: 8 }}
                 >
+                  {!!(r.sourceRef || r.complaintNo || r.violationNo) && <Text style={{ fontWeight: '700', color: '#c0392b' }}>{r.sourceRef || r.complaintNo || 'Violation ' + r.violationNo}</Text>}
                   <Text style={{ fontSize: 15, fontWeight: '600' }}>{r.address}</Text>
                   {!!r.returnNote && <Text style={{ fontSize: 13, color: '#c0392b', marginTop: 4 }}>Note: {r.returnNote}</Text>}
                   <Text style={{ fontSize: 12, color: ACCENT, marginTop: 6, fontWeight: '600' }}>Tap to reopen & fix</Text>
@@ -185,6 +213,15 @@ export default function ScopeSubmit() {
         </>
       ) : (
         <View style={{ gap: 8 }}>
+          {!!(draft.sourceRef || draft.complaintNo || draft.violationNo) && (
+            <View style={{ borderWidth: 1, borderColor: ACCENT, borderRadius: 8, padding: 10, backgroundColor: '#eef4fb' }}>
+              <Text style={{ fontWeight: '700', color: ACCENT, fontSize: 16 }}>{draft.sourceRef || draft.complaintNo || 'Violation ' + draft.violationNo}</Text>
+              <Text style={ui.listSub}>{draft.sourceTitle || 'Source'}{draft.handoffTargetName ? ' · reviewed by ' + draft.handoffTargetName : ''}</Text>
+              {draft.status === 'returned' && !!(draft.returnNote || draft.reviewNote) && (
+                <Text style={{ color: '#c0392b', marginTop: 4 }}>Returned: {draft.returnNote || draft.reviewNote}</Text>
+              )}
+            </View>
+          )}
           <Text style={ui.label}>Address</Text>
           <AddressInput value={draft.address} onChangeText={(t) => setDraft({ ...draft, address: t })} placeholder="245 Main St., Brooklyn, NY 11213" />
           <Text style={[ui.label, { marginTop: 8 }]}>Scope of work</Text>
@@ -223,7 +260,7 @@ export default function ScopeSubmit() {
           )}
 
           <Pressable style={[ui.btn, { marginTop: 16 }, busy && { opacity: 0.6 }]} onPress={send} disabled={busy}>
-            <Text style={ui.btnText}>Send to management for approval</Text>
+            <Text style={ui.btnText}>{draft.status === 'returned' ? 'Resubmit to CPM Supervisor' : 'Send to CPM Supervisor for approval'}</Text>
           </Pressable>
         </View>
       )}

@@ -131,6 +131,12 @@ export default function PublicVendor() {
                 }}>Change Job</Button>
               </CardHeader>
               <CardContent className="space-y-4">
+                {!!((scopeResult.state as any)?.sourceRef || (scopeResult.state as any)?.complaintNo || (scopeResult.state as any)?.violationNo) && (
+                  <div>
+                    <h4 className="text-sm font-medium text-muted-foreground mb-1">Reference</h4>
+                    <p className="text-sm font-semibold">{(scopeResult.state as any)?.sourceRef || (scopeResult.state as any)?.complaintNo || (scopeResult.state as any)?.violationNo}</p>
+                  </div>
+                )}
                 <div>
                   <h4 className="text-sm font-medium text-muted-foreground mb-1">Address</h4>
                   <p className="text-sm">{(scopeResult.state as any)?.address || 'N/A'}</p>
