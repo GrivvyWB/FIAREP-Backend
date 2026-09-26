@@ -4,13 +4,16 @@ import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
+import { takeProcurementCredentials } from "@/lib/procurement-carry";
 
 export default function ProcurementLogin() {
   const [, setLocation] = useLocation();
   const { procurementLogin, isAuthenticated, staff } = useAuth();
   const { toast } = useToast();
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
+  // Name and code carry over from the staff sign-in page.
+  const [carried] = useState(() => takeProcurementCredentials());
+  const [name, setName] = useState(carried?.name || "");
+  const [code, setCode] = useState(carried?.code || "");
   const [verificationCode, setVerificationCode] = useState("");
   const [busy, setBusy] = useState(false);
   const [showChallenge, setShowChallenge] = useState(true);
@@ -56,7 +59,7 @@ export default function ProcurementLogin() {
         <div>
           <div className="text-sm font-bold tracking-widest text-amber-400">FIAREP PROCUREMENT</div>
           <h1 className="mt-2 text-2xl font-bold">Procurement sign-in</h1>
-          <p className="mt-2 text-sm text-slate-400">Enter your Procurement credentials again, then type the verification number shown below.</p>
+          <p className="mt-2 text-sm text-slate-400">{carried ? "Type the verification number shown below." : "Enter your Procurement credentials again, then type the verification number shown below."}</p>
         </div>
         <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Full name" required className="bg-slate-800 border-slate-700" />
         <Input
@@ -82,6 +85,7 @@ export default function ProcurementLogin() {
           value={verificationCode}
           onChange={(e) => setVerificationCode(e.target.value.replace(/\D/g, "").slice(0, 2))}
           placeholder="Enter the 2-digit number"
+          autoFocus={!!carried}
           inputMode="numeric"
           pattern="[0-9]{2}"
           minLength={2}

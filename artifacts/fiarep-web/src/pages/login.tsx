@@ -1,3 +1,4 @@
+import { carryProcurementCredentials } from "@/lib/procurement-carry";
 import { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -63,7 +64,8 @@ export default function Login() {
           challengeCode: result.challengeCode,
           challengeToken: result.challengeToken,
         }));
-        window.location.assign("/procurement/login");
+        carryProcurementCredentials(values.name, values.code);
+        setLocation("/procurement/login");
         return;
       }
       const returnTo = sessionStorage.getItem("fiarep_return_to");
