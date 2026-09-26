@@ -2,7 +2,8 @@ import { isCpmSupervisorTitle } from '../lib/titles';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
-import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
+import { syncAllEntities } from '../lib/sync';
+import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition, listResidentReports, listRoutedInspectionsFor, listManpowerRequests } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useModuleAccess, useRawModules } from '../lib/module-access';
 import { hasAnyMeasurementAccess } from '../lib/measurement-access';
@@ -19,8 +20,38 @@ export default function CpmHome() {
   const rawModules = useRawModules();
   const { mode, refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
+  const [jobCount, setJobCount] = useState(0);
   const [position, setPosition] = useState('');
   useFocusEffect(useCallback(() => {
+    let active = true;
+    // Work assigned to me that is still open: complaints, violations and
+    // in-house jobs. Refreshed every 30 seconds while this screen is open.
+    const countJobs = async () => {
+      const a = await getCurrentActor();
+      if (!a?.id) return;
+      const [reports, routed, inHouse] = await Promise.all([
+        listResidentReports().catch(() => []),
+        listRoutedInspectionsFor(a.name || '', a.id).catch(() => []),
+        listManpowerRequests().catch(() => []),
+      ]);
+      const open = reports.filter((r) => r.assignedStaffId === a.id && (r.status === 'assigned' || r.status === 'in_progress')).length +
+        routed.length +
+        inHouse.filter((j) => j.assignedStaffId === a.id && ['dispatched', 'in_progress'].includes(j.status)).length;
+      if (active) setJobCount(open);
+    };
+    const refreshCounts = async () => {
+      const a = await getCurrentActor();
+      const normalized = ((await getCurrentPosition()) || '').trim().toLowerCase();
+      let c = isCpmSupervisorTitle(normalized) ? 0 : await unreadCount('inspector').catch(() => 0);
+      if (a?.id) c += await unreadCount(a.id).catch(() => 0);
+      if (a?.name) c += await unreadCount(a.name).catch(() => 0);
+      if (active) setUnread(c);
+      await countJobs().catch(() => undefined);
+    };
+    const timer = setInterval(() => {
+      syncAllEntities().catch(() => undefined).finally(() => { void refreshCounts().catch(() => undefined); });
+    }, 30_000);
+    void countJobs().catch(() => undefined);
     (async () => {
       try {
         const a = await getCurrentActor();
@@ -43,6 +74,7 @@ export default function CpmHome() {
         // Data not ready / offline — keep the screen usable rather than blank.
       }
     })();
+    return () => { active = false; clearInterval(timer); };
   }, [mode, router]));
   const normalizedPosition = position.trim().toLowerCase();
   const isCpmSupervisor = isCpmSupervisorTitle(normalizedPosition);
@@ -54,6 +86,13 @@ export default function CpmHome() {
   }
 
   const sections: Section[] = [
+    {
+      heading: 'My Work',
+      color: '#185FA5',
+      tiles: [
+        { label: jobCount > 0 ? 'My Jobs (' + jobCount + ')' : 'My Jobs', onPress: () => router.push('/my-jobs'), tone: 'solid' as Tone },
+      ],
+    },
     {
       heading: 'Inspections',
       color: '#1E7D4F',

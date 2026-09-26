@@ -499,7 +499,23 @@ async function applyRecord(d: any, record: any, owner: string) {
   );
 }
 
+// One sync at a time: the app now also syncs on a timer, and two syncs
+// running together would each announce the same new notification.
+let syncInFlight: Promise<boolean> | null = null;
+
 export async function syncAllEntities(options?: {
+  refreshEntities?: string[];
+}): Promise<boolean> {
+  if (syncInFlight) {
+    await syncInFlight.catch(() => false);
+    if (!options?.refreshEntities?.length) return true;
+  }
+  const run = syncAllEntitiesOnce(options);
+  syncInFlight = run;
+  try { return await run; } finally { if (syncInFlight === run) syncInFlight = null; }
+}
+
+async function syncAllEntitiesOnce(options?: {
   refreshEntities?: string[];
 }): Promise<boolean> {
   if (!(await getAccessToken())) return false;

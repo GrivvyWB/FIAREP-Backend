@@ -475,7 +475,12 @@ export default function Layout() {
         clearBadge().catch(() => undefined);
       }
     });
-    return () => { mounted = false; sub.remove(); };
+    // Check for new work every 30 seconds while the app is open, so an
+    // assignment shows up (and alerts) without closing and reopening the app.
+    const poll = setInterval(() => {
+      if (AppState.currentState === 'active') syncAllEntities().catch(() => undefined);
+    }, 30_000);
+    return () => { mounted = false; sub.remove(); clearInterval(poll); };
   }, []);
 
   useEffect(() => {
