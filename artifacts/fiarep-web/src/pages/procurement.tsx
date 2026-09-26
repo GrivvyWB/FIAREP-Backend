@@ -12,7 +12,7 @@ import {
   usePerformEntityAction,
   useUpdateEntityRecord,
 } from "@workspace/api-client-react";
-import { Bell, CheckCircle2, ChevronDown, Download, Eye, FileText, Gavel, LogOut, Mail, MapPin, Search, Send, ShoppingCart, Trophy, Undo2, Upload } from "lucide-react";
+import { Bell, CheckCircle2, ChevronDown, Download, Eye, FileText, Gavel, LogOut, Mail, MapPin, RefreshCw, Search, Send, ShoppingCart, Trophy, Undo2, Upload } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -121,12 +121,44 @@ function StatCard({ icon, tone, label, value, sub, active, onClick }: { icon: Re
   );
 }
 
-function EmptyState({ text }: { text: string }) {
+function EmptyState({ text, children }: { text: string; children?: ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center px-4 py-14 text-center">
       <span className="grid h-16 w-16 place-items-center rounded-full bg-blue-50 text-blue-600"><FileText className="h-7 w-7" /></span>
       <p className="mt-4 text-lg font-semibold text-slate-900">No items found</p>
       <p className="mt-1 text-sm text-slate-500">{text}</p>
+      {children}
+    </div>
+  );
+}
+
+/** Shown while nothing is waiting: how a scope reaches this tab and what to do now. */
+function ReleaseGuide({ vendorCount, onVendors, onRefresh, refreshing }: { vendorCount: number; onVendors: () => void; onRefresh: () => void; refreshing: boolean }) {
+  const steps = [
+    { n: 1, title: "CPM writes the scope", body: "From the complaint or violation, in the app." },
+    { n: 2, title: "CPM Supervisor approves it", body: "On the website under Scope Review. It then lands here." },
+    { n: 3, title: "You send it to vendors", body: "Set the walk-through and bid close, then press Send to all vendors." },
+  ];
+  return (
+    <div className="mx-auto mt-8 w-full max-w-3xl space-y-5 text-left">
+      <div className="grid gap-3 sm:grid-cols-3">
+        {steps.map((st) => (
+          <div key={st.n} className="rounded-xl border border-slate-200 bg-white p-4">
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600 text-xs font-bold text-white">{st.n}</span>
+            <p className="mt-2 text-sm font-semibold text-slate-900">{st.title}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{st.body}</p>
+          </div>
+        ))}
+      </div>
+      <div className="flex flex-col items-center justify-center gap-2 sm:flex-row">
+        <Button className="gap-1.5 bg-blue-600 hover:bg-blue-700" onClick={onVendors}>
+          <Mail className="h-4 w-4" />{vendorCount ? `Vendor list (${vendorCount})` : "Add vendors to email"}
+        </Button>
+        <Button variant="outline" className="gap-1.5" onClick={onRefresh} disabled={refreshing}>
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />Check for new scopes
+        </Button>
+      </div>
+      {!vendorCount && <p className="text-center text-xs text-amber-700">No vendor emails yet — add them now so the first release reaches someone.</p>}
     </div>
   );
 }
@@ -560,7 +592,16 @@ export default function Procurement() {
             <div className="p-4 md:p-5">
               {tab === "contacts" ? <VendorContacts canEdit={canAct} />
                 : loading ? <p className="py-10 text-center text-sm text-slate-500">Loading…</p>
-                : (current.cards?.length ? <div className="space-y-4">{current.cards}</div> : <EmptyState text={query ? "Nothing matches your filter." : current.empty || ""} />)}
+                : (current.cards?.length ? <div className="space-y-4">{current.cards}</div> : (
+                  <EmptyState text={query ? "Nothing matches your filter." : current.empty || ""}>
+                    {tab === "pending" && !query && (
+                      <ReleaseGuide vendorCount={vendorEmails} onVendors={() => setTab("contacts")}
+                        refreshing={scopesQuery.isFetching}
+                        onRefresh={async () => { await Promise.all([scopesQuery.refetch(), bidsQuery.refetch()]); toast({ title: "Up to date" }); }} />
+                    )}
+                    {query && <Button variant="outline" className="mt-4" onClick={() => setQuery("")}>Clear filter</Button>}
+                  </EmptyState>
+                ))}
             </div>
           </div>
 
