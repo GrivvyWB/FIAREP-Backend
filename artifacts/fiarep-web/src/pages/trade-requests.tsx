@@ -169,6 +169,20 @@ export default function TradeRequests() {
         action: actionName,
         data: staffId ? { assignedStaffId: staffId } : undefined,
       });
+      // Assigning sends the job straight to the employee (one step). If that
+      // second step is refused, the reason is shown and Dispatch stays available.
+      if (actionName === "assign") {
+        try {
+          await action.mutateAsync({ entity: "manpower-requests", id: request.id, action: "dispatch", data: undefined });
+          actionName = "dispatch";
+        } catch (error: any) {
+          await refresh();
+          setAssigningRequest(null);
+          setAssignedStaffId("");
+          toast({ variant: "destructive", title: "Assigned, but not sent to the employee yet", description: error?.message || "Press Dispatch to try again." });
+          return;
+        }
+      }
       await refresh();
       if (actionName === "dispatch") {
         const sourceEntity = String(request.state?.sourceEntity || "");
@@ -180,7 +194,7 @@ export default function TradeRequests() {
       }
       setAssigningRequest(null);
       setAssignedStaffId("");
-      toast({ title: actionName === "assign" ? "Employee assigned" : "Employee dispatched" });
+      toast({ title: staffId ? "Assigned and sent to the employee" : "Sent to the employee", description: "It's now in their My Jobs." });
     } catch (error: any) {
       toast({ variant: "destructive", title: "Action failed", description: error?.message || "The server rejected this action." });
     }
@@ -373,7 +387,7 @@ export default function TradeRequests() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setAssigningRequest(null)}>Cancel</Button>
-            <Button onClick={() => assigningRequest && runAction(assigningRequest, "assign", assignedStaffId)} disabled={!assignedStaffId || action.isPending}>Assign employee</Button>
+            <Button onClick={() => assigningRequest && runAction(assigningRequest, "assign", assignedStaffId)} disabled={!assignedStaffId || action.isPending}>Assign &amp; send to employee</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
