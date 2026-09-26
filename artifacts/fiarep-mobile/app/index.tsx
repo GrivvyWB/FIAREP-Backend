@@ -9,7 +9,7 @@ import { useModuleAccess } from '../lib/module-access';
 
 export default function Projects() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ new?: string }>();
+  const params = useLocalSearchParams<{ new?: string; list?: string; preName?: string; preDevelopment?: string; preReportId?: string; preComplaintNo?: string; preAddress?: string; preUnit?: string; preNote?: string }>();
   const { mode } = useAppMode();
   const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
   const modules = useModuleAccess();
@@ -20,7 +20,8 @@ export default function Projects() {
   // A worker-role account is redirected home, EXCEPT when it explicitly came
   // here to start a new project (e.g. a CPM tapping "+ New Project"). The
   // create form itself is still gated by position below.
-  if (mode === 'worker' && params.new !== '1') return <Redirect href="/worker-home" />;
+  // '?list=1' is the CPM "Projects" tile: it must open the list, not bounce home.
+  if (mode === 'worker' && params.new !== '1' && params.list !== '1') return <Redirect href="/worker-home" />;
   // Projects is an opt-in module; a worker without it enabled cannot open the
   // new-project workflow even via a direct link.
   if (mode === 'worker' && !modules['proj-new']) return <Redirect href="/worker-home" />;
@@ -41,15 +42,33 @@ export default function Projects() {
     getCurrentPosition().then(setPosition).catch(() => undefined);
   }, []);
   useFocusEffect(load);
+  // Started from a complaint/violation ("Start project" on Job Details):
+  // prefill the name and development and carry the complaint link.
+  const fromComplaint = String(params.preComplaintNo || '').trim();
   useEffect(() => {
     if (params.new === '1') setAdding(true);
-  }, [params.new]);
+    if (params.preName) setName(String(params.preName));
+  }, [params.new, params.preName]);
+  useEffect(() => {
+    const pre = String(params.preDevelopment || '').trim().toLowerCase();
+    if (!pre) return;
+    const match = developments.find((d) => d.trim().toLowerCase() === pre);
+    setDevelopment(match || String(params.preDevelopment));
+  }, [params.preDevelopment, developments]);
 
   const onCreate = async () => {
     if (!name.trim()) { Alert.alert('Name required', 'Give the project a name.'); return; }
     if (developments.length > 1 && !development) { Alert.alert('Development required', 'Select a development for this project.'); return; }
-    await createProject(name.trim(), client.trim(), {}, development || undefined);
+    const source = fromComplaint ? {
+      sourceReportId: String(params.preReportId || '') || undefined,
+      complaintNo: fromComplaint,
+      address: String(params.preAddress || '') || undefined,
+      unit: String(params.preUnit || '') || undefined,
+      sourceDescription: String(params.preNote || '') || undefined,
+    } : {};
+    const created = await createProject(name.trim(), client.trim(), source, development || undefined);
     setName(''); setClient(''); setDevelopment(''); setAdding(false); load();
+    if (fromComplaint) router.replace(`/project/${created.id}`);
   };
 
   return (
@@ -70,6 +89,7 @@ export default function Projects() {
           ) : (
           <>
           <Text style={ui.cardTitle}>New project</Text>
+          {!!fromComplaint && <Text style={{ color: '#1E7D4F', fontWeight: '700' }}>From complaint {fromComplaint}{development ? ' · ' + development : ''}</Text>}
           <View><Text style={ui.label}>Project name</Text>
             <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="123 Main St renovation" /></View>
           <View><Text style={ui.label}>Client (optional)</Text>

@@ -24,6 +24,9 @@ export default function InspectorViolations() {
   const { preBuilding, preUnit, preViolationNo, preNote, preDevelopment, routeAssignmentId } = useLocalSearchParams<{ preBuilding?: string; preUnit?: string; preViolationNo?: string; preNote?: string; preDevelopment?: string; routeAssignmentId?: string }>();
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
+  // CPMs open this from a complaint to look up DOB/HPD records; only field
+  // Inspectors log violations here.
+  const [lookupOnly, setLookupOnly] = useState(false);
   const [building, setBuilding] = useState('');
   const [assignedUnit, setAssignedUnit] = useState('');
   const [violationNo, setViolationNo] = useState('');
@@ -46,8 +49,12 @@ export default function InspectorViolations() {
 
   useFocusEffect(useCallback(() => {
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
-      const allowed = actor.role === 'inspector' && position.trim().toLowerCase() === 'inspector';
+      const pos = position.trim().toLowerCase();
+      const inspector = actor.role === 'inspector' && pos === 'inspector';
+      const cpm = pos === 'cpm';
+      const allowed = inspector || cpm;
       if (!allowed) router.replace('/cpm-home');
+      setLookupOnly(!inspector && cpm);
       setAuthorized(allowed);
     }).catch(() => router.replace('/cpm-home'));
   }, [router]));
@@ -221,6 +228,7 @@ export default function InspectorViolations() {
         </View>
       )}
 
+      {!lookupOnly && <>
       <Text style={[ui.label, { marginTop: 12 }]}>Violation number</Text>
       <TextInput style={ui.input} value={violationNo} onChangeText={setViolationNo} placeholder="Number from supervisor" />
 
@@ -270,6 +278,7 @@ export default function InspectorViolations() {
         </Pressable>
       </View>
 
+      </>}
       <Text style={[ui.h, { fontSize: 16, marginTop: 20 }]}>Logged ({items.length})</Text>
       {items.length === 0 && <Text style={ui.empty}>None logged for this building yet.</Text>}
       {items.map((v) => (

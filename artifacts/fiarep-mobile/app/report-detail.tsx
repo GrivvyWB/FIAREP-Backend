@@ -314,6 +314,21 @@ export default function ReportDetail() {
             <Text style={ui.btnText}>View DOB / HPD for this address</Text>
           </Pressable>
         )}
+        {position === 'CPM' && (
+          <Pressable
+            style={[ui.btnOutline, { marginTop: 10 }]}
+            onPress={() => router.push('/?new=1'
+              + '&preName=' + encodeURIComponent([r.complaintNo, r.address, r.unit ? 'Unit ' + r.unit : ''].filter(Boolean).join(' · '))
+              + '&preDevelopment=' + encodeURIComponent(r.development || '')
+              + '&preReportId=' + encodeURIComponent(r.id)
+              + '&preComplaintNo=' + encodeURIComponent(r.complaintNo || '')
+              + '&preAddress=' + encodeURIComponent(r.address || '')
+              + '&preUnit=' + encodeURIComponent(r.unit || '')
+              + '&preNote=' + encodeURIComponent(r.description || ''))}
+          >
+            <Text style={ui.btnOutlineText}>Start project / scope for {r.complaintNo || 'this complaint'}</Text>
+          </Pressable>
+        )}
         {isMine && r.status === 'assigned' && (
           <Pressable
             disabled={completionBusy}

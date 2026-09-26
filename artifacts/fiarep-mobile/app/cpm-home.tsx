@@ -58,7 +58,7 @@ export default function CpmHome() {
       color: '#1E7D4F',
       tiles: [
         ...(normalizedPosition === 'inspector' ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
-        ...(normalizedPosition === 'cpm' ? [{ label: 'Projects', onPress: () => router.push('/'), tone: 'outline' as Tone }] : []),
+        ...(normalizedPosition === 'cpm' ? [{ label: 'Projects', onPress: () => router.push('/?list=1'), tone: 'outline' as Tone }] : []),
         ...(normalizedPosition === 'cpm' ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
