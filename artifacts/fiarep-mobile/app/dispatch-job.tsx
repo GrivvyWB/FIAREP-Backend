@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -5,7 +7,7 @@ import { dispatchJob, listAssignableByTrade, sendViolationLookup, getCurrentActo
 import { ui } from '../lib/ui';
 import AddressInput from '../components/AddressInput';
 
-export default function DispatchJob() {
+function DispatchJobScreen() {
   const router = useRouter();
   const [address, setAddress] = useState('');
   const [unit, setUnit] = useState('');
@@ -147,4 +149,12 @@ export default function DispatchJob() {
     </ScrollView>
     </KeyboardAvoidingView>
   );
+}
+
+// Supervisors/managers are view-only on the app; this screen only takes action.
+export default function DispatchJob() {
+  const readOnly = useAppReadOnly();
+  if (readOnly === null) return null;
+  if (readOnly) return <ReadOnlyScreen title="Assign a Job" />;
+  return <DispatchJobScreen />;
 }

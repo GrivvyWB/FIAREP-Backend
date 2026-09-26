@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -20,6 +22,7 @@ const STATUS: Record<string, { label: string; color: string }> = {
 };
 
 export default function ChangeOrders() {
+  const readOnlyBanner = useAppReadOnly() === true;
   const { mode } = useAppMode();
   const router = useRouter();
   const [items, setItems] = useState<ChangeOrder[]>([]);
@@ -75,6 +78,7 @@ export default function ChangeOrders() {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
+      {readOnlyBanner && <ReadOnlyBanner />}
       <Text style={ui.h}>Change Work Orders</Text>
       <Text style={ui.label}>Add-on work with its cost impact. Flow: submitted → management approves → procurement approves the cost.</Text>
       {items.length === 0 && <Text style={ui.empty}>No change work orders.</Text>}

@@ -34,6 +34,7 @@ import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/sta
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 import { canHandleResidentReports } from "@/lib/access-policy";
+import { CreateReportButton, SendAsViolationPanel } from "@/components/report-actions";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 
@@ -496,7 +497,10 @@ export default function Reports() {
           <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
           <p className="text-muted-foreground text-sm">Review and manage resident reports across your developments.</p>
         </div>
-        {canHandleComplaints && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
+        <div className="flex flex-wrap gap-2">
+          {(actor?.role === "management" || actor?.role === "administrator") && actor?.position !== "Borough Director" && <CreateReportButton />}
+          {canHandleComplaints && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
+        </div>
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">
         <div className="p-4 border-b border-border flex flex-col lg:flex-row gap-3">
@@ -639,6 +643,7 @@ export default function Reports() {
                     </div>
                   )}
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canHandleComplaints && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canReview(selected) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
+                  {canHandleComplaints && currentStatus === "submitted" && <SendAsViolationPanel report={selected} staff={staff as never} />}
                   {canReview(selected) && currentStatus === "done" && <div className="border-t border-border pt-4 space-y-2"><p className="text-sm font-semibold">Send back to worker</p><Textarea value={sendBackNote} onChange={(event) => setSendBackNote(event.target.value)} placeholder="What needs fixing? (sent to the worker)" /><Button variant="outline" onClick={() => { perform(selected, "reject-work", { note: sendBackNote.trim() }); setSendBackNote(""); }} disabled={action.isPending || sendBackNote.trim().length < 3}>Send back with note</Button></div>}
               </div></>;
           })()}

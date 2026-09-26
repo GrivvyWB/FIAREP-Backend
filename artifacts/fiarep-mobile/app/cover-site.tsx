@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -5,7 +7,7 @@ import { DEVELOPMENT_NAMES } from '../lib/developments.seed';
 import { getDevelopmentCoverageCode, unlockCoverage, listActiveCoverage } from '../lib/store';
 import { ACCENT } from '../lib/ui';
 
-export default function CoverSite() {
+function CoverSiteScreen() {
   const router = useRouter();
   const [query, setQuery] = useState('');
   const [development, setDevelopment] = useState('');
@@ -114,4 +116,12 @@ export default function CoverSite() {
       )}
     </ScrollView>
   );
+}
+
+// Supervisors/managers are view-only on the app; this screen only takes action.
+export default function CoverSite() {
+  const readOnly = useAppReadOnly();
+  if (readOnly === null) return null;
+  if (readOnly) return <ReadOnlyScreen title="Cover a Site" />;
+  return <CoverSiteScreen />;
 }

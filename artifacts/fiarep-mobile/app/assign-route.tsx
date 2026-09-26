@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Alert, TextInput } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -10,7 +12,7 @@ import {
 import { pickTextFile } from '../lib/files';
 import { ui, ACCENT } from '../lib/ui';
 
-export default function AssignRoute() {
+function AssignRouteScreen() {
   const [inspectors, setInspectors] = useState<StaffAccount[]>([]);
   const [addresses, setAddresses] = useState<string[]>([]);
   const [fileName, setFileName] = useState('');
@@ -113,4 +115,12 @@ export default function AssignRoute() {
       </Pressable>
     </ScrollView>
   );
+}
+
+// Supervisors/managers are view-only on the app; this screen only takes action.
+export default function AssignRoute() {
+  const readOnly = useAppReadOnly();
+  if (readOnly === null) return null;
+  if (readOnly) return <ReadOnlyScreen title="Assign Route" />;
+  return <AssignRouteScreen />;
 }

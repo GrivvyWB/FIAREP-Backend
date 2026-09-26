@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle, supervisedTradeForPosition } from '../lib/titles';
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -21,7 +23,11 @@ export default function ManagementHome() {
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
   const modules = useModuleAccess();
+  // View-only on the app: action tiles live on fiarep.com.
+  const readOnly = useAppReadOnly() === true;
+  const actionTiles = new Set(['Send Violation', 'In-house assignments', 'Assign a Job', 'Cover a Site', 'Create Report', '+ New Project', 'Manage Trucks', 'Add Job for Mgmt', 'Assign Route', 'CPM Supervisor Scope Review', 'CPM Supervisor']);
   const enabledTiles = (tiles: Tile[]) => tiles.filter((tile) => {
+    if (readOnly && actionTiles.has(tile.label)) return false;
     const module = moduleForTile(tile.label);
     return !module || modules[module];
   });
@@ -60,14 +66,14 @@ export default function ManagementHome() {
   ];
   if (supervisorInspector) {
     return <ScrollView contentContainerStyle={ui.wrap}>
-      <AlertBanner count={unread} /><Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>Supervisor Inspector</Text>
+      <AlertBanner count={unread} />{readOnly && <ReadOnlyBanner />}<Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>Supervisor Inspector</Text>
       <Text style={{ color: '#1E7D4F', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8 }}>Inspections & Compliance</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' as Tone },
         { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone },
         { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone },
         ...personalTiles,
-       ].filter((t) => { const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
+       ].filter((t) => { if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
       <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
     </ScrollView>;
   }
@@ -84,7 +90,7 @@ export default function ManagementHome() {
         ...(coverageEligible ? [{ label: 'Cover a Site', onPress: () => router.push('/cover-site'), tone: 'tint' as Tone }] : []),
       ];
     return <ScrollView contentContainerStyle={ui.wrap}>
-      <AlertBanner count={unread} /><Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{title}</Text>
+      <AlertBanner count={unread} />{readOnly && <ReadOnlyBanner />}<Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{title}</Text>
        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{enabledTiles([...workflow, ...personalTiles]).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: ACCENT, backgroundColor: t.tone === 'solid' ? ACCENT : '#1E7D4F22', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : ACCENT, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
       <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
     </ScrollView>;
@@ -154,7 +160,7 @@ export default function ManagementHome() {
   const filteredSections = sections.map((section) => ({ ...section, tiles: enabledTiles(section.tiles) })).filter((section) => section.tiles.length > 0);
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
-      <AlertBanner count={unread} />
+      <AlertBanner count={unread} />{readOnly && <ReadOnlyBanner />}
       <UpperManagementMuteToggle />
       <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{heading}</Text>
       {filteredSections.map((sec, si) => (

@@ -398,6 +398,15 @@ async function pushQueue(d: any) {
         JSON.stringify(state), row.owner, row.entity, row.id,
       );
     } catch (error: any) {
+      // A supervisor/manager change refused because the app is view-only for
+      // their role: set it aside so it doesn't block the rest of the queue.
+      if (error?.status === 403 && /view-only/i.test(String(error?.message || ''))) {
+        await d.runAsync(
+          `UPDATE sync_queue SET status='rejected',error=? WHERE owner=? AND entity=? AND id=?`,
+          String(error?.message || 'View-only on the app'), row.owner, row.entity, row.id,
+        );
+        continue;
+      }
       const conflict = error?.status === 409 || /version|conflict/i.test(String(error?.message));
       await d.runAsync(
         `UPDATE sync_queue SET status=?,error=? WHERE owner=? AND entity=? AND id=?`,

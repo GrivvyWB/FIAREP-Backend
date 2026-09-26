@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, Modal, Image, TouchableOpacity } from 'react-native';
@@ -14,6 +16,7 @@ function fmt(iso: string): string {
 const classColor = (c: string) => c === 'C' ? '#c0392b' : c === 'B' ? '#B4741A' : '#1a8f4c';
 
 export default function InspectionApprovals() {
+  const readOnlyBanner = useAppReadOnly() === true;
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
   const [items, setItems] = useState<BuildingViolation[]>([]);
@@ -82,6 +85,7 @@ export default function InspectionApprovals() {
   if (!authorized) return null;
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
+      {readOnlyBanner && <ReadOnlyBanner />}
       <Text style={ui.h}>Inspection Approvals</Text>
       <Text style={ui.label}>Inspections logged by inspectors, awaiting your approval. Approve and route to a CPM (to scope) or a trade (to do the work).</Text>
 

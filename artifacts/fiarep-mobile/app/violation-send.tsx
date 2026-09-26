@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
@@ -25,7 +27,7 @@ function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
 }
 
-export default function ViolationSend() {
+function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
   const router = useRouter();
   const { preAddress, preReportId, preUnit, preNote, preComplaintNo, preResident, preDevelopment, filter } = useLocalSearchParams<{ preAddress?: string; preReportId?: string; preUnit?: string; preNote?: string; preComplaintNo?: string; preResident?: string; preDevelopment?: string; filter?: string }>();
   const [violationNumber, setViolationNumber] = useState('');
@@ -96,6 +98,8 @@ export default function ViolationSend() {
   // Inspectors and contractors are the people who go look a violation up.
   const recipients = staff.filter((s) => {
     if (myId && s.id === myId) return false; // a supervisor cannot send work to themselves
+    // Emergency request from the app (view-only supervisors): emergency crews only.
+    if (emergencyOnly && s.role !== 'emergency') return false;
     if (complaintMode) {
       const eligibleRole = ['management', 'worker', 'inspector', 'emergency'].includes(s.role);
       const eligiblePosition = s.position !== 'Borough Director' && s.position !== 'Superintendent Ⓔ' && s.position !== 'Director';
@@ -359,4 +363,15 @@ export default function ViolationSend() {
     )}
     </KeyboardAvoidingView>
   );
+}
+
+// Supervisors/managers are view-only on the app, except emergency requests to
+// workers (opened from a complaint with ?filter=worker&emergency=1).
+export default function ViolationSend() {
+  const { emergency, filter } = useLocalSearchParams<{ emergency?: string; filter?: string }>();
+  const emergencyOnly = emergency === '1' && String(filter || '').toLowerCase() === 'worker';
+  const readOnly = useAppReadOnly();
+  if (readOnly === null) return null;
+  if (readOnly && !emergencyOnly) return <ReadOnlyScreen title="Send Violation" />;
+  return <ViolationSendScreen emergencyOnly={!!readOnly && emergencyOnly} />;
 }

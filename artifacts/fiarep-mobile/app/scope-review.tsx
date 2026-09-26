@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, Alert, Modal } from 'react-native';
@@ -30,6 +32,7 @@ function fmt(iso: string): string {
 const money = (n: number) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function ScopeReview() {
+  const readOnlyBanner = useAppReadOnly() === true;
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const [authorized, setAuthorized] = useState<boolean | null>(null);
@@ -93,6 +96,7 @@ export default function ScopeReview() {
   if (authorized !== true) {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
+      {readOnlyBanner && <ReadOnlyBanner />}
         <Text style={ui.empty}>{authorized === null ? 'Checking access…' : 'Access denied.'}</Text>
       </ScrollView>
     );

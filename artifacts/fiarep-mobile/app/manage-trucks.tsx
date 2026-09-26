@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
@@ -5,7 +7,7 @@ import { createEmergencyUnit, listEmergencyUnits, deleteEmergencyUnit, type Emer
 import { ui, ACCENT } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
-export default function ManageTrucks() {
+function ManageTrucksScreen() {
   const [units, setUnits] = useState<EmergencyUnit[]>([]);
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
@@ -57,4 +59,12 @@ export default function ManageTrucks() {
     </ScrollView>
     </KeyboardAvoidingView>
   );
+}
+
+// Supervisors/managers are view-only on the app; this screen only takes action.
+export default function ManageTrucks() {
+  const readOnly = useAppReadOnly();
+  if (readOnly === null) return null;
+  if (readOnly) return <ReadOnlyScreen title="Manage Trucks" />;
+  return <ManageTrucksScreen />;
 }

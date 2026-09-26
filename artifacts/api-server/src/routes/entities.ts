@@ -43,6 +43,7 @@ import {
 import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
 import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
 import { isCpmSupervisorTitle, isCrewForTrade, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "../lib/titles";
+import { APP_READ_ONLY_MESSAGE, appReadOnlyDecision, isAppReadOnlyActor, isMobileAppRequest } from "../lib/appReadOnly";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
@@ -56,6 +57,27 @@ import { residentReportRecipientIds } from "../lib/notificationVisibility";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
+
+// Supervisors/managers are view-only on the phone app (see appReadOnly.ts).
+router.use("/v1/:entity", (req, res, next) => {
+  const entity = req.params["entity"] || "";
+  if (!validEntity(entity) || !isMobileAppRequest(req)) {
+    next();
+    return;
+  }
+  const actor = actorFrom(res);
+  if (!isAppReadOnlyActor(actor)) {
+    next();
+    return;
+  }
+  const decision = appReadOnlyDecision(req.method, entity, req.path);
+  if (decision === "block") {
+    res.status(403).json({ error: APP_READ_ONLY_MESSAGE, code: "app_read_only" });
+    return;
+  }
+  if (decision === "emergency-assign-only") res.locals["appEmergencyAssignOnly"] = true;
+  next();
+});
 const hrLeaveDecisionRateLimit = rateLimit("hr-leave-decision", 12);
 
 const HR_SENSITIVE_APPROVAL_PURPOSES = new Set([
@@ -1806,6 +1828,10 @@ router.post(
           ...(current.development ? [current.development] : []),
         ],
       };
+    }
+    if (res.locals["appEmergencyAssignOnly"] && target && target.role !== "emergency") {
+      res.status(403).json({ error: APP_READ_ONLY_MESSAGE, code: "app_read_only" });
+      return;
     }
     if (
       !target ||

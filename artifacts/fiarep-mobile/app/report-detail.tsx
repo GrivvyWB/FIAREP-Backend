@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -27,6 +29,7 @@ export default function ReportDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { mode } = useAppMode();
+  const readOnly = useAppReadOnly() === true;
   const [position, setPosition] = useState('');
   useFocusEffect(useCallback(() => { getCurrentPosition().then(setPosition).catch(() => {}); }, []));
   const [r, setR] = useState<ResidentReport | null>(null);
@@ -198,6 +201,7 @@ export default function ReportDetail() {
         <Text style={ui.h}>Job Details</Text>
         <Pressable onPress={() => router.back()} style={{ padding: 8 }}><Text style={{ color: ACCENT, fontWeight: '700', fontSize: 16 }}>Done</Text></Pressable>
       </View>
+      {readOnly && <ReadOnlyBanner />}
 
       <View style={[ui.card, { gap: 8 }]}>
         {!!r.complaintNo && <View style={ui.line}><Text style={ui.lineK}>Complaint #</Text><Text style={[ui.lineV, { color: ACCENT, fontWeight: '700' }]}>{r.complaintNo}</Text></View>}
@@ -265,6 +269,11 @@ export default function ReportDetail() {
             + '&preComplaintNo=' + encodeURIComponent(r.complaintNo || '')
             + '&preResident=' + encodeURIComponent(r.residentName || '')
             + '&preDevelopment=' + encodeURIComponent(r.development || '');
+          if (readOnly) return (
+            <Pressable style={[ui.btn, { marginTop: 10, backgroundColor: '#b3261e' }]} onPress={() => router.push('/violation-send?' + base + '&filter=worker&emergency=1')}>
+              <Text style={ui.btnText}>Send emergency request</Text>
+            </Pressable>
+          );
           return (
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
               <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => router.push('/violation-send?' + base + '&filter=worker')}>
@@ -276,7 +285,7 @@ export default function ReportDetail() {
             </View>
           );
         })()}
-        {(mode === 'management' || mode === 'administrator') && (r as any).reviewStatus === 'done' && (
+        {(mode === 'management' || mode === 'administrator') && !readOnly && (r as any).reviewStatus === 'done' && (
           <View style={{ marginTop: 12, borderWidth: 1, borderColor: '#e0d3b0', backgroundColor: '#fbf6e9', borderRadius: 8, padding: 10, gap: 8 }}>
             <Text style={{ fontWeight: '700', fontSize: 13 }}>Worker marked this complete — review the photo &amp; notes</Text>
             {reviewOpen ? (

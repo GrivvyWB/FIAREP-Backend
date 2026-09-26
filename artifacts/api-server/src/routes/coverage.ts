@@ -3,6 +3,7 @@ import { Router, type IRouter } from "express";
 import { db, entityRecords } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { isCoverageEligible } from "../lib/domain";
+import { APP_READ_ONLY_MESSAGE, isAppReadOnlyActor, isMobileAppRequest } from "../lib/appReadOnly";
 import {
   COVERAGE_ENTITY,
   COVERAGE_WINDOW_MS,
@@ -36,6 +37,10 @@ router.get("/v1/coverage/active", async (_req, res) => {
 // Unlock a development for 24h by confirming its 2-digit code.
 router.post("/v1/coverage/unlock", async (req, res) => {
   const actor = actorFrom(res);
+  if (isMobileAppRequest(req) && isAppReadOnlyActor(actor)) {
+    res.status(403).json({ error: APP_READ_ONLY_MESSAGE, code: "app_read_only" });
+    return;
+  }
   if (!isCoverageEligible(actor)) {
     res.status(403).json({ error: "You are not eligible for site coverage." });
     return;

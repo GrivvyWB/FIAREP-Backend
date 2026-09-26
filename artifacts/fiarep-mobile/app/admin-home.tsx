@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { clearAppMode, logout } from '../lib/store';
@@ -16,6 +18,9 @@ type Section = { heading: string; color: string; tiles: Tile[] };
 
 export default function AdminHome() {
   const router = useRouter();
+  // View-only on the app: action tiles live on fiarep.com.
+  const readOnly = useAppReadOnly() === true;
+  const actionTiles = new Set(['Send Violation', 'In-house assignments', 'Assign a Job', 'Cover a Site', 'Create Report', '+ New Project', 'Manage Trucks', 'Add Job for Mgmt', 'Assign Route', 'CPM Supervisor Scope Review', 'CPM Supervisor']);
   const navigation = useNavigation();
   useLayoutEffect(() => {
     (async () => {
@@ -96,6 +101,7 @@ export default function AdminHome() {
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <AlertBanner count={unread} />
+      {readOnly && <ReadOnlyBanner />}
       <UpperManagementMuteToggle />
       {sections.map((s, si) => (
         <View key={si} style={{ marginBottom: 18 }}>
@@ -112,7 +118,7 @@ export default function AdminHome() {
             {s.heading}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {s.tiles.filter((t) => { const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => {
+            {s.tiles.filter((t) => { if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => {
               const solid = t.tone === 'solid';
               const tint = t.tone === 'tint';
               return (

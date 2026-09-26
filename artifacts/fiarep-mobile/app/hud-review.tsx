@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -12,6 +14,7 @@ function fmt(iso: string): string {
 }
 
 export default function HudReview() {
+  const readOnlyBanner = useAppReadOnly() === true;
   const router = useRouter();
   const { mode } = useAppMode();
   const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
@@ -41,6 +44,7 @@ export default function HudReview() {
 
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
+      {readOnlyBanner && <ReadOnlyBanner />}
       <Text style={ui.h}>HUD Inspections</Text>
       <Text style={ui.label}>Read-only. Tap an inspection to view details and send a note to the inspector.</Text>
 

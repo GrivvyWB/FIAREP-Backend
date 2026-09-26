@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { isCrewForTrade, isSupervisorTitle } from '../lib/titles';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
@@ -6,7 +8,7 @@ import { getCurrentActor, getCurrentPosition, listManpowerRequests, listStaffAcc
 import { ui } from '../lib/ui';
 
 
-export default function InHouseAssignments() {
+function InHouseAssignmentsScreen() {
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
   const [requests, setRequests] = useState<ManpowerRequest[]>([]);
@@ -65,4 +67,12 @@ export default function InHouseAssignments() {
       </View>;
     })}
   </ScrollView>;
+}
+
+// Supervisors/managers are view-only on the app; this screen only takes action.
+export default function InHouseAssignments() {
+  const readOnly = useAppReadOnly();
+  if (readOnly === null) return null;
+  if (readOnly) return <ReadOnlyScreen title="In-house assignments" />;
+  return <InHouseAssignmentsScreen />;
 }

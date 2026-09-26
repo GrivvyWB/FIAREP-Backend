@@ -1306,6 +1306,14 @@ test("trade supervisors can assign only their own non-supervisor crew", () => {
   assert.equal(canAssignStaff(plumberSupervisor, otherSupervisor, "Development A"), false);
 });
 
+test("complaint-handling supervisors may send a complaint as a violation inspection", () => {
+  for (const position of ["Superintendent", "Plumber Supervisor", "CPM Supervisor", "Supervisor Inspector"]) {
+    assert.equal(canCreateEntity(actor({ role: "management", position }), "route-assignments"), true, position);
+  }
+  assert.equal(canCreateEntity(actor({ role: "management", position: "Property Manager" }), "route-assignments"), false);
+  assert.equal(canCreateEntity(actor({ role: "worker", position: "Plumber" }), "route-assignments"), false);
+});
+
 test("the assigned/completing CPM keeps a read copy of a complaint outside their developments", () => {
   const cpm = actor({ id: "cpm-7", role: "inspector", position: "CPM", developments: ["Development B"] });
   const row = (state: Record<string, unknown>) => ({

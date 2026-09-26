@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
@@ -131,6 +133,7 @@ function DevPicker(props: {
 
 export default function Management() {
   const { mode } = useAppMode();
+  const readOnly = useAppReadOnly() === true;
   const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
   const [reports, setReports] = useState<ResidentReport[]>([]);
   const [myDevs, setMyDevs] = useState<string[]>([]);
@@ -360,6 +363,7 @@ export default function Management() {
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Resident Reports</Text>
+      {readOnly && <ReadOnlyBanner />}
 
       <View style={{ flexDirection: 'row', gap: 12 }}>
         <View style={{ flex: 1, borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 14, backgroundColor: '#fafafa' }}>
@@ -454,7 +458,7 @@ export default function Management() {
           )}
 
           <View style={{ marginTop: 6, gap: 8 }}>
-            {canEdit(r) ? (
+            {canEdit(r) && !readOnly ? (
               <>
                 <Text style={ui.label}>Development</Text>
                 <Pressable style={ui.btnOutline} onPress={() => setPicker({ mode: 'tag', id: r.id })}>
@@ -509,7 +513,7 @@ export default function Management() {
               </>
             ) : (
               <Text style={{ fontSize: 13, color: '#999', fontStyle: 'italic', paddingVertical: 6 }}>
-                View only — not your assigned development.
+                {readOnly ? 'View only on the app — act on fiarep.com.' : 'View only — not your assigned development.'}
               </Text>
             )}
           </View>

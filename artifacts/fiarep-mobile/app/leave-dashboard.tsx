@@ -1,3 +1,4 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { isSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal } from 'react-native';
@@ -53,6 +54,7 @@ function overlaps(a: LeaveRequest, b: LeaveRequest): boolean {
 }
 
 export default function LeaveDashboard() {
+  const readOnly = useAppReadOnly() === true;
   const router = useRouter();
   const [all, setAll] = useState<LeaveRequest[]>([]);
   const [devFilter, setDevFilter] = useState('');
@@ -91,10 +93,10 @@ export default function LeaveDashboard() {
     'plumber supervisor', 'electric supervisor', 'elevator supervisor',
     'painter supervisor', 'carpenter supervisor',
   ];
-  const canDecide = myRole === 'management' ||
+  const canDecide = !readOnly && (myRole === 'management' ||
     myRole === 'administrator' ||
     APPROVER_TITLES.includes((myPosition || '').trim().toLowerCase()) ||
-    isSupervisorTitle(myPosition);
+    isSupervisorTitle(myPosition));
   const filtered = all.filter((r) => {
     if (isBoroughDir && !MGMT_TIER.includes((r.title || '').trim().toLowerCase())) return false;
     if (devFilter && (r.development || '').trim().toLowerCase() !== devFilter.trim().toLowerCase()) return false;

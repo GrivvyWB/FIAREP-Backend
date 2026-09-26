@@ -1,3 +1,5 @@
+import { useAppReadOnly } from '../lib/useAppReadOnly';
+import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, ScrollView, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
 import { useRouter } from 'expo-router';
@@ -7,7 +9,7 @@ import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
 
-export default function AdminJob() {
+function AdminJobScreen() {
   const router = useRouter();
   const [location, setLocation] = useState('Building');
   const [locationOther, setLocationOther] = useState('');
@@ -126,4 +128,12 @@ export default function AdminJob() {
     </ScrollView>
     </KeyboardAvoidingView>
   );
+}
+
+// Supervisors/managers are view-only on the app; this screen only takes action.
+export default function AdminJob() {
+  const readOnly = useAppReadOnly();
+  if (readOnly === null) return null;
+  if (readOnly) return <ReadOnlyScreen title="Add Job for Management" />;
+  return <AdminJobScreen />;
 }

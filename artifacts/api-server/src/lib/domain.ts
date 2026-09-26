@@ -711,6 +711,11 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
     );
   }
   if (VIOLATION_ENTITIES.has(entity)) {
+    // A complaint may be sent as a violation inspection (route-assignments) by
+    // the Supervisor Inspector, administration, or any complaint-handling
+    // supervisor; the route handler limits the recipient to an Inspector.
+    if (entity === "route-assignments" &&
+        (actor.role === "administrator" || isComplaintHandlingSupervisor(actor))) return true;
     return (
       actor.role === "inspector" ||
       isViolationAuthority(actor)
