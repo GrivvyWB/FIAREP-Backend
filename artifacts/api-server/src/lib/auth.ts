@@ -7,6 +7,7 @@ import {
   timingSafeEqual,
 } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
+import { sameTitle } from "./titles";
 import { db, refreshSessions, platformOwnerSessions, staffAccounts, organizations, type StaffAccount, type Organization } from "@workspace/db";
 
 const ACCESS_TTL_SECONDS = 15 * 60;
@@ -99,13 +100,23 @@ export function licenseAllows(
     (!organization.endsAt || organization.endsAt > now);
 }
 
+// Access follows the job title: a CPM or Inspector is a field inspector
+// even if the account was saved with the plain "worker" role, and the title
+// is spelled the one way the rules check ("CPM", "Inspector").
+function fieldTitle(position: string): "CPM" | "Inspector" | null {
+  if (sameTitle(position, "CPM")) return "CPM";
+  if (sameTitle(position, "Inspector")) return "Inspector";
+  return null;
+}
+
 export function actorFromStaff(staff: StaffAccount): Actor {
+  const field = fieldTitle(staff.position);
   return {
     id: staff.id,
     tenantId: staff.tenantId,
     name: staff.name,
-    role: staff.role,
-    position: staff.position,
+    role: field && staff.role === "worker" ? "inspector" : staff.role,
+    position: field ?? staff.position,
     developments: staff.developments,
     sessionVersion: staff.sessionVersion,
   };
