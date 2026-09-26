@@ -734,11 +734,13 @@ router.post("/v1/:entity", async (req, res, next) => {
   ) {
     development = actor.developments[0]!;
   }
-  if (!development && !isBoroughDirector(actor) && !isHrEntity(entity)) {
+  // Vendor contacts are one company-wide list, not tied to a development.
+  const companyWide = entity === "vendor-contacts";
+  if (!development && !companyWide && !isBoroughDirector(actor) && !isHrEntity(entity)) {
     res.status(403).json({ error: "A development is required for scoped records" });
     return;
   }
-  if (!isHrEntity(entity) && !entityDevelopmentAllowed(actor, entity, development)) {
+  if (!companyWide && !isHrEntity(entity) && !entityDevelopmentAllowed(actor, entity, development)) {
     res.status(403).json({ error: "Development access denied" });
     return;
   }
@@ -1204,7 +1206,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     typeof updatedState["development"] === "string"
       ? updatedState["development"]
       : current.development;
-  if (!isHrEntity(entity) && !entityDevelopmentAllowed(actor, entity, updatedDevelopment)) {
+  if (entity !== "vendor-contacts" && !isHrEntity(entity) && !entityDevelopmentAllowed(actor, entity, updatedDevelopment)) {
     res.status(403).json({ error: "Development access denied" });
     return;
   }
@@ -2987,16 +2989,18 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(403).json({ error: "HR lifecycle and approval records are retained and cannot be deleted" });
     return;
   }
+  // Procurement keeps its own vendor email list (add / edit / remove).
+  const vendorListEdit = entity === "vendor-contacts" && actor.role === "procurement";
   const [organization] = await db
     .select({ features: organizations.features })
     .from(organizations)
     .where(eq(organizations.id, actor.tenantId))
     .limit(1);
-  if (organization?.features?.["deletionEnabled"] !== true) {
+  if (!vendorListEdit && organization?.features?.["deletionEnabled"] !== true) {
     res.status(403).json({ error: "Deletion is disabled for this organization" });
     return;
   }
-  if (!canDeleteOperationalRecords(actor)) {
+  if (!vendorListEdit && !canDeleteOperationalRecords(actor)) {
     res.status(403).json({ error: "Only higher management can delete records" });
     return;
   }
@@ -3024,7 +3028,7 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   if (!(await canReadRecordForActor(actor, current)) ||
-      !canDeleteEntity(actor, entity, current.state)) {
+      !(vendorListEdit || canDeleteEntity(actor, entity, current.state))) {
     res.status(403).json({ error: "Not allowed to delete this record" });
     return;
   }

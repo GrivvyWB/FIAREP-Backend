@@ -703,6 +703,8 @@ export function canUploadToEntityRecord(
 }
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
+  // The vendor email list belongs to Procurement.
+  if (entity === "vendor-contacts") return actor.role === "procurement" || actor.role === "administrator";
   const isEmergencyMaintenance =
     actor.role === "emergency" && actor.position === "Maintenance Worker";
   if (isBoroughDirector(actor)) return false;
@@ -761,6 +763,8 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 }
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
+  // The vendor email list belongs to Procurement.
+  if (entity === "vendor-contacts") return actor.role === "procurement" || actor.role === "administrator";
   const isEmergencyMaintenance =
     actor.role === "emergency" && actor.position === "Maintenance Worker";
   if (isBoroughDirector(actor)) return false;
