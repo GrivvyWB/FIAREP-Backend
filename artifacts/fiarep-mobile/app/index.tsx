@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, Redirect } from 'expo-router';
-import { listProjects, createProject, deleteProject, type Project, listApprovedProjectIds, getSessionIdentity, getCurrentPosition } from '../lib/store';
+import { listProjects, createProject, deleteProject, type Project, listApprovedProjectIds, getSessionIdentity, getCurrentPosition, listResidentReports, lookupComplaintOrViolation } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
@@ -45,6 +45,36 @@ export default function Projects() {
   // Started from a complaint/violation ("Start project" on Job Details):
   // prefill the name and development and carry the complaint link.
   const fromComplaint = String(params.preComplaintNo || '').trim();
+  // Complaint / violation # typed on the New project form (or carried in).
+  const [refNo, setRefNo] = useState(fromComplaint);
+  const [refInfo, setRefInfo] = useState<{ reportId?: string; address?: string; unit?: string; note?: string; kind?: string } | null>(null);
+  const [refMsg, setRefMsg] = useState('');
+  useEffect(() => { if (fromComplaint) setRefNo(fromComplaint); }, [fromComplaint]);
+  const lookUpRef = async () => {
+    const key = refNo.trim().toLowerCase();
+    if (!key) { setRefInfo(null); setRefMsg(''); return; }
+    const reports = await listResidentReports().catch(() => []);
+    const rep = reports.find((r) => (r.complaintNo || '').trim().toLowerCase() === key);
+    if (rep) {
+      setRefInfo({ reportId: rep.id, address: rep.address, unit: rep.unit, note: rep.description, kind: 'complaint' });
+      if (!name.trim()) setName([rep.complaintNo, rep.address, rep.unit ? 'Unit ' + rep.unit : ''].filter(Boolean).join(' · '));
+      if (rep.development) {
+        const match = developments.find((d) => d.trim().toLowerCase() === String(rep.development).trim().toLowerCase());
+        if (match) setDevelopment(match);
+      }
+      setRefMsg('Found complaint — details pulled in.');
+      return;
+    }
+    const v = await lookupComplaintOrViolation(refNo.trim()).catch(() => null);
+    if (v) {
+      setRefInfo({ address: v.address, unit: v.unit, note: v.problem, kind: v.kind });
+      if (!name.trim()) setName([refNo.trim().toUpperCase(), v.address, v.unit ? 'Unit ' + v.unit : ''].filter(Boolean).join(' · '));
+      setRefMsg('Found ' + v.kind + ' — details pulled in.');
+      return;
+    }
+    setRefInfo(null);
+    setRefMsg('Not found on this phone — it will still be saved on the project.');
+  };
   useEffect(() => {
     if (params.new === '1') setAdding(true);
     if (params.preName) setName(String(params.preName));
@@ -59,16 +89,17 @@ export default function Projects() {
   const onCreate = async () => {
     if (!name.trim()) { Alert.alert('Name required', 'Give the project a name.'); return; }
     if (developments.length > 1 && !development) { Alert.alert('Development required', 'Select a development for this project.'); return; }
-    const source = fromComplaint ? {
-      sourceReportId: String(params.preReportId || '') || undefined,
-      complaintNo: fromComplaint,
-      address: String(params.preAddress || '') || undefined,
-      unit: String(params.preUnit || '') || undefined,
-      sourceDescription: String(params.preNote || '') || undefined,
+    const ref = refNo.trim().toUpperCase();
+    const source = ref ? {
+      sourceReportId: (ref === fromComplaint.toUpperCase() ? String(params.preReportId || '') : '') || refInfo?.reportId || undefined,
+      complaintNo: ref,
+      address: (ref === fromComplaint.toUpperCase() ? String(params.preAddress || '') : '') || refInfo?.address || undefined,
+      unit: (ref === fromComplaint.toUpperCase() ? String(params.preUnit || '') : '') || refInfo?.unit || undefined,
+      sourceDescription: (ref === fromComplaint.toUpperCase() ? String(params.preNote || '') : '') || refInfo?.note || undefined,
     } : {};
     const created = await createProject(name.trim(), client.trim(), source, development || undefined);
-    setName(''); setClient(''); setDevelopment(''); setAdding(false); load();
-    if (fromComplaint) router.replace(`/project/${created.id}`);
+    setName(''); setClient(''); setDevelopment(''); setRefNo(''); setRefInfo(null); setRefMsg(''); setAdding(false); load();
+    if (ref) router.replace(`/project/${created.id}`);
   };
 
   return (
@@ -90,6 +121,10 @@ export default function Projects() {
           <>
           <Text style={ui.cardTitle}>New project</Text>
           {!!fromComplaint && <Text style={{ color: '#1E7D4F', fontWeight: '700' }}>From complaint {fromComplaint}{development ? ' · ' + development : ''}</Text>}
+          <View><Text style={ui.label}>Complaint / Violation #</Text>
+            <TextInput style={ui.input} value={refNo} onChangeText={(t) => { setRefNo(t); setRefMsg(''); }} onEndEditing={() => { void lookUpRef(); }} placeholder="e.g. RC-45570 or V-23678" autoCapitalize="characters" />
+            {!!refMsg && <Text style={{ fontSize: 12, marginTop: 4, color: refInfo ? '#1a8f4c' : '#8a6d1a' }}>{refMsg}</Text>}
+          </View>
           <View><Text style={ui.label}>Project name</Text>
             <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="123 Main St renovation" /></View>
           <View><Text style={ui.label}>Client (optional)</Text>
