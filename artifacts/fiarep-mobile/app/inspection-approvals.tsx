@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle, isInspectionSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, ScrollView, Pressable, Alert, Modal, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -25,7 +26,7 @@ export default function InspectionApprovals() {
   const [cpmSupervisors, setCpmSupervisors] = useState<StaffAccount[]>([]);
   useEffect(() => {
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
-      if (actor.role === 'management' && position.trim().toLowerCase() === 'supervisor inspector') setAuthorized(true);
+      if (actor.role === 'management' && isInspectionSupervisorTitle(position)) setAuthorized(true);
       else router.replace('/management-home');
     }).catch(() => router.replace('/management-home'));
   }, [router]);
@@ -126,7 +127,7 @@ export default function InspectionApprovals() {
               {!!v.completionNote && <Text style={ui.listSub}>Note: {v.completionNote}</Text>}
               {v.status === 'approved' && (
                 <Pressable style={[ui.btnOutline, { marginTop: 6 }]} onPress={() => {
-                  const eligible = staff.filter((s) => String(s.position || '').trim().toLowerCase() === 'cpm supervisor'
+                  const eligible = staff.filter((s) => isCpmSupervisorTitle(s.position)
                     && (!v.development || (s.developments || []).some((d) => d.trim().toLowerCase() === v.development!.trim().toLowerCase())));
                   setCpmSupervisors(eligible);
                   setHandoffFor(v);

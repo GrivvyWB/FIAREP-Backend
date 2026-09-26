@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, Alert, Modal } from 'react-native';
 import * as Sharing from 'expo-sharing';
@@ -49,7 +50,7 @@ export default function ScopeReview() {
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
       if (!mounted) return;
        const allowed = actor?.role === 'management' &&
-          position.trim().toLowerCase() === 'cpm supervisor';
+          isCpmSupervisorTitle(position);
       setAuthorized(allowed);
       if (!allowed) {
           Alert.alert('Access denied', 'Scope review is available only to the CPM Supervisor.');

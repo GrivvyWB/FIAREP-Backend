@@ -1,5 +1,14 @@
 import { randomInt, randomUUID } from "node:crypto";
 import type { Actor } from "./auth";
+import {
+  isCpmSupervisorTitle,
+  isCrewForTrade,
+  isInspectionSupervisorTitle,
+  isOfficeTradeSupervisorTitle,
+  isSupervisorTitle,
+  sameTitle,
+  supervisedTradeForPosition as tradeFromTitle,
+} from "./titles";
 
 export const STAFF_ROLES = new Set([
   "administrator",
@@ -85,6 +94,17 @@ export const STAFF_POSITIONS = [
   "Bricklayer Supervisor",
   "Heating Service Supervisor",
 ] as const;
+
+/**
+ * A position HR may assign: any listed title, or any supervisor title
+ * ("<Trade> Supervisor" / "Supervisor <Trade>"), so a new supervisor title
+ * needs no code change. Access for it follows the title (see titles.ts).
+ */
+export function isAcceptedStaffPosition(position: string): boolean {
+  const title = position.trim();
+  return (STAFF_POSITIONS as readonly string[]).includes(title) ||
+    (isSupervisorTitle(title) && title.length <= 80);
+}
 
 export const ENTITIES = new Set([
   "projects",
@@ -245,12 +265,12 @@ export function isOrdinaryManagement(actor: Actor): boolean {
   return actor.role === "management" &&
     !isBoroughDirector(actor) &&
     !SPECIALIZED_MANAGEMENT_POSITIONS.has(actor.position) &&
-    actor.position !== "CPM Supervisor";
+    !isCpmSupervisorTitle(actor.position);
 }
 
 /** CPM Supervisors may author their own scope drafts, but are not procurement reviewers. */
 export function isCpmSupervisor(actor: Pick<Actor, "role" | "position">): boolean {
-  return actor.role === "management" && actor.position === "CPM Supervisor";
+  return actor.role === "management" && isCpmSupervisorTitle(actor.position);
 }
 
 /**
@@ -262,14 +282,14 @@ export function isCpmSupervisor(actor: Pick<Actor, "role" | "position">): boolea
 export function isElevatorFieldStaff(actor: Actor): boolean {
   return (
     ["worker", "inspector"].includes(actor.role) &&
-    (actor.position === "Elevator Service" ||
-      actor.position === "Elevator Supervisor" ||
-      (actor.role === "inspector" && actor.position === "CPM"))
+    (sameTitle(actor.position, "Elevator Service") ||
+      tradeFromTitle(actor.position) === "Elevator Service" ||
+      (actor.role === "inspector" && sameTitle(actor.position, "CPM")))
   );
 }
 
 export function isSupervisorPosition(actor: Actor): boolean {
-  return actor.position.toLowerCase().includes("supervisor") ||
+  return isSupervisorTitle(actor.position) ||
     actor.position === "Superintendent" ||
     isSuperintendentE(actor);
 }
@@ -304,13 +324,13 @@ export function isComplaintHandlingSupervisor(
 }
 
 export function isHudReviewSupervisor(actor: Actor): boolean {
-  return actor.position === "Supervisor Inspector";
+  return isInspectionSupervisorTitle(actor.position);
 }
 
 /** Violation and inspection review authority for management positions. */
 export function isViolationAuthority(actor: Actor): boolean {
   return actor.role === "management" &&
-    actor.position === "Supervisor Inspector";
+    isInspectionSupervisorTitle(actor.position);
 }
 
 export function canBrowseStaffDirectory(actor: Actor): boolean {
@@ -810,38 +830,11 @@ const TRADE_SUPERVISOR_POSITIONS = new Set([
   "Bricklayer Supervisor",
 ]);
 
-const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
-  ["Plumbing Supervisor", "Plumber"],
-  ["Plumber Supervisor", "Plumber"],
-  ["Supervisor Plumber", "Plumber"],
-  ["Supervisor Inspector", "Inspector"],
-  ["Inspector Supervisor", "Inspector"],
-  ["Inspection Supervisor", "Inspector"],
-  ["CPM Supervisor", "CPM"],
-  ["Supervisor CPM", "CPM"],
-  ["Carpenter Supervisor", "Carpenter"],
-  ["Supervisor Carpenter", "Carpenter"],
-  ["Elevator Supervisor", "Elevator Service"],
-  ["Elevator Service Supervisor", "Elevator Service"],
-  ["Supervisor Elevator", "Elevator Service"],
-  ["Electrical Supervisor", "Electrician"],
-  ["Electric Supervisor", "Electrician"],
-  ["Electrician Supervisor", "Electrician"],
-  ["Supervisor Electrician", "Electrician"],
-  ["Painter Supervisor", "Painter"],
-  ["Supervisor Painter", "Painter"],
-  ["Heating Service Supervisor", "Heating Service"],
-  ["Supervisor Heating Service", "Heating Service"],
-  ["Heat Plant Supervisor", "Heating Service"],
-  ["Bricklayer Supervisor", "Bricklayer"],
-  ["Supervisor Bricklayer", "Bricklayer"],
-  ["Mason Supervisor", "Bricklayer"],
-  ["Maintenance Supervisor", "Maintenance Worker"],
-  ["Grounds Supervisor", "Groundskeeper"],
-]);
 
+// Derived from the title (see titles.ts), so a new supervisor title works with
+// no code change or app build.
 export function supervisedTradeForPosition(position: string | null | undefined): string | null {
-  return TRADE_ASSIGNMENT_BY_SUPERVISOR.get(position || "") || null;
+  return tradeFromTitle(position);
 }
 
 // Craft/office supervisors and CPM roles work from the office, not from a base
@@ -849,23 +842,18 @@ export function supervisedTradeForPosition(position: string | null | undefined):
 // or emergency supervisor transfers/assigns the work to them — they never
 // browse a development's complaints. (Superintendents, Assistant
 // Superintendents, Maintenance and Grounds supervisors remain development-based.)
-const OFFICE_CRAFT_TRADES = new Set<string>([
-  "Plumber", "Electrician", "Carpenter", "Painter",
-  "Heating Service", "Bricklayer", "Elevator Service", "CPM",
-]);
 
 export function isOfficeCraftSupervisor(
-  actor: Pick<Actor, "role" | "position">,
+  actor: Pick<Actor, "role" | "position"> & { developments?: string[] },
 ): boolean {
-  if (actor.role === "inspector" && actor.position === "CPM") return true;
+  if (actor.role === "inspector" && sameTitle(actor.position, "CPM")) return true;
   if (actor.role !== "management") return false;
-  const trade = supervisedTradeForPosition(actor.position || "");
-  return !!trade && OFFICE_CRAFT_TRADES.has(trade);
+  return isOfficeTradeSupervisorTitle(actor.position, actor.developments);
 }
 
 function isOperationalAssignee(target: { role: string; position: string | null }) {
   return ["worker", "inspector", "emergency"].includes(target.role) &&
-    !String(target.position || "").toLowerCase().includes("supervisor");
+    !isSupervisorTitle(target.position);
 }
 
 const LEAVE_APPROVER_POSITIONS = new Set([
@@ -882,7 +870,8 @@ export function isLeaveApprovalAuthority(
   actor: Pick<Actor, "role" | "position">,
 ): boolean {
   return actor.role === "human_resources" ||
-    LEAVE_APPROVER_POSITIONS.has(actor.position ?? "");
+    LEAVE_APPROVER_POSITIONS.has(actor.position ?? "") ||
+    isSupervisorTitle(actor.position);
 }
 
 const SUPERVISED_LEAVE_POSITIONS = new Map<string, Set<string>>([
@@ -1032,7 +1021,7 @@ export function canAssignStaff(
     actor.position === "Assistant Superintendent" ||
     isSuperintendentE(actor);
   if (isSupervisorPosition(actor) && !actorTrade && !isGeneralSuperintendent) return false;
-  if (actorTrade && target.position !== actorTrade) return false;
+  if (actorTrade && !isCrewForTrade(target.position, actorTrade)) return false;
   return true;
 }
 

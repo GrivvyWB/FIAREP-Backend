@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle } from "@/lib/titles";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { hasModuleAccess } from "@/lib/access-policy";
@@ -51,7 +52,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Violations", href: "/violations", icon: AlertTriangle, module: "violations" as const },
     { name: "Trade-Supervisors:", href: "/trade-requests", icon: UserRoundCheck, module: "trade-requests" as const },
     { name: "My Jobs", href: "/my-jobs", icon: Wrench, module: "my-jobs" as const },
-     ...(staff?.role === "management" && staff?.position === "CPM Supervisor" ? [{ name: "CPM Supervisor", href: "/scope-review", icon: UserRoundCheck, module: "scope-review" as const }] : []),
+     ...(staff?.role === "management" && isCpmSupervisorTitle(staff?.position) ? [{ name: "CPM Supervisor", href: "/scope-review", icon: UserRoundCheck, module: "scope-review" as const }] : []),
     ...(staff?.role === "procurement" ? [{ name: "Procurement", href: "/procurement", icon: ShoppingCart, module: "procurement" as const }] : []),
     ...(hasModuleAccess(staff, "scope-writing", organizationModules) ? [{ name: "Scope Writing", href: "/scope-writing", icon: ClipboardCheck, module: "scope-writing" as const }] : []),
     ...((staff?.role === "management" || staff?.role === "administrator" || staff?.role === "emergency") ? [

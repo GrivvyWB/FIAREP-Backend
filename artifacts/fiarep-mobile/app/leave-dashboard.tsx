@@ -1,3 +1,4 @@
+import { isSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -92,7 +93,8 @@ export default function LeaveDashboard() {
   ];
   const canDecide = myRole === 'management' ||
     myRole === 'administrator' ||
-    APPROVER_TITLES.includes((myPosition || '').trim().toLowerCase());
+    APPROVER_TITLES.includes((myPosition || '').trim().toLowerCase()) ||
+    isSupervisorTitle(myPosition);
   const filtered = all.filter((r) => {
     if (isBoroughDir && !MGMT_TIER.includes((r.title || '').trim().toLowerCase())) return false;
     if (devFilter && (r.development || '').trim().toLowerCase() !== devFilter.trim().toLowerCase()) return false;

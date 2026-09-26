@@ -13,7 +13,7 @@ import {
 } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import {
-  STAFF_POSITIONS,
+  isAcceptedStaffPosition,
   canIssueStaffAccountRole,
   canBrowseStaffDirectory,
   canDeleteStaffAccounts,
@@ -342,7 +342,7 @@ router.post("/v1/staff", async (req, res) => {
     !name ||
     !canIssueStaffAccountRole(role) ||
     !requestedStatus ||
-    !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number])
+    !isAcceptedStaffPosition(position)
   ) {
     res.status(400).json({ error: "Valid name, role, and position are required" });
     return;
@@ -1116,7 +1116,7 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
   }
   if (
     !position ||
-    !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number]) ||
+    !isAcceptedStaffPosition(position) ||
     !canHrAssignPositionRole(position, role) ||
     !developments
   ) {

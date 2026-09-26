@@ -19,19 +19,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
+import { isCrewForTrade, isSupervisorForTrade, sameTitle, supervisedTradeForPosition } from "@/lib/titles";
 
-const trades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Heating Service", "Bricklayer"] as const;
-const supervisorPositions: Record<(typeof trades)[number], readonly string[]> = {
-  Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
-  CPM: ["CPM Supervisor", "Supervisor CPM"],
-  Plumber: ["Plumbing Supervisor", "Plumber Supervisor", "Supervisor Plumber"],
-  Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
-  Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
-  "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
-  Painter: ["Painter Supervisor", "Painting Supervisor", "Supervisor Painter"],
-  "Heating Service": ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor", "Heating Supervisor", "Boiler Supervisor"],
-  Bricklayer: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor"],
-};
+// Core trades are always offered; any other trade appears automatically once a
+// supervisor with that title is on staff (e.g. "Glazier Supervisor").
+const baseTrades = ["Inspector", "CPM", "Plumber", "Carpenter", "Electrician", "Elevator Service", "Painter", "Heating Service", "Bricklayer"];
 
 type SourceEntity = "resident-reports" | "building-violations";
 
@@ -58,7 +50,7 @@ export default function TradeRequests() {
   const [open, setOpen] = useState(false);
   const [sourceEntity, setSourceEntity] = useState<SourceEntity>("resident-reports");
   const [sourceRecordId, setSourceRecordId] = useState("");
-  const [requestedTrade, setRequestedTrade] = useState<(typeof trades)[number]>("Inspector");
+  const [requestedTrade, setRequestedTrade] = useState<string>("Inspector");
   const [receiverSupervisorId, setReceiverSupervisorId] = useState("");
   const [note, setNote] = useState("");
   const [assigningRequest, setAssigningRequest] = useState<EntityRecord | null>(null);
@@ -110,12 +102,16 @@ export default function TradeRequests() {
     (procurementQuery.data || []).map((record) => [record.id, record]),
   ), [procurementQuery.data]);
   const selectedSourceSent = Boolean(selectedSource && sentSourceIds.has(selectedSource.id));
+  const trades = useMemo(() => [...new Set([
+    ...baseTrades,
+    ...staff.map((member) => supervisedTradeForPosition(member.position)).filter((trade): trade is string => !!trade),
+  ])], [staff]);
   const supervisors = useMemo(() => staff.filter((member) =>
     member.id !== actor?.id &&
-    supervisorPositions[requestedTrade].includes(member.position) &&
+    isSupervisorForTrade(member.position, requestedTrade) &&
     (!selectedSource?.development ||
       member.developments.length === 0 ||
-      member.developments.includes(selectedSource.development)),
+      member.developments.some((value) => sameTitle(value, selectedSource?.development))),
   ), [actor?.id, requestedTrade, selectedSource?.development, staff]);
 
   const availableStaff = useMemo(() => {
@@ -125,7 +121,7 @@ export default function TradeRequests() {
     // Mirrors the server's manpower assign check: an operational (non-supervisor)
     // member of the requested trade who covers the site, matched case-insensitively.
     return staff.filter((member) =>
-      member.position === trade &&
+      isCrewForTrade(member.position, trade) &&
       ["worker", "inspector", "emergency"].includes(member.role) &&
       member.id !== actor?.id &&
       (!dev || member.developments.some((value) => (value || "").trim().toLowerCase() === dev)),
@@ -334,14 +330,14 @@ export default function TradeRequests() {
             </div>
             <div className="space-y-2">
               <Label>Trade needed</Label>
-              <select value={requestedTrade} onChange={(event) => setRequestedTrade(event.target.value as (typeof trades)[number])} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
+              <select value={requestedTrade} onChange={(event) => setRequestedTrade(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm">
                 {trades.map((trade) => <option key={trade} value={trade}>{trade}</option>)}
               </select>
             </div>
             <div className="space-y-2">
               <Label>Receiving supervisor</Label>
               <select value={receiverSupervisorId} onChange={(event) => setReceiverSupervisorId(event.target.value)} disabled={!selectedSource} className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm disabled:opacity-60">
-                <option value="">{supervisors.length ? "Select supervisor" : `No approved ${supervisorPositions[requestedTrade][0]} available`}</option>
+                <option value="">{supervisors.length ? "Select supervisor" : `No approved ${requestedTrade} supervisor available`}</option>
                 {supervisors.map((member) => <option key={member.id} value={member.id}>{member.name} · {member.position}</option>)}
               </select>
             </div>

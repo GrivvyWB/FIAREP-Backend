@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle } from "@/lib/titles";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
@@ -15,7 +16,7 @@ import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 export default function ScopeReview() {
   const { staff } = useAuth();
   const [, setLocation] = useLocation();
-  const allowed = staff?.role === "management" && staff?.position === "CPM Supervisor";
+  const allowed = staff?.role === "management" && isCpmSupervisorTitle(staff?.position);
   const { data, isLoading } = useListEntityRecords("procurement", { status: "submitted" }, {
     query: {
       queryKey: getListEntityRecordsQueryKey("procurement", { status: "submitted" }),

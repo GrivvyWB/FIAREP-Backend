@@ -5,7 +5,7 @@ import { db, entityRecords, notifications, organizations, publicAccessCodes, sta
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import {
   ENTITIES,
-  STAFF_POSITIONS,
+  isAcceptedStaffPosition,
   canIssueStaffAccountRole,
   canAssignStaff,
   canSuperintendentEAssignResidentReport,
@@ -42,6 +42,7 @@ import {
 } from "../lib/domain";
 import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
 import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
+import { isCpmSupervisorTitle, isCrewForTrade, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "../lib/titles";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
@@ -573,39 +574,17 @@ router.post("/v1/:entity", async (req, res, next) => {
     const requestedTrade = typeof rawState["requestedTrade"] === "string"
       ? rawState["requestedTrade"]
       : "";
-    const allowedTrades = new Set([
-      "Inspector",
-      "CPM",
-      "Plumber",
-      "Carpenter",
-      "Electrician",
-      "Elevator Service",
-      "Painter",
-      "Heating Service",
-      "Bricklayer",
-    ]);
-    const supervisorPositions: Record<string, readonly string[]> = {
-      Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
-      CPM: ["CPM Supervisor", "Supervisor CPM"],
-      Plumber: ["Plumbing Supervisor", "Plumber Supervisor", "Supervisor Plumber"],
-      Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
-      Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
-      "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
-      Painter: ["Painter Supervisor", "Supervisor Painter"],
-      "Heating Service": ["Heating Service Supervisor", "Supervisor Heating Service", "Heat Plant Supervisor"],
-      Bricklayer: ["Bricklayer Supervisor", "Supervisor Bricklayer", "Mason Supervisor"],
-    };
     if (
       !["resident-reports", "building-violations"].includes(sourceEntity) ||
       !sourceRecordId ||
       !receiverSupervisorId ||
-      !allowedTrades.has(requestedTrade)
+      !requestedTrade.trim()
     ) {
       res.status(400).json({ error: "Select a complaint or violation, trade, and receiving supervisor" });
       return;
     }
     const actorTrade = supervisedTradeForPosition(actor.position);
-    if (actorTrade && actorTrade !== requestedTrade) {
+    if (actorTrade && !sameTitle(actorTrade, requestedTrade)) {
       res.status(403).json({ error: "Supervisors may request manpower only for their own trade" });
       return;
     }
@@ -651,7 +630,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     if (
       !receiver ||
       receiver.id === actor.id ||
-      !(supervisorPositions[requestedTrade] || []).includes(receiver.position)
+      !isSupervisorForTrade(receiver.position, requestedTrade)
     ) {
       res.status(403).json({ error: "Select the supervisor for the requested trade" });
       return;
@@ -660,7 +639,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     if (
       development &&
       receiver.developments.length > 0 &&
-      !receiver.developments.includes(development)
+      !receiver.developments.some((value) => sameTitle(value, development))
     ) {
       res.status(403).json({ error: "The receiving supervisor must cover this development" });
       return;
@@ -747,7 +726,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     const position = String(rawState["position"] || "").trim();
     if (!firstName || !lastName || !email.includes("@") ||
         !canIssueStaffAccountRole(role) ||
-        !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number])) {
+        !isAcceptedStaffPosition(position)) {
       res.status(400).json({ error: "First name, last name, email, role, and position are required" });
       return;
     }
@@ -1145,7 +1124,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     typeof updatedState["position"] === "string"
       ? updatedState["position"].trim()
       : "";
-  if (linkedPosition && !STAFF_POSITIONS.some((position) => position === linkedPosition)) {
+  if (linkedPosition && !isAcceptedStaffPosition(linkedPosition)) {
     res.status(400).json({ error: "Select a valid staff position" });
     return;
   }
@@ -1745,15 +1724,7 @@ router.post(
       ? body["requestedTrade"].trim() : "";
     const receiverSupervisorId = typeof body["receiverSupervisorId"] === "string"
       ? body["receiverSupervisorId"].trim() : "";
-    const supervisorPositions: Record<string, readonly string[]> = {
-      Inspector: ["Supervisor Inspector", "Inspector Supervisor", "Inspection Supervisor"],
-      CPM: ["CPM Supervisor", "Supervisor CPM"],
-      Plumber: ["Plumbing Supervisor", "Plumber Supervisor", "Supervisor Plumber"],
-      Carpenter: ["Carpenter Supervisor", "Supervisor Carpenter"],
-      Electrician: ["Electrical Supervisor", "Electric Supervisor", "Electrician Supervisor", "Supervisor Electrician"],
-      "Elevator Service": ["Elevator Supervisor", "Elevator Service Supervisor", "Supervisor Elevator"],
-    };
-    if (!requestedTrade || !receiverSupervisorId || !supervisorPositions[requestedTrade]) {
+    if (!requestedTrade || !receiverSupervisorId) {
       res.status(400).json({ error: "requestedTrade and receiverSupervisorId are required" });
       return;
     }
@@ -1763,7 +1734,7 @@ router.post(
       eq(staffAccounts.status, "approved"),
     )).limit(1);
     if (!inHouseReceiver || inHouseReceiver.id === actor.id ||
-        !supervisorPositions[requestedTrade]!.includes(inHouseReceiver.position) ||
+        !isSupervisorForTrade(inHouseReceiver.position, requestedTrade) ||
         (current.development &&
           !inHouseReceiver.developments.some((value) =>
             value.trim().toLowerCase() === current.development!.trim().toLowerCase()))) {
@@ -1872,17 +1843,6 @@ router.post(
     delete body["assignedToName"];
   }
   if (entity === "manpower-requests" && action === "assign") {
-    const tradePositions: Record<string, readonly string[]> = {
-      Inspector: ["Inspector"],
-      CPM: ["CPM"],
-      Plumber: ["Plumber"],
-      Carpenter: ["Carpenter"],
-      Electrician: ["Electrician"],
-      "Elevator Service": ["Elevator Service"],
-      Painter: ["Painter"],
-      "Heating Service": ["Heating Service"],
-      Bricklayer: ["Bricklayer"],
-    };
     const assignedStaffId = typeof body["assignedStaffId"] === "string"
       ? body["assignedStaffId"].trim()
       : "";
@@ -1893,13 +1853,12 @@ router.post(
           eq(staffAccounts.status, "approved"),
         )).limit(1)
       : [];
-    const allowedPositions = tradePositions[String(current.state["requestedTrade"])] || [];
     if (
       !target ||
       !["worker", "inspector", "emergency"].includes(target.role) ||
-      String(target.position || "").toLowerCase().includes("supervisor") ||
+      isSupervisorTitle(target.position) ||
       target.id === actor.id ||
-      !allowedPositions.includes(target.position) ||
+      !isCrewForTrade(target.position, String(current.state["requestedTrade"] || "")) ||
       (current.development && !target.developments.some((value) =>
         value.trim().toLowerCase() === current.development!.trim().toLowerCase()))
     ) {
@@ -2787,7 +2746,7 @@ router.post(
           const development = current.development?.trim().toLowerCase() || "";
           const covered = development &&
             reviewer.developments.some((item) => item.trim().toLowerCase() === development);
-          if (reviewer.position !== "CPM Supervisor" || !covered) continue;
+          if (!isCpmSupervisorTitle(reviewer.position) || !covered) continue;
           await notify(actor, reviewer.id, "Scope submitted for CPM Supervisor review", undefined, current.id);
         }
       }

@@ -6,7 +6,7 @@ import {
   canReadHrEntityRecord,
   canIssueStaffAccountRole,
   isHrEntity,
-  STAFF_POSITIONS,
+  isAcceptedStaffPosition,
   serializeHrStaff,
 } from "../lib/domain";
 import { allocateStaffCode, allocateTruckStaffCode } from "../lib/staffCodes";
@@ -349,7 +349,7 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
     if (!firstName || !lastName || !email.includes("@") ||
         !["management", "worker", "inspector", "procurement", "emergency"].includes(role) ||
         position === "Borough Director" ||
-        !STAFF_POSITIONS.includes(position as (typeof STAFF_POSITIONS)[number]) ||
+        !isAcceptedStaffPosition(position) ||
         !canIssueStaffAccountRole(role)) {
       throw Object.assign(new Error("Complete the employee name, email, role, and position first"), { status: 400 });
     }

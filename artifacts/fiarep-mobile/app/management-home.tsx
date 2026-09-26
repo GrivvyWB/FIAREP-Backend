@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle, supervisedTradeForPosition } from '../lib/titles';
 import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import { clearAppMode, logout, getCurrentPosition } from '../lib/store';
@@ -36,11 +37,11 @@ export default function ManagementHome() {
   // may assign emergencies and register trucks. Everyone else (mgmt/supervisors)
   // gets a read-only Emergency Activity view for their development.
   const emergencyAdmin = mode === 'administrator' || _pos === 'borough director' || _pos === 'regional director';
-  const supervisorInspector = _pos === 'supervisor inspector';
+  const supervisorInspector = isInspectionSupervisorTitle(_pos);
   const canReviewInspections = supervisorInspector;
-  const cpmSupervisor = _pos === 'cpm supervisor';
-  const tradeSupervisor = /^(plumber|electric|electrician|elevator|painter|carpenter|roofer|heating|general construction|cctv installation)( service)? supervisor$/.test(_pos)
-    || ['plumbing supervisor', 'electrical supervisor', 'electrician supervisor', 'elevator service supervisor', 'bricklayer supervisor', 'mason supervisor', 'heat plant supervisor'].includes(_pos);
+  const cpmSupervisor = isCpmSupervisorTitle(_pos);
+  // Any office trade supervisor title — including new ones — gets this home.
+  const tradeSupervisor = !cpmSupervisor && isOfficeTradeSupervisorTitle(_pos);
   const director = _pos === 'borough director' || _pos === 'regional director';
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = isElevated ? await unreadCount('management') : 0; if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, [isElevated]));
 
@@ -114,7 +115,7 @@ export default function ManagementHome() {
         ...(!restricted && _pos !== 'borough director' ? [{ label: 'Leave Calendar', onPress: () => router.push('/leave-dashboard'), tone: 'tint' as Tone }] : []),
          ...(!cpmSupervisor ? [{ label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' as Tone }, { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' as Tone }] : []),
         ...(cpmSupervisor ? [{ label: 'CPM Supervisor', onPress: () => router.push('/scope-review'), tone: 'solid' as Tone }] : []),
-        ...(position === 'Elevator Supervisor' ? [{ label: 'Elevator Dashboard', onPress: () => router.push('/elevator-dashboard'), tone: 'tint' as Tone }] : []),
+        ...(supervisedTradeForPosition(position) === 'Elevator Service' ? [{ label: 'Elevator Dashboard', onPress: () => router.push('/elevator-dashboard'), tone: 'tint' as Tone }] : []),
       ],
     },
     {

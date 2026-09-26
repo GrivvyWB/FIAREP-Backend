@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -116,11 +117,10 @@ export default function ViolationSend() {
         (currentPosition === 'Superintendent Ⓔ' || inDev);
     }
     if (violationTarget === 'supervisor-inspector') {
-      return s.role === 'management' && pos === 'supervisor inspector';
+      return s.role === 'management' && isInspectionSupervisorTitle(pos);
     }
     // Trade supervisors are office-based (no development requirement).
-    const TRADE_SUP = /^(plumber|plumbing|electric|electrical|electrician|elevator|elevator service|painter|carpenter|roofer|heating|heating service|bricklayer|mason|general construction|cctv installation)( service)? supervisor$/;
-    return s.role === 'management' && TRADE_SUP.test(pos);
+    return s.role === 'management' && !isCpmSupervisorTitle(pos) && isOfficeTradeSupervisorTitle(pos, s.developments);
   });
 
   async function submit() {

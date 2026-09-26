@@ -1,14 +1,10 @@
+import { isCrewForTrade, isSupervisorTitle } from '../lib/titles';
 import { useCallback, useState } from 'react';
 import { Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getCurrentActor, getCurrentPosition, listManpowerRequests, listStaffAccounts, performEntityAction, type ManpowerRequest, type StaffAccount } from '../lib/store';
 import { ui } from '../lib/ui';
 
-const workerPositions: Record<string, string[]> = {
-  Inspector: ['Inspector'], CPM: ['CPM'], Plumber: ['Plumber'], Carpenter: ['Carpenter'],
-  Electrician: ['Electrician'], 'Elevator Service': ['Elevator Service'],
-  Painter: ['Painter'], 'Heating Service': ['Heating Service'], Bricklayer: ['Bricklayer'],
-};
 
 export default function InHouseAssignments() {
   const router = useRouter();
@@ -26,7 +22,7 @@ export default function InHouseAssignments() {
       const p = position.trim().toLowerCase();
       // Any receiving supervisor (incl. CPM Supervisor). The list below only
       // shows requests addressed to this account; the server enforces the rest.
-      const allowed = actor.role === 'management' && p.includes('supervisor');
+      const allowed = actor.role === 'management' && isSupervisorTitle(p);
       if (!allowed) { router.replace('/management-home'); return; }
       setAuthorized(true);
       void load();
@@ -50,7 +46,8 @@ export default function InHouseAssignments() {
     <Text style={ui.label}>Requests addressed to your receiving trade supervisor account.</Text>
     {requests.length === 0 && <Text style={ui.empty}>No in-house manpower requests.</Text>}
     {requests.map((r) => {
-      const eligible = people.filter((p) => (workerPositions[r.requestedTrade] || []).includes(p.position || '') &&
+      // Crew of the requested trade, by title (works for any trade).
+      const eligible = people.filter((p) => isCrewForTrade(p.position, r.requestedTrade) &&
         (!r.development || (p.developments || []).some((d) => d.toLowerCase() === r.development!.toLowerCase())));
       return <View key={r.id} style={[ui.card, { gap: 7, marginTop: 10 }]}>
         <Text style={{ fontWeight: '700' }}>{r.requestedTrade} · {r.sourceTitle || 'In-house work'}</Text>

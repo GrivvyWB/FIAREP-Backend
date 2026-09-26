@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle } from '../lib/titles';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { useState, useCallback } from 'react';
@@ -25,11 +26,11 @@ export default function CpmHome() {
         const a = await getCurrentActor();
         const nextPosition = (await getCurrentPosition()) || '';
         const normalized = nextPosition.trim().toLowerCase();
-        let c = normalized === 'cpm supervisor' ? 0 : await unreadCount('inspector').catch(() => 0);
+        let c = isCpmSupervisorTitle(normalized) ? 0 : await unreadCount('inspector').catch(() => 0);
         if (a?.id) c += await unreadCount(a.id).catch(() => 0);
         if (a?.name) c += await unreadCount(a.name).catch(() => 0);
         setUnread(c);
-        if (normalized === 'cpm supervisor') {
+        if (isCpmSupervisorTitle(normalized)) {
           router.replace('/management-home');
           return;
         }
@@ -44,7 +45,7 @@ export default function CpmHome() {
     })();
   }, [mode, router]));
   const normalizedPosition = position.trim().toLowerCase();
-  const isCpmSupervisor = normalizedPosition === 'cpm supervisor';
+  const isCpmSupervisor = isCpmSupervisorTitle(normalizedPosition);
 
   async function onSignOut() {
     await logout();
@@ -88,7 +89,7 @@ export default function CpmHome() {
     },
   ];
 
-  const roleTitle = normalizedPosition === 'cpm' ? 'CPM' : normalizedPosition === 'cpm supervisor' ? 'CPM Supervisor' : normalizedPosition === 'inspector' ? 'Inspector' : 'CPM / Inspector';
+  const roleTitle = normalizedPosition === 'cpm' ? 'CPM' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition === 'inspector' ? 'Inspector' : 'CPM / Inspector';
 
   return (
     <ScrollView contentContainerStyle={ui.wrap}>

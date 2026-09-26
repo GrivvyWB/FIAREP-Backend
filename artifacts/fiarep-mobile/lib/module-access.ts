@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle, isInspectionSupervisorTitle } from './titles';
 import { useEffect, useState } from 'react';
 import { customFetch } from '@workspace/api-client-react';
 import { db, getSessionIdentity } from './store';
@@ -41,9 +42,9 @@ const OPT_IN_MODULES = new Set<ModuleId>([
 function projectRoleForPosition(position: string): string | null {
   const p = (position || '').trim().toLowerCase();
   if (!p) return null;
-  if (p.includes('cpm supervisor')) return 'cpm-supervisor';
+  if (isCpmSupervisorTitle(p)) return 'cpm-supervisor';
   if (p === 'cpm' || p.includes('cpm')) return 'cpm';
-  if (p.includes('supervisor inspector')) return 'supervisor-inspector';
+  if (isInspectionSupervisorTitle(p)) return 'supervisor-inspector';
   if (p.includes('inspector')) return 'inspector';
   if (p.includes('property manager')) return 'property-manager';
   if (p.startsWith('superintendent')) return 'superintendent';

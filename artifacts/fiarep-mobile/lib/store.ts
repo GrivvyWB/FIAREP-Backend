@@ -1,3 +1,4 @@
+import { isCrewForTrade, isInspectionSupervisorTitle, isSupervisorTitle, supervisedTradeForPosition } from './titles';
 import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -1597,45 +1598,17 @@ export async function listEmergencyStaff(): Promise<StaffAccount[]> {
 // People assignable to a project, grouped by trade category (for the category dropdown picker).
 // Includes approved workers + inspectors + supervisor-titled management. Groups follow STAFF_POSITIONS order.
 export type TradeGroup = { position: string; people: StaffAccount[] };
-const SUPERVISOR_TRADE: Record<string, string> = {
-  'plumber supervisor': 'Plumber',
-  'plumbing supervisor': 'Plumber',
-  'supervisor inspector': 'Inspector',
-  'inspector supervisor': 'Inspector',
-  'inspection supervisor': 'Inspector',
-  'cpm supervisor': 'CPM',
-  'supervisor cpm': 'CPM',
-  'carpenter supervisor': 'Carpenter',
-  'supervisor carpenter': 'Carpenter',
-  'elevator supervisor': 'Elevator Service',
-  'elevator service supervisor': 'Elevator Service',
-  'supervisor elevator': 'Elevator Service',
-  'electrical supervisor': 'Electrician',
-  'electric supervisor': 'Electrician',
-  'electrician supervisor': 'Electrician',
-  'supervisor electrician': 'Electrician',
-  'painter supervisor': 'Painter',
-  'supervisor painter': 'Painter',
-  'heating service supervisor': 'Heating Service',
-  'supervisor heating service': 'Heating Service',
-  'heat plant supervisor': 'Heating Service',
-  'bricklayer supervisor': 'Bricklayer',
-  'supervisor bricklayer': 'Bricklayer',
-  'mason supervisor': 'Bricklayer',
-  'maintenance supervisor': 'Maintenance Worker',
-  'grounds supervisor': 'Groundskeeper',
-};
 
 /** The crew trade a supervisor position assigns (mirrors server TRADE_ASSIGNMENT_BY_SUPERVISOR). */
 export function supervisedTradeFor(position: string | null | undefined): string | null {
-  return SUPERVISOR_TRADE[(position || '').trim().toLowerCase()] || null;
+  return supervisedTradeForPosition(position);
 }
 
 export async function listAssignableByTrade(): Promise<TradeGroup[]> {
   const all = await listStaffAccounts('approved');
   const identity = await getSessionIdentity();
   const normalizedPosition = (identity?.position || '').trim().toLowerCase();
-  const actorTrade = SUPERVISOR_TRADE[normalizedPosition];
+  const actorTrade = supervisedTradeForPosition(identity?.position);
   const operational = all.filter(a =>
     a.role === 'worker' || a.role === 'inspector' || a.role === 'emergency'
   ).filter(a => !String(a.position || '').toLowerCase().includes('supervisor'));
@@ -1661,11 +1634,11 @@ export async function listAssignableByTrade(): Promise<TradeGroup[]> {
     'Heating Service Supervisor': 'Heating Service',
     'Bricklayer Supervisor': 'Bricklayer',
   };
-  const isSupervisor = normalizedPosition.includes('supervisor');
+  const isSupervisor = isSupervisorTitle(normalizedPosition);
   const tradeEligible = isSupervisor && !actorTrade
     ? []
     : actorTrade
-    ? eligible.filter((a) => (sectionForPosition[a.position || ''] || a.position || 'Other') === actorTrade)
+    ? eligible.filter((a) => isCrewForTrade(a.position, actorTrade))
     : eligible;
   const order = [...STAFF_POSITIONS].filter(position => !sectionForPosition[position]);
   const groups: TradeGroup[] = [];
@@ -4095,7 +4068,7 @@ export async function handoffViolationToCpmSupervisor(
   await ensureBuildingViolTable(d);
   const actor = await getCurrentActor();
   const position = (await getCurrentPosition()).trim().toLowerCase();
-  if (actor.role !== 'management' || position !== 'supervisor inspector') {
+  if (actor.role !== 'management' || !isInspectionSupervisorTitle(position)) {
     throw new Error('Only a Supervisor Inspector may send violations to a CPM Supervisor.');
   }
   if (!receiverSupervisorId.trim()) throw new Error('Select an approved CPM Supervisor.');

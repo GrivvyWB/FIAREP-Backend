@@ -242,8 +242,7 @@ export default function Reports() {
   const canHandleComplaints = canHandleResidentReports(actor);
   // CPM Supervisors can't clear/approve complaints, but may assign one to their
   // own CPMs (server: resident-reports assign + canAssignStaff).
-  const canAssignComplaints = canHandleComplaints ||
-    (actor?.role === "management" && (actor?.position || "").trim() === "CPM Supervisor");
+  const canAssignComplaints = canHandleComplaints;
   const reportsQuery = useListEntityRecords("resident-reports", undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),

@@ -1,4 +1,5 @@
 export type Persona = 'resident' | 'vendor' | 'staff' | null;
+import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isSupervisorTitle, sameTitle, supervisedTradeForPosition } from "./titles.ts";
 import type { Staff } from "@workspace/api-client-react";
 
 export type StaffModule =
@@ -14,8 +15,8 @@ export type OrganizationModules = Record<string, boolean>;
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
 const UPPER_MANAGEMENT_POSITIONS = new Set(["Director", "Borough Director", "Regional Director", "Assistant Regional Director"]);
 const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "shared-data"]);
-const ELEVATOR_POSITIONS = new Set(["Elevator Supervisor", "Elevator Service"]);
-const HUD_REVIEW_POSITIONS = new Set(["Supervisor Inspector"]);
+const isElevatorTitle = (position: string | null | undefined) =>
+  sameTitle(position, "Elevator Service") || supervisedTradeForPosition(position) === "Elevator Service";
 // Modules that are OFF until the platform owner enables them (none today;
 // the per-tool Project switches are handled in Module Management).
 const OPT_IN_MODULES = new Set<StaffModule>([]);
@@ -29,7 +30,7 @@ const CPM_ONLY_MODULES = new Set<StaffModule>([
 
 export function isSupervisor(staff: Staff | null | undefined): boolean {
   const position = staff?.position?.trim().toLowerCase() || "";
-  return position.includes("supervisor") ||
+  return isSupervisorTitle(position) ||
     position === "superintendent" ||
     position === "superintendent Ⓔ";
 }
@@ -50,7 +51,7 @@ export function isCoverageEligible(staff: Staff | null | undefined): boolean {
 }
 
 export function canReviewHud(staff: Staff | null | undefined): boolean {
-  return !!staff && HUD_REVIEW_POSITIONS.has(staff.position || "");
+  return !!staff && isInspectionSupervisorTitle(staff.position);
 }
 
 export function canReadSharedDefaultRates(staff: Staff | null | undefined): boolean {
@@ -85,18 +86,20 @@ export function hasModuleAccess(
   }
   // Inspector / CPM manpower requests are addressed to these supervisors, so
   // like every trade supervisor they need the Trade Requests page.
-  if (staff.role === "management" && position === "Supervisor Inspector") {
+  if (staff.role === "management" && isInspectionSupervisorTitle(position)) {
     return exactWorkflowShell.has(module) || module === "trade-requests";
   }
   if (staff.role === "inspector" && position === "CPM") {
     return exactWorkflowShell.has(module) || module === "scope-writing";
   }
-  if (staff.role === "management" && position === "CPM Supervisor") {
+  if (staff.role === "management" && isCpmSupervisorTitle(position)) {
     return exactWorkflowShell.has(module) || module === "scope-review" || module === "trade-requests";
   }
+  // Any other supervisor title — including new ones — is a trade supervisor.
   const isTradeSupervisor =
     isSupervisor(staff) &&
-    !["Supervisor Inspector", "CPM Supervisor"].includes(position);
+    !isInspectionSupervisorTitle(position) &&
+    !isCpmSupervisorTitle(position);
   if (isTradeSupervisor) {
     return exactWorkflowShell.has(module) || module === "trade-requests";
   }
@@ -104,7 +107,7 @@ export function hasModuleAccess(
     return exactWorkflowShell.has(module) || module === "my-jobs" || module === "reports";
   }
   if (
-    staff.position?.trim().toLowerCase() === "cpm supervisor" &&
+    isCpmSupervisorTitle(staff.position) &&
     (module === "violations" || module === "hud-inspections")
   ) {
     return false;
@@ -140,10 +143,10 @@ export function hasModuleAccess(
   if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
   if (module === "hr") return false;
   if (module === "elevators") {
-    return staff.role === "administrator" || ELEVATOR_POSITIONS.has(staff.position || "");
+    return staff.role === "administrator" || isElevatorTitle(staff.position);
   }
   if (module === "scope-review") {
-    return staff.role === "management" && staff.position === "CPM Supervisor";
+    return staff.role === "management" && isCpmSupervisorTitle(staff.position);
   }
   if (MANAGEMENT_ROLES.has(staff.role)) {
     if (module === "scope-writing") return false;
@@ -179,7 +182,7 @@ export function canHandleResidentReports(staff: Staff | null | undefined): boole
   // Every supervisor handles complaints the same way (CPM Supervisor included).
   return staff.role === "management" &&
     (
-      position.toLowerCase().includes("supervisor") ||
+      isSupervisorTitle(position) ||
       ["Superintendent", "Assistant Superintendent"].includes(position)
     );
 }

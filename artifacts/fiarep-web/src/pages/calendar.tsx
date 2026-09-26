@@ -1,3 +1,4 @@
+import { sameTitle, supervisedTradeForPosition } from "@/lib/titles";
 import { useMemo, useState } from "react";
 import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, ClipboardCheck, FolderKanban, Loader2, Plane, Wrench, FileSearch } from "lucide-react";
 import { Link } from "wouter";
@@ -49,8 +50,8 @@ function canReadCalendarEntity(staff: Staff | null, entity: string): boolean {
       staff.role === "management" ||
       staff.position === "Borough Director" ||
       (["worker", "inspector"].includes(staff.role) &&
-        (staff.position === "Elevator Service" ||
-          staff.position === "Elevator Supervisor" ||
+        (sameTitle(staff.position, "Elevator Service") ||
+          supervisedTradeForPosition(staff.position) === "Elevator Service" ||
           (staff.role === "inspector" && staff.position === "CPM")));
   }
   return true;

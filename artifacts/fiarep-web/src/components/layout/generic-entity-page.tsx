@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle, isInspectionSupervisorTitle, sameTitle } from "@/lib/titles";
 import { 
   useListEntityRecords, 
   useCreateEntityRecord, 
@@ -125,13 +126,13 @@ export function GenericEntityPage({
   const canSendInspectorViolationToCpm =
     entity === "building-violations" &&
     staff?.role === "management" &&
-    staff?.position === "Supervisor Inspector";
+    isInspectionSupervisorTitle(staff?.position);
   const cpmSupervisors = (item: EntityRecord) => operationalStaff.filter((member) =>
     member.status === "approved" &&
     member.role === "management" &&
-    member.position === "CPM Supervisor" &&
+    isCpmSupervisorTitle(member.position) &&
     Boolean(item.development) &&
-    member.developments.includes(item.development || ""),
+    member.developments.some((value) => sameTitle(value, item.development)),
   );
 
   const form = useForm<FormValues>({

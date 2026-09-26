@@ -93,7 +93,7 @@ export async function residentReportRecipientIds(
       // them — never automatically. Only true development supervisors auto-receive.
       const isDevelopmentSupervisor =
         account.role === "management" &&
-        !isOfficeCraftSupervisor({ role: account.role, position: account.position }) &&
+        !isOfficeCraftSupervisor({ role: account.role, position: account.position, developments: account.developments }) &&
         (
           account.position.toLowerCase().includes("supervisor") ||
           ["Superintendent", "Assistant Superintendent", "Property Manager", "Assistant Property Manager"].includes(account.position)

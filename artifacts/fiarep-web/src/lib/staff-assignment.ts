@@ -1,4 +1,12 @@
 import type { Staff } from "@workspace/api-client-react";
+import {
+  isCpmSupervisorTitle,
+  isCrewForTrade,
+  isOfficeTradeSupervisorTitle,
+  isSupervisorTitle,
+  normalizeTitle,
+  supervisedTradeForPosition,
+} from "./titles.ts";
 
 const OPERATIONAL_ROLES = new Set(["management", "worker", "inspector", "emergency"]);
 const FIELD_ROLES = new Set(["worker", "inspector", "emergency"]);
@@ -52,58 +60,9 @@ const TITLE_FAMILIES = [
   },
 ] as const;
 
-const TRADE_POSITIONS = new Set(
-  TRADE_CREW_SECTIONS.flatMap((section) => [section.supervisor, section.crew]),
-);
-const TRADE_SUPERVISOR_POSITIONS = new Set(
-  TRADE_CREW_SECTIONS.map((section) => section.supervisor),
-);
 
-// Mirrors the server's TRADE_ASSIGNMENT_BY_SUPERVISOR (domain.ts). A trade
-// supervisor may only assign complaints to their own trade's crew, so the
-// assignable list must not surface other trades or general operational staff.
-const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
-  ["Plumbing Supervisor", "Plumber"],
-  ["Plumber Supervisor", "Plumber"],
-  ["Supervisor Plumber", "Plumber"],
-  ["Supervisor Inspector", "Inspector"],
-  ["Inspector Supervisor", "Inspector"],
-  ["Inspection Supervisor", "Inspector"],
-  ["CPM Supervisor", "CPM"],
-  ["Supervisor CPM", "CPM"],
-  ["Carpenter Supervisor", "Carpenter"],
-  ["Supervisor Carpenter", "Carpenter"],
-  ["Elevator Supervisor", "Elevator Service"],
-  ["Elevator Service Supervisor", "Elevator Service"],
-  ["Supervisor Elevator", "Elevator Service"],
-  ["Electrical Supervisor", "Electrician"],
-  ["Electric Supervisor", "Electrician"],
-  ["Electrician Supervisor", "Electrician"],
-  ["Supervisor Electrician", "Electrician"],
-  ["Painter Supervisor", "Painter"],
-  ["Supervisor Painter", "Painter"],
-  ["Heating Service Supervisor", "Heating Service"],
-  ["Supervisor Heating Service", "Heating Service"],
-  ["Heat Plant Supervisor", "Heating Service"],
-  ["Bricklayer Supervisor", "Bricklayer"],
-  ["Supervisor Bricklayer", "Bricklayer"],
-  ["Mason Supervisor", "Bricklayer"],
-  ["Maintenance Supervisor", "Maintenance Worker"],
-  ["Grounds Supervisor", "Groundskeeper"],
-]);
-const OFFICE_CRAFT_TRADES = new Set<string>([
-  "Plumber", "Electrician", "Carpenter", "Painter",
-  "Heating Service", "Bricklayer", "Elevator Service", "CPM",
-]);
-function supervisedTradeForPosition(position?: string | null): string | null {
-  return TRADE_ASSIGNMENT_BY_SUPERVISOR.get(position || "") || null;
-}
-function isSupervisorPositionName(position: string): boolean {
-  return position.toLowerCase().includes("supervisor") ||
-    position === "Superintendent" ||
-    position === "Superintendent Ⓔ";
-}
-
+// Trade rules come from the job title (titles.ts, shared with the server and
+// the app), so a new supervisor title works without a code change.
 function withinDevelopments(candidate: Staff, developments: string[]) {
   // Development names vary in case across the data (staff store UPPERCASE,
   // reports/coverage may be title case), so match case-insensitively.
@@ -130,7 +89,7 @@ export function assignableOperationalStaff(
     actor.position === "Superintendent" ||
     actor.position === "Assistant Superintendent" ||
     isEmergencySuperintendent;
-  if (isSupervisorPositionName(actor.position) && !actorTrade && !isGeneralSuperintendent && !isAdministrator) {
+  if (isSupervisorTitle(actor.position) && !actorTrade && !isGeneralSuperintendent && !isAdministrator) {
     return [];
   }
 
@@ -138,7 +97,7 @@ export function assignableOperationalStaff(
     if (candidate.id === actor.id || candidate.position === "Borough Director") return false;
     if (candidate.position === "Director") return false; // procurement director - PR only, never operational work
     if (!OPERATIONAL_ROLES.has(candidate.role)) return false;
-    if (actorTrade && candidate.position !== actorTrade) return false;
+    if (actorTrade && !isCrewForTrade(candidate.position, actorTrade)) return false;
     if (isEmergencySuperintendent) return true;
     if (
       development &&
@@ -153,11 +112,12 @@ export function assignableOperationalStaff(
     // Office/craft supervisors (CPM Supervisor, trade supervisors) are
     // office-based and may hold no developments; the server exempts them from
     // the actor-scope check (canAssignStaff), so the list must too.
-    const officeCraft = actor.role === "management" && !!actorTrade &&
-      OFFICE_CRAFT_TRADES.has(actorTrade);
+    const officeCraft = actor.role === "management" &&
+      isOfficeTradeSupervisorTitle(actor.position, actor.developments);
     if (!officeCraft && !withinDevelopments(candidate, actor.developments)) return false;
     if (candidate.role === "management") {
-      return isRegionalDirector || TRADE_SUPERVISOR_POSITIONS.has(candidate.position as never);
+      return isRegionalDirector ||
+        (isOfficeTradeSupervisorTitle(candidate.position, candidate.developments) && !isCpmSupervisorTitle(candidate.position));
     }
     return FIELD_ROLES.has(candidate.role);
   });
@@ -168,17 +128,35 @@ export function groupStaffByTradeSections(
   otherLabel = "Other Operational Staff",
 ) {
   const byName = (a: Staff, b: Staff) => a.name.localeCompare(b.name);
-  const tradeGroups = TRADE_CREW_SECTIONS.flatMap((section) => {
+  // Known trade sections first, then a section for any new trade that has a
+  // supervisor on staff (e.g. "Glazier Supervisor & Crew").
+  const sections = new Map<string, string>(
+    TRADE_CREW_SECTIONS.map((section) => [normalizeTitle(section.crew), section.label]),
+  );
+  for (const member of staff) {
+    const trade = supervisedTradeForPosition(member.position);
+    if (
+      trade &&
+      !isCpmSupervisorTitle(member.position) &&
+      isOfficeTradeSupervisorTitle(member.position, member.developments) &&
+      !sections.has(normalizeTitle(trade))
+    ) sections.set(normalizeTitle(trade), `${trade} Supervisor & Crew`);
+  }
+  const sectionOf = (member: Staff) => {
+    const key = normalizeTitle(supervisedTradeForPosition(member.position) || member.position);
+    return sections.has(key) ? key : null;
+  };
+  const tradeGroups = [...sections.entries()].flatMap(([key, label]) => {
     const people = staff
-      .filter((member) => member.position === section.supervisor || member.position === section.crew)
+      .filter((member) => sectionOf(member) === key)
       .sort((a, b) => {
-        const aSupervisor = a.position === section.supervisor ? 0 : 1;
-        const bSupervisor = b.position === section.supervisor ? 0 : 1;
+        const aSupervisor = isSupervisorTitle(a.position) ? 0 : 1;
+        const bSupervisor = isSupervisorTitle(b.position) ? 0 : 1;
         return aSupervisor - bSupervisor || byName(a, b);
       });
-    return people.length ? [{ label: section.label, people }] : [];
+    return people.length ? [{ label, people }] : [];
   });
-  const other = staff.filter((member) => !TRADE_POSITIONS.has(member.position as never)).sort(byName);
+  const other = staff.filter((member) => !sectionOf(member)).sort(byName);
   return other.length ? [...tradeGroups, { label: otherLabel, people: other }] : tradeGroups;
 }
 
@@ -220,7 +198,7 @@ function titleFamily(position: string) {
 export function roleForPosition(position: string): Staff["role"] {
   if (position === "CPM" || position === "Inspector") return "inspector";
   if (
-    position.includes("Supervisor") ||
+    isSupervisorTitle(position) ||
     ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager", "Superintendent", "Superintendent Ⓔ", "Assistant Superintendent", "Housing Assistant", "Director"].includes(position)
   ) return "management";
   return "worker";

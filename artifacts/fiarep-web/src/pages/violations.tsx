@@ -1,3 +1,4 @@
+import { isInspectionSupervisorTitle } from "@/lib/titles";
 import { useState } from "react";
 import { GenericEntityPage } from "@/components/layout/generic-entity-page";
 import { AlertTriangle, Search, Building2, FileWarning, AlertCircle, Send } from "lucide-react";
@@ -31,17 +32,17 @@ export default function Violations() {
   const assignmentsQuery = useListEntityRecords("route-assignments", assignmentFilter, {
     query: {
       queryKey: getListEntityRecordsQueryKey("route-assignments", assignmentFilter),
-      enabled: (staff?.role === "management" && staff?.position === "Supervisor Inspector") ||
+      enabled: (staff?.role === "management" && isInspectionSupervisorTitle(staff?.position)) ||
         (staff?.role === "inspector" && staff.position === "Inspector"),
       refetchInterval: 15_000,
       refetchOnMount: "always",
     },
   });
   const { data: approvedInspectors = [] } = useListStaff({ status: "approved" }, {
-    query: { queryKey: getListStaffQueryKey({ status: "approved" }), enabled: staff?.role === "management" && staff?.position === "Supervisor Inspector" },
+    query: { queryKey: getListStaffQueryKey({ status: "approved" }), enabled: staff?.role === "management" && isInspectionSupervisorTitle(staff?.position) },
   });
   const createAssignment = useCreateEntityRecord();
-  const canAssignInspectors = staff?.role === "management" && staff?.position === "Supervisor Inspector";
+  const canAssignInspectors = staff?.role === "management" && isInspectionSupervisorTitle(staff?.position);
   const inspectorsFor = (development?: string | null) => approvedInspectors.filter((member) =>
     member.role === "inspector" && member.position === "Inspector" && Boolean(development) &&
     member.developments.includes(development || ""),
