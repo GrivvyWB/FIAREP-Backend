@@ -1,3 +1,4 @@
+import { notificationTitle } from "@/lib/notification-text";
 import { useListNotifications, useMarkNotificationRead } from "@workspace/api-client-react";
 import { getListNotificationsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -7,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 
 function isUrgent(notification: { message: string; detail?: string | null }) {
-  const text = `${notification.message} ${notification.detail ?? ""}`.toLowerCase();
+  const text = `${notification.message} ${notificationTitle(notification.message)} ${notification.detail ?? ""}`.toLowerCase();
   return [
     "emergency",
     "priority",
@@ -132,7 +133,7 @@ export default function Notifications() {
                     </div>
                     <div className="flex-1 min-w-0 pt-0.5">
                       <p className={`text-[14.5px] ${notification.read ? "" : "font-semibold"} ${urgent ? "text-red-700 dark:text-red-300" : ""}`}>
-                        {notification.message}
+                        {notificationTitle(notification.message)}
                       </p>
                       {notification.detail && (
                         <p className={`text-sm mt-1 line-clamp-2 ${urgent ? "text-red-700/80 dark:text-red-300/80" : "text-muted-foreground"}`}>

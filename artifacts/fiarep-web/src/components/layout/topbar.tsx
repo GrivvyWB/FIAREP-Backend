@@ -1,6 +1,7 @@
 import { Bell, ChevronDown, MoreHorizontal } from "lucide-react";
 import { getListNotificationsQueryKey, useListNotifications } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
+import { requestDesktopAlerts, useNotificationAlerts } from "@/lib/use-notification-alerts";
 import { isCoverageEligible } from "@/lib/access-policy";
 import { CoverSiteButton } from "@/components/layout/cover-site-button";
 import { Link } from "wouter";
@@ -16,12 +17,14 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
   const { data: notifications } = useListNotifications({
     query: {
       queryKey: getListNotificationsQueryKey(),
-      refetchInterval: 30_000,
-      staleTime: 15_000,
+      refetchInterval: 15_000,
+      refetchIntervalInBackground: true,
+      staleTime: 10_000,
       refetchOnMount: "always",
     },
   });
   const unreadCount = (notifications ?? []).filter((notification) => !notification.read).length;
+  const ringing = useNotificationAlerts(notifications);
   
   // Extract initials
   const getInitials = (name: string) => {
@@ -52,7 +55,7 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
       
       <div className="flex items-center gap-5 md:gap-[22px]">
         {isCoverageEligible(staff) && <CoverSiteButton />}
-        <Link href="/notifications" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"} className={`relative text-muted-foreground cursor-pointer hover:text-foreground transition-colors block ${unreadCount > 0 ? "notification-bell-unread" : ""}`}>
+        <Link href="/notifications" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"} onClick={requestDesktopAlerts} className={`relative text-muted-foreground cursor-pointer hover:text-foreground transition-colors block ${ringing ? "notification-bell-ring" : unreadCount > 0 ? "notification-bell-unread" : ""}`}>
           <Bell className={`w-[22px] h-[22px] ${unreadCount > 0 ? "text-[#b77900]" : ""}`} />
           {unreadCount > 0 && (
             <span className="absolute -top-1.5 -right-1.5 bg-[#F5B301] text-sidebar text-[10px] font-bold min-w-[17px] h-[17px] px-1 rounded-full grid place-items-center">

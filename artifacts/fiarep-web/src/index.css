@@ -12,8 +12,21 @@
   animation: notification-bell-blink 1s step-end infinite;
 }
 
+@keyframes notification-bell-ring {
+  0%, 100% { transform: rotate(0); }
+  10%, 30%, 50%, 70% { transform: rotate(-16deg); }
+  20%, 40%, 60%, 80% { transform: rotate(16deg); }
+}
+
+.notification-bell-ring {
+  animation: notification-bell-ring 0.9s ease-in-out 4;
+  transform-origin: 50% 10%;
+  color: #b77900;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .notification-bell-unread {
+  .notification-bell-unread,
+  .notification-bell-ring {
     animation: none;
   }
 }

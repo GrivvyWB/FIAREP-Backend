@@ -1,3 +1,4 @@
+import { notificationTitle } from "@/lib/notification-text";
 import { useAuth } from "@/hooks/use-auth";
 import { hasModuleAccess } from "@/lib/access-policy";
 import {
@@ -126,7 +127,7 @@ export default function Dashboard() {
                     const className = `flex gap-3.5 p-3 border-b border-border last:border-0 ${!notification.read ? "bg-[#fffaf0]" : ""}`;
                     const content = <>
                       <div className="w-[34px] h-[34px] rounded-[9px] shrink-0 bg-[#fff5d6] text-[#F5B301] grid place-items-center"><Bell className="w-[17px] h-[17px]" /></div>
-                      <div><b className="text-[13.5px] font-semibold">{notification.message}</b><span className="text-xs text-muted-foreground block mt-0.5">{notification.detail || formatDate(notification.at)}{!notification.read && " · Unread"}</span></div>
+                      <div><b className="text-[13.5px] font-semibold">{notificationTitle(notification.message)}</b><span className="text-xs text-muted-foreground block mt-0.5">{notification.detail || formatDate(notification.at)}{!notification.read && " · Unread"}</span></div>
                     </>;
                     return notification.reportId ? (
                       <Link key={notification.id} href={`/reports?id=${encodeURIComponent(notification.reportId)}`} className={`${className} rounded-md hover:bg-muted/50 transition-colors`}>

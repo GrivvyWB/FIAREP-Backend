@@ -20,6 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { useToast } from "@/hooks/use-toast";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
+import { notificationTitle } from "@/lib/notification-text";
+import { requestDesktopAlerts, useNotificationAlerts } from "@/lib/use-notification-alerts";
 
 // Procurement's workspace, laid out like the original app's Procurement
 // screen: Awaiting release -> Out for bid -> Awarded -> Closed, each scope
@@ -167,8 +169,9 @@ function ReleaseGuide({ vendorCount, onVendors, onRefresh, refreshing }: { vendo
 function NotificationBell({ onOpenRecord }: { onOpenRecord: (id: string) => void }) {
   const queryClient = useQueryClient();
   const { data } = useListNotifications({
-    query: { queryKey: getListNotificationsQueryKey(), refetchInterval: 30_000, refetchOnMount: "always" },
+    query: { queryKey: getListNotificationsQueryKey(), refetchInterval: 15_000, refetchIntervalInBackground: true, refetchOnMount: "always" },
   });
+  const ringing = useNotificationAlerts(data);
   const markRead = useMarkNotificationRead();
   const items = [...(data || [])].sort((a, b) => String(b.at).localeCompare(String(a.at))).slice(0, 30);
   const unread = items.filter((n) => !n.read);
@@ -176,8 +179,8 @@ function NotificationBell({ onOpenRecord }: { onOpenRecord: (id: string) => void
   return (
     <Popover>
       <PopoverTrigger asChild>
-        <button type="button" aria-label={unread.length ? `Notifications, ${unread.length} unread` : "Notifications"}
-          className="relative grid h-10 w-10 place-items-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-slate-900">
+        <button type="button" onClick={requestDesktopAlerts} aria-label={unread.length ? `Notifications, ${unread.length} unread` : "Notifications"}
+          className={`relative grid h-10 w-10 place-items-center rounded-full text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 ${ringing ? "notification-bell-ring" : ""}`}>
           <Bell className="h-5 w-5" />
           {unread.length > 0 && <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-red-500 ring-2 ring-white" />}
         </button>
@@ -200,7 +203,7 @@ function NotificationBell({ onOpenRecord }: { onOpenRecord: (id: string) => void
                 if (!n.read) { await markRead.mutateAsync({ id: n.id }).catch(() => undefined); await refresh(); }
                 if (n.reportId) onOpenRecord(n.reportId);
               }}>
-              <span className="block">{n.message}</span>
+              <span className="block">{notificationTitle(n.message)}</span>
               {!!n.detail && <span className="mt-0.5 block text-xs text-slate-500">{n.detail}</span>}
               <span className="mt-1 block text-[11px] text-slate-400">{fmt(n.at)}</span>
             </button>
