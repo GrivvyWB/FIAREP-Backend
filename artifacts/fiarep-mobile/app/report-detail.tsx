@@ -374,6 +374,12 @@ export default function ReportDetail() {
         </View>
         {isMine && r.status === 'in_progress' && (
           <View style={{ gap: 8, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 }}>
+            {!!r.reworkNote && (
+              <View style={{ borderWidth: 1, borderColor: '#e0b4b4', backgroundColor: '#fdf1f1', borderRadius: 8, padding: 10, gap: 4 }}>
+                <Text style={{ fontWeight: '700', color: '#a12b2b' }}>Sent back by {r.reworkByStaffName || 'supervisor'}{r.reworkAt ? ' · ' + fmt(r.reworkAt) : ''}</Text>
+                <Text style={{ color: '#222' }}>{r.reworkNote}</Text>
+              </View>
+            )}
             <Text style={ui.label}>Completed work</Text>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {completionPhotos.map((photo, index) => (

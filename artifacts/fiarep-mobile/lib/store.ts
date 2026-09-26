@@ -555,6 +555,9 @@ export type ResidentReport = {
   completedAt?: string;
   completionNote?: string;
   completionPhotoUrl?: string;
+  reworkNote?: string;       // supervisor's reason when the work was sent back
+  reworkByStaffName?: string;
+  reworkAt?: string;
   clearedByMgmt?: boolean;  // management cleared it so the worker may remove it from My Jobs
   reviewStatus?: string;    // raw server status: 'done' = awaiting supervisor review, 'work_approved' = accepted
   _meta?: any;
@@ -1594,39 +1597,45 @@ export async function listEmergencyStaff(): Promise<StaffAccount[]> {
 // People assignable to a project, grouped by trade category (for the category dropdown picker).
 // Includes approved workers + inspectors + supervisor-titled management. Groups follow STAFF_POSITIONS order.
 export type TradeGroup = { position: string; people: StaffAccount[] };
+const SUPERVISOR_TRADE: Record<string, string> = {
+  'plumber supervisor': 'Plumber',
+  'plumbing supervisor': 'Plumber',
+  'supervisor inspector': 'Inspector',
+  'inspector supervisor': 'Inspector',
+  'inspection supervisor': 'Inspector',
+  'cpm supervisor': 'CPM',
+  'supervisor cpm': 'CPM',
+  'carpenter supervisor': 'Carpenter',
+  'supervisor carpenter': 'Carpenter',
+  'elevator supervisor': 'Elevator Service',
+  'elevator service supervisor': 'Elevator Service',
+  'supervisor elevator': 'Elevator Service',
+  'electrical supervisor': 'Electrician',
+  'electric supervisor': 'Electrician',
+  'electrician supervisor': 'Electrician',
+  'supervisor electrician': 'Electrician',
+  'painter supervisor': 'Painter',
+  'supervisor painter': 'Painter',
+  'heating service supervisor': 'Heating Service',
+  'supervisor heating service': 'Heating Service',
+  'heat plant supervisor': 'Heating Service',
+  'bricklayer supervisor': 'Bricklayer',
+  'supervisor bricklayer': 'Bricklayer',
+  'mason supervisor': 'Bricklayer',
+  'maintenance supervisor': 'Maintenance Worker',
+  'grounds supervisor': 'Groundskeeper',
+};
+
+/** The crew trade a supervisor position assigns (mirrors server TRADE_ASSIGNMENT_BY_SUPERVISOR). */
+export function supervisedTradeFor(position: string | null | undefined): string | null {
+  return SUPERVISOR_TRADE[(position || '').trim().toLowerCase()] || null;
+}
+
 export async function listAssignableByTrade(): Promise<TradeGroup[]> {
   const all = await listStaffAccounts('approved');
   const identity = await getSessionIdentity();
   const normalizedPosition = (identity?.position || '').trim().toLowerCase();
-  const supervisorTrade: Record<string, string> = {
-    'plumber supervisor': 'Plumber',
-    'plumbing supervisor': 'Plumber',
-    'supervisor inspector': 'Inspector',
-    'inspector supervisor': 'Inspector',
-    'inspection supervisor': 'Inspector',
-    'cpm supervisor': 'CPM',
-    'supervisor cpm': 'CPM',
-    'carpenter supervisor': 'Carpenter',
-    'supervisor carpenter': 'Carpenter',
-    'elevator supervisor': 'Elevator Service',
-    'elevator service supervisor': 'Elevator Service',
-    'supervisor elevator': 'Elevator Service',
-    'electrical supervisor': 'Electrician',
-    'electric supervisor': 'Electrician',
-    'electrician supervisor': 'Electrician',
-    'supervisor electrician': 'Electrician',
-    'painter supervisor': 'Painter',
-    'supervisor painter': 'Painter',
-    'heating service supervisor': 'Heating Service',
-    'supervisor heating service': 'Heating Service',
-    'heat plant supervisor': 'Heating Service',
-    'bricklayer supervisor': 'Bricklayer',
-    'supervisor bricklayer': 'Bricklayer',
-    'mason supervisor': 'Bricklayer',
-    'maintenance supervisor': 'Maintenance Worker',
-    'grounds supervisor': 'Groundskeeper',
-  };
-  const actorTrade = supervisorTrade[normalizedPosition];
+  const actorTrade = SUPERVISOR_TRADE[normalizedPosition];
   const operational = all.filter(a =>
     a.role === 'worker' || a.role === 'inspector' || a.role === 'emergency'
   ).filter(a => !String(a.position || '').toLowerCase().includes('supervisor'));

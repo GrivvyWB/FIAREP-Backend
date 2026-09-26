@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
@@ -12,6 +12,7 @@ import {
   getCurrentPosition,
   getSessionIdentity,
   listDevelopmentNames,
+  supervisedTradeFor,
   type ViolationLookup,
   type StaffAccount,
   displayStaffPosition,
@@ -49,6 +50,12 @@ export default function ViolationSend() {
   const [authorized, setAuthorized] = useState(false);
   const [sending, setSending] = useState(false);
   const [assignedDevelopments, setAssignedDevelopments] = useState<string[]>([]);
+  const [devOpen, setDevOpen] = useState(false);
+  const [devQuery, setDevQuery] = useState('');
+  const devFiltered = useMemo(() => {
+    const q = devQuery.trim().toLowerCase();
+    return q ? assignedDevelopments.filter((d) => d.toLowerCase().includes(q)) : assignedDevelopments;
+  }, [assignedDevelopments, devQuery]);
   const complaintMode = String(filter || '').toLowerCase() === 'worker';
   // In violation mode the sender picks who receives it.
   const [violationTarget, setViolationTarget] = useState<'inspector' | 'supervisor-inspector' | 'trade'>('inspector');
@@ -77,7 +84,8 @@ export default function ViolationSend() {
       const assigned = ((si as any)?.developments || []).filter((d: any) => typeof d === 'string' && d.trim());
       const devs = assigned.length ? assigned : listDevelopmentNames();
       setAssignedDevelopments(devs);
-      setDevelopment((current) => devs.some((d: string) => d.trim().toLowerCase() === String(current || '').trim().toLowerCase()) ? current : '');
+      // Snap to the canonical list spelling (reports may carry UPPERCASE).
+      setDevelopment((current) => devs.find((d: string) => d.trim().toLowerCase() === String(current || '').trim().toLowerCase()) || '');
     });
   }, []);
   useFocusEffect(useCallback(() => {
@@ -92,6 +100,10 @@ export default function ViolationSend() {
       const eligiblePosition = s.position !== 'Borough Director' && s.position !== 'Superintendent Ⓔ' && s.position !== 'Director';
       const inDevelopment = !!development &&
         (s.developments || []).some((d) => d.trim().toLowerCase() === development.trim().toLowerCase());
+      // Trade supervisors (incl. CPM Supervisor) may only assign their own
+      // trade's crew; the server rejects anyone else (canAssignStaff).
+      const myTrade = supervisedTradeFor(currentPosition);
+      if (myTrade && (s.position !== myTrade || !['worker', 'inspector', 'emergency'].includes(s.role))) return false;
       return eligibleRole && eligiblePosition &&
         (currentPosition === 'Superintendent Ⓔ' || inDevelopment);
     }
@@ -234,11 +246,33 @@ export default function ViolationSend() {
         </View>
       )}
       <Text style={ui.label}>Development</Text>
-      {assignedDevelopments.map((d) => (
-        <Pressable key={d} style={[ui.input, development === d && { borderColor: ACCENT, borderWidth: 2 }]} onPress={() => { setDevelopment(d); setSentTo(''); setSentStaffId(''); }}>
-          <Text style={{ color: development === d ? ACCENT : '#000', fontWeight: '600' }}>{d}</Text>
-        </Pressable>
-      ))}
+      <Pressable
+        testID="violation-send-development"
+        style={[ui.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, !!development && { borderColor: ACCENT, borderWidth: 2 }]}
+        onPress={() => setDevOpen((open) => !open)}
+      >
+        <Text style={{ color: development ? ACCENT : '#999', fontWeight: '600', flex: 1 }}>{development || 'Select development'}</Text>
+        <Text style={{ color: '#666', fontSize: 14 }}>{devOpen ? '▲' : '▼'}</Text>
+      </Pressable>
+      {devOpen && (
+        <View style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 8, marginBottom: 8, gap: 6 }}>
+          {assignedDevelopments.length > 8 && (
+            <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments..." autoCorrect={false} />
+          )}
+          <ScrollView style={{ maxHeight: 280 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
+            {devFiltered.map((d) => (
+              <Pressable
+                key={d}
+                style={{ paddingVertical: 10, paddingHorizontal: 6, borderBottomWidth: 1, borderBottomColor: '#eee' }}
+                onPress={() => { setDevelopment(d); setSentTo(''); setSentStaffId(''); setDevOpen(false); setDevQuery(''); }}
+              >
+                <Text style={{ color: development === d ? ACCENT : '#000', fontWeight: development === d ? '700' : '500' }}>{d}</Text>
+              </Pressable>
+            ))}
+            {devFiltered.length === 0 && <Text style={ui.empty}>No matches.</Text>}
+          </ScrollView>
+        </View>
+      )}
       {assignedDevelopments.length === 0 && <Text style={ui.empty}>No assigned developments.</Text>}
       {recipients.length === 0 ? (
         <Text style={ui.listSub}>{complaintMode ? 'No approved staff yet.' : (violationTarget === 'trade' ? 'No approved trade supervisors yet.' : violationTarget === 'supervisor-inspector' ? 'No approved Supervisor Inspector yet.' : 'No approved inspectors yet.')}</Text>

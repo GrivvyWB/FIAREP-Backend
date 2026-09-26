@@ -91,6 +91,10 @@ const TRADE_ASSIGNMENT_BY_SUPERVISOR = new Map<string, string>([
   ["Maintenance Supervisor", "Maintenance Worker"],
   ["Grounds Supervisor", "Groundskeeper"],
 ]);
+const OFFICE_CRAFT_TRADES = new Set<string>([
+  "Plumber", "Electrician", "Carpenter", "Painter",
+  "Heating Service", "Bricklayer", "Elevator Service", "CPM",
+]);
 function supervisedTradeForPosition(position?: string | null): string | null {
   return TRADE_ASSIGNMENT_BY_SUPERVISOR.get(position || "") || null;
 }
@@ -146,7 +150,12 @@ export function assignableOperationalStaff(
     // development for 24h; the candidate must still serve this report's site
     // (checked above), but the actor's own development scope is bypassed.
     if (isBoroughDirector || isAdministrator || coverageAllAccess) return true;
-    if (!withinDevelopments(candidate, actor.developments)) return false;
+    // Office/craft supervisors (CPM Supervisor, trade supervisors) are
+    // office-based and may hold no developments; the server exempts them from
+    // the actor-scope check (canAssignStaff), so the list must too.
+    const officeCraft = actor.role === "management" && !!actorTrade &&
+      OFFICE_CRAFT_TRADES.has(actorTrade);
+    if (!officeCraft && !withinDevelopments(candidate, actor.developments)) return false;
     if (candidate.role === "management") {
       return isRegionalDirector || TRADE_SUPERVISOR_POSITIONS.has(candidate.position as never);
     }

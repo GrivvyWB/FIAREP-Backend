@@ -1306,6 +1306,15 @@ test("trade supervisors can assign only their own non-supervisor crew", () => {
   assert.equal(canAssignStaff(plumberSupervisor, otherSupervisor, "Development A"), false);
 });
 
+test("office-based CPM Supervisor assigns a CPM covering the site without holding that development", () => {
+  const cpmSupervisor = actor({ position: "CPM Supervisor", developments: [] });
+  const cpm = { id: "cpm-1", role: "inspector", position: "CPM", developments: ["CONEY ISLAND", "Development B"] };
+  const plumber = { id: "plumber-9", role: "worker", position: "Plumber", developments: ["CONEY ISLAND"] };
+  assert.equal(canAssignStaff(cpmSupervisor, cpm, "Coney Island"), true);
+  assert.equal(canAssignStaff(cpmSupervisor, cpm, "Development C"), false);
+  assert.equal(canAssignStaff(cpmSupervisor, plumber, "Coney Island"), false);
+});
+
 test("Superintendent E can hand resident complaints to supervisors or operational staff", () => {
   const superintendentE = actor({
     id: "superintendent-e",

@@ -1879,6 +1879,9 @@ router.post(
       Carpenter: ["Carpenter"],
       Electrician: ["Electrician"],
       "Elevator Service": ["Elevator Service"],
+      Painter: ["Painter"],
+      "Heating Service": ["Heating Service"],
+      Bricklayer: ["Bricklayer"],
     };
     const assignedStaffId = typeof body["assignedStaffId"] === "string"
       ? body["assignedStaffId"].trim()
@@ -2052,6 +2055,33 @@ router.post(
   if (action === "complete" || action === "resolve") {
     state["completedByStaffId"] = actor.id;
     state["completedByStaffName"] = actor.name;
+  }
+  if (entity === "resident-reports" && action === "reject-work") {
+    // The supervisor's reason is the worker's instructions for the redo, so
+    // it must be persisted on the record (it was previously discarded).
+    if (!reviewNote) {
+      res.status(400).json({ error: "Add a reason so the worker knows what to fix" });
+      return;
+    }
+    state["reworkNote"] = reviewNote;
+    state["reworkByStaffId"] = actor.id;
+    state["reworkByStaffName"] = actor.name;
+    state["reworkAt"] = now.toISOString();
+    const existingUpdates = Array.isArray(current.state["updates"])
+      ? current.state["updates"].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+      : [];
+    state["updates"] = [
+      ...existingUpdates,
+      {
+        status: "in_progress",
+        note: `Sent back: ${reviewNote}`,
+        by: actor.name,
+        at: now.toISOString(),
+        action: "reject-work",
+        staffId: actor.id,
+        staffName: actor.name,
+      },
+    ];
   }
   if (action === "release") {
     const existingUpdates = Array.isArray(current.state["updates"])
@@ -2649,6 +2679,8 @@ router.post(
         if (request) target = supervisorTargetForReleasedWork(request.state);
       }
     }
+  } else if (entity === "resident-reports" && action === "reject-work") {
+    target = String(current.state["assignedStaffId"] || current.state["completedByStaffId"] || "");
   } else if (entity === "hud-inspections") {
     target = String(current.createdBy ?? "");
   } else if (isHrEntity(entity)) {
@@ -2796,6 +2828,18 @@ router.post(
         typeof state["development"] === "string" ? state["development"] : "",
       ].filter(Boolean).join(" · ");
       await notify(actor, target, "New job assigned", detail || undefined, current.id);
+    } else if (entity === "resident-reports" && action === "reject-work") {
+      const ref = [
+        typeof state["complaintNo"] === "string" ? state["complaintNo"] : "",
+        typeof state["address"] === "string" ? state["address"] : "",
+      ].filter(Boolean).join(" · ");
+      await notify(
+        actor,
+        target,
+        "Work sent back — redo required",
+        [ref, reviewNote].filter(Boolean).join(" — ") || undefined,
+        current.id,
+      );
     } else if (
       action === "release" &&
       ["resident-reports", "building-violations", "manpower-requests"].includes(entity)

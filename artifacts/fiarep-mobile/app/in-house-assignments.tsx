@@ -7,6 +7,7 @@ import { ui } from '../lib/ui';
 const workerPositions: Record<string, string[]> = {
   Inspector: ['Inspector'], CPM: ['CPM'], Plumber: ['Plumber'], Carpenter: ['Carpenter'],
   Electrician: ['Electrician'], 'Elevator Service': ['Elevator Service'],
+  Painter: ['Painter'], 'Heating Service': ['Heating Service'], Bricklayer: ['Bricklayer'],
 };
 
 export default function InHouseAssignments() {
@@ -18,12 +19,14 @@ export default function InHouseAssignments() {
     const actor = await getCurrentActor();
     const all = await listManpowerRequests().catch(() => []);
     setRequests(all.filter((r) => r.receiverSupervisorId === actor.id && ['pending', 'assigned', 'dispatched'].includes(r.status)));
-    setPeople((await listStaffAccounts('approved')).filter((p) => p.role === 'worker' || p.role === 'inspector'));
+    setPeople((await listStaffAccounts('approved')).filter((p) => p.role === 'worker' || p.role === 'inspector' || p.role === 'emergency'));
   }, []);
   useFocusEffect(useCallback(() => {
     void Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
       const p = position.trim().toLowerCase();
-      const allowed = actor.role === 'management' && /^(plumber|electric|electrician|elevator|painter|carpenter|roofer|heating|general construction|cctv installation)( service)? supervisor$/.test(p);
+      // Any receiving supervisor (incl. CPM Supervisor). The list below only
+      // shows requests addressed to this account; the server enforces the rest.
+      const allowed = actor.role === 'management' && p.includes('supervisor');
       if (!allowed) { router.replace('/management-home'); return; }
       setAuthorized(true);
       void load();

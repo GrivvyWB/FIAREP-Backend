@@ -999,7 +999,13 @@ export function canAssignStaff(
   );
   if (development && target.role !== "emergency" && !targetCoversDev) return false;
   if (isBoroughDirector(actor) || actor.role === "administrator") return true;
+  // Office/craft supervisors (CPM Supervisor and the trade supervisors) are
+  // office-based and often hold no developments of their own; they assign
+  // their trade's crew to whatever site the work is at. The trade match below
+  // and the target-covers-this-development check above still apply.
+  const officeCraft = actor.role === "management" && isOfficeCraftSupervisor(actor);
   if (
+    !officeCraft &&
     target.role !== "emergency" &&
     (!target.developments.length ||
      !target.developments.every((value) =>

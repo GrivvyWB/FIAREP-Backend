@@ -121,11 +121,16 @@ export default function TradeRequests() {
   const availableStaff = useMemo(() => {
     if (!assigningRequest) return [];
     const trade = String(assigningRequest.state?.requestedTrade || "");
+    const dev = String(assigningRequest.development || "").trim().toLowerCase();
+    // Mirrors the server's manpower assign check: an operational (non-supervisor)
+    // member of the requested trade who covers the site, matched case-insensitively.
     return staff.filter((member) =>
       member.position === trade &&
-      (!assigningRequest.development || member.developments.includes(assigningRequest.development)),
+      ["worker", "inspector", "emergency"].includes(member.role) &&
+      member.id !== actor?.id &&
+      (!dev || member.developments.some((value) => (value || "").trim().toLowerCase() === dev)),
     );
-  }, [assigningRequest, staff]);
+  }, [actor?.id, assigningRequest, staff]);
 
   async function refresh() {
     await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey("manpower-requests") });

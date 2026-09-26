@@ -130,6 +130,7 @@ export default function Notifications() {
       }
       router.push('/my-jobs'); return;
     }
+    if (msg.includes('manpower requested')) { router.push('/in-house-assignments'); return; }
     if (msg.includes('new route assigned')) { router.push('/worker'); return; }
     if (n.reportId) { router.push('/report-detail?id=' + n.reportId); return; }
     // Fallback for older notifications without a stored reportId: match by detail text.

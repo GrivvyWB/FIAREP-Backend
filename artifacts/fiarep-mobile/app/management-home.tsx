@@ -72,7 +72,10 @@ export default function ManagementHome() {
   if (cpmSupervisor || tradeSupervisor) {
     const title = cpmSupervisor ? 'CPM Supervisor' : displayStaffPosition(position);
     const workflow: Tile[] = cpmSupervisor
-      ? [{ label: 'CPM Supervisor Scope Review', onPress: () => router.push('/scope-review'), tone: 'solid' }]
+      ? [
+        { label: 'CPM Supervisor Scope Review', onPress: () => router.push('/scope-review'), tone: 'solid' },
+        { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' },
+      ]
       : [
         { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' },
         { label: 'Assign a Job', onPress: () => router.push('/dispatch-job'), tone: 'solid' },
