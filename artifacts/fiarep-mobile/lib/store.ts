@@ -17,6 +17,7 @@ import {
   performEntityAction,
   createEntityRecord,
   updateEntityRecord,
+  getEntityRecord,
   refreshSession,
   registerDeviceToken,
   submitPublicResidentReport,
@@ -2881,7 +2882,16 @@ async function ensureDraftOnServer(r: ProcurementRequest): Promise<ProcurementRe
   if (!(await getAccessToken())) {
     throw new Error('Submit requires an online connection. Save the draft and reconnect before submitting.');
   }
-  const version = Number((r as any)?._meta?.serverVersion || 0);
+  // Use the server's current version: the CPM Supervisor may have returned
+  // the scope since this phone last synced (otherwise 409 "Concurrent update").
+  let version = Number((r as any)?._meta?.serverVersion || 0);
+  try {
+    const current = await getEntityRecord('procurement', r.id);
+    const serverVersion = Number((current as any)?.version || 0);
+    if (serverVersion) version = serverVersion;
+  } catch {
+    // Not on the server yet (new draft) — created below.
+  }
   const editable = {
     address: r.address,
     scope: r.scope,
