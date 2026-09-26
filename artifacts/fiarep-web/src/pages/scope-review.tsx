@@ -1,4 +1,4 @@
-import { CpmPackage, ScopeLines, ViolationCode } from "@/components/scope-lines";
+import { ComplaintPhotos, CpmPackage, ScopeLines, ViolationCode } from "@/components/scope-lines";
 import { isCpmSupervisorTitle, isOfficeTradeSupervisorTitle, isSupervisorForTrade, supervisedTradeForPosition } from "@/lib/titles";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation } from "wouter";
@@ -201,6 +201,7 @@ export default function ScopeReview() {
         <ViolationCode state={state} />
         <p>{state.scope || state.description || "No scope description."}</p>
         <ScopeLines scope={state.cpmScope} showPrices />
+        {state.sourceEntity === "resident-reports" && !!state.sourceRecordId && <ComplaintPhotos reportId={String(state.sourceRecordId)} />}
         <CpmPackage state={state} />
         {!(state.cpmScope || state.cpmEstimate || state.cpmElevator || state.scopeFileRemote) && (
           <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">

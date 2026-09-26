@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 // The CPM's CSI Scope of Work (division → section code → lines). Staff see the
 // CPM's prices; vendors see the same lines without prices.
 
@@ -79,7 +80,11 @@ export function ScopeLines({ scope, showPrices }: { scope?: Scope | null; showPr
  * Estimate, the Elevator Services survey, and the attached scope file.
  */
 export function CpmPackage({ state }: { state: Record<string, any> }) {
-  const est = state.cpmEstimate as { categories?: Array<{ title: string; location?: string; description?: string; cost?: string }>; totals?: Record<string, string> } | undefined;
+  const est = state.cpmEstimate as { header?: Record<string, string>; categories?: Array<{ title: string; location?: string; description?: string; cost?: string }>; totals?: Record<string, string> } | undefined;
+  // Totals as in the original Scope Review: cost estimate, 10% contingency, total.
+  const estSum = (est?.categories || []).reduce((sum, c) => sum + num(c.cost), 0);
+  const contingency = Math.round(estSum * 0.1 * 100) / 100;
+  const estHeader = est?.header || {};
   const elev = state.cpmElevator as { header?: Record<string, string>; items?: Array<{ section: string; label: string; condition?: string; cost?: string; note?: string }> } | undefined;
   const file = state.scopeFileRemote as { objectPath?: string; name?: string } | undefined;
   if (!est?.categories?.length && !elev?.items?.length && !file?.objectPath && !state.scopeFileName) return null;
@@ -94,17 +99,23 @@ export function CpmPackage({ state }: { state: Record<string, any> }) {
       {!!est?.categories?.length && (
         <div className="overflow-hidden rounded-md border">
           <div className="bg-muted/60 px-3 py-1.5 text-sm font-semibold">Nature of Work &amp; Cost Estimate</div>
+          {(estHeader.buildingAddress || estHeader.projectManager || estHeader.date || estHeader.inspectionDates) && (
+            <p className="px-3 pt-1.5 text-xs text-muted-foreground">
+              {[estHeader.buildingAddress, estHeader.projectManager ? `CPM ${estHeader.projectManager}` : "", estHeader.inspectionDates ? `Inspected ${estHeader.inspectionDates}` : "", estHeader.date].filter(Boolean).join(" · ")}
+            </p>
+          )}
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-muted-foreground"><th className="px-3 py-1">Nature of work</th><th className="px-3 py-1">Location</th><th className="px-3 py-1">Description</th><th className="px-3 py-1 text-right">Cost</th></tr></thead>
             <tbody>{est.categories.map((c, i) => (
-              <tr key={i} className="border-t"><td className="px-3 py-1 font-medium">{c.title}</td><td className="px-3 py-1">{c.location}</td><td className="px-3 py-1">{c.description}</td><td className="px-3 py-1 text-right">{c.cost}</td></tr>
+              <tr key={i} className="border-t"><td className="px-3 py-1 font-medium">{c.title}</td><td className="px-3 py-1">{c.location}</td><td className="px-3 py-1">{c.description}</td><td className="px-3 py-1 text-right">{num(c.cost) ? money(num(c.cost)) : c.cost}</td></tr>
             ))}</tbody>
           </table>
-          {!!est.totals && (est.totals.total || est.totals.costEstimate) && (
-            <div className="border-t px-3 py-1.5 text-right text-sm">
-              {est.totals.costEstimate ? <>Cost estimate {est.totals.costEstimate} · </> : null}
-              {est.totals.contingency ? <>Contingency {est.totals.contingency} · </> : null}
-              <span className="font-semibold">Total {est.totals.total || est.totals.costEstimate}</span>
+          {estSum > 0 && (
+            <div className="space-y-0.5 border-t px-3 py-2 text-right text-sm">
+              <p>Cost estimate <span className="font-medium">{money(estSum)}</span></p>
+              <p>Contingency (10%) <span className="font-medium">{money(contingency)}</span></p>
+              <p className="font-semibold">Total {money(estSum + contingency)}</p>
+              {!!est.totals?.costPerDU && <p className="text-muted-foreground">Cost per D.U. {est.totals.costPerDU}</p>}
             </div>
           )}
         </div>
@@ -127,6 +138,40 @@ export function CpmPackage({ state }: { state: Record<string, any> }) {
       ) : state.scopeFileName ? (
         <p className="text-sm text-muted-foreground">Attached file: {state.scopeFileName} (sent before files uploaded — ask the CPM to resend)</p>
       ) : null}
+    </div>
+  );
+}
+
+/** The resident's photos from the complaint this scope came from. */
+export function ComplaintPhotos({ reportId }: { reportId: string }) {
+  const [urls, setUrls] = useState<string[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const api = await import("@workspace/api-client-react");
+        const photos = await api.listResidentReportPhotos({ reportId });
+        const found = await Promise.all(photos.map(async (photo) => {
+          try { return (await api.requestResidentReportPhotoDownload(photo.id)).downloadUrl; } catch { return ""; }
+        }));
+        if (!cancelled) setUrls(found.filter(Boolean));
+      } catch {
+        if (!cancelled) setUrls([]);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [reportId]);
+  if (!urls?.length) return null;
+  return (
+    <div className="space-y-1">
+      <p className="text-sm font-semibold">Photos from the complaint</p>
+      <div className="flex flex-wrap gap-2">
+        {urls.map((url, i) => (
+          <a key={i} href={url} target="_blank" rel="noreferrer">
+            <img src={url} alt={`Complaint photo ${i + 1}`} className="h-32 w-32 rounded-md border object-cover" />
+          </a>
+        ))}
+      </div>
     </div>
   );
 }

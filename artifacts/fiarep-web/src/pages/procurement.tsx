@@ -1,4 +1,4 @@
-import { CpmPackage, ScopeLines, ViolationCode } from "@/components/scope-lines";
+import { ComplaintPhotos, CpmPackage, ScopeLines, ViolationCode } from "@/components/scope-lines";
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -342,6 +342,7 @@ export default function Procurement() {
             <ViolationCode state={s} />
             <p className="whitespace-pre-wrap">{s.scope || s.scopeDescription || "No scope description."}</p>
             <ScopeLines scope={s.cpmScope} showPrices />
+            {s.sourceEntity === "resident-reports" && !!s.sourceRecordId && <ComplaintPhotos reportId={String(s.sourceRecordId)} />}
             <CpmPackage state={s} />
             {!!s.cpmNotes && <p className="whitespace-pre-wrap text-slate-500">CPM notes: {s.cpmNotes}</p>}
             {!!s.violationNotes && <p className="whitespace-pre-wrap text-slate-500">Violation notes: {s.violationNotes}</p>}
