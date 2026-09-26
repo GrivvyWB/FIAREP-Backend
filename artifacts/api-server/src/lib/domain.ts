@@ -295,8 +295,8 @@ export function isComplaintHandlingSupervisor(
 ): boolean {
   if (actor.role === "administrator") return true;
   if (isSuperintendentE(actor)) return true;
+  // Every supervisor handles complaints the same way (CPM Supervisor included).
   return actor.role === "management" &&
-    actor.position !== "CPM Supervisor" &&
     (
       actor.position.toLowerCase().includes("supervisor") ||
       ["Superintendent", "Assistant Superintendent"].includes(actor.position)
@@ -1191,9 +1191,7 @@ export function canPerformEntityAction(
       return actor.role === "administrator" ||
         isBoroughDirector(actor) ||
         isComplaintHandlingSupervisor(actor) ||
-        (actor.role === "management" && actor.position !== "CPM Supervisor") ||
-        // A CPM Supervisor reviews the complaints they assigned to their CPMs.
-        (isCpmSupervisor(actor) && state["assignedByStaffId"] === actor.id);
+        actor.role === "management";
     }
     return isSupervisor;
   }
@@ -1230,9 +1228,9 @@ export function canPerformEntityAction(
   }
 
   if (entity === "resident-reports") {
-    // CPM Supervisors may assign a complaint to their own CPMs (canAssignStaff
-    // limits them to CPM crew); they still don't clear or approve complaints.
-    if (action === "assign") return isComplaintHandlingSupervisor(actor) || isCpmSupervisor(actor);
+    // Trade supervisors (CPM Supervisor included) are limited to their own
+    // crew by canAssignStaff.
+    if (action === "assign") return isComplaintHandlingSupervisor(actor);
     if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     if (action === "clear") return isComplaintHandlingSupervisor(actor);
     if (action === "resolve") return false;

@@ -83,14 +83,16 @@ export function hasModuleAccess(
   if (staff.role === "inspector" && position === "Inspector") {
     return exactWorkflowShell.has(module) || ["inspections", "inspection-create", "violations"].includes(module);
   }
+  // Inspector / CPM manpower requests are addressed to these supervisors, so
+  // like every trade supervisor they need the Trade Requests page.
   if (staff.role === "management" && position === "Supervisor Inspector") {
-    return exactWorkflowShell.has(module);
+    return exactWorkflowShell.has(module) || module === "trade-requests";
   }
   if (staff.role === "inspector" && position === "CPM") {
     return exactWorkflowShell.has(module) || module === "scope-writing";
   }
   if (staff.role === "management" && position === "CPM Supervisor") {
-    return exactWorkflowShell.has(module) || module === "scope-review";
+    return exactWorkflowShell.has(module) || module === "scope-review" || module === "trade-requests";
   }
   const isTradeSupervisor =
     isSupervisor(staff) &&
@@ -174,8 +176,8 @@ export function canHandleResidentReports(staff: Staff | null | undefined): boole
   if (staff.role === "administrator") return true;
   if (staff.position === "Superintendent Ⓔ") return true;
   const position = staff.position?.trim() || "";
+  // Every supervisor handles complaints the same way (CPM Supervisor included).
   return staff.role === "management" &&
-    position !== "CPM Supervisor" &&
     (
       position.toLowerCase().includes("supervisor") ||
       ["Superintendent", "Assistant Superintendent"].includes(position)

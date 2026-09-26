@@ -40,7 +40,7 @@ export default function ManagementHome() {
   const canReviewInspections = supervisorInspector;
   const cpmSupervisor = _pos === 'cpm supervisor';
   const tradeSupervisor = /^(plumber|electric|electrician|elevator|painter|carpenter|roofer|heating|general construction|cctv installation)( service)? supervisor$/.test(_pos)
-    || ['plumbing supervisor', 'electrical supervisor', 'electrician supervisor', 'elevator service supervisor'].includes(_pos);
+    || ['plumbing supervisor', 'electrical supervisor', 'electrician supervisor', 'elevator service supervisor', 'bricklayer supervisor', 'mason supervisor', 'heat plant supervisor'].includes(_pos);
   const director = _pos === 'borough director' || _pos === 'regional director';
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = isElevated ? await unreadCount('management') : 0; if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, [isElevated]));
 
@@ -64,6 +64,7 @@ export default function ManagementHome() {
       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' as Tone },
         { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone },
+        { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone },
         ...personalTiles,
        ].filter((t) => { const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
       <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
