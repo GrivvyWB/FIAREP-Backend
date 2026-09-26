@@ -99,7 +99,9 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
   const recipients = staff.filter((s) => {
     if (myId && s.id === myId) return false; // a supervisor cannot send work to themselves
     // Emergency request from the app (view-only supervisors): emergency crews only.
-    if (emergencyOnly && s.role !== 'emergency') return false;
+    // Emergency request: every emergency crew member, whatever their
+    // development or trade (crews respond across developments).
+    if (emergencyOnly) return s.role === 'emergency';
     if (complaintMode) {
       const eligibleRole = ['management', 'worker', 'inspector', 'emergency'].includes(s.role);
       const eligiblePosition = s.position !== 'Borough Director' && s.position !== 'Superintendent Ⓔ' && s.position !== 'Director';
@@ -189,7 +191,7 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
     <ScrollView contentContainerStyle={ui.wrap}>
-      <Text style={ui.h}>{complaintMode ? 'Send Complaint' : 'Send Violation'}</Text>
+      <Text style={ui.h}>{emergencyOnly ? 'Send Emergency Request' : complaintMode ? 'Send Complaint' : 'Send Violation'}</Text>
 
       {complaintMode ? (
         <>
@@ -324,7 +326,7 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
         onPress={submit}
         disabled={sending}
       >
-        <Text style={ui.btnText}>{sending ? 'Sending\u2026' : (complaintMode ? 'Send complaint' : 'Send violation')}</Text>
+        <Text style={ui.btnText}>{sending ? 'Sending\u2026' : (emergencyOnly ? 'Send emergency request' : complaintMode ? 'Send complaint' : 'Send violation')}</Text>
       </Pressable>
       {!!lastSent && <Text style={{ color: '#1a8f4c', fontWeight: '700', textAlign: 'center', marginTop: 8 }}>{lastSent}. Pick another person to send again.</Text>}
 

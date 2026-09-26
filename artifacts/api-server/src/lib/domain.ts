@@ -735,6 +735,9 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
     );
   }
   if (entity === "emergency-units" || entity === "emergency-jobs") {
+    // Any complaint-handling supervisor may send an emergency job to a crew;
+    // registering trucks (emergency-units) stays with admins and directors.
+    if (entity === "emergency-jobs" && isComplaintHandlingSupervisor(actor)) return true;
     return (
       actor.role === "administrator" ||
       (actor.role === "management" &&
@@ -1016,6 +1019,9 @@ export function canAssignStaff(
   );
   if (development && target.role !== "emergency" && !targetCoversDev) return false;
   if (isBoroughDirector(actor) || actor.role === "administrator") return true;
+  // Emergency crews answer emergency requests from any supervisor, whatever
+  // the supervisor's own trade or developments.
+  if (target.role === "emergency") return true;
   // Office/craft supervisors (CPM Supervisor and the trade supervisors) are
   // office-based and often hold no developments of their own; they assign
   // their trade's crew to whatever site the work is at. The trade match below

@@ -1308,6 +1308,16 @@ test("trade supervisors can assign only their own non-supervisor crew", () => {
   assert.equal(canAssignStaff(plumberSupervisor, otherSupervisor, "Development A"), false);
 });
 
+test("any supervisor may send an emergency request to an emergency crew member", () => {
+  const crew = { id: "em-1", role: "emergency", position: "Maintenance Worker", developments: [] as string[] };
+  for (const position of ["CPM Supervisor", "Plumber Supervisor", "Superintendent", "Supervisor Inspector"]) {
+    assert.equal(canAssignStaff(actor({ role: "management", position, developments: ["Development A"] }), crew, "CONEY ISLAND I (SITES 4 & 5)"), true, position);
+  }
+  assert.equal(canAssignStaff(actor({ role: "worker", position: "Plumber" }), crew, "Development A"), false);
+  assert.equal(canCreateEntity(actor({ role: "management", position: "CPM Supervisor" }), "emergency-jobs"), true);
+  assert.equal(canCreateEntity(actor({ role: "management", position: "CPM Supervisor" }), "emergency-units"), false);
+});
+
 test("procurement may return a scope that is pending release or out for bid", () => {
   const procurement = actor({ role: "procurement", position: "Procurement" });
   assert.equal(canPerformEntityAction(procurement, "procurement", "return", { status: "approved" }), true);
