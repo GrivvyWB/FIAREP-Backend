@@ -1228,7 +1228,7 @@ export function canPerformEntityAction(
      }
     return (
       actor.role === "procurement" &&
-      ["broadcast", "award", "rate-close", "return"].includes(action)
+      ["broadcast", "resend", "award", "rate-close", "return"].includes(action)
     );
   }
 
@@ -1418,6 +1418,8 @@ export function isValidEntityTransition(
       // Procurement may send a scope back while pending release or out for bid.
       return: ["submitted", "approved", "bidding"],
       broadcast: ["approved"],
+      // Send an out-for-bid scope to more vendors (same SR- code).
+      resend: ["bidding"],
       award: ["bidding"],
       "rate-close": ["awarded"],
     },

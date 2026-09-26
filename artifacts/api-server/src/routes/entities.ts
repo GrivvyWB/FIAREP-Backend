@@ -1472,6 +1472,7 @@ router.post(
       "handoff-inhouse": "in_house",
       return: "returned",
       broadcast: "bidding",
+      resend: "bidding",
       award: "awarded",
       "rate-close": "closed",
     },
@@ -2698,12 +2699,27 @@ router.post(
       current.id,
     );
   }
-  if (entity === "procurement" && action === "broadcast") {
+  if (entity === "procurement" && (action === "broadcast" || action === "resend")) {
+    // Release emails every vendor contact plus any addresses typed in; a
+    // resend with addresses goes only to those, otherwise to every contact.
+    const includeContacts = action === "broadcast" || vendorRecipients.length === 0;
+    let delivery: { sent: number; failed: number; recipients: number; error?: string } =
+      { sent: 0, failed: 0, recipients: 0 };
     try {
-      const delivery = await emailReleasedScope(actor.tenantId, state, vendorRecipients);
+      delivery = await emailReleasedScope(actor.tenantId, state, vendorRecipients, includeContacts);
       logger.info({ procurementId: current.id, ...delivery }, "Vendor scope emails processed");
     } catch (err) {
+      delivery = { ...delivery, error: "Email service unavailable" };
       logger.error({ err, procurementId: current.id }, "Vendor scope email delivery failed");
+    }
+    // Delivery report for Procurement (merged without a version bump).
+    const report = { ...delivery, action, at: new Date().toISOString() };
+    try {
+      await db.update(entityRecords)
+        .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ vendorEmail: report })}::jsonb` })
+        .where(and(eq(entityRecords.id, current.id), eq(entityRecords.tenantId, actor.tenantId)));
+    } catch (err) {
+      logger.error({ err, procurementId: current.id }, "Could not record vendor email delivery");
     }
   }
   let target = "";
