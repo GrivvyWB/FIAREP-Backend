@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -10,10 +10,13 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Modal,
+  FlatList,
+  Pressable,
 } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { useRouter } from 'expo-router';
-import { createResidentReport, LOCATION_CATEGORIES } from '../lib/store';
+import { createResidentReport, LOCATION_CATEGORIES, listDevelopmentNames } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import AddressInput from '../components/AddressInput';
@@ -36,6 +39,15 @@ export default function ResidentScreen() {
   const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const showWater = /(leak|water|flood|stoppage)/i.test(description);
+  // Canonical development names only; free text never matched routing or
+  // the address list.
+  const [devPickerOpen, setDevPickerOpen] = useState(false);
+  const [devQuery, setDevQuery] = useState('');
+  const devNames = useMemo(() => listDevelopmentNames(), []);
+  const devFiltered = useMemo(() => {
+    const q = devQuery.trim().toLowerCase();
+    return q ? devNames.filter((n) => n.toLowerCase().includes(q)) : devNames;
+  }, [devQuery, devNames]);
 
   async function onTakePhoto() {
     if (submitting) return;
@@ -63,7 +75,7 @@ export default function ResidentScreen() {
 
   async function onSubmit() {
     if (!development.trim()) {
-      Alert.alert('Development required', 'Please enter your development.');
+      Alert.alert('Development required', 'Select your development.');
       return;
     }
     if (!address.trim()) {
@@ -140,12 +152,9 @@ export default function ResidentScreen() {
       />
 
       <Text style={styles.label}>Development</Text>
-      <TextInput
-        value={development}
-        onChangeText={setDevelopment}
-        style={styles.input}
-        autoCapitalize="words"
-      />
+      <Pressable testID="resident-development" style={styles.input} onPress={() => setDevPickerOpen(true)}>
+        <Text style={{ fontSize: 16, color: development ? '#111' : '#999' }}>{development || 'Select your development'}</Text>
+      </Pressable>
 
       <Text style={styles.label}>Building Address</Text>
       <AddressInput
@@ -225,6 +234,34 @@ export default function ResidentScreen() {
       </TouchableOpacity>
 
     <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
+    <Modal visible={devPickerOpen} animationType="slide" onRequestClose={() => setDevPickerOpen(false)}>
+      <View style={{ flex: 1, padding: 16, paddingTop: 60, gap: 10, backgroundColor: '#fff' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#111' }}>Select development</Text>
+          <Pressable onPress={() => setDevPickerOpen(false)}><Text style={{ color: '#0a7ea4', fontWeight: '600', fontSize: 16 }}>Close</Text></Pressable>
+        </View>
+        <TextInput style={styles.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments..." placeholderTextColor="#999" autoFocus />
+        <FlatList
+          data={devFiltered}
+          keyExtractor={(n) => n}
+          keyboardShouldPersistTaps="handled"
+          renderItem={({ item }) => (
+            <Pressable
+              style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#eee' }}
+              onPress={() => {
+                if (item !== development) setAddress('');
+                setDevelopment(item);
+                setDevPickerOpen(false);
+                setDevQuery('');
+              }}
+            >
+              <Text style={{ fontSize: 16 }}>{item}</Text>
+            </Pressable>
+          )}
+          ListEmptyComponent={<Text style={{ color: '#999', textAlign: 'center', marginTop: 24 }}>No matches.</Text>}
+        />
+      </View>
+    </Modal>
     </ScrollView>
     </KeyboardAvoidingView>
   );
