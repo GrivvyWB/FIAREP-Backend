@@ -588,6 +588,16 @@ export function canReadEntityRecord(
     isCpmSupervisor(actor) &&
     row.state["cpmSupervisorId"] !== actor.id
   ) return false;
+  // Whoever a complaint is assigned to, or who completed it, always keeps a
+  // read copy (e.g. a CPM whose base developments don't list the complaint's
+  // site, or after the work was sent for review).
+  if (
+    row.entity === "resident-reports" &&
+    !row.deleted &&
+    canReadEntity(actor, row.entity) &&
+    (normalizeAssignment(row.state).assignedStaffId === actor.id ||
+      row.state["completedByStaffId"] === actor.id)
+  ) return true;
   // Office/craft supervisors (CPM, CPM Supervisor, and the trade supervisors —
   // plumbing, electrical, carpentry, heating, painting, bricklaying, elevator)
   // have no base development. They never browse a development's raw complaints;

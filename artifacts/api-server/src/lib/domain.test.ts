@@ -1306,6 +1306,17 @@ test("trade supervisors can assign only their own non-supervisor crew", () => {
   assert.equal(canAssignStaff(plumberSupervisor, otherSupervisor, "Development A"), false);
 });
 
+test("the assigned/completing CPM keeps a read copy of a complaint outside their developments", () => {
+  const cpm = actor({ id: "cpm-7", role: "inspector", position: "CPM", developments: ["Development B"] });
+  const row = (state: Record<string, unknown>) => ({
+    entity: "resident-reports", development: "CONEY ISLAND I (SITES 4 & 5)", state, createdBy: "resident", deleted: false,
+  });
+  assert.equal(canReadEntityRecord(cpm, row({ status: "done", assignedStaffId: "cpm-7" })), true);
+  assert.equal(canReadEntityRecord(cpm, row({ status: "work_approved", completedByStaffId: "cpm-7" })), true);
+  assert.equal(canReadEntityRecord(cpm, row({ status: "submitted" })), false);
+  assert.equal(canReadEntityRecord(cpm, row({ status: "done", assignedStaffId: "someone-else" })), false);
+});
+
 test("office-based CPM Supervisor assigns a CPM covering the site without holding that development", () => {
   const cpmSupervisor = actor({ position: "CPM Supervisor", developments: [] });
   const cpm = { id: "cpm-1", role: "inspector", position: "CPM", developments: ["CONEY ISLAND", "Development B"] };

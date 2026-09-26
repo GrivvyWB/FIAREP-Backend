@@ -53,7 +53,10 @@ export default function MyJobs() {
        // NOTE: 'seen' only affects the unread count on the home screen. A job
        // assigned to me must stay openable in My Jobs even after I've viewed it,
        // so we do NOT filter it out here by seen-state.
-       setResJobs(all.filter((r) => r.status !== 'resolved' && r.assignedStaffId === a.id && inMyDevs(r.development)));
+       // Everything this person was given or completed. Their own work is never
+       // hidden by the development filter (the server already scopes it).
+       setResJobs(all.filter((r) => r.status !== 'resolved' &&
+         (r.assignedStaffId === a.id || (r as any).completedByStaffId === a.id)));
        setInHouseJobs((await listManpowerRequests()).filter((r) => r.assignedStaffId === a.id && ['dispatched', 'in_progress'].includes(r.status) && inMyDevs(r.development)));
     });
   }, []);
@@ -182,15 +185,30 @@ export default function MyJobs() {
 
       {resJobs.length > 0 && (
         <>
-          <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>Resident requests ({resJobs.length})</Text>
-          {resJobs.map((r) => (
+          {resJobs.some((r) => r.status !== 'completed') && (
+            <Text style={[ui.label, { marginTop: 12, fontWeight: '700' }]}>Resident requests ({resJobs.filter((r) => r.status !== 'completed').length})</Text>
+          )}
+          {[...resJobs.filter((r) => r.status !== 'completed'), ...resJobs.filter((r) => r.status === 'completed')].map((r, index, ordered) => (
+            <View key={r.id}>
+            {r.status === 'completed' && (index === 0 || ordered[index - 1].status !== 'completed') && (
+              <Text style={[ui.label, { marginTop: 16, fontWeight: '700' }]}>Sent for review ({resJobs.filter((x) => x.status === 'completed').length})</Text>
+            )}
             <View key={r.id} style={[ui.card, { gap: 4, marginTop: 8 }]}>
               <Pressable onPress={() => { markReportSeen(r.id).catch(() => undefined); router.push('/report-detail?id=' + encodeURIComponent(r.id)); }}>
                 <Text style={{ fontSize: 15, fontWeight: '600' }}>{r.location || r.unit || r.address || 'Request'}</Text>
                 {!!r.address && <Text style={ui.listSub}>{r.address}{r.unit ? ' \u00b7 ' + r.unit : ''}</Text>}
                 {!!r.description && <Text style={ui.listSub} numberOfLines={2}>{r.description}</Text>}
               </Pressable>
-              {position !== 'Elevator Service' && (
+              {r.status === 'completed' ? (
+                <>
+                  <Text style={{ color: r.reviewStatus === 'work_approved' ? '#1E7D4F' : '#B4741A', fontWeight: '700', fontSize: 13 }}>
+                    {r.reviewStatus === 'work_approved' ? 'Approved by supervisor' : 'Awaiting supervisor review'}
+                  </Text>
+                  <Pressable style={[ui.btnOutline, { marginTop: 6 }]} onPress={() => router.push('/report-detail?id=' + encodeURIComponent(r.id))}>
+                    <Text style={ui.btnOutlineText}>View copy</Text>
+                  </Pressable>
+                </>
+              ) : position !== 'Elevator Service' && (
                 <Pressable style={[ui.btn, { marginTop: 6 }]} onPress={() => { markReportSeen(r.id).catch(() => undefined); router.push('/report-detail?id=' + encodeURIComponent(r.id)); }}>
                   <Text style={ui.btnText}>{r.status === 'in_progress' ? 'Continue \u2014 add photo & complete' : 'Open job \u2014 start, photo, complete'}</Text>
                 </Pressable>
@@ -200,6 +218,7 @@ export default function MyJobs() {
                   <Text style={{ color: '#c0392b', fontWeight: '600', fontSize: 13 }}>Remove (cleared by management)</Text>
                 </Pressable>
               )}
+            </View>
             </View>
           ))}
           <Text style={[ui.label, { marginTop: 16, fontWeight: '700' }]}>Inspection repairs</Text>
