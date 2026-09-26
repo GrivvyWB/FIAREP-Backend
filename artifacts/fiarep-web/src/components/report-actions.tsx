@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
-import { isInspectionSupervisorTitle, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "@/lib/titles";
+import { isInspectionSupervisorTitle, isSupervisorTitle, sameTitle } from "@/lib/titles";
 
 // Website versions of the app's management "Create Report" and "Send as
 // Violation" (supervisors/managers act on the website; the app is view-only).
@@ -158,18 +158,12 @@ export function SendAsViolationPanel({ report, staff }: {
   const [violationNumber, setViolationNumber] = useState("");
   const [note, setNote] = useState(String(state.description || ""));
   const [sentTo, setSentTo] = useState("");
-  // Supervisors send to the Supervisor Inspector, who assigns their own
-  // inspectors. Only the Supervisor Inspector (and non-supervisor managers)
-  // pick an inspector directly.
-  const viaSupervisor = isSupervisorTitle(actor?.position) && !isInspectionSupervisorTitle(actor?.position);
-  const coversSite = (member: { developments: string[] }) =>
-    !!development && member.developments.some((value) => sameTitle(value, development));
   const inspectors = staff.filter((member) =>
+    member.role === "inspector" &&
+    sameTitle(member.position, "Inspector") &&
     member.id !== actor?.id &&
-    (viaSupervisor
-      ? isSupervisorForTrade(member.position, "Inspector") &&
-        (member.developments.length === 0 || coversSite(member))
-      : member.role === "inspector" && sameTitle(member.position, "Inspector") && coversSite(member)),
+    !!development &&
+    member.developments.some((value) => sameTitle(value, development)),
   ).sort((a, b) => a.name.localeCompare(b.name));
   const address = [String(state.address || ""), state.unit ? `Unit ${String(state.unit)}` : ""].filter(Boolean).join(" ");
   const complaintNo = String(state.complaintNo || "");
@@ -177,32 +171,6 @@ export function SendAsViolationPanel({ report, staff }: {
   async function send() {
     const inspector = inspectors.find((member) => member.id === inspectorId);
     if (!inspector || !address) return;
-    if (viaSupervisor) {
-      try {
-        await create.mutateAsync({
-          entity: "manpower-requests",
-          data: {
-            id: newId(),
-            version: 1,
-            development: development || undefined,
-            state: {
-              sourceEntity: "resident-reports",
-              sourceRecordId: report.id,
-              requestedTrade: "Inspector",
-              receiverSupervisorId: inspector.id,
-              note: [violationNumber.trim() ? `Violation #: ${violationNumber.trim()}` : "", note.trim()].filter(Boolean).join("\n"),
-            },
-          } as never,
-        });
-        await invalidateOperationalQueries(queryClient, "manpower-requests", report.id);
-        setSentTo(inspector.name);
-        setInspectorId("");
-        toast({ title: "Sent to Supervisor Inspector", description: `${inspector.name} will assign an inspector · ${complaintNo || address}` });
-      } catch (error: any) {
-        toast({ variant: "destructive", title: "Could not send", description: error?.message || "Please try again." });
-      }
-      return;
-    }
     const id = newId();
     const clientRequestId = newId();
     const instructions = [
@@ -243,18 +211,22 @@ export function SendAsViolationPanel({ report, staff }: {
     }
   }
 
+  // Trade supervisors (CPM Supervisor, Plumbing Supervisor, ...) work with
+  // their own crew; sending to inspectors is the Supervisor Inspector's and
+  // management's job, so the panel is hidden for them.
+  if (isSupervisorTitle(actor?.position) && !isInspectionSupervisorTitle(actor?.position)) return null;
+
   return (
     <div className="border-t border-border pt-4 space-y-2">
-      <p className="text-sm font-semibold">{viaSupervisor ? "Send as violation to the Supervisor Inspector" : "Send as violation to an Inspector"}</p>
-      {viaSupervisor && <p className="text-xs text-muted-foreground">The Supervisor Inspector assigns one of their inspectors.</p>}
+      <p className="text-sm font-semibold">Send as violation to an Inspector</p>
       <select className={selectClass} value={inspectorId} onChange={(event) => setInspectorId(event.target.value)}>
-        <option value="">{inspectors.length ? (viaSupervisor ? "Select Supervisor Inspector" : "Select inspector") : viaSupervisor ? "No approved Supervisor Inspector available" : `No approved Inspector covers ${development || "this development"}`}</option>
+        <option value="">{inspectors.length ? "Select inspector" : `No approved Inspector covers ${development || "this development"}`}</option>
         {inspectors.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
       </select>
       <Input value={violationNumber} onChange={(event) => setViolationNumber(event.target.value)} placeholder="Violation # (optional)" />
       <Textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="What to check on site" />
       <Button variant="outline" onClick={send} disabled={!inspectorId || create.isPending}>{create.isPending ? "Sending…" : "Send as violation"}</Button>
-      {!!sentTo && <p className="text-xs text-muted-foreground">Sent to {sentTo}.{viaSupervisor ? "" : " You can send it to another inspector too."}</p>}
+      {!!sentTo && <p className="text-xs text-muted-foreground">Sent to {sentTo}. You can send it to another inspector too.</p>}
     </div>
   );
 }
