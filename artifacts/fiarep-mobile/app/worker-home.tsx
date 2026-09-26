@@ -59,12 +59,15 @@ export default function WorkerHome() {
           return !value || developments.length === 0 || developments.includes(value);
         };
         const [repairs, reports, inHouse] = await Promise.all([
-          listRoutedInspectionsFor(actor.name),
+          listRoutedInspectionsFor(actor.name, actor.id),
           listResidentReports(),
           listManpowerRequests(),
         ]);
+        // Only work still waiting on this worker. Completed ('done' ->
+        // 'completed'), approved and resolved complaints drop off the badge;
+        // a sent-back complaint returns to in_progress and counts again.
         const residentJobs = reports.filter((report) =>
-          report.status !== 'resolved' &&
+          (report.status === 'assigned' || report.status === 'in_progress') &&
           report.assignedStaffId === actor.id &&
           inAssignedDevelopment(report.development)
         );
