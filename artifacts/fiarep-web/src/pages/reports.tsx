@@ -271,6 +271,11 @@ export default function Reports() {
   const [dialogMode, setDialogMode] = useState<"details" | "assign">("details");
   const [selectedStaffId, setSelectedStaffId] = useState("");
   const [releaseUpdate, setReleaseUpdate] = useState("");
+  const [sendBackNote, setSendBackNote] = useState("");
+  // Complaint handlers review any completed work; a CPM Supervisor reviews the
+  // complaints they assigned (server: approve-work / reject-work).
+  const canReview = (report: Report) => canHandleComplaints ||
+    (canAssignComplaints && String((report.state || {}).assignedByStaffId || "") === actor?.id);
   const [completionPhoto, setCompletionPhoto] = useState<File | null>(null);
   const [completionPreview, setCompletionPreview] = useState("");
   const [completionNote, setCompletionNote] = useState("");
@@ -538,7 +543,7 @@ export default function Reports() {
                 {canAssignComplaints && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>Assign</Button>}
                  {!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button size="sm" onClick={() => openReport(report, "details")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
                  {canHandleComplaints && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
-                 {canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
+                 {canReview(report) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
                 <Button size="sm" variant="ghost" onClick={() => openReport(report, "details")}>View details</Button>
                 {deletionPolicy?.enabled && deletionPolicy.canDelete && <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingReportId(report.id); setIsDeleteDialogOpen(true); }} title="Delete report"><Trash2 className="h-3.5 w-3.5" /></Button>}
               </div>
@@ -634,7 +639,8 @@ export default function Reports() {
                       <Button variant="destructive" className="w-full" disabled={nudging || nudgeSent || !nudgeTargetId} onClick={() => requestAssignment(selected)}>{nudgeSent ? "Sent \u2713" : nudging ? "Sending\u2026" : nudgeTarget ? `Send urgent request to ${nudgeTarget.name}` : "Choose a supervisor first"}</Button>
                     </div>
                   )}
-                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canHandleComplaints && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
+                  <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canHandleComplaints && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canReview(selected) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
+                  {canReview(selected) && currentStatus === "done" && <div className="border-t border-border pt-4 space-y-2"><p className="text-sm font-semibold">Send back to worker</p><Textarea value={sendBackNote} onChange={(event) => setSendBackNote(event.target.value)} placeholder="What needs fixing? (sent to the worker)" /><Button variant="outline" onClick={() => { perform(selected, "reject-work", { note: sendBackNote.trim() }); setSendBackNote(""); }} disabled={action.isPending || sendBackNote.trim().length < 3}>Send back with note</Button></div>}
               </div></>;
           })()}
         </DialogContent>

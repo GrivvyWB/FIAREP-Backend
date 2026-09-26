@@ -2723,6 +2723,17 @@ router.post(
       photoReady ? "Repair photo ready for review" : "Repair completed for review",
     ].filter(Boolean).join(" · ");
     let recipients: string[] = await residentReportRecipientIds(actor.tenantId, development);
+    // The supervisor who assigned the complaint (e.g. an office-based CPM
+    // Supervisor with no base development) must get the completed work back.
+    const assignedBy = String(state["assignedByStaffId"] || current.state["assignedByStaffId"] || "");
+    if (entity === "resident-reports" && assignedBy) {
+      const [assigner] = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.status, "approved"),
+        eq(staffAccounts.id, assignedBy),
+      )).limit(1);
+      if (assigner) recipients = [...recipients, assigner.id];
+    }
     if (entity === "building-violations") {
       const candidateIds = [
         String(state["dispatchingSupervisorId"] || ""),

@@ -1326,6 +1326,9 @@ test("office-based CPM Supervisor assigns a CPM covering the site without holdin
   assert.equal(canAssignStaff(cpmSupervisor, plumber, "Coney Island"), false);  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "assign", { status: "submitted" }), true);
   assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "clear", { status: "resolved" }), false);
   assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "approve-work", { status: "done" }), false);
+  const assignedByHim = { status: "done", assignedByStaffId: cpmSupervisor.id };
+  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "approve-work", assignedByHim), true);
+  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "reject-work", assignedByHim), true);
 });
 
 test("Superintendent E can hand resident complaints to supervisors or operational staff", () => {

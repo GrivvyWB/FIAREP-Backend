@@ -1191,7 +1191,9 @@ export function canPerformEntityAction(
       return actor.role === "administrator" ||
         isBoroughDirector(actor) ||
         isComplaintHandlingSupervisor(actor) ||
-        (actor.role === "management" && actor.position !== "CPM Supervisor");
+        (actor.role === "management" && actor.position !== "CPM Supervisor") ||
+        // A CPM Supervisor reviews the complaints they assigned to their CPMs.
+        (isCpmSupervisor(actor) && state["assignedByStaffId"] === actor.id);
     }
     return isSupervisor;
   }
