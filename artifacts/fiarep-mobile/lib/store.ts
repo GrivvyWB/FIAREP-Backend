@@ -3283,20 +3283,40 @@ export async function checkInVendorWalkthrough(
 }
 
 // Vendor marks their awarded job as started. No-op unless it is awarded.
-export async function vendorStartProcurement(id: string): Promise<ProcurementRequest | null> {
+// Send the awarded vendor's progress to the server so Procurement, the CPM and
+// the CPM Supervisor see it (it used to stay on the vendor's device only).
+async function reportVendorProgress(trackingId: string, vendorName: string, step: 'start' | 'complete', note = ''): Promise<void> {
+  if (!trackingId || !vendorName) return;
+  const { customFetch } = await import('@workspace/api-client-react');
+  await customFetch(`/api/v1/public/vendor-scopes/${encodeURIComponent(trackingId)}/progress`, {
+    method: 'POST',
+    body: JSON.stringify({ vendorName, step, note }),
+  });
+}
+
+export async function vendorStartProcurement(id: string, trackingId = '', vendorName = ''): Promise<ProcurementRequest | null> {
+  // Vendors don't have the job stored locally (they look it up by code), so
+  // report to the server and read the job back from it.
+  if (trackingId && vendorName) {
+    await reportVendorProgress(trackingId, vendorName, 'start');
+    return getProcurementByTracking(trackingId, vendorName);
+  }
   const d = await db();
   await ensureProcurementTable(d);
   const r = await getProcurementRequest(id);
-  if (!r) return null;
-  if (r.status !== 'awarded') return r;
+  if (!r || r.status !== 'awarded') return r;
   const next: ProcurementRequest = { ...r, startedAt: r.startedAt || new Date().toISOString() };
   await saveProcurementRequest(d, next);
   return next;
 }
-
-// Vendor marks their job complete and leaves an optional note. This does not
-// close the record; the supervisor still closes it. It notifies the requester.
-export async function vendorCompleteProcurement(id: string, note: string = ''): Promise<ProcurementRequest | null> {
+// Vendor marks their job complete with an optional note. This does not close
+// the record; Procurement rates and closes it. The server notifies Procurement,
+// the CPM and the reviewing CPM Supervisor.
+export async function vendorCompleteProcurement(id: string, note: string = '', trackingId = '', vendorName = ''): Promise<ProcurementRequest | null> {
+  if (trackingId && vendorName) {
+    await reportVendorProgress(trackingId, vendorName, 'complete', (note || '').trim());
+    return getProcurementByTracking(trackingId, vendorName);
+  }
   const d = await db();
   await ensureProcurementTable(d);
   const r = await getProcurementRequest(id);
@@ -3308,17 +3328,8 @@ export async function vendorCompleteProcurement(id: string, note: string = ''): 
     vendorNote: (note || '').trim() || r.vendorNote,
   };
   await saveProcurementRequest(d, next);
-  if (next.requestedBy) {
-    await addNotification(
-      next.requestedBy,
-      'Vendor marked work complete: ' + (next.vendor || 'vendor'),
-      next.address + '  ID: ' + next.trackingId,
-      next.id,
-    );
-  }
   return next;
 }
-
 export type ProcurementBid = {
   id: string;
   requestId: string;

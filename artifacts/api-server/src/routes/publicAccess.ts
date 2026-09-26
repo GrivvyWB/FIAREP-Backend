@@ -576,4 +576,46 @@ router.post("/v1/public/vendor-scopes/:trackingId/bids", async (req, res) => {
   res.status(201).json(record(bid!));
 });
 
+// The awarded vendor reports progress (no account: vendor name + code). This
+// reaches Procurement, the CPM and the reviewing CPM Supervisor — previously
+// "Start"/"Mark complete" stayed on the vendor's own device.
+router.post("/v1/public/vendor-scopes/:trackingId/progress", rateLimit("vendor-progress", 30), async (req, res) => {
+  const vendorName = String(req.body?.vendorName ?? "").trim();
+  const step = String(req.body?.step ?? "").trim();
+  const note = String(req.body?.note ?? "").trim().slice(0, 2000);
+  const scope = await releasedScope(req.params["trackingId"]!);
+  if (!scope || !vendorName || !["start", "complete"].includes(step) ||
+      normalize(scope.state["status"]) !== "awarded" ||
+      normalize(scope.state["vendor"]) !== normalize(vendorName)) {
+    res.status(404).json({ error: "Only the awarded vendor can update this job" }); return;
+  }
+  const org = await evaluateLicense(scope.tenantId);
+  if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
+  const now = new Date().toISOString();
+  const state: Record<string, unknown> = { ...scope.state };
+  // vendorStartedAt/vendorCompletedAt for staff; startedAt/completedAt are what
+  // the vendor screens read.
+  state["vendorStartedAt"] = state["vendorStartedAt"] || now;
+  state["startedAt"] = state["startedAt"] || state["vendorStartedAt"];
+  if (step === "complete") {
+    state["vendorCompletedAt"] = now;
+    state["completedAt"] = now;
+    if (note) state["vendorNote"] = note;
+  }
+  const [updated] = await db.update(entityRecords)
+    .set({ state, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() })
+    .where(eq(entityRecords.id, scope.id))
+    .returning();
+  const ref = [scope.state["sourceRef"], scope.state["trackingId"], scope.state["address"]].filter(Boolean).join(" · ");
+  const message = step === "complete" ? `Vendor completed the work: ${vendorName}` : `Vendor started the work: ${vendorName}`;
+  const targets = new Set(["procurement", String(scope.state["cpmId"] || ""), String(scope.state["handoffTargetId"] || "")].filter(Boolean));
+  for (const target of targets) {
+    await db.insert(notifications).values({
+      id: randomUUID(), tenantId: scope.tenantId, target, message,
+      detail: [ref, note ? `Note: ${note}` : ""].filter(Boolean).join(" — "), reportId: scope.id,
+    });
+  }
+  res.json(record(updated!));
+});
+
 export default router;

@@ -2887,6 +2887,11 @@ router.post(
       if (origin && sameTitle(origin.position, "CPM")) {
         await notify(actor, origin.id, nextStatus === "returned" ? "Scope returned — correct and resubmit" : `Scope ${nextStatus}`, scopeDetail, current.id);
       }
+      // Returned by Procurement: the reviewing CPM Supervisor is told too.
+      const reviewer = String(current.state["handoffTargetId"] || "");
+      if (actor.role === "procurement" && reviewer) {
+        await notify(actor, reviewer, "Procurement returned a scope for revision", scopeDetail, current.id);
+      }
     } else if (
       (entity === "resident-reports" && action === "assign") ||
       (entity === "manpower-requests" && action === "dispatch")

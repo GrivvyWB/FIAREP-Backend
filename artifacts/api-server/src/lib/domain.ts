@@ -1217,7 +1217,7 @@ export function canPerformEntityAction(
       if (action === "approve" || action === "reject" || action === "handoff-inhouse") return isCpmSupervisor(actor);
      if (action === "return") {
         return (isCpmSupervisor(actor) && state["status"] === "submitted") ||
-         (actor.role === "procurement" && state["status"] === "approved");
+         (actor.role === "procurement" && ["approved", "bidding"].includes(String(state["status"])));
      }
     return (
       actor.role === "procurement" &&
@@ -1408,7 +1408,8 @@ export function isValidEntityTransition(
       approve: ["submitted"],
       "handoff-inhouse": ["submitted"],
       reject: ["submitted"],
-      return: ["submitted", "approved"],
+      // Procurement may send a scope back while pending release or out for bid.
+      return: ["submitted", "approved", "bidding"],
       broadcast: ["approved"],
       award: ["bidding"],
       "rate-close": ["awarded"],

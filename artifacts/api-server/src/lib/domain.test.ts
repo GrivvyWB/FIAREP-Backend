@@ -1308,6 +1308,13 @@ test("trade supervisors can assign only their own non-supervisor crew", () => {
   assert.equal(canAssignStaff(plumberSupervisor, otherSupervisor, "Development A"), false);
 });
 
+test("procurement may return a scope that is pending release or out for bid", () => {
+  const procurement = actor({ role: "procurement", position: "Procurement" });
+  assert.equal(canPerformEntityAction(procurement, "procurement", "return", { status: "approved" }), true);
+  assert.equal(canPerformEntityAction(procurement, "procurement", "return", { status: "bidding" }), true);
+  assert.equal(canPerformEntityAction(procurement, "procurement", "return", { status: "awarded" }), false);
+});
+
 test("the CPM and the routed CPM Supervisor follow a scope through every stage", () => {
   const cpm = actor({ id: "cpm-1", role: "inspector", position: "CPM", developments: ["Other"] });
   const sup = actor({ id: "sup-1", role: "management", position: "CPM Supervisor", developments: [] });

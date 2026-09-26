@@ -97,7 +97,7 @@ export default function VendorHome() {
     if (!job) return;
     setBusy(true);
     try {
-      const next = await vendorStartProcurement(job.id);
+      const next = await vendorStartProcurement(job.id, job.trackingId, bidName.trim() || job.vendor || '');
       if (next) setJob(next);
     } finally {
       setBusy(false);
@@ -108,7 +108,7 @@ export default function VendorHome() {
     if (!job) return;
     setBusy(true);
     try {
-      const next = await vendorCompleteProcurement(job.id, note.trim());
+      const next = await vendorCompleteProcurement(job.id, note.trim(), job.trackingId, bidName.trim() || job.vendor || '');
       if (next) { setJob(next); setNote(''); }
       Alert.alert('Marked complete', 'The supervisor has been notified.');
     } finally {

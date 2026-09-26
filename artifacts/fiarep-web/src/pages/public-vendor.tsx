@@ -22,6 +22,30 @@ const bidSchema = z.object({
 
 export default function PublicVendor() {
   const [lookupData, setLookupData] = useState<{ trackingId: string, vendorName: string } | null>(null);
+  const [progressNote, setProgressNote] = useState('');
+  const [progressBusy, setProgressBusy] = useState(false);
+  // Awarded vendor reports Start / Complete; Procurement, the CPM and the CPM
+  // Supervisor are notified.
+  async function reportProgress(step: 'start' | 'complete') {
+    if (!lookupData) return;
+    setProgressBusy(true);
+    try {
+      const response = await fetch(`/api/v1/public/vendor-scopes/${encodeURIComponent(lookupData.trackingId)}/progress`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendorName: lookupData.vendorName, step, note: progressNote.trim() }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || 'Could not update the job');
+      setProgressNote('');
+      queryClient.invalidateQueries({ queryKey: getLookupPublicVendorScopeQueryKey(lookupData.trackingId, { vendorName: lookupData.vendorName }) });
+      toast({ title: step === 'start' ? 'Marked as started' : 'Marked complete', description: 'Procurement has been notified.' });
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Update failed', description: error?.message });
+    } finally {
+      setProgressBusy(false);
+    }
+  }
   const { toast } = useToast();
   const queryClient = useQueryClient();
   
@@ -172,6 +196,25 @@ export default function PublicVendor() {
               </CardContent>
             </Card>
 
+            {(scopeResult.state as any)?.status === 'awarded' && !(scopeResult.state as any)?.completedAt && (
+              <Card className="shadow-lg border-border/50">
+                <CardHeader><CardTitle>Your awarded job</CardTitle></CardHeader>
+                <CardContent className="space-y-3">
+                  {!!(scopeResult.state as any)?.startedAt && <p className="text-sm text-muted-foreground">Started {new Date((scopeResult.state as any).startedAt).toLocaleString()}</p>}
+                  {!(scopeResult.state as any)?.startedAt ? (
+                    <Button className="w-full" disabled={progressBusy} onClick={() => reportProgress('start')}>Start work</Button>
+                  ) : (
+                    <>
+                      <Input value={progressNote} onChange={(e) => setProgressNote(e.target.value)} placeholder="Completion note (optional)" />
+                      <Button className="w-full" disabled={progressBusy} onClick={() => reportProgress('complete')}>Mark work complete</Button>
+                    </>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+            {!!(scopeResult.state as any)?.completedAt && (scopeResult.state as any)?.status === 'awarded' && (
+              <p className="text-sm text-muted-foreground">Completed {new Date((scopeResult.state as any).completedAt).toLocaleString()} — Procurement will rate and close the job.</p>
+            )}
             {((scopeResult.state as any)?.status === 'bidding' || (scopeResult.state as any)?.status === 'bidding_open' || (scopeResult.state as any)?.status === 'open') ? (
               <Card className="shadow-lg border-border/50">
                 <CardHeader>
