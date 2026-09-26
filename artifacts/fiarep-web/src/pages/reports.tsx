@@ -1,3 +1,4 @@
+import { isCpmSupervisorTitle } from "@/lib/titles";
 import {
   getListEntityRecordsQueryKey,
   getListResidentReportPhotosQueryKey,
@@ -244,6 +245,12 @@ export default function Reports() {
   // CPM Supervisors can't clear/approve complaints, but may assign one to their
   // own CPMs (server: resident-reports assign + canAssignStaff).
   const canAssignComplaints = canHandleComplaints;
+  // CPM Supervisor: the CPM's scope for a complaint, so the complaint page can
+  // say where it is and link to Scope Review (Procurement / in-house buttons).
+  const isCpmSup = isCpmSupervisorTitle(actor?.position);
+  const scopesQuery = useListEntityRecords("procurement", undefined, {
+    query: { queryKey: getListEntityRecordsQueryKey("procurement"), enabled: isCpmSup, refetchInterval: 15_000 },
+  });
   const reportsQuery = useListEntityRecords("resident-reports", undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),
@@ -586,6 +593,31 @@ export default function Reports() {
                   />
                 </div>
                 <FieldEvidenceDisplay state={state} reportId={selected.id} photosLabel="After — completed work" />
+                {isCpmSup && (() => {
+                  const complaintNo = String(state.complaintNo || "");
+                  const scope = ((scopesQuery.data || []) as any[]).find((row) =>
+                    row.state?.sourceRecordId === selected.id ||
+                    (!!complaintNo && (row.state?.complaintNo === complaintNo || row.state?.sourceRef === complaintNo)));
+                  const status = String(scope?.state?.status || "");
+                  const label: Record<string, string> = {
+                    draft: "being written by the CPM", submitted: "waiting for your review", returned: "returned to the CPM for correction",
+                    approved: "with Procurement", bidding: "out to vendors", awarded: "awarded to a vendor", closed: "closed",
+                    in_house: "sent to in-house workers", in_house_completed: "in-house work completed",
+                  };
+                  return (
+                    <div className={`rounded-xl border p-4 space-y-2 ${status === "submitted" ? "border-amber-300 bg-amber-50" : "border-border bg-muted/30"}`}>
+                      <p className="text-sm font-semibold">CPM scope</p>
+                      {!scope ? (
+                        <p className="text-sm text-muted-foreground">No scope yet. {String(state.assignedTo || state.assignedStaffName || "The CPM")} writes it in the app and sends it to you; then you choose Procurement or in-house workers.</p>
+                      ) : (
+                        <>
+                          <p className="text-sm">Scope by {String(scope.state?.cpmName || scope.state?.requestedBy || "CPM")} is <span className="font-semibold">{label[status] || status}</span>{scope.state?.trackingId ? ` · ${scope.state.trackingId}` : ""}.</p>
+                          {status === "submitted" && <Button asChild><Link href="/scope-review">Review scope: Procurement or in-house</Link></Button>}
+                        </>
+                      )}
+                    </div>
+                  );
+                })()}
                  {String(state.assignedStaffId || "") === actor?.id && currentStatus === "in_progress" && (
                    <div className="space-y-3 border-t border-border pt-4">
                      <input
