@@ -197,9 +197,10 @@ function canHrAssignPositionRole(position: string, role: string): boolean {
   if (role === "management") return managementPosition;
   if (role === "inspector") return position === "Inspector" || position === "CPM";
   if (role === "emergency") return position === "Maintenance Worker";
+  if (role === "procurement") return position === "Procurement" || position === "Director";
   if (role === "worker") {
     return !managementPosition &&
-      !["Human Resources", "Inspector", "CPM"].includes(position);
+      !["Human Resources", "Procurement", "Inspector", "CPM"].includes(position);
   }
   return false;
 }

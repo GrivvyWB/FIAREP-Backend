@@ -398,6 +398,7 @@ export default function Team() {
     }
     setRole(nextRole);
     if (nextRole === "human_resources") setPosition("Human Resources");
+    if (nextRole === "procurement") setPosition("Procurement");
     if (nextRole === "administrator" && actor?.position === "Borough Director") {
       setPosition("Borough Director");
     }

@@ -70,6 +70,7 @@ export const STAFF_POSITIONS = [
   "Administrative Staff",
   "Other Support Staff",
   "Human Resources",
+  "Procurement",
   "Assistant Property Manager",
   "Housing Assistant",
   "Janitorial Staff",

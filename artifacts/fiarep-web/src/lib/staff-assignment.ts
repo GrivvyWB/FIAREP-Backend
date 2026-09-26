@@ -197,6 +197,7 @@ function titleFamily(position: string) {
 
 export function roleForPosition(position: string): Staff["role"] {
   if (position === "CPM" || position === "Inspector") return "inspector";
+  if (position === "Procurement") return "procurement";
   if (
     isSupervisorTitle(position) ||
     ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager", "Superintendent", "Superintendent Ⓔ", "Assistant Superintendent", "Housing Assistant", "Director"].includes(position)

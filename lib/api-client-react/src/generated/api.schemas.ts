@@ -672,6 +672,7 @@ export const StaffPosition = {
   Administrative_Staff: 'Administrative Staff',
   Other_Support_Staff: 'Other Support Staff',
   Human_Resources: 'Human Resources',
+  Procurement: 'Procurement',
   Janitorial_Staff: 'Janitorial Staff',
   Other: 'Other',
 } as const;
@@ -862,6 +863,7 @@ export const StaffInputPosition = {
   Administrative_Staff: 'Administrative Staff',
   Other_Support_Staff: 'Other Support Staff',
   Human_Resources: 'Human Resources',
+  Procurement: 'Procurement',
   Janitorial_Staff: 'Janitorial Staff',
   Other: 'Other',
 } as const;
