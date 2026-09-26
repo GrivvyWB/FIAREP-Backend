@@ -1218,7 +1218,9 @@ export function canPerformEntityAction(
   }
 
   if (entity === "resident-reports") {
-    if (action === "assign") return isComplaintHandlingSupervisor(actor);
+    // CPM Supervisors may assign a complaint to their own CPMs (canAssignStaff
+    // limits them to CPM crew); they still don't clear or approve complaints.
+    if (action === "assign") return isComplaintHandlingSupervisor(actor) || isCpmSupervisor(actor);
     if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     if (action === "clear") return isComplaintHandlingSupervisor(actor);
     if (action === "resolve") return false;

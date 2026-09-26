@@ -240,6 +240,10 @@ export default function Reports() {
     ? { ...actor, developments: [...(actor.developments || []), ...coverageDevs] }
     : actor;
   const canHandleComplaints = canHandleResidentReports(actor);
+  // CPM Supervisors can't clear/approve complaints, but may assign one to their
+  // own CPMs (server: resident-reports assign + canAssignStaff).
+  const canAssignComplaints = canHandleComplaints ||
+    (actor?.role === "management" && (actor?.position || "").trim() === "CPM Supervisor");
   const reportsQuery = useListEntityRecords("resident-reports", undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),
@@ -287,10 +291,10 @@ export default function Reports() {
     .filter((m) => {
       if (!m) return false;
       const role = String(m.role || "");
-      const position = String(m.position || "");
+      const position = String(m.position || "").trim();
       // The company/procurement "Director" (not Borough/Regional Director) never
       // handles or assigns a resident complaint, whatever role the account carries.
-      if (position === "Director") return false;
+      if (position.trim().toLowerCase() === "director") return false;
       // Any trade or inspector supervisor, or a superintendent, can take a
       // complaint - include them regardless of whether their role is management
       // or worker (trade supervisors are sometimes stored as worker).
@@ -531,7 +535,7 @@ export default function Reports() {
               </div>
               <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
                 {!!String(state.assignedTo || "") && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{String(state.assignedTo)}</span>}
-                {canHandleComplaints && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>Assign</Button>}
+                {canAssignComplaints && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>Assign</Button>}
                  {!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button size="sm" onClick={() => openReport(report, "details")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
                  {canHandleComplaints && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canHandleComplaints && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
@@ -595,7 +599,7 @@ export default function Reports() {
                      <Textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} />
                    </div>
                  )}
-                   {canHandleComplaints && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(assignActor, staff, selected.development, coverageDevs.length > 0)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
+                   {canAssignComplaints && dialogMode === "assign" && <div className="border-t border-border pt-4 space-y-3"><p className="text-sm font-semibold">Staff assignment</p>{groupStaffByTradeSections(assignableOperationalStaff(assignActor, staff, selected.development, coverageDevs.length > 0)).map((group) => <div key={group.label} className="space-y-2"><p className="text-xs font-medium text-muted-foreground">{group.label}</p><div className="grid gap-2">{group.people.map((member) => <button type="button" key={member.id} onClick={() => setSelectedStaffId(member.id)} disabled={action.isPending || assigning === selected.id} className={`w-full rounded-md border px-3 py-2 text-left text-sm transition-colors ${selectedStaffId === member.id ? "border-primary bg-primary/10 text-foreground" : "border-input bg-background hover:bg-muted"}`}><span className="font-medium">{member.name}</span><span className="text-muted-foreground"> · {member.position}</span></button>)}</div></div>)}<Button className="w-full" onClick={() => assign(selected, selectedStaffId)} disabled={!selectedStaffId || action.isPending || assigning === selected.id}>{assigning === selected.id ? "Assigning…" : "Assign complaint"}</Button></div>}
                   {actor?.position !== "Elevator Service" && String(state.assignedStaffId || "") === actor?.id && ["assigned", "in_progress"].includes(currentStatus) && <div className="border-t border-border pt-4 space-y-2"><p className="text-sm font-semibold">Release assignment</p><Textarea value={releaseUpdate} onChange={(event) => setReleaseUpdate(event.target.value)} placeholder="Provide an update before releasing this complaint" /><Button variant="outline" onClick={() => perform(selected, "release", { update: releaseUpdate })} disabled={action.isPending || releaseUpdate.trim().length < 3}>Release with update</Button></div>}
                   {(actor?.role === "management" || actor?.role === "administrator") && currentStatus === "submitted" && (
                     <div className="rounded-xl border-2 border-red-300 bg-red-50 p-4 space-y-2">
