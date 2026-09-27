@@ -1232,7 +1232,7 @@ export function canPerformEntityAction(
      }
     return (
       actor.role === "procurement" &&
-      ["broadcast", "resend", "award", "pay", "rate-close", "return"].includes(action)
+      ["broadcast", "resend", "award", "pay", "mark-started", "mark-completed", "rate-close", "return"].includes(action)
     );
   }
 
@@ -1427,6 +1427,9 @@ export function isValidEntityTransition(
       award: ["bidding"],
       // Release money to the awarded vendor (one or more payments).
       pay: ["awarded"],
+      // Procurement records the vendor's start / finish (site visit, phone).
+      "mark-started": ["awarded"],
+      "mark-completed": ["awarded"],
       "rate-close": ["awarded"],
     },
     "resident-reports": {

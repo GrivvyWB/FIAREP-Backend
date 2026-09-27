@@ -1495,6 +1495,8 @@ router.post(
       resend: "bidding",
       award: "awarded",
       pay: "awarded",
+      "mark-started": "awarded",
+      "mark-completed": "awarded",
       "rate-close": "closed",
     },
     "resident-reports": {
@@ -2122,6 +2124,18 @@ router.post(
       at: now.toISOString(), byId: actor.id, byName: actor.name,
     }];
     state["releasedTotal"] = Math.round((releasedSoFar + amount) * 100) / 100;
+  }
+  if (entity === "procurement" && (action === "mark-started" || action === "mark-completed")) {
+    const at = now.toISOString();
+    state["vendorStartedAt"] = current.state["vendorStartedAt"] || at;
+    state["startedAt"] = current.state["startedAt"] || state["vendorStartedAt"];
+    if (!current.state["vendorStartedAt"]) state["startedMarkedBy"] = actor.name;
+    if (action === "mark-completed") {
+      state["vendorCompletedAt"] = at;
+      state["completedAt"] = at;
+      state["completedMarkedBy"] = actor.name;
+      if (reviewNote) state["completionNote"] = reviewNote.slice(0, 1000);
+    }
   }
   if (entity === "procurement" && action === "rate-close") {
     // A job closes only when the work is finished and all the money is out.

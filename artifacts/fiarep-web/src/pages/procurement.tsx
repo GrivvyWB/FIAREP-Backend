@@ -518,15 +518,29 @@ export default function Procurement() {
     const left = Math.max(0, Math.round((finalAmount - released) * 100) / 100);
     const pct = finalAmount > 0 ? Math.min(100, Math.round((released / finalAmount) * 100)) : 0;
     const vendorDone = !!(s.completedAt || s.vendorCompletedAt);
-    const finished = vendorDone || !!workDone[r.id];
+    const finished = vendorDone;
     const payments = (Array.isArray(s.payments) ? s.payments : []) as Array<{ id: string; amount: number; note?: string; at?: string; byName?: string }>;
     const payAmount = Number(payAmt[r.id] ?? "") || 0;
     return card(r, <>
       <div className="rounded-lg border border-slate-200 px-4 py-2">
         <Line label="Vendor">{s.vendor || "—"}</Line>
         <Line label="Awarded">{fmt(s.awardAt || s.awardedAt) || "—"}</Line>
-        <Line label="Vendor started">{s.startedAt || s.vendorStartedAt ? fmt(s.startedAt || s.vendorStartedAt) : "Not yet"}</Line>
-        <Line label="Vendor completed">{vendorDone ? fmt(s.completedAt || s.vendorCompletedAt) : "Not yet"}</Line>
+        <Line label="Vendor started">
+          {s.startedAt || s.vendorStartedAt ? <>{fmt(s.startedAt || s.vendorStartedAt)}{s.startedMarkedBy ? ` · marked by ${s.startedMarkedBy}` : ""}</> : canAct ? (
+            <Button size="sm" variant="outline" className="h-7 border-blue-300 text-blue-700 hover:bg-blue-50" disabled={action.isPending}
+              onClick={() => run(r, "mark-started", {}, `${s.vendor || "Vendor"} marked as started`)}>Mark started</Button>
+          ) : "Not yet"}
+        </Line>
+        <Line label="Vendor completed">
+          {vendorDone ? <>{fmt(s.completedAt || s.vendorCompletedAt)}{s.completedMarkedBy ? ` · marked by ${s.completedMarkedBy}` : ""}</> : canAct ? (
+            <Button size="sm" variant="outline" className="h-7 border-emerald-300 text-emerald-700 hover:bg-emerald-50" disabled={action.isPending}
+              onClick={() => {
+                if (!window.confirm(`Mark the work by ${s.vendor || "the vendor"} as completed?`)) return;
+                void run(r, "mark-completed", {}, `${s.vendor || "Vendor"} marked as completed`);
+              }}>Mark completed</Button>
+          ) : "Not yet"}
+        </Line>
+        {!!(s.vendorNote || s.completionNote) && <Line label="Completion note">{s.vendorNote || s.completionNote}</Line>}
       </div>
 
       <div className="space-y-3 rounded-lg border border-slate-200 p-4">
@@ -569,12 +583,7 @@ export default function Procurement() {
       {canAct && (
         <div className="space-y-3 rounded-lg border border-slate-200 p-4">
           <p className="text-sm font-semibold text-slate-900">Close the job</p>
-          {!vendorDone && (
-            <label className="flex items-center gap-2 text-sm">
-              <input type="checkbox" checked={!!workDone[r.id]} onChange={(e) => setWorkDone((m) => ({ ...m, [r.id]: e.target.checked }))} />
-              The work is completely finished (the vendor hasn't marked it complete)
-            </label>
-          )}
+          {!vendorDone && <p className="text-xs text-slate-500">Press <span className="font-semibold">Mark completed</span> above once the work is completely finished.</p>}
           <div className="flex gap-2">
             {(["good", "fair", "poor"] as const).map((lvl) => (
               <Button key={lvl} type="button" size="sm" variant={perf[r.id] === lvl ? "default" : "outline"}
