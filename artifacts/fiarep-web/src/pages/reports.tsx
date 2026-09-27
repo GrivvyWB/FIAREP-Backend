@@ -17,7 +17,7 @@ import {
   type ViolationClassification,
   customFetch,
 } from "@workspace/api-client-react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle, Camera, CheckCircle2, ChevronDown, FolderOpen, Image as ImageIcon,
   MapPin, ScanLine, Search, Send, Trash2, UserRound, X,
@@ -311,7 +311,14 @@ export default function Reports() {
   const deepLinkHandled = useRef(false);
 
   const reports = (reportsQuery.data || []) as Report[];
-  const supervisorChoices = (staff as any[])
+  // Every supervisor / manager in the organization (not only this person's
+  // developments) can be asked to assign.
+  const { data: allSupervisors = [] } = useQuery({
+    queryKey: ["staff-supervisors"],
+    queryFn: () => customFetch<any[]>("/api/v1/staff/supervisors"),
+    staleTime: 60_000,
+  });
+  const supervisorChoices = ((allSupervisors as any[]).length ? allSupervisors as any[] : staff as any[])
     .filter((m) => {
       if (!m) return false;
       const role = String(m.role || "");

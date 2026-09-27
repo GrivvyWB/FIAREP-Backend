@@ -274,6 +274,28 @@ router.get("/v1/staff", async (req, res) => {
     .map((row) => safe(row, actor)));
 });
 
+// Every supervisor / manager in the organization (name + title only), for the
+// "Ask a supervisor to assign" picker. Not limited to the caller's developments:
+// any supervisor or manager can be asked, wherever they work.
+router.get("/v1/staff/supervisors", async (_req, res) => {
+  const actor = actorFrom(res);
+  if (!["management", "administrator", "worker", "inspector", "emergency"].includes(actor.role)) {
+    res.status(403).json({ error: "Not allowed" });
+    return;
+  }
+  const rows = await db
+    .select({ id: staffAccounts.id, name: staffAccounts.name, role: staffAccounts.role, position: staffAccounts.position, developments: staffAccounts.developments })
+    .from(staffAccounts)
+    .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved")))
+    .orderBy(asc(staffAccounts.name));
+  res.json(rows.filter((row) => {
+    const position = String(row.position || "").trim();
+    if (position.toLowerCase() === "director") return false;
+    if (/supervisor|superintendent|manager|director/i.test(position)) return true;
+    return row.role === "management" || row.role === "administrator";
+  }));
+});
+
 router.get("/v1/staff/developments", async (_req, res) => {
   const actor = actorFrom(res);
   if (!canBrowseStaffDirectory(actor)) {
