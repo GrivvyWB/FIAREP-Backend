@@ -1560,3 +1560,13 @@ test("Borough Director cannot perform procurement workflow actions", () => {
     false,
   );
 });
+test("trade supervisors read matching complaints but act only once sent to them", () => {
+  const plumbSup = actor({ id: "plumb-sup", role: "management", position: "Plumber Supervisor", developments: [] });
+  const leak = { status: "submitted", description: "Water leak under the sink", development: "CONEY ISLAND" };
+  assert.equal(canPerformEntityAction(plumbSup, "resident-reports", "assign", leak), false);
+  assert.equal(canPerformEntityAction(plumbSup, "resident-reports", "assign", { ...leak, assignedStaffId: "plumb-sup" }), true);
+  assert.equal(canPerformEntityAction(plumbSup, "resident-reports", "approve-work", { ...leak, status: "done" }), false);
+  assert.equal(canPerformEntityAction(plumbSup, "resident-reports", "approve-work", { ...leak, status: "done", assignedByStaffId: "plumb-sup" }), true);
+  const supt = actor({ id: "supt", role: "management", position: "Superintendent", developments: ["CONEY ISLAND"] });
+  assert.equal(canPerformEntityAction(supt, "resident-reports", "assign", leak), true);
+});

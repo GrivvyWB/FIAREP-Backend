@@ -644,14 +644,14 @@ export function canReadEntityRecord(
     normalizeAssignment(row.state).assignedStaffId !== actor.id
   ) {
     // Keyword routing: a complaint whose words point to this supervisor's
-    // trade ("water" → plumbing …) reaches them until someone else takes it.
+    // trade ("water" → plumbing …) is readable by them (read-only; they act
+    // once it is sent to them — see canPerformEntityAction).
     const trade = tradeFromTitle(actor.position);
-    const assignedStaffId = normalizeAssignment(row.state).assignedStaffId;
     return !row.deleted &&
       canReadEntity(actor, row.entity) &&
       !!trade &&
-      tradesForComplaint(row.state).some((t) => sameTitle(t, trade)) &&
-      (!assignedStaffId || row.state["assignedByStaffId"] === actor.id);
+      (tradesForComplaint(row.state).some((t) => sameTitle(t, trade)) ||
+        row.state["assignedByStaffId"] === actor.id);
   }
   // Trade (office/craft) supervisors — plumbing, electrical, carpentry,
   // heating, painting, bricklaying, elevator — work from the office with no
@@ -660,6 +660,15 @@ export function canReadEntityRecord(
   // arrives as a manpower-request (the Trade Request path), so this removes the
   // development-wide violation clutter from their box. CPM roles keep their own
   // visibility rules above.
+  if (
+    row.entity === "building-violations" &&
+    isOfficeCraftSupervisor(actor) &&
+    !isCpmSupervisor(actor) &&
+    !row.deleted &&
+    canReadEntity(actor, row.entity) &&
+    !!tradeFromTitle(actor.position) &&
+    tradesForComplaint(row.state).some((t) => sameTitle(t, tradeFromTitle(actor.position)))
+  ) return true;
   if (
     row.entity === "building-violations" &&
     isOfficeCraftSupervisor(actor) &&
@@ -1214,6 +1223,11 @@ export function canPerformEntityAction(
       .includes(entity)
   ) {
     if (entity === "resident-reports") {
+      if (
+        isOfficeCraftSupervisor(actor) && !isCpmSupervisor(actor) &&
+        normalizeAssignment(state).assignedStaffId !== actor.id &&
+        state["assignedByStaffId"] !== actor.id
+      ) return false;
       // Administrators, Borough/Regional Directors, ordinary management and
       // complaint-handling supervisors may approve or send back completed
       // work. CPM Supervisors are scope reviewers, not complaint reviewers.
@@ -1257,6 +1271,16 @@ export function canPerformEntityAction(
   }
 
   if (entity === "resident-reports") {
+    // Office trade supervisors (plumbing, electrical, carpentry … and the CPM
+    // Supervisor) may READ a matching complaint but act only once the
+    // development supervisor, emergency supervisor or upper management sends
+    // it to them (assigned to them, or they made the assignment).
+    if (
+      isOfficeCraftSupervisor(actor) && !isCpmSupervisor(actor) &&
+      ["assign", "clear", "approve-work", "reject-work"].includes(action) &&
+      normalizeAssignment(state).assignedStaffId !== actor.id &&
+      state["assignedByStaffId"] !== actor.id
+    ) return false;
     // Trade supervisors (CPM Supervisor included) are limited to their own
     // crew by canAssignStaff.
     if (action === "assign") return isComplaintHandlingSupervisor(actor);

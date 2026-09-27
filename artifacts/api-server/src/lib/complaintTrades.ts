@@ -85,6 +85,8 @@ export function complaintTexts(state: Record<string, unknown>): string[] {
     ? state["assessment"] as Record<string, unknown> : {};
   return [
     state["description"], state["issue"], state["location"], state["category"],
+    state["notes"], state["violationNotes"], state["condition"], state["trade"], state["title"],
+    state["violationDescription"], state["novDescription"],
     assessment["trade"], assessment["condition"],
   ].map((value) => (typeof value === "string" ? value : ""));
 }

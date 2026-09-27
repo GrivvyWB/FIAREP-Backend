@@ -1,4 +1,7 @@
-// Keyword routing for resident complaints. A complaint goes to:
+// Keyword routing for resident complaints. Inbox alerts go to the triage
+// supervisors (on site + emergency). Matching trade supervisors can READ the
+// complaint (see domain.ts) but act only once it is sent to them.
+// Original design — a complaint goes to:
 //   • the supervisors on site (the development's own supervisors),
 //   • the emergency supervisor (Superintendent Ⓔ), and
 //   • the trade supervisors whose trade the complaint's words point to
@@ -44,6 +47,7 @@ export async function routedComplaintRecipientIds(
   tenantId: string,
   development: string,
   state: Record<string, unknown>,
+  includeTradeSupervisors = false,
 ): Promise<string[]> {
   const trades = tradesForComplaint(state);
   const staff = await db.select().from(staffAccounts).where(and(
@@ -58,6 +62,9 @@ export async function routedComplaintRecipientIds(
     const title = normalize(position);
     const supervisedTrade = supervisedTradeForPosition(position);
     const isOffice = isOfficeTradeSupervisorTitle(position, account.developments);
+    // Trade supervisors only READ a matching complaint (no inbox alert) until
+    // the development / emergency supervisor or upper management sends it to them.
+    if (!includeTradeSupervisors && isOffice) continue;
     // Trade supervisors (plumbing, electrical, carpentry, heating …) whose trade matches.
     if (supervisedTrade && trades.some((trade) => sameTitle(trade, supervisedTrade))) {
       if (isOffice && (account.developments.length === 0 || worksDevelopment(account, development))) {
