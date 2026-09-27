@@ -20,7 +20,7 @@ import { evaluateLicense, licenseAllows } from "../lib/auth";
 import { fileStorage } from "../lib/fileStorage";
 import { isBoroughDirector, isCoverageEligible } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
-import { residentReportRecipientIds } from "../lib/notificationVisibility";
+import { routedComplaintRecipientIds, tradesForComplaint } from "../lib/complaintRouting";
 import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
 import { rateLimit } from "../lib/rateLimit";
 import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
@@ -196,12 +196,13 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       development: reportDevelopment,
       description, status: "submitted", photos: [],
       updates: [{ status: "submitted", by: "resident", at: now.toISOString() }], createdAt: now.toISOString(),
-    };
+    } as Record<string, unknown>;
+    state["routedTrades"] = tradesForComplaint(state);
     const [row] = await tx.insert(entityRecords).values({
       id, tenantId, entity: "resident-reports", development: reportDevelopment,
       state, createdBy: "public-resident", createdAt: now, updatedAt: now,
     }).returning();
-    const recipientIds = await residentReportRecipientIds(tenantId, reportDevelopment);
+    const recipientIds = await routedComplaintRecipientIds(tenantId, reportDevelopment, state);
     const createdNotifications = recipientIds.length
       ? await tx.insert(notifications).values(recipientIds.map((target) => ({
           id: randomUUID(),

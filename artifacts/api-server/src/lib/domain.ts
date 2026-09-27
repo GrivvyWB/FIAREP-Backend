@@ -9,6 +9,7 @@ import {
   sameTitle,
   supervisedTradeForPosition as tradeFromTitle,
 } from "./titles";
+import { tradesForComplaint } from "./complaintTrades";
 
 export const STAFF_ROLES = new Set([
   "administrator",
@@ -641,7 +642,17 @@ export function canReadEntityRecord(
     row.entity === "resident-reports" &&
     isOfficeCraftSupervisor(actor) &&
     normalizeAssignment(row.state).assignedStaffId !== actor.id
-  ) return false;
+  ) {
+    // Keyword routing: a complaint whose words point to this supervisor's
+    // trade ("water" → plumbing …) reaches them until someone else takes it.
+    const trade = tradeFromTitle(actor.position);
+    const assignedStaffId = normalizeAssignment(row.state).assignedStaffId;
+    return !row.deleted &&
+      canReadEntity(actor, row.entity) &&
+      !!trade &&
+      tradesForComplaint(row.state).some((t) => sameTitle(t, trade)) &&
+      (!assignedStaffId || row.state["assignedByStaffId"] === actor.id);
+  }
   // Trade (office/craft) supervisors — plumbing, electrical, carpentry,
   // heating, painting, bricklaying, elevator — work from the office with no
   // base development. Like resident complaints, they see a raw building

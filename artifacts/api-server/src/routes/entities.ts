@@ -54,6 +54,7 @@ import { rateLimit } from "../lib/rateLimit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
 import { residentReportRecipientIds } from "../lib/notificationVisibility";
+import { routedComplaintRecipientIds } from "../lib/complaintRouting";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -1381,7 +1382,9 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
     recipients = [target.id];
     directedTo = target.name || "";
   } else {
-    recipients = await residentReportRecipientIds(actor.tenantId, development);
+    recipients = entity === "resident-reports"
+      ? await routedComplaintRecipientIds(actor.tenantId, development, report.state)
+      : await residentReportRecipientIds(actor.tenantId, development);
   }
   if (recipients.length) {
     await db.insert(notifications).values(recipients.map((target) => ({
@@ -2926,7 +2929,9 @@ router.post(
       String(state["address"] || state["building"] || development),
       photoReady ? "Repair photo ready for review" : "Repair completed for review",
     ].filter(Boolean).join(" · ");
-    let recipients: string[] = await residentReportRecipientIds(actor.tenantId, development);
+    let recipients: string[] = entity === "resident-reports"
+      ? await routedComplaintRecipientIds(actor.tenantId, development, { ...current.state, ...state })
+      : await residentReportRecipientIds(actor.tenantId, development);
     // The supervisor who assigned the complaint (e.g. an office-based CPM
     // Supervisor with no base development) must get the completed work back.
     const assignedBy = String(state["assignedByStaffId"] || current.state["assignedByStaffId"] || "");
@@ -3080,6 +3085,18 @@ router.post(
         releaseUpdate || undefined,
         current.id,
       );
+    } else if (entity === "resident-reports" && target === "management") {
+      // Complaint status alerts follow the keyword routing (on-site, emergency
+      // and matching trade supervisors) plus whoever assigned it — not every
+      // manager in the company.
+      const development = String(state["development"] || current.development || "").trim();
+      const routed = await routedComplaintRecipientIds(actor.tenantId, development, { ...current.state, ...state });
+      const assignedBy = String(state["assignedByStaffId"] || current.state["assignedByStaffId"] || "");
+      const recipients = [...new Set([...routed, ...(assignedBy ? [assignedBy] : [])])]
+        .filter((recipient) => recipient !== actor.id);
+      for (const recipient of recipients) {
+        await notify(actor, recipient, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
+      }
     } else {
       await notify(actor, target, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
     }
