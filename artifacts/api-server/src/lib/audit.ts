@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   db,
   auditLog,
+  notificationReads,
   notifications,
   platformLicenseAudit,
   staffAccounts,
@@ -112,17 +113,43 @@ export async function notify(
   ) {
     return undefined;
   }
-  const [notification] = await db
-    .insert(notifications)
-    .values({
-      id: randomUUID(),
-      tenantId: actor.tenantId,
-      target: stableTarget,
-      message,
-      detail,
-      reportId,
-    })
-    .returning();
+  // One alert per person per item: a repeat (e.g. a scope resubmitted after a
+  // return) refreshes the existing alert instead of stacking a duplicate.
+  let notification: typeof notifications.$inferSelect | undefined;
+  if (reportId) {
+    const [existing] = await db
+      .select({ id: notifications.id })
+      .from(notifications)
+      .where(and(
+        eq(notifications.tenantId, actor.tenantId),
+        eq(notifications.target, stableTarget),
+        eq(notifications.message, message),
+        eq(notifications.reportId, reportId),
+      ))
+      .limit(1);
+    if (existing) {
+      const now = new Date();
+      [notification] = await db
+        .update(notifications)
+        .set({ detail, at: now, read: false, updatedAt: now })
+        .where(eq(notifications.id, existing.id))
+        .returning();
+      await db.delete(notificationReads).where(eq(notificationReads.notificationId, existing.id));
+    }
+  }
+  if (!notification) {
+    [notification] = await db
+      .insert(notifications)
+      .values({
+        id: randomUUID(),
+        tenantId: actor.tenantId,
+        target: stableTarget,
+        message,
+        detail,
+        reportId,
+      })
+      .returning();
+  }
 
   if (!notification) return undefined;
   void deliverPushNotification(notification).catch((error) => {

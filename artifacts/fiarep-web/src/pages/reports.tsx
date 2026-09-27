@@ -617,6 +617,8 @@ export default function Reports() {
                     approved: "with Procurement", bidding: "out to vendors", awarded: "awarded to a vendor", closed: "closed",
                     in_house: "sent to in-house workers", in_house_completed: "in-house work completed",
                   };
+                  // No scope yet → show nothing (it arrives when the CPM sends it).
+                  if (!scope) return null;
                   return (
                     <div className={`rounded-xl border p-4 space-y-2 ${status === "submitted" ? "border-amber-300 bg-amber-50" : "border-border bg-muted/30"}`}>
                       <p className="text-sm font-semibold">CPM scope</p>

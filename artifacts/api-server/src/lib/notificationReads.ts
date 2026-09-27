@@ -25,6 +25,17 @@ export async function ensureNotificationReadsTable(): Promise<void> {
   await db.execute(sql`
     create index if not exists notification_reads_staff_idx
       on notification_reads (tenant_id, staff_id)`);
+  // One alert per person per item: drop older duplicates (same person, same
+  // message, same record) left from before alerts were de-duplicated.
+  await db.execute(sql`
+    delete from notifications a
+      using notifications b
+     where a.tenant_id = b.tenant_id
+       and a.target = b.target
+       and a.message = b.message
+       and a.report_id is not null
+       and a.report_id = b.report_id
+       and (a.at < b.at or (a.at = b.at and a.id < b.id))`);
 }
 
 /** Returns the rows with `read` reflecting THIS person, not whoever read it first. */
