@@ -38,6 +38,7 @@ import {
   procurementRecordAllowed,
   normalizeAssignment,
   isComplaintHandlingSupervisor,
+  waitsToBeSentComplaints,
 } from "../lib/domain";
 import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
 import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
@@ -509,6 +510,28 @@ router.post("/v1/:entity", async (req, res, next) => {
         !development || !location || !instructions || !assignedStaffId) {
       res.status(400).json({ error: "assignmentKind, clientRequestId, development, address/location, instructions, and assignedStaffId are required" });
       return;
+    }
+    // A resident complaint goes to an inspector only after building management
+    // (development / emergency supervisor, upper management) has sent it to
+    // this supervisor. Inspection, CPM and trade supervisors don't act on
+    // their own.
+    const sourceReportId = typeof rawState["sourceReportId"] === "string" ? rawState["sourceReportId"].trim() : "";
+    if (waitsToBeSentComplaints(actor)) {
+      const [complaint] = sourceReportId
+        ? await db.select().from(entityRecords).where(and(
+            eq(entityRecords.id, sourceReportId),
+            eq(entityRecords.tenantId, actor.tenantId),
+            eq(entityRecords.entity, "resident-reports"),
+          )).limit(1)
+        : [];
+      const complaintState = (complaint?.state || {}) as Record<string, unknown>;
+      const sentToActor = !!complaint && (
+        complaintState["assignedStaffId"] === actor.id || complaintState["assignedByStaffId"] === actor.id
+      );
+      if (sourceReportId && !sentToActor) {
+        res.status(403).json({ error: "Building management has not sent you this complaint yet" });
+        return;
+      }
     }
     const [target] = await db.select().from(staffAccounts).where(and(
         eq(staffAccounts.id, assignedStaffId),

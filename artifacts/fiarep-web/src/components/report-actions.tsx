@@ -190,6 +190,7 @@ export function SendAsViolationPanel({ report, staff }: {
             clientRequestId,
             inspector: "",
             assignmentKind: "violation-inspection",
+            sourceReportId: report.id,
             assignedStaffId: inspector.id,
             development,
             location: address,
