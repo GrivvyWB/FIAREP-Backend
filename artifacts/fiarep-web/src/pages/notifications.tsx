@@ -1,4 +1,4 @@
-import { notificationTitle } from "@/lib/notification-text";
+import { notificationHref, notificationTitle } from "@/lib/notification-text";
 import { useListNotifications, useMarkNotificationRead } from "@workspace/api-client-react";
 import { getListNotificationsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -165,9 +165,7 @@ export default function Notifications() {
                             ? `/team?staffId=${encodeURIComponent(notification.reportId)}`
                             : notification.message === "Leave request"
                               ? "/leave?view=team"
-                                : /violation/i.test(notification.message)
-                                  ? `/inspections?id=${encodeURIComponent(notification.reportId)}`
-                              : `/reports?id=${encodeURIComponent(notification.reportId)}`
+                                : notificationHref(notification.message, notification.reportId)
                         }
                         className="flex min-w-0 flex-1 items-start gap-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => {

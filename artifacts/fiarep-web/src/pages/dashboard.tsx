@@ -1,4 +1,4 @@
-import { notificationTitle } from "@/lib/notification-text";
+import { notificationHref, notificationTitle } from "@/lib/notification-text";
 import { useAuth } from "@/hooks/use-auth";
 import { hasModuleAccess } from "@/lib/access-policy";
 import {
@@ -130,7 +130,7 @@ export default function Dashboard() {
                       <div><b className="text-[13.5px] font-semibold">{notificationTitle(notification.message)}</b><span className="text-xs text-muted-foreground block mt-0.5">{notification.detail || formatDate(notification.at)}{!notification.read && " · Unread"}</span></div>
                     </>;
                     return notification.reportId ? (
-                      <Link key={notification.id} href={`/reports?id=${encodeURIComponent(notification.reportId)}`} className={`${className} rounded-md hover:bg-muted/50 transition-colors`}>
+                      <Link key={notification.id} href={notificationHref(notification.message, notification.reportId)} className={`${className} rounded-md hover:bg-muted/50 transition-colors`}>
                         {content}
                       </Link>
                     ) : (

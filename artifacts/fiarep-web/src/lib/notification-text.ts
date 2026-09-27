@@ -51,3 +51,14 @@ export function notificationTitle(message: string | null | undefined): string {
   const status = STATUS[m[2]!] || m[2]!.replace(/_/g, " ");
   return `${entity} ${status}`;
 }
+
+
+/** Where tapping an alert should take the person. */
+export function notificationHref(message: string, reportId: string): string {
+  const id = encodeURIComponent(reportId);
+  const m = message || "";
+  if (/^Scope approved for Procurement|Procurement returned|bid/i.test(m)) return "/procurement";
+  if (/^Scope submitted|^Scope /i.test(m)) return "/scope-review";
+  if (/violation/i.test(m)) return `/inspections?id=${id}`;
+  return `/reports?id=${id}`;
+}

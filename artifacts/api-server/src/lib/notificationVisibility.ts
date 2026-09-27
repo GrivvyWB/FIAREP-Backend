@@ -63,7 +63,8 @@ export async function visibleNotificationsFor(
   const finishedReviewAlert = (notification: NotificationRow) => {
     if (!/^Scope submitted for (CPM Supervisor review|approval)$/.test(notification.message || "")) return false;
     const record = notification.reportId ? byId.get(notification.reportId) : undefined;
-    return !!record && record.entity === "procurement" && String(record.state["status"] || "") !== "submitted";
+    if (!record) return true; // the scope no longer exists
+    return record.deleted || (record.entity === "procurement" && String(record.state["status"] || "") !== "submitted");
   };
   return candidateRows
     .filter((_notification, index) => visibility[index])
