@@ -58,8 +58,16 @@ export async function visibleNotificationsFor(
     if (!record) return !isResidentReportAlert(notification);
     return canReadEntityRecordForActor(actor, record);
   }));
+  // A "waiting for your review" alert is finished once the scope has moved on
+  // (approved, returned, handed to in-house …) — don't keep showing it.
+  const finishedReviewAlert = (notification: NotificationRow) => {
+    if (!/^Scope submitted for (CPM Supervisor review|approval)$/.test(notification.message || "")) return false;
+    const record = notification.reportId ? byId.get(notification.reportId) : undefined;
+    return !!record && record.entity === "procurement" && String(record.state["status"] || "") !== "submitted";
+  };
   return candidateRows
     .filter((_notification, index) => visibility[index])
+    .filter((notification) => !finishedReviewAlert(notification))
     .map((notification) => {
       if (!notification.reportId) return notification;
       const record = byId.get(notification.reportId);
