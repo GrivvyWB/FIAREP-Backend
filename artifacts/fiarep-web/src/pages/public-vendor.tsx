@@ -26,6 +26,8 @@ export default function PublicVendor() {
   const [progressNote, setProgressNote] = useState('');
   const [progressBusy, setProgressBusy] = useState(false);
   const [checkedInAt, setCheckedInAt] = useState<string | null>(null);
+  // The vendor's own price for each line of the CPM's scope.
+  const [linePrices, setLinePrices] = useState<Record<string, string>>({});
   // Walk-through check-in from the phone's browser: GPS + time go to
   // Procurement, who see whether the vendor was at the building.
   function walkthroughCheckIn() {
@@ -92,6 +94,38 @@ export default function PublicVendor() {
     { query: { enabled: !!lookupData, retry: false, queryKey: getLookupPublicVendorScopeQueryKey(lookupData?.trackingId || '', { vendorName: lookupData?.vendorName || '' }) } }
   );
   
+  const vendorState = (scopeResult?.state as any) || {};
+  const pricedLines: Array<{ key: string; label: string }> = [
+    ...((vendorState.vendorEstimate || []) as Array<{ title: string; location?: string; description?: string }>).map((c, i) => ({
+      key: `est-${i}`, label: [c.title, c.location, c.description].filter(Boolean).join(" · "),
+    })),
+    ...((vendorState.vendorElevator?.items || []) as Array<{ label: string; condition?: string }>).map((it, i) => ({
+      key: `elev-${i}`, label: [it.label, it.condition].filter(Boolean).join(" · "),
+    })),
+  ];
+  const lineTotal = Object.values(linePrices).reduce((sum, v) => sum + (Number(v) || 0), 0);
+  function setLinePrice(key: string, value: string) {
+    setLinePrices((current) => {
+      const next = { ...current, [key]: value };
+      const total = Object.values(next).reduce((sum, v) => sum + (Number(v) || 0), 0);
+      bidForm.setValue('amount', Math.round(total * 100) / 100, { shouldValidate: true });
+      return next;
+    });
+  }
+  async function openScopeFile() {
+    if (!lookupData) return;
+    try {
+      const response = await fetch(`/api/v1/public/vendor-scopes/${encodeURIComponent(lookupData.trackingId)}/scope-file`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ vendorName: lookupData.vendorName }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(payload?.error || 'Could not open the file');
+      window.open(payload.downloadUrl, '_blank', 'noopener');
+    } catch (error: any) {
+      toast({ variant: 'destructive', title: 'Could not open the file', description: error?.message });
+    }
+  }
   const submitBid = useSubmitPublicVendorBid();
   
   const lookupForm = useForm<z.infer<typeof lookupSchema>>({
@@ -116,12 +150,16 @@ export default function PublicVendor() {
       data: {
         vendorName: lookupData.vendorName,
         amount: values.amount,
-        note: values.note,
+        note: [
+          ...pricedLines.filter((l) => Number(linePrices[l.key]) > 0).map((l) => `${l.label}: $${Number(linePrices[l.key]).toFixed(2)}`),
+          values.note || '',
+        ].filter(Boolean).join('\n'),
       }
     }, {
       onSuccess: () => {
         toast({ title: 'Bid Submitted', description: 'Your bid has been recorded.' });
         bidForm.reset();
+        setLinePrices({});
         if (lookupData) {
           queryClient.invalidateQueries({ queryKey: getLookupPublicVendorScopeQueryKey(lookupData.trackingId, { vendorName: lookupData.vendorName }) });
         }
@@ -189,6 +227,7 @@ export default function PublicVendor() {
                 <Button variant="outline" size="sm" onClick={() => {
                   setLookupData(null);
                   bidForm.reset();
+                  setLinePrices({});
                 }}>Change Job</Button>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -210,6 +249,33 @@ export default function PublicVendor() {
                   </div>
                   {/* The CPM's scope lines with section codes — enter your own pricing. */}
                   <div className="mt-3"><ScopeLines scope={(scopeResult.state as any)?.vendorScopeTemplate} showPrices={false} /></div>
+                  {!!vendorState.vendorEstimate?.length && (
+                    <div className="mt-3 overflow-hidden rounded-md border">
+                      <div className="bg-muted/60 px-3 py-1.5 text-sm font-semibold">Nature of Work</div>
+                      <table className="w-full text-sm">
+                        <thead><tr className="text-left text-xs text-muted-foreground"><th className="px-3 py-1">Nature of work</th><th className="px-3 py-1">Location</th><th className="px-3 py-1">Description</th></tr></thead>
+                        <tbody>{(vendorState.vendorEstimate as Array<{ title: string; location?: string; description?: string }>).map((c, i) => (
+                          <tr key={i} className="border-t"><td className="px-3 py-1.5 font-medium">{c.title}</td><td className="px-3 py-1.5">{c.location}</td><td className="px-3 py-1.5">{c.description}</td></tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  )}
+                  {!!vendorState.vendorElevator?.items?.length && (
+                    <div className="mt-3 overflow-hidden rounded-md border">
+                      <div className="bg-muted/60 px-3 py-1.5 text-sm font-semibold">Elevator Services{vendorState.vendorElevator.header?.elevatorId ? ` · ${vendorState.vendorElevator.header.elevatorId}` : ''}</div>
+                      <table className="w-full text-sm">
+                        <thead><tr className="text-left text-xs text-muted-foreground"><th className="px-3 py-1">Component</th><th className="px-3 py-1">Condition</th><th className="px-3 py-1">Note</th></tr></thead>
+                        <tbody>{(vendorState.vendorElevator.items as Array<{ section?: string; label: string; condition?: string; note?: string }>).map((it, i) => (
+                          <tr key={i} className="border-t"><td className="px-3 py-1.5">{it.label}</td><td className="px-3 py-1.5">{it.condition}</td><td className="px-3 py-1.5">{it.note}</td></tr>
+                        ))}</tbody>
+                      </table>
+                    </div>
+                  )}
+                  {!!vendorState.scopeFileAvailable && (
+                    <Button type="button" variant="outline" size="sm" className="mt-3" onClick={() => { void openScopeFile(); }}>
+                      Open scope file: {vendorState.scopeFileAvailable}
+                    </Button>
+                  )}
                 </div>
                 {((scopeResult.state as any)?.walkthroughAt || (scopeResult.state as any)?.bidCloseAt) && (
                    <div className="grid grid-cols-2 gap-4 pt-2">
@@ -277,6 +343,19 @@ export default function PublicVendor() {
                 <CardContent>
                   <Form {...bidForm}>
                     <form onSubmit={bidForm.handleSubmit(onBidSubmit)} className="space-y-4">
+                      {pricedLines.length > 0 && (
+                        <div className="space-y-2 rounded-md border p-3">
+                          <p className="text-sm font-medium">Your price for each line</p>
+                          {pricedLines.map((line) => (
+                            <div key={line.key} className="flex items-center gap-2">
+                              <span className="flex-1 text-sm">{line.label}</span>
+                              <Input type="number" step="0.01" min="0" className="w-32" placeholder="$0.00"
+                                value={linePrices[line.key] || ''} onChange={(e) => setLinePrice(line.key, e.target.value)} />
+                            </div>
+                          ))}
+                          {lineTotal > 0 && <p className="text-right text-sm font-semibold">Total ${lineTotal.toFixed(2)}</p>}
+                        </div>
+                      )}
                       <FormField control={bidForm.control} name="amount" render={({ field }) => (
                         <FormItem>
                           <FormLabel>Bid Amount ($)</FormLabel>

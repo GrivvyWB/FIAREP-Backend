@@ -54,6 +54,26 @@ function vendorRecord(row: typeof entityRecords.$inferSelect, vendorName: string
       if (row.state[key] !== undefined) state[key] = row.state[key];
     }
   }
+  // The CPM's Nature of Work and elevator lines, without the CPM's prices,
+  // so the vendor prices each line; and whether a scope file can be opened.
+  const est = row.state["cpmEstimate"] as { categories?: Array<Record<string, unknown>> } | undefined;
+  if (Array.isArray(est?.categories) && est!.categories.length) {
+    state["vendorEstimate"] = est!.categories.map((c) => ({
+      title: String(c["title"] ?? ""), location: String(c["location"] ?? ""), description: String(c["description"] ?? ""),
+    }));
+  }
+  const elev = row.state["cpmElevator"] as { header?: Record<string, unknown>; items?: Array<Record<string, unknown>> } | undefined;
+  if (Array.isArray(elev?.items) && elev!.items.length) {
+    state["vendorElevator"] = {
+      header: { elevatorId: String(elev!.header?.["elevatorId"] ?? ""), location: String(elev!.header?.["location"] ?? "") },
+      items: elev!.items.map((it) => ({
+        section: String(it["section"] ?? ""), label: String(it["label"] ?? ""),
+        condition: String(it["condition"] ?? ""), note: String(it["note"] ?? ""),
+      })),
+    };
+  }
+  const file = row.state["scopeFileRemote"] as { objectPath?: string; name?: string } | undefined;
+  if (file?.objectPath) state["scopeFileAvailable"] = String(file.name || row.state["scopeFileName"] || "Scope file");
   const checkIns = Array.isArray(row.state["walkthroughCheckIns"]) ? row.state["walkthroughCheckIns"] : [];
   state["walkthroughCheckIns"] = checkIns.filter((item) =>
     item && typeof item === "object" && normalize((item as Record<string, unknown>)["vendorName"]) === normalize(vendorName));
@@ -453,6 +473,22 @@ router.get("/v1/public/vendor-scopes/:trackingId", async (req, res) => {
   const org = await evaluateLicense(scope.tenantId);
   if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
   res.json(vendorRecord(scope, vendorName));
+});
+
+// Open the CPM's attached scope file (PDF, drawings…) with the vendor code.
+router.post("/v1/public/vendor-scopes/:trackingId/scope-file", async (req, res) => {
+  const vendorName = normalize(req.body?.vendorName);
+  const scope = await releasedScope(req.params["trackingId"]!);
+  if (!vendorName || !scope) { res.status(404).json({ error: "Released scope not found" }); return; }
+  if (["awarded", "eligible-awarded", "closed"].includes(normalize(scope.state["status"])) && normalize(scope.state["vendor"]) !== vendorName) {
+    res.status(404).json({ error: "Released scope not found" }); return;
+  }
+  const org = await evaluateLicense(scope.tenantId);
+  if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
+  const file = scope.state["scopeFileRemote"] as { objectPath?: string; name?: string } | undefined;
+  if (!file?.objectPath) { res.status(404).json({ error: "No scope file attached" }); return; }
+  const download = await fileStorage.createDownload(scope.tenantId, String(file.objectPath));
+  res.json({ downloadUrl: download.downloadUrl, name: file.name || "Scope file" });
 });
 
 router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async (req, res) => {
