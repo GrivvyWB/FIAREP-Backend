@@ -8,7 +8,7 @@ export type StaffModule =
   | "clients" | "team" | "violations" | "procurement" | "scope-review"
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
-   | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard";
+   | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -92,7 +92,7 @@ export function hasModuleAccess(
   if (staff.role === "management" && isInspectionSupervisorTitle(position)) {
     // Send Violation / Inspection Approvals / HUD Inspections (app tiles).
     return exactWorkflowShell.has(module) ||
-      ["trade-requests", "inspections", "violations", "hud-inspections"].includes(module);
+      ["trade-requests", "inspections", "violations", "hud-inspections", "inspection-approvals"].includes(module);
   }
   if (staff.role === "inspector" && position === "CPM") {
     return exactWorkflowShell.has(module) || module === "scope-writing";
@@ -132,6 +132,7 @@ export function hasModuleAccess(
   }
   if (staff.role === "procurement") return module === "procurement";
   if (module === "hud-inspections") return canReviewHud(staff);
+  if (module === "inspection-approvals") return staff.role === "administrator" || (staff.role === "management" && isInspectionSupervisorTitle(position));
   // Shared Data remains an administrator-only module.  Default-rate
   // visibility is a Settings concern, not a reason to broaden this module.
   if (module === "shared-data") return staff.role === "administrator";

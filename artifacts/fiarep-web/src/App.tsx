@@ -39,6 +39,7 @@ import ScopeReview from '@/pages/scope-review';
 import ScopeWriting from '@/pages/scope-writing';
 import Scores from '@/pages/scores';
 import HudInspections from '@/pages/hud-inspections';
+import InspectionApprovals from '@/pages/inspection-approvals';
 import ComplaintDashboard from '@/pages/complaint-dashboard';
 
 // Owner Pages
@@ -197,6 +198,7 @@ function AppRouter() {
           <Route path="/dashboard" component={DashboardRoute} />
           <Route path="/inspections" component={InspectionsRoute} />
           <Route path="/hud-inspections" component={HudInspectionsRoute} />
+          <Route path="/inspection-approvals" component={InspectionApprovalsRoute} />
           <Route path="/inspections/new" component={NewInspectionRoute} />
           <Route path="/estimates" component={EstimatesRoute} />
           <Route path="/repairs" component={RepairsRoute} />
@@ -244,6 +246,7 @@ function ModuleRoute({ module, children }: { module: StaffModule; children: Reac
 const DashboardRoute = () => <ModuleRoute module="dashboard"><Dashboard /></ModuleRoute>;
 const InspectionsRoute = () => <ModuleRoute module="inspections"><Inspections /></ModuleRoute>;
 const HudInspectionsRoute = () => <ModuleRoute module="hud-inspections"><HudInspections /></ModuleRoute>;
+const InspectionApprovalsRoute = () => <ModuleRoute module="inspection-approvals"><InspectionApprovals /></ModuleRoute>;
 const NewInspectionRoute = () => <ModuleRoute module="inspection-create"><NewInspection /></ModuleRoute>;
 const EstimatesRoute = () => <ModuleRoute module="estimates"><Estimates /></ModuleRoute>;
 const RepairsRoute = () => <ModuleRoute module="repairs"><Repairs /></ModuleRoute>;

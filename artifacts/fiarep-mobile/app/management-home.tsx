@@ -27,7 +27,7 @@ export default function ManagementHome() {
   const readOnlyState = useAppReadOnly();
   const readOnly = readOnlyState === true;
   const [positionLoaded, setPositionLoaded] = useState(false);
-  const actionTiles = new Set(['Send Violation', 'In-house assignments', 'Assign a Job', 'Cover a Site', 'Create Report', '+ New Project', 'Manage Trucks', 'Add Job for Mgmt', 'Assign Route', 'CPM Supervisor Scope Review', 'CPM Supervisor']);
+  const actionTiles = new Set(['Send Violation', 'Inspection Approvals', 'HUD Inspections', 'In-house assignments', 'Assign a Job', 'Cover a Site', 'Create Report', '+ New Project', 'Manage Trucks', 'Add Job for Mgmt', 'Assign Route', 'Assign Emergency Unit', 'Staff Member Jobs', 'Review Reports', 'CPM Supervisor Scope Review', 'CPM Supervisor', 'Default rates']);
   const enabledTiles = (tiles: Tile[]) => tiles.filter((tile) => {
     if (readOnly && actionTiles.has(tile.label)) return false;
     const module = moduleForTile(tile.label);
