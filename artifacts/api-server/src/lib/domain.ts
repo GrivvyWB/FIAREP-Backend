@@ -1232,7 +1232,7 @@ export function canPerformEntityAction(
      }
     return (
       actor.role === "procurement" &&
-      ["broadcast", "resend", "award", "rate-close", "return"].includes(action)
+      ["broadcast", "resend", "award", "pay", "rate-close", "return"].includes(action)
     );
   }
 
@@ -1425,6 +1425,8 @@ export function isValidEntityTransition(
       // Send an out-for-bid scope to more vendors (same SR- code).
       resend: ["bidding"],
       award: ["bidding"],
+      // Release money to the awarded vendor (one or more payments).
+      pay: ["awarded"],
       "rate-close": ["awarded"],
     },
     "resident-reports": {

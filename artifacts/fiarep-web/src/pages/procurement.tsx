@@ -57,6 +57,14 @@ const cpmTotal = (s: Record<string, any>): number => {
     .reduce((acc, c) => acc + (Number(String(c.cost || "").replace(/[^0-9.-]/g, "")) || 0), 0);
   return sum ? Math.round(sum * 1.1 * 100) / 100 : 0;
 };
+/** Contract = winning bid (less any deduction once closed). */
+const contractOf = (s: Record<string, any>): number => Number(s.bidAmount) || 0;
+/** Money released to the vendor so far. */
+const releasedOf = (s: Record<string, any>): number => {
+  const list = Array.isArray(s.payments) ? s.payments : [];
+  const sum = list.reduce((acc: number, p: any) => acc + (Number(p?.amount) || 0), 0);
+  return Math.round((sum || Number(s.releasedTotal) || 0) * 100) / 100;
+};
 const reference = (s: Record<string, any>) =>
   s.sourceRef || s.complaintNo || (s.violationNo ? `Violation ${s.violationNo}` : "");
 
@@ -263,6 +271,9 @@ export default function Procurement() {
   const [deductWhy, setDeductWhy] = useState<Record<string, string>>({});
   const [extraTo, setExtraTo] = useState<Record<string, string>>({});
   const [missingClose, setMissingClose] = useState<Record<string, boolean>>({});
+  const [payAmt, setPayAmt] = useState<Record<string, string>>({});
+  const [payNote, setPayNote] = useState<Record<string, string>>({});
+  const [workDone, setWorkDone] = useState<Record<string, boolean>>({});
   const [moreOpen, setMoreOpen] = useState<Record<string, boolean>>({});
   const [moreTo, setMoreTo] = useState<Record<string, string>>({});
   const activityRef = useRef<HTMLDivElement>(null);
@@ -500,21 +511,70 @@ export default function Procurement() {
 
   const awardedCards = awarded.map((r) => {
     const s = r.state || {};
-    const amt = Math.max(0, Number(charged[r.id]) || 0);
-    const cut = Math.min(amt, Math.max(0, Number(deduct[r.id]) || 0));
+    const contract = contractOf(s);
+    const released = releasedOf(s);
+    const cut = Math.min(contract, Math.max(0, Number(deduct[r.id]) || 0));
+    const finalAmount = Math.round((contract - cut) * 100) / 100;
+    const left = Math.max(0, Math.round((finalAmount - released) * 100) / 100);
+    const pct = finalAmount > 0 ? Math.min(100, Math.round((released / finalAmount) * 100)) : 0;
+    const vendorDone = !!(s.completedAt || s.vendorCompletedAt);
+    const finished = vendorDone || !!workDone[r.id];
+    const payments = (Array.isArray(s.payments) ? s.payments : []) as Array<{ id: string; amount: number; note?: string; at?: string; byName?: string }>;
+    const payAmount = Number(payAmt[r.id] ?? "") || 0;
     return card(r, <>
       <div className="rounded-lg border border-slate-200 px-4 py-2">
         <Line label="Vendor">{s.vendor || "—"}</Line>
-        <Line label="Winning bid">{money(s.bidAmount) || "—"}</Line>
         <Line label="Awarded">{fmt(s.awardAt || s.awardedAt) || "—"}</Line>
         <Line label="Vendor started">{s.startedAt || s.vendorStartedAt ? fmt(s.startedAt || s.vendorStartedAt) : "Not yet"}</Line>
-        <Line label="Vendor completed">{s.completedAt || s.vendorCompletedAt ? fmt(s.completedAt || s.vendorCompletedAt) : "Not yet"}</Line>
+        <Line label="Vendor completed">{vendorDone ? fmt(s.completedAt || s.vendorCompletedAt) : "Not yet"}</Line>
       </div>
+
+      <div className="space-y-3 rounded-lg border border-slate-200 p-4">
+        <p className="text-sm font-semibold text-slate-900">Payments</p>
+        <div className="grid grid-cols-3 gap-2 text-center">
+          <div className="rounded-lg bg-slate-50 p-2"><p className="text-xs text-slate-500">Contract</p><p className="text-lg font-bold text-slate-900">{money(finalAmount) || "$0"}</p></div>
+          <div className="rounded-lg bg-emerald-50 p-2"><p className="text-xs text-emerald-700">Released</p><p className="text-lg font-bold text-emerald-700">{money(released) || "$0"}</p></div>
+          <div className="rounded-lg bg-amber-50 p-2"><p className="text-xs text-amber-700">Left to release</p><p className="text-lg font-bold text-amber-700">{money(left) || "$0"}</p></div>
+        </div>
+        <div className="h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${pct}%` }} /></div>
+        {payments.length > 0 && (
+          <div className="divide-y divide-slate-100 rounded-md border border-slate-100 text-sm">
+            {payments.map((p) => (
+              <div key={p.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
+                <span className="text-slate-600">{fmt(p.at)}{p.byName ? ` · ${p.byName}` : ""}{p.note ? ` · ${p.note}` : ""}</span>
+                <span className="font-semibold text-slate-900">{money(p.amount)}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {canAct && left > 0 && (
+          <div className="grid gap-2 sm:grid-cols-[190px_1fr_auto]">
+            <Input type="number" min="0" step="0.01" value={payAmt[r.id] ?? ""} onChange={(e) => setPayAmt((m) => ({ ...m, [r.id]: e.target.value }))} placeholder={`$ up to ${money(left)}`} />
+            <Input value={payNote[r.id] || ""} onChange={(e) => setPayNote((m) => ({ ...m, [r.id]: e.target.value }))} placeholder="Note (e.g. 50% deposit, check #1024)" />
+            <Button className="gap-1.5 bg-emerald-600 hover:bg-emerald-700" disabled={action.isPending || payAmount <= 0 || payAmount > left + 0.005}
+              onClick={async () => {
+                if (await run(r, "pay", { amount: payAmount, note: (payNote[r.id] || "").trim() }, `Released ${money(payAmount)} to ${s.vendor || "the vendor"}`)) {
+                  setPayAmt((m) => ({ ...m, [r.id]: "" })); setPayNote((m) => ({ ...m, [r.id]: "" }));
+                }
+              }}>
+              Release payment
+            </Button>
+            <button type="button" className="text-left text-xs font-semibold text-blue-600 hover:underline sm:col-span-3" onClick={() => setPayAmt((m) => ({ ...m, [r.id]: String(left) }))}>Release the full remaining {money(left)}</button>
+          </div>
+        )}
+      </div>
+
       <WalkthroughArrivals scope={r} />
       {scopeDetails(r)}
       {canAct && (
         <div className="space-y-3 rounded-lg border border-slate-200 p-4">
-          <p className="text-sm font-semibold text-slate-900">Rate &amp; close out</p>
+          <p className="text-sm font-semibold text-slate-900">Close the job</p>
+          {!vendorDone && (
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={!!workDone[r.id]} onChange={(e) => setWorkDone((m) => ({ ...m, [r.id]: e.target.checked }))} />
+              The work is completely finished (the vendor hasn't marked it complete)
+            </label>
+          )}
           <div className="flex gap-2">
             {(["good", "fair", "poor"] as const).map((lvl) => (
               <Button key={lvl} type="button" size="sm" variant={perf[r.id] === lvl ? "default" : "outline"}
@@ -522,20 +582,24 @@ export default function Procurement() {
             ))}
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
-            <Input type="number" min="0" step="0.01" value={charged[r.id] || ""} onChange={(e) => setCharged((m) => ({ ...m, [r.id]: e.target.value }))} placeholder="Amount vendor charged ($)" />
             <Input type="number" min="0" step="0.01" value={deduct[r.id] || ""} onChange={(e) => setDeduct((m) => ({ ...m, [r.id]: e.target.value }))} placeholder="Deduction for poor work ($, optional)" />
+            {cut > 0 && <Input value={deductWhy[r.id] || ""} onChange={(e) => setDeductWhy((m) => ({ ...m, [r.id]: e.target.value }))} placeholder="Reason for the deduction" />}
           </div>
-          {cut > 0 && <Input value={deductWhy[r.id] || ""} onChange={(e) => setDeductWhy((m) => ({ ...m, [r.id]: e.target.value }))} placeholder="Reason for the deduction" />}
-          {amt > 0 && <p className="text-sm">Vendor paid <span className="font-semibold">{money(amt - cut)}</span>{cut > 0 ? ` (cut ${money(cut)})` : ""}</p>}
-          <Button className="w-full gap-1.5 bg-blue-600 hover:bg-blue-700" disabled={action.isPending || !perf[r.id] || amt <= 0 || (cut > 0 && !(deductWhy[r.id] || "").trim())}
+          <ul className="space-y-0.5 text-sm">
+            <li className={finished ? "text-emerald-700" : "text-slate-500"}>{finished ? "✓" : "○"} Work finished</li>
+            <li className={left <= 0 ? "text-emerald-700" : "text-slate-500"}>{left <= 0 ? "✓" : "○"} All money released{left > 0 ? ` (${money(left)} left)` : ""}</li>
+            <li className={perf[r.id] ? "text-emerald-700" : "text-slate-500"}>{perf[r.id] ? "✓" : "○"} Work quality rated</li>
+          </ul>
+          <Button className="w-full gap-1.5 bg-blue-600 hover:bg-blue-700"
+            disabled={action.isPending || !finished || left > 0 || !perf[r.id] || (cut > 0 && !(deductWhy[r.id] || "").trim())}
             onClick={() => run(r, "rate-close", {
               performance: perf[r.id],
-              amountCharged: amt,
+              amountCharged: contract,
               ...(cut > 0 ? { deduction: cut, deductionReason: deductWhy[r.id]!.trim() } : {}),
-              finalAmount: amt - cut,
+              finalAmount,
               closedAt: new Date().toISOString(),
-            }, `Closed · vendor paid ${money(amt - cut)}`)}>
-            <CheckCircle2 className="h-4 w-4" />Rate &amp; close out
+            }, `Job closed · vendor paid ${money(released)}`)}>
+            <CheckCircle2 className="h-4 w-4" />Close job
           </Button>
         </div>
       )}
@@ -547,7 +611,7 @@ export default function Procurement() {
     return card(r, <>
       <div className="rounded-lg border border-slate-200 px-4 py-2">
         <Line label="Vendor">{s.vendor || "—"}</Line>
-        <Line label="Paid">{money(s.finalAmount ?? s.amountCharged) || "—"}{s.deduction ? ` (cut ${money(s.deduction)}: ${s.deductionReason || ""})` : ""}</Line>
+        <Line label="Paid">{money(s.releasedTotal ?? s.finalAmount ?? s.amountCharged) || "—"}{s.deduction ? ` (cut ${money(s.deduction)}: ${s.deductionReason || ""})` : ""}</Line>
         <Line label="Work quality"><span className="capitalize">{s.performance || "—"}</span></Line>
         <Line label="Closed">{fmt(s.closedAt || s.rate_closeAt) || "—"}</Line>
       </div>
@@ -607,6 +671,34 @@ export default function Procurement() {
             <StatCard icon={<Trophy className="h-6 w-6" />} tone="bg-purple-600" label="Awarded" value={awarded.length} sub="Bids awarded" active={tab === "awarded"} onClick={() => setTab("awarded")} />
             <StatCard icon={<CheckCircle2 className="h-6 w-6" />} tone="bg-amber-500" label="Closed" value={closed.length} sub="Completed & closed" active={tab === "closed"} onClick={() => setTab("closed")} />
           </div>
+
+          {(() => {
+            // Money: what's been awarded, released to vendors, and still owed.
+            const moneyRows = released.filter((r) => ["awarded", "closed"].includes(String(r.state?.status || "")));
+            const awardedValue = moneyRows.reduce((sum, r) => {
+              const st = r.state || {};
+              return sum + (st.status === "closed" ? Number(st.finalAmount ?? contractOf(st)) || 0 : contractOf(st));
+            }, 0);
+            const releasedValue = moneyRows.reduce((sum, r) => sum + releasedOf(r.state || {}), 0);
+            const leftValue = released.filter((r) => r.state?.status === "awarded")
+              .reduce((sum, r) => sum + Math.max(0, contractOf(r.state || {}) - releasedOf(r.state || {})), 0);
+            const pct = awardedValue > 0 ? Math.min(100, Math.round((releasedValue / awardedValue) * 100)) : 0;
+            return (
+              <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-base font-bold text-slate-900">Money</p>
+                  <p className="text-xs text-slate-500">Awarded and closed jobs</p>
+                </div>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg bg-slate-50 p-3"><p className="text-sm text-slate-600">Awarded value</p><p className="text-2xl font-bold text-slate-900">{money(awardedValue) || "$0"}</p></div>
+                  <div className="rounded-lg bg-emerald-50 p-3"><p className="text-sm text-emerald-700">Released to vendors</p><p className="text-2xl font-bold text-emerald-700">{money(releasedValue) || "$0"}</p></div>
+                  <button type="button" onClick={() => setTab("awarded")} className="rounded-lg bg-amber-50 p-3 text-left hover:ring-1 hover:ring-amber-300"><p className="text-sm text-amber-700">Left to release</p><p className="text-2xl font-bold text-amber-700">{money(leftValue) || "$0"}</p></button>
+                </div>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></div>
+                <p className="mt-1 text-xs text-slate-500">{pct}% released</p>
+              </div>
+            );
+          })()}
 
           <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex gap-1 overflow-x-auto border-b border-slate-200 bg-slate-50/60 px-2" role="tablist">

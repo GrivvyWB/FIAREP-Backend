@@ -1494,6 +1494,7 @@ router.post(
       broadcast: "bidding",
       resend: "bidding",
       award: "awarded",
+      pay: "awarded",
       "rate-close": "closed",
     },
     "resident-reports": {
@@ -2100,6 +2101,38 @@ router.post(
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
   };
+  // Money released to the awarded vendor: server-kept list of payments.
+  const paymentsSoFar = (Array.isArray(current.state["payments"]) ? current.state["payments"] : [])
+    .filter((p): p is Record<string, unknown> => !!p && typeof p === "object");
+  const releasedSoFar = Math.round(paymentsSoFar.reduce((sum, p) => sum + (Number(p["amount"]) || 0), 0) * 100) / 100;
+  if (entity === "procurement" && action === "pay") {
+    const amount = Math.round(Number(body["amount"]) * 100) / 100;
+    const contract = Number(current.state["finalAmount"] ?? current.state["bidAmount"]) || 0;
+    delete state["amount"];
+    if (!Number.isFinite(amount) || amount <= 0) {
+      res.status(400).json({ error: "Enter the amount to release." });
+      return;
+    }
+    if (contract > 0 && releasedSoFar + amount > contract + 0.005) {
+      res.status(400).json({ error: `That's more than is left to release ($${(contract - releasedSoFar).toFixed(2)}).` });
+      return;
+    }
+    state["payments"] = [...paymentsSoFar, {
+      id: randomUUID(), amount, note: reviewNote.slice(0, 500),
+      at: now.toISOString(), byId: actor.id, byName: actor.name,
+    }];
+    state["releasedTotal"] = Math.round((releasedSoFar + amount) * 100) / 100;
+  }
+  if (entity === "procurement" && action === "rate-close") {
+    // A job closes only when the work is finished and all the money is out.
+    const finalAmount = Number(body["finalAmount"]);
+    if (!Number.isFinite(finalAmount) || releasedSoFar + 0.005 < finalAmount) {
+      const left = Math.max(0, (Number.isFinite(finalAmount) ? finalAmount : 0) - releasedSoFar);
+      res.status(400).json({ error: `Release the remaining $${left.toFixed(2)} before closing this job.` });
+      return;
+    }
+    state["releasedTotal"] = releasedSoFar;
+  }
   if (entity === "procurement" && ["submit", "approve", "broadcast"].includes(action)) {
     // Carry the CPM's CSI scope (with prices for staff, without for vendors).
     const keys = [current.id, String(current.projectId || "")].filter(Boolean);
