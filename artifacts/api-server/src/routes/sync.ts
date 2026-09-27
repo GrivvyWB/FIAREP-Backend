@@ -9,6 +9,7 @@ import {
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { visibleNotificationsFor } from "../lib/notificationVisibility";
+import { withPersonalReadState } from "../lib/notificationReads";
 
 const router: IRouter = Router();
 function parseRecordCursors(value: string | undefined): Record<string, Date> {
@@ -104,7 +105,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
       ),
     )
     .orderBy(asc(notifications.updatedAt));
-  const visibleAlerts = await visibleNotificationsFor(actor, alerts);
+  const visibleAlerts = await withPersonalReadState(actor, await visibleNotificationsFor(actor, alerts));
   const authorizedRecords = (
     await Promise.all(
       records.map(async (row) => ({

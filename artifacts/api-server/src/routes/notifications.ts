@@ -4,6 +4,7 @@ import { db, notifications, staffAccounts } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { visibleNotificationsFor } from "../lib/notificationVisibility";
 import { canDeleteOperationalRecords } from "../lib/domain";
+import { markReadForActor, withPersonalReadState } from "../lib/notificationReads";
 
 const router: IRouter = Router();
 router.use("/v1/notifications", requireAuth);
@@ -46,7 +47,7 @@ router.get("/v1/notifications", async (_req, res) => {
       ),
     )
     .orderBy(desc(notifications.at));
-  res.json(await visibleNotificationsFor(actor, rows));
+  res.json(await withPersonalReadState(actor, await visibleNotificationsFor(actor, rows)));
 });
 
 router.get("/v1/notifications/unread-count", async (_req, res) => {
@@ -57,7 +58,6 @@ router.get("/v1/notifications/unread-count", async (_req, res) => {
     .where(
       and(
         eq(notifications.tenantId, actor.tenantId),
-        eq(notifications.read, false),
         or(
           eq(notifications.target, actor.id),
           eq(notifications.target, actor.name),
@@ -65,8 +65,8 @@ router.get("/v1/notifications/unread-count", async (_req, res) => {
         ),
       ),
     );
-  const visible = await visibleNotificationsFor(actor, rows);
-  res.json({ count: visible.length });
+  const visible = await withPersonalReadState(actor, await visibleNotificationsFor(actor, rows));
+  res.json({ count: visible.filter((row) => !row.read).length });
 });
 
 router.post("/v1/notifications/:id/read", async (req, res) => {
@@ -90,22 +90,8 @@ router.post("/v1/notifications/:id/read", async (req, res) => {
     res.json(candidate);
     return;
   }
-  const [updated] = await db
-    .update(notifications)
-    .set({ read: true, updatedAt: new Date() })
-    .where(
-      and(
-        eq(notifications.id, req.params["id"]!),
-        eq(notifications.tenantId, actor.tenantId),
-        inArray(notifications.target, [actor.id, actor.name, actor.role]),
-      ),
-    )
-    .returning();
-  if (!updated) {
-    res.status(404).json({ error: "Notification not found" });
-    return;
-  }
-  res.json(updated);
+  await markReadForActor(actor, [candidate]);
+  res.json({ ...candidate, read: true });
 });
 
 // Permanently remove a notification so it does not return on the next sync.
@@ -144,22 +130,8 @@ router.post("/v1/notifications/read-all", async (_req, res) => {
     );
   const visible = await visibleNotificationsFor(actor, candidates);
   const protectedIds = await pendingEmployeeReminderIds(actor.tenantId, visible);
-  const markableIds = visible
-    .filter((notification) => !protectedIds.has(notification.id))
-    .map((notification) => notification.id);
-  if (!markableIds.length) {
-    res.status(204).send();
-    return;
-  }
-  await db
-    .update(notifications)
-    .set({ read: true, updatedAt: new Date() })
-    .where(
-      and(
-        eq(notifications.tenantId, actor.tenantId),
-        inArray(notifications.id, markableIds),
-      ),
-    );
+  const markable = visible.filter((notification) => !protectedIds.has(notification.id));
+  if (markable.length) await markReadForActor(actor, markable);
   res.status(204).send();
 });
 

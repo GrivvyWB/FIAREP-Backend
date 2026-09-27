@@ -322,6 +322,23 @@ export const notifications = pgTable(
   ],
 );
 
+// Per-person read state for notifications addressed to a shared target (a
+// role such as "management"). One supervisor reading a shared alert must not
+// mark it read for everyone else.
+export const notificationReads = pgTable(
+  "notification_reads",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull().default("default"),
+    notificationId: text("notification_id").notNull(),
+    staffId: text("staff_id").notNull(),
+    readAt: timestamp("read_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    index("notification_reads_staff_idx").on(table.tenantId, table.staffId),
+  ],
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {
