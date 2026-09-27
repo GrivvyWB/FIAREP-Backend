@@ -446,7 +446,7 @@ export default function Procurement() {
         </button>
         {openBids[r.id] && (
           <div className="border-t border-slate-200 px-4 pb-3">
-            {rBids.length === 0 ? <p className="py-3 text-sm text-slate-500">No bids in yet.</p> : rBids.map((b, i) => (
+            {rBids.length === 0 ? <p className="py-3 text-sm text-slate-500">No bids in yet. Vendors bid at fiarep.com/vendor with their company name and {s.trackingId || "the SR- code"}. Each bid shows here with an <span className="font-semibold">Award</span> button.</p> : rBids.map((b, i) => (
               <div key={b.id} className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 py-3 last:border-0">
                 <div>
                   <p className="text-sm font-semibold text-slate-900">{String(b.state?.vendorName || "Vendor")}{i === 0 && rBids.length > 1 ? <span className="ml-2 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">Lowest</span> : null}</p>
