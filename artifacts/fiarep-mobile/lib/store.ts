@@ -4232,6 +4232,27 @@ export async function getComplaintScopeDraft(reportId: string, requestedBy: stri
   return draft;
 }
 
+/** The scope already started for this complaint (direct complaint scope, or a
+ *  project created from it). `locked` is true once it has been sent to the
+ *  CPM Supervisor or approved/handed off — the CPM can't start another one. */
+export async function findComplaintScope(report: { id: string; complaintNo?: string }): Promise<{ scope: ProcurementRequest | null; locked: boolean }> {
+  const rid = (report.id || '').trim();
+  const no = (report.complaintNo || '').trim().toUpperCase();
+  const all = await listProcurementRequests().catch(() => [] as ProcurementRequest[]);
+  const projects = await listProjects().catch(() => [] as Project[]);
+  const projIds = new Set(projects.filter((p: any) =>
+    (rid && (p.sourceReportId || '') === rid) || (no && String(p.complaintNo || '').trim().toUpperCase() === no)
+  ).map((p) => p.id));
+  const matches = all.filter((x) =>
+    x.id === `complaint-scope:${rid}`
+    || (rid && x.sourceRecordId === rid)
+    || (no && String(x.complaintNo || '').trim().toUpperCase() === no)
+    || (x.projectId && projIds.has(x.projectId))
+  );
+  const lockedOne = matches.find((x) => !['draft', 'returned'].includes(String(x.status)));
+  return { scope: lockedOne || matches[0] || null, locked: !!lockedOne };
+}
+
 /** Complaints assigned to this CPM that still need a scope. */
 export async function listComplaintsToScope(staffId: string): Promise<ResidentReport[]> {
   const all = await listResidentReports();

@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { addResidentUpdate, approveResidentWork, rejectResidentWork, assessReportPhotos, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls } from '../lib/store';
+import { addResidentUpdate, approveResidentWork, rejectResidentWork, assessReportPhotos, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls, findComplaintScope } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -20,6 +20,18 @@ const STATUS_LABEL: Record<ResidentReport['status'], string> = {
   completed: 'Completed',
   resolved: 'Resolved',
 };
+
+function scopeStatusLabel(st: string): string {
+  switch (st) {
+    case 'submitted': case 'pending': return 'sent';
+    case 'approved': return 'approved';
+    case 'in_house': return 'sent to in-house';
+    case 'bidding': return 'out to vendors';
+    case 'awarded': return 'awarded';
+    case 'closed': return 'closed';
+    default: return 'sent';
+  }
+}
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
@@ -48,6 +60,7 @@ export default function ReportDetail() {
   const [completionNote, setCompletionNote] = useState('');
   const [completionPhotos, setCompletionPhotos] = useState<PhotoEvidence[]>([]);
   const [completionBusy, setCompletionBusy] = useState(false);
+  const [scopeLock, setScopeLock] = useState<{ locked: boolean; status: string }>({ locked: false, status: '' });
 
   const load = useCallback(() => {
     if (!id) {
@@ -69,6 +82,9 @@ export default function ReportDetail() {
         }
         if (!active) return;
         setR(report);
+        if (report) {
+          findComplaintScope(report).then((f) => { if (active) setScopeLock({ locked: f.locked, status: f.scope ? String(f.scope.status) : '' }); }).catch(() => {});
+        }
         setRemotePhotoUris([]);
         setCompletedPhotoUris([]);
         setPhotosError(false);
@@ -325,15 +341,17 @@ export default function ReportDetail() {
         )}
         {position === 'CPM' && isMine && (
           <Pressable
-            style={[ui.btn, { marginTop: 10 }]}
+            disabled={scopeLock.locked}
+            style={[ui.btn, { marginTop: 10 }, scopeLock.locked && { backgroundColor: '#9e9e9e' }]}
             onPress={() => router.push('/scope-submit?complaintId=' + encodeURIComponent(r.id))}
           >
-            <Text style={ui.btnText}>Write scope for {r.complaintNo || 'this complaint'}</Text>
+            <Text style={ui.btnText}>{scopeLock.locked ? 'Scope ' + scopeStatusLabel(scopeLock.status) + ' \u2014 ' + (r.complaintNo || 'this complaint') : 'Write scope for ' + (r.complaintNo || 'this complaint')}</Text>
           </Pressable>
         )}
         {position === 'CPM' && (
           <Pressable
-            style={[ui.btnOutline, { marginTop: 10 }]}
+            disabled={scopeLock.locked}
+            style={[ui.btnOutline, { marginTop: 10 }, scopeLock.locked && { borderColor: '#bdbdbd', opacity: 0.6 }]}
             onPress={() => router.push('/?new=1'
               + '&preName=' + encodeURIComponent([r.complaintNo, r.address, r.unit ? 'Unit ' + r.unit : ''].filter(Boolean).join(' · '))
               + '&preDevelopment=' + encodeURIComponent(r.development || '')
@@ -343,7 +361,7 @@ export default function ReportDetail() {
               + '&preUnit=' + encodeURIComponent(r.unit || '')
               + '&preNote=' + encodeURIComponent(r.description || ''))}
           >
-            <Text style={ui.btnOutlineText}>Start project / scope for {r.complaintNo || 'this complaint'}</Text>
+            <Text style={[ui.btnOutlineText, scopeLock.locked && { color: '#9e9e9e' }]}>Start project / scope for {r.complaintNo || 'this complaint'}</Text>
           </Pressable>
         )}
         {isMine && r.status === 'assigned' && (
