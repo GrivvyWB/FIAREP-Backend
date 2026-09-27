@@ -2837,6 +2837,15 @@ router.post(
       current.id,
     );
   }
+  // Once the CPM Supervisor has acted on a scope, the "waiting for your
+  // review" alert is done — take it out of the inbox.
+  if (entity === "procurement" && ["approve", "reject", "return", "handoff-inhouse"].includes(action)) {
+    await db.delete(notifications).where(and(
+      eq(notifications.tenantId, actor.tenantId),
+      eq(notifications.reportId, current.id),
+      eq(notifications.message, "Scope submitted for CPM Supervisor review"),
+    )).catch(() => undefined);
+  }
   if (entity === "procurement" && (action === "broadcast" || action === "resend")) {
     // Release emails every vendor contact plus any addresses typed in; a
     // resend with addresses goes only to those, otherwise to every contact.
