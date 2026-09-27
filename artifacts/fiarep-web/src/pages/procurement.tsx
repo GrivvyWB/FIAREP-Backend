@@ -285,8 +285,14 @@ export default function Procurement() {
   const bidding = byStatus("bidding");
   const awarded = byStatus("awarded");
   const closed = byStatus("closed");
-  const bidsFor = (id: string) => bids.filter((b) => b.state?.requestId === id)
-    .sort((a, b) => Number(a.state?.amount || 0) - Number(b.state?.amount || 0));
+  // Bids come from the bid list and, as a backup, from the scope itself.
+  const bidsFor = (id: string) => {
+    const byId = new Map<string, Rec>();
+    for (const b of bids) if (b.state?.requestId === id) byId.set(b.id, b);
+    const scope = scopes.find((x) => x.id === id);
+    for (const b of ((scope?.state?.vendorBids || []) as Rec[])) if (!byId.has(b.id)) byId.set(b.id, b);
+    return [...byId.values()].sort((a, b) => Number(a.state?.amount || 0) - Number(b.state?.amount || 0));
+  };
   const activity = [...visible].sort((a, b) => lastActivity(b).localeCompare(lastActivity(a)));
 
   // Jump to a release: its tab, its details open, scrolled into view.

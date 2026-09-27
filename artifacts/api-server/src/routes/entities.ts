@@ -425,9 +425,30 @@ router.get("/v1/:entity", async (req, res, next) => {
   const authorizedRows = await Promise.all(
     rows.map(async (row) => (await canReadRecordForActor(actor, row)) ? row : null),
   );
+  // Procurement sees every vendor bid on the scopes it can see, carried on
+  // the scope itself, so a bid can never be hidden from the Award step.
+  let bidsByScope: Map<string, Array<Record<string, unknown>>> | null = null;
+  if (entity === "procurement" && actor.role === "procurement") {
+    const bidRows = await db.select().from(entityRecords).where(and(
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.entity, "procurement-bids"),
+      eq(entityRecords.deleted, false),
+    ));
+    bidsByScope = new Map();
+    for (const bid of bidRows) {
+      const requestId = String(bid.state["requestId"] ?? "");
+      if (!requestId || typeof bid.createdBy !== "string" || !bid.createdBy.startsWith("public-vendor:")) continue;
+      const list = bidsByScope.get(requestId) ?? [];
+      list.push({ id: bid.id, version: bid.version, state: bid.state, updatedAt: bid.updatedAt });
+      bidsByScope.set(requestId, list);
+    }
+  }
   res.json(
     authorizedRows
       .filter((row): row is typeof rows[number] => row !== null)
+      .map((row) => bidsByScope
+        ? { ...row, state: { ...row.state, vendorBids: bidsByScope.get(row.id) ?? [] } }
+        : row)
       .filter((row) => !projectId || row.projectId === projectId)
       .filter(
         (row) =>
