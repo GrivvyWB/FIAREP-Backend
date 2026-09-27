@@ -287,56 +287,6 @@ export default function Scores() {
 
         <Card className="shadow-sm">
           <CardHeader className="border-b border-border/40 bg-muted/20 pb-4">
-            <CardTitle className="text-lg">Building Status</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {scores.buildings.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">No building data available.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-muted/10">
-                    <TableRow>
-                      <TableHead>Building</TableHead>
-                      <TableHead className="text-right">Total / Resolved</TableHead>
-                      <TableHead className="text-right">Open / Overdue</TableHead>
-                      <TableHead className="text-right">Resolution Rate</TableHead>
-                      <TableHead className="text-right">Score</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {scores.buildings.map((bldg) => (
-                      <TableRow key={bldg.building}>
-                        <TableCell className="font-medium">{bldg.building}</TableCell>
-                        <TableCell className="text-right">
-                          <span className="text-muted-foreground">{bldg.total}</span>
-                          <span className="mx-1 text-border">/</span>
-                          <span className="text-foreground">{bldg.resolved}</span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="text-muted-foreground">{bldg.open}</span>
-                          <span className="mx-1 text-border">/</span>
-                          <span className={bldg.overdue > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
-                            {bldg.overdue}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">{formatPercent(bldg.resolutionRate)}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={getScoreBadgeVariant(bldg.score)} className="ml-auto w-12 justify-center">
-                            {bldg.score}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-sm">
-          <CardHeader className="border-b border-border/40 bg-muted/20 pb-4">
             <CardTitle className="text-lg">Residential Scores</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
