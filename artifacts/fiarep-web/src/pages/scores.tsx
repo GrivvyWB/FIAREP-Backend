@@ -335,55 +335,6 @@ export default function Scores() {
           </CardContent>
         </Card>
 
-        <Card className="shadow-sm">
-          <CardHeader className="border-b border-border/40 bg-muted/20 pb-4">
-            <CardTitle className="text-lg">Residential Scores</CardTitle>
-          </CardHeader>
-          <CardContent className="p-0">
-            {scores.residential.length === 0 ? (
-              <div className="p-8 text-center text-sm text-muted-foreground">No residential data available.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader className="bg-muted/10">
-                    <TableRow>
-                      <TableHead>Address</TableHead>
-                      <TableHead className="text-right">Total / Resolved</TableHead>
-                      <TableHead className="text-right">Open / Overdue</TableHead>
-                      <TableHead className="text-right">Resolution Rate</TableHead>
-                      <TableHead className="text-right">Score</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {scores.residential.map((res) => (
-                      <TableRow key={res.address}>
-                        <TableCell className="font-medium">{res.address}</TableCell>
-                        <TableCell className="text-right">
-                          <span className="text-muted-foreground">{res.total}</span>
-                          <span className="mx-1 text-border">/</span>
-                          <span className="text-foreground">{res.resolved}</span>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span className="text-muted-foreground">{res.open}</span>
-                          <span className="mx-1 text-border">/</span>
-                          <span className={res.overdue > 0 ? "text-destructive font-medium" : "text-muted-foreground"}>
-                            {res.overdue}
-                          </span>
-                        </TableCell>
-                        <TableCell className="text-right font-mono text-sm">{formatPercent(res.resolutionRate)}</TableCell>
-                        <TableCell className="text-right">
-                          <Badge variant={getScoreBadgeVariant(res.score)} className="ml-auto w-12 justify-center">
-                            {res.score}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            )}
-          </CardContent>
-        </Card>
       </div>
     </div>
   );
