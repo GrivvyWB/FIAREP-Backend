@@ -7,6 +7,7 @@ import {
   getListOrganizationsQueryKey,
   NYCHA_DEVELOPMENT_NAMES,
   useListPlatformLicenseAudit,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -38,7 +39,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy, X, ChevronDown, FolderOpen } from "lucide-react";
+import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy, X, ChevronDown, FolderOpen, KeyRound } from "lucide-react";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
 import { format, isValid } from "date-fns";
 
@@ -52,6 +53,35 @@ export default function OwnerDashboard() {
   const [organizationPreset, setOrganizationPreset] = useState<"nycha" | null>(null);
   const [restoreOrg, setRestoreOrg] = useState<OrganizationWithUsage | null>(null);
   const [restoreEndDate, setRestoreEndDate] = useState("");
+  // Reset an Administrator / Borough Director login code (only the platform owner can).
+  type OrgStaff = { id: string; name: string; role: string; position: string; status: string };
+  const [codeOrg, setCodeOrg] = useState<OrganizationWithUsage | null>(null);
+  const [codeStaff, setCodeStaff] = useState<OrgStaff[]>([]);
+  const [codeBusy, setCodeBusy] = useState("");
+  const [newCode, setNewCode] = useState<{ name: string; code: string } | null>(null);
+  const openCodeReset = async (org: OrganizationWithUsage) => {
+    setCodeOrg(org); setCodeStaff([]); setNewCode(null);
+    try {
+      const rows = await customFetch<OrgStaff[]>(`/api/v1/platform/organizations/${encodeURIComponent(org.id)}/staff`);
+      setCodeStaff(rows.filter((row) => row.role === "administrator" || row.position === "Borough Director"));
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Could not load staff", description: error?.message || "Try again." });
+    }
+  };
+  const resetCode = async (person: OrgStaff) => {
+    if (!codeOrg) return;
+    if (!window.confirm(`Issue a new login code for ${person.name}? Their old code stops working.`)) return;
+    setCodeBusy(person.id);
+    try {
+      const result = await customFetch<{ name: string; code: string }>(
+        `/api/v1/platform/organizations/${encodeURIComponent(codeOrg.id)}/staff/${encodeURIComponent(person.id)}/reset-code`,
+        { method: "POST" },
+      );
+      setNewCode({ name: result.name, code: result.code });
+    } catch (error: any) {
+      toast({ variant: "destructive", title: "Could not reset code", description: error?.message || "Try again." });
+    } finally { setCodeBusy(""); }
+  };
 
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -336,6 +366,9 @@ export default function OwnerDashboard() {
                             <DropdownMenuItem onClick={() => handleEdit(org)}>
                               <Edit2 className="w-4 h-4 mr-2 text-slate-400" /> Edit Constraints
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void openCodeReset(org)}>
+                              <KeyRound className="w-4 h-4 mr-2 text-slate-400" /> Reset admin / director code
+                            </DropdownMenuItem>
                             <DropdownMenuSeparator />
                             
                             {!isActive && (
@@ -420,6 +453,30 @@ export default function OwnerDashboard() {
               Restore / Activate
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={Boolean(codeOrg)} onOpenChange={(open) => { if (!open) { setCodeOrg(null); setNewCode(null); } }}>
+        <DialogContent className="bg-white">
+          <DialogHeader><DialogTitle>Reset login code · {codeOrg?.name}</DialogTitle></DialogHeader>
+          {newCode ? (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-600">New login code for <strong>{newCode.name}</strong>. Their old code no longer works. Give them this code; they sign in with their name and this code.</p>
+              <div className="flex items-center gap-2">
+                <span className="rounded-md border bg-slate-50 px-4 py-2 font-mono text-2xl tracking-widest">{newCode.code}</span>
+                <Button type="button" variant="outline" size="sm" onClick={() => { void navigator.clipboard?.writeText(newCode.code); toast({ title: "Code copied" }); }}><Copy className="h-4 w-4 mr-1" />Copy</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {!codeStaff.length && <p className="text-sm text-slate-500">No Administrator or Borough Director found for this organization.</p>}
+              {codeStaff.map((person) => (
+                <div key={person.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
+                  <span className="text-sm"><strong>{person.name}</strong> · {person.position} · <span className="text-slate-500">{person.role}</span></span>
+                  <Button type="button" size="sm" disabled={!!codeBusy} onClick={() => void resetCode(person)}>{codeBusy === person.id ? "Resetting…" : "Reset code"}</Button>
+                </div>
+              ))}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
       <div className="bg-white rounded-xl border border-slate-200 p-5">

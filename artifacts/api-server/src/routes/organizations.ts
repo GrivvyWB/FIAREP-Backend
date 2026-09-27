@@ -311,6 +311,32 @@ router.get("/v1/platform/license-audit", async (req, res) => {
   res.json(await db.select().from(platformLicenseAudit).orderBy(desc(platformLicenseAudit.at)).limit(limit));
 });
 
+// Platform owner: issue a new login code for an organization's Administrator
+// or Borough Director (nobody inside the organization can reset those). The
+// old code stops working and every open session for that person is signed out.
+router.post("/v1/platform/organizations/:organizationId/staff/:staffId/reset-code", async (req, res) => {
+  const tenantId = req.params.organizationId!;
+  const [target] = await db.select().from(staffAccounts).where(and(
+    eq(staffAccounts.tenantId, tenantId),
+    eq(staffAccounts.id, req.params.staffId!),
+  )).limit(1);
+  if (!target) { res.status(404).json({ error: "Staff account not found" }); return; }
+  if (target.role !== "administrator" && target.position !== "Borough Director") {
+    res.status(400).json({ error: "Only Administrator and Borough Director codes are reset here; HR resets everyone else" });
+    return;
+  }
+  const code = await db.transaction(async (tx) => {
+    const next = await allocateStaffCode(tx, tenantId, target.name);
+    await tx.update(staffAccounts)
+      .set({ code: next, sessionVersion: sql`${staffAccounts.sessionVersion} + 1`, updatedAt: new Date() })
+      .where(and(eq(staffAccounts.tenantId, tenantId), eq(staffAccounts.id, target.id)));
+    return next;
+  });
+  const owner = res.locals["platformOwner"] as { name: string };
+  await platformAudit(owner.name, "staff.code_reset_by_platform_owner", tenantId, null, { staffId: target.id, name: target.name, position: target.position });
+  res.json({ id: target.id, name: target.name, position: target.position, code });
+});
+
 router.post("/v1/platform/organizations", async (req, res) => {
   const body = req.body as Record<string, unknown>;
   const name = typeof body["name"] === "string" ? body["name"].trim() : "";
