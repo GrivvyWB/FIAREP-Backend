@@ -38,7 +38,36 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
       eq(entityRecords.deleted, false),
       inArray(entityRecords.entity, [...SCORE_ENTITIES]),
     ));
-  const rows = await Promise.all(storedRows.map(repairLegacyResidentDevelopment));
+  // Work that came from a resident complaint an administrator deleted (a scope,
+  // a violation sent to an inspector, a trade request …) no longer scores.
+  const complaintRows = await db
+    .select({ id: entityRecords.id, deleted: entityRecords.deleted, state: entityRecords.state })
+    .from(entityRecords)
+    .where(and(
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.entity, "resident-reports"),
+    ));
+  const liveComplaintIds = new Set(complaintRows.filter((row) => !row.deleted).map((row) => row.id));
+  const deletedComplaintIds = new Set(complaintRows.filter((row) => row.deleted).map((row) => row.id));
+  const complaintNoOf = (state: Record<string, unknown>) =>
+    String(state["complaintNo"] || "").trim().toUpperCase();
+  const liveComplaintNos = new Set(complaintRows.filter((row) => !row.deleted).map((row) => complaintNoOf(row.state)).filter(Boolean));
+  const deletedComplaintNos = new Set(complaintRows.filter((row) => row.deleted).map((row) => complaintNoOf(row.state))
+    .filter((no) => no && !liveComplaintNos.has(no)));
+  const fromDeletedComplaint = (row: typeof storedRows[number]) => {
+    if (row.entity === "resident-reports") return false;
+    const state = row.state as Record<string, unknown>;
+    const sourceId = String(state["sourceReportId"] || (state["sourceEntity"] === "resident-reports" ? state["sourceRecordId"] || "" : "") || "");
+    if (sourceId && (deletedComplaintIds.has(sourceId) || !liveComplaintIds.has(sourceId))) return true;
+    const refs = [state["complaintNo"], state["sourceRef"], state["sourceInspectionRef"]]
+      .map((value) => String(value || "").trim().toUpperCase())
+      .filter((value) => /^RC-\d+$/.test(value));
+    if (refs.some((ref) => deletedComplaintNos.has(ref) || !liveComplaintNos.has(ref))) return true;
+    const instructions = String(state["instructions"] || "").toUpperCase();
+    const match = instructions.match(/COMPLAINT #:\s*(RC-\d+)/);
+    return !!match && (deletedComplaintNos.has(match[1]!) || !liveComplaintNos.has(match[1]!));
+  };
+  const rows = await Promise.all(storedRows.filter((row) => !fromDeletedComplaint(row)).map(repairLegacyResidentDevelopment));
 
   const records: ScoringRecord[] = rows
     .filter((row) => {
