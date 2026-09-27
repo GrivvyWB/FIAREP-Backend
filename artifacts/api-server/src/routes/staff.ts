@@ -291,6 +291,9 @@ router.get("/v1/staff/supervisors", async (_req, res) => {
   res.json(rows.filter((row) => {
     const position = String(row.position || "").trim();
     if (position.toLowerCase() === "director") return false;
+    // HR and Procurement never assign complaints.
+    if (["human_resources", "procurement", "vendor", "resident"].includes(row.role)) return false;
+    if (/\bhr\b|human resources|procurement|payroll/i.test(position)) return false;
     if (/supervisor|superintendent|manager|director/i.test(position)) return true;
     return row.role === "management" || row.role === "administrator";
   }));

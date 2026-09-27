@@ -326,6 +326,8 @@ export default function Reports() {
       // The company/procurement "Director" (not Borough/Regional Director) never
       // handles or assigns a resident complaint, whatever role the account carries.
       if (position.trim().toLowerCase() === "director") return false;
+      if (["procurement", "human_resources", "vendor", "resident"].includes(role)) return false;
+      if (/\bhr\b|human resources|procurement|payroll/i.test(position)) return false;
       // Any trade or inspector supervisor, or a superintendent, can take a
       // complaint - include them regardless of whether their role is management
       // or worker (trade supervisors are sometimes stored as worker).
