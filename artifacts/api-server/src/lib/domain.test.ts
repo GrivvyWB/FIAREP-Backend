@@ -1366,9 +1366,10 @@ test("office-based CPM Supervisor assigns a CPM covering the site without holdin
   const plumber = { id: "plumber-9", role: "worker", position: "Plumber", developments: ["CONEY ISLAND"] };
   assert.equal(canAssignStaff(cpmSupervisor, cpm, "Coney Island"), true);
   assert.equal(canAssignStaff(cpmSupervisor, cpm, "Development C"), false);
-  assert.equal(canAssignStaff(cpmSupervisor, plumber, "Coney Island"), false);  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "assign", { status: "submitted" }), true);
-  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "clear", { status: "resolved" }), true);
-  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "approve-work", { status: "done" }), true);
+  assert.equal(canAssignStaff(cpmSupervisor, plumber, "Coney Island"), false);  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "assign", { status: "submitted" }), false);
+  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "assign", { status: "submitted", assignedStaffId: cpmSupervisor.id }), true);
+  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "clear", { status: "resolved" }), false);
+  assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "approve-work", { status: "done" }), false);
   const assignedByHim = { status: "done", assignedByStaffId: cpmSupervisor.id };
   assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "approve-work", assignedByHim), true);
   assert.equal(canPerformEntityAction(cpmSupervisor, "resident-reports", "reject-work", assignedByHim), true);
@@ -1569,4 +1570,10 @@ test("trade supervisors read matching complaints but act only once sent to them"
   assert.equal(canPerformEntityAction(plumbSup, "resident-reports", "approve-work", { ...leak, status: "done", assignedByStaffId: "plumb-sup" }), true);
   const supt = actor({ id: "supt", role: "management", position: "Superintendent", developments: ["CONEY ISLAND"] });
   assert.equal(canPerformEntityAction(supt, "resident-reports", "assign", leak), true);
+});
+
+test("Inspection Supervisor and CPM Supervisor wait to be sent a complaint", () => {
+  const inspSup = actor({ id: "insp-sup", role: "management", position: "Supervisor Inspector", developments: ["CONEY ISLAND"] });
+  assert.equal(canPerformEntityAction(inspSup, "resident-reports", "assign", { status: "submitted" }), false);
+  assert.equal(canPerformEntityAction(inspSup, "resident-reports", "assign", { status: "submitted", assignedStaffId: "insp-sup" }), true);
 });

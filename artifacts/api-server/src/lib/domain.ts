@@ -889,6 +889,22 @@ export function supervisedTradeForPosition(position: string | null | undefined):
 // browse a development's complaints. (Superintendents, Assistant
 // Superintendents, Maintenance and Grounds supervisors remain development-based.)
 
+/**
+ * Supervisors who never pick up a resident complaint on their own: the office
+ * trade supervisors (plumbing, electrical, carpentry …), the CPM Supervisor,
+ * CPMs and the Inspection Supervisor. They act only once the development's
+ * building-management supervisor, the emergency supervisor or upper
+ * management sends the complaint to them.
+ */
+export function waitsToBeSentComplaints(
+  actor: Pick<Actor, "role" | "position"> & { developments?: string[] },
+): boolean {
+  return isOfficeCraftSupervisor(actor) ||
+    isCpmSupervisor(actor) ||
+    isInspectionSupervisorTitle(actor.position) ||
+    sameTitle(actor.position, "CPM");
+}
+
 export function isOfficeCraftSupervisor(
   actor: Pick<Actor, "role" | "position"> & { developments?: string[] },
 ): boolean {
@@ -1224,7 +1240,7 @@ export function canPerformEntityAction(
   ) {
     if (entity === "resident-reports") {
       if (
-        isOfficeCraftSupervisor(actor) && !isCpmSupervisor(actor) &&
+        waitsToBeSentComplaints(actor) &&
         normalizeAssignment(state).assignedStaffId !== actor.id &&
         state["assignedByStaffId"] !== actor.id
       ) return false;
@@ -1276,7 +1292,7 @@ export function canPerformEntityAction(
     // development supervisor, emergency supervisor or upper management sends
     // it to them (assigned to them, or they made the assignment).
     if (
-      isOfficeCraftSupervisor(actor) && !isCpmSupervisor(actor) &&
+      waitsToBeSentComplaints(actor) &&
       ["assign", "clear", "approve-work", "reject-work"].includes(action) &&
       normalizeAssignment(state).assignedStaffId !== actor.id &&
       state["assignedByStaffId"] !== actor.id

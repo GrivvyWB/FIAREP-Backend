@@ -1,4 +1,4 @@
-import { isCpmSupervisorTitle, isOfficeTradeSupervisorTitle } from "@/lib/titles";
+import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle, sameTitle } from "@/lib/titles";
 import {
   getListEntityRecordsQueryKey,
   getListResidentReportPhotosQueryKey,
@@ -248,7 +248,10 @@ export default function Reports() {
   // Office trade supervisors (plumbing, electrical … and CPM Supervisor) only
   // READ a complaint until the development / emergency supervisor or upper
   // management sends it to them (server enforces the same rule).
-  const isTradeSup = actor?.role === "management" && isOfficeTradeSupervisorTitle(actor?.position, actor?.developments) && !isCpmSupervisorTitle(actor?.position);
+  // Trade supervisors, CPM Supervisor, CPMs and the Inspection Supervisor wait
+  // for building management to send them the complaint.
+  const isTradeSup = (actor?.role === "management" && isOfficeTradeSupervisorTitle(actor?.position, actor?.developments)) ||
+    isCpmSupervisorTitle(actor?.position) || isInspectionSupervisorTitle(actor?.position) || sameTitle(actor?.position, "CPM");
   const sentToMe = (report: Report) => {
     const st = (report.state || {}) as Record<string, unknown>;
     return String(st.assignedStaffId || "") === actor?.id || String(st.assignedByStaffId || "") === actor?.id;
@@ -560,7 +563,7 @@ export default function Reports() {
               <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
                 {!!String(state.assignedTo || "") && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{String(state.assignedTo)}</span>}
                 {canActOn(report) && currentStatus === "submitted" && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>Assign</Button>}
-                {isTradeSup && !sentToMe(report) && <span className="text-xs rounded-full bg-muted px-2 py-1 text-muted-foreground">Read only — acts once the development supervisor sends it to you</span>}
+                {isTradeSup && !sentToMe(report) && <span className="text-xs rounded-full bg-muted px-2 py-1 text-muted-foreground">Read only — waiting for building management to send it to you</span>}
                  {!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button size="sm" onClick={() => openReport(report, "details")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
                  {canActOn(report) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canReview(report) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
