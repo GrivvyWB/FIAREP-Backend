@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { PhraseHelper } from '@/components/phrase-helper';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
@@ -302,7 +303,8 @@ export default function PublicResident() {
                   <FormField control={reportForm.control} name="description" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Description</FormLabel>
-                      <FormControl><Textarea className="min-h-[100px]" {...field} /></FormControl>
+                      <FormControl><Textarea className="min-h-[100px]" placeholder="Describe the issue..." {...field} /></FormControl>
+                      <PhraseHelper value={field.value || ''} onChange={(next) => field.onChange(next)} />
                       <FormMessage />
                     </FormItem>
                   )} />

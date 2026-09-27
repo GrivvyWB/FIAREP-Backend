@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, Image, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getCurrentActor, getCurrentPosition, listProjects, listProcurementRequests, createChangeOrder } from '../lib/store';
@@ -88,6 +89,7 @@ export default function CpmChangeOrder() {
 
       <Text style={[ui.label, { marginTop: 12 }]}>Describe the change</Text>
       <TextInput style={[ui.input, { minHeight: 70, textAlignVertical: 'top' }]} value={desc} onChangeText={setDesc} placeholder="Add-on work needed" multiline />
+      <PhraseHelper value={desc} onChange={setDesc} picker />
 
       <Text style={[ui.label, { marginTop: 8 }]}>Cost of change (materials + labor + markup)</Text>
       <TextInput style={ui.input} value={cost} onChangeText={setCost} placeholder="$" keyboardType="numeric" />

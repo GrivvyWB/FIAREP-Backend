@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, Image, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { getCurrentActor, listRoutedInspectionsFor, listResidentReports, createWorkerChangeOrder } from '../lib/store';
@@ -65,6 +66,7 @@ export default function WorkerChangeOrder() {
 
       <Text style={[ui.label, { marginTop: 12 }]}>Describe the change</Text>
       <TextInput style={[ui.input, { minHeight: 70, textAlignVertical: 'top' }]} value={desc} onChangeText={setDesc} placeholder="Add-on work found on the job" multiline />
+      <PhraseHelper value={desc} onChange={setDesc} picker />
 
       <Text style={[ui.label, { marginTop: 8 }]}>Photos</Text>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

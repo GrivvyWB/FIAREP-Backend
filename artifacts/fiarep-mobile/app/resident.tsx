@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import PhraseHelper from '../components/PhraseHelper';
 import {
   View,
   Text,
@@ -176,6 +177,7 @@ export default function ResidentScreen() {
         numberOfLines={5}
         textAlignVertical="top"
       />
+      <PhraseHelper value={description} onChange={setDescription} />
 
       {showWater && (
         <>

@@ -10,6 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
+import { PhraseHelper } from "@/components/phrase-helper";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
@@ -167,7 +168,7 @@ export default function MyJobs() {
       <DialogContent>
         <DialogHeader><DialogTitle>Complete assigned work</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div className="space-y-2"><Label>Completion note</Label><Textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} placeholder="Describe the completed work" /></div>
+          <div className="space-y-2"><Label>Completion note</Label><Textarea value={completionNote} onChange={(event) => setCompletionNote(event.target.value)} placeholder="Describe the completed work" /><PhraseHelper value={completionNote} onChange={setCompletionNote} picker /></div>
           <div className="space-y-2"><Label>Completion photo evidence</Label><input type="file" accept="image/*" onChange={(event) => setCompletionPhoto(event.target.files?.[0] || null)} /></div>
         </div>
         <DialogFooter><Button variant="outline" onClick={() => setCompletionJob(null)}>Cancel</Button><Button onClick={complete} disabled={!completionNote.trim() || !completionPhoto || action.isPending || requestUpload.isPending}>Complete</Button></DialogFooter>

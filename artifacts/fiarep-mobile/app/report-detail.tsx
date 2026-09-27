@@ -1,4 +1,5 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
+import PhraseHelper from '../components/PhraseHelper';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
@@ -452,6 +453,7 @@ export default function ReportDetail() {
               onChangeText={setCompletionNote}
               multiline
             />
+            <PhraseHelper value={completionNote} onChange={setCompletionNote} picker />
             <Pressable
               style={[ui.btn, (completionBusy || completionPhotos.length === 0 || !completionNote.trim()) && { opacity: 0.45 }]}
               disabled={completionBusy || completionPhotos.length === 0 || !completionNote.trim()}

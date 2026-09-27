@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
+import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { lookupNycProperty, type NycPropertyLookup } from '@workspace/api-client-react';
@@ -272,6 +273,7 @@ export default function InspectorViolations() {
 
         <Text style={[ui.label, { marginTop: 4 }]}>Notes</Text>
         <TextInput style={[ui.input, { minHeight: 60 }]} value={notes} onChangeText={setNotes} placeholder="What you observed, location, etc." multiline />
+        <PhraseHelper value={notes} onChange={setNotes} picker />
 
         <Pressable style={[ui.btn, { marginTop: 4 }]} onPress={add}>
           <Text style={ui.btnText}>Add violation</Text>

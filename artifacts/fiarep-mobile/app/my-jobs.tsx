@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getCurrentActor, getCurrentPosition, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, listManpowerRequests, performEntityAction, markReportSeen, type BuildingViolation, type ResidentReport, type ManpowerRequest } from '../lib/store';
@@ -142,6 +143,7 @@ export default function MyJobs() {
            {job.status === 'in_progress' && inHouseOpenId === job.id && <View style={{ gap: 8 }}>
              <Text style={ui.label}>Completion note</Text>
              <TextInput style={[ui.input, { minHeight: 60, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder="What was completed" multiline />
+             <PhraseHelper value={note} onChange={setNote} picker />
              <Text style={ui.label}>Photo evidence of finished work</Text>
              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                {photos.map((photo, i) => <TouchableOpacity key={`${photo.uri}-${i}`} onPress={() => setViewerUri(photo.uri)}>
@@ -261,6 +263,7 @@ export default function MyJobs() {
             <View style={{ borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 8, gap: 8 }}>
               <Text style={ui.label}>Completion note</Text>
               <TextInput style={[ui.input, { minHeight: 60, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder="What was repaired" multiline />
+              <PhraseHelper value={note} onChange={setNote} picker />
               <Text style={ui.label}>Photos of the finished work</Text>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                 {photos.map((photo, i) => (

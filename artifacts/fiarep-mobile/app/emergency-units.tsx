@@ -1,4 +1,5 @@
 import { useCallback, useState, useEffect, useRef } from 'react';
+import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { getCurrentActor, listEmergencyJobsForTruck, listEmergencyUnits, setEmergencyProgress, addEmergencyPhoto, completeEmergencyJob, type EmergencyJob, type EmergencyUnit } from '../lib/store';
@@ -161,6 +162,7 @@ export default function EmergencyUnits() {
               {j.status !== 'done' && (
                 <>
                   <TextInput style={[ui.input, { minHeight: 50, textAlignVertical: 'top' }]} value={note} onChangeText={setNote} placeholder="Completion note (optional)" multiline />
+                  <PhraseHelper value={note} onChange={setNote} picker />
                   <Pressable style={ui.btn} onPress={async () => { await completeEmergencyJob(j.id, note.trim()); setNote(''); setOpenId(null); refresh(); Alert.alert('Completed', 'Supervisor notified.'); }}>
                     <Text style={ui.btnText}>Mark complete</Text>
                   </Pressable>

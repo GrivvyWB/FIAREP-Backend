@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { createEmergencyJob, listDevelopmentNames, listEmergencyUnits, listEmergencyStaff, type EmergencyUnit, type StaffAccount } from '../lib/store';
@@ -71,6 +72,7 @@ export default function AssignEmergency() {
 
       <Text style={[ui.label, { marginTop: 12 }]}>Emergency / issue</Text>
       <TextInput style={[ui.input, { minHeight: 70, textAlignVertical: 'top' }]} value={issue} onChangeText={setIssue} placeholder="What's the emergency?" multiline />
+      <PhraseHelper value={issue} onChange={setIssue} picker />
 
       <Pressable style={[ui.btn, { marginTop: 16 }, busy && { opacity: 0.6 }]} onPress={onAssign} disabled={busy}>
         <Text style={ui.btnText}>Assign emergency unit</Text>

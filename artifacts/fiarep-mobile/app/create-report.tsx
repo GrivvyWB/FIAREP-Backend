@@ -1,4 +1,5 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
+import PhraseHelper from '../components/PhraseHelper';
 import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Pressable, ScrollView, Image, Alert, ActivityIndicator, KeyboardAvoidingView, Platform, Modal, FlatList } from 'react-native';
@@ -83,6 +84,7 @@ function CreateReportScreen() {
 
       <Text style={ui.label}>Description</Text>
       <TextInput style={[ui.input, { minHeight: 100 }]} value={description} onChangeText={setDescription} placeholder="What needs repair or inspection?" multiline textAlignVertical="top" />
+      <PhraseHelper value={description} onChange={setDescription} picker />
 
       <Text style={ui.label}>Photos</Text>
       <View style={ui.row}>
