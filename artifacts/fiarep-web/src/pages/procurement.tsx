@@ -12,7 +12,7 @@ import {
   usePerformEntityAction,
   useUpdateEntityRecord,
 } from "@workspace/api-client-react";
-import { Bell, CheckCircle2, ChevronDown, Download, Eye, FileText, Gavel, LogOut, Mail, MapPin, RefreshCw, Search, Send, ShoppingCart, Trophy, Undo2, Upload } from "lucide-react";
+import { Bell, CheckCircle2, ChevronDown, Download, Eye, FileText, Gavel, LogOut, Mail, MapPin, RefreshCw, Search, Send, Trophy, Undo2, Upload } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +49,13 @@ const fmtSchedule = (value?: string) => {
 const money = (value: unknown) => {
   const n = Number(value);
   return Number.isFinite(n) ? `$${n.toLocaleString(undefined, { maximumFractionDigits: 2 })}` : "";
+};
+/** The CPM's priced total: divisions, else Nature of Work + 10% contingency. */
+const cpmTotal = (s: Record<string, any>): number => {
+  if (Number(s.cpmScopeTotal)) return Number(s.cpmScopeTotal);
+  const sum = ((s.cpmEstimate?.categories || []) as Array<{ cost?: string }>)
+    .reduce((acc, c) => acc + (Number(String(c.cost || "").replace(/[^0-9.-]/g, "")) || 0), 0);
+  return sum ? Math.round(sum * 1.1 * 100) / 100 : 0;
 };
 const reference = (s: Record<string, any>) =>
   s.sourceRef || s.complaintNo || (s.violationNo ? `Violation ${s.violationNo}` : "");
@@ -88,7 +95,12 @@ const workType = (s: Record<string, any>) => {
     if (sec?.code) sections.push(String(sec.code).replace(/^Section\s+[\d\s.]+\s*[-–—]\s*/i, "").trim());
   }
   if (sections.length) return sections.length > 1 ? `${sections[0]} +${sections.length - 1}` : sections[0];
-  return String(s.trade || s.workType || s.category || s.title || "General repairs");
+  // Else the CPM's Nature of Work lines, the elevator survey, or the trade.
+  const titleCase = (t: string) => t.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  const natures = ((s.cpmEstimate?.categories || []) as Array<{ title?: string }>).map((c) => titleCase(String(c.title || ""))).filter(Boolean);
+  if (natures.length) return natures.length > 1 ? `${natures[0]} +${natures.length - 1}` : natures[0]!;
+  if (s.cpmElevator?.items?.length) return "Elevator services";
+  return String(s.trade || s.workType || s.category || "General repairs");
 };
 
 /** What happened when the release email went out. */
@@ -250,6 +262,7 @@ export default function Procurement() {
   const [deduct, setDeduct] = useState<Record<string, string>>({});
   const [deductWhy, setDeductWhy] = useState<Record<string, string>>({});
   const [extraTo, setExtraTo] = useState<Record<string, string>>({});
+  const [missingClose, setMissingClose] = useState<Record<string, boolean>>({});
   const [moreOpen, setMoreOpen] = useState<Record<string, boolean>>({});
   const [moreTo, setMoreTo] = useState<Record<string, string>>({});
   const activityRef = useRef<HTMLDivElement>(null);
@@ -321,7 +334,7 @@ export default function Procurement() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            {!!s.trackingId && <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs font-semibold text-slate-700">{s.trackingId}</span>}
+            {!!s.trackingId && s.status !== "approved" && <span className="rounded-md bg-slate-100 px-2 py-0.5 font-mono text-xs font-semibold text-slate-700">{s.trackingId}</span>}
             <StatusBadge status={String(s.status || "")} />
           </div>
         </div>
@@ -378,7 +391,7 @@ export default function Procurement() {
       {canAct && (
         <div className="grid gap-3 rounded-lg border border-slate-200 p-4 sm:grid-cols-2">
           <div><p className="mb-1 text-sm font-medium">Walk-through date &amp; time</p><Input type="datetime-local" value={walk[r.id] || ""} onChange={(e) => setWalk((m) => ({ ...m, [r.id]: e.target.value }))} /></div>
-          <div><p className="mb-1 text-sm font-medium">Bids close <span className="text-red-600">*</span></p><Input type="datetime-local" value={closeAt[r.id] || ""} onChange={(e) => setCloseAt((m) => ({ ...m, [r.id]: e.target.value }))} /></div>
+          <div><p className="mb-1 text-sm font-medium">Bids close <span className="text-red-600">*</span></p><Input type="datetime-local" value={closeAt[r.id] || ""} className={missingClose[r.id] && !closeAt[r.id] ? "border-red-500 ring-1 ring-red-400" : ""} onChange={(e) => setCloseAt((m) => ({ ...m, [r.id]: e.target.value }))} />{missingClose[r.id] && !closeAt[r.id] && <p className="mt-1 text-xs text-red-600">Required before sending.</p>}</div>
           <div className="sm:col-span-2"><p className="mb-1 text-sm font-medium">Meeting note</p><Textarea value={walkNote[r.id] || ""} onChange={(e) => setWalkNote((m) => ({ ...m, [r.id]: e.target.value }))} placeholder="Where to meet, what to bring, etc." /></div>
           <div className="sm:col-span-2">
             <p className="mb-1 text-sm font-medium">Also send to <span className="font-normal text-slate-500">(optional — emails not on your vendor list)</span></p>
@@ -395,15 +408,21 @@ export default function Procurement() {
       )}
       <div className="flex flex-wrap items-center gap-2">
         {canAct && (
-          <Button className="gap-1.5 bg-blue-600 hover:bg-blue-700" disabled={action.isPending || !closeAt[r.id]}
-            title={!closeAt[r.id] ? "Set when bids close first" : undefined}
-            onClick={() => run(r, "broadcast", {
+          <Button className="gap-1.5 bg-blue-600 hover:bg-blue-700" disabled={action.isPending}
+            onClick={() => {
+              if (!closeAt[r.id]) {
+                setMissingClose((m) => ({ ...m, [r.id]: true }));
+                toast({ variant: "destructive", title: "Set when bids close", description: "Pick the bid close date and time, then press Send to all vendors." });
+                return;
+              }
+              void run(r, "broadcast", {
               ...(walk[r.id] ? { walkthroughAt: fmtSchedule(walk[r.id]), walkthroughAtIso: new Date(walk[r.id]!).toISOString() } : {}),
               ...((walkNote[r.id] || "").trim() ? { walkthroughNote: walkNote[r.id]!.trim() } : {}),
               bidCloseAt: fmtSchedule(closeAt[r.id]),
               bidCloseAtIso: new Date(closeAt[r.id]!).toISOString(),
               vendorRecipients: parseEmailList(extraTo[r.id] || ""),
-            }, "Sent to vendors")}>
+            }, "Sent to vendors");
+            }}>
             <Send className="h-4 w-4" />Send to all vendors
           </Button>
         )}
@@ -559,7 +578,6 @@ export default function Procurement() {
 
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-4">
-            <ShoppingCart className="mt-1 h-10 w-10 text-blue-600" strokeWidth={2.2} />
             <div>
               <h1 className="text-3xl font-extrabold tracking-tight text-slate-900 md:text-4xl">Procurement</h1>
               <p className="mt-1 text-slate-500">Release approved scopes to vendors, award bids, rate and close.</p>
@@ -660,10 +678,10 @@ export default function Procurement() {
                             <tr className="bg-slate-50/60">
                               <td colSpan={6} className="px-5 pb-4 pt-1">
                                 <div className="grid gap-x-8 rounded-lg border border-slate-200 bg-white px-4 py-2 sm:grid-cols-2">
-                                  <Line label="ID">{s.trackingId || "Not yet sent"}</Line>
+                                  <Line label="ID">{s.status !== "approved" && s.trackingId ? s.trackingId : "Not yet sent"}</Line>
                                   <Line label="Reference">{reference(s) || "—"}</Line>
                                   <Line label="Violation code">{s.violationCode ? `${s.violationCode}${s.hazardClass ? ` · Class ${s.hazardClass}` : ""}` : "—"}</Line>
-                                  <Line label="CPM estimate">{money(s.cpmScopeTotal) || "—"}</Line>
+                                  <Line label="CPM estimate">{cpmTotal(s) ? money(cpmTotal(s)) : "—"}</Line>
                                   <Line label="Walk-through">{s.walkthroughAt || "—"}</Line>
                                   <Line label="Bids close">{s.bidCloseAt || "—"}</Line>
                                   <Line label="Bids received">{rBids.length}{rBids.length ? ` · lowest ${money(rBids[0]!.state?.amount)}` : ""}</Line>
