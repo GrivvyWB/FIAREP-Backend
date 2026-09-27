@@ -75,7 +75,10 @@ export function hasModuleAccess(
   // no other role, including Administrator or Borough Director, sees it.
   if (module === "team") return staff.role === "human_resources";
   const position = staff.position?.trim() || "";
-  const exactWorkflowShell = new Set(["dashboard", "calendar", "notifications", "settings"]);
+  // Every supervisor's shell on the website mirrors the tiles they had in the
+  // app: Inbox, Time off / Leave calendar, Emergency activity, Scores
+  // (vendor / development / building & residential), Change orders, Reports.
+  const exactWorkflowShell = new Set(["dashboard", "calendar", "notifications", "settings", "leave", "emergency", "scores", "change-orders", "reports"]);
   if (isSupervisor(staff) && (module === "reports" || module === "violations")) {
     return true;
   }
@@ -87,7 +90,9 @@ export function hasModuleAccess(
   // Inspector / CPM manpower requests are addressed to these supervisors, so
   // like every trade supervisor they need the Trade Requests page.
   if (staff.role === "management" && isInspectionSupervisorTitle(position)) {
-    return exactWorkflowShell.has(module) || module === "trade-requests";
+    // Send Violation / Inspection Approvals / HUD Inspections (app tiles).
+    return exactWorkflowShell.has(module) ||
+      ["trade-requests", "inspections", "violations", "hud-inspections"].includes(module);
   }
   if (staff.role === "inspector" && position === "CPM") {
     return exactWorkflowShell.has(module) || module === "scope-writing";

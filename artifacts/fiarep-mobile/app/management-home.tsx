@@ -24,7 +24,9 @@ export default function ManagementHome() {
   const [position, setPosition] = useState('');
   const modules = useModuleAccess();
   // View-only on the app: action tiles live on fiarep.com.
-  const readOnly = useAppReadOnly() === true;
+  const readOnlyState = useAppReadOnly();
+  const readOnly = readOnlyState === true;
+  const [positionLoaded, setPositionLoaded] = useState(false);
   const actionTiles = new Set(['Send Violation', 'In-house assignments', 'Assign a Job', 'Cover a Site', 'Create Report', '+ New Project', 'Manage Trucks', 'Add Job for Mgmt', 'Assign Route', 'CPM Supervisor Scope Review', 'CPM Supervisor']);
   const enabledTiles = (tiles: Tile[]) => tiles.filter((tile) => {
     if (readOnly && actionTiles.has(tile.label)) return false;
@@ -49,7 +51,7 @@ export default function ManagementHome() {
   // Any office trade supervisor title — including new ones — gets this home.
   const tradeSupervisor = !cpmSupervisor && isOfficeTradeSupervisorTitle(_pos);
   const director = _pos === 'borough director' || _pos === 'regional director';
-  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = isElevated ? await unreadCount('management') : 0; if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} })(); }, [isElevated]));
+  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = isElevated ? await unreadCount('management') : 0; if (a.id) c += await unreadCount(a.id); if (a.name) c += await unreadCount(a.name); setUnread(c); try { setPosition(await getCurrentPosition()); } catch (e) {} finally { setPositionLoaded(true); } })(); }, [isElevated]));
 
   async function onSignOut() {
     await logout();
@@ -158,6 +160,8 @@ export default function ManagementHome() {
   const heading = position === 'Borough Director' ? 'Borough Director' : isSupervisor ? displayStaffPosition(position) : 'Management';
 
   const filteredSections = sections.map((section) => ({ ...section, tiles: enabledTiles(section.tiles) })).filter((section) => section.tiles.length > 0);
+  // Don't flash the full Management home before we know who this is.
+  if (!positionLoaded || readOnlyState === null) return <View style={{ flex: 1, backgroundColor: '#fff' }} />;
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <AlertBanner count={unread} />{readOnly && <ReadOnlyBanner />}
