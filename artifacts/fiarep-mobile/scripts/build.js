@@ -466,8 +466,7 @@ function updateBundleUrls(timestamp, baseUrl) {
     fs.writeFileSync(bundlePath, bundle);
   };
 
-  updateForPlatform('ios');
-  updateForPlatform('android');
+  for (const platform of platforms) updateForPlatform(platform);
   console.log('Updated bundle URLs');
 }
 
