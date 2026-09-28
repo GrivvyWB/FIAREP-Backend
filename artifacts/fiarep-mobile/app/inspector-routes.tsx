@@ -40,9 +40,10 @@ export default function InspectorRoutes() {
 
   function doneForDay(r: RouteAssignment) {
     const pending = r.stops.filter(s => s.status === 'pending').length;
+    const allReached = r.stops.every(s => s.status === 'reached');
     Alert.alert('Done for the day?', pending > 0
       ? pending + ' stop' + (pending === 1 ? '' : 's') + ' still pending will be marked "Not reached" and moved to the top.'
-      : 'Wrap up this route for today.', [
+      : allReached ? 'Every stop is reached. This route is finished and will be removed from My Routes.' : 'Wrap up this route for today.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Done', onPress: async () => { await finishRouteDay(r.id); load(); } },
     ]);

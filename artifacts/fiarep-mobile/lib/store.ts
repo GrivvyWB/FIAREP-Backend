@@ -4484,6 +4484,7 @@ export type RouteAssignment = {
   instructions?: string;
   sourceInspectionRef?: string;
   pendingSync?: boolean;
+  completedAt?: string;   // set by "Done for the day" once every stop is reached
   assignedBy: string;
   assignedAt: string;
   fileName: string;
@@ -4578,6 +4579,7 @@ export async function listRouteAssignments(inspector: string, assignedStaffId?: 
   const nm = (inspector || '').trim().toLowerCase();
   const sid = (assignedStaffId || '').trim();
   return items
+    .filter(r => !r.completedAt)
     .filter(r => r.assignmentKind === 'violation-inspection'
       ? r.assignedStaffId === sid
       : (!sid && (r.inspector || '').trim().toLowerCase() === nm))
@@ -4606,7 +4608,11 @@ export async function finishRouteDay(assignmentId: string): Promise<RouteAssignm
   const rank = (s: RouteStop) => s.status === 'not_reached' ? 0 : s.status === 'pending' ? 1 : 2;
   bumped.sort((a, b) => rank(a) - rank(b));
   r.stops = bumped;
+  // Every stop reached → the route is finished and leaves My Routes. Stops
+  // not reached keep the route open, at the top, for the next day.
+  if (bumped.every(s => s.status === 'reached')) r.completedAt = new Date().toISOString();
   await saveRouteAssignment(d, r);
+  await queueMutation('route-assignments', r.id, r);
   return r;
 }
 
