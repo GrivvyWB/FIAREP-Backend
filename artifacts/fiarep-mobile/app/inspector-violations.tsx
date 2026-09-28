@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -124,10 +124,42 @@ export default function InspectorViolations() {
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase();
     if (!q) return [];
-    return VIOLATION_CODES.filter(
+    // A code number, or an exact phrase in the description, matches directly.
+    const direct = VIOLATION_CODES.filter(
       c => c.code.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q),
-    ).slice(0, 25);
+    );
+    if (direct.length) return direct.slice(0, 25);
+    // Otherwise match on the words typed (e.g. "smoke detector not working"):
+    // codes whose text contains the most of those words come first.
+    const stop = new Set(['not', 'working', 'broken', 'the', 'a', 'an', 'is', 'in', 'of', 'and', 'no', 'missing', 'damaged', 'needed', 'repair', 'problem']);
+    const words = q.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !stop.has(w));
+    if (!words.length) return [];
+    return VIOLATION_CODES
+      .map(c => {
+        const text = `${c.desc} ${c.full || ''} ${c.abstract || ''}`.toLowerCase();
+        const hits = words.filter(w => text.includes(w)).length;
+        return { c, hits };
+      })
+      .filter(x => x.hits > 0)
+      .sort((a, b) => b.hits - a.hits)
+      .slice(0, 25)
+      .map(x => x.c);
   }, [query]);
+  // Picking an issue phrase (Did you mean / Pick an issue) also finds the
+  // matching violation codes, so the inspector doesn't have to search twice.
+  const [autoPickFrom, setAutoPickFrom] = useState('');
+  const onNotesChange = (next: string) => {
+    setNotes(next);
+    const phrase = next.split(/[.\n]/)[0].trim();
+    if (!pickedCode && phrase && phrase !== notes) { setQuery(phrase); setAutoPickFrom(phrase); }
+  };
+  // Best-matching code is picked for the phrase; the inspector can Change it.
+  useEffect(() => {
+    if (!autoPickFrom || pickedCode || query !== autoPickFrom) return;
+    const top = matches[0];
+    if (top) { setPickedCode(top.code); setPickedDesc(top.desc); setPickedFull(top.full || ''); setPickedHint(top.hint || ''); setQuery(''); }
+    setAutoPickFrom('');
+  }, [autoPickFrom, matches, pickedCode, query]);
 
   async function add() {
     if (!building.trim()) { Alert.alert('Missing', 'Enter the building.'); return; }
@@ -282,7 +314,7 @@ export default function InspectorViolations() {
 
         <Text style={[ui.label, { marginTop: 4 }]}>Notes</Text>
         <TextInput style={[ui.input, { minHeight: 60 }]} value={notes} onChangeText={setNotes} placeholder="What you observed, location, etc." multiline />
-        <PhraseHelper value={notes} onChange={setNotes} picker />
+        <PhraseHelper value={notes} onChange={onNotesChange} picker />
 
         <Pressable style={[ui.btn, { marginTop: 4 }]} onPress={add}>
           <Text style={ui.btnText}>Add violation</Text>
