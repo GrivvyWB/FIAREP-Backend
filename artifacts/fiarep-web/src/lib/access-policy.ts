@@ -86,6 +86,9 @@ export function hasModuleAccess(
   // app: Inbox, Time off / Leave calendar, Emergency activity, Scores
   // (vendor / development / building & residential), Change orders, Reports.
   const exactWorkflowShell = new Set(["dashboard", "calendar", "notifications", "settings", "leave", "emergency", "scores", "change-orders", "reports"]);
+  // Inspectors and the Supervisor Inspector have no part in change work orders
+  // (CPMs / workers write them; CPM Supervisor and management review them).
+  if (module === "change-orders" && (staff.role === "inspector" && position !== "CPM" || isInspectionSupervisorTitle(position))) return false;
   if (isSupervisor(staff) && (module === "reports" || module === "violations")) {
     return true;
   }
@@ -146,6 +149,7 @@ export function hasModuleAccess(
   // visibility is a Settings concern, not a reason to broaden this module.
   if (module === "shared-data") return staff.role === "administrator";
   if (module === "change-orders" && isSupervisor(staff)) return true;
+  if (module === "change-orders" && staff.role === "inspector") return position === "CPM";
   if (module === "trade-requests") {
     return MANAGEMENT_ROLES.has(staff.role) || isSupervisor(staff);
   }

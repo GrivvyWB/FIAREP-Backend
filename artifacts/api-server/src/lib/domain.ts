@@ -365,7 +365,13 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
     return isHudReviewSupervisor(actor) ||
       (actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position));
   }
-  if (entity === "change-orders" && isSupervisorPosition(actor)) return true;
+  if (entity === "change-orders") {
+    // Inspectors (field Inspectors, Supervisor Inspector) have no part in
+    // change work orders; CPMs, workers, supervisors, management, procurement do.
+    if (actor.role === "inspector" && !sameTitle(actor.position, "CPM")) return false;
+    if (isInspectionSupervisorTitle(actor.position)) return false;
+    if (isSupervisorPosition(actor)) return true;
+  }
   if (ELEVATOR_ENTITIES.has(entity)) {
     if (["management", "administrator"].includes(actor.role) ||
         isBoroughDirector(actor)) {
@@ -746,7 +752,16 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
   if (entity === "hud-inspections") {
     return actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position);
   }
-  if (entity === "change-orders" && isSupervisorPosition(actor)) return true;
+  if (entity === "change-orders") {
+    // Change work orders are written by the people doing the work: CPMs and
+    // trade/general-construction workers. Inspectors don't write them, and
+    // supervisors (CPM Supervisor included) only review, approve or decline.
+    if (actor.role === "administrator") return true;
+    if (sameTitle(actor.position, "CPM")) return true;
+    if (actor.role === "inspector") return false;
+    if (isSupervisorPosition(actor) || actor.role === "management") return false;
+    return actor.role === "worker" || isEmergencyMaintenance;
+  }
   if (ELEVATOR_ENTITIES.has(entity)) {
     return (
       isElevatorFieldStaff(actor) ||
@@ -809,7 +824,13 @@ export function canMutateEntity(actor: Actor, entity: string): boolean {
   if (entity === "hud-inspections") {
     return actor.role === "inspector" && ["CPM", "Inspector"].includes(actor.position);
   }
-  if (entity === "change-orders" && isSupervisorPosition(actor)) return true;
+  if (entity === "change-orders") {
+    if (actor.role === "inspector" && !sameTitle(actor.position, "CPM")) return false;
+    if (isInspectionSupervisorTitle(actor.position)) return false;
+    return isSupervisorPosition(actor) || actor.role === "management" ||
+      actor.role === "administrator" || actor.role === "procurement" ||
+      canCreateEntity(actor, entity);
+  }
   if (ELEVATOR_ENTITIES.has(entity) || VIOLATION_ENTITIES.has(entity)) {
     return canCreateEntity(actor, entity);
   }

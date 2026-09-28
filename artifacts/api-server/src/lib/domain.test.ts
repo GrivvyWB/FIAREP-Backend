@@ -530,12 +530,21 @@ test("HUD inspection workflow protects review status and valid transitions", () 
   );
 });
 
-test("all supervisors can open and change work orders", () => {
-  for (const position of ["Supervisor Inspector", "CPM Supervisor", "Plumber Supervisor"]) {
+test("supervisors review change work orders; CPMs and workers write them; inspectors have no part", () => {
+  for (const position of ["CPM Supervisor", "Plumber Supervisor"]) {
     const supervisor = actor({ role: "management", position });
     assert.equal(canReadEntity(supervisor, "change-orders"), true);
-    assert.equal(canCreateEntity(supervisor, "change-orders"), true);
+    assert.equal(canCreateEntity(supervisor, "change-orders"), false);
     assert.equal(canMutateEntity(supervisor, "change-orders"), true);
+  }
+  const cpm = actor({ role: "inspector", position: "CPM" });
+  assert.equal(canCreateEntity(cpm, "change-orders"), true);
+  const gc = actor({ role: "worker", position: "General Construction" });
+  assert.equal(canCreateEntity(gc, "change-orders"), true);
+  for (const insp of [actor({ role: "inspector", position: "Inspector" }), actor({ role: "management", position: "Supervisor Inspector" })]) {
+    assert.equal(canReadEntity(insp, "change-orders"), false);
+    assert.equal(canCreateEntity(insp, "change-orders"), false);
+    assert.equal(canMutateEntity(insp, "change-orders"), false);
   }
 });
 
