@@ -131,17 +131,39 @@ export default function InspectorViolations() {
     if (direct.length) return direct.slice(0, 25);
     // Otherwise match on the words typed (e.g. "smoke detector not working"):
     // codes whose text contains the most of those words come first.
-    const stop = new Set(['not', 'working', 'broken', 'the', 'a', 'an', 'is', 'in', 'of', 'and', 'no', 'missing', 'damaged', 'needed', 'repair', 'problem']);
+    const stop = new Set(['the', 'a', 'an', 'is', 'in', 'of', 'and', 'no', 'not', 'needed', 'problem', 'apartment', 'apt', 'unit']);
+    // Everyday words → the words HPD uses in the code text.
+    const synonyms: Record<string, string[]> = {
+      working: ['operational', 'operate', 'repair', 'replace', 'defective'], broken: ['repair', 'replace', 'defective', 'broken'],
+      missing: ['provide', 'install', 'missing'], damaged: ['repair', 'replace', 'defective', 'damaged'], repair: ['repair', 'replace'],
+      clogged: ['stoppage', 'obstruct', 'unclog', 'drain'], stopped: ['stoppage', 'obstruct'],
+      toilet: ['water closet', 'toilet'], sink: ['sink', 'basin', 'lavatory'], leak: ['leak', 'leaking', 'leakage'], leaking: ['leak', 'leakage'],
+      heat: ['heat', 'heating'], hot: ['hot water'], mice: ['mice', 'rodent', 'vermin'], rats: ['rats', 'rodent', 'vermin'],
+      roaches: ['roaches', 'vermin', 'insects'], bugs: ['bed bugs', 'vermin', 'insects'], mold: ['mold', 'mildew'],
+      peeling: ['peeling', 'paint'], lights: ['lighting', 'light'], light: ['lighting', 'light'], power: ['electric', 'lighting'],
+      outlet: ['receptacle', 'outlet', 'electric'], guard: ['guard'], detector: ['detector', 'detecting'], alarm: ['detector', 'alarm'],
+      fridge: ['refrigerator'], stove: ['range', 'stove', 'gas'], door: ['door'], lock: ['lock'], window: ['window'],
+    };
     const words = q.replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length >= 3 && !stop.has(w));
     if (!words.length) return [];
+    // Administrative codes (post a notice, file a certification) rank below
+    // codes that call for the actual repair.
+    const paperwork = /post a proper notice|file certification|registration statement|certificate of|records|notice of/i;
     return VIOLATION_CODES
       .map(c => {
-        const text = `${c.desc} ${c.full || ''} ${c.abstract || ''}`.toLowerCase();
-        const hits = words.filter(w => text.includes(w)).length;
-        return { c, hits };
+        const summary = (c.abstract || '').toLowerCase();
+        const text = `${c.desc} ${c.full || ''}`.toLowerCase();
+        let score = 0;
+        for (const w of words) {
+          const variants = [w, ...(synonyms[w] || [])];
+          if (variants.some(v => summary.includes(v))) score += 3;
+          else if (variants.some(v => text.includes(v))) score += 2;
+        }
+        if (score && paperwork.test(`${c.desc} ${c.full || ''}`)) score -= 2;
+        return { c, score };
       })
-      .filter(x => x.hits > 0)
-      .sort((a, b) => b.hits - a.hits)
+      .filter(x => x.score > 0)
+      .sort((a, b) => b.score - a.score)
       .slice(0, 25)
       .map(x => x.c);
   }, [query]);
