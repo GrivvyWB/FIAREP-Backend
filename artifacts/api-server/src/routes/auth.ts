@@ -15,6 +15,7 @@ import {
   issueProcurementChallenge,
   verifyProcurementChallenge,
   issueWebHandoff,
+  actorFromStaff,
 } from "../lib/auth";
 import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
@@ -25,7 +26,12 @@ const router: IRouter = Router();
 function publicStaff(staff: typeof staffAccounts.$inferSelect) {
   const { code: _code, sessionVersion: _version, ...safe } =
     staff;
-  return safe;
+  // The app picks its home screen from the role. A worker account titled
+  // "Inspector" or "CPM" works as an inspector (same rule the API applies),
+  // so send that role — otherwise the person lands on the plain worker home
+  // without HUD Inspections, Log Violations, scope writing, etc.
+  const effective = actorFromStaff(staff);
+  return { ...safe, role: effective.role, position: effective.position };
 }
 
 router.post("/v1/auth/bootstrap", async (req, res) => {
