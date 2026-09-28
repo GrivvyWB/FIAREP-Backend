@@ -587,15 +587,25 @@ router.post("/v1/:entity", async (req, res, next) => {
         return;
       }
       const assignmentLocation = assignment.state["address"] ?? assignment.state["location"];
-      const violationLocation = rawState["address"] ?? rawState["location"];
-      if (!normalizeLocation(violationLocation) ||
-          normalizeLocation(violationLocation) !== normalizeLocation(assignmentLocation)) {
+      // The app's Log Violations screen sends the address as "building".
+      const violationLocation = rawState["address"] ?? rawState["location"] ?? rawState["building"];
+      const normalizedViolation = normalizeLocation(violationLocation);
+      const normalizedAssignment = normalizeLocation(assignmentLocation);
+      // Same building with or without the unit ("60 EAST 104TH STREET" vs
+      // "60 EAST 104TH STREET Unit K") still matches.
+      const sameBuilding = !!normalizedViolation && !!normalizedAssignment && (
+        normalizedViolation === normalizedAssignment ||
+        normalizedViolation.startsWith(normalizedAssignment) ||
+        normalizedAssignment.startsWith(normalizedViolation)
+      );
+      if (!sameBuilding) {
         res.status(403).json({ error: "Violation address/location must match the route assignment" });
         return;
       }
       rawState["development"] = assignment.development || assignment.state["development"];
       rawState["address"] = assignmentLocation;
       rawState["location"] = assignmentLocation;
+      if (typeof rawState["building"] !== "string" || !rawState["building"].trim()) rawState["building"] = assignmentLocation;
     }
   }
   const [existing] = await db
