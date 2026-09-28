@@ -1271,7 +1271,8 @@ export function canPerformEntityAction(
       if (
         waitsToBeSentComplaints(actor) &&
         normalizeAssignment(state).assignedStaffId !== actor.id &&
-        state["assignedByStaffId"] !== actor.id
+        state["assignedByStaffId"] !== actor.id &&
+        state["directedToStaffId"] !== actor.id
       ) return false;
       // Administrators, Borough/Regional Directors, ordinary management and
       // complaint-handling supervisors may approve or send back completed
@@ -1324,7 +1325,8 @@ export function canPerformEntityAction(
       waitsToBeSentComplaints(actor) &&
       ["assign", "clear", "approve-work", "reject-work"].includes(action) &&
       normalizeAssignment(state).assignedStaffId !== actor.id &&
-      state["assignedByStaffId"] !== actor.id
+      state["assignedByStaffId"] !== actor.id &&
+      state["directedToStaffId"] !== actor.id
     ) return false;
     // Trade supervisors (CPM Supervisor included) are limited to their own
     // crew by canAssignStaff.

@@ -254,7 +254,7 @@ export default function Reports() {
     isCpmSupervisorTitle(actor?.position) || isInspectionSupervisorTitle(actor?.position) || sameTitle(actor?.position, "CPM");
   const sentToMe = (report: Report) => {
     const st = (report.state || {}) as Record<string, unknown>;
-    return String(st.assignedStaffId || "") === actor?.id || String(st.assignedByStaffId || "") === actor?.id;
+    return String(st.assignedStaffId || "") === actor?.id || String(st.assignedByStaffId || "") === actor?.id || String(st.directedToStaffId || "") === actor?.id;
   };
   const canActOn = (report: Report) => canHandleComplaints && (!isTradeSup || sentToMe(report));
   // CPM Supervisor: the CPM's scope for a complaint, so the complaint page can

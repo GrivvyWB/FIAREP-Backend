@@ -54,6 +54,9 @@ export async function visibleNotificationsFor(
     if (!notification.reportId) {
       return true;
     }
+    // An alert addressed to this person by id was sent to them on purpose
+    // (e.g. "Ask a supervisor to assign"): always show it.
+    if (notification.target === actor.id) return true;
     const record = byId.get(notification.reportId);
     if (!record) return !isResidentReportAlert(notification);
     return canReadEntityRecordForActor(actor, record);

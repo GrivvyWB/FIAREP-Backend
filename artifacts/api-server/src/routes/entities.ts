@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
 import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
+import { deliverPushNotification } from "../lib/push";
 import {
   ENTITIES,
   isAcceptedStaffPosition,
@@ -1414,20 +1415,26 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
     }
     recipients = [target.id];
     directedTo = target.name || "";
+    // Asking a specific supervisor sends the complaint to them: record it on
+    // the complaint so it shows in their inbox and Reports until it's assigned.
+    await db.update(entityRecords)
+      .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ directedToStaffId: target.id, directedToName: target.name, directedAt: new Date().toISOString() })}::jsonb` })
+      .where(and(eq(entityRecords.id, report.id), eq(entityRecords.tenantId, actor.tenantId)));
   } else {
     recipients = entity === "resident-reports"
       ? await routedComplaintRecipientIds(actor.tenantId, development, report.state)
       : await residentReportRecipientIds(actor.tenantId, development);
   }
   if (recipients.length) {
-    await db.insert(notifications).values(recipients.map((target) => ({
+    const created = await db.insert(notifications).values(recipients.map((target) => ({
       id: randomUUID(),
       tenantId: actor.tenantId,
       target,
       message: "Urgent: assignment requested",
       detail: `${actor.name || "Management"}: ${note}${complaintNo ? ` \u00b7 ${complaintNo}` : ""}`,
       reportId: report.id,
-    })));
+    }))).returning();
+    for (const notification of created) void deliverPushNotification(notification).catch(() => undefined);
   }
   await audit(actor, `${entity}.assignment-requested`, note, report.id);
   res.json({ ok: true, notified: recipients.length, directedTo });
