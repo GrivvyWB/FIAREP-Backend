@@ -28,6 +28,13 @@ if (!Number.isInteger(metroPort) || metroPort < 1024 || metroPort > 65535) {
   throw new Error('FIAREP_BUILD_METRO_PORT must be a valid unprivileged port');
 }
 const metroUrl = `http://localhost:${metroPort}`;
+// Platforms to bundle for the hosted Expo preview. The TestFlight app is built
+// by EAS, so the Replit publish only needs iOS; bundling Android as well was
+// pushing the publish past its resource limit. FIAREP_BUILD_PLATFORMS=ios,android
+// restores both.
+const platforms = String(process.env.FIAREP_BUILD_PLATFORMS || 'ios')
+  .split(',').map((p) => p.trim()).filter((p) => p === 'ios' || p === 'android');
+if (!platforms.length) throw new Error('FIAREP_BUILD_PLATFORMS must list ios and/or android');
 
 function exitWithError(message) {
   console.error(message);
@@ -296,16 +303,14 @@ async function downloadBundlesAndManifests(timestamp) {
   try {
     // Bundles are sequential — Metro can't handle both platforms simultaneously
     // without stalling. Manifests are cheap and run in parallel after.
-    await downloadBundle('ios', timestamp);
-    await downloadBundle('android', timestamp);
+    for (const platform of platforms) await downloadBundle(platform, timestamp);
 
-    const [iosManifest, androidManifest] = await Promise.all([
-      downloadManifest('ios'),
-      downloadManifest('android'),
-    ]);
+    const manifestList = await Promise.all(platforms.map((platform) => downloadManifest(platform)));
+    const manifests = {};
+    platforms.forEach((platform, index) => { manifests[platform] = manifestList[index]; });
 
     console.log('All downloads completed successfully');
-    return { ios: iosManifest, android: androidManifest };
+    return manifests;
   } catch (error) {
     exitWithError(`Download failed: ${error.message}`);
   }
@@ -313,32 +318,13 @@ async function downloadBundlesAndManifests(timestamp) {
 
 function extractAssets(timestamp) {
   const staticBuild = path.join(projectRoot, 'static-build');
-  const bundles = {
-    ios: fs.readFileSync(
-      path.join(
-        staticBuild,
-        timestamp,
-        '_expo',
-        'static',
-        'js',
-        'ios',
-        'bundle.js',
-      ),
+  const bundles = {};
+  for (const platform of platforms) {
+    bundles[platform] = fs.readFileSync(
+      path.join(staticBuild, timestamp, '_expo', 'static', 'js', platform, 'bundle.js'),
       'utf-8',
-    ),
-    android: fs.readFileSync(
-      path.join(
-        staticBuild,
-        timestamp,
-        '_expo',
-        'static',
-        'js',
-        'android',
-        'bundle.js',
-      ),
-      'utf-8',
-    ),
-  };
+    );
+  }
 
   const assetsMap = new Map();
   const assetPattern =
@@ -375,8 +361,7 @@ function extractAssets(timestamp) {
     }
   };
 
-  extractFromBundle(bundles.ios, 'ios');
-  extractFromBundle(bundles.android, 'android');
+  for (const platform of platforms) extractFromBundle(bundles[platform], platform);
 
   return Array.from(assetsMap.values());
 }
@@ -523,8 +508,7 @@ function updateManifests(manifests, timestamp, baseUrl, assetsByHash) {
     );
   };
 
-  updateForPlatform('ios', manifests.ios);
-  updateForPlatform('android', manifests.android);
+  for (const platform of platforms) updateForPlatform(platform, manifests[platform]);
   console.log('Manifests updated');
 }
 
