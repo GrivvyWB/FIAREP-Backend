@@ -110,9 +110,12 @@ export default function Projects() {
           <Text style={ui.cardTitle}>Project tools</Text>
           {!adding ? (
             <View style={ui.row}>
-              <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => router.push('/settings')}>
-                <Text style={ui.btnOutlineText}>Default rates</Text>
-              </Pressable>
+              {/* Default rates are for CPMs (scope writing), not Inspectors. */}
+              {!/^inspector$|supervisor inspector|inspector supervisor/i.test(position.trim()) && (
+                <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => router.push('/settings')}>
+                  <Text style={ui.btnOutlineText}>Default rates</Text>
+                </Pressable>
+              )}
               <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => setAdding(true)}>
                 <Text style={ui.btnText}>+ New project</Text>
               </Pressable>

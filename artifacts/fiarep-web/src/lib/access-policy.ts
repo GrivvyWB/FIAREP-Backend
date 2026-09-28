@@ -54,8 +54,15 @@ export function canReviewHud(staff: Staff | null | undefined): boolean {
   return !!staff && isInspectionSupervisorTitle(staff.position);
 }
 
+// Shared default rates are for CPMs (who write scopes) and the managers /
+// administrators who set them — not for Inspectors or the Supervisor Inspector.
 export function canReadSharedDefaultRates(staff: Staff | null | undefined): boolean {
-  return !!staff && staff.position !== "Maintenance Worker";
+  if (!staff) return false;
+  if (sameTitle(staff.position, "CPM")) return true;
+  if (staff.role === "inspector") return false;
+  if (isInspectionSupervisorTitle(staff.position)) return false;
+  return (staff.role === "management" || staff.role === "administrator") &&
+    staff.position !== "Maintenance Worker";
 }
 
 /** One client-side policy shared by navigation, routes, and data surfaces.

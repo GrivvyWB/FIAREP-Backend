@@ -256,8 +256,16 @@ export function canReadAuditLog(actor: Actor): boolean {
     (actor.role === "management" && actor.position === "Regional Director");
 }
 
+// Shared default rates (waste multiplier, drywall, labor, paint, flooring …)
+// are for the CPMs who write scopes, and the managers/administrators who set
+// them. Inspectors — field Inspectors and the Supervisor Inspector — don't
+// need them.
 export function canReadSharedDefaultRates(actor: Actor): boolean {
-  return actor.position !== "Maintenance Worker";
+  if (sameTitle(actor.position, "CPM")) return true;
+  if (actor.role === "inspector") return false;
+  if (isInspectionSupervisorTitle(actor.position)) return false;
+  return (actor.role === "management" || actor.role === "administrator") &&
+    actor.position !== "Maintenance Worker";
 }
 
 /** The only management actors who may review procurement scopes.  Keep this
