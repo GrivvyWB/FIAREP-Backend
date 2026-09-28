@@ -694,6 +694,13 @@ export function canReadEntityRecord(
     row.state["assignedCpmStaffId"] !== actor.id &&
     row.createdBy !== actor.id
   ) return false;
+  // The inspector who logged a violation keeps a read-only copy for good —
+  // their proof of the inspection, whatever happens to it afterwards.
+  if (
+    row.entity === "building-violations" &&
+    !row.deleted &&
+    row.createdBy === actor.id
+  ) return true;
   // The person a violation assignment was sent to can always read it, even
   // though they work from the office and have no matching base development.
   if (
@@ -1345,7 +1352,7 @@ export function canPerformEntityAction(
       return isCpmSupervisor(actor) &&
         state["cpmSupervisorId"] === actor.id;
     }
-    if (["approve", "route", "clear"].includes(action)) return isViolationAuthority(actor);
+    if (["approve", "deny", "route", "clear"].includes(action)) return isViolationAuthority(actor);
     if (action === "release") return canPerformAssignedWorkflowAction(actor, entity, action, state);
     return action === "complete" &&
       (isFieldStaff || isSupervisor) &&
@@ -1526,6 +1533,8 @@ export function isValidEntityTransition(
     },
     "building-violations": {
       approve: ["submitted"],
+      // Supervisor Inspector sends a logged inspection back to the inspector.
+      deny: ["submitted"],
       "handoff-cpm-supervisor": ["approved"],
       "assign-cpm": ["cpm_review"],
       route: ["approved"],

@@ -1554,6 +1554,7 @@ router.post(
     },
     "building-violations": {
       approve: "approved",
+      deny: "denied",
       "handoff-cpm-supervisor": "cpm_review",
       "assign-cpm": "cpm_scope_assigned",
       route: "routed",
@@ -2235,6 +2236,12 @@ router.post(
   if (entity === "procurement" && action === "handoff-inhouse") {
     state["handoffMode"] = "in_house";
     state["linkedManpowerRequestId"] = `manpower-request:${current.id}`;
+  }
+  if (entity === "building-violations" && action === "deny") {
+    state["denyReason"] = typeof body["reason"] === "string" ? body["reason"].trim() : "";
+    state["deniedByStaffId"] = actor.id;
+    state["deniedByName"] = actor.name;
+    state["deniedAt"] = now.toISOString();
   }
   if (entity === "building-violations" && action === "handoff-cpm-supervisor") {
     state["cpmSupervisorId"] = cpmSupervisorReceiver?.id || "";
@@ -2953,6 +2960,8 @@ router.post(
           ? current.state["inspectorName"]
           : "management";
     }
+  } else if (entity === "building-violations" && action === "deny") {
+    target = String(current.createdBy || "");
   } else if (entity === "building-violations" && action === "handoff-cpm-supervisor") {
     target = String(state["cpmSupervisorId"] || "");
   } else if (entity === "building-violations" && action === "assign-cpm") {
@@ -3068,6 +3077,14 @@ router.post(
         "In-house procurement scope assigned",
         current.development || undefined,
         `manpower-request:${current.id}`,
+      );
+    } else if (entity === "building-violations" && action === "deny") {
+      await notify(
+        actor,
+        target,
+        "Inspection denied \u2014 review and log again",
+        [String(state["violationNo"] || ""), String(state["building"] || ""), state["denyReason"] ? `Reason: ${state["denyReason"]}` : ""].filter(Boolean).join(" \u00b7 ") || undefined,
+        current.id,
       );
     } else if (entity === "building-violations" && action === "handoff-cpm-supervisor") {
       await notify(

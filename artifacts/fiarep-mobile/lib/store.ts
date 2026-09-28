@@ -4459,6 +4459,19 @@ export async function listBuildingViolations(building: string, violationNo: stri
     .sort((a, b) => (b.loggedAt || '').localeCompare(a.loggedAt || ''));
 }
 
+/** Every inspection this inspector logged, newest first — their permanent record. */
+export async function listMyLoggedInspections(): Promise<BuildingViolation[]> {
+  const d = await db();
+  await ensureBuildingViolTable(d);
+  const a = await getCurrentActor();
+  const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
+  const items = rows.map((r: any) => { try { return JSON.parse(r.state) as BuildingViolation; } catch { return null; } }).filter(Boolean) as BuildingViolation[];
+  const me = (a?.name || '').trim().toLowerCase();
+  return items
+    .filter(v => (v.loggedBy || '').trim().toLowerCase() === me || (v as any).loggedByStaffId === a?.id || (v as any)._meta?.createdBy === a?.id)
+    .sort((x, y) => (y.loggedAt || '').localeCompare(x.loggedAt || ''));
+}
+
 export async function deleteBuildingViolation(id: string): Promise<void> {
   const d = await db();
   await ensureBuildingViolTable(d);

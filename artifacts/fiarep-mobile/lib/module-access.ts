@@ -119,7 +119,7 @@ export function useRawModules(): Record<string, boolean> {
 }
 
 const ROUTE_MODULES: Array<[string, ModuleId]> = [
-  ['/hud-', 'hud-inspections'], ['/violation-', 'violations'], ['/inspector-violations', 'violations'],
+  ['/hud-', 'hud-inspections'], ['/violation-', 'violations'], ['/inspector-violations', 'violations'], ['/my-inspections', 'violations'],
   ['/create-report', 'inspection-create'], ['/report-detail', 'reports'], ['/worker', 'my-jobs'],
   ['/my-jobs', 'my-jobs'], ['/change-orders', 'change-orders'], ['/cpm-change-order', 'change-orders'],
   ['/scope-submit', 'scope-writing'], ['/scope-', 'scope-review'], ['/dispatch-job', 'trade-requests'], ['/in-house-assignments', 'trade-requests'],
@@ -158,7 +158,7 @@ export function moduleForTile(label: string): ModuleId | null {
     'CPM Supervisor': 'scope-review', 'CPM Supervisor Scope Review': 'scope-review',
     'Elevator Dashboard': 'elevators', 'Default rates': 'settings', 'Inbox': 'notifications',
     'Request Time Off': 'leave', 'Leave Calendar': 'leave', 'Attendance': 'calendar',
-    'Audit Log': 'reports', 'Assign Route': 'calendar', 'Measurement': 'measurement',
+    'Audit Log': 'reports', 'Assign Route': 'calendar', 'Measurement': 'measurement', 'My Inspections': 'violations',
   };
   return modules[value] || null;
 }

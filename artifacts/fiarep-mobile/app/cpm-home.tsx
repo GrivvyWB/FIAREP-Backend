@@ -103,6 +103,7 @@ export default function CpmHome() {
         ...(position === 'Inspector' ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
+        ...(position === 'Inspector' ? [{ label: 'My Inspections', onPress: () => router.push('/my-inspections'), tone: 'outline' as Tone }] : []),
         ...(normalizedPosition === 'inspector' ? [{ label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone }] : []),
         ...(normalizedPosition === 'inspector' && hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }] : []),
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },

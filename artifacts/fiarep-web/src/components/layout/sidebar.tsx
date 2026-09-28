@@ -41,6 +41,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },
     { name: "HUD Inspections", href: "/hud-inspections", icon: ClipboardCheck, module: "hud-inspections" as const },
     { name: "Inspection Approvals", href: "/inspection-approvals", icon: ClipboardCheck, module: "inspection-approvals" as const },
+    { name: "My Inspections", href: "/my-inspections", icon: ClipboardCheck, module: "my-inspections" as const },
     { name: "Estimates", href: "/estimates", icon: FileText, module: "estimates" as const },
     { name: "Repairs", href: "/repairs", icon: Wrench, module: "repairs" as const },
     { name: "Projects", href: "/projects", icon: Briefcase, module: "projects" as const },

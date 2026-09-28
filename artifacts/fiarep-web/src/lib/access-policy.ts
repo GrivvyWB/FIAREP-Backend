@@ -8,7 +8,7 @@ export type StaffModule =
   | "clients" | "team" | "violations" | "procurement" | "scope-review"
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
-   | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals";
+   | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -97,7 +97,7 @@ export function hasModuleAccess(
   if (staff.role === "inspector" && position === "Inspector") {
     // HUD Inspections: inspectors see their HUD inspections and the review
     // outcome here; they fill new ones out in the app.
-    return exactWorkflowShell.has(module) || ["inspections", "inspection-create", "violations", "hud-inspections"].includes(module);
+    return exactWorkflowShell.has(module) || ["inspections", "inspection-create", "violations", "hud-inspections", "my-inspections"].includes(module);
   }
   // Inspector / CPM manpower requests are addressed to these supervisors, so
   // like every trade supervisor they need the Trade Requests page.
@@ -144,6 +144,7 @@ export function hasModuleAccess(
   }
   if (staff.role === "procurement") return module === "procurement";
   if (module === "hud-inspections") return canReviewHud(staff) || staff.role === "inspector";
+  if (module === "my-inspections") return staff.role === "inspector" && position === "Inspector";
   if (module === "inspection-approvals") return staff.role === "administrator" || (staff.role === "management" && isInspectionSupervisorTitle(position));
   // Shared Data remains an administrator-only module.  Default-rate
   // visibility is a Settings concern, not a reason to broaden this module.

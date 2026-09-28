@@ -11,14 +11,15 @@ import {
   useListStaff,
   usePerformEntityAction,
 } from "@workspace/api-client-react";
-import { ClipboardCheck, Send } from "lucide-react";
+import { ClipboardCheck, Send, X } from "lucide-react";
+import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
-import { isCpmSupervisorTitle, sameTitle } from "@/lib/titles";
+import { isCpmSupervisorTitle } from "@/lib/titles";
 
 type Row = { id: string; development?: string | null; createdAt: string; state?: Record<string, any> };
 
@@ -30,8 +31,9 @@ export default function InspectionApprovals() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { staff: me } = useAuth();
-  const [picking, setPicking] = useState<{ row: Row; kind: "route" | "handoff" } | null>(null);
+  const [picking, setPicking] = useState<{ row: Row; kind: "handoff" } | null>(null);
   const [choice, setChoice] = useState("");
+  const [reasons, setReasons] = useState<Record<string, string>>({});
   const query = useListEntityRecords("building-violations", undefined, {
     query: { queryKey: getListEntityRecordsQueryKey("building-violations"), refetchInterval: 30_000, staleTime: 10_000, refetchOnMount: "always" },
   });
@@ -42,16 +44,13 @@ export default function InspectionApprovals() {
   const rows = (query.data || []) as Row[];
   const status = (r: Row) => String(r.state?.status || "submitted").toLowerCase();
   const awaiting = rows.filter((r) => ["submitted", "logged"].includes(status(r)));
-  const active = rows.filter((r) => ["approved", "routed", "cpm_review", "done"].includes(status(r)));
+  const active = rows.filter((r) => ["approved", "routed", "cpm_review", "cpm_scope_assigned", "done", "denied"].includes(status(r)));
 
+  // CPM Supervisors covering this development (office-based ones cover all).
   const options = useMemo(() => {
     if (!picking) return [];
     const dev = picking.row.development || picking.row.state?.development;
-    if (picking.kind === "route") {
-      return (people as any[]).filter((p) => p.role === "inspector" && sameTitle(p.position, "Inspector") && p.id !== me?.id &&
-        (!dev || (p.developments || []).some((d: string) => sameDev(d, dev))));
-    }
-    return (people as any[]).filter((p) => isCpmSupervisorTitle(p.position) &&
+    return (people as any[]).filter((p) => isCpmSupervisorTitle(p.position) && p.id !== me?.id &&
       (!dev || !(p.developments || []).length || (p.developments || []).some((d: string) => sameDev(d, dev))));
   }, [picking, people, me?.id]);
 
@@ -64,19 +63,24 @@ export default function InspectionApprovals() {
     if (!picking || !choice) return;
     const person = options.find((p) => p.id === choice);
     try {
-      if (picking.kind === "route") {
-        // A logged inspection is approved first, then sent to the Inspector.
-        if (["submitted", "logged"].includes(status(picking.row))) await run(picking.row, "approve");
-        await run(picking.row, "route", { assignedStaffId: choice });
-        toast({ title: "Approved & routed", description: `Sent to ${person?.name || "inspector"}.` });
-      } else {
-        await run(picking.row, "handoff-cpm-supervisor", { receiverSupervisorId: choice });
-        toast({ title: "Sent to CPM Supervisor", description: `${person?.name || ""} will assign a CPM to write the scope.` });
-      }
+      // A logged inspection is approved, then sent to the CPM Supervisor to be scoped.
+      if (["submitted", "logged"].includes(status(picking.row))) await run(picking.row, "approve");
+      await run(picking.row, "handoff-cpm-supervisor", { receiverSupervisorId: choice });
+      toast({ title: "Approved & sent to CPM Supervisor", description: `${person?.name || ""} will assign a CPM to write the scope.` });
       setPicking(null); setChoice("");
     } catch (error: any) {
       toast({ variant: "destructive", title: "Could not send", description: error?.message || "Try again." });
     }
+  }
+
+  async function deny(row: Row) {
+    const reason = (reasons[row.id] || "").trim();
+    if (reason.length < 3) { toast({ variant: "destructive", title: "Give the inspector a reason", description: "Say what is not correct so they can fix it." }); return; }
+    try {
+      await run(row, "deny", { reason });
+      setReasons((m) => ({ ...m, [row.id]: "" }));
+      toast({ title: "Denied — sent back to the inspector" });
+    } catch (error: any) { toast({ variant: "destructive", title: "Could not deny", description: error?.message || "Try again." }); }
   }
 
   async function approveOnly(row: Row) {
@@ -110,7 +114,7 @@ export default function InspectionApprovals() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><ClipboardCheck className="h-6 w-6" />Inspection Approvals</h1>
-        <p className="text-sm text-muted-foreground">Inspections logged by inspectors, awaiting your approval. Approve and route to an Inspector, or send an approved violation to a CPM Supervisor to be scoped.</p>
+        <p className="text-sm text-muted-foreground">Inspections logged by inspectors, awaiting your approval. Approve and send to a CPM Supervisor to be scoped, or deny with a reason so the inspector can correct it.</p>
       </div>
 
       <Card>
@@ -122,9 +126,13 @@ export default function InspectionApprovals() {
             <div key={row.id} className="rounded-xl border p-4 space-y-3">
               <Head row={row} />
               <FieldEvidenceDisplay state={row.state || {}} photosLabel="Inspector photos" />
-              <div className="flex flex-wrap gap-2">
-                <Button onClick={() => { setPicking({ row, kind: "route" }); setChoice(""); }} disabled={action.isPending}><Send className="mr-2 h-4 w-4" />Approve & route to Inspector</Button>
-                <Button variant="outline" onClick={() => approveOnly(row)} disabled={action.isPending}>Approve only</Button>
+              <div className="space-y-2 border-t pt-3">
+                <Textarea value={reasons[row.id] || ""} onChange={(e) => setReasons((m) => ({ ...m, [row.id]: e.target.value }))} placeholder="Deny reason — what is not correct (sent to the inspector)" />
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={() => { setPicking({ row, kind: "handoff" }); setChoice(""); }} disabled={action.isPending}><Send className="mr-2 h-4 w-4" />Approve & send to CPM Supervisor</Button>
+                  <Button variant="outline" onClick={() => approveOnly(row)} disabled={action.isPending}>Approve only</Button>
+                  <Button variant="outline" className="border-red-300 text-red-700" onClick={() => deny(row)} disabled={action.isPending}><X className="mr-2 h-4 w-4" />Deny</Button>
+                </div>
               </div>
             </div>
           ))}
@@ -142,12 +150,11 @@ export default function InspectionApprovals() {
               <div key={row.id} className="rounded-xl border p-4 space-y-2">
                 <Head row={row} />
                 <p className="text-sm">
-                  <span className={`font-semibold ${st === "done" ? "text-emerald-700" : "text-amber-700"}`}>{st === "done" ? "Completed" : st === "cpm_review" ? "With CPM Supervisor" : st === "routed" ? "Routed" : "Approved"}</span>
-                  {s.assignedTo ? ` · Assigned to ${s.assignedTo}` : ""}{s.completionNote ? ` · Note: ${s.completionNote}` : ""}
+                  <span className={`font-semibold ${st === "done" ? "text-emerald-700" : st === "denied" ? "text-red-700" : "text-amber-700"}`}>{st === "done" ? "Completed" : st === "denied" ? "Denied — back with the inspector" : st === "cpm_review" ? "With CPM Supervisor" : st === "cpm_scope_assigned" ? "CPM writing the scope" : st === "routed" ? "Routed" : "Approved"}</span>
+                  {s.cpmSupervisorName ? ` · ${s.cpmSupervisorName}` : ""}{s.assignedTo ? ` · Assigned to ${s.assignedTo}` : ""}{s.completionNote ? ` · Note: ${s.completionNote}` : ""}{st === "denied" && s.denyReason ? ` · Reason: ${s.denyReason}` : ""}
                 </p>
                 <div className="flex flex-wrap gap-2">
-                  {st === "approved" && <Button size="sm" onClick={() => { setPicking({ row, kind: "route" }); setChoice(""); }} disabled={action.isPending}>Route to Inspector</Button>}
-                  {st === "approved" && <Button size="sm" variant="outline" onClick={() => { setPicking({ row, kind: "handoff" }); setChoice(""); }} disabled={action.isPending}>Send to CPM Supervisor</Button>}
+                  {st === "approved" && <Button size="sm" onClick={() => { setPicking({ row, kind: "handoff" }); setChoice(""); }} disabled={action.isPending}>Send to CPM Supervisor</Button>}
                   {st === "done" && !s.clearedByMgmt && <Button size="sm" variant="ghost" onClick={() => clearForStaff(row)} disabled={action.isPending}>Clear for staff</Button>}
                 </div>
               </div>
@@ -159,12 +166,12 @@ export default function InspectionApprovals() {
       {picking && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" onClick={() => setPicking(null)}>
           <div className="w-full max-w-md rounded-xl bg-background p-5 space-y-3" onClick={(e) => e.stopPropagation()}>
-            <p className="font-semibold">{picking.kind === "route" ? "Route to Inspector" : "Send to CPM Supervisor"} · {String(picking.row.state?.violationNo || "")}</p>
+            <p className="font-semibold">Send to CPM Supervisor · {String(picking.row.state?.violationNo || "")}</p>
             <select value={choice} onChange={(e) => setChoice(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
               <option value="">Choose a person…</option>
               {options.map((p) => <option key={p.id} value={p.id}>{p.name} · {p.position}</option>)}
             </select>
-            {!options.length && <p className="text-sm text-muted-foreground">No one covers this development yet.</p>}
+            {!options.length && <p className="text-sm text-muted-foreground">No CPM Supervisor covers this development yet.</p>}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setPicking(null)}>Cancel</Button>
               <Button onClick={confirmPick} disabled={!choice || action.isPending}>{action.isPending ? "Sending…" : "Send"}</Button>
