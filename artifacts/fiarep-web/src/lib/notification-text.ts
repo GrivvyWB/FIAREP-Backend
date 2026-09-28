@@ -59,6 +59,8 @@ export function notificationHref(message: string, reportId: string): string {
   const m = message || "";
   if (/^Scope approved for Procurement|Procurement returned|bid/i.test(m)) return "/procurement";
   if (/^Scope submitted|^Scope /i.test(m)) return "/scope-review";
+  // Inspections logged by inspectors are approved / routed on Inspection Approvals.
+  if (/inspection logged|awaiting review|approved inspection/i.test(m)) return "/inspection-approvals";
   if (/violation/i.test(m)) return `/inspections?id=${id}`;
   return `/reports?id=${id}`;
 }
