@@ -92,7 +92,9 @@ export function hasModuleAccess(
   // These field personas have deliberately separate workflow tabs.  Handoffs
   // connect records; they must not broaden the recipient's navigation.
   if (staff.role === "inspector" && position === "Inspector") {
-    return exactWorkflowShell.has(module) || ["inspections", "inspection-create", "violations"].includes(module);
+    // HUD Inspections: inspectors see their HUD inspections and the review
+    // outcome here; they fill new ones out in the app.
+    return exactWorkflowShell.has(module) || ["inspections", "inspection-create", "violations", "hud-inspections"].includes(module);
   }
   // Inspector / CPM manpower requests are addressed to these supervisors, so
   // like every trade supervisor they need the Trade Requests page.
@@ -138,7 +140,7 @@ export function hasModuleAccess(
       module === "leave" || module === "hr" || module === "notifications" || module === "settings";
   }
   if (staff.role === "procurement") return module === "procurement";
-  if (module === "hud-inspections") return canReviewHud(staff);
+  if (module === "hud-inspections") return canReviewHud(staff) || staff.role === "inspector";
   if (module === "inspection-approvals") return staff.role === "administrator" || (staff.role === "management" && isInspectionSupervisorTitle(position));
   // Shared Data remains an administrator-only module.  Default-rate
   // visibility is a Settings concern, not a reason to broaden this module.

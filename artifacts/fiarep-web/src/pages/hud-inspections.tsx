@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
+import { useAuth } from "@/hooks/use-auth";
+import { canReviewHud } from "@/lib/access-policy";
 
 type HudRow = {
   id: string;
@@ -35,6 +37,8 @@ export default function HudInspections() {
     },
   });
   const action = usePerformEntityAction();
+  const { staff } = useAuth();
+  const reviewer = canReviewHud(staff);
   const rows = (query.data || []) as HudRow[];
 
   async function decide(row: HudRow, name: "approve" | "deny" | "correction") {
@@ -67,6 +71,7 @@ export default function HudInspections() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">HUD Inspections</h1>
+        {!reviewer && <p className="text-sm text-muted-foreground">Your HUD / NSPIRE inspections and their review status. New HUD inspections are filled out in the FIAREP app.</p>}
       </div>
 
       {query.isLoading && <p className="text-muted-foreground">Loading HUD inspections...</p>}
@@ -127,7 +132,7 @@ export default function HudInspections() {
                 </div>
               )}
 
-              {submitted && (
+              {submitted && reviewer && (
                 <div className="space-y-3 border-t border-border pt-4">
                   <Textarea
                     aria-label="Review note"
