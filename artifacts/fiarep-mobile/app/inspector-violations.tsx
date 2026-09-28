@@ -44,6 +44,15 @@ export default function InspectorViolations() {
   const [notes, setNotes] = useState('');
   const [items, setItems] = useState<BuildingViolation[]>([]);
   const [lookupData, setLookupData] = useState<NycPropertyLookup | null>(null);
+  // Each records list opens on its own; tap the heading to close it after reviewing.
+  const [openList, setOpenList] = useState<Record<string, boolean>>({ hpd: true, dob: true, complaints: true });
+  const toggleList = (key: string) => setOpenList((m) => ({ ...m, [key]: !m[key] }));
+  const listHeading = (key: string, label: string) => (
+    <Pressable onPress={() => toggleList(key)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, paddingVertical: 8, paddingHorizontal: 10, backgroundColor: '#eef3f8', borderRadius: 8 }}>
+      <Text style={[ui.h, { fontSize: 14, marginTop: 0, flex: 1 }]}>{label}</Text>
+      <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 13 }}>{openList[key] ? 'Close \u25B2' : 'Open \u25BC'}</Text>
+    </Pressable>
+  );
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string>('');
   const canDelete = useDeletionPolicy();
@@ -186,8 +195,8 @@ export default function InspectorViolations() {
             </View>
           )}
 
-          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>HPD Violations ({lookupData.summary.hpdViolations} building total, {lookupData.summary.openHpdViolations} open)</Text>
-          {hpdViolations.length === 0 ? <Text style={ui.listSub}>No HPD violations found.</Text> : hpdViolations.map((v, i) => (
+          {listHeading('hpd', `HPD Violations (${lookupData.summary.hpdViolations} building total, ${lookupData.summary.openHpdViolations} open)`)}
+          {openList.hpd && (hpdViolations.length === 0 ? <Text style={ui.listSub}>No HPD violations found.</Text> : hpdViolations.map((v, i) => (
             <View key={v.id || i} style={{ marginTop: 6, padding: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0' }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ fontWeight: '600', color: ACCENT }}>Class {v.class || '?'}{v.apartment ? ` · Apt ${v.apartment}` : ''}</Text>
@@ -197,10 +206,10 @@ export default function InspectorViolations() {
               <Text style={{ fontSize: 13, marginTop: 4 }}>{v.description}</Text>
               {!!v.inspectionDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Inspected: {v.inspectionDate}</Text>}
             </View>
-          ))}
+          )))}
 
-          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>DOB Violations ({lookupData.summary.dobViolations} total, {lookupData.summary.openDobViolations} open)</Text>
-          {lookupData.dobViolations.length === 0 ? <Text style={ui.listSub}>No DOB violations found.</Text> : lookupData.dobViolations.map((v, i) => (
+          {listHeading('dob', `DOB Violations (${lookupData.summary.dobViolations} total, ${lookupData.summary.openDobViolations} open)`)}
+          {openList.dob && (lookupData.dobViolations.length === 0 ? <Text style={ui.listSub}>No DOB violations found.</Text> : lookupData.dobViolations.map((v, i) => (
             <View key={v.id || i} style={{ marginTop: 6, padding: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0' }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ fontWeight: '600', color: ACCENT }}>{v.number || v.type}</Text>
@@ -209,10 +218,10 @@ export default function InspectorViolations() {
               <Text style={{ fontSize: 13, marginTop: 4 }}>{v.description}</Text>
               {!!v.issueDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Issued: {v.issueDate}</Text>}
             </View>
-          ))}
+          )))}
 
-          <Text style={[ui.h, { fontSize: 14, marginTop: 12 }]}>HPD Complaints ({lookupData.summary.hpdComplaints} building total)</Text>
-          {hpdComplaints.length === 0 ? <Text style={ui.listSub}>No HPD complaints found.</Text> : hpdComplaints.map((c, i) => (
+          {listHeading('complaints', `HPD Complaints (${lookupData.summary.hpdComplaints} building total)`)}
+          {openList.complaints && (hpdComplaints.length === 0 ? <Text style={ui.listSub}>No HPD complaints found.</Text> : hpdComplaints.map((c, i) => (
             <View key={c.id || i} style={{ marginTop: 6, padding: 8, backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: '#e0e0e0' }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                 <Text style={{ fontWeight: '600', color: ACCENT, flex: 1 }} numberOfLines={1}>{c.majorCategory}</Text>
@@ -223,7 +232,7 @@ export default function InspectorViolations() {
               <Text style={{ fontSize: 13, marginTop: 4 }}>{c.description}</Text>
               {!!c.receivedDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Received: {c.receivedDate}</Text>}
             </View>
-          ))}
+          )))}
 
           <Text style={[ui.listSub, { marginTop: 12, textAlign: 'center' }]}>Retrieved: {fmt(lookupData.retrievedAt)}</Text>
         </View>
