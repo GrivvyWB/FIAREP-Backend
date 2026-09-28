@@ -12,6 +12,7 @@ import {
   type ScoringRecord,
 } from "../lib/scoring";
 import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
+import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 
 const router: IRouter = Router();
 const SCORE_ENTITIES = [
@@ -67,7 +68,11 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
     const match = instructions.match(/COMPLAINT #:\s*(RC-\d+)/);
     return !!match && (deletedComplaintNos.has(match[1]!) || !liveComplaintNos.has(match[1]!));
   };
-  const rows = await Promise.all(storedRows.filter((row) => !fromDeletedComplaint(row)).map(repairLegacyResidentDevelopment));
+  const repaired = await Promise.all(storedRows.filter((row) => !fromDeletedComplaint(row)).map(repairLegacyResidentDevelopment));
+  // Scores only count what this person is allowed to see: a supervisor who
+  // hasn't been sent a development's complaints doesn't see them here either.
+  const readable = await Promise.all(repaired.map((row) => canReadEntityRecordForActor(actor, row)));
+  const rows = repaired.filter((_row, index) => readable[index]);
 
   const records: ScoringRecord[] = rows
     .filter((row) => {
