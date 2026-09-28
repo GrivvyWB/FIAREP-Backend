@@ -173,7 +173,12 @@ export default function InspectorViolations() {
   const onNotesChange = (next: string) => {
     setNotes(next);
     const phrase = next.split(/[.\n]/)[0].trim();
-    if (!pickedCode && phrase && phrase !== notes) { setQuery(phrase); setAutoPickFrom(phrase); }
+    const previous = notes.split(/[.\n]/)[0].trim();
+    // A new issue picked → find its code (replacing a code picked for the old issue).
+    if (phrase && phrase !== previous) {
+      setPickedCode(''); setPickedDesc(''); setPickedFull(''); setPickedHint('');
+      setQuery(phrase); setAutoPickFrom(phrase);
+    }
   };
   // Best-matching code is picked for the phrase; the inspector can Change it.
   useEffect(() => {

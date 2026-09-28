@@ -4,7 +4,7 @@
 //    by trade (for workers, inspectors, carpenters, maintenance …).
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { PHRASE_GROUPS, suggestPhrases, applyPhrase } from '../lib/complaintPhrases';
+import { PHRASE_GROUPS, suggestPhrases, applyPhrase, pickedPhraseIn } from '../lib/complaintPhrases';
 import { ACCENT } from '../lib/ui';
 
 type Props = {
@@ -18,6 +18,7 @@ export default function PhraseHelper({ value, onChange, picker = false, label = 
   const [open, setOpen] = useState(false);
   const [group, setGroup] = useState<string | null>(null);
   const suggestions = suggestPhrases(value || '');
+  const picked = pickedPhraseIn(value || '');
   const pick = (phrase: string) => {
     onChange(applyPhrase(value || '', phrase));
     setOpen(false);
@@ -40,7 +41,7 @@ export default function PhraseHelper({ value, onChange, picker = false, label = 
       {picker && (
         <View style={s.box}>
           <Pressable style={s.header} onPress={() => { setOpen(!open); setGroup(null); }}>
-            <Text style={s.headerText}>{label}</Text>
+            <Text style={[s.headerText, { flex: 1 }]} numberOfLines={1}>{picked ? `Issue: ${picked}` : label}</Text>
             <Text style={s.headerText}>{open ? '▲' : '▼'}</Text>
           </Pressable>
           {open && PHRASE_GROUPS.map((g) => (
@@ -50,8 +51,8 @@ export default function PhraseHelper({ value, onChange, picker = false, label = 
                 <Text style={s.groupArrow}>{group === g.label ? '−' : '+'}</Text>
               </Pressable>
               {group === g.label && g.phrases.map((p) => (
-                <Pressable key={g.label + p} style={s.phraseRow} onPress={() => pick(p)}>
-                  <Text style={s.phraseText}>{p}</Text>
+                <Pressable key={g.label + p} style={[s.phraseRow, p === picked && { backgroundColor: '#EEF4FB' }]} onPress={() => pick(p)}>
+                  <Text style={[s.phraseText, p === picked && { color: ACCENT, fontWeight: '700' }]}>{p === picked ? '\u2713 ' : ''}{p}</Text>
                 </Pressable>
               ))}
             </View>

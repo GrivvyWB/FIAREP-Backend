@@ -176,5 +176,20 @@ export function applyPhrase(current: string, phrase: string): string {
   const text = current.trim();
   if (!text || text.length <= 30) return phrase;
   if (text.toLowerCase().startsWith(phrase.toLowerCase())) return text;
+  // A phrase picked earlier sits at the front ("Old phrase. details…"):
+  // the new pick replaces it instead of stacking in front of it.
+  const previous = pickedPhraseIn(text);
+  if (previous) return `${phrase}${text.slice(previous.length)}`;
   return `${phrase}. ${text}`;
+}
+
+/** The known phrase the text starts with, if any. */
+export function pickedPhraseIn(text: string): string {
+  const lower = text.trim().toLowerCase();
+  let best = '';
+  for (const phrase of ALL_PHRASES) {
+    const p = phrase.toLowerCase();
+    if ((lower === p || lower.startsWith(p + '.') || lower.startsWith(p + '\n')) && p.length > best.length) best = phrase;
+  }
+  return best;
 }
