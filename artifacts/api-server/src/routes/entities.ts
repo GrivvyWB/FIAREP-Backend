@@ -2092,11 +2092,17 @@ router.post(
     body["requestedTrade"] = requestedTrade;
     body["receiverSupervisorId"] = inHouseReceiver.id;
   }
+  // A complaint sent TO a supervisor is theirs to hand down (CPM Supervisor →
+  // CPM, trade supervisor → crew); the emergency supervisor may always
+  // reassign. Anyone else must have it released first.
+  const currentAssignee = normalizeAssignment(current.state).assignedStaffId;
+  const handingDown = entity === "resident-reports" && currentAssignee === actor.id;
   if (
     action === "assign" &&
     ["resident-reports", "building-violations", "manpower-requests"].includes(entity) &&
-    normalizeAssignment(current.state).assignedStaffId &&
-    !(entity === "resident-reports" && isSuperintendentE(actor))
+    currentAssignee &&
+    !(entity === "resident-reports" && isSuperintendentE(actor)) &&
+    !handingDown
   ) {
     res.status(409).json({
       error: "This record is already assigned. The current assignee must release it with an update before reassignment.",
