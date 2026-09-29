@@ -38,6 +38,7 @@ export type CostEstimateState = {
     projectManager?: string;
     companyName?: string;
     date?: string;
+    reference?: string;   // complaint / violation number this estimate is for
   };
   rows: Record<string, CostRow>;
   totals: {

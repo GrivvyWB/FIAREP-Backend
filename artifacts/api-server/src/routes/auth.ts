@@ -277,6 +277,7 @@ router.get("/v1/auth/organization-config", requireAuth, async (_req, res) => {
     .select({
       propertyLimit: organizations.propertyLimit,
       features: organizations.features,
+      name: organizations.name,
     })
     .from(organizations)
     .where(eq(organizations.id, staff.tenantId))

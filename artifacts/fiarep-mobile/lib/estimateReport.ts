@@ -64,6 +64,7 @@ export function buildEstimateHTML(state: CostEstimateState): string {
   </style></head><body>
     <div class="title">NATURE OF WORK &amp; ESTIMATE OF COST</div>
     <table class="hdr">
+      ${h.reference ? `<tr><td class="k">REFERENCE:</td><td class="v">${esc(h.reference)}</td></tr>` : ''}
       <tr><td class="k">DATE:</td><td class="v">${esc(h.date)}</td></tr>
       <tr><td class="k">BUILDING ADDRESS:</td><td class="v">${esc(h.buildingAddress)}</td></tr>
       <tr><td class="k">INSPECTION DATE(S):</td><td class="v">${esc(h.inspectionDates)}</td></tr>

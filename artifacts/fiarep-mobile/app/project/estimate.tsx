@@ -1,7 +1,8 @@
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
-import { getCostEstimate, setCostEstimate, getProcurementRequest, getProject, type ProcurementRequest } from '../../lib/store';
+import { getCostEstimate, setCostEstimate, getProcurementRequest, getProject, getCurrentActor, type ProcurementRequest } from '../../lib/store';
+import { loadModuleConfig } from '../../lib/module-access';
 import { COST_CATEGORIES, EMPTY_COST_ESTIMATE, type CostEstimateState } from '../../lib/costEstimate';
 import { buildEstimateHTML } from '../../lib/estimateReport';
 import { ui } from '../../lib/ui';
@@ -19,22 +20,38 @@ export default function Estimate() {
   const [added, setAdded] = useState<string[]>([]);
 
   const load = useCallback(() => {
-    if (projectId) getCostEstimate(projectId).then(async (s: any) => {
+    if (!projectId) return;
+    (async () => {
+      const s: any = await getCostEstimate(projectId);
       let next: CostEstimateState = (s && s.rows) ? s : EMPTY_COST_ESTIMATE;
-      // Auto-fill building address from the project name, and date with today,
-      // but only when each is still empty so we never overwrite the CPM's edits.
-      const haveAddr = String(next.header?.buildingAddress || '').trim();
-      const haveDate = String(next.header?.date || '').trim();
-      if (!haveAddr || !haveDate) {
-        const proj = await getProject(projectId).catch(() => null);
-        const addr = haveAddr || (proj ? proj.name : '');
-        const today = haveDate || new Date().toLocaleDateString();
-        next = { ...next, header: { ...next.header, buildingAddress: addr, date: today } };
-        setCostEstimate(projectId, next);
+      const scope = await getProcurementRequest(projectId).catch(() => null);
+      setScopeRef(scope);
+      // Pre-fill the header from what we already know — the scope's address,
+      // its complaint / violation number, the CPM's name, the company and
+      // today's date — filling only blanks so the CPM's edits are never lost.
+      const h = { ...(next.header || {}) };
+      const blank = (k: keyof typeof h) => !String(h[k] || '').trim();
+      let changed = false;
+      const fill = (k: keyof typeof h, v: string) => { if (blank(k) && v) { (h as any)[k] = v; changed = true; } };
+      if (blank('buildingAddress')) {
+        const proj = scope ? null : await getProject(projectId).catch(() => null);
+        fill('buildingAddress', scope?.address || (proj ? proj.name : ''));
       }
+      fill('reference', scope ? (scope.sourceRef || scope.complaintNo || (scope.violationNo ? 'Violation ' + scope.violationNo : '') || scope.trackingId || '') : '');
+      const today = new Date().toLocaleDateString();
+      fill('date', today);
+      fill('inspectionDates', scope?.requestedAt ? new Date(scope.requestedAt).toLocaleDateString() : today);
+      if (blank('projectManager')) {
+        const actor = await getCurrentActor().catch(() => null);
+        fill('projectManager', actor?.name || '');
+      }
+      if (blank('companyName')) {
+        const config = await loadModuleConfig().catch(() => null);
+        fill('companyName', config?.name || '');
+      }
+      if (changed) { next = { ...next, header: h }; setCostEstimate(projectId, next); }
       setState(next);
-    });
-    if (projectId) getProcurementRequest(projectId).then((r) => setScopeRef(r)).catch(() => {});
+    })();
   }, [projectId]);
   useFocusEffect(load);
 
@@ -102,6 +119,9 @@ export default function Estimate() {
 
       <View style={ui.card}>
         <Text style={ui.cardTitle}>Header</Text>
+        {label('Complaint / violation #')}
+        <TextInput editable={!readOnly} value={state.header.reference ?? ''} onChangeText={t => setHeader('reference', t)}
+          placeholder="e.g. RC-60822 or V-48213" placeholderTextColor="#999" style={ui.input} />
         {label('Company / Header')}
         <TextInput editable={!readOnly} value={state.header.companyName ?? ''} onChangeText={t => setHeader('companyName', t)}
           placeholder="Your company name" placeholderTextColor="#999" style={ui.input} />

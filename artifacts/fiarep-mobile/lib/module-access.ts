@@ -15,7 +15,7 @@ export type ModuleId =
   | 'proj-estimate' | 'proj-scope' | 'proj-intake' | 'proj-elevator'
   | 'proj-photos' | 'proj-scans' | 'proj-roofplan' | 'proj-compass';
 
-export type ModuleConfig = { propertyLimit?: number; features?: { modules?: Record<string, boolean> } };
+export type ModuleConfig = { propertyLimit?: number; name?: string; features?: { modules?: Record<string, boolean> } };
 let cached: ModuleConfig | null = null;
 let cachedStaffId = '';
 let cachedPosition = '';
