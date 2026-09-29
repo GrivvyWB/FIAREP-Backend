@@ -3120,9 +3120,14 @@ export async function submitProjectScope(projectId: string, scopeName: string = 
     returnedAt: undefined,
     returnNote: undefined,
   };
+  // Push the Divisions form (and any estimate / elevator survey) up first, and
+  // send a readable copy with the submit, so the CPM Supervisor's copy is
+  // never empty even if the background sync hasn't caught up.
+  await import('./sync').then((m) => m.syncAllEntities()).catch(() => undefined);
   const serverDraft = await ensureDraftOnServer(draft);
   const next: ProcurementRequest = { ...serverDraft, ...draft, status: 'submitted' };
-  await performEntityAction('procurement', next.id, 'submit');
+  const pkg = await buildScopePackage(pid, next, next.id);
+  await performEntityAction('procurement', next.id, 'submit', pkg);
   await d.runAsync('UPDATE procurement SET state=? WHERE id=?', JSON.stringify(next), next.id);
   await removeNotificationsByRef(next.id, 'Scope submitted for approval');
   await addNotification('management', 'Scope submitted for approval', next.address, next.id);
@@ -3212,6 +3217,33 @@ export async function scopeQuoteParts(projectId: string): Promise<{ estimate: bo
 // scope file, sent with the submit so the reviewer sees exactly what was filled.
 async function buildScopePackage(localId: string, r: ProcurementRequest, serverId: string): Promise<Record<string, unknown>> {
   const out: Record<string, unknown> = {};
+  // The Divisions scope of work (priced) — same shape the server snapshots.
+  const form: any = await getProjectScopeForm(localId).catch(() => null)
+    || (r.projectId ? await getProjectScopeForm(r.projectId).catch(() => null) : null);
+  if (form && Array.isArray(form.divisions)) {
+    const text = (v: unknown) => String(v ?? '').trim();
+    const num = (v: unknown) => { const n = parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, '')); return Number.isFinite(n) ? n : 0; };
+    let total = 0;
+    const divisions = form.divisions.map((d: any) => ({
+      title: text(d?.title),
+      sections: (Array.isArray(d?.sections) ? d.sections : []).map((sec: any) => ({
+        code: text(sec?.code),
+        lines: (Array.isArray(sec?.lines) ? sec.lines : []).filter((l: any) => text(l?.description)).map((l: any) => {
+          const quantity = text(l?.quantity); const unitCost = text(l?.unitCost);
+          total += num(quantity || '1') * num(unitCost);
+          return { description: text(l?.description), quantity, unit: text(l?.unit), unitCost };
+        }),
+      })).filter((sec: any) => sec.lines.length),
+    })).filter((d: any) => d.sections.length);
+    if (divisions.length) {
+      const h = form.header && typeof form.header === 'object' ? form.header : {};
+      const header: Record<string, string> = {};
+      for (const key of ['projectName', 'address', 'numDUs', 'projectManager', 'date', 'multiBuilding']) if (text(h[key])) header[key] = text(h[key]);
+      out.cpmScope = { header, divisions, total: Math.round(total * 100) / 100 };
+      out.cpmScopeTotal = out.cpmScope && (out.cpmScope as any).total;
+      out.vendorScopeTemplate = { header, divisions: divisions.map((d: any) => ({ ...d, sections: d.sections.map((sec: any) => ({ ...sec, lines: sec.lines.map(({ unitCost, ...rest }: any) => rest) })) })) };
+    }
+  }
   const { COST_CATEGORIES } = await import('./costEstimate');
   const est = await getCostEstimate(localId).catch(() => null);
   if (est) {

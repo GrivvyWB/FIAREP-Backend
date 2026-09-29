@@ -78,6 +78,8 @@ export default function ProjectScope() {
       const r = await submitProjectScope(String(projectId), name, addr);
       if (r) { setSubmitted(true); Alert.alert('Submitted', 'Your Scope of Work was sent to your supervisor.'); }
       else Alert.alert('Not sent', 'Could not submit the scope.');
+    } catch (e: any) {
+      Alert.alert('Not sent', e?.data?.error || e?.message || 'Could not submit the scope. Check your connection and try again.');
     } finally {
       setSubmitting(false);
     }
