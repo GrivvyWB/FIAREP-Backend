@@ -220,18 +220,19 @@ export default function LeaveDashboard() {
       {filtered.map((r) => {
         const conflicts = conflictCount(r);
         return (
-          <View key={r.id} style={[ui.card, { gap: 4, marginTop: 10, borderLeftWidth: 4, borderLeftColor: TYPE_COLOR[r.type] || '#999' }]}>
+          <View key={r.id} style={[ui.card, { gap: 4, marginTop: 10, borderLeftWidth: 4, borderLeftColor: TYPE_COLOR[r.type] || '#999', opacity: r.status === 'Pending' ? 1 : 0.7, backgroundColor: r.status === 'Pending' ? '#fff' : '#F3F5F4' }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <Text style={{ fontSize: 16, fontWeight: '700' }}>{r.employee}</Text>
-              <Text style={{ fontSize: 12, fontWeight: '700', color: statusColor(r.status) }}>{r.status}</Text>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: statusColor(r.status) }}>{r.status === 'Approved' ? 'Complete' : r.status}</Text>
             </View>
+            {r.status === 'Approved' && <Text style={{ fontSize: 13, color: '#1a8f4c', fontWeight: '600' }}>Covering the shift: {(r as any).coveredByName ? `${(r as any).coveredByName}${(r as any).coveredByPosition ? ` (${(r as any).coveredByPosition})` : ''}` : 'no cover named'}</Text>}
             <Text style={{ fontSize: 14, color: TYPE_COLOR[r.type] || '#333', fontWeight: '600' }}>{r.type}</Text>
             <Text style={ui.listSub}>{r.startDate}{r.endDate && r.endDate !== r.startDate ? '  \u2013  ' + r.endDate : ''}  ({r.hours && r.hours > 0 ? r.hours + ' hour' + (r.hours === 1 ? '' : 's') : (r.approvedDays != null ? r.approvedDays : r.days) + ' day' + ((r.approvedDays != null ? r.approvedDays : r.days) === 1 ? '' : 's')})</Text>
             {!!r.title && <Text style={ui.listSub}>{r.title}{r.development ? '  \u00b7  ' + r.development : ''}</Text>}
             {!!r.supervisor && <Text style={ui.listSub}>Supervisor: {r.supervisor}</Text>}
             {!!r.reason && <Text style={{ fontSize: 13 }}>{r.reason}</Text>}
             {conflicts > 0 && <Text style={{ color: '#c0392b', fontWeight: '700', fontSize: 12 }}>⚠️ Overlaps {conflicts} other approved leave in this development</Text>}
-            <Text style={ui.listSub}>Requested by {r.requestedBy}{r.decidedBy ? '  \u00b7  decided by ' + r.decidedBy : ''}</Text>
+            <Text style={ui.listSub}>Requested by {r.requestedBy}{(r.decidedBy || (r as any).decidedByName) ? '  \u00b7  decided by ' + (r.decidedBy || (r as any).decidedByName) : ''}</Text>
 
             {r.status === 'Pending' && canDecide && (
               <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>

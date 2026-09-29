@@ -118,9 +118,11 @@ test("supervisors cannot approve employee leave but retain scoped directory acce
     position: "Plumber Supervisor",
     developments: ["Development A", "Development B"],
   };
-  assert.equal(canApproveLeaveForEmployee(supervisor, inScope), false);
+  // Proper management decides time off for the staff of their development; a
+  // supervisor's own request is decided by upper management (Property Manager).
+  assert.equal(canApproveLeaveForEmployee(supervisor, inScope), true);
   assert.equal(canApproveLeaveForEmployee(supervisor, outOfScope), false);
-  assert.equal(canApproveLeaveForEmployee(supervisor, sharedScope), false);
+  assert.equal(canApproveLeaveForEmployee(supervisor, sharedScope), true);
   assert.equal(canReadStaffDirectoryEmployee(supervisor, inScope), true);
   assert.equal(canReadStaffDirectoryEmployee(supervisor, outOfScope), false);
   assert.equal(canReadStaffDirectoryEmployee(supervisor, sharedScope), true);
@@ -936,98 +938,58 @@ test("staff can cancel only their own leave request", () => {
   );
 });
 
-test("only HR can decide another employee's leave request", () => {
-  const cannotApprove = [
+test("HR and proper management may decide leave; the Borough Director and field staff may not", () => {
+  const canApprove = [
+    actor({ role: "human_resources", position: "Human Resources" }),
+    actor({ role: "administrator", position: "Administrator" }),
     actor({ role: "management", position: "Property Manager" }),
     actor({ role: "management", position: "Superintendent" }),
+    actor({ role: "management", position: "Regional Director" }),
+  ];
+  for (const approver of canApprove) {
+    assert.equal(canPerformEntityAction(approver, "leave-requests", "approve", {}), true);
+    assert.equal(canPerformEntityAction(approver, "leave-requests", "deny", {}), true);
+  }
+  const cannotApprove = [
+    actor({ role: "management", position: "Borough Director" }),
     actor({ role: "worker", position: "Plumber Supervisor" }),
     actor({ role: "inspector", position: "Supervisor Inspector" }),
+    actor({ role: "worker", position: "Maintenance Worker" }),
   ];
   for (const approver of cannotApprove) {
-    assert.equal(
-      canPerformEntityAction(approver, "leave-requests", "approve", {}),
-      false,
-    );
-    assert.equal(
-      canPerformEntityAction(approver, "leave-requests", "deny", {}),
-      false,
-    );
+    assert.equal(canPerformEntityAction(approver, "leave-requests", "approve", {}), false);
   }
-  for (const upperManagement of [
-    actor({ role: "administrator", position: "Administrator" }),
-    actor({ role: "management", position: "Regional Director" }),
-    actor({ role: "management", position: "Borough Director" }),
-  ]) {
-    assert.equal(
-      canPerformEntityAction(upperManagement, "leave-requests", "approve", {}),
-      false,
-    );
-  }
-  assert.equal(
-    canPerformEntityAction(
-      actor({ role: "worker", position: "Maintenance Worker" }),
-      "leave-requests",
-      "approve",
-      {},
-    ),
-    false,
-  );
-  assert.equal(
-    canPerformEntityAction(
-      actor({ role: "human_resources", position: "Human Resources" }),
-      "leave-requests",
-      "approve",
-      {},
-    ),
-    true,
-  );
+  // Never your own request.
+  const manager = actor({ id: "pm-1", name: "Pat M", role: "management", position: "Property Manager" });
+  assert.equal(canPerformEntityAction(manager, "leave-requests", "approve", { employeeStaffId: "pm-1" }), false);
 });
 
-test("HR controls leave while supervisors cannot access employee leave", () => {
-  const employee = actor({
-    id: "employee-1",
-    role: "worker",
-    position: "Plumber",
-    developments: ["Development A"],
-  });
-  assert.equal(
-    canApproveLeaveForEmployee(
-      actor({ id: "hr-1", role: "human_resources", position: "Human Resources", developments: [] }),
-      employee,
-    ),
-    true,
-  );
-  assert.equal(
-    canApproveLeaveForEmployee(
-      actor({ id: "plumber-supervisor", role: "management", position: "Plumber Supervisor", developments: ["Development A"] }),
-      employee,
-    ),
-    false,
-  );
-  assert.equal(
-    canApproveLeaveForEmployee(
-      actor({ id: "painter-supervisor", role: "management", position: "Painter Supervisor", developments: ["Development A"] }),
-      employee,
-    ),
-    false,
-  );
-  assert.equal(
-    canApproveLeaveForEmployee(
-      actor({ id: "other-development", role: "management", position: "Property Manager", developments: ["Development B"] }),
-      employee,
-    ),
-    false,
-  );
-  assert.equal(
-    canApproveLeaveForEmployee(
-      actor({ id: "regional", role: "management", position: "Regional Director", developments: ["Development A"] }),
-      employee,
-    ),
-    false,
-  );
+test("who decides whose leave", () => {
+  const employee = actor({ id: "employee-1", role: "worker", position: "Plumber", developments: ["Development A"] });
+  const supervisorEmployee = actor({ id: "sup-1", role: "management", position: "Plumbing Supervisor", developments: ["Development A"] });
+  const hr = actor({ id: "hr-1", role: "human_resources", position: "Human Resources", developments: [] });
+  const plumbingSupervisor = actor({ id: "plumber-supervisor", role: "management", position: "Plumber Supervisor", developments: ["Development A"] });
+  const otherDevelopment = actor({ id: "other-development", role: "management", position: "Property Manager", developments: ["Development B"] });
+  const propertyManager = actor({ id: "pm", role: "management", position: "Property Manager", developments: ["Development A"] });
+  const regional = actor({ id: "regional", role: "management", position: "Regional Director", developments: [] });
+  const borough = actor({ id: "borough", role: "management", position: "Borough Director", developments: [] });
+  // A worker's request: HR, or management sharing the development.
+  assert.equal(canApproveLeaveForEmployee(hr, employee), true);
+  assert.equal(canApproveLeaveForEmployee(plumbingSupervisor, employee), true);
+  assert.equal(canApproveLeaveForEmployee(otherDevelopment, employee), false);
+  assert.equal(canApproveLeaveForEmployee(regional, employee), true);
+  assert.equal(canApproveLeaveForEmployee(borough, employee), false);
+  // A supervisor's own request: HR or upper management only — not a fellow
+  // supervisor, never the Borough Director.
+  assert.equal(canApproveLeaveForEmployee(hr, supervisorEmployee), true);
+  assert.equal(canApproveLeaveForEmployee(plumbingSupervisor, supervisorEmployee), false);
+  assert.equal(canApproveLeaveForEmployee(propertyManager, supervisorEmployee), true);
+  assert.equal(canApproveLeaveForEmployee(regional, supervisorEmployee), true);
+  assert.equal(canApproveLeaveForEmployee(borough, supervisorEmployee), false);
+  assert.equal(canApproveLeaveForEmployee(supervisorEmployee, supervisorEmployee), false);
 });
 
-test("leave records are visible only to HR and the employee", () => {
+test("leave records are visible to HR, the employee and their development's management", () => {
   const leave = {
     entity: "leave-requests",
     development: "Development A",
@@ -1043,8 +1005,13 @@ test("leave records are visible only to HR and the employee", () => {
     canReadEntityRecord(actor({ id: "employee-1", role: "worker", position: "Plumber" }), leave),
     true,
   );
+  // Management of that development sees it (office-based management covers all); the Borough Director does not.
   assert.equal(
-    canReadEntityRecord(actor({ id: "supervisor-1", role: "management", position: "Plumber Supervisor" }), leave),
+    canReadEntityRecord(actor({ id: "supervisor-1", role: "management", position: "Plumber Supervisor", developments: ["Development A"] }), leave),
+    true,
+  );
+  assert.equal(
+    canReadEntityRecord(actor({ id: "supervisor-2", role: "management", position: "Plumber Supervisor", developments: ["Development B"] }), leave),
     false,
   );
   assert.equal(
@@ -1053,10 +1020,10 @@ test("leave records are visible only to HR and the employee", () => {
   );
   assert.equal(
     canReadEntityRecord(actor({ id: "regional", role: "management", position: "Regional Director" }), leave),
-    false,
+    true,
   );
   assert.equal(
-    canReadEntityRecord(actor({ id: "admin", role: "administrator", position: "Administrator" }), leave),
+    canReadEntityRecord(actor({ id: "borough", role: "management", position: "Borough Director" }), leave),
     false,
   );
 });
@@ -1072,10 +1039,12 @@ test("leave duration routes short requests to supervisors and long requests to H
   assert.equal(validLeaveRequestDuration(366), false);
   assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 14), true);
   assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 30), false);
-  assert.equal(canApproveLeaveDuration(actor({ role: "administrator" }), 14), false);
+  assert.equal(canApproveLeaveDuration(actor({ role: "administrator" }), 14), true);
   assert.equal(canApproveLeaveDuration(actor({ role: "worker" }), 14), false);
   assert.equal(canApproveLeaveDuration(actor({ role: "inspector" }), 14), false);
-  assert.equal(canApproveLeaveDuration(actor({ role: "human_resources" }), 14), false);
+  // HR decides any length — a one-day request too.
+  assert.equal(canApproveLeaveDuration(actor({ role: "human_resources" }), 1), true);
+  assert.equal(canApproveLeaveDuration(actor({ role: "human_resources" }), 14), true);
   assert.equal(canApproveLeaveDuration(actor({ role: "human_resources" }), 30), true);
   assert.equal(validateLeaveRequestSchedule({
     startAt: "2026-09-01T09:00",
@@ -1094,7 +1063,7 @@ test("leave duration routes short requests to supervisors and long requests to H
   }), "Return must not be before end");
 });
 
-test("management cannot approve or deny any leave request", () => {
+test("management cannot approve or deny their own leave request", () => {
   const manager = actor({
     id: "manager-1",
     name: "Kye G",
@@ -1119,7 +1088,7 @@ test("management cannot approve or deny any leave request", () => {
       employeeStaffId: "worker-1",
       employee: "Mark K",
     }),
-    false,
+    true,
   );
 });
 

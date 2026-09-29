@@ -415,11 +415,24 @@ function leaveRecordAllowed(
   row: EntityRecordAuthorizationState,
 ): boolean {
   if (row.entity !== "leave-requests") return true;
-  if (actor.role === "human_resources") return true;
+  if (actor.role === "human_resources" || actor.role === "administrator") return true;
   const employeeStaffId = typeof row.state["employeeStaffId"] === "string"
     ? row.state["employeeStaffId"]
     : "";
-  if (employeeStaffId) return employeeStaffId === actor.id;
+  if (employeeStaffId === actor.id) return true;
+  // Proper management sees the requests they may decide (the request carries
+  // the employee's title and development). The Borough Director is not in
+  // the leave flow.
+  if (actor.role === "management" && !isBoroughDirector(actor) && employeeStaffId) {
+    const title = String(row.state["title"] || row.state["employeePosition"] || "");
+    const employeeIsManagement =
+      /supervisor|superintendent|manager|director/i.test(title) || row.state["employeeRole"] === "management";
+    if (employeeIsManagement) return LEAVE_UPPER_MANAGEMENT.has(actor.position);
+    const development = row.development || String(row.state["development"] || "");
+    return actor.developments.length === 0 || !development ||
+      actor.developments.some((d) => d.trim().toLowerCase() === development.trim().toLowerCase());
+  }
+  if (employeeStaffId) return false;
   const employeeName = typeof row.state["employee"] === "string"
     ? row.state["employee"].trim().toLowerCase()
     : "";
@@ -983,11 +996,30 @@ const SUPERVISED_LEAVE_POSITIONS = new Map<string, Set<string>>([
   ["Supervisor Inspector", new Set(["Inspector", "CPM"])],
 ]);
 
+// Upper management who sign off on a supervisor's own time off. The Borough
+// Director is deliberately left out of the leave flow.
+const LEAVE_UPPER_MANAGEMENT = new Set([
+  "Property Manager", "Assistant Property Manager", "Regional Director", "Assistant Regional Director",
+]);
+
+/** Time off is decided by HR, or by proper management:
+ *  - a worker's / inspector's request: any manager or supervisor sharing the
+ *    employee's development (office-based managers cover all),
+ *  - a supervisor's / manager's own request: HR or upper management only
+ *    (Property Manager, APM, Regional / Assistant Regional Director),
+ *  - never the Borough Director, never your own request. */
 export function canApproveLeaveForEmployee(
   actor: Actor,
   employee: Pick<Actor, "id" | "role" | "position" | "developments">,
 ): boolean {
-  return actor.role === "human_resources" && actor.id !== employee.id;
+  if (actor.id === employee.id) return false;
+  if (actor.role === "human_resources" || actor.role === "administrator") return true;
+  if (actor.role !== "management" || isBoroughDirector(actor)) return false;
+  const employeeIsManagement = employee.role === "management" || employee.role === "administrator";
+  if (employeeIsManagement) return LEAVE_UPPER_MANAGEMENT.has(actor.position);
+  return actor.developments.length === 0 ||
+    employee.developments.length === 0 ||
+    actor.developments.some((development) => employee.developments.includes(development));
 }
 
 export function canReadStaffDirectoryEmployee(
@@ -1058,9 +1090,10 @@ export function canApproveLeaveDuration(
   actor: Pick<Actor, "role">,
   days: number,
 ): boolean {
-  if (days >= 30 && days <= 365) return actor.role === "human_resources";
-  if (days >= 1 && days <= 14) return actor.role === "management";
-  return false;
+  if (days < 1 || days > 365) return false;
+  if (actor.role === "human_resources" || actor.role === "administrator") return true;
+  // Management and supervisors decide up to two weeks; longer goes to HR.
+  return actor.role === "management" && days <= 14;
 }
 
 /**
@@ -1373,7 +1406,9 @@ export function canPerformEntityAction(
       ) {
         return false;
       }
-      return actor.role === "human_resources";
+      // HR or proper management (the route checks the employee relationship).
+      return actor.role === "human_resources" || actor.role === "administrator" ||
+        (actor.role === "management" && !isBoroughDirector(actor));
     }
     if (action !== "cancel") return false;
     return state["requesterStaffId"] === actor.id;

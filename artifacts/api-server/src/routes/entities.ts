@@ -858,7 +858,7 @@ router.post("/v1/:entity", async (req, res, next) => {
       ? createdState["employee"].trim()
       : "";
     if (employeeName) {
-      const employeeMatches = await db.select({ id: staffAccounts.id })
+      const employeeMatches = await db.select({ id: staffAccounts.id, role: staffAccounts.role, position: staffAccounts.position, developments: staffAccounts.developments })
         .from(staffAccounts)
         .where(and(
           eq(staffAccounts.tenantId, actor.tenantId),
@@ -868,6 +868,10 @@ router.post("/v1/:entity", async (req, res, next) => {
         .limit(2);
       if (employeeMatches.length === 1) {
         createdState["employeeStaffId"] = employeeMatches[0]!.id;
+        // Snapshot who is asking, so the right management sees it.
+        createdState["employeeRole"] = employeeMatches[0]!.role;
+        if (!createdState["title"]) createdState["title"] = employeeMatches[0]!.position;
+        if (!createdState["development"] && employeeMatches[0]!.developments?.[0]) createdState["development"] = employeeMatches[0]!.developments[0];
       }
     }
     const leaveDays = leaveRequestDurationDays(createdState);
@@ -1059,9 +1063,15 @@ router.post("/v1/:entity", async (req, res, next) => {
         developments: reviewer.developments,
         sessionVersion: reviewer.sessionVersion,
       };
+      const employeeForLeave = {
+        id: String(persistedCreatedState["employeeStaffId"] || ""),
+        role: String(persistedCreatedState["employeeRole"] || actor.role),
+        position: String(persistedCreatedState["title"] || actor.position),
+        developments: development ? [development] : actor.developments,
+      } as Pick<Actor, "id" | "role" | "position" | "developments">;
       if (
-        reviewerActor.role === "human_resources" &&
-        entityDevelopmentAllowed(reviewerActor, entity, development)
+        (reviewerActor.role === "human_resources" && entityDevelopmentAllowed(reviewerActor, entity, development)) ||
+        (reviewerActor.role === "management" && canApproveLeaveForEmployee(reviewerActor, employeeForLeave))
       ) {
         await notify(
           actor,
@@ -1827,6 +1837,12 @@ router.post(
     return;
   }
   if (entity === "leave-requests" && (action === "approve" || action === "deny")) {
+    // Whoever decides first completes it.
+    const decided = String(current.state["status"] || "Pending");
+    if (decided !== "Pending") {
+      res.status(409).json({ error: `Already ${decided.toLowerCase()}${current.state["decidedByName"] ? ` by ${current.state["decidedByName"]}` : ""}` });
+      return;
+    }
     const leaveDays = leaveRequestDurationDays(current.state);
     if (leaveDays === null || !canApproveLeaveDuration(actor, leaveDays)) {
       res.status(403).json({
@@ -1855,9 +1871,29 @@ router.post(
         : [];
     const employee = employeeMatches.length === 1 ? employeeMatches[0] : undefined;
     if (!employee || !canApproveLeaveForEmployee(actor, employee)) {
-      res.status(403).json({ error: "You may only decide leave for staff you supervise" });
+      res.status(403).json({
+        error: employee && ["management", "administrator"].includes(String(employee.role))
+          ? "A supervisor's time off is decided by HR or upper management (Property Manager, Regional Director)"
+          : "You may only decide leave for staff you supervise",
+      });
       return;
     }
+    // Who covers the shift while they're out (picked from the supervisors list).
+    const coverId = typeof body["coveredByStaffId"] === "string" ? body["coveredByStaffId"].trim() : "";
+    if (action === "approve" && coverId) {
+      const [cover] = await db.select({ id: staffAccounts.id, name: staffAccounts.name, position: staffAccounts.position }).from(staffAccounts).where(and(
+        eq(staffAccounts.id, coverId), eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"))).limit(1);
+      if (!cover) { res.status(400).json({ error: "Pick who covers the shift from the list" }); return; }
+      body["coveredByStaffId"] = cover.id;
+      body["coveredByName"] = cover.name;
+      body["coveredByPosition"] = cover.position;
+    } else {
+      delete body["coveredByStaffId"]; delete body["coveredByName"]; delete body["coveredByPosition"];
+    }
+    body["decidedByStaffId"] = actor.id;
+    body["decidedByName"] = actor.name;
+    body["decidedByPosition"] = actor.position;
+    body["decidedAt"] = new Date().toISOString();
     if (actor.role === "human_resources") {
       const authorizationCode = typeof body["authorizationCode"] === "string"
         ? body["authorizationCode"].trim().toUpperCase()
