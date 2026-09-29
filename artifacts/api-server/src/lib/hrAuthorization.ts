@@ -1,3 +1,5 @@
+import { and, eq, inArray } from "drizzle-orm";
+import { db, entityRecords } from "@workspace/db";
 import type { Actor } from "./auth";
 import { activeCoverageDevelopments } from "./coverage";
 import {
@@ -16,7 +18,7 @@ const normalizeDevelopment = (value: string | null | undefined) =>
 
 export async function canReadEntityRecordForActor(
   actor: Actor,
-  row: EntityRecordAuthorizationState & { tenantId?: string },
+  row: EntityRecordAuthorizationState & { tenantId?: string; id?: string },
 ): Promise<boolean> {
   if (row.tenantId && row.tenantId !== actor.tenantId) return false;
   if (row.entity === "resident-reports" || row.entity === "building-violations") {
@@ -90,9 +92,43 @@ async function coveredDevelopments(actor: Actor): Promise<string[]> {
   return developments;
 }
 
+// Complaints the actor handled indirectly: the inspection, scope, trade
+// request or change order that came out of the complaint was created by them
+// or sent to them (the Supervisor Inspector reviews every inspection). The
+// complaint itself then reads for them too — a read-only trail of their work.
+const handledCache = new Map<string, { at: number; ids: Set<string> }>();
+async function handledComplaintIds(actor: Actor): Promise<Set<string>> {
+  const key = `${actor.tenantId}:${actor.id}`;
+  const hit = handledCache.get(key);
+  if (hit && Date.now() - hit.at < 15_000) return hit.ids;
+  const ids = new Set<string>();
+  try {
+    const rows = await db
+      .select({ entity: entityRecords.entity, state: entityRecords.state, createdBy: entityRecords.createdBy, deleted: entityRecords.deleted })
+      .from(entityRecords)
+      .where(and(
+        eq(entityRecords.tenantId, actor.tenantId),
+        inArray(entityRecords.entity, ["building-violations", "procurement", "manpower-requests", "change-orders"]),
+      ));
+    for (const r of rows) {
+      if (r.deleted) continue;
+      const state = (r.state || {}) as Record<string, unknown>;
+      const mine =
+        r.createdBy === actor.id ||
+        SENT_TO_FIELDS.some((field) => state[field] === actor.id) ||
+        (r.entity === "building-violations" && isViolationAuthority(actor));
+      if (!mine) continue;
+      const source = String(state["sourceReportId"] || (state["sourceEntity"] === "resident-reports" ? state["sourceRecordId"] || "" : "") || "").trim();
+      if (source) ids.add(source);
+    }
+  } catch { /* best effort */ }
+  handledCache.set(key, { at: Date.now(), ids });
+  return ids;
+}
+
 async function complaintVisibility(
   actor: Actor,
-  row: EntityRecordAuthorizationState,
+  row: EntityRecordAuthorizationState & { id?: string },
 ): Promise<boolean | null> {
   // Residents, administrators and field staff viewing violations keep the
   // existing rules.
@@ -105,6 +141,7 @@ async function complaintVisibility(
   if (isSuperintendentE(actor) || isBoroughDirector(actor) || UPPER_MANAGEMENT_TITLES.has(title)) return null;
   if (row.createdBy === actor.id) return true;
   if (SENT_TO_FIELDS.some((field) => row.state[field] === actor.id)) return true;
+  if (row.entity === "resident-reports" && row.id && (await handledComplaintIds(actor)).has(row.id)) return true;
   const development = normalizeDevelopment(row.development || String(row.state["development"] || ""));
   if (!development) return false;
   const home = actor.developments.some((d) => normalizeDevelopment(d) === development);
