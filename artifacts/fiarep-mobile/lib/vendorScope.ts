@@ -100,6 +100,27 @@ export function newLine(): ScopeLine { return line(); }
 export function newSection(code: string = 'New section'): ScopeSection { return section(code); }
 export function newDivision(title: string = 'NEW DIVISION'): ScopeDivision { return { id: sid(), title, sections: [] }; }
 
+// Rebuild an editable form from a submitted snapshot (the server's cpmScope:
+// header + divisions/sections/lines without ids). Used when a scope comes back
+// for revision on a phone that no longer has the local form, so the CPM fixes
+// the original instead of starting over.
+export function scopeFromSnapshot(snap: any): VendorScope | null {
+  if (!snap || !Array.isArray(snap.divisions) || !snap.divisions.length) return null;
+  const s = (v: unknown) => String(v ?? '');
+  const divisions: ScopeDivision[] = snap.divisions.map((d: any) => ({
+    id: sid(), title: s(d?.title),
+    sections: (Array.isArray(d?.sections) ? d.sections : []).map((sec: any) => ({
+      id: sid(), code: s(sec?.code),
+      lines: (Array.isArray(sec?.lines) ? sec.lines : []).map((l: any) => ({
+        id: sid(), description: s(l?.description), quantity: s(l?.quantity), unit: s(l?.unit), sqFt: s(l?.sqFt), unitCost: s(l?.unitCost),
+      })),
+    })),
+  }));
+  const header = snap.header && typeof snap.header === 'object' ? { ...snap.header } : {};
+  if (!header.multiBuilding) header.multiBuilding = 'NO';
+  return { header, divisions };
+}
+
 const num = (v?: string) => { const n = parseFloat(String(v ?? '').replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : n; };
 export function lineAmount(l: ScopeLine): number { return num(l.quantity) * num(l.unitCost); }
 export function sectionTotal(s: ScopeSection): number { return s.lines.reduce((sum, l) => sum + lineAmount(l), 0); }

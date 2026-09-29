@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingVi
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getProjectScopeForm, setProjectScopeForm, getProject, getProcurementRequest, getCurrentActor, submitProjectScope, createChangeOrder } from '../../lib/store';
 import {
-  emptyScope, addSectionToScope, newLine,
+  emptyScope, addSectionToScope, newLine, scopeFromSnapshot,
   lineAmount, sectionTotal, grandTotal, costPerDU, SCOPE_CATALOG,
   type VendorScope, type ScopeLine,
 } from '../../lib/vendorScope';
@@ -35,7 +35,12 @@ export default function ProjectScope() {
       const proj = await getProject(projectId).catch(() => null);
       const req = await getProcurementRequest(String(projectId)).catch(() => null);
       const actor = await getCurrentActor().catch(() => null);
-      const base: any = (saved && Array.isArray(saved.divisions)) ? saved : emptyScope();
+      // Returned for revision on a phone without the local form: start from
+      // the scope that was submitted (server snapshot) so nothing is retyped.
+      const hasSaved = saved && Array.isArray(saved.divisions) && saved.divisions.length > 0;
+      const restored = !hasSaved ? scopeFromSnapshot((req as any)?.cpmScope) : null;
+      const base: any = hasSaved ? saved : (restored || emptyScope());
+      if (restored && projectId) setProjectScopeForm(projectId, restored);
       const h = { ...(base.header || {}) };
       // Backfill only EMPTY fields so we never overwrite the CPM's own edits.
       const fill = (k: string, v: string) => { if (!h[k] && v) h[k] = v; };
