@@ -17,7 +17,7 @@ export function AttachedMeasurements({ list }: { list: unknown }) {
               </a>
             )}
             <div className="min-w-0 text-sm">
-              <p className="font-semibold">{line || "Measurement"}</p>
+              <p className="font-semibold">{m.audience === "all" && <span className="mr-1 rounded bg-destructive px-1.5 py-0.5 text-[10px] font-bold uppercase text-destructive-foreground">Emergency</span>}{line || "Measurement"}</p>
               {!!m.summary && <p className="text-muted-foreground">{String(m.summary)}</p>}
               {Array.isArray(m.items) && m.items.length > 0 && (
                 <p className="text-muted-foreground">{(m.items as Array<{ qty?: number; name?: string }>).map((it) => `${it.qty}× ${it.name}`).join(", ")}</p>

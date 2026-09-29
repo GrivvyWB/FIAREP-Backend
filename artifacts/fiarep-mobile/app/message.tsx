@@ -80,7 +80,7 @@ function AttachedMeasurements({ list }: { list: any[] }) {
         <View key={i} style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
           {!!m.photoDataUrl && <Image source={{ uri: m.photoDataUrl }} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} resizeMode="cover" />}
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: '600' }}>{[m.material, m.lengthFt && m.widthFt ? `${m.lengthFt} \u00d7 ${m.widthFt} ft` : '', m.areaSqFt ? `${m.areaSqFt} sq ft` : ''].filter(Boolean).join(' \u00b7 ')}</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600' }}>{m.audience === 'all' ? 'EMERGENCY \u00b7 ' : ''}{[m.material, m.lengthFt && m.widthFt ? `${m.lengthFt} \u00d7 ${m.widthFt} ft` : '', m.areaSqFt ? `${m.areaSqFt} sq ft` : ''].filter(Boolean).join(' \u00b7 ')}</Text>
             {!!m.summary && <Text style={{ fontSize: 13, color: '#333' }}>{m.summary}</Text>}
             <Text style={{ fontSize: 12, color: '#777' }}>{[m.attachedBy || m.measuredBy, fmt(m.attachedAt)].filter(Boolean).join(' \u00b7 ')}</Text>
           </View>

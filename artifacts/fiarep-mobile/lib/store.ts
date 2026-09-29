@@ -4503,11 +4503,21 @@ export async function listAttachableJobs(): Promise<AttachableJob[]> {
   return jobs;
 }
 
-export async function attachMeasurementToJob(entity: AttachableJob['entity'], id: string, measurementId: string): Promise<{ ok: boolean; notified?: number; alreadyAttached?: boolean }> {
+export type MeasurementAudience = 'all' | 'development' | 'staff';
+export async function attachMeasurementToJob(
+  entity: AttachableJob['entity'], id: string, measurementId: string,
+  audience: MeasurementAudience = 'development', targetStaffId: string = '',
+): Promise<{ ok: boolean; notified?: number; alreadyAttached?: boolean }> {
   return customFetch<{ ok: boolean; notified?: number; alreadyAttached?: boolean }>(
     `/api/v1/${entity}/${encodeURIComponent(id)}/attach-measurement`,
-    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ measurementId }), responseType: 'json' },
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ measurementId, audience, targetStaffId }), responseType: 'json' },
   );
+}
+
+export type SupervisorOption = { id: string; name: string; position: string; developments?: string[] };
+export async function listSupervisorOptions(): Promise<SupervisorOption[]> {
+  const rows = await customFetch<SupervisorOption[]>('/api/v1/staff/supervisors', { responseType: 'json' });
+  return Array.isArray(rows) ? rows : [];
 }
 
 export async function listMyLoggedInspections(): Promise<BuildingViolation[]> {

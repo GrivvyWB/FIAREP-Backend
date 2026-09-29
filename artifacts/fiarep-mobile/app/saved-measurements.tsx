@@ -3,7 +3,7 @@ import { View, Text, Pressable, ScrollView, Image, ActivityIndicator, Alert, Mod
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
-import { getCurrentActor, listAttachableJobs, attachMeasurementToJob, type AttachableJob } from '../lib/store';
+import { listAttachableJobs, attachMeasurementToJob, listSupervisorOptions, type AttachableJob, type MeasurementAudience, type SupervisorOption } from '../lib/store';
 import { ACCENT } from '../lib/ui';
 
 // Every measurement and material list saved from the Measurement screen, with
@@ -21,10 +21,10 @@ export default function SavedMeasurements() {
   const [items, setItems] = useState<Rec[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [mineOnly, setMineOnly] = useState(true);
-  const [me, setMe] = useState('');
   const [open, setOpen] = useState<string | null>(null);
   const [picker, setPicker] = useState<{ measurementId: string; jobs: AttachableJob[] } | null>(null);
+  const [job, setJob] = useState<AttachableJob | null>(null);
+  const [supervisors, setSupervisors] = useState<SupervisorOption[] | null>(null);
   const [attaching, setAttaching] = useState(false);
 
   async function openPicker(measurementId: string) {
@@ -33,20 +33,25 @@ export default function SavedMeasurements() {
       Alert.alert('No jobs to attach to', 'You have no open complaint or inspection assigned to you on this phone. Sync first, or ask your supervisor to send you the job.');
       return;
     }
+    setJob(null); setSupervisors(null);
     setPicker({ measurementId, jobs });
   }
 
-  async function attach(job: AttachableJob) {
-    if (!picker) return;
+  async function send(audience: MeasurementAudience, targetStaffId: string = '') {
+    if (!picker || !job) return;
     setAttaching(true);
     try {
-      const r = await attachMeasurementToJob(job.entity, job.id, picker.measurementId);
-      setPicker(null);
-      Alert.alert(r?.alreadyAttached ? 'Already attached' : 'Attached',
-        r?.alreadyAttached ? 'This measurement is already on that job.' : `Added to ${job.title}. Your supervisor has been alerted${r?.notified ? ` (${r.notified})` : ''}.`);
+      const r = await attachMeasurementToJob(job.entity, job.id, picker.measurementId, audience, targetStaffId);
+      setPicker(null); setJob(null);
+      const who = audience === 'all' ? 'All supervisors and management' : audience === 'staff' ? 'That supervisor' : "The development's supervisors";
+      Alert.alert('Sent', `Added to ${job.title}. ${who} ${r?.notified === 1 ? 'has' : 'have'} been alerted${r?.notified ? ` (${r.notified})` : ''}.`);
     } catch (e: any) {
-      Alert.alert('Could not attach', e?.data?.error || e?.message || 'Please try again.');
+      Alert.alert('Could not send', e?.data?.error || e?.message || 'Please try again.');
     } finally { setAttaching(false); }
+  }
+
+  async function showSupervisors() {
+    try { setSupervisors(await listSupervisorOptions()); } catch { setSupervisors([]); }
   }
 
   useFocusEffect(useCallback(() => {
@@ -54,8 +59,6 @@ export default function SavedMeasurements() {
     (async () => {
       setLoading(true); setError('');
       try {
-        const actor = await getCurrentActor();
-        if (active) setMe(actor.id || '');
         const rows = await customFetch<Rec[]>('/api/v1/measurements', { responseType: 'json' });
         if (!active) return;
         const list = (Array.isArray(rows) ? rows : []).filter((r) => r && r.state);
@@ -68,7 +71,7 @@ export default function SavedMeasurements() {
     return () => { active = false; };
   }, []));
 
-  const shown = items.filter((r) => !mineOnly || !me || r.state?.byId === me);
+  const shown = items;
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F7F6' }} edges={['top']}>
@@ -77,13 +80,7 @@ export default function SavedMeasurements() {
         <Text style={{ flex: 1, textAlign: 'center', fontWeight: '700', fontSize: 18, marginRight: 40 }}>Saved measurements</Text>
       </View>
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 48 }}>
-        <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
-          {[['Mine', true], ['Everyone', false]].map(([label, value]) => (
-            <Pressable key={String(label)} onPress={() => setMineOnly(value as boolean)} style={{ flex: 1, borderRadius: 12, borderWidth: 1.5, borderColor: ACCENT, backgroundColor: mineOnly === value ? ACCENT : '#fff', paddingVertical: 10, alignItems: 'center' }}>
-              <Text style={{ color: mineOnly === value ? '#fff' : ACCENT, fontWeight: '700' }}>{String(label)}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <Text style={{ color: '#4A5560', marginBottom: 12, fontSize: 13 }}>Every measurement saved by your team, newest first. Open one to see the picture and send it to a supervisor.</Text>
         {loading && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator color={ACCENT} /><Text style={{ color: '#4A5560' }}>Loading…</Text></View>}
         {!!error && <Text style={{ color: '#c00' }}>{error}</Text>}
         {!loading && !error && shown.length === 0 && (
@@ -132,9 +129,9 @@ export default function SavedMeasurements() {
                     </View>
                   )}
                   <Pressable onPress={() => openPicker(r.id)} style={{ borderRadius: 12, backgroundColor: ACCENT, paddingVertical: 12, alignItems: 'center', marginTop: 10 }}>
-                    <Text style={{ color: '#fff', fontWeight: '700' }}>Attach to a complaint / inspection</Text>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Send to a supervisor (attach to a job)</Text>
                   </Pressable>
-                  <Text style={{ color: '#8A928C', fontSize: 12, marginTop: 6, textAlign: 'center' }}>Adds this picture and measurement to the job and alerts your supervisor.</Text>
+                  <Text style={{ color: '#8A928C', fontSize: 12, marginTop: 6, textAlign: 'center' }}>Adds this picture and measurement to the job and alerts the supervisors you choose.</Text>
                 </View>
               )}
             </Pressable>
@@ -148,14 +145,43 @@ export default function SavedMeasurements() {
             <Text style={{ flex: 1, textAlign: 'center', fontWeight: '700', fontSize: 18, marginRight: 50 }}>Attach to…</Text>
           </View>
           <ScrollView contentContainerStyle={{ padding: 16 }}>
-            <Text style={{ color: '#4A5560', marginBottom: 12 }}>Pick the complaint or inspection this measurement belongs to.</Text>
-            {(picker?.jobs || []).map((job) => (
-              <Pressable key={job.entity + job.id} disabled={attaching} onPress={() => attach(job)} style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E4E9E6', padding: 14, marginBottom: 10, opacity: attaching ? 0.6 : 1 }}>
-                <Text style={{ fontSize: 11, color: '#8A928C', marginBottom: 2 }}>{job.entity === 'resident-reports' ? 'COMPLAINT' : 'INSPECTION'}</Text>
-                <Text style={{ fontWeight: '700', fontSize: 15 }}>{job.title}</Text>
-                {!!job.subtitle && <Text style={{ color: '#4A5560', marginTop: 2 }} numberOfLines={2}>{job.subtitle}</Text>}
+            {!job && (<>
+              <Text style={{ color: '#4A5560', marginBottom: 12 }}>Step 1 — pick the complaint or inspection this measurement belongs to.</Text>
+              {(picker?.jobs || []).map((j) => (
+                <Pressable key={j.entity + j.id} onPress={() => setJob(j)} style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E4E9E6', padding: 14, marginBottom: 10 }}>
+                  <Text style={{ fontSize: 11, color: '#8A928C', marginBottom: 2 }}>{j.entity === 'resident-reports' ? 'COMPLAINT' : 'INSPECTION'}</Text>
+                  <Text style={{ fontWeight: '700', fontSize: 15 }}>{j.title}</Text>
+                  {!!j.subtitle && <Text style={{ color: '#4A5560', marginTop: 2 }} numberOfLines={2}>{j.subtitle}</Text>}
+                </Pressable>
+              ))}
+            </>)}
+            {job && !supervisors && (<>
+              <Pressable onPress={() => setJob(null)} hitSlop={8}><Text style={{ color: ACCENT, fontWeight: '600', marginBottom: 8 }}>‹ {job.title}</Text></Pressable>
+              <Text style={{ color: '#4A5560', marginBottom: 12 }}>Step 2 — who should see the picture and measurement?</Text>
+              <Pressable disabled={attaching} onPress={() => send('development')} style={{ backgroundColor: ACCENT, borderRadius: 14, padding: 16, marginBottom: 10, opacity: attaching ? 0.6 : 1 }}>
+                <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>This development's supervisors</Text>
+                <Text style={{ color: '#E4F2EA', marginTop: 2, fontSize: 13 }}>Building management for the site and whoever sent you the job.</Text>
               </Pressable>
-            ))}
+              <Pressable disabled={attaching} onPress={showSupervisors} style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1.5, borderColor: ACCENT, padding: 16, marginBottom: 10, opacity: attaching ? 0.6 : 1 }}>
+                <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 15 }}>Just my supervisor…</Text>
+                <Text style={{ color: '#4A5560', marginTop: 2, fontSize: 13 }}>Pick one supervisor or manager to send it to.</Text>
+              </Pressable>
+              <Pressable disabled={attaching} onPress={() => Alert.alert('Send to everyone?', 'All supervisors and management in the company will be alerted and can open the picture. Use this for an emergency.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Send to all', style: 'destructive', onPress: () => send('all') }])} style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1.5, borderColor: '#B42318', padding: 16, marginBottom: 10, opacity: attaching ? 0.6 : 1 }}>
+                <Text style={{ color: '#B42318', fontWeight: '700', fontSize: 15 }}>EMERGENCY — all supervisors & management</Text>
+                <Text style={{ color: '#4A5560', marginTop: 2, fontSize: 13 }}>Everyone in supervision and management sees it right away.</Text>
+              </Pressable>
+            </>)}
+            {job && supervisors && (<>
+              <Pressable onPress={() => setSupervisors(null)} hitSlop={8}><Text style={{ color: ACCENT, fontWeight: '600', marginBottom: 8 }}>‹ Who should see it</Text></Pressable>
+              <Text style={{ color: '#4A5560', marginBottom: 12 }}>Pick the supervisor or manager.</Text>
+              {supervisors.length === 0 && <Text style={{ color: '#8A928C' }}>No supervisors found.</Text>}
+              {supervisors.map((sv) => (
+                <Pressable key={sv.id} disabled={attaching} onPress={() => send('staff', sv.id)} style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E4E9E6', padding: 14, marginBottom: 8, opacity: attaching ? 0.6 : 1 }}>
+                  <Text style={{ fontWeight: '700', fontSize: 15 }}>{sv.name}</Text>
+                  <Text style={{ color: '#4A5560', fontSize: 13 }}>{[sv.position, (sv.developments || []).slice(0, 3).join(', ')].filter(Boolean).join(' \u00b7 ')}</Text>
+                </Pressable>
+              ))}
+            </>)}
           </ScrollView>
         </SafeAreaView>
       </Modal>

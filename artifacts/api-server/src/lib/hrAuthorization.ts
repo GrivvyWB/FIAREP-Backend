@@ -141,6 +141,8 @@ async function complaintVisibility(
   if (isSuperintendentE(actor) || isBoroughDirector(actor) || UPPER_MANAGEMENT_TITLES.has(title)) return null;
   if (row.createdBy === actor.id) return true;
   if (SENT_TO_FIELDS.some((field) => row.state[field] === actor.id)) return true;
+  // A measurement / picture from the job was sent to this person.
+  if (Array.isArray(row.state["measurementSharedWith"]) && (row.state["measurementSharedWith"] as unknown[]).includes(actor.id)) return true;
   if (row.entity === "resident-reports" && row.id && (await handledComplaintIds(actor)).has(row.id)) return true;
   const development = normalizeDevelopment(row.development || String(row.state["development"] || ""));
   if (!development) return false;

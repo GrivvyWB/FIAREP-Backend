@@ -1415,37 +1415,57 @@ router.post("/v1/:entity/:id/attach-measurement", async (req, res, next) => {
     attachedByStaffId: actor.id,
     attachedAt: new Date().toISOString(),
   };
-  const existing = Array.isArray(state["measurements"]) ? (state["measurements"] as unknown[]) : [];
-  if (existing.some((x) => (x as Record<string, unknown>)?.["measurementId"] === measurementId)) {
-    res.json({ ok: true, alreadyAttached: true });
-    return;
-  }
-  await db.update(entityRecords)
-    .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ measurements: [...existing, attached] })}::jsonb`, updatedAt: new Date() })
-    .where(and(eq(entityRecords.id, record.id), eq(entityRecords.tenantId, actor.tenantId)));
-  // Tell the supervisor / management this job belongs to.
+  // Who should see it: "all" = every supervisor and manager in the company
+  // (an emergency), "development" = this development's supervisors and whoever
+  // sent the job (the default), "staff" = one chosen supervisor / manager.
+  const audience = ["all", "development", "staff"].includes(String(req.body?.["audience"] || "")) ? String(req.body["audience"]) : "development";
+  const targetStaffId = typeof req.body?.["targetStaffId"] === "string" ? req.body["targetStaffId"].trim() : "";
   const development = record.development || String(state["development"] || "");
+  const recipients = new Set<string>();
+  if (audience === "staff") {
+    const [target] = await db.select({ id: staffAccounts.id, role: staffAccounts.role, position: staffAccounts.position }).from(staffAccounts).where(and(
+      eq(staffAccounts.id, targetStaffId), eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"))).limit(1);
+    const ok = !!target && !["human_resources", "procurement", "vendor", "resident"].includes(target.role) &&
+      (/supervisor|superintendent|manager|director/i.test(String(target.position || "")) || ["management", "administrator"].includes(target.role));
+    if (!ok) { res.status(400).json({ error: "Pick a supervisor or manager from the list" }); return; }
+    recipients.add(target.id);
+  } else if (audience === "all") {
+    const rows = await db.select({ id: staffAccounts.id, role: staffAccounts.role, position: staffAccounts.position }).from(staffAccounts).where(and(
+      eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved")));
+    rows.filter((row) => !["human_resources", "procurement", "vendor", "resident", "worker", "inspector", "emergency"].includes(row.role) &&
+        !/\bhr\b|human resources|procurement|payroll/i.test(String(row.position || "")) && String(row.position || "").trim().toLowerCase() !== "director")
+      .forEach((row) => recipients.add(row.id));
+  } else {
+    ["assignedByStaffId", "cpmSupervisorId", "dispatchingSupervisorId", "directedToStaffId", "approvedByStaffId"]
+      .forEach((field) => { if (typeof state[field] === "string" && state[field]) recipients.add(state[field] as string); });
+    if (entity === "resident-reports") {
+      (await routedComplaintRecipientIds(actor.tenantId, development, state)).forEach((id) => recipients.add(id));
+    } else {
+      const supervisors = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+        eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"), eq(staffAccounts.position, "Supervisor Inspector")));
+      supervisors.forEach((row) => recipients.add(row.id));
+      (await residentReportRecipientIds(actor.tenantId, development)).forEach((id) => recipients.add(id));
+    }
+  }
+  recipients.delete(actor.id);
+  const existing = Array.isArray(state["measurements"]) ? (state["measurements"] as unknown[]) : [];
+  const already = existing.some((x) => (x as Record<string, unknown>)?.["measurementId"] === measurementId);
+  // Everyone it was sent to can open this record (and the picture) even if
+  // the job itself was never sent to them.
+  const sharedWith = new Set<string>(Array.isArray(state["measurementSharedWith"]) ? (state["measurementSharedWith"] as string[]) : []);
+  recipients.forEach((id) => sharedWith.add(id));
+  await db.update(entityRecords)
+    .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ measurements: already ? existing : [...existing, { ...attached, audience }], measurementSharedWith: [...sharedWith] })}::jsonb`, updatedAt: new Date() })
+    .where(and(eq(entityRecords.id, record.id), eq(entityRecords.tenantId, actor.tenantId)));
   const ref = entity === "resident-reports"
     ? [String(state["complaintNo"] || ""), String(state["address"] || "")].filter(Boolean).join(" \u00b7 ")
     : [String(state["violationNo"] || ""), String(state["building"] || "")].filter(Boolean).join(" \u00b7 ");
   const sizeText = attached.lengthFt && attached.widthFt ? ` ${attached.lengthFt} \u00d7 ${attached.widthFt} ft` : "";
-  const detail = `${attached.material}${sizeText}${attached.areaSqFt ? ` (${attached.areaSqFt} sq ft)` : ""}${ref ? ` \u00b7 ${ref}` : ""} \u2014 by ${actor.name}`;
-  const recipients = new Set<string>();
-  ["assignedByStaffId", "cpmSupervisorId", "dispatchingSupervisorId", "directedToStaffId", "approvedByStaffId"]
-    .forEach((field) => { if (typeof state[field] === "string" && state[field]) recipients.add(state[field] as string); });
-  if (entity === "resident-reports") {
-    (await routedComplaintRecipientIds(actor.tenantId, development, state)).forEach((id) => recipients.add(id));
-  } else {
-    const supervisors = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
-      eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"), eq(staffAccounts.position, "Supervisor Inspector")));
-    supervisors.forEach((row) => recipients.add(row.id));
-    (await residentReportRecipientIds(actor.tenantId, development)).forEach((id) => recipients.add(id));
-  }
-  recipients.delete(actor.id);
+  const detail = `${audience === "all" ? "EMERGENCY \u00b7 " : ""}${attached.material}${sizeText}${attached.areaSqFt ? ` (${attached.areaSqFt} sq ft)` : ""}${ref ? ` \u00b7 ${ref}` : ""} \u2014 by ${actor.name}`;
   const message = entity === "resident-reports" ? "Measurement added to complaint" : "Measurement added to inspection";
   for (const target of recipients) await notify(actor, target, message, detail, record.id);
   await audit(actor, `${entity}.measurement-attached`, detail, record.id);
-  res.json({ ok: true, notified: recipients.size });
+  res.json({ ok: true, notified: recipients.size, alreadyAttached: already });
 });
 
 router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
