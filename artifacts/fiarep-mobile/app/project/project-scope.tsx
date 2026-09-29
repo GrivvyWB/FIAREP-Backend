@@ -165,6 +165,7 @@ export default function ProjectScope() {
                   <View style={{ flexDirection: 'row', gap: 6 }}>
                     <View style={{ flex: 1 }}><Text style={ui.label}>Qty</Text><TextInput style={ui.input} value={l.quantity} onChangeText={(t) => setLine(di, si, li, 'quantity', t)} placeholder="0" keyboardType="numeric" /></View>
                     <View style={{ flex: 1 }}><Text style={ui.label}>Unit</Text><TextInput style={ui.input} value={l.unit} onChangeText={(t) => setLine(di, si, li, 'unit', t)} placeholder="Each" /></View>
+                    <View style={{ flex: 1 }}><Text style={ui.label}>Sq ft</Text><TextInput style={ui.input} value={l.sqFt || ''} onChangeText={(t) => setLine(di, si, li, 'sqFt', t)} placeholder="Area" keyboardType="numeric" /></View>
                     <View style={{ flex: 1.2 }}><Text style={ui.label}>Unit Cost</Text><TextInput style={ui.input} value={l.unitCost} onChangeText={(t) => setLine(di, si, li, 'unitCost', t)} placeholder="$" keyboardType="numeric" /></View>
                   </View>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

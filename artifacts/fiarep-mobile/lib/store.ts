@@ -3231,7 +3231,7 @@ async function buildScopePackage(localId: string, r: ProcurementRequest, serverI
         lines: (Array.isArray(sec?.lines) ? sec.lines : []).filter((l: any) => text(l?.description)).map((l: any) => {
           const quantity = text(l?.quantity); const unitCost = text(l?.unitCost);
           total += num(quantity || '1') * num(unitCost);
-          return { description: text(l?.description), quantity, unit: text(l?.unit), unitCost };
+          return { description: text(l?.description), quantity, unit: text(l?.unit), sqFt: text(l?.sqFt), unitCost };
         }),
       })).filter((sec: any) => sec.lines.length),
     })).filter((d: any) => d.sections.length);

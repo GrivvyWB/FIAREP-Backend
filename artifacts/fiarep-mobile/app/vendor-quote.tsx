@@ -52,7 +52,7 @@ export default function VendorQuote() {
             sections: (d.sections || []).map((sec: any, si: number) => ({
               id: 'd' + di + 's' + si, code: sec.code,
               lines: (sec.lines || []).map((l: any, li: number) => ({
-                id: 'd' + di + 's' + si + 'l' + li, description: l.description || '', quantity: l.quantity || '', unit: l.unit || '', unitCost: '',
+                id: 'd' + di + 's' + si + 'l' + li, description: l.description || '', quantity: l.quantity || '', unit: l.unit || '', sqFt: l.sqFt || '', unitCost: '',
               })),
             })),
           })),
@@ -152,6 +152,12 @@ export default function VendorQuote() {
                       {locked ? <Text style={{ paddingVertical: 8, fontWeight: '600' }}>{l.unit || '—'}</Text>
                         : <TextInput style={ui.input} value={l.unit} onChangeText={(t) => setField(di, si, li, 'unit', t)} placeholder="Each" />}
                     </View>
+                    {!!l.sqFt && (
+                      <View style={{ flex: 1 }}>
+                        <Text style={ui.label}>Sq ft</Text>
+                        <Text style={{ paddingVertical: 8, fontWeight: '600' }}>{l.sqFt}</Text>
+                      </View>
+                    )}
                     <View style={{ flex: 1.3 }}>
                       <Text style={ui.label}>Your Unit Cost</Text>
                       <TextInput style={ui.input} value={l.unitCost} onChangeText={(t) => setField(di, si, li, 'unitCost', t)} placeholder="$" keyboardType="numeric" />

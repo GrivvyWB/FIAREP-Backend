@@ -8,6 +8,8 @@ export type ScopeLine = {
   description: string;
   quantity: string;
   unit: string;
+  /** Area to be replaced/repaired, in square feet — so the vendor knows the size of the job. */
+  sqFt?: string;
   unitCost: string;
 };
 
@@ -44,7 +46,7 @@ export const UNIT_OPTIONS = ['Each', 'L.F.', 'S.F.', 'C.Y.', 'L.S.', 'D.U.'];
 let _n = 0;
 const sid = () => 'vs' + (Date.now().toString(36)) + (_n++).toString(36);
 
-const line = (): ScopeLine => ({ id: sid(), description: '', quantity: '', unit: '', unitCost: '' });
+const line = (): ScopeLine => ({ id: sid(), description: '', quantity: '', unit: '', sqFt: '', unitCost: '' });
 const section = (code: string): ScopeSection => ({ id: sid(), code, lines: [line()] });
 const division = (title: string, sectionCodes: string[]): ScopeDivision => ({
   id: sid(), title, sections: sectionCodes.map(section),

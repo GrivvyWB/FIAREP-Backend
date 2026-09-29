@@ -304,7 +304,7 @@ export default function ScopeReview() {
                     <View key={l.id} style={{ borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 4 }}>
                       <Text>{l.description || '(no description)'}</Text>
                       <View style={ui.line}>
-                        <Text style={ui.listSub}>{(l.quantity || '—')} {l.unit || ''} @ {l.unitCost ? money(parseNum(l.unitCost)) : '—'}</Text>
+                        <Text style={ui.listSub}>{(l.quantity || '—')} {l.unit || ''}{l.sqFt ? ' · ' + l.sqFt + ' sq ft' : ''} @ {l.unitCost ? money(parseNum(l.unitCost)) : '—'}</Text>
                         <Text style={{ fontWeight: '600' }}>{money(lineAmount(l))}</Text>
                       </View>
                     </View>

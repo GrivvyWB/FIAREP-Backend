@@ -3,7 +3,7 @@
 // vendors get the same lines — section codes, descriptions, quantities, units —
 // with the prices removed, to enter their own.
 
-type Line = { description: string; quantity: string; unit: string; unitCost?: string };
+type Line = { description: string; quantity: string; unit: string; sqFt?: string; unitCost?: string };
 type Section = { code: string; lines: Line[] };
 type Division = { title: string; sections: Section[] };
 export type ScopeSnapshot = {
@@ -33,12 +33,13 @@ export function snapshotScope(raw: unknown, withPrices: boolean): ScopeSnapshot 
         if (!description) continue;
         const quantity = text(l?.quantity);
         const unit = text(l?.unit);
+        const sqFt = text(l?.sqFt);
         if (withPrices) {
           const unitCost = text(l?.unitCost);
           total += num(quantity || "1") * num(unitCost);
-          lines.push({ description, quantity, unit, unitCost });
+          lines.push({ description, quantity, unit, sqFt, unitCost });
         } else {
-          lines.push({ description, quantity, unit });
+          lines.push({ description, quantity, unit, sqFt });
         }
       }
       if (lines.length) sections.push({ code: text(s?.code), lines });

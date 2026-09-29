@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 // The CPM's CSI Scope of Work (division → section code → lines). Staff see the
 // CPM's prices; vendors see the same lines without prices.
 
-type Line = { description: string; quantity?: string; unit?: string; unitCost?: string };
+type Line = { description: string; quantity?: string; unit?: string; sqFt?: string; unitCost?: string };
 type Scope = {
   header?: Record<string, string>;
   divisions?: Array<{ title: string; sections: Array<{ code: string; lines: Line[] }> }>;
@@ -48,6 +48,7 @@ export function ScopeLines({ scope, showPrices }: { scope?: Scope | null; showPr
                     <th className="px-3 py-1 font-medium">Description</th>
                     <th className="px-3 py-1 font-medium">Qty</th>
                     <th className="px-3 py-1 font-medium">Unit</th>
+                    <th className="px-3 py-1 font-medium">Sq ft</th>
                     {showPrices && <th className="px-3 py-1 text-right font-medium">Unit cost</th>}
                     {showPrices && <th className="px-3 py-1 text-right font-medium">Amount</th>}
                   </tr>
@@ -58,6 +59,7 @@ export function ScopeLines({ scope, showPrices }: { scope?: Scope | null; showPr
                       <td className="px-3 py-1.5">{l.description}</td>
                       <td className="px-3 py-1.5">{l.quantity || ""}</td>
                       <td className="px-3 py-1.5">{l.unit || ""}</td>
+                      <td className="px-3 py-1.5">{l.sqFt ? `${l.sqFt} sq ft` : ""}</td>
                       {showPrices && <td className="px-3 py-1.5 text-right">{l.unitCost ? money(num(l.unitCost)) : ""}</td>}
                       {showPrices && <td className="px-3 py-1.5 text-right">{l.unitCost ? money(num(l.quantity || "1") * num(l.unitCost)) : ""}</td>}
                     </tr>
