@@ -1,3 +1,5 @@
+import { hasModuleAccess, type OrganizationModules, type StaffModule } from "./access-policy";
+import type { Staff } from "@workspace/api-client-react";
 // Turns raw server messages like "resident reports work_approved" into
 // plain words ("Complaint work approved"). Messages that are already
 // written for people pass through unchanged.
@@ -53,21 +55,48 @@ export function notificationTitle(message: string | null | undefined): string {
 }
 
 
-/** Where tapping an alert should take the person. */
-export function notificationHref(message: string, reportId: string, opts?: { inspector?: boolean }): string {
+
+/** Where tapping an alert should take the person.
+ * Each kind of alert has pages it can open, best first; the first one this
+ * person actually has is used, so an alert always opens somewhere useful
+ * (a CPM Supervisor's inspection alert opens Scope Review, not a page they
+ * are bounced off). Falls back to the Inbox. */
+export function notificationHref(
+  message: string,
+  reportId: string,
+  opts?: { inspector?: boolean; staff?: Staff | null; modules?: OrganizationModules | null },
+): string {
   const id = encodeURIComponent(reportId);
   const m = message || "";
-  if (/change work order|^change orders /i.test(m)) return "/change-orders";
-  if (/^Measurement added to inspection/i.test(m)) return opts?.inspector ? "/my-inspections" : "/inspection-approvals";
-  if (/^Measurement added/i.test(m)) return `/reports?id=${id}`;
-  if (/^Scope approved for Procurement|Procurement returned|bid/i.test(m)) return "/procurement";
-  if (/^Scope submitted|^Scope /i.test(m)) return "/scope-review";
-  // Inspections logged by inspectors are approved / routed on Inspection Approvals.
-  // Inspection alerts: the inspector opens his own read-only copy (My
-  // Inspections); supervisors / management open Inspection Approvals.
-  if (/inspection logged|awaiting review|approved inspection|^inspection |^building violations/i.test(m)) {
-    return opts?.inspector ? "/my-inspections" : "/inspection-approvals";
+  const inspector = opts?.inspector ?? (opts?.staff?.role === "inspector" && opts?.staff?.position === "Inspector");
+  type Candidate = { module: StaffModule; href: string };
+  let candidates: Candidate[];
+  if (/change work order|^change orders /i.test(m)) {
+    candidates = [{ module: "change-orders", href: "/change-orders" }];
+  } else if (/^Measurement added to inspection/i.test(m) || /inspection logged|awaiting review|approved inspection|^inspection |^building violations|violation/i.test(m)) {
+    // Inspections / violations: the inspector's own copy, the approver's
+    // page, the CPM Supervisor's review page, the violations list, or the
+    // complaint it came from.
+    candidates = inspector
+      ? [{ module: "my-inspections", href: "/my-inspections" }, { module: "violations", href: "/violations" }]
+      : [
+          { module: "inspection-approvals", href: "/inspection-approvals" },
+          { module: "scope-review", href: "/scope-review" },
+          { module: "violations", href: `/violations?id=${id}` },
+          { module: "inspections", href: `/inspections?id=${id}` },
+          { module: "reports", href: `/reports?id=${id}` },
+        ];
+  } else if (/^Measurement added/i.test(m)) {
+    candidates = [{ module: "reports", href: `/reports?id=${id}` }];
+  } else if (/^Scope approved for Procurement|Procurement returned|bid/i.test(m)) {
+    candidates = [{ module: "procurement", href: "/procurement" }, { module: "scope-review", href: "/scope-review" }, { module: "scope-writing", href: "/scope-writing" }];
+  } else if (/^Scope submitted|^Scope /i.test(m)) {
+    candidates = [{ module: "scope-review", href: "/scope-review" }, { module: "scope-writing", href: "/scope-writing" }, { module: "procurement", href: "/procurement" }];
+  } else {
+    candidates = [{ module: "reports", href: `/reports?id=${id}` }, { module: "my-jobs", href: "/my-jobs" }];
   }
-  if (/violation/i.test(m)) return `/inspections?id=${id}`;
-  return `/reports?id=${id}`;
+  // Without a staff record (older callers) keep the best page.
+  if (!opts?.staff) return candidates[0]!.href;
+  const allowed = candidates.find((c) => hasModuleAccess(opts.staff, c.module, opts.modules));
+  return allowed ? allowed.href : "/notifications";
 }
