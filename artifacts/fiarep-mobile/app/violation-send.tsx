@@ -145,7 +145,13 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
 
   async function submit() {
     if (sending) return; // block double-tap while a send is in flight
-    if (!complaintMode && !violationNumber.trim()) { Alert.alert('Missing', 'Enter a violation number.'); return; }
+    // No violation number on hand (a complaint being sent on, or a fresh
+    // finding): give it one — V-<five digits>. Anything typed is kept as is.
+    let violationNo = violationNumber.trim().toUpperCase();
+    if (!complaintMode && !violationNo) {
+      violationNo = 'V-' + String(10000 + Math.floor(Math.random() * 90000));
+      setViolationNumber(violationNo);
+    }
     if (!address.trim()) { Alert.alert('Missing', 'Enter an address.'); return; }
     if (!sentTo.trim() || !sentStaffId.trim()) {
       Alert.alert('Missing', complaintMode ? 'Choose an approved staff member.' : (violationTarget === 'trade' ? 'Choose a trade supervisor.' : violationTarget === 'supervisor-inspector' ? 'Choose a Supervisor Inspector.' : violationTarget === 'worker' ? 'Choose a worker.' : violationTarget === 'cpm' ? 'Choose a CPM.' : violationTarget === 'cpm-supervisor' ? 'Choose a CPM Supervisor.' : 'Choose an approved Inspector.'));
@@ -179,11 +185,11 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
             development: development || undefined,
             address: address.trim() + (unit.trim() ? ' Unit ' + unit.trim() : ''),
             instructions: [
-              violationNumber.trim() ? 'Violation #: ' + violationNumber.trim() : '',
+              violationNo ? 'Violation #: ' + violationNo : '',
               preComplaint ? 'Complaint #: ' + preComplaint : '',
               note.trim() ? 'Note: ' + note.trim() : '',
             ].filter(Boolean).join('\n'),
-            sourceInspectionRef: violationNumber.trim() || preComplaint || undefined,
+            sourceInspectionRef: violationNo || preComplaint || undefined,
           });
       // Keep the violation details so you can immediately send the same job to
       // another person (e.g. a plumber to meet the inspector). Only clear the
@@ -214,12 +220,12 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
         </>
       ) : (
         <>
-          <Text style={ui.label}>Violation number</Text>
+          <Text style={ui.label}>Violation number (optional — one is created if left blank)</Text>
           <TextInput
             style={ui.input}
             value={violationNumber}
             onChangeText={setViolationNumber}
-            placeholder="e.g. V-104882"
+            placeholder="Leave blank to auto-number, or enter the DOB / HPD number"
             autoCapitalize="characters"
           />
           {!!preComplaint && (
