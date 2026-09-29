@@ -38,8 +38,13 @@ export default function Platform() {
       {/* Top bar: logo left, Enter Platform / Staff Login top right */}
       <header className="sticky top-0 z-20 w-full border-b border-border/60 bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3 lg:px-8">
-          <div className="font-bold text-2xl tracking-tight">
-            FIA<span className="text-[#F5B301]">REP</span>
+          <div className="min-w-0">
+            <div className="font-bold text-2xl tracking-tight leading-none">
+              FIA<span className="text-[#F5B301]">REP</span>
+            </div>
+            <div className="mt-1 text-[11px] sm:text-xs font-medium text-muted-foreground leading-tight" data-testid="text-brand-tagline">
+              Field Infrastructure, Asset Reporting &amp; Evaluation Performance
+            </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <Link href="/access" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 sm:px-6 sm:py-3 text-sm sm:text-base font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-primary/25" data-testid="link-platform-access">
