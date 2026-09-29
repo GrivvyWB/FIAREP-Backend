@@ -5,6 +5,8 @@
 import { customFetch } from '@workspace/api-client-react';
 import { db } from './store';
 
+export type VendorPhoto = { dataUrl: string; capturedAt: string; lat?: number; lng?: number; accuracy?: number };
+
 export type VendorChangeOrderDraft = {
   id: string;               // local id; also sent as clientId so a retry never duplicates
   trackingId: string;
@@ -14,7 +16,7 @@ export type VendorChangeOrderDraft = {
   measurements: string;
   notes: string;
   cost: number;
-  photos: string[];         // data URLs
+  photos: VendorPhoto[];    // data URLs stamped with when / where they were taken
   createdAt: string;
   attempts: number;
   lastError?: string;

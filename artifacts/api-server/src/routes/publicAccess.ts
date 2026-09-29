@@ -26,6 +26,7 @@ import { rateLimit } from "../lib/rateLimit";
 import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
 import { UpdateResidentReportPhotoBody } from "@workspace/api-zod";
 import { audit } from "../lib/audit";
+import { verifyVendorChangeOrder, type PhotoStamp } from "../lib/vendorChangeOrderVerification";
 
 const router: IRouter = Router();
 router.use("/v1/public", rateLimit("public-access", 60));
@@ -761,8 +762,21 @@ router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("ven
   const measurements = String(body.measurements ?? "").trim().slice(0, 2000);
   const notes = String(body.notes ?? "").trim().slice(0, 4000);
   const cost = Number(body.cost);
-  const photos = (Array.isArray(body.photos) ? body.photos : []).filter((p: unknown) =>
-    typeof p === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(p) && p.length <= VENDOR_CO_PHOTO_CHARS).slice(0, VENDOR_CO_PHOTO_MAX) as string[];
+  const rawPhotos = (Array.isArray(body.photos) ? body.photos : []) as unknown[];
+  // Each photo may come with the stamp the phone put on it at capture time.
+  const photoItems = rawPhotos.map((p) => {
+    if (typeof p === "string") return { dataUrl: p, stamp: {} as PhotoStamp };
+    const o = (p && typeof p === "object" ? p : {}) as Record<string, unknown>;
+    const stamp: PhotoStamp = {
+      capturedAt: typeof o["capturedAt"] === "string" ? o["capturedAt"] : undefined,
+      lat: typeof o["lat"] === "number" ? o["lat"] : undefined,
+      lng: typeof o["lng"] === "number" ? o["lng"] : undefined,
+      accuracy: typeof o["accuracy"] === "number" ? o["accuracy"] : undefined,
+    };
+    return { dataUrl: String(o["dataUrl"] || ""), stamp };
+  }).filter((p) => /^data:image\/(jpeg|png|webp);base64,/.test(p.dataUrl) && p.dataUrl.length <= VENDOR_CO_PHOTO_CHARS).slice(0, VENDOR_CO_PHOTO_MAX);
+  const photos = photoItems.map((p) => p.dataUrl);
+  const photoStamps = photoItems.map((p) => ({ capturedAt: p.stamp.capturedAt || "", lat: p.stamp.lat, lng: p.stamp.lng, accuracy: p.stamp.accuracy }));
   const scope = await releasedScope(req.params["trackingId"]!);
   if (!scope || !vendorName || normalize(scope.state["status"]) !== "awarded" ||
       normalize(scope.state["vendor"]) !== normalize(vendorName)) {
@@ -804,7 +818,7 @@ router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("ven
     targetPosition: "CPM Supervisor", targetName: supervisorName, targetStaffId: supervisorId, cpmSupervisorId: supervisorId, cpmId,
     assignedStaffId: cpmId || supervisorId,
     isVendorCO: true, vendor: vendorName, createdByRole: "vendor", createdByName: vendorName,
-    description, vendorReason, measurements, notes, cost: Number.isFinite(cost) && cost > 0 ? Math.round(cost * 100) / 100 : 0, photos,
+    description, vendorReason, measurements, notes, cost: Number.isFinite(cost) && cost > 0 ? Math.round(cost * 100) / 100 : 0, photos, photoStamps,
     status: "submitted", reason: "", respondedByName: "", respondedAt: "", createdAt: clientCreatedAt || now, sentAt: now,
     receivedBy, receivedAt: targets.length ? now : "",
   };
@@ -819,6 +833,13 @@ router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("ven
     if (n) void deliverPushNotification(n).catch(() => undefined);
   }
   res.status(201).json(vendorChangeOrderView(created!));
+  // Quietly verify where and what the photos show; only the supervisors
+  // handling this job hear about anything doubtful.
+  void verifyVendorChangeOrder({
+    tenantId: scope.tenantId, changeOrderId: id, address: String(scope.state["address"] || ""),
+    scope: String(scope.state["scope"] || scope.state["scopeDescription"] || ""), description, reason: vendorReason,
+    photos, stamps: photoStamps, supervisorIds: targets, vendorName, ref,
+  }).catch(() => undefined);
 });
 
 export default router;

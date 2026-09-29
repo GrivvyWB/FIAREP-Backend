@@ -92,11 +92,37 @@ export default function ChangeOrders() {
         {!!s.measurements && <p className="text-sm"><span className="font-semibold">Measurements: </span>{String(s.measurements)}</p>}
         {!!s.notes && <p className="text-sm"><span className="font-semibold">Notes: </span>{String(s.notes)}</p>}
         {!s.isWorkerCO && <p className="text-sm font-semibold">Cost: {money(s.cost)}{s.isVendorCO === true && !Number(s.cost) ? " (vendor gave no cost)" : ""}</p>}
+        {s.isVendorCO === true && s.verification && typeof s.verification === "object" && (() => {
+          const v = s.verification as { needsReview?: boolean; summary?: string; checkedAt?: string; content?: { observation?: string; skipped?: string } };
+          return v.needsReview ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900" data-testid="co-verify-warning">
+              <p className="font-semibold">⚠ Please verify the photo location before approving</p>
+              <p className="mt-1">{v.summary}</p>
+              {!!v.content?.observation && <p className="mt-1 text-amber-800">Photo review: {v.content.observation}</p>}
+              <p className="mt-1 text-xs text-amber-700">This check is only visible to the supervisors handling the job. A quick call to the vendor usually clears it up.</p>
+            </div>
+          ) : (
+            <p className="text-xs text-emerald-700">✓ {v.summary}{v.content?.skipped ? ` (${v.content.skipped})` : ""}</p>
+          );
+        })()}
         {Array.isArray(s.photos) && s.photos.some((p: unknown) => typeof p === "string" && p.startsWith("data:image")) && (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {(s.photos as string[]).filter((p) => typeof p === "string" && p.startsWith("data:image")).map((p, i) => (
-              <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt={`Photo ${i + 1}`} className="h-32 w-full rounded-lg border bg-muted object-cover" /></a>
-            ))}
+            {(s.photos as string[]).map((p, i) => ({ p, i })).filter(({ p }) => typeof p === "string" && p.startsWith("data:image")).map(({ p, i }) => {
+              const stamp = (Array.isArray(s.photoStamps) ? s.photoStamps[i] : null) as { capturedAt?: string; lat?: number; lng?: number; accuracy?: number } | null;
+              const check = (s.verification as any)?.location?.photos?.[i] as { distanceMeters?: number | null; ok?: boolean } | undefined;
+              return (
+                <div key={i} className="space-y-1">
+                  <a href={p} target="_blank" rel="noreferrer"><img src={p} alt={`Photo ${i + 1}`} className="h-32 w-full rounded-lg border bg-muted object-cover" /></a>
+                  <p className="text-[11px] leading-tight text-muted-foreground">
+                    {stamp?.capturedAt ? new Date(stamp.capturedAt).toLocaleString() : "No time stamp"}
+                    {typeof stamp?.lat === "number" && typeof stamp?.lng === "number"
+                      ? <> · <a className="underline" href={`https://maps.google.com/?q=${stamp.lat},${stamp.lng}`} target="_blank" rel="noreferrer">{stamp.lat.toFixed(5)}, {stamp.lng.toFixed(5)}</a>{typeof stamp.accuracy === "number" ? ` (±${Math.round(stamp.accuracy)} m)` : ""}</>
+                      : " · No location"}
+                    {check && typeof check.distanceMeters === "number" ? <span className={check.ok ? " text-emerald-700" : " font-semibold text-amber-700"}> · {check.distanceMeters < 1000 ? `${check.distanceMeters} m` : `${(check.distanceMeters / 1000).toFixed(1)} km`} from the job</span> : null}
+                  </p>
+                </div>
+              );
+            })}
           </div>
         )}
         {!!s.reason && status(row) === "declined" && <p className="text-sm text-red-700">Reason: {String(s.reason)}</p>}

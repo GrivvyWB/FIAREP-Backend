@@ -2,7 +2,8 @@ import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Image, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import { queueVendorChangeOrder, flushVendorOutbox } from '../lib/vendorChangeOrders';
+import { queueVendorChangeOrder, flushVendorOutbox, type VendorPhoto } from '../lib/vendorChangeOrders';
+import { captureGeo } from '../lib/geo';
 import { ui, ACCENT } from '../lib/ui';
 
 // Vendor raises a change work order from the job site. Everything is required
@@ -17,7 +18,7 @@ export default function VendorChangeOrder() {
   const [measurements, setMeasurements] = useState('');
   const [notes, setNotes] = useState('');
   const [cost, setCost] = useState('');
-  const [photos, setPhotos] = useState<string[]>([]);
+  const [photos, setPhotos] = useState<VendorPhoto[]>([]);
   const [busy, setBusy] = useState(false);
 
   async function takePhoto() {
@@ -28,7 +29,9 @@ export default function VendorChangeOrder() {
     if (shot.canceled || !shot.assets?.[0]?.base64) return;
     const data = `data:image/jpeg;base64,${shot.assets[0].base64}`;
     if (data.length > 700_000) { Alert.alert('Photo too large', 'Try again a little further back — the photo must be under about 500 KB.'); return; }
-    setPhotos((p) => [...p, data]);
+    // Stamp the photo with when and where it was taken.
+    const geo = await captureGeo().catch(() => ({ at: new Date().toISOString() } as any));
+    setPhotos((p) => [...p, { dataUrl: data, capturedAt: geo?.at || new Date().toISOString(), lat: geo?.lat, lng: geo?.lng, accuracy: geo?.accuracy }]);
   }
 
   async function submit() {
@@ -77,10 +80,10 @@ export default function VendorChangeOrder() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {photos.map((p, i) => (
               <Pressable key={i} onLongPress={() => setPhotos((ps) => ps.filter((_, j) => j !== i))}>
-                <Image source={{ uri: p }} style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: '#eee' }} />
+                <Image source={{ uri: p.dataUrl }} style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: '#eee' }} />
               </Pressable>
             ))}
-            <Text style={{ width: '100%', color: '#888', fontSize: 12 }}>Hold a photo to remove it.</Text>
+            <Text style={{ width: '100%', color: '#888', fontSize: 12 }}>Hold a photo to remove it. Each photo is stamped with the time and location it was taken.</Text>
           </View>
         )}
         <Pressable style={[ui.btn, busy && { opacity: 0.6 }]} onPress={submit} disabled={busy}>

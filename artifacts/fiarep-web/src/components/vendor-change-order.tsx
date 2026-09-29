@@ -47,7 +47,8 @@ export function VendorChangeOrder({ trackingId, vendorName, started, completed }
   const [measurements, setMeasurements] = useState("");
   const [notes, setNotes] = useState("");
   const [cost, setCost] = useState("");
-  const [photos, setPhotos] = useState<string[]>([]);
+  type VendorPhoto = { dataUrl: string; capturedAt: string; lat?: number; lng?: number; accuracy?: number };
+  const [photos, setPhotos] = useState<VendorPhoto[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
 
   const load = useCallback(async () => {
@@ -58,11 +59,23 @@ export function VendorChangeOrder({ trackingId, vendorName, started, completed }
   }, [trackingId, vendorName]);
   useEffect(() => { void load(); }, [load]);
 
+  // Where the phone is right now, stamped on each photo as it is added.
+  function whereAmI(): Promise<{ lat?: number; lng?: number; accuracy?: number }> {
+    return new Promise((resolve) => {
+      if (!navigator.geolocation) { resolve({}); return; }
+      navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        () => resolve({}),
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      );
+    });
+  }
   async function addPhotos(files: FileList | null) {
     if (!files) return;
-    const next: string[] = [];
+    const geo = await whereAmI();
+    const next: VendorPhoto[] = [];
     for (const f of Array.from(files).slice(0, 6 - photos.length)) {
-      try { next.push(await shrink(f)); } catch { /* skip bad file */ }
+      try { next.push({ dataUrl: await shrink(f), capturedAt: new Date(f.lastModified || Date.now()).toISOString(), ...geo }); } catch { /* skip bad file */ }
     }
     setPhotos((p) => [...p, ...next].slice(0, 6));
   }
@@ -113,12 +126,13 @@ export function VendorChangeOrder({ trackingId, vendorName, started, completed }
                   <div className="grid grid-cols-3 gap-2">
                     {photos.map((p, i) => (
                       <div key={i} className="relative">
-                        <img src={p} alt={`Photo ${i + 1}`} className="h-24 w-full rounded-lg border object-cover" />
+                        <img src={p.dataUrl} alt={`Photo ${i + 1}`} className="h-24 w-full rounded-lg border object-cover" />
                         <button type="button" onClick={() => setPhotos((ps) => ps.filter((_, j) => j !== i))} className="absolute right-1 top-1 rounded-full bg-black/60 p-1 text-white"><X className="h-3 w-3" /></button>
                       </div>
                     ))}
                   </div>
                 )}
+                <p className="text-xs text-muted-foreground">Each photo is stamped with the time and location it was taken.</p>
                 <div className="flex gap-2">
                   <Button className="flex-1" onClick={submit} disabled={busy}>{busy ? "Sending…" : "Send to supervisor"}</Button>
                   <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
