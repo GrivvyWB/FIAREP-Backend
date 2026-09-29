@@ -35,6 +35,23 @@ export default function Platform() {
       {/* Background Grid */}
       <div className="fixed inset-0 bg-[linear-gradient(to_right,hsl(var(--border))_1px,transparent_1px),linear-gradient(to_bottom,hsl(var(--border))_1px,transparent_1px)] bg-[size:40px_40px] opacity-[0.3] pointer-events-none -z-10 [mask-image:linear-gradient(to_bottom,white,transparent)] dark:[mask-image:linear-gradient(to_bottom,black,transparent)]" />
       
+      {/* Top bar: logo left, Enter Platform / Staff Login top right */}
+      <header className="sticky top-0 z-20 w-full border-b border-border/60 bg-background/80 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3 lg:px-8">
+          <div className="font-bold text-2xl tracking-tight">
+            FIA<span className="text-[#F5B301]">REP</span>
+          </div>
+          <div className="flex items-center gap-2 sm:gap-3">
+            <Link href="/access" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 sm:px-6 sm:py-3 text-sm sm:text-base font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-primary/25" data-testid="link-platform-access">
+              Enter Platform <ArrowRight className="ml-2 h-5 w-5" />
+            </Link>
+            <Link href="/login" className="inline-flex items-center justify-center rounded-lg bg-card px-4 py-2 sm:px-6 sm:py-3 text-sm sm:text-base font-semibold text-foreground shadow-sm hover:bg-accent/5 hover:text-accent border border-border transition-all hover:border-accent/30" data-testid="link-platform-login">
+              Staff Login
+            </Link>
+          </div>
+        </div>
+      </header>
+
       {/* Hero Section */}
       <section className="relative pt-24 pb-32 px-6 lg:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
         <motion.div 
@@ -64,14 +81,6 @@ export default function Platform() {
             Connect management, staff, residents, and vendors in one platform built around the daily work of housing developments.
           </motion.p>
           
-          <motion.div variants={fadeIn} className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link href="/access" className="inline-flex items-center justify-center rounded-lg bg-primary px-8 py-4 text-base font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-primary/25" data-testid="link-platform-access">
-              Enter Platform <ArrowRight className="ml-2 h-5 w-5" />
-            </Link>
-            <Link href="/login" className="inline-flex items-center justify-center rounded-lg bg-card px-8 py-4 text-base font-semibold text-foreground shadow-sm hover:bg-accent/5 hover:text-accent border border-border transition-all hover:border-accent/30" data-testid="link-platform-login">
-              Staff Login
-            </Link>
-          </motion.div>
         </motion.div>
 
         <motion.div 
