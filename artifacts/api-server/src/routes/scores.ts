@@ -72,7 +72,31 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
   // Scores only count what this person is allowed to see: a supervisor who
   // hasn't been sent a development's complaints doesn't see them here either.
   const readable = await Promise.all(repaired.map((row) => canReadEntityRecordForActor(actor, row)));
-  const rows = repaired.filter((_row, index) => readable[index]);
+  // A complaint also scores for whoever handled work that came out of it — the
+  // Supervisor Inspector who reviewed its inspection, the CPM Supervisor who
+  // received the scope, the trade that did the repair — even if the complaint
+  // itself was never sent to them directly.
+  const derivedFrom = (row: typeof storedRows[number]): { ids: string[]; nos: string[] } => {
+    const state = row.state as Record<string, unknown>;
+    const ids = [String(state["sourceReportId"] || ""), state["sourceEntity"] === "resident-reports" ? String(state["sourceRecordId"] || "") : ""].filter(Boolean);
+    const nos = [state["complaintNo"], state["sourceRef"], state["sourceInspectionRef"]]
+      .map((value) => String(value || "").trim().toUpperCase()).filter((value) => /^RC-\d+$/.test(value));
+    const match = String(state["instructions"] || "").toUpperCase().match(/COMPLAINT #:\s*(RC-\d+)/);
+    if (match) nos.push(match[1]!);
+    return { ids, nos };
+  };
+  const handledComplaintIds = new Set<string>();
+  const handledComplaintNos = new Set<string>();
+  repaired.forEach((row, index) => {
+    if (!readable[index] || row.entity === "resident-reports") return;
+    const { ids, nos } = derivedFrom(row);
+    ids.forEach((id) => handledComplaintIds.add(id));
+    nos.forEach((no) => handledComplaintNos.add(no));
+  });
+  const rows = repaired.filter((row, index) =>
+    readable[index] ||
+    (row.entity === "resident-reports" &&
+      (handledComplaintIds.has(row.id) || handledComplaintNos.has(complaintNoOf(row.state as Record<string, unknown>)))));
 
   const records: ScoringRecord[] = rows
     .filter((row) => {
