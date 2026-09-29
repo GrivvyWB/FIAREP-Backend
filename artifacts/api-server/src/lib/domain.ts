@@ -279,6 +279,16 @@ export function isOrdinaryManagement(actor: Actor): boolean {
 }
 
 /** CPM Supervisors may author their own scope drafts, but are not procurement reviewers. */
+/**
+ * Who acts as Procurement: the Procurement role, or the company's "Director"
+ * (an administrator titled plainly "Director" — not a Borough/Regional
+ * Director), who runs the desk from the same Procurement page.
+ */
+export function isProcurementActor(actor: Pick<Actor, "role" | "position">): boolean {
+  if (actor.role === "procurement") return true;
+  return actor.role === "administrator" && String(actor.position || "").trim().toLowerCase() === "director";
+}
+
 export function isCpmSupervisor(actor: Pick<Actor, "role" | "position">): boolean {
   return actor.role === "management" && isCpmSupervisorTitle(actor.position);
 }
@@ -389,7 +399,7 @@ export function canReadEntity(actor: Actor, entity: string): boolean {
   }
   if (entity === "procurement" || entity === "procurement-bids") {
     if (isCpmSupervisor(actor) && entity === "procurement-bids") return false;
-    return actor.role === "procurement" ||
+    return isProcurementActor(actor) ||
       (entity === "procurement" && isCpmSupervisor(actor)) ||
       (entity === "procurement" && actor.role === "inspector" && actor.position === "CPM");
   }
@@ -438,7 +448,7 @@ export function procurementRecordAllowed(
 ): boolean {
   if (row.entity !== "procurement" && row.entity !== "procurement-bids") return true;
   const status = String(row.state["status"] ?? "");
-  if (actor.role === "procurement") {
+  if (isProcurementActor(actor)) {
     return row.entity === "procurement-bids" ||
       ["approved", "bidding", "awarded", "closed"].includes(status);
   }
@@ -1336,10 +1346,10 @@ export function canPerformEntityAction(
       if (action === "approve" || action === "reject" || action === "handoff-inhouse") return isCpmSupervisor(actor);
      if (action === "return") {
         return (isCpmSupervisor(actor) && state["status"] === "submitted") ||
-         (actor.role === "procurement" && ["approved", "bidding"].includes(String(state["status"])));
+         (isProcurementActor(actor) && ["approved", "bidding"].includes(String(state["status"])));
      }
     return (
-      actor.role === "procurement" &&
+      isProcurementActor(actor) &&
       ["broadcast", "resend", "award", "pay", "mark-started", "mark-completed", "rate-close", "return"].includes(action)
     );
   }

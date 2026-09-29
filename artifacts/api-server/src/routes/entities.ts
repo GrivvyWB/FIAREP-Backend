@@ -37,6 +37,7 @@ import {
   validLeaveRequestDuration,
   withInitialWorkflowState,
   procurementRecordAllowed,
+  isProcurementActor,
   normalizeAssignment,
   isComplaintHandlingSupervisor,
   waitsToBeSentComplaints,
@@ -431,7 +432,7 @@ router.get("/v1/:entity", async (req, res, next) => {
   // Procurement sees every vendor bid on the scopes it can see, carried on
   // the scope itself, so a bid can never be hidden from the Award step.
   let bidsByScope: Map<string, Array<Record<string, unknown>>> | null = null;
-  if (entity === "procurement" && actor.role === "procurement") {
+  if (entity === "procurement" && isProcurementActor(actor)) {
     const bidRows = await db.select().from(entityRecords).where(and(
       eq(entityRecords.tenantId, actor.tenantId),
       eq(entityRecords.entity, "procurement-bids"),
@@ -3250,9 +3251,11 @@ router.post(
         }
       }
     } else if (entity === "procurement" && action === "approve") {
-      const recipients = await db.select({ name: staffAccounts.name })
+      // The Procurement desk: Procurement accounts plus the company "Director".
+      const recipients = (await db.select({ name: staffAccounts.name, role: staffAccounts.role, position: staffAccounts.position })
         .from(staffAccounts)
-        .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.role, "procurement"), eq(staffAccounts.status, "approved")));
+        .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"))))
+        .filter((row) => isProcurementActor({ role: row.role, position: row.position || "" } as any));
       for (const recipient of recipients) await notify(actor, recipient.name, "Scope approved for Procurement", scopeDetail, current.id);
     } else if (entity === "procurement" && action === "handoff-inhouse") {
       await notify(
@@ -3296,7 +3299,7 @@ router.post(
       }
       // Returned by Procurement: the reviewing CPM Supervisor is told too.
       const reviewer = String(current.state["handoffTargetId"] || "");
-      if (actor.role === "procurement" && reviewer) {
+      if (isProcurementActor(actor) && reviewer) {
         await notify(actor, reviewer, "Procurement returned a scope for revision", scopeDetail, current.id);
       }
     } else if (
@@ -3373,7 +3376,7 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   // Procurement keeps its own vendor email list (add / edit / remove).
-  const vendorListEdit = entity === "vendor-contacts" && actor.role === "procurement";
+  const vendorListEdit = entity === "vendor-contacts" && isProcurementActor(actor);
   const [organization] = await db
     .select({ features: organizations.features })
     .from(organizations)

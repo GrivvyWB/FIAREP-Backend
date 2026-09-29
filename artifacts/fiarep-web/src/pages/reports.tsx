@@ -263,7 +263,7 @@ export default function Reports() {
   const isCpmSup = isCpmSupervisorTitle(actor?.position);
   const isCpm = actor?.position === "CPM";
   // Procurement reads the complaint and acts on its scope in Procurement.
-  const isProcurement = actor?.role === "procurement" || /procurement/i.test(actor?.position || "");
+  const isProcurement = actor?.role === "procurement" || /procurement/i.test(actor?.position || "") || (actor?.role === "administrator" && (actor?.position || "").trim().toLowerCase() === "director");
   const scopesQuery = useListEntityRecords("procurement", undefined, {
     query: { queryKey: getListEntityRecordsQueryKey("procurement"), enabled: isCpmSup || isCpm || isProcurement, refetchInterval: 15_000 },
   });

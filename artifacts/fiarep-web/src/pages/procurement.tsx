@@ -242,7 +242,7 @@ export default function Procurement() {
   const queryClient = useQueryClient();
   const action = usePerformEntityAction();
   // Only Procurement may act; the server enforces the same rule.
-  const canAct = staff?.role === "procurement";
+  const canAct = staff?.role === "procurement" || (staff?.role === "administrator" && (staff?.position || "").trim().toLowerCase() === "director");
 
   const scopesQuery = useListEntityRecords("procurement", undefined, {
     query: { queryKey: getListEntityRecordsQueryKey("procurement"), refetchInterval: 15_000, refetchOnMount: "always" },
