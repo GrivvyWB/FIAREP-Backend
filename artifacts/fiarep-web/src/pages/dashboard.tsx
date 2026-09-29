@@ -72,7 +72,7 @@ export default function Dashboard() {
     { label: "Resident Reports", value: reports.filter((item) => !["resolved", "closed"].includes(statusOf(item))).length, total: reports.length, icon: FileSearch, query: reportsQuery, href: "/reports" },
     { label: "Open Inspections", value: inspections.filter((item) => !["completed", "closed"].includes(statusOf(item))).length, total: inspections.length, icon: ClipboardCheck, query: inspectionsQuery, href: "/inspections" },
     { label: "Emergencies", value: emergencies.filter((item) => !["completed", "closed", "resolved"].includes(statusOf(item))).length, total: emergencies.length, icon: AlertTriangle, query: emergenciesQuery, href: "/emergency" },
-    { label: "Pending Leave", value: leave.length, total: leave.length, icon: Plane, query: leaveQuery, href: "/leave?view=team" },
+    { label: "Pending Leave", value: leave.filter((item) => String(item.state?.status || "Pending") === "Pending").length, total: leave.length, icon: Plane, query: leaveQuery, href: "/leave?view=team" },
     { label: "Unread Notifications", value: unread, total: notifications.length, icon: Bell, query: notificationsQuery, href: "/notifications" },
   ].filter((metric) => hasModuleAccess(staff, metric.href === "/emergency" ? "emergency" : metric.href.startsWith("/leave") ? "leave" : metric.href.slice(1) as Parameters<typeof hasModuleAccess>[1]));
   const activity = [
