@@ -1148,7 +1148,11 @@ export function canAssignStaff(
     actor.position === "Assistant Superintendent" ||
     isSuperintendentE(actor);
   if (isSupervisorPosition(actor) && !actorTrade && !isGeneralSuperintendent) return false;
-  if (actorTrade && !isCrewForTrade(target.position, actorTrade)) return false;
+  // A CPM Supervisor may also send a job to an Inspector (in case a violation
+  // needs to be logged before it is scoped).
+  const cpmSupervisorToInspector = isCpmSupervisor(actor) &&
+    target.role === "inspector" && sameTitle(target.position, "Inspector");
+  if (actorTrade && !isCrewForTrade(target.position, actorTrade) && !cpmSupervisorToInspector) return false;
   return true;
 }
 

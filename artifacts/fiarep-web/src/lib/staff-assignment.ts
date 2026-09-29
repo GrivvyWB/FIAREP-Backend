@@ -2,6 +2,7 @@ import type { Staff } from "@workspace/api-client-react";
 import {
   isCpmSupervisorTitle,
   isCrewForTrade,
+  sameTitle,
   isOfficeTradeSupervisorTitle,
   isSupervisorTitle,
   normalizeTitle,
@@ -97,7 +98,11 @@ export function assignableOperationalStaff(
     if (candidate.id === actor.id || candidate.position === "Borough Director") return false;
     if (candidate.position === "Director") return false; // procurement director - PR only, never operational work
     if (!OPERATIONAL_ROLES.has(candidate.role)) return false;
-    if (actorTrade && !isCrewForTrade(candidate.position, actorTrade)) return false;
+    // A CPM Supervisor may also send a job to an Inspector (a violation may
+    // need logging before it is scoped).
+    const cpmSupervisorToInspector = isCpmSupervisorTitle(actor.position) &&
+      candidate.role === "inspector" && sameTitle(candidate.position, "Inspector");
+    if (actorTrade && !isCrewForTrade(candidate.position, actorTrade) && !cpmSupervisorToInspector) return false;
     if (isEmergencySuperintendent) return true;
     // Office-based people (CPMs, office trade crews) hold no developments and
     // go wherever they're sent; everyone else must cover this site.
