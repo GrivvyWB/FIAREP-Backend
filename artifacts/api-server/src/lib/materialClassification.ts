@@ -10,6 +10,11 @@ export type MaterialClassification = {
   material: MaterialKind;
   confidence: number; // 0..1
   note: string;
+  // Best-effort size estimate from the photo (feet), using standard reference
+  // sizes visible in the shot. 0 when nothing reliable can be judged.
+  estimatedAFt: number;   // first dimension: length / opening width / surface width
+  estimatedBFt: number;   // second dimension: width / opening height / surface height
+  sizeBasis: string;      // what the estimate was judged from
 };
 
 type FetchLike = typeof fetch;
@@ -29,7 +34,14 @@ Choose exactly one:
 - "paint": a painted or to-be-painted wall or ceiling surface (bare/primed wall ready for paint).
 - "unknown": none of the above is clearly the subject.
 Judge by the dominant subject of the photo. Set confidence to how sure you are (0 to 1).
-Keep note to a short factual phrase describing what you see.`;
+Keep note to a short factual phrase describing what you see.
+Also estimate the subject's size in FEET (decimal) from standard reference sizes visible in the photo:
+a residential door slab is 30, 32 or 36 in wide x 80 in tall; a door knob sits ~36 in above the floor;
+an outlet / switch cover is 2.75 x 4.5 in; a standard ceiling is 8 ft; floor tiles are commonly 12 or 24 in;
+subway wall tile is 3 x 6 in; a drywall sheet is 4 x 8 ft; a plywood sheet is 4 x 8 ft; a brick is 8 in long.
+estimatedAFt = length / opening width / surface width; estimatedBFt = width / opening height / surface height.
+For a door or window give the OPENING size (slab plus frame). If nothing reliable is visible, return 0 for both
+and say why in sizeBasis. Never guess wildly: an estimate should be within about 15% of the true size.`;
 
 export async function classifyMaterialImage(
   image: string,
@@ -65,11 +77,14 @@ export async function classifyMaterialImage(
             schema: {
               type: "object",
               additionalProperties: false,
-              required: ["material", "confidence", "note"],
+              required: ["material", "confidence", "note", "estimatedAFt", "estimatedBFt", "sizeBasis"],
               properties: {
                 material: { type: "string", enum: ["concrete", "sheetrock", "plywood", "window", "door", "room", "floor-tile", "wall-tile", "wood-floor", "paint", "unknown"] },
                 confidence: { type: "number" },
                 note: { type: "string" },
+                estimatedAFt: { type: "number" },
+                estimatedBFt: { type: "number" },
+                sizeBasis: { type: "string" },
               },
             },
           },
@@ -95,7 +110,18 @@ export async function classifyMaterialImage(
     const confidence = typeof parsed.confidence === "number"
       ? Math.min(1, Math.max(0, parsed.confidence))
       : 0;
-    return { material, confidence, note: typeof parsed.note === "string" ? parsed.note : "" };
+    const feet = (value: unknown) => {
+      const n = typeof value === "number" && Number.isFinite(value) ? value : 0;
+      return n > 0 && n < 500 ? Math.round(n * 100) / 100 : 0;
+    };
+    return {
+      material,
+      confidence,
+      note: typeof parsed.note === "string" ? parsed.note : "",
+      estimatedAFt: feet(parsed.estimatedAFt),
+      estimatedBFt: feet(parsed.estimatedBFt),
+      sizeBasis: typeof parsed.sizeBasis === "string" ? parsed.sizeBasis : "",
+    };
   } finally {
     clearTimeout(timeout);
   }

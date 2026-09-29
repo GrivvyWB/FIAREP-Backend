@@ -82,12 +82,23 @@ export default function Measurement() {
       if (!asset.base64) return;
       setClassifying(true); setAiNote('');
       try {
-        const res = await customFetch<{ material: MaterialKind; confidence: number; note: string }>(
+        const res = await customFetch<{ material: MaterialKind; confidence: number; note: string; estimatedAFt?: number; estimatedBFt?: number; sizeBasis?: string }>(
           '/api/ai/classify-material',
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: `data:image/jpeg;base64,${asset.base64}` }), responseType: 'json' });
         if (res?.material && allowed.includes(res.material)) {
           setMaterial(res.material);
-          setAiNote(`Detected ${MATERIAL_LABELS[res.material]}${res.confidence ? ` (${Math.round(res.confidence * 100)}%)` : ''}. ${res.note || ''}`.trim());
+          // Size estimate from the photo: pre-fill the dimensions (the user
+          // can overwrite them) and say what it was judged from.
+          const estA = Number(res.estimatedAFt) || 0;
+          const estB = Number(res.estimatedBFt) || 0;
+          let sizeNote = '';
+          if (estA > 0 && estB > 0) {
+            setA(String(estA)); setB(String(estB));
+            sizeNote = ` Estimated ${estA} × ${estB} ft${res.sizeBasis ? ` (from ${res.sizeBasis})` : ''} — verify with a tape or LiDAR and adjust below.`;
+          } else {
+            sizeNote = ` Couldn't judge the size from this photo${res.sizeBasis ? ` (${res.sizeBasis})` : ''} — enter the dimensions below.`;
+          }
+          setAiNote(`Detected ${MATERIAL_LABELS[res.material]}${res.confidence ? ` (${Math.round(res.confidence * 100)}%)` : ''}. ${res.note || ''}`.trim() + sizeNote);
         } else if (res?.material && (res.material as string) !== 'unknown') {
           setAiNote(`Looks like ${MATERIAL_LABELS[res.material] || res.material}, but that's not enabled for you — pick below.`);
         } else { setAiNote("Couldn't identify the material — pick it below."); }
@@ -298,7 +309,7 @@ export default function Measurement() {
         )}
 
         {showCalculators && (
-          <Text style={{ color: '#8A928C', fontSize: 12, marginTop: 16, textAlign: 'center' }}>Auto-measure (point & tap the corners) arrives with LiDAR AR — for now enter the dimensions.</Text>
+          <Text style={{ color: '#8A928C', fontSize: 12, marginTop: 16, textAlign: 'center' }}>{arSupported ? 'AR Measure uses LiDAR for exact sizes; the photo estimate is a starting point.' : 'The photo gives an estimated size. Exact LiDAR measuring (AR Measure) is in the App Store / TestFlight build, not Expo Go — or enter the dimensions from a tape.'}</Text>
         )}
       </ScrollView>
     </SafeAreaView>
