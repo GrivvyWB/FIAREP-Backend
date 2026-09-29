@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import { isProcurementDesk } from "@/lib/access-policy";
+import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 import { notificationTitle } from "@/lib/notification-text";
