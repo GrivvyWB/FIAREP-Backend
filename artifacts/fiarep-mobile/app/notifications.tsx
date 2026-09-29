@@ -116,7 +116,14 @@ export default function Notifications() {
       }
       return;
     }
-    if (msg.includes('inspection logged') || msg.includes('awaiting approval') || msg.includes('awaiting review')) { router.push('/inspection-approvals'); return; }
+    if (msg.includes('inspection logged') || msg.includes('awaiting approval') || msg.includes('awaiting review')
+      || msg.startsWith('inspection ') || msg.startsWith('building violations')) {
+      // Inspection status alerts: the inspector opens his own read-only copy;
+      // supervisors / management open Inspection Approvals.
+      const pos = ((position || '') || (await getCurrentPosition().catch(() => '')) || '').trim().toLowerCase();
+      router.push(pos === 'inspector' ? '/my-inspections' : '/inspection-approvals');
+      return;
+    }
     if (msg.includes('change work order') || msg.includes('change order')) { router.push('/change-orders'); return; }
     if (msg.includes('elevator update') || msg.includes('elevator job')) { router.push('/elevator-dashboard'); return; }
     if (msg.includes('emergency update') || msg.includes('emergency job') || msg.includes('emergency unit')) { router.push('/emergency-units'); return; }

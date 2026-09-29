@@ -3163,6 +3163,12 @@ router.post(
       for (const recipient of recipients) {
         await notify(actor, recipient, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
       }
+    } else if (entity === "building-violations") {
+      // Inspection status alerts (approved / routed / cleared ...) open the
+      // inspection itself, not a complaint: say so and carry its reference.
+      const ref = [String(state["violationNo"] || current.state["violationNo"] || ""), String(state["building"] || current.state["building"] || "")]
+        .filter(Boolean).join(" \u00b7 ");
+      await notify(actor, target, `Inspection ${nextStatus.replaceAll("_", " ")}`, ref || undefined, current.id);
     } else {
       await notify(actor, target, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
     }

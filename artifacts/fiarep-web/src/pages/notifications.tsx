@@ -165,7 +165,7 @@ export default function Notifications() {
                             ? `/team?staffId=${encodeURIComponent(notification.reportId)}`
                             : notification.message === "Leave request"
                               ? "/leave?view=team"
-                                : notificationHref(notification.message, notification.reportId)
+                                : notificationHref(notification.message, notification.reportId, { inspector: staff?.role === "inspector" && staff?.position === "Inspector" })
                         }
                         className="flex min-w-0 flex-1 items-start gap-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         onClick={() => {

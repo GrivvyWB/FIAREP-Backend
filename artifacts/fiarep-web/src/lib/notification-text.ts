@@ -54,13 +54,17 @@ export function notificationTitle(message: string | null | undefined): string {
 
 
 /** Where tapping an alert should take the person. */
-export function notificationHref(message: string, reportId: string): string {
+export function notificationHref(message: string, reportId: string, opts?: { inspector?: boolean }): string {
   const id = encodeURIComponent(reportId);
   const m = message || "";
   if (/^Scope approved for Procurement|Procurement returned|bid/i.test(m)) return "/procurement";
   if (/^Scope submitted|^Scope /i.test(m)) return "/scope-review";
   // Inspections logged by inspectors are approved / routed on Inspection Approvals.
-  if (/inspection logged|awaiting review|approved inspection/i.test(m)) return "/inspection-approvals";
+  // Inspection alerts: the inspector opens his own read-only copy (My
+  // Inspections); supervisors / management open Inspection Approvals.
+  if (/inspection logged|awaiting review|approved inspection|^inspection |^building violations/i.test(m)) {
+    return opts?.inspector ? "/my-inspections" : "/inspection-approvals";
+  }
   if (/violation/i.test(m)) return `/inspections?id=${id}`;
   return `/reports?id=${id}`;
 }
