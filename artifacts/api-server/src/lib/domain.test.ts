@@ -989,7 +989,7 @@ test("who decides whose leave", () => {
   assert.equal(canApproveLeaveForEmployee(supervisorEmployee, supervisorEmployee), false);
 });
 
-test("leave records are visible to HR, the employee and their development's management", () => {
+test("leave records are visible to HR, the employee and management", () => {
   const leave = {
     entity: "leave-requests",
     development: "Development A",
@@ -1005,7 +1005,7 @@ test("leave records are visible to HR, the employee and their development's mana
     canReadEntityRecord(actor({ id: "employee-1", role: "worker", position: "Plumber" }), leave),
     true,
   );
-  // Management of that development sees it (office-based management covers all); the Borough Director does not.
+  // Management sees time off for their developments (office-based management and the Borough Director see all).
   assert.equal(
     canReadEntityRecord(actor({ id: "supervisor-1", role: "management", position: "Plumber Supervisor", developments: ["Development A"] }), leave),
     true,
@@ -1024,7 +1024,7 @@ test("leave records are visible to HR, the employee and their development's mana
   );
   assert.equal(
     canReadEntityRecord(actor({ id: "borough", role: "management", position: "Borough Director" }), leave),
-    false,
+    true,
   );
 });
 

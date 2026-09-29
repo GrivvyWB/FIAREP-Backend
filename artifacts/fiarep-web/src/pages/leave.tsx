@@ -77,7 +77,8 @@ export default function Leave() {
   // HR, or proper management — the Borough Director is not in the leave flow.
   const canDecide = staff?.role === "human_resources" || staff?.role === "administrator" ||
     (staff?.role === "management" && staff?.position !== "Borough Director");
-  const canViewTeamLeave = canDecide;
+  // Everyone in management (Borough Director included) can view who is out; only canDecide may approve.
+  const canViewTeamLeave = canDecide || staff?.role === "management";
   const teamView = canViewTeamLeave && new URLSearchParams(window.location.search).get("view") === "team";
   const ownRows = rows.filter((row) => {
     const state = row.state || {};

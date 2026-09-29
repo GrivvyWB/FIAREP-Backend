@@ -66,7 +66,10 @@ function normalize(record: RecordItem, category: Category): CalendarItem | null 
   const href = category === "Resident reports" || category === "Inspections"
     ? `${m.href}?id=${encodeURIComponent(record.id)}`
     : m.href;
-  return { ...record, category, label: String(value(s, ["title", "name", "description", "reason", "issue"]) || `${category} record`), href, start, end };
+  const label = category === "Leave requests"
+    ? `${String(s.employee || "Staff")} \u00b7 ${String(s.type || "Leave")} \u00b7 ${String(s.status || "Pending")}${s.coveredByName ? ` (cover: ${String(s.coveredByName)})` : ""}`
+    : String(value(s, ["title", "name", "description", "reason", "issue"]) || `${category} record`);
+  return { ...record, category, label, href, start, end };
 }
 
 export default function Calendar() {

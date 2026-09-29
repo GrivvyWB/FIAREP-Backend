@@ -420,18 +420,9 @@ function leaveRecordAllowed(
     ? row.state["employeeStaffId"]
     : "";
   if (employeeStaffId === actor.id) return true;
-  // Proper management sees the requests they may decide (the request carries
-  // the employee's title and development). The Borough Director is not in
-  // the leave flow.
-  if (actor.role === "management" && !isBoroughDirector(actor) && employeeStaffId) {
-    const title = String(row.state["title"] || row.state["employeePosition"] || "");
-    const employeeIsManagement =
-      /supervisor|superintendent|manager|director/i.test(title) || row.state["employeeRole"] === "management";
-    if (employeeIsManagement) return LEAVE_UPPER_MANAGEMENT.has(actor.position);
-    const development = row.development || String(row.state["development"] || "");
-    return actor.developments.length === 0 || !development ||
-      actor.developments.some((d) => d.trim().toLowerCase() === development.trim().toLowerCase());
-  }
+  // Management sees time off (the Leave Calendar shows who is out); who may
+  // DECIDE a request is a separate, narrower rule (canApproveLeaveForEmployee).
+  if (actor.role === "management") return true;
   if (employeeStaffId) return false;
   const employeeName = typeof row.state["employee"] === "string"
     ? row.state["employee"].trim().toLowerCase()
