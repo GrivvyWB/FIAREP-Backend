@@ -83,7 +83,7 @@ export default function VendorChangeOrder() {
                 <Image source={{ uri: p.dataUrl }} style={{ width: 96, height: 96, borderRadius: 10, backgroundColor: '#eee' }} />
               </Pressable>
             ))}
-            <Text style={{ width: '100%', color: '#888', fontSize: 12 }}>Hold a photo to remove it. Each photo is stamped with the time and location it was taken.</Text>
+            <Text style={{ width: '100%', color: '#888', fontSize: 12 }}>Hold a photo to remove it.</Text>
           </View>
         )}
         <Pressable style={[ui.btn, busy && { opacity: 0.6 }]} onPress={submit} disabled={busy}>

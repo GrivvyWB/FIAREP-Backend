@@ -132,7 +132,6 @@ export function VendorChangeOrder({ trackingId, vendorName, started, completed }
                     ))}
                   </div>
                 )}
-                <p className="text-xs text-muted-foreground">Each photo is stamped with the time and location it was taken.</p>
                 <div className="flex gap-2">
                   <Button className="flex-1" onClick={submit} disabled={busy}>{busy ? "Sending…" : "Send to supervisor"}</Button>
                   <Button variant="ghost" onClick={() => setOpen(false)} disabled={busy}>Cancel</Button>
