@@ -1,20 +1,14 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Home, HardHat, Building2 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
-import { setStoredPersona } from '@/lib/access-policy';
 import { WebsiteFooter } from '@/components/layout/website-footer';
 
 export default function Access() {
   const [, setLocation] = useLocation();
 
+  // Picking a door does not lock the website yet — signing in does.
   const handleSelect = (persona: 'resident' | 'vendor' | 'staff') => {
-    const chosen = setStoredPersona(persona);
-    if (!chosen) return;
-    if (chosen === 'staff') {
-      setLocation('/login');
-    } else {
-      setLocation(`/${chosen}`);
-    }
+    setLocation(persona === 'staff' ? '/login' : `/${persona}`);
   };
 
   return (
@@ -65,7 +59,7 @@ export default function Access() {
           </div>
           <div className="mt-8 text-center">
             <Link
-              href="/platform"
+              href="/"
               className="inline-flex items-center justify-center rounded-md border border-border bg-card px-5 py-3 text-sm font-semibold text-foreground transition-colors hover:border-primary hover:text-primary"
               data-testid="link-about-fiarep"
             >

@@ -1,5 +1,8 @@
 import { ScopeLines, ViolationCode } from "@/components/scope-lines";
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation } from 'wouter';
+import { LogOut } from 'lucide-react';
+import { clearStoredPersona, getStoredPersona, lockPersona } from '@/lib/access-policy';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -94,6 +97,14 @@ export default function PublicVendor() {
     { query: { enabled: !!lookupData, retry: false, queryKey: getLookupPublicVendorScopeQueryKey(lookupData?.trackingId || '', { vendorName: lookupData?.vendorName || '' }) } }
   );
   
+  const [, setLocation] = useLocation();
+  const [locked, setLocked] = useState(() => getStoredPersona() === 'vendor');
+  useEffect(() => {
+    // Signed in with a tracking ID: the website is now locked to this vendor.
+    if (scopeResult) { lockPersona('vendor'); setLocked(true); }
+  }, [scopeResult]);
+  const signOut = () => { clearStoredPersona(); setLocation('/'); };
+
   const vendorState = (scopeResult?.state as any) || {};
   const pricedLines: Array<{ key: string; label: string }> = [
     ...((vendorState.vendorEstimate || []) as Array<{ title: string; location?: string; description?: string }>).map((c, i) => ({
@@ -179,6 +190,14 @@ export default function PublicVendor() {
               FIA<span className="text-[#F5B301]">REP</span> Vendor
             </div>
           </div>
+          {locked && (
+            <div className="flex justify-end -mt-4">
+              <button type="button" onClick={signOut} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none" data-testid="button-vendor-sign-out">
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
 
         {!scopeResult ? (

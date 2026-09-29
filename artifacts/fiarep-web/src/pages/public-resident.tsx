@@ -19,7 +19,9 @@ import {
   useSearchNychaAddresses,
   useSubmitPublicResidentReport,
 } from '@workspace/api-client-react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, LogOut } from 'lucide-react';
+import { useLocation } from 'wouter';
+import { clearStoredPersona, getStoredPersona, lockPersona } from '@/lib/access-policy';
 
 const reportSchema = z.object({
   development: z.string().min(1, 'Development is required'),
@@ -57,11 +59,24 @@ export default function PublicResident() {
     { query: { enabled: !!lookupData, retry: false, queryKey: getLookupPublicResidentReportsQueryKey(lookupData?.complaintNo || '') } }
   );
 
+  const [, setLocation] = useLocation();
+  const [locked, setLocked] = useState(() => getStoredPersona() === 'resident');
+
   useEffect(() => {
     if (statusResult) {
+       // Signed in with a complaint number: the website is now locked to this resident.
+       lockPersona('resident');
+       setLocked(true);
        setView('lookup');
     }
   }, [statusResult]);
+
+  const signOut = () => {
+    clearStoredPersona();
+    sessionStorage.removeItem('fiarep_resident_complaint');
+    sessionStorage.removeItem('fiarep_resident_token');
+    setLocation('/');
+  };
   
   const reportForm = useForm<z.infer<typeof reportSchema>>({
     resolver: zodResolver(reportSchema),
@@ -144,6 +159,9 @@ export default function PublicResident() {
         
         sessionStorage.setItem('fiarep_resident_complaint', returnedComplaintNo);
         sessionStorage.setItem('fiarep_resident_token', res.statusToken);
+        // Signed in: the website is now locked to this resident.
+        lockPersona('resident');
+        setLocked(true);
         
         toast({
           title: 'Report Submitted',
@@ -183,6 +201,14 @@ export default function PublicResident() {
               FIA<span className="text-[#F5B301]">REP</span> Resident
             </div>
           </div>
+          {locked && (
+            <div className="flex justify-end -mt-4">
+              <button type="button" onClick={signOut} className="inline-flex items-center text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer bg-transparent border-none" data-testid="button-resident-sign-out">
+                <LogOut className="w-4 h-4 mr-2" />
+                Sign out
+              </button>
+            </div>
+          )}
         </div>
 
         {view === 'options' && (

@@ -74,3 +74,20 @@ test("organization module switches override role access", () => {
     true,
   );
 });
+import { evaluateAccess } from "./access-policy.ts";
+
+test("landing page opens first; sign-in pages stay open until someone signs in", () => {
+  assert.deepEqual(evaluateAccess(null, "/", false), {});
+  assert.deepEqual(evaluateAccess(null, "/access", false), {});
+  assert.deepEqual(evaluateAccess(null, "/login", false), {});
+  assert.deepEqual(evaluateAccess(null, "/resident", false), {});
+  assert.deepEqual(evaluateAccess(null, "/vendor", false), {});
+  assert.deepEqual(evaluateAccess(null, "/dashboard", false), { redirect: "/" });
+});
+
+test("once signed in the website is locked to that person", () => {
+  assert.deepEqual(evaluateAccess("staff", "/", true), { redirect: "/dashboard" });
+  assert.deepEqual(evaluateAccess("staff", "/access", true), { redirect: "/dashboard" });
+  assert.deepEqual(evaluateAccess("resident", "/", false), { redirect: "/resident" });
+  assert.deepEqual(evaluateAccess("vendor", "/login", false), { redirect: "/vendor" });
+});

@@ -1,6 +1,5 @@
 import { motion, type Variants } from 'framer-motion';
 import { Link } from 'wouter';
-import { PERSONA_KEY } from '@/lib/access-policy';
 import { WebsiteFooter } from '@/components/layout/website-footer';
 import { 
   ClipboardCheck, Wrench, 
@@ -31,14 +30,6 @@ const roles = [
 ];
 
 export default function Platform() {
-  const prepareStaffLogin = () => {
-    try {
-      localStorage.setItem(PERSONA_KEY, "staff");
-    } catch {
-      // The login page still handles browsers where storage is unavailable.
-    }
-  };
-
   return (
     <div className="min-h-[100dvh] bg-background text-foreground overflow-x-hidden font-sans" data-testid="page-platform">
       {/* Background Grid */}
@@ -74,10 +65,10 @@ export default function Platform() {
           </motion.p>
           
           <motion.div variants={fadeIn} className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link href="/" className="inline-flex items-center justify-center rounded-lg bg-primary px-8 py-4 text-base font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-primary/25" data-testid="link-platform-access">
+            <Link href="/access" className="inline-flex items-center justify-center rounded-lg bg-primary px-8 py-4 text-base font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-primary/25" data-testid="link-platform-access">
               Enter Platform <ArrowRight className="ml-2 h-5 w-5" />
             </Link>
-            <Link href="/login" onClick={prepareStaffLogin} className="inline-flex items-center justify-center rounded-lg bg-card px-8 py-4 text-base font-semibold text-foreground shadow-sm hover:bg-accent/5 hover:text-accent border border-border transition-all hover:border-accent/30" data-testid="link-platform-login">
+            <Link href="/login" className="inline-flex items-center justify-center rounded-lg bg-card px-8 py-4 text-base font-semibold text-foreground shadow-sm hover:bg-accent/5 hover:text-accent border border-border transition-all hover:border-accent/30" data-testid="link-platform-login">
               Staff Login
             </Link>
           </motion.div>

@@ -213,6 +213,10 @@ export interface AccessEvaluation {
   clearAuth?: boolean;
 }
 
+/** Pages anyone may open before the website is locked to a signed-in person:
+ * the landing page, the Enter Platform picker, and the sign-in pages. */
+export const OPEN_PATHS = new Set(['/', '/platform', '/access', '/login', '/procurement/login', '/resident', '/vendor']);
+
 export function evaluateAccess(
   persona: Persona,
   path: string,
@@ -221,6 +225,8 @@ export function evaluateAccess(
   if (path === "/platform") return {};
   const isProcurement = path === '/procurement' || path.startsWith('/procurement/');
 
+  // Nobody is signed in yet: the landing page opens first, and the sign-in
+  // pages stay reachable. The website locks to a person only once they sign in.
   if (!persona) {
     if (isAuthenticated) {
       return { setPersona: 'staff' };
@@ -228,7 +234,7 @@ export function evaluateAccess(
     if (isProcurement) {
       return { setPersona: 'staff' };
     }
-    if (path !== '/') {
+    if (!OPEN_PATHS.has(path)) {
       return { redirect: '/' };
     }
     return {};
@@ -255,7 +261,7 @@ export function evaluateAccess(
   }
 
   if (persona === 'staff') {
-    if (path === '/' || path === '/resident' || path === '/vendor') {
+    if (path === '/' || path === '/access' || path === '/resident' || path === '/vendor') {
       return { redirect: isAuthenticated ? '/dashboard' : '/login' };
     }
     return {};
@@ -271,6 +277,17 @@ export function choosePersona(
   requested: Exclude<Persona, null>,
 ): Exclude<Persona, null> {
   return existing || requested;
+}
+
+/** Lock the website to the person who just signed in (staff, resident or
+ * vendor). Replaces any earlier choice; signing out clears it. */
+export function lockPersona(persona: Exclude<Persona, null>): void {
+  try { localStorage.setItem(PERSONA_KEY, persona); } catch { /* storage unavailable */ }
+}
+
+/** Sign out: unlock the website so the landing page opens first again. */
+export function clearStoredPersona(): void {
+  try { localStorage.removeItem(PERSONA_KEY); } catch { /* storage unavailable */ }
 }
 
 export function getStoredPersona(): Persona {

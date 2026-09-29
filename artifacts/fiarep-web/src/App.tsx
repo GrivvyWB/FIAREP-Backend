@@ -147,11 +147,18 @@ function AppRouter() {
   }
 
   if (!persona) {
+    // Nobody signed in: the landing page opens first. Enter Platform picks
+    // Resident / Vendor / Staff; the website locks to the person on sign-in.
     return (
       <RoutedErrorBoundary>
         <Switch>
-          <Route path="/" component={Access} />
+          <Route path="/" component={Platform} />
           <Route path="/platform" component={Platform} />
+          <Route path="/access" component={Access} />
+          <Route path="/login" component={Login} />
+          <Route path="/procurement/login" component={ProcurementLogin} />
+          <Route path="/resident" component={PublicResident} />
+          <Route path="/vendor" component={PublicVendor} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>

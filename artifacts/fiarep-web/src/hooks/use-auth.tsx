@@ -190,6 +190,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!response.ok) throw new Error(payload?.error || "Invalid staff name or code");
     localStorage.setItem("fiarep_access_token", payload.accessToken);
     localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
+    // Signed in: the website is now locked to this staff member.
+    localStorage.setItem("fiarep_persona", "staff");
     queryClient.clear();
     setStaff(payload.staff);
     await loadOrganizationConfig(payload.accessToken);
@@ -213,11 +215,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     localStorage.removeItem("fiarep_access_token");
     localStorage.removeItem("fiarep_refresh_token");
+    // Signed out: unlock the website so the landing page opens first again.
+    localStorage.removeItem("fiarep_persona");
     queryClient.clear();
     setStaff(null);
     setOrganizationModules({});
     setPropertyLimit(null);
-    setLocation("/login");
+    setLocation("/");
   };
 
   return (
