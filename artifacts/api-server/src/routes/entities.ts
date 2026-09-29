@@ -50,7 +50,7 @@ import { hasScopePackage, snapshotElevator, snapshotEstimate, snapshotScope } fr
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
-import { emailReleasedScope, emailVendorChangeOrderStatus } from "../lib/vendorEmail";
+import { emailAwardedVendor, emailReleasedScope, emailVendorChangeOrderStatus } from "../lib/vendorEmail";
 import { logger } from "../lib/logger";
 import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
 import { rateLimit } from "../lib/rateLimit";
@@ -3054,6 +3054,25 @@ router.post(
       eq(notifications.reportId, current.id),
       eq(notifications.message, "Scope submitted for CPM Supervisor review"),
     )).catch(() => undefined);
+  }
+  if (entity === "procurement" && action === "award") {
+    // The winner hears about it by email (contact on file) as well as on
+    // their vendor page / app, which now show "Awarded to you" + Start work.
+    let award: { sent: boolean; email?: string; reason?: string; error?: string } = { sent: false };
+    try {
+      award = await emailAwardedVendor(actor.tenantId, state);
+      logger.info({ procurementId: current.id, ...award }, "Vendor award email processed");
+    } catch (err) {
+      award = { sent: false, error: "Email service unavailable" };
+      logger.error({ err, procurementId: current.id }, "Vendor award email failed");
+    }
+    try {
+      await db.update(entityRecords)
+        .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ awardEmail: { ...award, at: new Date().toISOString() } })}::jsonb` })
+        .where(and(eq(entityRecords.id, current.id), eq(entityRecords.tenantId, actor.tenantId)));
+    } catch (err) {
+      logger.warn({ err, procurementId: current.id }, "Could not record award email report");
+    }
   }
   if (entity === "procurement" && (action === "broadcast" || action === "resend")) {
     // Release emails every vendor contact plus any addresses typed in; a

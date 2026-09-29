@@ -85,6 +85,56 @@ export async function emailReleasedScope(
   return { sent, failed, recipients: recipients.size };
 }
 
+// The award: tell the winning vendor (contact email on file) that the job is
+// theirs and where to start it. Bids carry no email, so the vendor-contacts
+// list is the address book; without a match nothing is sent (the vendor's
+// page and app still show "Awarded to you").
+export async function emailAwardedVendor(
+  tenantId: string,
+  scope: Record<string, unknown>,
+): Promise<{ sent: boolean; email?: string; reason?: string }> {
+  const vendor = String(scope["vendor"] ?? "").trim().toLowerCase();
+  if (!vendor) return { sent: false, reason: "no vendor" };
+  const contacts = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, tenantId),
+    eq(entityRecords.entity, "vendor-contacts"),
+    eq(entityRecords.deleted, false),
+  ));
+  const contact = contacts.find((c) => String(c.state["name"] ?? "").trim().toLowerCase() === vendor);
+  const email = String(contact?.state["email"] ?? "").trim().toLowerCase();
+  if (!email.includes("@")) return { sent: false, reason: "no contact email for " + vendor };
+  const trackingId = String(scope["trackingId"] ?? "").trim();
+  const address = String(scope["address"] ?? "").trim();
+  const reference = String(scope["sourceRef"] ?? scope["complaintNo"] ?? scope["violationNo"] ?? "").trim();
+  const amount = Number(scope["bidAmount"] ?? 0) || 0;
+  const vendorLink = `${(process.env["PUBLIC_WEB_URL"] || "https://fiarep.com").replace(/\/$/, "")}/vendor`;
+  const response = await connectors.proxy("outlook", "/v1.0/me/sendMail", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      message: {
+        subject: `FIAREP — you were awarded ${trackingId}${reference ? ` · ${reference}` : ""}`,
+        body: {
+          contentType: "HTML",
+          content: [
+            `<p>Hello ${escapeHtml(String(contact?.state["name"] ?? "") || "Vendor")},</p>`,
+            `<p><strong>Congratulations — FIAREP Procurement awarded you this job.</strong></p>`,
+            `<p><strong>Code:</strong> ${escapeHtml(trackingId)}<br>`,
+            reference ? `<strong>Reference:</strong> ${escapeHtml(reference)}<br>` : "",
+            `<strong>Address:</strong> ${escapeHtml(address)}`,
+            amount ? `<br><strong>Your bid:</strong> $${amount.toFixed(2)}` : "",
+            `</p>`,
+            `<p>Go to <a href="${vendorLink}">${vendorLink}</a> (or open the FIAREP app and select Vendor), enter your company name and the code ${escapeHtml(trackingId)}, then tap <strong>Start work</strong> when you begin. Extra work found on site goes in as a change work order from the same page.</p>`,
+          ].join(""),
+        },
+        toRecipients: [{ emailAddress: { address: email, name: String(contact?.state["name"] ?? "") || undefined } }],
+      },
+      saveToSentItems: true,
+    }),
+  });
+  return { sent: response.status === 202, email };
+}
+
 // Tell the vendor what happened to their change work order (received /
 // approved by the supervisor / cost approved by Procurement / declined).
 // Sent to the vendor's contact email when one is on file; the vendor's page

@@ -113,6 +113,15 @@ const workType = (s: Record<string, any>) => {
   return String(s.trade || s.workType || s.category || "General repairs");
 };
 
+/** Whether the award email reached the winning vendor. */
+function AwardNote({ state }: { state: Record<string, any> }) {
+  const a = state.awardEmail;
+  if (!a || !state.vendor) return null;
+  const when = fmt(a.at);
+  if (a.sent) return <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">Award emailed to {state.vendor}{a.email ? ` (${a.email})` : ""} · {when}</p>;
+  return <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{state.vendor} was not emailed about the award ({a.error || a.reason || "no email on file"}) · {when}. Add their email under Vendor contacts, or tell them to open {state.trackingId} on the vendor page / app — it already shows "Awarded to you".</p>;
+}
+
 /** What happened when the release email went out. */
 function DeliveryNote({ state }: { state: Record<string, any> }) {
   const d = state.vendorEmail;
@@ -465,6 +474,7 @@ export default function Procurement() {
     return card(r, <>
       <p className="text-xs text-slate-500">Open since {fmt(s.broadcastAt || s.invitedAt)}{s.bidCloseAt ? ` · bids close ${s.bidCloseAt}` : ""}</p>
       <DeliveryNote state={s} />
+      <AwardNote state={s} />
       {scopeDetails(r)}
       <WalkthroughArrivals scope={r} />
       <div className="rounded-lg border border-slate-200">

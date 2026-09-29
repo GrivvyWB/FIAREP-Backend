@@ -95,7 +95,7 @@ export default function PublicVendor() {
   const { data: scopeResult, isLoading: isLookingUp, error: lookupError } = useLookupPublicVendorScope(
     lookupData?.trackingId || '',
     { vendorName: lookupData?.vendorName || '' },
-    { query: { enabled: !!lookupData, retry: false, queryKey: getLookupPublicVendorScopeQueryKey(lookupData?.trackingId || '', { vendorName: lookupData?.vendorName || '' }) } }
+    { query: { enabled: !!lookupData, retry: false, refetchInterval: 15_000, refetchOnWindowFocus: true, queryKey: getLookupPublicVendorScopeQueryKey(lookupData?.trackingId || '', { vendorName: lookupData?.vendorName || '' }) } }
   );
   
   const [, setLocation] = useLocation();
