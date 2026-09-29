@@ -96,12 +96,30 @@ async function coveredDevelopments(actor: Actor): Promise<string[]> {
 // request or change order that came out of the complaint was created by them
 // or sent to them (the Supervisor Inspector reviews every inspection). The
 // complaint itself then reads for them too — a read-only trail of their work.
-const handledCache = new Map<string, { at: number; ids: Set<string> }>();
-async function handledComplaintIds(actor: Actor): Promise<Set<string>> {
+const handledCache = new Map<string, { at: number; ids: Set<string>; nos: Set<string> }>();
+// Complaint numbers (RC-12345) written anywhere on a record: the inspector's
+// note ("Complaint #: RC-86147"), the scope's source reference, etc.
+function complaintNumbersIn(state: Record<string, unknown>): string[] {
+  const found = new Set<string>();
+  const scan = (value: unknown, depth: number) => {
+    if (depth > 2 || value == null) return;
+    if (typeof value === "string") {
+      for (const m of value.toUpperCase().matchAll(/\bRC-\d{3,}\b/g)) found.add(m[0]);
+    } else if (Array.isArray(value)) {
+      value.forEach((v) => scan(v, depth + 1));
+    } else if (typeof value === "object") {
+      Object.values(value as Record<string, unknown>).forEach((v) => scan(v, depth + 1));
+    }
+  };
+  scan(state, 0);
+  return [...found];
+}
+async function handledComplaints(actor: Actor): Promise<{ ids: Set<string>; nos: Set<string> }> {
   const key = `${actor.tenantId}:${actor.id}`;
   const hit = handledCache.get(key);
-  if (hit && Date.now() - hit.at < 15_000) return hit.ids;
+  if (hit && Date.now() - hit.at < 15_000) return hit;
   const ids = new Set<string>();
+  const nos = new Set<string>();
   try {
     const rows = await db
       .select({ entity: entityRecords.entity, state: entityRecords.state, createdBy: entityRecords.createdBy, deleted: entityRecords.deleted })
@@ -120,10 +138,12 @@ async function handledComplaintIds(actor: Actor): Promise<Set<string>> {
       if (!mine) continue;
       const source = String(state["sourceReportId"] || (state["sourceEntity"] === "resident-reports" ? state["sourceRecordId"] || "" : "") || "").trim();
       if (source) ids.add(source);
+      complaintNumbersIn(state).forEach((no) => nos.add(no));
     }
   } catch { /* best effort */ }
-  handledCache.set(key, { at: Date.now(), ids });
-  return ids;
+  const result = { at: Date.now(), ids, nos };
+  handledCache.set(key, result);
+  return result;
 }
 
 async function complaintVisibility(
@@ -143,7 +163,12 @@ async function complaintVisibility(
   if (SENT_TO_FIELDS.some((field) => row.state[field] === actor.id)) return true;
   // A measurement / picture from the job was sent to this person.
   if (Array.isArray(row.state["measurementSharedWith"]) && (row.state["measurementSharedWith"] as unknown[]).includes(actor.id)) return true;
-  if (row.entity === "resident-reports" && row.id && (await handledComplaintIds(actor)).has(row.id)) return true;
+  if (row.entity === "resident-reports") {
+    const handled = await handledComplaints(actor);
+    if (row.id && handled.ids.has(row.id)) return true;
+    const no = String(row.state["complaintNo"] || "").trim().toUpperCase();
+    if (no && handled.nos.has(no)) return true;
+  }
   const development = normalizeDevelopment(row.development || String(row.state["development"] || ""));
   if (!development) return false;
   const home = actor.developments.some((d) => normalizeDevelopment(d) === development);
