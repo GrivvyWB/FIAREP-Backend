@@ -534,16 +534,26 @@ router.post("/v1/:entity", async (req, res, next) => {
         return;
       }
     }
+    // Who can be sent a violation: an Inspector, a CPM, the Supervisor
+    // Inspector, a CPM Supervisor, a trade supervisor, or a worker / emergency
+    // crew member. Office-based people (no developments) and emergency crews
+    // cover every site; everyone else must cover this development. The
+    // emergency supervisor sends across developments.
     const [target] = await db.select().from(staffAccounts).where(and(
         eq(staffAccounts.id, assignedStaffId),
         eq(staffAccounts.tenantId, actor.tenantId),
         eq(staffAccounts.status, "approved"),
-        eq(staffAccounts.role, "inspector"),
-        eq(staffAccounts.position, "Inspector"),
       )).limit(1);
-    if (!target || target.id === actor.id ||
-        !target.developments.some((value) => value.trim().toLowerCase() === development.toLowerCase())) {
-      res.status(403).json({ error: "Select an approved Inspector covering this development" });
+    const targetRoleOk = !!target && ["inspector", "worker", "emergency", "management"].includes(target.role) &&
+      !["Borough Director", "Director"].includes(String(target.position || ""));
+    const targetCovers = !!target && (
+      target.role === "emergency" ||
+      !target.developments.length ||
+      isSuperintendentE(actor) ||
+      target.developments.some((value) => value.trim().toLowerCase() === development.toLowerCase())
+    );
+    if (!target || !targetRoleOk || target.id === actor.id || !targetCovers) {
+      res.status(403).json({ error: "Select an approved inspector, CPM, supervisor or worker covering this development" });
       return;
     }
     id = `route-assignment:${clientRequestId}`;

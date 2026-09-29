@@ -178,7 +178,12 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
           sentStaffId,
         ).catch(() => undefined);
       }
-      const assignment = complaintMode
+      // A complaint sent on to a CPM, CPM Supervisor, worker or trade
+      // supervisor is assigned to them as the complaint (it lands in their
+      // Inbox / My Jobs / Reports); inspectors get an inspection route.
+      const sendAsComplaint = complaintMode ||
+        (!!reportId && ['cpm', 'cpm-supervisor', 'worker', 'trade'].includes(violationTarget));
+      const assignment = sendAsComplaint
         ? await assignResidentReport(reportId, sentStaffId, to)
         : await createViolationInspectionAssignment({
             assignedStaffId: sentStaffId,
