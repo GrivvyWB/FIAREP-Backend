@@ -136,10 +136,7 @@ export default function WorkerHome() {
         <Text style={ui.btnOutlineText}>Check Report Status</Text>
       </Pressable>}
 
-      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={() => router.push('/settings')}>
-        <Text style={ui.btnOutlineText}>What the buttons do</Text>
-      </Pressable>
-      <Pressable style={ui.btnOutline} onPress={onSignOut}>
+      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onSignOut}>
         <Text style={ui.btnOutlineText}>Sign out</Text>
       </Pressable>
     </ScrollView>

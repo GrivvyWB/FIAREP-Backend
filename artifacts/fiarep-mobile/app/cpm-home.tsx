@@ -124,7 +124,6 @@ export default function CpmHome() {
       color: '#4A5560',
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
-        { label: 'What the buttons do', onPress: () => router.push('/settings'), tone: 'outline' },
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },

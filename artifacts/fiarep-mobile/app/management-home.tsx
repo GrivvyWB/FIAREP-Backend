@@ -76,8 +76,7 @@ export default function ManagementHome() {
         { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone },
         ...personalTiles,
        ].filter((t) => { if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
-      <Pressable onPress={() => router.push('/settings')} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#1E7D4F', fontWeight: '600' }}>What the buttons do</Text></Pressable>
-      <Pressable onPress={onSignOut} style={{ padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
+      <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
     </ScrollView>;
   }
   if (cpmSupervisor || tradeSupervisor) {
@@ -95,8 +94,7 @@ export default function ManagementHome() {
     return <ScrollView contentContainerStyle={ui.wrap}>
       <AlertBanner count={unread} />{readOnly && <ReadOnlyBanner />}<Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{title}</Text>
        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{enabledTiles([...workflow, ...personalTiles]).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: ACCENT, backgroundColor: t.tone === 'solid' ? ACCENT : '#1E7D4F22', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : ACCENT, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
-      <Pressable onPress={() => router.push('/settings')} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#1E7D4F', fontWeight: '600' }}>What the buttons do</Text></Pressable>
-      <Pressable onPress={onSignOut} style={{ padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
+      <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
     </ScrollView>;
   }
   const sections: Section[] = [
@@ -153,7 +151,6 @@ export default function ManagementHome() {
         ...(director ? [{ label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' as Tone }] : []),
         ...(director ? [{ label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' as Tone }] : []),
         ...(!restricted ? [{ label: 'Default rates', onPress: () => router.push('/settings'), tone: 'tint' as Tone }] : []),
-        { label: 'What the buttons do', onPress: () => router.push('/settings'), tone: 'tint' as Tone },
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },
