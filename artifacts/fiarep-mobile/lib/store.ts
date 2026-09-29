@@ -4348,7 +4348,8 @@ export async function listLoggedInspections(): Promise<BuildingViolation[]> {
   await ensureBuildingViolTable(d);
   const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
   const items = rows.map((r: any) => { try { return JSON.parse(r.state) as BuildingViolation; } catch { return null; } }).filter(Boolean) as BuildingViolation[];
-  return items.filter(v => (v.status || 'logged') === 'logged').sort((a, b) => (b.loggedAt || '').localeCompare(a.loggedAt || ''));
+  const hidden = await hiddenViolationIds();
+  return items.filter(v => (v.status || 'logged') === 'logged' && !hidden.has(v.id)).sort((a, b) => (b.loggedAt || '').localeCompare(a.loggedAt || ''));
 }
 
 // Approved inspections routed to a specific person (for their inbox/list).
@@ -4359,7 +4360,8 @@ export async function listRoutedInspectionsFor(name: string, assignedStaffId?: s
   const items = rows.map((r: any) => { try { return JSON.parse(r.state) as BuildingViolation; } catch { return null; } }).filter(Boolean) as BuildingViolation[];
   const nm = (name || '').trim().toLowerCase();
   const sid = (assignedStaffId || '').trim();
-  return items.filter(v => v.status === 'routed' && (sid ? v.assignedStaffId === sid : false))
+  const hidden = await hiddenViolationIds();
+  return items.filter(v => v.status === 'routed' && (sid ? v.assignedStaffId === sid : false) && !hidden.has(v.id))
     .sort((a, b) => (b.routedAt || '').localeCompare(a.routedAt || ''));
 }
 
@@ -4480,7 +4482,28 @@ export async function listMyLoggedInspections(): Promise<BuildingViolation[]> {
     .sort((x, y) => (y.loggedAt || '').localeCompare(x.loggedAt || ''));
 }
 
+// "Remove" on an inspector's / worker's list only hides the inspection from
+// their working list on this phone. The record stays — on the server and in
+// the inspector's My Inspections — as proof of the work. Only an
+// administrator's Scores delete removes it for real (hardDeleteBuildingViolation).
+export async function hiddenViolationIds(): Promise<Set<string>> {
+  try {
+    const d = await db();
+    const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'hidden_violation_ids');
+    return new Set<string>(row?.value ? JSON.parse(row.value) : []);
+  } catch { return new Set<string>(); }
+}
+
 export async function deleteBuildingViolation(id: string): Promise<void> {
+  const d = await db();
+  const ids = [...(await hiddenViolationIds())].filter((x) => x !== id);
+  ids.push(id);
+  try {
+    await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'hidden_violation_ids', JSON.stringify(ids.slice(-1000)));
+  } catch {}
+}
+
+export async function hardDeleteBuildingViolation(id: string): Promise<void> {
   const d = await db();
   await ensureBuildingViolTable(d);
   await queueMutation('building-violations', id, null, 'delete');
@@ -4915,7 +4938,7 @@ export async function deleteScoreItem(kind: 'scope' | 'route' | 'violation' | 'r
   if (kind === 'route') return deleteRouteAssignment(id);
   if (kind === 'violation') return deleteViolationLookup(id);
   if (kind === 'report') return deleteResidentReport(id);
-  if (kind === 'inspection') return deleteBuildingViolation(id);
+  if (kind === 'inspection') return hardDeleteBuildingViolation(id);
 }
 
 // ── Elevator jobs ──────────────────────────────────────────────────────────

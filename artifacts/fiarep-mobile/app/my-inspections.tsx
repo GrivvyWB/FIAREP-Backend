@@ -5,6 +5,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { listMyLoggedInspections, type BuildingViolation } from '../lib/store';
+import { syncAllEntities } from '../lib/sync';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { ui, ACCENT } from '../lib/ui';
@@ -21,7 +22,15 @@ function fmt(iso?: string): string { try { return iso ? new Date(iso).toLocaleSt
 export default function MyInspections() {
   const [items, setItems] = useState<BuildingViolation[]>([]);
   const [viewer, setViewer] = useState<string | null>(null);
-  useFocusEffect(useCallback(() => { listMyLoggedInspections().then(setItems).catch(() => setItems([])); }, []));
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    const show = () => listMyLoggedInspections().then((v) => { if (active) setItems(v); }).catch(() => { if (active) setItems([]); });
+    show();
+    // Your record lives on the server too: pull it in case this phone's copy
+    // was removed or never synced.
+    syncAllEntities({ refreshEntities: ['building-violations'] }).catch(() => undefined).then(show);
+    return () => { active = false; };
+  }, []));
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>My Inspections</Text>
