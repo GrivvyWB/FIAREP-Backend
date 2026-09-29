@@ -262,8 +262,10 @@ export default function Reports() {
   // say where it is and link to Scope Review (Procurement / in-house buttons).
   const isCpmSup = isCpmSupervisorTitle(actor?.position);
   const isCpm = actor?.position === "CPM";
+  // Procurement reads the complaint and acts on its scope in Procurement.
+  const isProcurement = actor?.role === "procurement" || /procurement/i.test(actor?.position || "");
   const scopesQuery = useListEntityRecords("procurement", undefined, {
-    query: { queryKey: getListEntityRecordsQueryKey("procurement"), enabled: isCpmSup || isCpm, refetchInterval: 15_000 },
+    query: { queryKey: getListEntityRecordsQueryKey("procurement"), enabled: isCpmSup || isCpm || isProcurement, refetchInterval: 15_000 },
   });
   // The scope a CPM already started for a complaint (so the button greys out).
   const cpmScopeFor = (report: Report) => {
@@ -535,7 +537,7 @@ export default function Reports() {
           <p className="text-muted-foreground text-sm">Review and manage resident reports across your developments.</p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {(actor?.role === "management" || actor?.role === "administrator") && actor?.position !== "Borough Director" && <CreateReportButton />}
+          {(actor?.role === "management" || actor?.role === "administrator") && actor?.position !== "Borough Director" && !isProcurement && <CreateReportButton />}
           {canHandleComplaints && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
         </div>
       </div>
@@ -652,6 +654,31 @@ export default function Reports() {
                   );
                 })()}
                  <AttachedMeasurements list={state.measurements} />
+                 {isProcurement && (() => {
+                   const scope = cpmScopeFor(selected);
+                   const st = String(scope?.state?.status || "");
+                   const inProcurement = ["approved", "bidding", "awarded", "closed"].includes(st);
+                   const label: Record<string, string> = { draft: "being written by the CPM", returned: "returned to the CPM for changes", submitted: "waiting on the CPM Supervisor's approval", pending: "waiting on the CPM Supervisor's approval", approved: "approved — ready to release to vendors", bidding: "out to vendors for bids", awarded: "awarded to a vendor", closed: "closed" };
+                   return (
+                     <div className="space-y-2 border-t border-border pt-4">
+                       <p className="text-sm font-semibold">Scope for {String(state.complaintNo || "this complaint")}</p>
+                       {scope ? (
+                         <>
+                           <p className="text-sm">{scope.state?.address || ""}{scope.state?.cpmName ? ` · scoped by ${scope.state.cpmName}` : ""} — <span className="font-medium">{label[st] || st}</span></p>
+                           {inProcurement ? (
+                             <Link href={`/procurement?open=${encodeURIComponent(scope.id)}`} className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground">
+                               Open in Procurement to approve / release
+                             </Link>
+                           ) : (
+                             <p className="text-xs text-muted-foreground">It reaches Procurement once the CPM Supervisor approves it.</p>
+                           )}
+                         </>
+                       ) : (
+                         <p className="text-xs text-muted-foreground">No scope has been written for this complaint yet. The CPM writes it, the CPM Supervisor approves it, then it lands in Procurement.</p>
+                       )}
+                     </div>
+                   );
+                 })()}
                  {actor?.position === "CPM" && String(state.assignedStaffId || "") === actor?.id && !["resolved", "closed"].includes(currentStatus) && (
                    <div className="space-y-2 border-t border-border pt-4">
                      <p className="text-sm font-semibold">Scope of work</p>

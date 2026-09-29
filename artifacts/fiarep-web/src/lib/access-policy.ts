@@ -194,9 +194,17 @@ export function canApproveWork(staff: Staff | null | undefined): boolean {
   return !!staff && (MANAGEMENT_ROLES.has(staff.role) || isSupervisor(staff));
 }
 
+/** Procurement / HR / payroll desks: office roles that never handle a complaint. */
+export function isProcurementOrHrStaff(staff: Staff | null | undefined): boolean {
+  if (!staff) return false;
+  if (["procurement", "human_resources"].includes(String(staff.role || ""))) return true;
+  return /procurement|human resources|\bhr\b|payroll/i.test(staff.position || "");
+}
+
 export function canHandleResidentReports(staff: Staff | null | undefined): boolean {
   if (!staff) return false;
   if (staff.role === "administrator") return true;
+  if (isProcurementOrHrStaff(staff)) return false;
   if (staff.position === "Superintendent Ⓔ") return true;
   const position = staff.position?.trim() || "";
   // Every supervisor handles complaints the same way (CPM Supervisor included).

@@ -317,6 +317,15 @@ export default function Procurement() {
     if (t === "bidding") setOpenBids((m) => ({ ...m, [id]: true }));
     setFocusId(id);
   }
+  // Opened from a complaint ("Open in Procurement"): /procurement?open=<scope id>
+  const openedFromUrl = useRef(false);
+  useEffect(() => {
+    if (openedFromUrl.current || !scopes.length) return;
+    const id = new URLSearchParams(window.location.search).get("open");
+    if (!id) return;
+    openedFromUrl.current = true;
+    openRecord(id);
+  }, [scopes.length]);
   useEffect(() => {
     if (!focusId) return;
     const t = window.setTimeout(() => {
