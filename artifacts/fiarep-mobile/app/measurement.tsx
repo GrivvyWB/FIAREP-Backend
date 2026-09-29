@@ -75,7 +75,7 @@ export default function Measurement() {
     try {
       const perm = await ImagePicker.requestCameraPermissionsAsync();
       if (!perm.granted) { Alert.alert('Camera needed', 'Allow camera access to identify the material.'); return; }
-      const shot = await ImagePicker.launchCameraAsync({ quality: 0.5, base64: true, allowsEditing: false });
+      const shot = await ImagePicker.launchCameraAsync({ quality: 0.3, base64: true, allowsEditing: false });
       if (shot.canceled || !shot.assets?.[0]) return;
       const asset = shot.assets[0];
       setPhoto(asset.uri);
@@ -91,7 +91,15 @@ export default function Measurement() {
         } else if (res?.material && (res.material as string) !== 'unknown') {
           setAiNote(`Looks like ${MATERIAL_LABELS[res.material] || res.material}, but that's not enabled for you — pick below.`);
         } else { setAiNote("Couldn't identify the material — pick it below."); }
-      } catch { setAiNote('Material auto-detect unavailable — pick it below.'); }
+      } catch (e: any) {
+        // Say why, so a missing AI key or an oversized photo is obvious.
+        const status = e?.status || e?.response?.status;
+        const serverMsg = String(e?.data?.error || e?.message || '').trim();
+        setAiNote(
+          status === 413 ? 'Photo too large for auto-detect — pick the material below.'
+          : status === 503 ? 'Material auto-detect is turned off on the server (AI key not set) — pick it below.'
+          : 'Material auto-detect unavailable' + (serverMsg ? ` (${serverMsg.slice(0, 80)})` : '') + ' — pick it below.');
+      }
       finally { setClassifying(false); }
     } catch { setClassifying(false); }
   };
