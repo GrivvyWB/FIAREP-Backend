@@ -1,7 +1,7 @@
 import { useCallback, useState, useEffect } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { createLeaveRequest, leaveBalances, leavePrefillForEmployee, listStaffNames, listLeaveForEmployee, getCurrentActor, getCurrentPosition, LEAVE_TYPES, type LeaveType, type LeaveBalance, type LeaveRequest } from '../lib/store';
+import { createLeaveRequest, leaveBalances, leavePrefillForEmployee, listStaffNames, listLeaveForEmployee, getCurrentActor, getCurrentPosition, listSupervisorOptions, LEAVE_TYPES, type LeaveType, type LeaveBalance, type LeaveRequest, type SupervisorOption } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
@@ -68,6 +68,11 @@ export default function LeaveRequestScreen() {
   const [hours, setHours] = useState('');
   const [hoursPicker, setHoursPicker] = useState(false);
   const [typePicker, setTypePicker] = useState(false);
+  // Who covers the shift while they're out — picked from supervisors / management.
+  const [coverPicker, setCoverPicker] = useState(false);
+  const [coverOptions, setCoverOptions] = useState<SupervisorOption[]>([]);
+  const [cover, setCover] = useState<SupervisorOption | null>(null);
+  useEffect(() => { listSupervisorOptions().then(setCoverOptions).catch(() => setCoverOptions([])); }, []);
   const [startPicker, setStartPicker] = useState(false);
   const [endPicker, setEndPicker] = useState(false);
   const [balances, setBalances] = useState<LeaveBalance[]>([]);
@@ -116,7 +121,8 @@ export default function LeaveRequestScreen() {
     if (!start.trim()) { Alert.alert('Start date required', 'Pick a start date.'); return; }
     setBusy(true);
     try {
-      await createLeaveRequest({ employee: employee.trim(), title: title.trim(), development: development.trim(), supervisor: supervisor.trim(), type, startDate: start.trim(), endDate: (end.trim() || start.trim()), reason: reason.trim(), hours: hours.trim() ? Number(hours.trim()) : undefined });
+      await createLeaveRequest({ employee: employee.trim(), title: title.trim(), development: development.trim(), supervisor: supervisor.trim(), type, startDate: start.trim(), endDate: (end.trim() || start.trim()), reason: reason.trim(), hours: hours.trim() ? Number(hours.trim()) : undefined,
+        coveredByStaffId: cover?.id, coveredByName: cover?.name, coveredByPosition: cover?.position });
       Alert.alert('Submitted', 'Leave request submitted for review.', [{ text: 'OK', onPress: () => router.back() }]);
     } catch (e: any) { Alert.alert('Failed', String(e && e.message ? e.message : e)); }
     finally { setBusy(false); }
@@ -182,6 +188,11 @@ export default function LeaveRequestScreen() {
 
       <Text style={[ui.label, { marginTop: 12 }]}>Supervisor</Text>
       <TextInput style={ui.input} value={supervisor} onChangeText={setSupervisor} placeholder="Auto-fills from development; type if none" autoCapitalize="words" />
+
+      <Text style={[ui.label, { marginTop: 12 }]}>Who covers your shift</Text>
+      <Pressable style={ui.input} onPress={() => setCoverPicker(true)}>
+        <Text style={{ fontWeight: cover ? '600' : '400', color: cover ? '#000' : '#999' }}>{cover ? `${cover.name} \u00b7 ${cover.position}` : 'Pick a supervisor or manager  \u25be'}</Text>
+      </Pressable>
 
       <Text style={[ui.label, { marginTop: 12 }]}>Leave type</Text>
       <Pressable style={ui.input} onPress={() => setTypePicker(true)}>
@@ -257,6 +268,24 @@ export default function LeaveRequestScreen() {
         </View>
       </Modal>
 
+      <Modal visible={coverPicker} transparent animationType="slide" onRequestClose={() => setCoverPicker(false)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
+            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>Who covers your shift</Text>
+            <ScrollView>
+              <Pressable onPress={() => { setCover(null); setCoverPicker(false); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee' }}><Text style={{ fontSize: 15, color: '#999' }}>Not sure — let my supervisor pick</Text></Pressable>
+              {coverOptions.length === 0 && <Text style={{ padding: 16, color: '#999' }}>No supervisors loaded — connect to the internet and try again.</Text>}
+              {coverOptions.map((o) => (
+                <Pressable key={o.id} onPress={() => { setCover(o); setCoverPicker(false); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee' }}>
+                  <Text style={{ fontSize: 15, fontWeight: cover?.id === o.id ? '700' : '400', color: cover?.id === o.id ? ACCENT : '#000' }}>{o.name}</Text>
+                  <Text style={{ fontSize: 12, color: '#666' }}>{[o.position, (o.developments || []).slice(0, 2).join(', ')].filter(Boolean).join(' \u00b7 ')}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable onPress={() => setCoverPicker(false)} style={{ padding: 16 }}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Cancel</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={typePicker} transparent animationType="slide" onRequestClose={() => setTypePicker(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>

@@ -5462,6 +5462,9 @@ export type LeaveRequest = {
   hours?: number;          // optional partial-day hours (8h = 1 day)
   approvedDays?: number;   // total days approved (defaults to days on approve)
   reason?: string;
+  coveredByStaffId?: string;   // who covers the shift (picked from the supervisors list)
+  coveredByName?: string;
+  coveredByPosition?: string;
   status: LeaveStatus;
   requestedBy: string;
   requestedAt: string;
@@ -5485,6 +5488,7 @@ function daysBetween(start: string, end: string): number {
 export async function createLeaveRequest(input: {
   employee: string; title?: string; development?: string; supervisor?: string;
   type: LeaveType; startDate: string; endDate: string; reason?: string; hours?: number;
+  coveredByStaffId?: string; coveredByName?: string; coveredByPosition?: string;
 }): Promise<LeaveRequest> {
   const d = await db();
   await ensureLeaveTable(d);
@@ -5495,6 +5499,7 @@ export async function createLeaveRequest(input: {
     title: (input.title || '').trim(),
     development: (input.development || '').trim(),
     supervisor: (input.supervisor || '').trim(),
+    ...(input.coveredByStaffId ? { coveredByStaffId: input.coveredByStaffId, coveredByName: input.coveredByName || '', coveredByPosition: input.coveredByPosition || '' } : {}),
     type: input.type,
     startDate: (input.startDate || '').trim(),
     endDate: (input.endDate || input.startDate || '').trim(),
@@ -5537,7 +5542,7 @@ async function _saveLeave(req: LeaveRequest) {
   await queueMutation('leave-requests', req.id, req);
 }
 
-export async function decideLeaveRequest(id: string, status: LeaveStatus, approvedDays?: number): Promise<LeaveRequest | null> {
+export async function decideLeaveRequest(id: string, status: LeaveStatus, approvedDays?: number, coveredByStaffId?: string): Promise<LeaveRequest | null> {
   const req = await getLeaveRequest(id);
   if (!req) return null;
   const a = await getCurrentActor();
@@ -5545,7 +5550,9 @@ export async function decideLeaveRequest(id: string, status: LeaveStatus, approv
   if (!action) throw new Error(`Unsupported leave status: ${status}`);
   const pending = {
     action,
-    body: status === 'Approved' ? { approvedDays: approvedDays != null ? approvedDays : req.days } : {},
+    body: status === 'Approved'
+      ? { approvedDays: approvedDays != null ? approvedDays : req.days, ...(coveredByStaffId ? { coveredByStaffId } : {}) }
+      : {},
   };
   let result;
   try {

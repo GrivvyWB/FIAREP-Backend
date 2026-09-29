@@ -3,7 +3,7 @@ import { isSupervisorTitle } from '../lib/titles';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { listLeaveRequests, decideLeaveRequest, deleteLeaveRequest, listDevelopmentNames, getCurrentActor, getCurrentPosition, type LeaveRequest, type LeaveStatus } from '../lib/store';
+import { listLeaveRequests, decideLeaveRequest, deleteLeaveRequest, listDevelopmentNames, getCurrentActor, getCurrentPosition, listSupervisorOptions, type LeaveRequest, type LeaveStatus, type SupervisorOption } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
 
@@ -112,9 +112,17 @@ export default function LeaveDashboard() {
     return approved.filter((o) => o.id !== r.id && (o.development || '') === (r.development || '') && overlaps(r, o)).length;
   }
 
-  async function decide(r: LeaveRequest, status: LeaveStatus) {
+  const [coverFor, setCoverFor] = useState<LeaveRequest | null>(null);
+  const [coverOptions, setCoverOptions] = useState<SupervisorOption[]>([]);
+  async function decide(r: LeaveRequest, status: LeaveStatus, coveredByStaffId?: string) {
+    if (status === 'Approved' && coveredByStaffId === undefined) {
+      // Pick who covers the shift first (the requester's pick is pre-selected).
+      try { setCoverOptions(await listSupervisorOptions()); } catch { setCoverOptions([]); }
+      setCoverFor(r);
+      return;
+    }
     try {
-      await decideLeaveRequest(r.id, status);
+      await decideLeaveRequest(r.id, status, undefined, coveredByStaffId || (r as any).coveredByStaffId || '');
       load();
     } catch (error) {
       Alert.alert(
@@ -226,6 +234,7 @@ export default function LeaveDashboard() {
               <Text style={{ fontSize: 12, fontWeight: '700', color: statusColor(r.status) }}>{r.status === 'Approved' ? 'Complete' : r.status}</Text>
             </View>
             {r.status === 'Approved' && <Text style={{ fontSize: 13, color: '#1a8f4c', fontWeight: '600' }}>Covering the shift: {(r as any).coveredByName ? `${(r as any).coveredByName}${(r as any).coveredByPosition ? ` (${(r as any).coveredByPosition})` : ''}` : 'no cover named'}</Text>}
+            {r.status === 'Pending' && !!(r as any).coveredByName && <Text style={{ fontSize: 13, color: '#4A5560' }}>Cover proposed: {(r as any).coveredByName}{(r as any).coveredByPosition ? ` (${(r as any).coveredByPosition})` : ''}</Text>}
             <Text style={{ fontSize: 14, color: TYPE_COLOR[r.type] || '#333', fontWeight: '600' }}>{r.type}</Text>
             <Text style={ui.listSub}>{r.startDate}{r.endDate && r.endDate !== r.startDate ? '  \u2013  ' + r.endDate : ''}  ({r.hours && r.hours > 0 ? r.hours + ' hour' + (r.hours === 1 ? '' : 's') : (r.approvedDays != null ? r.approvedDays : r.days) + ' day' + ((r.approvedDays != null ? r.approvedDays : r.days) === 1 ? '' : 's')})</Text>
             {!!r.title && <Text style={ui.listSub}>{r.title}{r.development ? '  \u00b7  ' + r.development : ''}</Text>}
@@ -246,6 +255,23 @@ export default function LeaveDashboard() {
       })}
       <View style={{ height: 40 }} />
 
+      <Modal visible={!!coverFor} transparent animationType="slide" onRequestClose={() => setCoverFor(null)}>
+        <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
+            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>Approve — who covers {coverFor?.employee}'s shift?</Text>
+            <ScrollView>
+              <Pressable onPress={() => { const r = coverFor!; setCoverFor(null); void decide(r, 'Approved', ''); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee' }}><Text style={{ fontSize: 15, color: '#999' }}>No cover needed</Text></Pressable>
+              {coverOptions.filter((o) => o.id !== (coverFor as any)?.employeeStaffId).map((o) => (
+                <Pressable key={o.id} onPress={() => { const r = coverFor!; setCoverFor(null); void decide(r, 'Approved', o.id); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee' }}>
+                  <Text style={{ fontSize: 15, fontWeight: (coverFor as any)?.coveredByStaffId === o.id ? '700' : '400', color: (coverFor as any)?.coveredByStaffId === o.id ? ACCENT : '#000' }}>{o.name}{(coverFor as any)?.coveredByStaffId === o.id ? '  (proposed)' : ''}</Text>
+                  <Text style={{ fontSize: 12, color: '#666' }}>{[o.position, (o.developments || []).slice(0, 2).join(', ')].filter(Boolean).join(' \u00b7 ')}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+            <Pressable onPress={() => setCoverFor(null)} style={{ padding: 16 }}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Cancel</Text></Pressable>
+          </View>
+        </View>
+      </Modal>
       <Modal visible={devPicker} transparent animationType="slide" onRequestClose={() => setDevPicker(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>

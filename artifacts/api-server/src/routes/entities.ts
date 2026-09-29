@@ -874,6 +874,14 @@ router.post("/v1/:entity", async (req, res, next) => {
         if (!createdState["development"] && employeeMatches[0]!.developments?.[0]) createdState["development"] = employeeMatches[0]!.developments[0];
       }
     }
+    // The requester may propose who covers the shift; the approver confirms or changes it.
+    const proposedCover = typeof createdState["coveredByStaffId"] === "string" ? createdState["coveredByStaffId"].trim() : "";
+    delete createdState["coveredByStaffId"]; delete createdState["coveredByName"]; delete createdState["coveredByPosition"];
+    if (proposedCover) {
+      const [cover] = await db.select({ id: staffAccounts.id, name: staffAccounts.name, position: staffAccounts.position }).from(staffAccounts).where(and(
+        eq(staffAccounts.id, proposedCover), eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"))).limit(1);
+      if (cover) { createdState["coveredByStaffId"] = cover.id; createdState["coveredByName"] = cover.name; createdState["coveredByPosition"] = cover.position; }
+    }
     const leaveDays = leaveRequestDurationDays(createdState);
     if (leaveDays === null || !validLeaveRequestDuration(leaveDays)) {
       res.status(400).json({ error: "Time off must be 1 to 14 days or 30 to 365 days" });
@@ -1888,6 +1896,7 @@ router.post(
       body["coveredByName"] = cover.name;
       body["coveredByPosition"] = cover.position;
     } else {
+      // No pick from the approver: keep whoever the requester proposed.
       delete body["coveredByStaffId"]; delete body["coveredByName"]; delete body["coveredByPosition"];
     }
     body["decidedByStaffId"] = actor.id;
