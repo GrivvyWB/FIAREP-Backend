@@ -261,9 +261,17 @@ export default function Reports() {
   // CPM Supervisor: the CPM's scope for a complaint, so the complaint page can
   // say where it is and link to Scope Review (Procurement / in-house buttons).
   const isCpmSup = isCpmSupervisorTitle(actor?.position);
+  const isCpm = actor?.position === "CPM";
   const scopesQuery = useListEntityRecords("procurement", undefined, {
-    query: { queryKey: getListEntityRecordsQueryKey("procurement"), enabled: isCpmSup, refetchInterval: 15_000 },
+    query: { queryKey: getListEntityRecordsQueryKey("procurement"), enabled: isCpmSup || isCpm, refetchInterval: 15_000 },
   });
+  // The scope a CPM already started for a complaint (so the button greys out).
+  const cpmScopeFor = (report: Report) => {
+    const complaintNo = String((report.state as any)?.complaintNo || "");
+    return ((scopesQuery.data || []) as any[]).find((row) =>
+      row.state?.sourceRecordId === report.id || row.state?.sourceReportId === report.id ||
+      (!!complaintNo && (row.state?.complaintNo === complaintNo || row.state?.sourceRef === complaintNo)));
+  };
   const reportsQuery = useListEntityRecords("resident-reports", undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),
@@ -644,6 +652,21 @@ export default function Reports() {
                   );
                 })()}
                  <AttachedMeasurements list={state.measurements} />
+                 {actor?.position === "CPM" && String(state.assignedStaffId || "") === actor?.id && !["resolved", "closed"].includes(currentStatus) && (
+                   <div className="space-y-2 border-t border-border pt-4">
+                     <p className="text-sm font-semibold">Scope of work</p>
+                     {cpmScopeFor(selected) ? (
+                       <Link href="/scope-writing" className="inline-flex w-full items-center justify-center rounded-md border border-border bg-muted px-4 py-2 text-sm font-semibold text-muted-foreground">
+                         ✓ Scope {String(cpmScopeFor(selected)?.state?.status || "started")} — open Scope Writing
+                       </Link>
+                     ) : (
+                       <Link href={`/scope-writing?complaintId=${encodeURIComponent(selected.id)}&complaintNo=${encodeURIComponent(String(state.complaintNo || ""))}&address=${encodeURIComponent(String(state.address || ""))}&development=${encodeURIComponent(String(selected.development || state.development || ""))}&description=${encodeURIComponent(String(state.description || ""))}`} className="inline-flex w-full items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground hover:bg-primary/90">
+                         Start project / write scope for {String(state.complaintNo || "this complaint")}
+                       </Link>
+                     )}
+                     <p className="text-xs text-muted-foreground">Write the scope from this complaint and submit it to your CPM Supervisor for review.</p>
+                   </div>
+                 )}
                  {String(state.assignedStaffId || "") === actor?.id && currentStatus === "in_progress" && (
                    <div className="space-y-3 border-t border-border pt-4">
                      <input

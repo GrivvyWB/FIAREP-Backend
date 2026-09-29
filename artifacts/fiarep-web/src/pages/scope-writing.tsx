@@ -38,7 +38,19 @@ export default function ScopeWriting() {
   const update = useUpdateEntityRecord();
   const submit = usePerformEntityAction();
   const [editing, setEditing] = useState<Scope | null>(null);
-  const [draft, setDraft] = useState({ title: "", development: "", address: "", scope: "", evidence: "" });
+  // Opened from a complaint ("Start project / write scope"): the complaint's
+  // details are pre-filled and the scope stays linked to it.
+  const fromComplaint = (() => {
+    const p = new URLSearchParams(window.location.search);
+    const id = p.get("complaintId") || "";
+    return id ? {
+      id, complaintNo: p.get("complaintNo") || "", address: p.get("address") || "",
+      development: p.get("development") || "", description: p.get("description") || "",
+    } : null;
+  })();
+  const [draft, setDraft] = useState(() => fromComplaint
+    ? { title: `${fromComplaint.complaintNo || "Complaint"} \u2014 ${fromComplaint.address}`.trim(), development: fromComplaint.development, address: fromComplaint.address, scope: fromComplaint.description ? `Complaint: ${fromComplaint.description}\n\nScope of work:\n` : "", evidence: "" }
+    : { title: "", development: "", address: "", scope: "", evidence: "" });
   const assignedViolationIds = new Set((violationQuery.data || [])
     .filter((record) => {
       const state = record.state as any;
@@ -73,6 +85,7 @@ export default function ScopeWriting() {
       address: draft.address,
       scope: draft.scope,
       evidence: draft.evidence,
+      ...(!record && fromComplaint ? { sourceEntity: "resident-reports", sourceReportId: fromComplaint.id, sourceRecordId: fromComplaint.id, complaintNo: fromComplaint.complaintNo, sourceRef: fromComplaint.complaintNo } : {}),
     };
       if (record) {
         await update.mutateAsync({
@@ -116,7 +129,8 @@ export default function ScopeWriting() {
   return <div className="space-y-6">
     <div><h1 className="text-2xl font-bold">Scope Writing</h1><p className="text-muted-foreground">Write and submit procurement scopes for your assigned records.</p></div>
     <div className="rounded-xl border border-border bg-card p-5 space-y-3">
-      <h2 className="font-semibold">{editing ? "Edit scope draft" : "New scope draft"}</h2>
+      <h2 className="font-semibold">{editing ? "Edit scope draft" : fromComplaint ? `New scope for ${fromComplaint.complaintNo || "complaint"}` : "New scope draft"}</h2>
+      {!editing && fromComplaint && <p className="text-sm text-muted-foreground">Linked to complaint {fromComplaint.complaintNo}{fromComplaint.address ? ` · ${fromComplaint.address}` : ""}. Submit sends it to your CPM Supervisor.</p>}
        <div className="grid gap-3 md:grid-cols-2">
         <Input placeholder="Title" value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
         <Input placeholder="Development" value={draft.development} onChange={(e) => setDraft({ ...draft, development: e.target.value })} />
