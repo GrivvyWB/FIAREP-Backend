@@ -350,20 +350,17 @@ export default function ReportDetail() {
           </Pressable>
         )}
         {position === 'CPM' && (
-          <Pressable
-            disabled={scopeLock.locked}
-            style={[ui.btnOutline, { marginTop: 10 }, scopeLock.locked && { borderColor: '#bdbdbd', opacity: 0.6 }]}
-            onPress={() => router.push('/?new=1'
-              + '&preName=' + encodeURIComponent([r.complaintNo, r.address, r.unit ? 'Unit ' + r.unit : ''].filter(Boolean).join(' · '))
-              + '&preDevelopment=' + encodeURIComponent(r.development || '')
-              + '&preReportId=' + encodeURIComponent(r.id)
-              + '&preComplaintNo=' + encodeURIComponent(r.complaintNo || '')
-              + '&preAddress=' + encodeURIComponent(r.address || '')
-              + '&preUnit=' + encodeURIComponent(r.unit || '')
-              + '&preNote=' + encodeURIComponent(r.description || ''))}
-          >
-            <Text style={[ui.btnOutlineText, scopeLock.locked && { color: '#9e9e9e' }]}>Start project / scope for {r.complaintNo || 'this complaint'}</Text>
-          </Pressable>
+          <View style={{ marginTop: 10 }}>
+            <Pressable
+              style={[ui.btnOutline, { marginTop: 0 }]}
+              onPress={() => router.push('/?new=1&preDevelopment=' + encodeURIComponent(r.development || ''))}
+            >
+              <Text style={ui.btnOutlineText}>Start a new project scope (new findings)</Text>
+            </Pressable>
+            <Text style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+              Blank scope for violations you found on site that were not sent to you. It goes to your supervisor, who can pass it to an inspector if needed.
+            </Text>
+          </View>
         )}
         {isMine && r.status === 'assigned' && !readOnly && (
           <Pressable
