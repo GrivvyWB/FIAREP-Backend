@@ -2340,6 +2340,14 @@ export async function unreadCount(target: string): Promise<number> {
   return all.filter(n => !n.read).length;
 }
 
+export async function getNotification(id: string): Promise<Notification | null> {
+  const d = await db();
+  await ensureNotifTable(d);
+  const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM notifications WHERE id = ?', id);
+  if (!row) return null;
+  try { return JSON.parse(row.state) as Notification; } catch { return null; }
+}
+
 export async function markNotificationRead(id: string): Promise<void> {
   const d = await db();
   await ensureNotifTable(d);

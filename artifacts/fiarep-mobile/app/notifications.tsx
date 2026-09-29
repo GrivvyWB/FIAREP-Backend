@@ -7,6 +7,7 @@ import { Alert } from 'react-native';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
 import { clearBadge } from '../lib/push';
+import { isAppReadOnly } from '../lib/useAppReadOnly';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
@@ -18,6 +19,13 @@ export default function Notifications() {
   const router = useRouter();
   async function openFor(n: Notification) {
     const msg = (n.message || '').toLowerCase();
+    // Supervisors / management read the whole message (and what it refers
+    // to) right here, even with poor service; they act on fiarep.com.
+    if (await isAppReadOnly().catch(() => false)) {
+      await markNotificationRead(n.id);
+      router.push('/message?id=' + encodeURIComponent(n.id));
+      return;
+    }
     if (msg.includes('new resident report') && n.reportId) {
       await markNotificationRead(n.id);
       // Always open the report screen by id. report-detail re-syncs and fetches

@@ -201,6 +201,7 @@ function AdministratorStack() {
       <Stack.Screen name="admin-job" options={{ title: 'Add Job' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="manage-requests" options={{ title: 'Manage Requests' }} />
       <Stack.Screen name="assign-emergency" options={{ title: 'Assign Emergency Unit' }} />
       <Stack.Screen name="manage-trucks" options={{ title: 'Emergency Units' }} />
@@ -249,6 +250,7 @@ function InspectorStack() {
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
       <Stack.Screen name="leave-dashboard" options={{ title: 'Leave Calendar' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'Log Violations' }} />
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision' }} />
@@ -282,6 +284,7 @@ function ManagementStack() {
     <Stack initialRouteName="management-home">
       <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="manage-requests" options={{ title: 'Manage Requests' }} />
       <Stack.Screen name="in-house-assignments" options={{ title: 'In-house assignments' }} />
       <Stack.Screen name="cpm-home" options={{ title: 'CPM Supervisor', headerBackVisible: false }} />
@@ -354,6 +357,7 @@ function WorkerStack() {
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="worker-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
@@ -372,6 +376,7 @@ function EmergencyStack() {
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="worker-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
