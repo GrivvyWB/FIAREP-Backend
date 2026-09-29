@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
+import { isProcurementDesk } from "@/lib/access-policy";
 import { useToast } from "@/hooks/use-toast";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 import { notificationTitle } from "@/lib/notification-text";
@@ -242,7 +243,7 @@ export default function Procurement() {
   const queryClient = useQueryClient();
   const action = usePerformEntityAction();
   // Only Procurement may act; the server enforces the same rule.
-  const canAct = staff?.role === "procurement" || (staff?.role === "administrator" && (staff?.position || "").trim().toLowerCase() === "director");
+  const canAct = isProcurementDesk(staff);
 
   const scopesQuery = useListEntityRecords("procurement", undefined, {
     query: { queryKey: getListEntityRecordsQueryKey("procurement"), refetchInterval: 15_000, refetchOnMount: "always" },
@@ -671,7 +672,10 @@ export default function Procurement() {
               <p className="mt-1 text-slate-500">Release approved scopes to vendors, award bids, rate and close.</p>
             </div>
           </div>
-          <Button onClick={logout} className="gap-2 self-start bg-blue-600 px-5 hover:bg-blue-700" data-testid="button-procurement-sign-out"><LogOut className="h-4 w-4" />Sign out</Button>
+          <div className="flex gap-2 self-start">
+            {staff?.role !== "procurement" && <Button asChild variant="outline" className="px-5"><Link href="/dashboard">Back to dashboard</Link></Button>}
+            <Button onClick={logout} className="gap-2 bg-blue-600 px-5 hover:bg-blue-700" data-testid="button-procurement-sign-out"><LogOut className="h-4 w-4" />Sign out</Button>
+          </div>
         </div>
 
         <div className="space-y-6 rounded-2xl border border-slate-200 bg-white/70 p-4 shadow-sm md:p-6">

@@ -194,12 +194,20 @@ export function canApproveWork(staff: Staff | null | undefined): boolean {
   return !!staff && (MANAGEMENT_ROLES.has(staff.role) || isSupervisor(staff));
 }
 
+/** Who runs the Procurement desk: the Procurement role, or the company "Director"
+ * (an administrator titled plainly "Director" — not a Borough/Regional Director). */
+export function isProcurementDesk(staff: Staff | null | undefined): boolean {
+  if (!staff) return false;
+  if (staff.role === "procurement") return true;
+  return staff.role === "administrator" && (staff.position || "").trim().toLowerCase() === "director";
+}
+
 /** Procurement / HR / payroll desks: office roles that never handle a complaint. */
 export function isProcurementOrHrStaff(staff: Staff | null | undefined): boolean {
   if (!staff) return false;
   if (["procurement", "human_resources"].includes(String(staff.role || ""))) return true;
   // The company "Director" (administrator titled plainly "Director") runs Procurement.
-  if (staff.role === "administrator" && (staff.position || "").trim().toLowerCase() === "director") return true;
+  if (isProcurementDesk(staff)) return true;
   return /procurement|human resources|\bhr\b|payroll/i.test(staff.position || "");
 }
 

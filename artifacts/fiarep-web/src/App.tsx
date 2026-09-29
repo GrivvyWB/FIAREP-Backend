@@ -50,7 +50,7 @@ import PublicVendor from '@/pages/public-vendor';
 import OwnerLogin from '@/pages/platform-owner/login';
 import OwnerDashboard from '@/pages/platform-owner/index';
 import OwnerModules from '@/pages/platform-owner/modules';
-import { getStoredPersona, setStoredPersona, evaluateAccess, Persona, hasModuleAccess, type StaffModule } from '@/lib/access-policy';
+import { getStoredPersona, setStoredPersona, evaluateAccess, Persona, hasModuleAccess, isProcurementDesk, type StaffModule } from '@/lib/access-policy';
 import { useState } from 'react';
 import HRWorkspace from '@/pages/hr';
 import TradeRequests from '@/pages/trade-requests';
@@ -187,8 +187,10 @@ function AppRouter() {
   }
 
   if (location === "/procurement" || location.startsWith("/procurement/")) {
-    if (staff?.role !== "procurement") {
-      setLocation("/login");
+    // The Procurement role lives on this page alone; the company Director
+    // (an administrator) also works the desk here and keeps the rest of the site.
+    if (!isProcurementDesk(staff)) {
+      setLocation(staff ? "/dashboard" : "/login");
       return null;
     }
     return (
