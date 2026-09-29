@@ -86,8 +86,19 @@ export default function ChangeOrders() {
           </div>
           <span className={`rounded-full px-2 py-1 text-xs font-semibold ${st.cls}`}>{st.label}</span>
         </div>
-        {!!s.description && <p className="text-sm">{String(s.description)}</p>}
-        {!s.isWorkerCO && <p className="text-sm font-semibold">Cost: {money(s.cost)}</p>}
+        {s.isVendorCO === true && <span className="inline-block rounded bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">Vendor change work order · {String(s.vendor || "")}</span>}
+        {!!s.description && <p className="text-sm"><span className="font-semibold">What changed: </span>{String(s.description)}</p>}
+        {!!s.vendorReason && <p className="text-sm"><span className="font-semibold">Why: </span>{String(s.vendorReason)}</p>}
+        {!!s.measurements && <p className="text-sm"><span className="font-semibold">Measurements: </span>{String(s.measurements)}</p>}
+        {!!s.notes && <p className="text-sm"><span className="font-semibold">Notes: </span>{String(s.notes)}</p>}
+        {!s.isWorkerCO && <p className="text-sm font-semibold">Cost: {money(s.cost)}{s.isVendorCO === true && !Number(s.cost) ? " (vendor gave no cost)" : ""}</p>}
+        {Array.isArray(s.photos) && s.photos.some((p: unknown) => typeof p === "string" && p.startsWith("data:image")) && (
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {(s.photos as string[]).filter((p) => typeof p === "string" && p.startsWith("data:image")).map((p, i) => (
+              <a key={i} href={p} target="_blank" rel="noreferrer"><img src={p} alt={`Photo ${i + 1}`} className="h-32 w-full rounded-lg border bg-muted object-cover" /></a>
+            ))}
+          </div>
+        )}
         {!!s.reason && status(row) === "declined" && <p className="text-sm text-red-700">Reason: {String(s.reason)}</p>}
         {!!s.respondedByName && status(row) !== "submitted" && <p className="text-xs text-muted-foreground">{st.label} by {String(s.respondedByName)}{s.respondedAt ? ` · ${new Date(String(s.respondedAt)).toLocaleString()}` : ""}</p>}
         <FieldEvidenceDisplay state={s} photosLabel="Photos" />
@@ -114,7 +125,7 @@ export default function ChangeOrders() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2"><FileCog className="h-6 w-6" />Change Orders</h1>
-        <p className="text-sm text-muted-foreground">Change work orders written by CPMs and workers in the app. {canReview ? "Approve to send the cost to Procurement, or decline with a reason." : isProcurement ? "Approve the cost once management has approved the work." : "Track where each one stands."}</p>
+        <p className="text-sm text-muted-foreground">Change work orders written by CPMs and workers in the app, and by awarded vendors on site. {canReview ? "Approve to send the cost to Procurement, or decline with a reason." : isProcurement ? "Approve the cost once management has approved the work." : "Track where each one stands."}</p>
       </div>
       {(canReview || isProcurement) && (
         <Card>

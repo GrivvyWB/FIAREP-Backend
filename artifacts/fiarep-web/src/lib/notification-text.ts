@@ -57,6 +57,7 @@ export function notificationTitle(message: string | null | undefined): string {
 export function notificationHref(message: string, reportId: string, opts?: { inspector?: boolean }): string {
   const id = encodeURIComponent(reportId);
   const m = message || "";
+  if (/change work order|^change orders /i.test(m)) return "/change-orders";
   if (/^Measurement added to inspection/i.test(m)) return opts?.inspector ? "/my-inspections" : "/inspection-approvals";
   if (/^Measurement added/i.test(m)) return `/reports?id=${id}`;
   if (/^Scope approved for Procurement|Procurement returned|bid/i.test(m)) return "/procurement";

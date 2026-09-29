@@ -1,4 +1,5 @@
 import { ScopeLines, ViolationCode } from "@/components/scope-lines";
+import { VendorChangeOrder } from "@/components/vendor-change-order";
 import { useEffect, useState } from 'react';
 import { useLocation } from 'wouter';
 import { LogOut } from 'lucide-react';
@@ -350,6 +351,14 @@ export default function PublicVendor() {
                   )}
                 </CardContent>
               </Card>
+            )}
+            {(scopeResult.state as any)?.status === 'awarded' && lookupData && (
+              <VendorChangeOrder
+                trackingId={lookupData.trackingId}
+                vendorName={lookupData.vendorName}
+                started={!!(scopeResult.state as any)?.startedAt}
+                completed={!!(scopeResult.state as any)?.completedAt}
+              />
             )}
             {!!(scopeResult.state as any)?.completedAt && (scopeResult.state as any)?.status === 'awarded' && (
               <p className="text-sm text-muted-foreground">Completed {new Date((scopeResult.state as any).completedAt).toLocaleString()} — Procurement will rate and close the job.</p>

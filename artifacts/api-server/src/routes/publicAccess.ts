@@ -700,4 +700,114 @@ router.post("/v1/public/vendor-scopes/:trackingId/progress", rateLimit("vendor-p
   res.json(vendorRecord(updated!, vendorName));
 });
 
+// ── Vendor change work orders ──────────────────────────────────────────────
+// Once awarded and on site, a vendor can raise a change work order: what
+// changed, why, measurements, notes and photos — all required so there is
+// never a mix-up. It goes to the CPM Supervisor handling the scope (and the
+// CPM who wrote it) to approve and send to Procurement, or decline. The vendor
+// sees who received it and every status change on their page.
+const VENDOR_CO_PHOTO_MAX = 6;
+const VENDOR_CO_PHOTO_CHARS = 700_000; // ~500 KB each, as a data URL
+
+function vendorChangeOrderView(row: typeof entityRecords.$inferSelect) {
+  const st = row.state as Record<string, unknown>;
+  return {
+    id: row.id,
+    createdAt: String(st["createdAt"] || row.createdAt),
+    status: String(st["status"] || "submitted"),
+    description: String(st["description"] || ""),
+    vendorReason: String(st["vendorReason"] || ""),
+    measurements: String(st["measurements"] || ""),
+    notes: String(st["notes"] || ""),
+    cost: Number(st["cost"] || 0) || 0,
+    photoCount: Array.isArray(st["photos"]) ? (st["photos"] as unknown[]).length : 0,
+    receivedBy: Array.isArray(st["receivedBy"]) ? (st["receivedBy"] as string[]) : [],
+    receivedAt: String(st["receivedAt"] || ""),
+    respondedByName: String(st["respondedByName"] || ""),
+    respondedAt: String(st["respondedAt"] || ""),
+    reason: String(st["reason"] || ""),
+  };
+}
+
+async function vendorChangeOrders(scopeId: string, tenantId: string, vendorName: string) {
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, tenantId), eq(entityRecords.entity, "change-orders"), eq(entityRecords.deleted, false),
+  )).orderBy(desc(entityRecords.createdAt));
+  return rows
+    .filter((row) => row.state["reportId"] === scopeId && row.state["isVendorCO"] === true &&
+      normalize(row.state["vendor"]) === normalize(vendorName))
+    .map(vendorChangeOrderView);
+}
+
+router.get("/v1/public/vendor-scopes/:trackingId/change-orders", async (req, res) => {
+  const vendorName = String(req.query["vendorName"] ?? "").trim();
+  const scope = await releasedScope(req.params["trackingId"]!);
+  if (!scope || !vendorName || normalize(scope.state["vendor"]) !== normalize(vendorName)) {
+    res.status(404).json({ error: "Only the awarded vendor can see these" }); return;
+  }
+  res.json(await vendorChangeOrders(scope.id, scope.tenantId, vendorName));
+});
+
+router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("vendor-change-order", 20), async (req, res) => {
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const vendorName = String(body.vendorName ?? "").trim();
+  const description = String(body.description ?? "").trim().slice(0, 4000);
+  const vendorReason = String(body.reason ?? "").trim().slice(0, 4000);
+  const measurements = String(body.measurements ?? "").trim().slice(0, 2000);
+  const notes = String(body.notes ?? "").trim().slice(0, 4000);
+  const cost = Number(body.cost);
+  const photos = (Array.isArray(body.photos) ? body.photos : []).filter((p: unknown) =>
+    typeof p === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(p) && p.length <= VENDOR_CO_PHOTO_CHARS).slice(0, VENDOR_CO_PHOTO_MAX) as string[];
+  const scope = await releasedScope(req.params["trackingId"]!);
+  if (!scope || !vendorName || normalize(scope.state["status"]) !== "awarded" ||
+      normalize(scope.state["vendor"]) !== normalize(vendorName)) {
+    res.status(404).json({ error: "Only the awarded vendor can raise a change work order on this job" }); return;
+  }
+  if (!scope.state["startedAt"] && !scope.state["vendorStartedAt"]) {
+    res.status(409).json({ error: "Press Start work first — change work orders are raised from the job site" }); return;
+  }
+  if (scope.state["completedAt"]) {
+    res.status(409).json({ error: "This job is marked complete" }); return;
+  }
+  const missing = [
+    !description ? "what changed" : "", !vendorReason ? "the reason why" : "", !measurements ? "measurements" : "",
+    !notes ? "notes" : "", !photos.length ? "at least one photo" : "",
+  ].filter(Boolean);
+  if (missing.length) { res.status(400).json({ error: `Please provide ${missing.join(", ")}` }); return; }
+  const org = await evaluateLicense(scope.tenantId);
+  if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
+
+  // The chain of command: the CPM Supervisor handling this scope and the CPM
+  // who wrote it.
+  const supervisorId = String(scope.state["handoffTargetId"] || scope.state["cpmSupervisorId"] || "");
+  const supervisorName = String(scope.state["handoffTargetName"] || scope.state["cpmSupervisorName"] || "");
+  const cpmId = String(scope.state["cpmId"] || "");
+  const cpmName = String(scope.state["cpmName"] || scope.state["requestedBy"] || "");
+  const targets = [...new Set([supervisorId, cpmId].filter(Boolean))];
+  const receivedBy = [...new Set([supervisorName, cpmName].filter(Boolean))];
+  const now = new Date().toISOString();
+  const ref = [scope.state["trackingId"], scope.state["sourceRef"], scope.state["address"]].filter(Boolean).join(" \u00b7 ");
+  const id = randomUUID();
+  const state = {
+    id, reportId: scope.id, reportRef: ref, trackingId: String(scope.state["trackingId"] || ""),
+    targetPosition: "CPM Supervisor", targetName: supervisorName, targetStaffId: supervisorId, cpmSupervisorId: supervisorId, cpmId,
+    assignedStaffId: cpmId || supervisorId,
+    isVendorCO: true, vendor: vendorName, createdByRole: "vendor", createdByName: vendorName,
+    description, vendorReason, measurements, notes, cost: Number.isFinite(cost) && cost > 0 ? Math.round(cost * 100) / 100 : 0, photos,
+    status: "submitted", reason: "", respondedByName: "", respondedAt: "", createdAt: now,
+    receivedBy, receivedAt: targets.length ? now : "",
+  };
+  const [created] = await db.insert(entityRecords).values({
+    id, tenantId: scope.tenantId, entity: "change-orders", development: scope.development, state, createdBy: null,
+  }).returning();
+  const detail = `${vendorName} \u00b7 ${ref}${state.cost ? ` \u00b7 $${state.cost}` : ""} \u2014 ${vendorReason.slice(0, 80)}`;
+  for (const target of targets) {
+    const [n] = await db.insert(notifications).values({
+      id: randomUUID(), tenantId: scope.tenantId, target, message: "Vendor change work order to review", detail, reportId: id,
+    }).returning();
+    if (n) void deliverPushNotification(n).catch(() => undefined);
+  }
+  res.status(201).json(vendorChangeOrderView(created!));
+});
+
 export default router;
