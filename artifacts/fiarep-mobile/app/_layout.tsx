@@ -405,6 +405,7 @@ function VendorStack() {
     <Stack initialRouteName="vendor-home">
       <Stack.Screen name="vendor-home" options={{ title: 'Vendor', headerBackVisible: false }} />
       <Stack.Screen name="vendor-quote" options={{ title: 'Your Quote' }} />
+      <Stack.Screen name="vendor-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Status' }} />
       <Stack.Screen name="project/checklist" options={{ title: 'Renovation checklist' }} />
       <Stack.Screen name="project/project-scope" options={{ title: 'Scope of Work' }} />

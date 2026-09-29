@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { flushVendorOutbox, listVendorChangeOrders, removeFromOutbox, type VendorChangeOrderView } from '../lib/vendorChangeOrders';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import {
   getProcurementByTracking,
   submitBid,
@@ -44,6 +45,24 @@ export default function VendorHome() {
   const [searched, setSearched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [walkthroughCheckIn, setWalkthroughCheckIn] = useState<VendorWalkthroughCheckIn | null>(null);
+  const [changeOrders, setChangeOrders] = useState<VendorChangeOrderView[]>([]);
+  const [outboxLeft, setOutboxLeft] = useState(0);
+
+  // Push anything saved while there was no service, then refresh this job's
+  // change work orders. Runs on open, when the job changes, and every minute
+  // while this screen is up.
+  const syncChangeOrders = useCallback(async () => {
+    try { const r = await flushVendorOutbox(); setOutboxLeft(r.left); } catch {}
+    const vendor = (bidName || job?.vendor || '').trim();
+    if (job?.trackingId && vendor) {
+      try { setChangeOrders(await listVendorChangeOrders(job.trackingId, vendor)); } catch {}
+    }
+  }, [job?.trackingId, job?.vendor, bidName]);
+  useFocusEffect(useCallback(() => { void syncChangeOrders(); }, [syncChangeOrders]));
+  useEffect(() => {
+    const t = setInterval(() => { void syncChangeOrders(); }, 60_000);
+    return () => clearInterval(t);
+  }, [syncChangeOrders]);
 
   async function lookup() {
     const q = query.trim();
@@ -268,6 +287,9 @@ export default function VendorHome() {
               )}
               {!!job.startedAt && (
                 <>
+                  <Pressable style={ui.btnOutline} onPress={() => router.push('/vendor-change-order?trackingId=' + encodeURIComponent(job.trackingId) + '&vendor=' + encodeURIComponent(bidName.trim() || job.vendor || '') + '&address=' + encodeURIComponent(job.address || ''))}>
+                    <Text style={ui.btnOutlineText}>Change work order (with photos)</Text>
+                  </Pressable>
                   <Text style={ui.label}>Completion note (optional)</Text>
                   <TextInput
                     style={[ui.input, { height: 90, textAlignVertical: 'top' }]}
@@ -281,6 +303,38 @@ export default function VendorHome() {
                   </Pressable>
                 </>
               )}
+            </View>
+          )}
+
+          {job.status === 'awarded' && (changeOrders.length > 0 || outboxLeft > 0) && (
+            <View style={{ gap: 8, marginTop: 10 }}>
+              <Text style={ui.h}>Your change work orders</Text>
+              {changeOrders.map((co) => {
+                const label = co.pending ? (co.lastError && co.lastError.startsWith('Rejected') ? co.lastError : 'Saved on this phone — will send when you have service')
+                  : co.status === 'submitted' ? 'Received — awaiting supervisor review'
+                  : co.status === 'mgmt_approved' ? 'Approved by supervisor — with Procurement for cost'
+                  : co.status === 'cost_approved' ? 'Approved — go ahead'
+                  : co.status === 'declined' ? 'Declined' : co.status;
+                const color = co.pending ? (co.lastError && co.lastError.startsWith('Rejected') ? '#B42318' : '#9a3412') : co.status === 'declined' ? '#B42318' : co.status === 'cost_approved' ? '#1E7D4F' : '#1c3d66';
+                return (
+                  <View key={co.id} style={[ui.card, { padding: 12 }]}>
+                    <Text style={{ color, fontWeight: '700', fontSize: 13 }}>{label}</Text>
+                    <Text style={{ fontSize: 12, color: '#888' }}>{fmt(co.createdAt)}{co.photoCount ? ` · ${co.photoCount} photo${co.photoCount === 1 ? '' : 's'}` : ''}</Text>
+                    <Text style={{ marginTop: 4 }}><Text style={{ fontWeight: '600' }}>What changed: </Text>{co.description}</Text>
+                    <Text><Text style={{ fontWeight: '600' }}>Why: </Text>{co.vendorReason}</Text>
+                    <Text><Text style={{ fontWeight: '600' }}>Measurements: </Text>{co.measurements}</Text>
+                    {!!co.cost && <Text><Text style={{ fontWeight: '600' }}>Added cost: </Text>${co.cost.toFixed(2)}</Text>}
+                    {!!co.receivedBy.length && <Text style={{ color: '#1E7D4F', fontSize: 12, marginTop: 4 }}>✓ Received by {co.receivedBy.join(' and ')}{co.receivedAt ? ' · ' + fmt(co.receivedAt) : ''}</Text>}
+                    {!co.pending && co.status !== 'submitted' && !!co.respondedByName && <Text style={{ color: '#666', fontSize: 12 }}>{label} by {co.respondedByName}{co.respondedAt ? ' · ' + fmt(co.respondedAt) : ''}</Text>}
+                    {co.status === 'declined' && !!co.reason && <Text style={{ color: '#B42318' }}>Reason: {co.reason}</Text>}
+                    {co.pending && co.lastError && co.lastError.startsWith('Rejected') && (
+                      <Pressable onPress={() => Alert.alert('Remove?', 'This change work order was rejected by the server and will not be sent. Remove it from this phone?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { await removeFromOutbox(co.id); void syncChangeOrders(); } }])} style={{ marginTop: 6 }}>
+                        <Text style={{ color: '#B42318', fontWeight: '600' }}>Remove</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
             </View>
           )}
 

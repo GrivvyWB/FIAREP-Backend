@@ -751,6 +751,10 @@ router.get("/v1/public/vendor-scopes/:trackingId/change-orders", async (req, res
 router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("vendor-change-order", 20), async (req, res) => {
   const body = req.body && typeof req.body === "object" ? req.body : {};
   const vendorName = String(body.vendorName ?? "").trim();
+  // The app queues change orders offline and retries: the same clientId is
+  // never created twice.
+  const clientId = String(body.clientId ?? "").trim().slice(0, 64);
+  const clientCreatedAt = typeof body.createdAt === "string" && !Number.isNaN(Date.parse(body.createdAt)) ? new Date(body.createdAt).toISOString() : "";
   const description = String(body.description ?? "").trim().slice(0, 4000);
   const vendorReason = String(body.reason ?? "").trim().slice(0, 4000);
   const measurements = String(body.measurements ?? "").trim().slice(0, 2000);
@@ -776,6 +780,12 @@ router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("ven
   if (missing.length) { res.status(400).json({ error: `Please provide ${missing.join(", ")}` }); return; }
   const org = await evaluateLicense(scope.tenantId);
   if (!licenseAllows(org, scope.tenantId)) { res.status(404).json({ error: "Released scope not found" }); return; }
+  if (clientId) {
+    const existing = (await db.select().from(entityRecords).where(and(
+      eq(entityRecords.tenantId, scope.tenantId), eq(entityRecords.entity, "change-orders"), eq(entityRecords.deleted, false),
+    ))).find((row) => row.state["clientId"] === clientId && row.state["reportId"] === scope.id);
+    if (existing) { res.json(vendorChangeOrderView(existing)); return; }
+  }
 
   // The chain of command: the CPM Supervisor handling this scope and the CPM
   // who wrote it.
@@ -789,12 +799,12 @@ router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("ven
   const ref = [scope.state["trackingId"], scope.state["sourceRef"], scope.state["address"]].filter(Boolean).join(" \u00b7 ");
   const id = randomUUID();
   const state = {
-    id, reportId: scope.id, reportRef: ref, trackingId: String(scope.state["trackingId"] || ""),
+    id, clientId: clientId || undefined, reportId: scope.id, reportRef: ref, trackingId: String(scope.state["trackingId"] || ""),
     targetPosition: "CPM Supervisor", targetName: supervisorName, targetStaffId: supervisorId, cpmSupervisorId: supervisorId, cpmId,
     assignedStaffId: cpmId || supervisorId,
     isVendorCO: true, vendor: vendorName, createdByRole: "vendor", createdByName: vendorName,
     description, vendorReason, measurements, notes, cost: Number.isFinite(cost) && cost > 0 ? Math.round(cost * 100) / 100 : 0, photos,
-    status: "submitted", reason: "", respondedByName: "", respondedAt: "", createdAt: now,
+    status: "submitted", reason: "", respondedByName: "", respondedAt: "", createdAt: clientCreatedAt || now, sentAt: now,
     receivedBy, receivedAt: targets.length ? now : "",
   };
   const [created] = await db.insert(entityRecords).values({
