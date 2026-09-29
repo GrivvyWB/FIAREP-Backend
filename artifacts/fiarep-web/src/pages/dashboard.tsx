@@ -69,7 +69,9 @@ export default function Dashboard() {
 
   const metrics = [
     { label: "Active Projects", value: projects.filter((item) => !["completed", "closed", "cancelled"].includes(statusOf(item))).length, total: projects.length, icon: FolderKanban, query: projectsQuery, href: "/projects" },
-    { label: "Resident Reports", value: reports.filter((item) => !["resolved", "closed"].includes(statusOf(item))).length, total: reports.length, icon: FileSearch, query: reportsQuery, href: "/reports" },
+    // The big number is what needs YOUR action: new complaints, and ones
+    // sent to you that you haven't handed on or finished. Total underneath.
+    { label: "Resident Reports", value: reports.filter((item) => statusOf(item) === "submitted" || (String(item.state?.assignedStaffId || "") === staff?.id && !["resolved", "closed", "done", "work_approved"].includes(statusOf(item)))).length, total: reports.length, icon: FileSearch, query: reportsQuery, href: "/reports" },
     { label: "Open Inspections", value: inspections.filter((item) => !["completed", "closed"].includes(statusOf(item))).length, total: inspections.length, icon: ClipboardCheck, query: inspectionsQuery, href: "/inspections" },
     { label: "Emergencies", value: emergencies.filter((item) => !["completed", "closed", "resolved"].includes(statusOf(item))).length, total: emergencies.length, icon: AlertTriangle, query: emergenciesQuery, href: "/emergency" },
     { label: "Pending Leave", value: leave.filter((item) => String(item.state?.status || "Pending") === "Pending").length, total: leave.length, icon: Plane, query: leaveQuery, href: "/leave?view=team" },
