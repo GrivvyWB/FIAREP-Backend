@@ -313,7 +313,7 @@ export default function VendorHome() {
                 const label = co.pending ? (co.lastError && co.lastError.startsWith('Rejected') ? co.lastError : 'Saved on this phone — will send when you have service')
                   : co.status === 'submitted' ? 'Received — awaiting supervisor review'
                   : co.status === 'mgmt_approved' ? 'Approved by supervisor — with Procurement for cost'
-                  : co.status === 'cost_approved' ? 'Approved — go ahead'
+                  : co.status === 'cost_approved' ? 'APPROVED — go ahead'
                   : co.status === 'declined' ? 'Declined' : co.status;
                 const color = co.pending ? (co.lastError && co.lastError.startsWith('Rejected') ? '#B42318' : '#9a3412') : co.status === 'declined' ? '#B42318' : co.status === 'cost_approved' ? '#1E7D4F' : '#1c3d66';
                 return (
@@ -327,6 +327,8 @@ export default function VendorHome() {
                     {!!co.receivedBy.length && <Text style={{ color: '#1E7D4F', fontSize: 12, marginTop: 4 }}>✓ Received by {co.receivedBy.join(' and ')}{co.receivedAt ? ' · ' + fmt(co.receivedAt) : ''}</Text>}
                     {!co.pending && co.status !== 'submitted' && !!co.respondedByName && <Text style={{ color: '#666', fontSize: 12 }}>{label} by {co.respondedByName}{co.respondedAt ? ' · ' + fmt(co.respondedAt) : ''}</Text>}
                     {co.status === 'declined' && !!co.reason && <Text style={{ color: '#B42318' }}>Reason: {co.reason}</Text>}
+                    {co.status === 'cost_approved' && <Text style={{ color: '#1E7D4F', fontWeight: '700', marginTop: 4 }}>✓ Approved by the supervisor and Procurement — you're clear to do this extra work{co.cost ? ` for $${co.cost.toFixed(2)}` : ''}.</Text>}
+                    {co.vendorEmailed && co.status !== 'submitted' && <Text style={{ color: '#888', fontSize: 12 }}>A copy was emailed to you.</Text>}
                     {co.pending && co.lastError && co.lastError.startsWith('Rejected') && (
                       <Pressable onPress={() => Alert.alert('Remove?', 'This change work order was rejected by the server and will not be sent. Remove it from this phone?', [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: async () => { await removeFromOutbox(co.id); void syncChangeOrders(); } }])} style={{ marginTop: 6 }}>
                         <Text style={{ color: '#B42318', fontWeight: '600' }}>Remove</Text>

@@ -23,7 +23,7 @@ export type VendorChangeOrderDraft = {
 export type VendorChangeOrderView = {
   id: string; createdAt: string; status: string; description: string; vendorReason: string; measurements: string;
   notes: string; cost: number; photoCount: number; receivedBy: string[]; receivedAt: string;
-  respondedByName: string; respondedAt: string; reason: string;
+  respondedByName: string; respondedAt: string; reason: string; vendorEmailed?: boolean;
   pending?: boolean;        // still in the outbox (no service yet)
   lastError?: string;
 };

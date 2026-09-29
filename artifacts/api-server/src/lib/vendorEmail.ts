@@ -84,3 +84,60 @@ export async function emailReleasedScope(
   }
   return { sent, failed, recipients: recipients.size };
 }
+
+// Tell the vendor what happened to their change work order (received /
+// approved by the supervisor / cost approved by Procurement / declined).
+// Sent to the vendor's contact email when one is on file; the vendor's page
+// and app show the same status either way.
+export async function emailVendorChangeOrderStatus(
+  tenantId: string,
+  changeOrder: Record<string, unknown>,
+): Promise<boolean> {
+  const vendor = String(changeOrder["vendor"] ?? "").trim().toLowerCase();
+  if (!vendor) return false;
+  const contacts = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, tenantId),
+    eq(entityRecords.entity, "vendor-contacts"),
+    eq(entityRecords.deleted, false),
+  ));
+  const contact = contacts.find((c) => String(c.state["name"] ?? "").trim().toLowerCase() === vendor);
+  const email = String(contact?.state["email"] ?? "").trim().toLowerCase();
+  if (!email.includes("@")) return false;
+  const status = String(changeOrder["status"] ?? "");
+  const headline =
+    status === "cost_approved" ? "APPROVED — go ahead with the extra work" :
+    status === "mgmt_approved" ? "Approved by the supervisor — with Procurement for cost approval" :
+    status === "declined" ? "Declined" : "Received — awaiting supervisor review";
+  const ref = String(changeOrder["reportRef"] ?? "").trim();
+  const by = String(changeOrder["respondedByName"] ?? "").trim();
+  const reason = String(changeOrder["reason"] ?? "").trim();
+  const cost = Number(changeOrder["cost"] ?? 0) || 0;
+  const vendorLink = `${(process.env["PUBLIC_WEB_URL"] || "https://fiarep.com").replace(/\/$/, "")}/vendor`;
+  try {
+    const response = await connectors.proxy("outlook", "/v1.0/me/sendMail", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        message: {
+          subject: `FIAREP change work order ${headline.split(" — ")[0]}${ref ? ` · ${ref}` : ""}`,
+          body: {
+            contentType: "HTML",
+            content: `<p><strong>${escapeHtml(headline)}</strong>${by ? ` by ${escapeHtml(by)}` : ""}</p>` +
+              (ref ? `<p>Job: ${escapeHtml(ref)}</p>` : "") +
+              `<p>What changed: ${escapeHtml(changeOrder["description"])}</p>` +
+              `<p>Why: ${escapeHtml(changeOrder["vendorReason"])}</p>` +
+              `<p>Measurements: ${escapeHtml(changeOrder["measurements"])}</p>` +
+              (cost ? `<p>Added cost: $${cost.toFixed(2)}</p>` : "") +
+              (status === "declined" && reason ? `<p>Reason: ${escapeHtml(reason)}</p>` : "") +
+              `<p>Open your job at <a href="${vendorLink}">${vendorLink}</a> with your tracking ID to see it.</p>`,
+          },
+          toRecipients: [{ emailAddress: { address: email, name: String(contact?.state["name"] ?? "") || undefined } }],
+        },
+        saveToSentItems: true,
+      }),
+    });
+    return response.ok;
+  } catch {
+    return false;
+  }
+}

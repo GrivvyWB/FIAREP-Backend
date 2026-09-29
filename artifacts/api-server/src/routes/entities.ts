@@ -49,7 +49,7 @@ import { hasScopePackage, snapshotElevator, snapshotEstimate, snapshotScope } fr
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
-import { emailReleasedScope } from "../lib/vendorEmail";
+import { emailReleasedScope, emailVendorChangeOrderStatus } from "../lib/vendorEmail";
 import { logger } from "../lib/logger";
 import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
 import { rateLimit } from "../lib/rateLimit";
@@ -1357,6 +1357,23 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   await audit(actor, `${entity}.updated`, `Updated ${entity} record`, current.id);
+  // A vendor's change work order changed status (supervisor approved /
+  // Procurement approved the cost / declined): the vendor gets an approved (or
+  // declined) on their side — their page and app show it, and they are emailed
+  // when a contact email is on file.
+  if (
+    entity === "change-orders" &&
+    updated.state["isVendorCO"] === true &&
+    String(updated.state["status"] || "") !== String(current.state["status"] || "")
+  ) {
+    void emailVendorChangeOrderStatus(actor.tenantId, updated.state as Record<string, unknown>)
+      .then(async (sent) => {
+        await db.update(entityRecords)
+          .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ vendorNotifiedAt: new Date().toISOString(), vendorEmailed: sent })}::jsonb` })
+          .where(and(eq(entityRecords.id, updated.id), eq(entityRecords.tenantId, actor.tenantId)));
+      })
+      .catch(() => undefined);
+  }
   res.json(outward(actor, updated));
 });
 

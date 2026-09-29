@@ -13,13 +13,13 @@ import { Camera, X } from "lucide-react";
 type VendorCO = {
   id: string; createdAt: string; status: string; description: string; vendorReason: string; measurements: string;
   notes: string; cost: number; photoCount: number; receivedBy: string[]; receivedAt: string;
-  respondedByName: string; respondedAt: string; reason: string;
+  respondedByName: string; respondedAt: string; reason: string; vendorEmailed?: boolean;
 };
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   submitted: { label: "Received — awaiting supervisor review", cls: "bg-amber-100 text-amber-800" },
   mgmt_approved: { label: "Approved by supervisor — with Procurement for cost", cls: "bg-blue-100 text-blue-800" },
-  cost_approved: { label: "Approved — go ahead", cls: "bg-emerald-100 text-emerald-800" },
+  cost_approved: { label: "APPROVED — go ahead", cls: "bg-emerald-600 text-white" },
   declined: { label: "Declined", cls: "bg-red-100 text-red-800" },
 };
 
@@ -146,6 +146,8 @@ export function VendorChangeOrder({ trackingId, vendorName, started, completed }
               {!!co.receivedBy.length && <p className="text-xs text-emerald-700">✓ Received by {co.receivedBy.join(" and ")}{co.receivedAt ? ` · ${new Date(co.receivedAt).toLocaleString()}` : ""}</p>}
               {co.status !== "submitted" && !!co.respondedByName && <p className="text-xs text-muted-foreground">{st.label} by {co.respondedByName}{co.respondedAt ? ` · ${new Date(co.respondedAt).toLocaleString()}` : ""}</p>}
               {co.status === "declined" && !!co.reason && <p className="text-sm text-red-700">Reason: {co.reason}</p>}
+              {co.status === "cost_approved" && <p className="text-sm font-semibold text-emerald-700">✓ Approved by the supervisor and Procurement — you're clear to do this extra work{co.cost ? ` for $${co.cost.toFixed(2)}` : ""}.</p>}
+              {co.vendorEmailed && co.status !== "submitted" && <p className="text-xs text-muted-foreground">A copy was emailed to you.</p>}
             </div>
           );
         })}

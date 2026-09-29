@@ -726,6 +726,7 @@ function vendorChangeOrderView(row: typeof entityRecords.$inferSelect) {
     respondedByName: String(st["respondedByName"] || ""),
     respondedAt: String(st["respondedAt"] || ""),
     reason: String(st["reason"] || ""),
+    vendorEmailed: st["vendorEmailed"] === true,
   };
 }
 
