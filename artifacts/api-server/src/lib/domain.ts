@@ -1118,7 +1118,9 @@ export function canAssignStaff(
   const targetCoversDev = target.developments.some(
     (d) => (d || "").trim().toLowerCase() === devN,
   );
-  if (development && target.role !== "emergency" && !targetCoversDev) return false;
+  // Office-based staff (CPMs, office trade crews — no developments of their
+  // own) work at whatever site they're sent to.
+  if (development && target.role !== "emergency" && target.developments.length && !targetCoversDev) return false;
   if (isBoroughDirector(actor) || actor.role === "administrator") return true;
   // Emergency crews answer emergency requests from any supervisor, whatever
   // the supervisor's own trade or developments.
@@ -1548,7 +1550,9 @@ export function isValidEntityTransition(
       "rate-close": ["awarded"],
     },
     "resident-reports": {
-      assign: ["submitted"],
+      // A complaint sent to a supervisor is handed down again (CPM Supervisor
+      // → CPM, trade supervisor → crew), so assign is allowed from assigned too.
+      assign: ["submitted", "assigned"],
       release: ["assigned", "in_progress"],
       start: ["assigned"],
       resolve: ["in_progress"],

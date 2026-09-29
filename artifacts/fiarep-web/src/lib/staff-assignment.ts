@@ -99,8 +99,11 @@ export function assignableOperationalStaff(
     if (!OPERATIONAL_ROLES.has(candidate.role)) return false;
     if (actorTrade && !isCrewForTrade(candidate.position, actorTrade)) return false;
     if (isEmergencySuperintendent) return true;
+    // Office-based people (CPMs, office trade crews) hold no developments and
+    // go wherever they're sent; everyone else must cover this site.
     if (
       development &&
+      candidate.developments.length > 0 &&
       !candidate.developments.some(
         (value) => value.trim().toLowerCase() === development.trim().toLowerCase(),
       )
