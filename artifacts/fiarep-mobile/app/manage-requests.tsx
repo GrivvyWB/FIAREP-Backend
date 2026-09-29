@@ -120,9 +120,12 @@ export default function ManageRequests() {
       {open['notifs'] && groupedNotifs.length === 0 && <Text style={ui.empty}>None.</Text>}
       {open['notifs'] && groupedNotifs.map(({ notification: n, ids }) => (
         <View key={`${n.reportId || n.detail || n.id}:${n.message}`} style={[ui.card, { gap: 4 }]}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{n.message}</Text>
-          <Text style={{ fontSize: 13, color: '#666' }}>To: {n.target}{n.detail ? ' \u00b7 ' + n.detail : ''}</Text>
-          <Text style={{ fontSize: 12, color: '#999' }}>{fmt(n.at)}</Text>
+          <Pressable onPress={() => router.push('/message?id=' + encodeURIComponent(n.id))}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{n.message}  \u203a</Text>
+            {!!n.detail && <Text style={{ fontSize: 13, color: '#333' }}>{n.detail}</Text>}
+            <Text style={{ fontSize: 12, color: '#999' }}>{fmt(n.at)}{/^[0-9a-f-]{20,}$/i.test(n.target || '') ? '' : n.target ? ' \u00b7 to ' + n.target : ''}</Text>
+            <Text style={{ fontSize: 12, color: ACCENT, marginTop: 2 }}>Tap to open</Text>
+          </Pressable>
           <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => confirmDelete('notification', () => Promise.all(ids.map(deleteNotification)).then(() => undefined))}>
             <Text style={[ui.btnOutlineText, { color: '#c0392b' }]}>Delete</Text>
           </Pressable>

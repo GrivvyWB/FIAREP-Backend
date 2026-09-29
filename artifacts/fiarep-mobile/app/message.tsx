@@ -268,6 +268,16 @@ export default function Message() {
           <Row label="To" value={r.endDate} />
           <Row label="Days" value={r.days ? String(r.days) + (r.hours ? ` (${r.hours}h)` : '') : ''} />
           <Row label="Reason" value={r.reason} />
+          <Row label={r.status === 'Approved' ? 'Covering the shift' : 'Cover proposed'} value={r.coveredByName ? `${r.coveredByName}${r.coveredByPosition ? ` (${r.coveredByPosition})` : ''}` : ''} />
+          <Row label="Decided" value={[r.decidedByName || r.decidedBy, fmt(r.decidedAt)].filter(Boolean).join(' \u00b7 ')} />
+          {r.status === 'Pending' && (
+            <Pressable style={[ui.btn, { marginTop: 8 }]} onPress={() => { openWebsiteSignedIn('/leave?view=team').catch(() => undefined); }}>
+              <Text style={ui.btnText}>Approve or deny on fiarep.com</Text>
+            </Pressable>
+          )}
+          <Pressable style={[ui.btnOutline, { marginTop: 8 }]} onPress={() => router.push('/leave-dashboard')}>
+            <Text style={ui.btnOutlineText}>Open the Leave Calendar</Text>
+          </Pressable>
         </Section>
       )}
 
