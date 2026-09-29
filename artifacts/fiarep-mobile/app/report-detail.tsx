@@ -365,7 +365,7 @@ export default function ReportDetail() {
             <Text style={[ui.btnOutlineText, scopeLock.locked && { color: '#9e9e9e' }]}>Start project / scope for {r.complaintNo || 'this complaint'}</Text>
           </Pressable>
         )}
-        {isMine && r.status === 'assigned' && (
+        {isMine && r.status === 'assigned' && !readOnly && (
           <Pressable
             disabled={completionBusy}
             style={[ui.btn, { marginTop: 10 }, completionBusy && { opacity: 0.45 }]}
@@ -423,7 +423,7 @@ export default function ReportDetail() {
               <Text style={ui.listSub}>No photos attached.</Text>
             )}
         </View>
-        {isMine && r.status === 'in_progress' && (
+        {isMine && r.status === 'in_progress' && !readOnly && (
           <View style={{ gap: 8, borderTopWidth: 1, borderTopColor: '#eee', paddingTop: 10 }}>
             {!!r.reworkNote && (
               <View style={{ borderWidth: 1, borderColor: '#e0b4b4', backgroundColor: '#fdf1f1', borderRadius: 8, padding: 10, gap: 4 }}>
