@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { User, LogOut, Shield, Calculator, ChevronDown } from "lucide-react";
+import { User, LogOut, Shield, Calculator, ChevronDown, CircleHelp } from "lucide-react";
+import { BUTTON_GUIDE } from "@/lib/button-guide";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
-import { canReadSharedDefaultRates } from "@/lib/access-policy";
+import { canReadSharedDefaultRates, hasModuleAccess } from "@/lib/access-policy";
 
 const DEFAULT_RATES = {
   waste: 1.12,
@@ -15,7 +16,7 @@ const DEFAULT_RATES = {
 };
 
 export default function Settings() {
-  const { staff, logout } = useAuth();
+  const { staff, logout, organizationModules } = useAuth();
   const { toast } = useToast();
   const [rates, setRates] = useState(DEFAULT_RATES);
   const [ratesLoading, setRatesLoading] = useState(true);
@@ -163,6 +164,34 @@ export default function Settings() {
               </div>
             </details>
           </div>}
+        </div>
+
+        <div className="p-6 border-t border-border space-y-4" data-testid="section-button-guide">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <CircleHelp className="w-4 h-4" /> What the buttons do
+          </h3>
+          <p className="text-xs text-muted-foreground">A plain-words guide to each page you have and what pressing each button does.</p>
+          <div className="space-y-2">
+            {BUTTON_GUIDE.filter((g) => hasModuleAccess(staff, g.module, organizationModules)).map((g) => (
+              <details key={g.module} className="group bg-secondary/50 rounded-xl border border-border">
+                <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold">
+                  {g.page}
+                  <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                </summary>
+                <div className="border-t border-border px-4 py-3 space-y-3">
+                  <p className="text-sm text-muted-foreground">{g.purpose}</p>
+                  <ul className="space-y-2">
+                    {g.buttons.map((b) => (
+                      <li key={b.name} className="text-sm">
+                        <span className="font-semibold">{b.name}</span>
+                        <span className="text-muted-foreground"> — {b.does}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </details>
+            ))}
+          </div>
         </div>
 
         <div className="p-6 bg-muted/30 border-t border-border flex justify-between items-center">

@@ -222,7 +222,7 @@ function AdministratorStack() {
       <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
       <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
-      <Stack.Screen name="settings" options={{ title: 'Default rates' }} />
+      <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
       <Stack.Screen name="project/roof" options={{ title: 'Roof lookup', presentation: 'modal' }} />
       <Stack.Screen name="project/checklist" options={{ title: 'Renovation checklist' }} />
@@ -263,7 +263,7 @@ function InspectorStack() {
       <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
       <Stack.Screen name="project/compass" options={{ title: 'Compass' }} />
       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
-      <Stack.Screen name="settings" options={{ title: 'Default rates' }} />
+      <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
       <Stack.Screen name="project/roof" options={{ title: 'Roof lookup', presentation: 'modal' }} />
       <Stack.Screen name="project/checklist" options={{ title: 'Renovation checklist' }} />
@@ -307,7 +307,7 @@ function ManagementStack() {
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="create-report" options={{ title: 'Create Report' }} />
       <Stack.Screen name="audit-log" options={{ title: 'Audit Log' }} />
-      <Stack.Screen name="settings" options={{ title: 'Default rates' }} />
+      <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="management" options={{ title: 'Resident Reports' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
       <Stack.Screen name="resident" options={{ title: 'Report an Issue' }} />
@@ -364,7 +364,8 @@ function WorkerStack() {
       <Stack.Screen name="project/elevator" options={{ title: 'Elevator Services' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
-    </Stack>
+          <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+</Stack>
   );
 }
 
@@ -384,7 +385,8 @@ function EmergencyStack() {
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
       <Stack.Screen name="emergency-units" options={{ title: 'Emergency Units' }} />
-    </Stack>
+          <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+</Stack>
   );
 }
 
