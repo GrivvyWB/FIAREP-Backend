@@ -36,6 +36,8 @@ app.use(cors({
 // Photo classification (FIAREP Vision, Measurement material detect) posts a
 // phone photo as base64 — well over 1 MB. Everything else stays at 1 MB.
 app.use("/api/ai", express.json({ limit: "15mb" }));
+// A saved measurement carries the picture it was taken from.
+app.use("/api/v1/measurements", express.json({ limit: "4mb" }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 

@@ -47,6 +47,7 @@ export default function Measurement() {
   // ---- Measurement calculator state ----
   const [material, setMaterial] = useState<MaterialKind>('concrete');
   const [photo, setPhoto] = useState<string | null>(null);
+  const [photoDataUrl, setPhotoDataUrl] = useState<string>('');
   const [classifying, setClassifying] = useState(false);
   const [aiNote, setAiNote] = useState('');
   const [a, setA] = useState('');
@@ -79,6 +80,10 @@ export default function Measurement() {
       if (shot.canceled || !shot.assets?.[0]) return;
       const asset = shot.assets[0];
       setPhoto(asset.uri);
+      setSaved(false);
+      // Keep the picture with the measurement so it can be looked at later
+      // (kept small; a huge shot is saved by its local path only).
+      setPhotoDataUrl(asset.base64 && asset.base64.length < 700_000 ? `data:image/jpeg;base64,${asset.base64}` : '');
       if (!asset.base64) return;
       setClassifying(true); setAiNote('');
       try {
@@ -143,9 +148,10 @@ export default function Measurement() {
         areaSqFt: result.areaSqFt, cubicYards: result.cubicYards, orderCubicYards: result.orderCubicYards,
         sheets: result.sheets, tiles: result.tiles, boxes: result.boxes, gallons: result.gallons, doorSize: result.doorSize,
         summary: result.summary, by: actor.name, byId: actor.id, position, status: 'saved', createdAt: new Date().toISOString(),
+        note: aiNote, photoLocalUri: photo || '', photoDataUrl,
       };
       await customFetch('/api/v1/measurements', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ development: dev, state }), responseType: 'json' });
-      setSaved(true); setAiNote('Measurement saved.');
+      setSaved(true); setAiNote('Measurement saved — see Saved measurements.');
     } catch (e: any) { Alert.alert('Could not save', e?.message ? String(e.message) : 'Please try again.'); }
     finally { setSaving(false); }
   };
@@ -200,6 +206,9 @@ export default function Measurement() {
         )}
 
         {showCalculators && (<>
+          <Pressable onPress={() => router.push('/saved-measurements')} style={{ borderRadius: 16, borderWidth: 2, borderColor: ACCENT, paddingVertical: 12, alignItems: 'center', marginBottom: 12 }}>
+            <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 15 }}>Saved measurements</Text>
+          </Pressable>
           <Pressable onPress={capture} style={{ borderRadius: 16, backgroundColor: ACCENT, paddingVertical: 16, alignItems: 'center', marginBottom: 12 }}>
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{photo ? 'Retake photo' : 'Point camera & take photo'}</Text>
           </Pressable>

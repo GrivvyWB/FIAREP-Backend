@@ -105,7 +105,7 @@ export default function CpmHome() {
         ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'My Inspections', onPress: () => router.push('/my-inspections'), tone: 'outline' as Tone }] : []),
         ...(normalizedPosition === 'inspector' ? [{ label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone }] : []),
-        ...(normalizedPosition === 'inspector' && hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }] : []),
+        ...(normalizedPosition === 'inspector' && hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }, { label: 'Saved Measurements', onPress: () => router.push('/saved-measurements'), tone: 'outline' as Tone }] : []),
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },
         { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone },
       ],
@@ -116,7 +116,7 @@ export default function CpmHome() {
       tiles: [
         { label: 'Submit Scope', onPress: () => router.push('/scope-submit'), tone: 'solid' as Tone },
         { label: 'Change Work Order', onPress: () => router.push('/cpm-change-order'), tone: 'outline' as Tone },
-        ...(hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }] : []),
+        ...(hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }, { label: 'Saved Measurements', onPress: () => router.push('/saved-measurements'), tone: 'outline' as Tone }] : []),
       ],
     }] : []),
     {

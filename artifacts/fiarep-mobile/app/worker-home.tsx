@@ -106,9 +106,14 @@ export default function WorkerHome() {
         </Pressable>
       )}
       {(hasAnyMeasurementAccess(position, rawModules) || (modules['measurement'] && !!catalogForTrade(tradeKeyForPosition(position)))) && (
-        <Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
-          <Text style={ui.btnText}>Measurement</Text>
-        </Pressable>
+        <>
+          <Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
+            <Text style={ui.btnText}>Measurement</Text>
+          </Pressable>
+          <Pressable style={ui.btnOutline} onPress={() => router.push('/saved-measurements')}>
+            <Text style={ui.btnOutlineText}>Saved Measurements</Text>
+          </Pressable>
+        </>
       )}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
         <Text style={ui.btnOutlineText}>Inbox</Text>
