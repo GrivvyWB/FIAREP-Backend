@@ -1,5 +1,5 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   getNotification, getResidentReport, getBuildingViolation, getProcurementRequest,
@@ -67,6 +67,25 @@ function Row({ label, value }: { label: string; value?: string | number | null }
     <View style={{ marginBottom: 8 }}>
       <Text style={ui.label}>{label}</Text>
       <Text style={{ fontSize: 15, color: '#111' }}>{text}</Text>
+    </View>
+  );
+}
+
+function AttachedMeasurements({ list }: { list: any[] }) {
+  if (!Array.isArray(list) || !list.length) return null;
+  return (
+    <View style={{ marginTop: 6 }}>
+      <Text style={ui.label}>Measurements attached</Text>
+      {list.map((m, i) => (
+        <View key={i} style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
+          {!!m.photoDataUrl && <Image source={{ uri: m.photoDataUrl }} style={{ width: 64, height: 64, borderRadius: 8, backgroundColor: '#eee' }} resizeMode="cover" />}
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600' }}>{[m.material, m.lengthFt && m.widthFt ? `${m.lengthFt} \u00d7 ${m.widthFt} ft` : '', m.areaSqFt ? `${m.areaSqFt} sq ft` : ''].filter(Boolean).join(' \u00b7 ')}</Text>
+            {!!m.summary && <Text style={{ fontSize: 13, color: '#333' }}>{m.summary}</Text>}
+            <Text style={{ fontSize: 12, color: '#777' }}>{[m.attachedBy || m.measuredBy, fmt(m.attachedAt)].filter(Boolean).join(' \u00b7 ')}</Text>
+          </View>
+        </View>
+      ))}
     </View>
   );
 }
@@ -171,6 +190,7 @@ export default function Message() {
               ))}
             </View>
           )}
+          <AttachedMeasurements list={(c as any).measurements} />
           <Pressable style={[ui.btnOutline, { marginTop: 8 }]} onPress={() => router.push('/report-detail?id=' + encodeURIComponent(c.id))}>
             <Text style={ui.btnOutlineText}>Open the complaint (photos)</Text>
           </Pressable>
@@ -192,6 +212,7 @@ export default function Message() {
           <Row label="Completion note" value={v.completionNote} />
           <Row label="Denied" value={[(v as any).deniedByName, fmt((v as any).deniedAt), (v as any).denyReason].filter(Boolean).join(' · ')} />
           <Row label="Photos" value={(v.photos?.length || 0) + (v.completionPhotos?.length || 0) ? `${(v.photos?.length || 0) + (v.completionPhotos?.length || 0)} attached` : ''} />
+          <AttachedMeasurements list={(v as any).measurements} />
           <Pressable style={[ui.btnOutline, { marginTop: 8 }]} onPress={() => router.push('/inspection-approvals')}>
             <Text style={ui.btnOutlineText}>Open Inspection Approvals</Text>
           </Pressable>

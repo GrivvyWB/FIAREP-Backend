@@ -1,4 +1,5 @@
 // Supervisor Inspector: inspections logged by inspectors, awaiting approval.
+import { AttachedMeasurements } from "@/components/attached-measurements";
 // Approve & route to an Inspector, send an approved violation to a CPM
 // Supervisor (scope), and clear finished ones for staff. Same job as the app's
 // "Inspection Approvals" tile — supervisors act on the website.
@@ -104,6 +105,7 @@ export default function InspectionApprovals() {
           {!!s.code && <p className="text-xs text-muted-foreground">Code {String(s.code)}{s.codeDesc ? ` · ${s.codeDesc}` : ""}</p>}
           {!!s.notes && <p className="mt-1 text-sm">{String(s.notes)}</p>}
           <p className="text-xs text-muted-foreground">Logged by {String(s.loggedBy || s.inspectorName || "inspector")} · {new Date(String(s.loggedAt || row.createdAt)).toLocaleString()}</p>
+          <AttachedMeasurements list={s.measurements} />
         </div>
         {!!s.hazardClass && <span className={`text-sm font-bold ${classColor(String(s.hazardClass))}`}>Class {String(s.hazardClass)}{s.hazardClass === "C" ? " · priority" : ""}</span>}
       </div>

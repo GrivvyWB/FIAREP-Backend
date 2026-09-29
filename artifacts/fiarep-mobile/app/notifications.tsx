@@ -124,6 +124,10 @@ export default function Notifications() {
       }
       return;
     }
+    if (msg.startsWith('measurement added') && n.reportId) {
+      router.push(msg.includes('inspection') ? '/inspection-approvals' : '/report-detail?id=' + encodeURIComponent(n.reportId));
+      return;
+    }
     if (msg.includes('inspection logged') || msg.includes('awaiting approval') || msg.includes('awaiting review')
       || msg.startsWith('inspection ') || msg.startsWith('building violations')) {
       // Inspection status alerts: the inspector opens his own read-only copy;

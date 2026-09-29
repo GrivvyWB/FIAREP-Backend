@@ -1362,6 +1362,92 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
 
 // Management nudge: request the development's supervisors assign a complaint or
 // violation right away, with a short note. Sends a notification (no status change).
+// A CPM / inspector / worker attaches a saved measurement (picture, size,
+// result) to the complaint or inspection they are handling. It lands on the
+// record for the supervisor / management to see, and they are alerted.
+router.post("/v1/:entity/:id/attach-measurement", async (req, res, next) => {
+  const entity = req.params["entity"];
+  if (!validEntity(entity) || !["resident-reports", "building-violations"].includes(entity)) { next(); return; }
+  const actor = actorFrom(res);
+  const [record] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, req.params["id"]!),
+    eq(entityRecords.entity, entity),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!record || !(await canReadRecordForActor(actor, record))) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  const state = record.state as Record<string, unknown>;
+  const handler =
+    actor.role === "administrator" || actor.role === "management" ||
+    record.createdBy === actor.id ||
+    ["assignedStaffId", "assignedCpmStaffId", "handoffTargetId", "directedToStaffId", "completedByStaffId"]
+      .some((field) => state[field] === actor.id);
+  if (!handler) {
+    res.status(403).json({ error: "Only the person handling this job can attach a measurement to it" });
+    return;
+  }
+  const measurementId = typeof req.body?.["measurementId"] === "string" ? req.body["measurementId"].trim() : "";
+  if (!measurementId) { res.status(400).json({ error: "measurementId is required" }); return; }
+  const [measurement] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, measurementId),
+    eq(entityRecords.entity, "measurements"),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!measurement) { res.status(404).json({ error: "Measurement not found" }); return; }
+  const m = measurement.state as Record<string, unknown>;
+  const attached = {
+    measurementId,
+    material: String(m["materialLabel"] || m["material"] || ""),
+    lengthFt: Number(m["lengthFt"] || 0) || 0,
+    widthFt: Number(m["widthFt"] || 0) || 0,
+    areaSqFt: Number(m["areaSqFt"] || 0) || 0,
+    summary: String(m["summary"] || ""),
+    note: String(m["note"] || ""),
+    photoDataUrl: typeof m["photoDataUrl"] === "string" ? m["photoDataUrl"] : "",
+    items: Array.isArray(m["items"]) ? m["items"] : undefined,
+    measuredBy: String(m["by"] || actor.name || ""),
+    measuredAt: String(m["createdAt"] || ""),
+    attachedBy: actor.name || "",
+    attachedByStaffId: actor.id,
+    attachedAt: new Date().toISOString(),
+  };
+  const existing = Array.isArray(state["measurements"]) ? (state["measurements"] as unknown[]) : [];
+  if (existing.some((x) => (x as Record<string, unknown>)?.["measurementId"] === measurementId)) {
+    res.json({ ok: true, alreadyAttached: true });
+    return;
+  }
+  await db.update(entityRecords)
+    .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ measurements: [...existing, attached] })}::jsonb`, updatedAt: new Date() })
+    .where(and(eq(entityRecords.id, record.id), eq(entityRecords.tenantId, actor.tenantId)));
+  // Tell the supervisor / management this job belongs to.
+  const development = record.development || String(state["development"] || "");
+  const ref = entity === "resident-reports"
+    ? [String(state["complaintNo"] || ""), String(state["address"] || "")].filter(Boolean).join(" \u00b7 ")
+    : [String(state["violationNo"] || ""), String(state["building"] || "")].filter(Boolean).join(" \u00b7 ");
+  const sizeText = attached.lengthFt && attached.widthFt ? ` ${attached.lengthFt} \u00d7 ${attached.widthFt} ft` : "";
+  const detail = `${attached.material}${sizeText}${attached.areaSqFt ? ` (${attached.areaSqFt} sq ft)` : ""}${ref ? ` \u00b7 ${ref}` : ""} \u2014 by ${actor.name}`;
+  const recipients = new Set<string>();
+  ["assignedByStaffId", "cpmSupervisorId", "dispatchingSupervisorId", "directedToStaffId", "approvedByStaffId"]
+    .forEach((field) => { if (typeof state[field] === "string" && state[field]) recipients.add(state[field] as string); });
+  if (entity === "resident-reports") {
+    (await routedComplaintRecipientIds(actor.tenantId, development, state)).forEach((id) => recipients.add(id));
+  } else {
+    const supervisors = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+      eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"), eq(staffAccounts.position, "Supervisor Inspector")));
+    supervisors.forEach((row) => recipients.add(row.id));
+    (await residentReportRecipientIds(actor.tenantId, development)).forEach((id) => recipients.add(id));
+  }
+  recipients.delete(actor.id);
+  const message = entity === "resident-reports" ? "Measurement added to complaint" : "Measurement added to inspection";
+  for (const target of recipients) await notify(actor, target, message, detail, record.id);
+  await audit(actor, `${entity}.measurement-attached`, detail, record.id);
+  res.json({ ok: true, notified: recipients.size });
+});
+
 router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
   const entity = req.params["entity"];
   if (!validEntity(entity) || !["resident-reports", "building-violations"].includes(entity)) { next(); return; }

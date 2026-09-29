@@ -1,4 +1,5 @@
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle, sameTitle } from "@/lib/titles";
+import { AttachedMeasurements } from "@/components/attached-measurements";
 import {
   getListEntityRecordsQueryKey,
   getListResidentReportPhotosQueryKey,
@@ -642,6 +643,7 @@ export default function Reports() {
                     </div>
                   );
                 })()}
+                 <AttachedMeasurements list={state.measurements} />
                  {String(state.assignedStaffId || "") === actor?.id && currentStatus === "in_progress" && (
                    <div className="space-y-3 border-t border-border pt-4">
                      <input

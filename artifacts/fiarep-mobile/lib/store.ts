@@ -4470,6 +4470,46 @@ export async function listBuildingViolations(building: string, violationNo: stri
 }
 
 /** Every inspection this inspector logged, newest first — their permanent record. */
+// The complaints and inspections this person is handling right now (assigned
+// or sent to them, or that they logged) — the jobs a measurement can be
+// attached to.
+export type AttachableJob = { entity: 'resident-reports' | 'building-violations'; id: string; title: string; subtitle: string };
+export async function listAttachableJobs(): Promise<AttachableJob[]> {
+  const a = await getCurrentActor();
+  const me = a?.id || '';
+  const name = (a?.name || '').trim().toLowerCase();
+  const jobs: AttachableJob[] = [];
+  const reports = await listResidentReports().catch(() => [] as ResidentReport[]);
+  for (const r of reports) {
+    const st: any = r;
+    const mine = st.assignedStaffId === me || st.assignedCpmStaffId === me || st.directedToStaffId === me ||
+      (r.assignedTo || '').trim().toLowerCase() === name || st._meta?.createdBy === me;
+    if (!mine || r.status === 'resolved') continue;
+    jobs.push({ entity: 'resident-reports', id: r.id, title: (r.complaintNo ? r.complaintNo + ' \u00b7 ' : '') + (r.address || '') + (r.unit ? ' Unit ' + r.unit : ''), subtitle: (r.description || '').slice(0, 80) });
+  }
+  const d = await db();
+  await ensureBuildingViolTable(d);
+  const rows = await d.getAllAsync<{ state: string }>('SELECT state FROM building_violations');
+  for (const row of rows) {
+    let v: BuildingViolation | null = null;
+    try { v = JSON.parse(row.state) as BuildingViolation; } catch { v = null; }
+    if (!v) continue;
+    const st: any = v;
+    const mine = v.assignedStaffId === me || v.assignedCpmStaffId === me || v.handoffTargetId === me ||
+      (v.loggedBy || '').trim().toLowerCase() === name || st._meta?.createdBy === me;
+    if (!mine || v.status === 'done') continue;
+    jobs.push({ entity: 'building-violations', id: v.id, title: (v.violationNo ? v.violationNo + ' \u00b7 ' : '') + (v.building || ''), subtitle: [v.code, v.notes].filter(Boolean).join(' \u2014 ').slice(0, 80) });
+  }
+  return jobs;
+}
+
+export async function attachMeasurementToJob(entity: AttachableJob['entity'], id: string, measurementId: string): Promise<{ ok: boolean; notified?: number; alreadyAttached?: boolean }> {
+  return customFetch<{ ok: boolean; notified?: number; alreadyAttached?: boolean }>(
+    `/api/v1/${entity}/${encodeURIComponent(id)}/attach-measurement`,
+    { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ measurementId }), responseType: 'json' },
+  );
+}
+
 export async function listMyLoggedInspections(): Promise<BuildingViolation[]> {
   const d = await db();
   await ensureBuildingViolTable(d);

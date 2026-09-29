@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Image, ActivityIndicator } from 'react-native';
+import { View, Text, Pressable, ScrollView, Image, ActivityIndicator, Alert, Modal } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
-import { getCurrentActor } from '../lib/store';
+import { getCurrentActor, listAttachableJobs, attachMeasurementToJob, type AttachableJob } from '../lib/store';
 import { ACCENT } from '../lib/ui';
 
 // Every measurement and material list saved from the Measurement screen, with
@@ -24,6 +24,30 @@ export default function SavedMeasurements() {
   const [mineOnly, setMineOnly] = useState(true);
   const [me, setMe] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const [picker, setPicker] = useState<{ measurementId: string; jobs: AttachableJob[] } | null>(null);
+  const [attaching, setAttaching] = useState(false);
+
+  async function openPicker(measurementId: string) {
+    const jobs = await listAttachableJobs().catch(() => [] as AttachableJob[]);
+    if (!jobs.length) {
+      Alert.alert('No jobs to attach to', 'You have no open complaint or inspection assigned to you on this phone. Sync first, or ask your supervisor to send you the job.');
+      return;
+    }
+    setPicker({ measurementId, jobs });
+  }
+
+  async function attach(job: AttachableJob) {
+    if (!picker) return;
+    setAttaching(true);
+    try {
+      const r = await attachMeasurementToJob(job.entity, job.id, picker.measurementId);
+      setPicker(null);
+      Alert.alert(r?.alreadyAttached ? 'Already attached' : 'Attached',
+        r?.alreadyAttached ? 'This measurement is already on that job.' : `Added to ${job.title}. Your supervisor has been alerted${r?.notified ? ` (${r.notified})` : ''}.`);
+    } catch (e: any) {
+      Alert.alert('Could not attach', e?.data?.error || e?.message || 'Please try again.');
+    } finally { setAttaching(false); }
+  }
 
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -107,12 +131,34 @@ export default function SavedMeasurements() {
                       {st.items.map((it: any, i: number) => <Text key={i} style={{ color: '#1F2A24', fontSize: 13 }}>• {it.qty}× {it.name}</Text>)}
                     </View>
                   )}
+                  <Pressable onPress={() => openPicker(r.id)} style={{ borderRadius: 12, backgroundColor: ACCENT, paddingVertical: 12, alignItems: 'center', marginTop: 10 }}>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Attach to a complaint / inspection</Text>
+                  </Pressable>
+                  <Text style={{ color: '#8A928C', fontSize: 12, marginTop: 6, textAlign: 'center' }}>Adds this picture and measurement to the job and alerts your supervisor.</Text>
                 </View>
               )}
             </Pressable>
           );
         })}
       </ScrollView>
+      <Modal visible={!!picker} animationType="slide" onRequestClose={() => setPicker(null)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#F5F7F6' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12 }}>
+            <Pressable onPress={() => setPicker(null)} hitSlop={12}><Text style={{ color: ACCENT, fontWeight: '600', fontSize: 16 }}>Cancel</Text></Pressable>
+            <Text style={{ flex: 1, textAlign: 'center', fontWeight: '700', fontSize: 18, marginRight: 50 }}>Attach to…</Text>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16 }}>
+            <Text style={{ color: '#4A5560', marginBottom: 12 }}>Pick the complaint or inspection this measurement belongs to.</Text>
+            {(picker?.jobs || []).map((job) => (
+              <Pressable key={job.entity + job.id} disabled={attaching} onPress={() => attach(job)} style={{ backgroundColor: '#fff', borderRadius: 14, borderWidth: 1, borderColor: '#E4E9E6', padding: 14, marginBottom: 10, opacity: attaching ? 0.6 : 1 }}>
+                <Text style={{ fontSize: 11, color: '#8A928C', marginBottom: 2 }}>{job.entity === 'resident-reports' ? 'COMPLAINT' : 'INSPECTION'}</Text>
+                <Text style={{ fontWeight: '700', fontSize: 15 }}>{job.title}</Text>
+                {!!job.subtitle && <Text style={{ color: '#4A5560', marginTop: 2 }} numberOfLines={2}>{job.subtitle}</Text>}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 }
