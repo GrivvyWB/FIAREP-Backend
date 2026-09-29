@@ -61,7 +61,7 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
   }, [assignedDevelopments, devQuery]);
   const complaintMode = String(filter || '').toLowerCase() === 'worker';
   // In violation mode the sender picks who receives it.
-  const [violationTarget, setViolationTarget] = useState<'inspector' | 'supervisor-inspector' | 'trade' | 'worker'>('inspector');
+  const [violationTarget, setViolationTarget] = useState<'inspector' | 'supervisor-inspector' | 'cpm' | 'cpm-supervisor' | 'trade' | 'worker'>('inspector');
   const [currentPosition, setCurrentPosition] = useState('');
 
   useEffect(() => {
@@ -125,14 +125,22 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
     if (violationTarget === 'supervisor-inspector') {
       return s.role === 'management' && isInspectionSupervisorTitle(pos);
     }
+    if (violationTarget === 'cpm') {
+      // CPMs sit with the inspectors, not the workers.
+      return pos === 'cpm' && (currentPosition === 'Superintendent Ⓔ' || inDev || !(s.developments || []).length);
+    }
+    if (violationTarget === 'cpm-supervisor') {
+      return s.role === 'management' && isCpmSupervisorTitle(pos);
+    }
     if (violationTarget === 'worker') {
-      // Any worker (plumber, electrician, maintenance, emergency crew …).
-      // The emergency supervisor sends across developments; others within theirs.
-      return ['worker', 'emergency'].includes(s.role) &&
+      // Any trade worker (plumber, electrician, maintenance, emergency crew …)
+      // — CPMs and inspectors have their own buttons. The emergency
+      // supervisor sends across developments; others within theirs.
+      return ['worker', 'emergency'].includes(s.role) && pos !== 'cpm' && pos !== 'inspector' &&
         (currentPosition === 'Superintendent Ⓔ' || inDev);
     }
     // Trade supervisors are office-based (no development requirement).
-    return s.role === 'management' && !isCpmSupervisorTitle(pos) && isOfficeTradeSupervisorTitle(pos, s.developments);
+    return s.role === 'management' && !isCpmSupervisorTitle(pos) && !isInspectionSupervisorTitle(pos) && isOfficeTradeSupervisorTitle(pos, s.developments);
   });
 
   async function submit() {
@@ -140,7 +148,7 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
     if (!complaintMode && !violationNumber.trim()) { Alert.alert('Missing', 'Enter a violation number.'); return; }
     if (!address.trim()) { Alert.alert('Missing', 'Enter an address.'); return; }
     if (!sentTo.trim() || !sentStaffId.trim()) {
-      Alert.alert('Missing', complaintMode ? 'Choose an approved staff member.' : (violationTarget === 'trade' ? 'Choose a trade supervisor.' : violationTarget === 'supervisor-inspector' ? 'Choose a Supervisor Inspector.' : violationTarget === 'worker' ? 'Choose a worker.' : 'Choose an approved Inspector.'));
+      Alert.alert('Missing', complaintMode ? 'Choose an approved staff member.' : (violationTarget === 'trade' ? 'Choose a trade supervisor.' : violationTarget === 'supervisor-inspector' ? 'Choose a Supervisor Inspector.' : violationTarget === 'worker' ? 'Choose a worker.' : violationTarget === 'cpm' ? 'Choose a CPM.' : violationTarget === 'cpm-supervisor' ? 'Choose a CPM Supervisor.' : 'Choose an approved Inspector.'));
       return;
     }
     if (complaintMode && (!reportId || !preComplaint)) {
@@ -246,7 +254,7 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
       <Text style={[ui.label, { marginTop: 12 }]}>Send to</Text>
       {!complaintMode && (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
-          {([['inspector','Inspector'],['supervisor-inspector','Supervisor Inspector'],['trade','Trade supervisor'],['worker','Worker']] as const).map(([key,lbl]) => (
+          {([['inspector','Inspector'],['supervisor-inspector','Supervisor Inspector'],['cpm','CPM'],['cpm-supervisor','CPM Supervisor'],['worker','Worker'],['trade','Trade supervisor']] as const).map(([key,lbl]) => (
             <Pressable
               key={key}
               style={[ui.btnOutline, { flexBasis: '48%', flexGrow: 1, paddingVertical: 8 }, violationTarget === key && ui.btn]}
@@ -287,7 +295,7 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
       )}
       {assignedDevelopments.length === 0 && <Text style={ui.empty}>No assigned developments.</Text>}
       {recipients.length === 0 ? (
-        <Text style={ui.listSub}>{complaintMode ? 'No approved staff yet.' : (violationTarget === 'trade' ? 'No approved trade supervisors yet.' : violationTarget === 'supervisor-inspector' ? 'No approved Supervisor Inspector yet.' : violationTarget === 'worker' ? 'No approved workers for this development yet.' : 'No approved inspectors yet.')}</Text>
+        <Text style={ui.listSub}>{complaintMode ? 'No approved staff yet.' : (violationTarget === 'trade' ? 'No approved trade supervisors yet.' : violationTarget === 'supervisor-inspector' ? 'No approved Supervisor Inspector yet.' : violationTarget === 'worker' ? 'No approved workers for this development yet.' : violationTarget === 'cpm' ? 'No approved CPMs yet.' : violationTarget === 'cpm-supervisor' ? 'No approved CPM Supervisor yet.' : 'No approved inspectors yet.')}</Text>
       ) : (
         <View style={{ gap: 6 }}>
           {Array.from(new Set(recipients.map((r) => (r.position || 'Other')))).sort().map((pos) => {
