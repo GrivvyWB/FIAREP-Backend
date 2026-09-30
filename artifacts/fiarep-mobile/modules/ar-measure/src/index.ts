@@ -9,7 +9,7 @@ export type ARMeasureResult = {
   imagePath?: string;
 };
 
-type ARMeasureModule = { isSupported(): boolean; measure(steps: string[]): Promise<ARMeasureResult>; scanOpening(): Promise<ARMeasureResult> };
+type ARMeasureModule = { isSupported(): boolean; measure(steps: string[]): Promise<ARMeasureResult>; scanOpening(mode: string, label: string): Promise<ARMeasureResult> };
 
 let Native: ARMeasureModule | null = null;
 try {
@@ -29,12 +29,14 @@ export function measureArea(steps: string[] = []): Promise<ARMeasureResult> {
   return Native.measure(steps);
 }
 
-/** Automatic: point the camera at a door / window; it finds the frame and
- * measures width × height by itself — no tapping. */
-export function scanOpening(): Promise<ARMeasureResult> {
+/** Automatic: point the camera at the thing; it finds its outline and measures
+ * width × height by itself — no tapping. mode 'opening' = a door / window on a
+ * wall (tall rectangle); 'surface' = any rectangle on any surface (a slab, a
+ * sidewalk flag, a driveway, a wall, a facade). label = what to call it. */
+export function scanOpening(mode: 'opening' | 'surface' = 'opening', label = 'opening'): Promise<ARMeasureResult> {
   if (!Native) return Promise.reject(new Error('AR scan unavailable.'));
   if (typeof Native.scanOpening !== 'function') return Promise.reject(new Error('This build cannot scan automatically yet — update the app.'));
-  return Native.scanOpening();
+  return Native.scanOpening(mode, label);
 }
 
 /** Door / window opening: three corners give width (side 1) and height (side 2). */

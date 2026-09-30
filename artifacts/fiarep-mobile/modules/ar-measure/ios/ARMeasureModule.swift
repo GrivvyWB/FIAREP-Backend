@@ -22,13 +22,13 @@ public class ARMeasureModule: Module {
     }
     // Automatic: finds the door / window frame in the camera view and measures
     // it without any tapping.
-    AsyncFunction("scanOpening") { (promise: Promise) in
+    AsyncFunction("scanOpening") { (mode: String?, label: String?, promise: Promise) in
       guard ARWorldTrackingConfiguration.isSupported else {
         promise.reject("UNSUPPORTED", "AR scanning requires an ARKit-capable device.")
         return
       }
       DispatchQueue.main.async {
-        let d = ARAutoScanDelegate(promise: promise)
+        let d = ARAutoScanDelegate(promise: promise, mode: mode ?? "opening", label: label ?? "opening")
         self.autoDelegate = d
         d.present()
       }

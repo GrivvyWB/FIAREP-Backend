@@ -4,13 +4,17 @@ import SceneKit
 import UIKit
 import Vision
 
-// Automatic opening scan: no tapping. Vision finds the door / window frame
-// (the largest tall rectangle in view), ARKit raycasts its four corners onto
-// the wall, and once the size holds steady for a moment the scan finishes
-// with the real width and height. A "Use this" button accepts an unsteady
+// Automatic scan: no tapping. Vision finds the largest rectangle in view (a
+// door or window frame, a concrete slab, a sidewalk flag, a driveway, a wall
+// or facade), ARKit raycasts its four corners onto the real surface, and once
+// the size holds steady for a moment the scan finishes with the real width
+// and height. "opening" mode prefers tall rectangles on a wall; "surface"
+// mode takes any rectangle on any surface. "Use this" accepts an unsteady
 // reading; Cancel rejects.
 class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
   private let promise: Promise
+  private let mode: String   // "opening" | "surface"
+  private let label: String  // what we are scanning, for the prompts
   private var vc: UIViewController?
   private var sceneView: ARSCNView?
   private var infoLabel: UILabel?
@@ -24,7 +28,7 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
   private let M_TO_FT = 3.28084
   private let queue = DispatchQueue(label: "ar.autoscan.vision")
 
-  init(promise: Promise) { self.promise = promise }
+  init(promise: Promise, mode: String = "opening", label: String = "opening") { self.promise = promise; self.mode = mode; self.label = label }
 
   func present() {
     let controller = UIViewController()
@@ -48,7 +52,7 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
     info.numberOfLines = 0
     info.textColor = .white
     info.font = UIFont.boldSystemFont(ofSize: 17)
-    info.text = "Stand back so the WHOLE opening is in view, frame and all. Hold the phone still — it measures by itself."
+    info.text = "Stand back so the WHOLE \(label) is in view, edge to edge. Hold the phone still — it measures by itself."
     info.layer.shadowColor = UIColor.black.cgColor
     info.layer.shadowRadius = 3
     info.layer.shadowOpacity = 0.9
@@ -100,9 +104,9 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
     queue.async { [weak self] in
       guard let self = self else { return }
       let request = VNDetectRectanglesRequest()
-      request.minimumAspectRatio = 0.25   // shorter ÷ longer side: doors ~0.4–0.5, windows wider
+      request.minimumAspectRatio = self.mode == "opening" ? 0.25 : 0.08   // shorter ÷ longer side
       request.maximumAspectRatio = 1.0
-      request.minimumSize = 0.2
+      request.minimumSize = self.mode == "opening" ? 0.2 : 0.15
       request.minimumConfidence = 0.5
       request.quadratureTolerance = 25
       request.maximumObservations = 6
@@ -115,7 +119,7 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
           let w = r.boundingBox.width, h = r.boundingBox.height
           // Sensor image is landscape; a portrait door appears wider than tall there.
           let tallOnScreen = w > h
-          if !tallOnScreen { continue }
+          if self.mode == "opening" && !tallOnScreen { continue }
           if best == nil || (w * h) > (best!.boundingBox.width * best!.boundingBox.height) { best = r }
         }
       } catch { }
@@ -147,14 +151,16 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
         }
         let widthM = (self.dist(world[0], world[1]) + self.dist(world[3], world[2])) / 2
         let heightM = (self.dist(world[0], world[3]) + self.dist(world[1], world[2])) / 2
-        guard widthM > 0.3, heightM > 0.5, widthM < 4, heightM < 4 else { self.noReading(); return }
+        let maxM = self.mode == "opening" ? 4.0 : 120.0
+        guard widthM > 0.2, heightM > 0.2, widthM < maxM, heightM < maxM else { self.noReading(); return }
         let w = widthM * self.M_TO_FT, h = heightM * self.M_TO_FT
         self.last = (w, h, ordered)
         self.readings.append((w, h)); if self.readings.count > 8 { self.readings.removeFirst() }
         self.draw(ordered)
         let wIn = (w * 12 * 4).rounded() / 4, hIn = (h * 12 * 4).rounded() / 4
         let steady = self.isSteady()
-        self.infoLabel?.text = String(format: "Opening: %.2f\" wide × %.2f\" high (%.2f × %.2f ft)\n%@", wIn, hIn, w, h, steady ? "Locked in." : "Hold still… locking in the size.")
+        let title = self.label.prefix(1).uppercased() + self.label.dropFirst()
+        self.infoLabel?.text = String(format: "%@: %.2f\" × %.2f\" (%.2f × %.2f ft = %.1f sq ft)\n%@", String(title), wIn, hIn, w, h, w * h, steady ? "Locked in." : "Hold still… locking in the size.")
         self.useButton?.isEnabled = true; self.useButton?.alpha = 1
         if steady { self.finish(w: w, h: h) }
       }
@@ -163,7 +169,7 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
 
   private func noReading() {
     outline.path = nil
-    if last == nil { infoLabel?.text = "Looking for the opening… keep the whole frame in view and hold still." }
+    if last == nil { infoLabel?.text = "Looking for the \(label)… keep its whole outline in view and hold still." }
   }
 
   private func isSteady() -> Bool {

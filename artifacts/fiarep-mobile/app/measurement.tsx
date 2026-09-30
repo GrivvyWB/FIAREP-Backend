@@ -130,13 +130,15 @@ export default function Measurement() {
     } catch { setClassifying(false); }
   };
 
-  const runAR = async () => {
+  const SCAN_LABEL: Partial<Record<MaterialKind, string>> = { door: 'door opening', window: 'window opening', concrete: 'concrete area', sheetrock: 'wall area', plywood: 'sheet area', room: 'floor area', 'floor-tile': 'floor area', 'wall-tile': 'wall area', 'wood-floor': 'floor area', paint: 'wall area' };
+  const runAR = async (tapMode = false) => {
     setArBusy(true);
     try {
       const opening = material === 'door' || material === 'window';
-      // Doors / windows: automatic — the camera finds the frame and measures it.
-      // Everything else: tap the corners (lengths and small areas).
-      const r = opening ? await scanOpening() : await measureArea();
+      // Automatic for everything: the camera finds the outline (door or window
+      // frame, slab, sidewalk, driveway, wall, facade) and measures it. The
+      // separate "tap the corners" button covers odd shapes and short lengths.
+      const r = tapMode ? await measureArea() : await scanOpening(opening ? 'opening' : 'surface', SCAN_LABEL[material] || 'area');
       const round1 = (n?: number) => (typeof n === 'number' ? String(Math.round(n * 100) / 100) : '');
       if (r.widthFt) setA(round1(r.widthFt));
       if (r.heightFt) setB(round1(r.heightFt));
@@ -148,9 +150,9 @@ export default function Measurement() {
         try { const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }); if (b64.length < 700_000) setPhotoDataUrl('data:image/jpeg;base64,' + b64); } catch {}
       }
       const inches = (ft: number) => Math.round(ft * 12 * 4) / 4;
-      setAiNote(opening && r.widthFt && r.heightFt
-        ? `Scanned opening: ${inches(r.widthFt)}" wide × ${inches(r.heightFt)}" high (${round1(r.widthFt)} × ${round1(r.heightFt)} ft). This is the measured size — it replaces the photo estimate. Take your own photo if you want one on the record.`
-        : r.areaSqFt ? `Scanned ${Math.round(r.areaSqFt * 100) / 100} sq ft — adjust below if needed.` : 'Scan captured.');
+      setAiNote(!tapMode && r.widthFt && r.heightFt
+        ? `Scanned ${SCAN_LABEL[material] || 'area'}: ${inches(r.widthFt)}" × ${inches(r.heightFt)}" (${round1(r.widthFt)} × ${round1(r.heightFt)} ft = ${Math.round(r.widthFt * r.heightFt * 100) / 100} sq ft). This is the measured size — it replaces the photo estimate. Take your own photo if you want one on the record.`
+        : r.areaSqFt ? `Measured ${Math.round(r.areaSqFt * 100) / 100} sq ft from the corners you tapped — adjust below if needed.` : 'Scan captured.');
     } catch (e: any) {
       if (/cancel/i.test(String(e?.message || e?.code || ''))) return;
       Alert.alert('Scan', e?.message ? String(e.message) : 'Could not measure. Enter the dimensions manually.');
@@ -237,10 +239,15 @@ export default function Measurement() {
             <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{photo ? 'Retake photo' : 'Point camera & take photo'}</Text>
           </Pressable>
           {arSupported && (
-            <Pressable onPress={runAR} disabled={arBusy} style={{ borderRadius: 16, borderWidth: 2, borderColor: ACCENT, paddingVertical: 14, alignItems: 'center', marginBottom: 12, opacity: arBusy ? 0.6 : 1 }}>
-              <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 15 }}>{arBusy ? 'Scanning…' : (material === 'door' || material === 'window') ? `Scan the ${material} opening (exact size)` : 'Scan with camera — tap the corners (exact size)'}</Text>
-              <Text style={{ color: '#4A5560', fontSize: 12, marginTop: 4, paddingHorizontal: 12, textAlign: 'center' }}>{(material === 'door' || material === 'window') ? 'No tapping: point the camera at the whole opening, hold still, and it measures width and height by itself.' : 'Tap each corner; 2 taps = a length, 3 or more = an area.'}</Text>
+            <>
+            <Pressable onPress={() => runAR(false)} disabled={arBusy} style={{ borderRadius: 16, borderWidth: 2, borderColor: ACCENT, paddingVertical: 14, alignItems: 'center', marginBottom: 8, opacity: arBusy ? 0.6 : 1 }}>
+              <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 15 }}>{arBusy ? 'Scanning…' : `Scan the ${SCAN_LABEL[material] || 'area'} (exact size)`}</Text>
+              <Text style={{ color: '#4A5560', fontSize: 12, marginTop: 4, paddingHorizontal: 12, textAlign: 'center' }}>No tapping: point the camera so the whole outline is in view, hold still, and it measures width and height by itself.</Text>
             </Pressable>
+            <Pressable onPress={() => runAR(true)} disabled={arBusy} style={{ alignItems: 'center', marginBottom: 12 }}>
+              <Text style={{ color: ACCENT, fontWeight: '600', fontSize: 13 }}>Odd shape or just a length? Tap the corners instead</Text>
+            </Pressable>
+            </>
           )}
           {photo && <Image source={{ uri: photo }} style={{ width: '100%', height: 200, borderRadius: 16, marginBottom: 12, backgroundColor: '#E4E9E6' }} resizeMode="cover" />}
           {classifying && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}><ActivityIndicator color={ACCENT} /><Text style={{ color: '#4A5560' }}>Identifying material…</Text></View>}
