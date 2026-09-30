@@ -7,7 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Camera, X } from "lucide-react";
 
 // An awarded vendor, on site, raises a change work order: what changed, why,
-// measurements, notes and photos (all required). It goes to the CPM Supervisor
+// notes and photos (required; measurements optional). It goes to the CPM Supervisor
 // handling the scope; the vendor sees who received it and every decision here.
 
 type VendorCO = {
@@ -22,6 +22,15 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   cost_approved: { label: "APPROVED — go ahead", cls: "bg-emerald-600 text-white" },
   declined: { label: "Declined", cls: "bg-red-100 text-red-800" },
 };
+
+function readAsDataUrl(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result || ""));
+    r.onerror = () => reject(r.error);
+    r.readAsDataURL(file);
+  });
+}
 
 async function shrink(file: File, max = 1280): Promise<string> {
   const url = URL.createObjectURL(file);
@@ -71,17 +80,29 @@ export function VendorChangeOrder({ trackingId, vendorName, started, completed }
     });
   }
   async function addPhotos(files: FileList | null) {
-    if (!files) return;
-    const geo = await whereAmI();
-    const next: VendorPhoto[] = [];
-    for (const f of Array.from(files).slice(0, 6 - photos.length)) {
-      try { next.push({ dataUrl: await shrink(f), capturedAt: new Date(f.lastModified || Date.now()).toISOString(), ...geo }); } catch { /* skip bad file */ }
+    if (!files || !files.length) return;
+    // Copy the files NOW: the input is reset right after this call and Safari
+    // empties the FileList with it, which lost photos while we waited on GPS.
+    const picked = Array.from(files).slice(0, 6 - photos.length);
+    // Read the photos first, then stamp the location (GPS can take a while).
+    const read: Array<{ dataUrl: string; capturedAt: string }> = [];
+    let failed = 0;
+    for (const f of picked) {
+      try {
+        let dataUrl = "";
+        try { dataUrl = await shrink(f); } catch { dataUrl = await readAsDataUrl(f); }
+        read.push({ dataUrl, capturedAt: new Date(f.lastModified || Date.now()).toISOString() });
+      } catch { failed += 1; }
     }
-    setPhotos((p) => [...p, ...next].slice(0, 6));
+    if (read.length) setPhotos((p) => [...p, ...read.map((r) => ({ ...r }))].slice(0, 6));
+    if (failed) toast({ variant: "destructive", title: failed === picked.length ? "Photo not added" : "Some photos not added", description: "That photo could not be read. Try taking it again." });
+    if (!read.length) return;
+    const geo = await whereAmI();
+    if (geo.lat != null) setPhotos((p) => p.map((ph) => (read.some((r) => r.dataUrl === ph.dataUrl) && ph.lat == null ? { ...ph, ...geo } : ph)));
   }
 
   async function submit() {
-    const missing = [!description.trim() && "what changed", !reason.trim() && "why", !measurements.trim() && "measurements", !notes.trim() && "notes", !photos.length && "at least one photo"].filter(Boolean);
+    const missing = [!description.trim() && "what changed", !reason.trim() && "why", !notes.trim() && "notes", !photos.length && "at least one photo"].filter(Boolean);
     if (missing.length) { toast({ variant: "destructive", title: "Change work order incomplete", description: `Please add ${missing.join(", ")}.` }); return; }
     setBusy(true);
     try {
@@ -115,7 +136,7 @@ export function VendorChangeOrder({ trackingId, vendorName, started, completed }
               <div className="space-y-3 rounded-xl border p-3">
                 <Textarea value={description} onChange={(e) => setDescription(e.target.value)} placeholder="What changed / extra work needed (required)" />
                 <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why — the reason this is outside the scope (required)" />
-                <Input value={measurements} onChange={(e) => setMeasurements(e.target.value)} placeholder="Measurements, e.g. 12 ft × 8 ft wall, 40 sq ft (required)" />
+                <Input value={measurements} onChange={(e) => setMeasurements(e.target.value)} placeholder="Measurements, e.g. 12 ft × 8 ft wall, 40 sq ft (optional)" />
                 <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Notes (required)" />
                 <Input type="number" step="0.01" value={cost} onChange={(e) => setCost(e.target.value)} placeholder="Added cost $ (optional)" />
                 <input ref={fileInput} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => { void addPhotos(e.target.files); e.target.value = ""; }} />
@@ -154,7 +175,7 @@ export function VendorChangeOrder({ trackingId, vendorName, started, completed }
               </div>
               <p className="text-sm"><span className="font-semibold">What changed: </span>{co.description}</p>
               <p className="text-sm"><span className="font-semibold">Why: </span>{co.vendorReason}</p>
-              <p className="text-sm"><span className="font-semibold">Measurements: </span>{co.measurements}</p>
+              {!!co.measurements && <p className="text-sm"><span className="font-semibold">Measurements: </span>{co.measurements}</p>}
               {!!co.cost && <p className="text-sm"><span className="font-semibold">Added cost: </span>${co.cost.toFixed(2)}</p>}
               {!!co.receivedBy.length && <p className="text-xs text-emerald-700">✓ Received by {co.receivedBy.join(" and ")}{co.receivedAt ? ` · ${new Date(co.receivedAt).toLocaleString()}` : ""}</p>}
               {co.status !== "submitted" && !!co.respondedByName && <p className="text-xs text-muted-foreground">{st.label} by {co.respondedByName}{co.respondedAt ? ` · ${new Date(co.respondedAt).toLocaleString()}` : ""}</p>}

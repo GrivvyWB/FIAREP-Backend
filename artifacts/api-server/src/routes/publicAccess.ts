@@ -703,7 +703,7 @@ router.post("/v1/public/vendor-scopes/:trackingId/progress", rateLimit("vendor-p
 
 // ── Vendor change work orders ──────────────────────────────────────────────
 // Once awarded and on site, a vendor can raise a change work order: what
-// changed, why, measurements, notes and photos — all required so there is
+// changed, why, notes and photos — required (measurements optional) so there is
 // never a mix-up. It goes to the CPM Supervisor handling the scope (and the
 // CPM who wrote it) to approve and send to Procurement, or decline. The vendor
 // sees who received it and every status change on their page.
@@ -789,7 +789,7 @@ router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("ven
     res.status(409).json({ error: "This job is marked complete" }); return;
   }
   const missing = [
-    !description ? "what changed" : "", !vendorReason ? "the reason why" : "", !measurements ? "measurements" : "",
+    !description ? "what changed" : "", !vendorReason ? "the reason why" : "",
     !notes ? "notes" : "", !photos.length ? "at least one photo" : "",
   ].filter(Boolean);
   if (missing.length) { res.status(400).json({ error: `Please provide ${missing.join(", ")}` }); return; }

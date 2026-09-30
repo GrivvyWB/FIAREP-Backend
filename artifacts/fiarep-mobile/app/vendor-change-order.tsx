@@ -7,7 +7,7 @@ import { captureGeo } from '../lib/geo';
 import { ui, ACCENT } from '../lib/ui';
 
 // Vendor raises a change work order from the job site. Everything is required
-// (what changed, why, measurements, notes, photos) so there is never a mix-up.
+// (what changed, why, notes, photos; measurements optional) so there is never a mix-up.
 // Saved on the phone first, then pushed when there is service.
 
 export default function VendorChangeOrder() {
@@ -25,10 +25,15 @@ export default function VendorChangeOrder() {
     if (photos.length >= 6) { Alert.alert('Photo limit', 'Up to 6 photos per change work order.'); return; }
     const perm = await ImagePicker.requestCameraPermissionsAsync();
     if (!perm.granted) { Alert.alert('Camera needed', 'Allow camera access to add photos.'); return; }
-    const shot = await ImagePicker.launchCameraAsync({ quality: 0.3, base64: true, allowsEditing: false });
-    if (shot.canceled || !shot.assets?.[0]?.base64) return;
-    const data = `data:image/jpeg;base64,${shot.assets[0].base64}`;
-    if (data.length > 700_000) { Alert.alert('Photo too large', 'Try again a little further back — the photo must be under about 500 KB.'); return; }
+    let shot: ImagePicker.ImagePickerResult;
+    try {
+      shot = await ImagePicker.launchCameraAsync({ quality: 0.2, base64: true, allowsEditing: false, exif: false });
+    } catch (e: any) { Alert.alert('Camera', e?.message || 'Could not open the camera.'); return; }
+    if (shot.canceled) return;
+    const asset = shot.assets?.[0];
+    if (!asset?.base64) { Alert.alert('Photo not added', 'The camera did not return a photo. Please try again.'); return; }
+    const data = `data:image/jpeg;base64,${asset.base64}`;
+    if (data.length > 1_600_000) { Alert.alert('Photo too large', 'Try again a little further back so the photo is smaller.'); return; }
     // Stamp the photo with when and where it was taken.
     const geo = await captureGeo().catch(() => ({ at: new Date().toISOString() } as any));
     setPhotos((p) => [...p, { dataUrl: data, capturedAt: geo?.at || new Date().toISOString(), lat: geo?.lat, lng: geo?.lng, accuracy: geo?.accuracy }]);
@@ -36,7 +41,7 @@ export default function VendorChangeOrder() {
 
   async function submit() {
     const missing = [
-      !description.trim() && 'what changed', !reason.trim() && 'why', !measurements.trim() && 'measurements',
+      !description.trim() && 'what changed', !reason.trim() && 'why',
       !notes.trim() && 'notes', !photos.length && 'at least one photo',
     ].filter(Boolean);
     if (missing.length) { Alert.alert('Change work order incomplete', 'Please add ' + missing.join(', ') + '.'); return; }
@@ -70,7 +75,7 @@ export default function VendorChangeOrder() {
         <Text style={{ color: '#666', fontSize: 13 }}>Job {String(trackingId || '')}{address ? ' · ' + address : ''}. Goes to the supervisor handling this scope, who approves and sends it to Procurement. Everything below is required.</Text>
         {field('What changed / extra work needed', description, setDescription, 'Describe the extra work found on site')}
         {field('Why — reason it is outside the scope', reason, setReason, 'e.g. wall behind the tile is rotted; scope only covered tile')}
-        {field('Measurements', measurements, setMeasurements, 'e.g. 12 ft × 8 ft wall, 96 sq ft', false)}
+        {field('Measurements (optional)', measurements, setMeasurements, 'e.g. 12 ft × 8 ft wall, 96 sq ft', false)}
         {field('Notes', notes, setNotes, 'Anything the supervisor needs to know')}
         {field('Added cost $ (optional)', cost, setCost, '0.00', false, 'decimal-pad')}
         <Pressable style={[ui.btnOutline]} onPress={takePhoto}>
