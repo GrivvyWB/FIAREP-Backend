@@ -138,7 +138,9 @@ export default function Measurement() {
       // Automatic for everything: the camera finds the outline (door or window
       // frame, slab, sidewalk, driveway, wall, facade) and measures it. The
       // separate "tap the corners" button covers odd shapes and short lengths.
-      const r = tapMode ? await measureArea() : await scanOpening(opening ? 'opening' : 'surface', SCAN_LABEL[material] || 'area');
+      // Openings: the camera finds the frame. Surfaces: sweep the camera across
+      // the area and the measurement grows with it — no edges or taps needed.
+      const r = tapMode ? await measureArea() : await scanOpening(opening ? 'opening' : 'sweep', SCAN_LABEL[material] || 'area');
       const round1 = (n?: number) => (typeof n === 'number' ? String(Math.round(n * 100) / 100) : '');
       if (r.widthFt) setA(round1(r.widthFt));
       if (r.heightFt) setB(round1(r.heightFt));
@@ -242,7 +244,7 @@ export default function Measurement() {
             <>
             <Pressable onPress={() => runAR(false)} disabled={arBusy} style={{ borderRadius: 16, borderWidth: 2, borderColor: ACCENT, paddingVertical: 14, alignItems: 'center', marginBottom: 8, opacity: arBusy ? 0.6 : 1 }}>
               <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 15 }}>{arBusy ? 'Scanning…' : `Scan the ${SCAN_LABEL[material] || 'area'} (exact size)`}</Text>
-              <Text style={{ color: '#4A5560', fontSize: 12, marginTop: 4, paddingHorizontal: 12, textAlign: 'center' }}>No tapping: point the camera so the whole outline is in view, hold still, and it measures width and height by itself.</Text>
+              <Text style={{ color: '#4A5560', fontSize: 12, marginTop: 4, paddingHorizontal: 12, textAlign: 'center' }}>{(material === 'door' || material === 'window') ? 'No tapping: point the camera at the whole opening, hold still, and it measures width and height by itself.' : 'No tapping: sweep the camera slowly across the whole area, edge to edge — the measurement builds as you go and drops into the boxes.'}</Text>
             </Pressable>
             <Pressable onPress={() => runAR(true)} disabled={arBusy} style={{ alignItems: 'center', marginBottom: 12 }}>
               <Text style={{ color: ACCENT, fontWeight: '600', fontSize: 13 }}>Odd shape or just a length? Tap the corners instead</Text>

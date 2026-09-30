@@ -32,8 +32,9 @@ export function measureArea(steps: string[] = []): Promise<ARMeasureResult> {
 /** Automatic: point the camera at the thing; it finds its outline and measures
  * width × height by itself — no tapping. mode 'opening' = a door / window on a
  * wall (tall rectangle); 'surface' = any rectangle on any surface (a slab, a
- * sidewalk flag, a driveway, a wall, a facade). label = what to call it. */
-export function scanOpening(mode: 'opening' | 'surface' = 'opening', label = 'opening'): Promise<ARMeasureResult> {
+ * sidewalk flag, a driveway, a wall, a facade); 'sweep' = pan the camera across
+ * the surface and it grows the measurement as you go, no edges needed. */
+export function scanOpening(mode: 'opening' | 'surface' | 'sweep' = 'opening', label = 'opening'): Promise<ARMeasureResult> {
   if (!Native) return Promise.reject(new Error('AR scan unavailable.'));
   if (typeof Native.scanOpening !== 'function') return Promise.reject(new Error('This build cannot scan automatically yet — update the app.'));
   return Native.scanOpening(mode, label);

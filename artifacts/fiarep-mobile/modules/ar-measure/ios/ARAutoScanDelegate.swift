@@ -13,7 +13,7 @@ import Vision
 // reading; Cancel rejects.
 class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
   private let promise: Promise
-  private let mode: String   // "opening" | "surface"
+  private let mode: String   // "opening" | "surface" | "sweep"
   private let label: String  // what we are scanning, for the prompts
   private var vc: UIViewController?
   private var sceneView: ARSCNView?
@@ -27,6 +27,13 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
   private var last: (w: Double, h: Double, corners: [CGPoint])? = nil
   private let M_TO_FT = 3.28084
   private let queue = DispatchQueue(label: "ar.autoscan.vision")
+  // Sweep mode: the surface under the crosshair grows as the camera pans over
+  // it; we report the tracked plane's extent and lock when it stops growing.
+  private var sweepAnchorId: UUID? = nil
+  private var sweepLast: (w: Double, h: Double) = (0, 0)
+  private var sweepStableSince: TimeInterval = 0
+  private var sweepStarted: TimeInterval = 0
+  private var planeNodes: [UUID: SCNNode] = [:]
 
   init(promise: Promise, mode: String = "opening", label: String = "opening") { self.promise = promise; self.mode = mode; self.label = label }
 
@@ -52,7 +59,9 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
     info.numberOfLines = 0
     info.textColor = .white
     info.font = UIFont.boldSystemFont(ofSize: 17)
-    info.text = "Stand back so the WHOLE \(label) is in view, edge to edge. Hold the phone still — it measures by itself."
+    info.text = mode == "sweep"
+      ? "Point at the \(label) and slowly sweep the camera across ALL of it, edge to edge. The yellow patch shows what has been measured so far."
+      : "Stand back so the WHOLE \(label) is in view, edge to edge. Hold the phone still — it measures by itself."
     info.layer.shadowColor = UIColor.black.cgColor
     info.layer.shadowRadius = 3
     info.layer.shadowOpacity = 0.9
@@ -93,9 +102,60 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
     return top
   }
 
+  // Sweep mode: show each detected surface as a translucent patch so the
+  // user sees what has been covered.
+  func renderer(_ renderer: SCNSceneRenderer, didAdd node: SCNNode, for anchor: ARAnchor) {
+    guard mode == "sweep", let plane = anchor as? ARPlaneAnchor, let sv = sceneView, let dev = sv.device else { return }
+    let geo = ARSCNPlaneGeometry(device: dev)
+    geo?.update(from: plane.geometry)
+    geo?.firstMaterial?.diffuse.contents = UIColor.systemYellow.withAlphaComponent(0.25)
+    let n = SCNNode(geometry: geo)
+    node.addChildNode(n)
+    planeNodes[plane.identifier] = n
+  }
+  func renderer(_ renderer: SCNSceneRenderer, didUpdate node: SCNNode, for anchor: ARAnchor) {
+    guard mode == "sweep", let plane = anchor as? ARPlaneAnchor, let n = planeNodes[plane.identifier],
+          let geo = n.geometry as? ARSCNPlaneGeometry else { return }
+    geo.update(from: plane.geometry)
+    n.geometry?.firstMaterial?.diffuse.contents = plane.identifier == sweepAnchorId
+      ? UIColor.systemYellow.withAlphaComponent(0.35) : UIColor.white.withAlphaComponent(0.12)
+  }
+
+  private func sweepTick(_ time: TimeInterval) {
+    guard let sv = sceneView, let frame = sv.session.currentFrame else { return }
+    if sweepStarted == 0 { sweepStarted = time }
+    let center = CGPoint(x: sv.bounds.midX, y: sv.bounds.midY)
+    guard let q = sv.raycastQuery(from: center, allowing: .existingPlaneGeometry, alignment: .any),
+          let hit = sv.session.raycast(q).first, let plane = hit.anchor as? ARPlaneAnchor else {
+      if sweepAnchorId == nil { infoLabel?.text = "Finding the \(label)… move the camera slowly over it." }
+      return
+    }
+    // Follow the plane under the crosshair; if the user pans to a bigger one, take that.
+    if sweepAnchorId != plane.identifier { sweepAnchorId = plane.identifier; sweepStableSince = 0 }
+    let anchors = frame.anchors.compactMap { $0 as? ARPlaneAnchor }
+    guard let tracked = anchors.first(where: { $0.identifier == sweepAnchorId }) else { return }
+    let w = Double(tracked.planeExtent.width) * M_TO_FT
+    let h = Double(tracked.planeExtent.height) * M_TO_FT
+    let grew = abs(w - sweepLast.w) / max(w, 0.01) > 0.01 || abs(h - sweepLast.h) / max(h, 0.01) > 0.01
+    if grew || sweepStableSince == 0 { sweepStableSince = time }
+    sweepLast = (w, h)
+    last = (w, h, [])
+    useButton?.isEnabled = true; useButton?.alpha = 1
+    let title = label.prefix(1).uppercased() + label.dropFirst()
+    let held = time - sweepStableSince
+    let locked = held > 3.0 && time - sweepStarted > 4.0 && w > 0.5 && h > 0.5
+    infoLabel?.text = String(format: "%@ so far: %.2f × %.2f ft = %.1f sq ft\n%@", String(title), w, h, w * h,
+      locked ? "Locked in." : "Keep sweeping to the edges… tap Use this when it covers the whole \(label).")
+    if locked { finish(w: w, h: h) }
+  }
+
   // Every few frames: find the opening in the camera image and measure it.
   func renderer(_ renderer: SCNSceneRenderer, updateAtTime time: TimeInterval) {
     frameCount += 1
+    if mode == "sweep" {
+      if frameCount % 6 == 0 && !finished { DispatchQueue.main.async { [weak self] in self?.sweepTick(time) } }
+      return
+    }
     guard !finished, !busy, frameCount % 5 == 0, let sv = sceneView, let frame = sv.session.currentFrame else { return }
     busy = true
     let pixelBuffer = frame.capturedImage
@@ -192,6 +252,7 @@ class ARAutoScanDelegate: NSObject, ARSCNViewDelegate {
 
   @objc private func handleUse() {
     guard let l = last else { return }
+    if mode == "sweep" { finish(w: l.w, h: l.h); return }
     // Average the recent readings so one shaky frame doesn't decide it.
     let ws = readings.map { $0.w }, hs = readings.map { $0.h }
     let w = ws.isEmpty ? l.w : ws.reduce(0, +) / Double(ws.count)
