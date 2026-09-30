@@ -11,8 +11,8 @@ static-build/
 expo-env.d.ts
 
 # Native
-ios/
-android/
+/ios/
+/android/
 *.orig.*
 *.jks
 *.p8
@@ -40,3 +40,4 @@ yarn-error.*
 .vercel
 
 .env
+*.swift.bak.*
