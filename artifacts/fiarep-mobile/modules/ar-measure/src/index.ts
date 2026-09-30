@@ -9,7 +9,7 @@ export type ARMeasureResult = {
   imagePath?: string;
 };
 
-type ARMeasureModule = { isSupported(): boolean; measure(): Promise<ARMeasureResult> };
+type ARMeasureModule = { isSupported(): boolean; measure(steps: string[]): Promise<ARMeasureResult> };
 
 let Native: ARMeasureModule | null = null;
 try {
@@ -23,7 +23,15 @@ try {
 export function isARMeasureSupported(): boolean {
   return !!Native && Native.isSupported();
 }
-export function measureArea(): Promise<ARMeasureResult> {
+/** Free tapping (2 points = length, 3+ = area), or guided: one prompt per corner. */
+export function measureArea(steps: string[] = []): Promise<ARMeasureResult> {
   if (!Native) return Promise.reject(new Error('AR measure unavailable.'));
-  return Native.measure();
+  return Native.measure(steps);
 }
+
+/** Door / window opening: three corners give width (side 1) and height (side 2). */
+export const OPENING_STEPS = [
+  'Stand back so the whole opening is in view. Put the + on the BOTTOM-LEFT corner of the opening (where the left jamb meets the floor / sill) and tap.',
+  'Move the + to the BOTTOM-RIGHT corner of the opening and tap. That is the width.',
+  'Move the + up to the TOP-RIGHT corner (right jamb meets the head) and tap. That is the height.',
+];

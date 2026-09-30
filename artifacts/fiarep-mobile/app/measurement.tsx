@@ -5,7 +5,8 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import { customFetch } from '@workspace/api-client-react';
 import { computeMeasurement, MATERIAL_LABELS, type MaterialKind } from '../lib/measurements';
-import { isARMeasureSupported, measureArea } from '../modules/ar-measure/src';
+import { isARMeasureSupported, measureArea, OPENING_STEPS } from '../modules/ar-measure/src';
+import * as FileSystem from 'expo-file-system/legacy';
 import { getCurrentActor, getSessionIdentity } from '../lib/store';
 import { useRawModules } from '../lib/module-access';
 import { allowedMaterialsForTrade, tradeKeyForPosition } from '../lib/measurement-access';
@@ -132,11 +133,22 @@ export default function Measurement() {
   const runAR = async () => {
     setArBusy(true);
     try {
-      const r = await measureArea();
+      const opening = material === 'door' || material === 'window';
+      const r = await measureArea(opening ? OPENING_STEPS : []);
       const round1 = (n?: number) => (typeof n === 'number' ? String(Math.round(n * 100) / 100) : '');
       if (r.widthFt) setA(round1(r.widthFt));
       if (r.heightFt) setB(round1(r.heightFt));
-      setAiNote(r.areaSqFt ? `AR measured ${Math.round(r.areaSqFt * 100) / 100} sq ft — adjust below if needed.` : 'AR measurement captured.');
+      if (r.widthFt && r.heightFt) setAspect(r.widthFt / r.heightFt);
+      setAssumedStd(false);
+      if (r.imagePath) {
+        const uri = (FileSystem.documentDirectory || '') + r.imagePath;
+        setPhoto(uri);
+        try { const b64 = await FileSystem.readAsStringAsync(uri, { encoding: FileSystem.EncodingType.Base64 }); if (b64.length < 700_000) setPhotoDataUrl('data:image/jpeg;base64,' + b64); } catch {}
+      }
+      const inches = (ft: number) => Math.round(ft * 12 * 4) / 4;
+      setAiNote(opening && r.widthFt && r.heightFt
+        ? `Scanned opening: ${inches(r.widthFt)}" wide × ${inches(r.heightFt)}" high (${round1(r.widthFt)} × ${round1(r.heightFt)} ft). This is the measured size — it replaces the photo estimate.`
+        : r.areaSqFt ? `Scanned ${Math.round(r.areaSqFt * 100) / 100} sq ft — adjust below if needed.` : 'Scan captured.');
     } catch (e: any) {
       Alert.alert('AR measure', e?.message ? String(e.message) : 'Could not measure. Enter the dimensions manually.');
     } finally { setArBusy(false); }
@@ -223,7 +235,8 @@ export default function Measurement() {
           </Pressable>
           {arSupported && (
             <Pressable onPress={runAR} disabled={arBusy} style={{ borderRadius: 16, borderWidth: 2, borderColor: ACCENT, paddingVertical: 14, alignItems: 'center', marginBottom: 12, opacity: arBusy ? 0.6 : 1 }}>
-              <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 15 }}>{arBusy ? 'Measuring…' : 'AR Measure (LiDAR) — tap the corners'}</Text>
+              <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 15 }}>{arBusy ? 'Scanning…' : (material === 'door' || material === 'window') ? `Scan the ${material} opening (exact size)` : 'Scan with camera — tap the corners (exact size)'}</Text>
+              <Text style={{ color: '#4A5560', fontSize: 12, marginTop: 4, paddingHorizontal: 12, textAlign: 'center' }}>{(material === 'door' || material === 'window') ? 'Tap bottom-left, bottom-right, then top-right of the opening. Gives the real width and height.' : 'Tap each corner; 2 taps = a length, 3 or more = an area.'}</Text>
             </Pressable>
           )}
           {photo && <Image source={{ uri: photo }} style={{ width: '100%', height: 200, borderRadius: 16, marginBottom: 12, backgroundColor: '#E4E9E6' }} resizeMode="cover" />}
