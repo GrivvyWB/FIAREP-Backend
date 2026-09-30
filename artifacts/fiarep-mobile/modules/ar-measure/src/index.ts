@@ -9,7 +9,7 @@ export type ARMeasureResult = {
   imagePath?: string;
 };
 
-type ARMeasureModule = { isSupported(): boolean; measure(steps: string[]): Promise<ARMeasureResult> };
+type ARMeasureModule = { isSupported(): boolean; measure(steps: string[]): Promise<ARMeasureResult>; scanOpening(): Promise<ARMeasureResult> };
 
 let Native: ARMeasureModule | null = null;
 try {
@@ -27,6 +27,14 @@ export function isARMeasureSupported(): boolean {
 export function measureArea(steps: string[] = []): Promise<ARMeasureResult> {
   if (!Native) return Promise.reject(new Error('AR measure unavailable.'));
   return Native.measure(steps);
+}
+
+/** Automatic: point the camera at a door / window; it finds the frame and
+ * measures width × height by itself — no tapping. */
+export function scanOpening(): Promise<ARMeasureResult> {
+  if (!Native) return Promise.reject(new Error('AR scan unavailable.'));
+  if (typeof Native.scanOpening !== 'function') return Promise.reject(new Error('This build cannot scan automatically yet — update the app.'));
+  return Native.scanOpening();
 }
 
 /** Door / window opening: three corners give width (side 1) and height (side 2). */
