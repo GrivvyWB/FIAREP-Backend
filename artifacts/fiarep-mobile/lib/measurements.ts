@@ -14,7 +14,9 @@ export type MaterialKind =
   | 'floor-tile'
   | 'wall-tile'
   | 'wood-floor'
-  | 'paint';
+  | 'paint'
+  | 'floor'
+  | 'ceiling';
 
 export const MATERIAL_LABELS: Record<MaterialKind, string> = {
   concrete: 'Concrete',
@@ -27,11 +29,13 @@ export const MATERIAL_LABELS: Record<MaterialKind, string> = {
   'wall-tile': 'Wall tile',
   'wood-floor': 'Wood / laminate flooring',
   paint: 'Paint',
+  floor: 'Floor (joists)',
+  ceiling: 'Ceiling (rafters)',
 };
 
 /** Materials whose take-off is a coverage/count problem measured as area. */
 export const AREA_MATERIALS: MaterialKind[] = [
-  'sheetrock', 'plywood', 'window', 'door', 'room', 'floor-tile', 'wall-tile', 'wood-floor', 'paint',
+  'sheetrock', 'plywood', 'window', 'door', 'room', 'floor-tile', 'wall-tile', 'wood-floor', 'paint', 'floor', 'ceiling',
 ];
 
 export const SHEET_SQFT = 32;        // 4 ft x 8 ft sheet (sheetrock, plywood)
@@ -40,6 +44,18 @@ export const DEFAULT_TILE_IN = 12;   // 12" square tile default
 export const DEFAULT_BOX_SQFT = 20;  // wood/laminate flooring box coverage
 export const PAINT_COVERAGE_SQFT = 350; // sq ft per gallon per coat
 export const DEFAULT_COATS = 2;
+export const DEFAULT_JOIST_SPACING_IN = 16; // joists / rafters on 16" centres
+
+/**
+ * Framing members (floor joists or ceiling rafters) across a span.
+ * Members run across the WIDTH and are spaced along the LENGTH, so the count
+ * is one every `spacing` inches along the length plus the end member:
+ *   count = floor(length_in / spacing) + 1   (e.g. 20 ft @ 16" OC = 16)
+ */
+export function framingMembers(lengthFt: number, spacingIn: number = DEFAULT_JOIST_SPACING_IN): number {
+  if (![lengthFt, spacingIn].every(pos)) return 0;
+  return Math.floor((lengthFt * 12) / spacingIn) + 1;
+}
 
 const round = (value: number, dp = 2): number => {
   const f = 10 ** dp;
@@ -112,6 +128,7 @@ export interface MeasurementInput {
   boxSqFt?: number;    // wood flooring
   coats?: number;      // paint
   coverageSqFt?: number; // paint
+  spacingIn?: number;  // floor joists / ceiling rafters, inches on centre
 }
 
 export interface MeasurementResult {
@@ -125,6 +142,8 @@ export interface MeasurementResult {
   boxes?: number;
   doorSize?: string;
   gallons?: number;
+  members?: number;      // floor joists / ceiling rafters
+  memberLengthFt?: number; // each member spans the width
   summary: string;
 }
 
@@ -174,6 +193,14 @@ export function computeMeasurement(input: MeasurementInput): MeasurementResult {
       const wIn = Math.round(L * 12 * 4) / 4; const hIn = Math.round(W * 12 * 4) / 4;
       return { ...base, doorSize,
         summary: doorSize ? `Opening ${wIn}" x ${hIn}" (${area} sq ft) -> nearest standard slab ${doorSize}` : 'Enter the opening width and height.' };
+    }
+    case 'floor':
+    case 'ceiling': {
+      const spacing = input.spacingIn ?? DEFAULT_JOIST_SPACING_IN;
+      const members = framingMembers(L, spacing);
+      const what = input.material === 'floor' ? 'joist' : 'rafter';
+      return { ...base, members, memberLengthFt: pos(W) ? round(W, 2) : 0,
+        summary: members ? `${area} sq ft -> ${members} ${what}s @ ${spacing}" OC, each ${round(W, 2)} ft long` : 'Enter the length and width.' };
     }
     case 'window':
     case 'room':

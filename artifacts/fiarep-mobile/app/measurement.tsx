@@ -16,6 +16,7 @@ const ACCENT = '#1E7D4F';
 const CHIP: Record<MaterialKind, string> = {
   concrete: 'Concrete', sheetrock: 'Sheetrock', plywood: 'Plyboard', 'floor-tile': 'Floor tile',
   'wall-tile': 'Wall tile', 'wood-floor': 'Wood floor', paint: 'Paint', window: 'Window', door: 'Door', room: 'Room',
+  floor: 'Floor / joists', ceiling: 'Ceiling / rafters',
 };
 const DIM_LABELS: Record<MaterialKind, { a: string; b: string }> = {
   concrete: { a: 'Length (ft)', b: 'Width (ft)' }, sheetrock: { a: 'Width (ft)', b: 'Height (ft)' },
@@ -23,6 +24,7 @@ const DIM_LABELS: Record<MaterialKind, { a: string; b: string }> = {
   door: { a: 'Opening width (ft)', b: 'Opening height (ft)' }, room: { a: 'Length (ft)', b: 'Width (ft)' },
   'floor-tile': { a: 'Length (ft)', b: 'Width (ft)' }, 'wall-tile': { a: 'Wall width (ft)', b: 'Wall height (ft)' },
   'wood-floor': { a: 'Length (ft)', b: 'Width (ft)' }, paint: { a: 'Surface width (ft)', b: 'Surface height (ft)' },
+  floor: { a: 'Length (ft) — joists run across this', b: 'Width / span (ft)' }, ceiling: { a: 'Length (ft) — rafters run across this', b: 'Width / span (ft)' },
 };
 
 export default function Measurement() {
@@ -61,6 +63,7 @@ export default function Measurement() {
   const [tileW, setTileW] = useState('12');
   const [tileH, setTileH] = useState('12');
   const [boxSqFt, setBoxSqFt] = useState('20');
+  const [spacing, setSpacing] = useState('16');
   const [coats, setCoats] = useState('2');
   const [coverage, setCoverage] = useState('350');
   const [arSupported, setArSupported] = useState(false);
@@ -74,8 +77,8 @@ export default function Measurement() {
   const result = useMemo(() => computeMeasurement({
     material, lengthFt: parseFloat(a) || 0, widthFt: parseFloat(b) || 0, thicknessIn: parseFloat(thickness) || 0,
     tileWidthIn: parseFloat(tileW) || 0, tileHeightIn: parseFloat(tileH) || 0, boxSqFt: parseFloat(boxSqFt) || 0,
-    coats: parseFloat(coats) || 0, coverageSqFt: parseFloat(coverage) || 0,
-  }), [material, a, b, thickness, tileW, tileH, boxSqFt, coats, coverage]);
+    coats: parseFloat(coats) || 0, coverageSqFt: parseFloat(coverage) || 0, spacingIn: parseFloat(spacing) || 0,
+  }), [material, a, b, thickness, tileW, tileH, boxSqFt, coats, coverage, spacing]);
 
   const capture = async () => {
     try {
@@ -130,7 +133,7 @@ export default function Measurement() {
     } catch { setClassifying(false); }
   };
 
-  const SCAN_LABEL: Partial<Record<MaterialKind, string>> = { door: 'door opening', window: 'window opening', concrete: 'concrete area', sheetrock: 'wall area', plywood: 'sheet area', room: 'floor area', 'floor-tile': 'floor area', 'wall-tile': 'wall area', 'wood-floor': 'floor area', paint: 'wall area' };
+  const SCAN_LABEL: Partial<Record<MaterialKind, string>> = { door: 'door opening', window: 'window opening', concrete: 'concrete area', sheetrock: 'wall area', plywood: 'sheet area', room: 'floor area', 'floor-tile': 'floor area', 'wall-tile': 'wall area', 'wood-floor': 'floor area', paint: 'wall area', floor: 'floor', ceiling: 'ceiling' };
   const runAR = async (tapMode = false) => {
     setArBusy(true);
     try {
@@ -172,7 +175,8 @@ export default function Measurement() {
         material, materialLabel: MATERIAL_LABELS[material], development: dev,
         lengthFt: parseFloat(a) || 0, widthFt: parseFloat(b) || 0, thicknessIn: parseFloat(thickness) || 0,
         tileWidthIn: parseFloat(tileW) || 0, tileHeightIn: parseFloat(tileH) || 0, boxSqFt: parseFloat(boxSqFt) || 0,
-        coats: parseFloat(coats) || 0, coverageSqFt: parseFloat(coverage) || 0,
+        coats: parseFloat(coats) || 0, coverageSqFt: parseFloat(coverage) || 0, spacingIn: parseFloat(spacing) || 0,
+        members: result.members, memberLengthFt: result.memberLengthFt,
         areaSqFt: result.areaSqFt, cubicYards: result.cubicYards, orderCubicYards: result.orderCubicYards,
         sheets: result.sheets, tiles: result.tiles, boxes: result.boxes, gallons: result.gallons, doorSize: result.doorSize,
         summary: result.summary, by: actor.name, byId: actor.id, position, status: 'saved', createdAt: new Date().toISOString(),
@@ -279,6 +283,7 @@ export default function Measurement() {
           {material === 'concrete' && <View style={{ marginBottom: 12 }}>{field('Thickness / depth (inches)', thickness, setThickness)}</View>}
           {isTile && <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>{field('Tile width (in)', tileW, setTileW)}{field('Tile height (in)', tileH, setTileH)}</View>}
           {material === 'wood-floor' && <View style={{ marginBottom: 12 }}>{field('Box coverage (sq ft / box)', boxSqFt, setBoxSqFt)}</View>}
+          {(material === 'floor' || material === 'ceiling') && <View style={{ marginBottom: 12 }}>{field(`${material === 'floor' ? 'Joist' : 'Rafter'} spacing (inches on centre)`, spacing, setSpacing)}</View>}
           {material === 'paint' && <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>{field('Coats', coats, setCoats)}{field('Coverage (sq ft / gal)', coverage, setCoverage)}</View>}
 
           <View style={{ borderRadius: 16, backgroundColor: '#fff', borderWidth: 1.5, borderColor: '#D3DAD5', padding: 16, marginTop: 4 }}>
@@ -292,6 +297,7 @@ export default function Measurement() {
             {isTile && <Text style={{ fontSize: 15 }}>Tiles (incl 10% waste): <Text style={{ fontWeight: '700', color: ACCENT }}>{result.tiles ?? 0}</Text></Text>}
             {material === 'wood-floor' && <Text style={{ fontSize: 15 }}>Boxes (incl 10% waste): <Text style={{ fontWeight: '700', color: ACCENT }}>{result.boxes ?? 0}</Text></Text>}
             {material === 'paint' && <Text style={{ fontSize: 15 }}>Paint: <Text style={{ fontWeight: '700', color: ACCENT }}>{result.gallons ?? 0} gallon(s)</Text></Text>}
+            {(material === 'floor' || material === 'ceiling') && <Text style={{ fontSize: 15 }}>{material === 'floor' ? 'Floor joists' : 'Ceiling rafters'} @ {spacing || '16'}" OC: <Text style={{ fontWeight: '700', color: ACCENT }}>{result.members ?? 0}</Text>{result.memberLengthFt ? ` × ${result.memberLengthFt} ft each` : ''}</Text>}
             {material === 'door' && !!result.doorSize && <Text style={{ fontSize: 15 }}>Nearest standard door: <Text style={{ fontWeight: '700', color: ACCENT }}>{result.doorSize}</Text></Text>}
           </View>
         </>)}

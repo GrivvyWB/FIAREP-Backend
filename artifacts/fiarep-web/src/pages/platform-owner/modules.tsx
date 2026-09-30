@@ -134,6 +134,8 @@ const MEASUREMENT_MATERIALS = [
   { key: "window", label: "Window" },
   { key: "door", label: "Door" },
   { key: "room", label: "Room" },
+  { key: "floor", label: "Floor (joists)" },
+  { key: "ceiling", label: "Ceiling (rafters)" },
 ];
 const measurementKey = (trade: string, material: string) => `meas.${trade}.${material}`;
 

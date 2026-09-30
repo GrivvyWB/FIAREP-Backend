@@ -7,6 +7,7 @@ const MATERIAL_LABELS: Record<string, string> = {
   concrete: "Concrete", sheetrock: "Sheetrock", plywood: "Plyboard",
   "floor-tile": "Floor tile", "wall-tile": "Wall tile", "wood-floor": "Wood flooring",
   paint: "Paint", window: "Window", door: "Door", room: "Room",
+  floor: "Floor (joists)", ceiling: "Ceiling (rafters)",
 };
 
 function resultLine(state: Record<string, any>): string {
@@ -19,6 +20,7 @@ function resultLine(state: Record<string, any>): string {
   if (state.boxes) parts.push(`${state.boxes} boxes`);
   if (state.gallons) parts.push(`${state.gallons} gal`);
   if (state.doorSize) parts.push(state.doorSize);
+  if (state.members) parts.push(`${state.members} ${state.material === "ceiling" ? "rafters" : "joists"}${state.spacingIn ? ` @ ${state.spacingIn}" OC` : ""}`);
   return parts.join(" · ") || "—";
 }
 

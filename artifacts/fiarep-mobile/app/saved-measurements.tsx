@@ -116,6 +116,7 @@ export default function SavedMeasurements() {
                     ['Boxes', st.boxes ? String(st.boxes) : ''],
                     ['Paint', st.gallons ? `${st.gallons} gal (${st.coats} coats)` : ''],
                     ['Door size', st.doorSize || ''],
+                    [st.material === 'ceiling' ? 'Rafters' : 'Joists', st.members ? `${st.members} @ ${st.spacingIn || 16}" OC${st.memberLengthFt ? ` × ${st.memberLengthFt} ft` : ''}` : ''],
                     ['Note', st.note || ''],
                   ].filter(([, v]) => v).map(([k, v]) => (
                     <View key={String(k)} style={{ flexDirection: 'row', marginBottom: 4 }}>
