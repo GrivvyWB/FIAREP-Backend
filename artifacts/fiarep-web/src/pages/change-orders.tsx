@@ -30,6 +30,7 @@ const STATUS: Record<string, { label: string; cls: string }> = {
 const money = (n: unknown) => `$${Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function ChangeOrders() {
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
   const queryClient = useQueryClient();
   const { toast } = useToast();
   const { staff } = useAuth();
@@ -112,7 +113,7 @@ export default function ChangeOrders() {
               const check = (s.verification as any)?.location?.photos?.[i] as { distanceMeters?: number | null; ok?: boolean } | undefined;
               return (
                 <div key={i} className="space-y-1">
-                  <a href={p} target="_blank" rel="noreferrer"><img src={p} alt={`Photo ${i + 1}`} className="h-32 w-full rounded-lg border bg-muted object-cover" /></a>
+                  <button type="button" onClick={() => setViewPhoto(p)} className="block w-full"><img src={p} alt={`Photo ${i + 1}`} className="h-32 w-full rounded-lg border bg-muted object-cover" /></button>
                   <p className="text-[11px] leading-tight text-muted-foreground">
                     {stamp?.capturedAt ? new Date(stamp.capturedAt).toLocaleString() : "No time stamp"}
                     {typeof stamp?.lat === "number" && typeof stamp?.lng === "number"
@@ -170,6 +171,12 @@ export default function ChangeOrders() {
           {(canReview || isProcurement ? rest : rows).map((row) => <Item key={row.id} row={row} />)}
         </CardContent>
       </Card>
+      {viewPhoto && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={() => setViewPhoto(null)}>
+          <img src={viewPhoto} alt="Change work order photo" className="max-h-full max-w-full rounded-lg object-contain" />
+          <button type="button" className="absolute right-4 top-4 rounded-full bg-white/90 p-2 text-black" onClick={() => setViewPhoto(null)} aria-label="Close"><X className="h-5 w-5" /></button>
+        </div>
+      )}
     </div>
   );
 }
