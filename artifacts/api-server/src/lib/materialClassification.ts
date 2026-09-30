@@ -15,6 +15,11 @@ export type MaterialClassification = {
   estimatedAFt: number;   // first dimension: length / opening width / surface width
   estimatedBFt: number;   // second dimension: width / opening height / surface height
   sizeBasis: string;      // what the estimate was judged from
+  // width ÷ height of the subject as it appears (perspective-corrected), so one
+  // tape measurement on site can correct the other side. 0 when unknown.
+  aspectRatio: number;
+  // true when no reliable reference was visible and a catalog size was assumed.
+  assumedStandard: boolean;
 };
 
 type FetchLike = typeof fetch;
@@ -35,13 +40,20 @@ Choose exactly one:
 - "unknown": none of the above is clearly the subject.
 Judge by the dominant subject of the photo. Set confidence to how sure you are (0 to 1).
 Keep note to a short factual phrase describing what you see.
-Also estimate the subject's size in FEET (decimal) from standard reference sizes visible in the photo:
-a residential door slab is 30, 32 or 36 in wide x 80 in tall; a door knob sits ~36 in above the floor;
-an outlet / switch cover is 2.75 x 4.5 in; a standard ceiling is 8 ft; floor tiles are commonly 12 or 24 in;
-subway wall tile is 3 x 6 in; a drywall sheet is 4 x 8 ft; a plywood sheet is 4 x 8 ft; a brick is 8 in long.
+Also MEASURE the subject's size in FEET (decimal). Work like a surveyor, not a catalog:
+1. Find a reference of KNOWN size in the photo and use it as a ruler: a door knob / lever centre sits 36 in above
+   the floor; an outlet or switch cover is 2.75 x 4.5 in; a standard ceiling is 8 ft; floor tiles are commonly
+   12 or 24 in; subway wall tile is 3 x 6 in; a drywall or plywood sheet is 4 x 8 ft; a brick is 8 in long;
+   a light switch is ~48 in above the floor; a standard hinge is 3.5 in tall; a baseboard is 3 to 5 in.
+2. Set the scale from that reference, correct for perspective, and measure the subject's width and height in
+   pixels against it. Report the MEASURED numbers (e.g. 3.21 ft = 38.5 in), NOT the nearest catalog size.
+3. For a door or window measure the OPENING between the outer edges of the frame / jambs, not the slab: real
+   openings are often 34 to 40 in wide even when the slab is 32 or 36 in. Do not round to 30/32/36 x 80.
 estimatedAFt = length / opening width / surface width; estimatedBFt = width / opening height / surface height.
-For a door or window give the OPENING size (slab plus frame). If nothing reliable is visible, return 0 for both
-and say why in sizeBasis. Never guess wildly: an estimate should be within about 15% of the true size.`;
+aspectRatio = the subject's width divided by its height as it truly is (perspective-corrected), 0 if unknown.
+assumedStandard = true ONLY if no usable reference was visible and you fell back to a typical size; then say so
+in sizeBasis. If nothing at all can be judged, return 0 for both sizes and say why in sizeBasis. sizeBasis names
+the reference used and the pixel ratio you measured (e.g. "knob at 36 in; opening 1.09x knob height wide").`;
 
 export async function classifyMaterialImage(
   image: string,
@@ -77,7 +89,7 @@ export async function classifyMaterialImage(
             schema: {
               type: "object",
               additionalProperties: false,
-              required: ["material", "confidence", "note", "estimatedAFt", "estimatedBFt", "sizeBasis"],
+              required: ["material", "confidence", "note", "estimatedAFt", "estimatedBFt", "sizeBasis", "aspectRatio", "assumedStandard"],
               properties: {
                 material: { type: "string", enum: ["concrete", "sheetrock", "plywood", "window", "door", "room", "floor-tile", "wall-tile", "wood-floor", "paint", "unknown"] },
                 confidence: { type: "number" },
@@ -85,6 +97,8 @@ export async function classifyMaterialImage(
                 estimatedAFt: { type: "number" },
                 estimatedBFt: { type: "number" },
                 sizeBasis: { type: "string" },
+                aspectRatio: { type: "number" },
+                assumedStandard: { type: "boolean" },
               },
             },
           },
@@ -121,6 +135,9 @@ export async function classifyMaterialImage(
       estimatedAFt: feet(parsed.estimatedAFt),
       estimatedBFt: feet(parsed.estimatedBFt),
       sizeBasis: typeof parsed.sizeBasis === "string" ? parsed.sizeBasis : "",
+      aspectRatio: typeof parsed.aspectRatio === "number" && Number.isFinite(parsed.aspectRatio) && parsed.aspectRatio > 0 && parsed.aspectRatio < 50
+        ? Math.round(parsed.aspectRatio * 1000) / 1000 : 0,
+      assumedStandard: parsed.assumedStandard === true,
     };
   } finally {
     clearTimeout(timeout);

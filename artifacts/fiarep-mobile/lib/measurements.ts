@@ -171,8 +171,9 @@ export function computeMeasurement(input: MeasurementInput): MeasurementResult {
     }
     case 'door': {
       const doorSize = nearestStandardDoor(L * 12, W * 12);
+      const wIn = Math.round(L * 12 * 4) / 4; const hIn = Math.round(W * 12 * 4) / 4;
       return { ...base, doorSize,
-        summary: doorSize ? `${area} sq ft opening -> nearest standard door ${doorSize}` : 'Enter the opening width and height.' };
+        summary: doorSize ? `Opening ${wIn}" x ${hIn}" (${area} sq ft) -> nearest standard slab ${doorSize}` : 'Enter the opening width and height.' };
     }
     case 'window':
     case 'room':

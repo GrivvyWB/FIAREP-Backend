@@ -52,6 +52,10 @@ export default function Measurement() {
   const [aiNote, setAiNote] = useState('');
   const [a, setA] = useState('');
   const [b, setB] = useState('');
+  // Width ÷ height of the subject as the photo shows it, so a tape measurement of
+  // one side corrects the other; and whether the AI only assumed a catalog size.
+  const [aspect, setAspect] = useState(0);
+  const [assumedStd, setAssumedStd] = useState(false);
   const [thickness, setThickness] = useState('');
   const [tileW, setTileW] = useState('12');
   const [tileH, setTileH] = useState('12');
@@ -87,7 +91,7 @@ export default function Measurement() {
       if (!asset.base64) return;
       setClassifying(true); setAiNote('');
       try {
-        const res = await customFetch<{ material: MaterialKind; confidence: number; note: string; estimatedAFt?: number; estimatedBFt?: number; sizeBasis?: string }>(
+        const res = await customFetch<{ material: MaterialKind; confidence: number; note: string; estimatedAFt?: number; estimatedBFt?: number; sizeBasis?: string; aspectRatio?: number; assumedStandard?: boolean }>(
           '/api/ai/classify-material',
           { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ image: `data:image/jpeg;base64,${asset.base64}` }), responseType: 'json' });
         if (res?.material && allowed.includes(res.material)) {
@@ -97,9 +101,14 @@ export default function Measurement() {
           const estA = Number(res.estimatedAFt) || 0;
           const estB = Number(res.estimatedBFt) || 0;
           let sizeNote = '';
+          const ratio = Number(res.aspectRatio) || (estA > 0 && estB > 0 ? estA / estB : 0);
+          setAspect(ratio > 0 ? ratio : 0);
+          setAssumedStd(res.assumedStandard === true);
           if (estA > 0 && estB > 0) {
             setA(String(estA)); setB(String(estB));
-            sizeNote = ` Estimated ${estA} × ${estB} ft${res.sizeBasis ? ` (from ${res.sizeBasis})` : ''} — verify with a tape or LiDAR and adjust below.`;
+            sizeNote = res.assumedStandard
+              ? ` The photo had nothing to scale from, so a TYPICAL size was assumed (${estA} × ${estB} ft) — this is not a measurement. Tape one side and use "Set … from photo ratio" for the other.`
+              : ` Measured about ${estA} × ${estB} ft from the photo${res.sizeBasis ? ` (${res.sizeBasis})` : ''} — expect ±10%; tape one side to correct the other.`;
           } else {
             sizeNote = ` Couldn't judge the size from this photo${res.sizeBasis ? ` (${res.sizeBasis})` : ''} — enter the dimensions below.`;
           }
@@ -231,6 +240,17 @@ export default function Measurement() {
           </View>
 
           <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>{field(dims.a, a, setA)}{field(dims.b, b, setB)}</View>
+          {aspect > 0 && (
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12, flexWrap: 'wrap' }}>
+              <Pressable onPress={() => { const h = parseFloat(b); if (h > 0) setA(String(Math.round(h * aspect * 100) / 100)); }} style={{ borderWidth: 1, borderColor: ACCENT, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 }}>
+                <Text style={{ color: ACCENT, fontWeight: '600', fontSize: 13 }}>Set {dims.a.toLowerCase()} from {dims.b.toLowerCase()} (photo ratio)</Text>
+              </Pressable>
+              <Pressable onPress={() => { const w = parseFloat(a); if (w > 0) setB(String(Math.round(w / aspect * 100) / 100)); }} style={{ borderWidth: 1, borderColor: ACCENT, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 12 }}>
+                <Text style={{ color: ACCENT, fontWeight: '600', fontSize: 13 }}>Set {dims.b.toLowerCase()} from {dims.a.toLowerCase()} (photo ratio)</Text>
+              </Pressable>
+              {assumedStd && <Text style={{ width: '100%', color: '#9a3412', fontSize: 12 }}>Sizes above are a typical guess, not a measurement — tape at least one side.</Text>}
+            </View>
+          )}
           {material === 'concrete' && <View style={{ marginBottom: 12 }}>{field('Thickness / depth (inches)', thickness, setThickness)}</View>}
           {isTile && <View style={{ flexDirection: 'row', gap: 12, marginBottom: 12 }}>{field('Tile width (in)', tileW, setTileW)}{field('Tile height (in)', tileH, setTileH)}</View>}
           {material === 'wood-floor' && <View style={{ marginBottom: 12 }}>{field('Box coverage (sq ft / box)', boxSqFt, setBoxSqFt)}</View>}
