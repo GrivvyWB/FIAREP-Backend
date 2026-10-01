@@ -16,6 +16,7 @@ import {
   canApproveLeaveDuration,
   canDeleteOperationalRecords,
   isDeleteOverrideManager,
+  canHrDeleteLeave,
   canCreateEntity,
   canPerformAssignedWorkflowAction,
   canDeleteEntity,
@@ -143,7 +144,9 @@ router.get("/v1/deletion-policy", async (_req, res) => {
     // Supervisors / management may delete their own work (a copy stays in the
     // Deleted items box); upper management deletes anyone's with a code.
     canDeleteOwn: actor.role === "management" && !isDeleteOverrideManager(actor),
-    overrideRequired: isDeleteOverrideManager(actor),
+    overrideRequired: isDeleteOverrideManager(actor) || actor.role === "human_resources",
+    // HR deletes leave requests only (a mistake — wrong person), with a two-digit code.
+    hrLeaveDelete: actor.role === "human_resources",
   });
 });
 
@@ -154,8 +157,11 @@ router.get("/v1/deletion-policy", async (_req, res) => {
 // clear who deleted what.
 const deleteOverrides = new Map<string, { code: string; issuedAt: number; expiresAt: number }>();
 const OVERRIDE_TTL_MS = 10 * 60 * 1000;
-function issueDeleteOverride(actorId: string): { code: string; expiresAt: number } {
-  const code = String(100 + (randomBytes(2).readUInt16BE(0) % 900));
+function issueDeleteOverride(actorId: string, digits: 2 | 3 = 3): { code: string; expiresAt: number } {
+  // Upper management: three digits (100–999). HR: two digits (10–99).
+  const code = digits === 2
+    ? String(10 + (randomBytes(2).readUInt16BE(0) % 90))
+    : String(100 + (randomBytes(2).readUInt16BE(0) % 900));
   const now = Date.now();
   const entry = { code, issuedAt: now, expiresAt: now + OVERRIDE_TTL_MS };
   deleteOverrides.set(actorId, entry);
@@ -172,8 +178,9 @@ function consumeDeleteOverride(actorId: string, code: unknown): boolean {
 
 router.post("/v1/delete-override", async (_req, res) => {
   const actor = actorFrom(res);
-  if (!isDeleteOverrideManager(actor) && actor.role !== "administrator") {
-    res.status(403).json({ error: "Only upper management may request a delete override code" });
+  const hrCode = actor.role === "human_resources";
+  if (!isDeleteOverrideManager(actor) && actor.role !== "administrator" && !hrCode) {
+    res.status(403).json({ error: "Only upper management or HR may request a delete override code" });
     return;
   }
   const [organization] = await db
@@ -185,10 +192,10 @@ router.post("/v1/delete-override", async (_req, res) => {
     res.status(403).json({ error: "Deletion is disabled for this organization" });
     return;
   }
-  const issued = issueDeleteOverride(actor.id);
+  const issued = issueDeleteOverride(actor.id, hrCode ? 2 : 3);
   await audit(actor, "delete-override.issued", `Delete override code ${issued.code} issued to ${actor.name} (${actor.position})`);
   res.setHeader("Cache-Control", "no-store");
-  res.json({ code: issued.code, expiresAt: new Date(issued.expiresAt).toISOString(), ttlMinutes: 10 });
+  res.json({ code: issued.code, digits: hrCode ? 2 : 3, expiresAt: new Date(issued.expiresAt).toISOString(), ttlMinutes: 10 });
 });
 
 // ── Deleted items box (upper management / administrators) ───────────────
@@ -3668,13 +3675,16 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   const ownWorkDelete = !vendorListEdit && actor.role === "management" && !isDeleteOverrideManager(actor);
-  if (!vendorListEdit && !canDeleteOperationalRecords(actor) && !ownWorkDelete) {
+  // HR fixing its own mistake: a leave request for the wrong person.
+  const hrLeaveDelete = canHrDeleteLeave(actor, entity);
+  if (!vendorListEdit && !canDeleteOperationalRecords(actor) && !ownWorkDelete && !hrLeaveDelete) {
     res.status(403).json({ error: "Only higher management can delete records" });
     return;
   }
-  // Upper management deletes with a one-time override code (website only).
+  // Upper management (three digits) and HR (two digits) delete with a
+  // one-time override code (website only).
   let overrideCode = "";
-  if (!vendorListEdit && actor.role === "management" && !ownWorkDelete) {
+  if (!vendorListEdit && ((actor.role === "management" && !ownWorkDelete) || hrLeaveDelete)) {
     const supplied = (req.body as { overrideCode?: unknown })?.overrideCode;
     if (!consumeDeleteOverride(actor.id, supplied)) {
       res.status(403).json({ error: "Enter your delete override code (request a new one if it expired)" });
@@ -3794,7 +3804,7 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
   // violation sent to an inspector, the inspection, the route assignment, the
   // scope, the trade request, change orders) goes with it, along with their
   // alerts, so nothing lingers in inboxes or on the scores.
-  if ((actor.role === "administrator" || overrideCode || ownWorkDelete) && !isHrEntity(entity) && entity !== "vendor-contacts") {
+  if ((actor.role === "administrator" || overrideCode || ownWorkDelete || hrLeaveDelete) && !isHrEntity(entity) && entity !== "vendor-contacts") {
     try {
       const cascaded = await cascadeDelete(actor.tenantId, current);
       if (cascaded.length) await audit(actor, `${entity}.deleted.cascade`, `Also removed ${cascaded.length} linked record(s)`, current.id);

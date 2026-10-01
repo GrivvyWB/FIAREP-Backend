@@ -47,6 +47,12 @@ export function isDeleteOverrideManager(actor: Pick<Actor, "role" | "position">)
   return actor.role === "management" && DELETE_OVERRIDE_POSITIONS.has(String(actor.position || "").trim());
 }
 
+/** HR may delete a leave request it got wrong (wrong person, wrong dates),
+ * on the website, with a one-time two-digit code. */
+export function canHrDeleteLeave(actor: Pick<Actor, "role">, entity: string): boolean {
+  return actor.role === "human_resources" && entity === "leave-requests";
+}
+
 export function canDeleteOperationalRecords(actor: Actor): boolean {
   return actor.role === "administrator" || isDeleteOverrideManager(actor);
 }
@@ -884,6 +890,7 @@ export function canDeleteEntity(
     return actor.role === "administrator" || canDeleteOperationalRecords(actor);
   }
   if (actor.role === "administrator") return true;
+  if (canHrDeleteLeave(actor, entity)) return true;
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
   // entity deletion route.

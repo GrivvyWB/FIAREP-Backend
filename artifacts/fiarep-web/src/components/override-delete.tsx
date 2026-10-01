@@ -20,8 +20,10 @@ export function useOverrideDelete() {
   const [expiresAt, setExpiresAt] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [digits, setDigits] = useState(3);
 
-  const needsCode = staff?.role === "management";
+  // Upper management types a three-digit code; HR a two-digit one (leave only).
+  const needsCode = staff?.role === "management" || staff?.role === "human_resources";
 
   async function doDelete(entity: string, id: string, version: number, overrideCode?: string) {
     await customFetch<void>(`/api/v1/${encodeURIComponent(entity)}/${encodeURIComponent(id)}`, {
@@ -37,8 +39,8 @@ export function useOverrideDelete() {
     return new Promise<boolean>((resolve) => {
       setError(""); setTyped(""); setCode("");
       setPending({ entity, id, version, label, resolve });
-      customFetch<{ code: string; expiresAt: string }>("/api/v1/delete-override", { method: "POST" })
-        .then((r) => { setCode(r.code); setExpiresAt(r.expiresAt); })
+      customFetch<{ code: string; digits?: number; expiresAt: string }>("/api/v1/delete-override", { method: "POST" })
+        .then((r) => { setCode(r.code); setDigits(r.digits || r.code.length || 3); setExpiresAt(r.expiresAt); })
         .catch((e: any) => setError(e?.message || "Could not get an override code."));
     });
   }
@@ -62,7 +64,7 @@ export function useOverrideDelete() {
         <DialogHeader>
           <DialogTitle>Override code to delete</DialogTitle>
           <DialogDescription>
-            You are deleting: <span className="font-semibold text-foreground">{pending?.label}</span>. This removes it, and the work that came out of it, for everyone. The supervisor it was with will see that you deleted it, with this code.
+            You are deleting: <span className="font-semibold text-foreground">{pending?.label}</span>. This removes it, and the work that came out of it, for everyone. {staff?.role === "human_resources" ? "The employee and their supervisor will see that HR deleted it, with this code." : "The supervisor it was with will see that you deleted it, with this code."}
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
@@ -70,12 +72,12 @@ export function useOverrideDelete() {
             <p className="text-xs uppercase tracking-wide text-amber-800">Your override code{expiresAt ? " · good for 10 minutes" : ""}</p>
             <p className="font-mono text-3xl font-bold tracking-[0.3em] text-amber-900">{code || "···"}</p>
           </div>
-          <Input value={typed} onChange={(e) => setTyped(e.target.value.replace(/\D/g, "").slice(0, 3))} placeholder="Type the code to confirm" inputMode="numeric" className="text-center font-mono text-lg tracking-widest" autoFocus />
+          <Input value={typed} onChange={(e) => setTyped(e.target.value.replace(/\D/g, "").slice(0, digits))} placeholder="Type the code to confirm" inputMode="numeric" className="text-center font-mono text-lg tracking-widest" autoFocus />
           {error && <p className="text-sm text-destructive">{error}</p>}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={cancel} disabled={busy}>Cancel</Button>
-          <Button variant="destructive" onClick={() => void confirm()} disabled={busy || typed.trim().length !== 3 || !code}>{busy ? "Deleting…" : "Delete"}</Button>
+          <Button variant="destructive" onClick={() => void confirm()} disabled={busy || typed.trim().length !== digits || !code}>{busy ? "Deleting…" : "Delete"}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
