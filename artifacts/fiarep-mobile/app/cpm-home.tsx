@@ -141,7 +141,7 @@ export default function CpmHome() {
             {sec.heading}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {sec.tiles.filter((t) => tileEnabled(t.label, rawModules)).map((t, i) => {
+            {sec.tiles.filter((t) => tileEnabled('cpm', t.label, rawModules)).map((t, i) => {
               const solid = t.tone === 'solid';
               const tint = t.tone === 'tint';
               return (

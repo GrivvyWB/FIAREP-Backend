@@ -145,11 +145,14 @@ export function moduleForRoute(path: string): ModuleId | null {
 
 // ── App tabs: every tile on every home screen can be switched off from the
 // control panel (features.modules["apptab.<slug>"] === false hides it).
-export const appTabKey = (label: string): string =>
-  'apptab.' + label.replace(/\s*\(\d+\)\s*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+// Keyed PER SCREEN ("apptab.<screen>.<slug>") so switching Attendance off on
+// the worker screen leaves it on for management, and vice versa.
+export type AppTabScreen = 'management' | 'admin' | 'cpm' | 'worker';
+export const appTabKey = (screen: AppTabScreen, label: string): string =>
+  'apptab.' + screen + '.' + label.replace(/\s*\(\d+\)\s*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
-export function tileEnabled(label: string, raw: Record<string, boolean> | null | undefined): boolean {
-  return (raw || {})[appTabKey(label)] !== false;
+export function tileEnabled(screen: AppTabScreen, label: string, raw: Record<string, boolean> | null | undefined): boolean {
+  return (raw || {})[appTabKey(screen, label)] !== false;
 }
 
 export function moduleForTile(label: string): ModuleId | null {

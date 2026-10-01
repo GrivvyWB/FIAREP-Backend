@@ -142,34 +142,35 @@ const measurementKey = (trade: string, material: string) => `meas.${trade}.${mat
 // Every tile on the app's home screens, by screen. A tab switched OFF here is
 // hidden in the app for everyone in this organization (features.modules
 // "apptab.<slug>" = false). Keep labels exactly as the app shows them.
-const APP_TABS: Array<{ screen: string; tabs: string[] }> = [
-  { screen: "Management / Supervisor home", tabs: [
+const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
+  { id: "management", screen: "Management / Supervisor home", tabs: [
     "Review Reports", "Send Violation", "Assign a Job", "In-house assignments", "Staff Member Jobs", "Cover a Site", "Create Report", "+ New Project",
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
     "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
     "Default rates", "Audit Log", "Request Time Off", "Leave Calendar", "Attendance",
   ] },
-  { screen: "Administrator home", tabs: [
+  { id: "admin", screen: "Administrator home", tabs: [
     "Manage All Requests", "Resident Reports", "Send Violation", "Assign a Job", "Staff Member Jobs", "Add Job for Mgmt", "Projects / Inspections",
     "HUD Inspections", "Change Orders", "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score",
     "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
   ] },
-  { screen: "CPM / Inspector home", tabs: [
+  { id: "cpm", screen: "CPM / Inspector home", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
     "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Inbox",
   ] },
-  { screen: "Worker home", tabs: [
+  { id: "worker", screen: "Worker home", tabs: [
     "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off",
   ] },
 ];
-const appTabKey = (label: string) =>
-  "apptab." + label.replace(/\s*\(\d+\)\s*$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+// Keyed per screen so the same label on two screens has two switches.
+const appTabKey = (screen: string, label: string) =>
+  "apptab." + screen + "." + label.replace(/\s*\(\d+\)\s*$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 function configuredAppTabs(organization: OrganizationWithUsage): Record<string, boolean> {
   const value = organization.features?.modules;
   const saved = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
   const result: Record<string, boolean> = {};
   for (const group of APP_TABS) for (const tab of group.tabs) {
-    const key = appTabKey(tab);
+    const key = appTabKey(group.id, tab);
     result[key] = saved[key] !== false;
   }
   return result;
@@ -441,10 +442,10 @@ export default function OwnerModules() {
                   <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.screen}</p>
                   <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
                     {group.tabs.map((tab) => {
-                      const key = appTabKey(tab);
+                      const key = appTabKey(group.id, tab);
                       const on = appTabs[key] !== false;
                       return (
-                        <label key={key} className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
+                        <div key={key} className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
                           <span className={on ? "text-slate-800" : "text-slate-400 line-through"}>{tab}</span>
                           <button
                             type="button"
@@ -455,7 +456,7 @@ export default function OwnerModules() {
                           >
                             <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${on ? "left-[18px]" : "left-0.5"}`} />
                           </button>
-                        </label>
+                        </div>
                       );
                     })}
                   </div>

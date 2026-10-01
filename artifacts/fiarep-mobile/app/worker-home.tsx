@@ -92,44 +92,44 @@ export default function WorkerHome() {
         View your assigned jobs and check report status.
       </Text>
 
-      {tileEnabled('My Jobs', rawModules) && (<Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
+      {tileEnabled('worker', 'My Jobs', rawModules) && (<Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
       </Pressable>)}
-      {modules['proj-new'] && canStartProject(position) && tileEnabled('+ New Project', rawModules) && (
+      {modules['proj-new'] && canStartProject(position) && tileEnabled('worker', '+ New Project', rawModules) && (
         <Pressable style={ui.btn} onPress={() => router.push('/?new=1')}>
           <Text style={ui.btnText}>+ New Project</Text>
         </Pressable>
       )}
-      {position === 'Elevator Service' && tileEnabled('Elevator Jobs', rawModules) && (
+      {position === 'Elevator Service' && tileEnabled('worker', 'Elevator Jobs', rawModules) && (
         <Pressable style={ui.btn} onPress={() => router.push('/elevator-jobs')}>
           <Text style={ui.btnText}>Elevator Jobs</Text>
         </Pressable>
       )}
       {(hasAnyMeasurementAccess(position, rawModules) || (modules['measurement'] && !!catalogForTrade(tradeKeyForPosition(position)))) && (
         <>
-          {tileEnabled('Measurement', rawModules) && (<Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
+          {tileEnabled('worker', 'Measurement', rawModules) && (<Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
             <Text style={ui.btnText}>Measurement</Text>
           </Pressable>)}
-          {tileEnabled('Saved Measurements', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/saved-measurements')}>
+          {tileEnabled('worker', 'Saved Measurements', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/saved-measurements')}>
             <Text style={ui.btnOutlineText}>Saved Measurements</Text>
           </Pressable>)}
         </>
       )}
-      {tileEnabled('Inbox', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
+      {tileEnabled('worker', 'Inbox', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
         <Text style={ui.btnOutlineText}>Inbox</Text>
       </Pressable>)}
-      {isEmergencyMaintenance && tileEnabled('Emergency Units', rawModules) && (
+      {isEmergencyMaintenance && tileEnabled('worker', 'Emergency Units', rawModules) && (
         <Pressable style={ui.btnOutline} onPress={() => router.push('/emergency-units')}>
           <Text style={ui.btnOutlineText}>Emergency Units</Text>
         </Pressable>
       )}
-      {tileEnabled('Attendance', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
+      {tileEnabled('worker', 'Attendance', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
         <Text style={ui.btnOutlineText}>Attendance</Text>
       </Pressable>)}
-      {tileEnabled('Change Work Order', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
+      {tileEnabled('worker', 'Change Work Order', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
         <Text style={ui.btnOutlineText}>Change Work Order</Text>
       </Pressable>)}
-      {tileEnabled('Request Time Off', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
+      {tileEnabled('worker', 'Request Time Off', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
         <Text style={ui.btnOutlineText}>Request Time Off</Text>
       </Pressable>)}
       {!isTradeWorker && <Pressable style={ui.btnOutline} onPress={() => router.push('/resident-lookup')}>
