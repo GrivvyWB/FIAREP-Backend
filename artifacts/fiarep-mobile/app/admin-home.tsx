@@ -4,7 +4,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useNavigation } from 'expo-router';
 import { clearAppMode, logout } from '../lib/store';
 import { useAppMode } from './_layout';
-import { useState, useCallback, useEffect, useLayoutEffect } from 'react';
+import { useState, useCallback, useLayoutEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
@@ -35,11 +35,9 @@ export default function AdminHome() {
   }, [navigation]);
   const { refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
-  const [position, setPosition] = useState('');
-  useEffect(() => { getCurrentPosition().then((p) => setPosition(String(p || ''))).catch(() => undefined); }, []);
-  // The Borough Director is view-only and is alerted for nothing on the app:
-  // no Inbox tile (dead button) — alerts for him live on fiarep.com.
-  const isBoroughDirector = position.trim().toLowerCase() === 'borough director';
+  // No Inbox tile here: nothing in the system is ever addressed to an
+  // administrator or Borough Director on the app (alerts go to the people
+  // who act: supervisors, CPMs, HR, Procurement). Dead button removed.
   const modules = useModuleAccess();
   const rawModules = useRawModules();
   useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('administrator'); if (a.name) c += await unreadCount(a.name); setUnread(c); })(); }, []));
@@ -98,7 +96,6 @@ export default function AdminHome() {
       heading: 'System',
       color: '#4A5560',
       tiles: [
-        ...(isBoroughDirector ? [] : [{ label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' as Tone }]),
         { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
       ],
     },

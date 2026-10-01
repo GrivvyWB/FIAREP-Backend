@@ -1051,13 +1051,28 @@ router.post("/v1/:entity", async (req, res, next) => {
   }
   await audit(actor, `${entity}.created`, `Created ${entity} record`, id);
   if (entity === "building-violations") {
-    await notify(
-      actor,
-      "management",
-      "Inspection logged and awaiting review",
-      typeof rawState["building"] === "string" ? rawState["building"] : undefined,
-      id,
-    );
+    // To the development's own management and supervisors (the people who
+    // review it), never the Borough Director or upper management's inboxes.
+    const dev = String(persistedCreatedState["development"] || rawState["development"] || "").trim().toLowerCase();
+    const managers = await db.select().from(staffAccounts).where(and(
+      eq(staffAccounts.tenantId, actor.tenantId),
+      eq(staffAccounts.status, "approved"),
+      eq(staffAccounts.role, "management"),
+    ));
+    const reviewers = managers.filter((m) =>
+      m.id !== actor.id &&
+      !isBoroughDirector({ role: m.role, position: m.position } as Actor) &&
+      !LEAVE_UPPER_MANAGEMENT_TITLES.has(String(m.position || "").trim()) &&
+      (!dev || (m.developments || []).some((d) => d.trim().toLowerCase() === dev)));
+    for (const reviewer of reviewers) {
+      await notify(
+        actor,
+        reviewer.id,
+        "Inspection logged and awaiting review",
+        typeof rawState["building"] === "string" ? rawState["building"] : undefined,
+        id,
+      );
+    }
   } else if (entity === "resident-reports" && actor.role === "inspector") {
     await notify(
       actor,
@@ -3388,6 +3403,7 @@ router.post(
 // Every live record that points at `root` — by id (sourceReportId,
 // sourceRecordId, violationId, inspectionId, reportId …) or by its complaint /
 // violation / tracking number — is soft-deleted, recursively, with its alerts.
+const LEAVE_UPPER_MANAGEMENT_TITLES = new Set(["Regional Director", "Assistant Regional Director"]);
 const CASCADE_ENTITIES = new Set([
   "route-assignments", "building-violations", "violations", "priority-violations", "inspections",
   "hud-inspections", "procurement", "procurement-bids", "vendor-quotes", "change-orders",
