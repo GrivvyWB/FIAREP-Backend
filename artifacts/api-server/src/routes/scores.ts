@@ -55,9 +55,21 @@ router.get("/v1/scores", requireAuth, async (_req, res): Promise<void> => {
   const liveComplaintNos = new Set(complaintRows.filter((row) => !row.deleted).map((row) => complaintNoOf(row.state)).filter(Boolean));
   const deletedComplaintNos = new Set(complaintRows.filter((row) => row.deleted).map((row) => complaintNoOf(row.state))
     .filter((no) => no && !liveComplaintNos.has(no)));
+  // Work at the same address + apartment as a deleted complaint, with no live
+  // complaint there, came from that complaint even when it carries no RC-#.
+  const placeOf = (state: Record<string, unknown>) => {
+    const address = String(state["address"] || "").trim().toUpperCase().replace(/\s+/g, " ");
+    const unit = String(state["unit"] || "").trim().toUpperCase();
+    return address ? `${address}|${unit}` : "";
+  };
+  const livePlaces = new Set(complaintRows.filter((row) => !row.deleted).map((row) => placeOf(row.state)).filter(Boolean));
+  const deletedPlaces = new Set(complaintRows.filter((row) => row.deleted).map((row) => placeOf(row.state))
+    .filter((place) => place && !livePlaces.has(place)));
   const fromDeletedComplaint = (row: typeof storedRows[number]) => {
     if (row.entity === "resident-reports") return false;
     const state = row.state as Record<string, unknown>;
+    const place = placeOf(state);
+    if (place && deletedPlaces.has(place)) return true;
     const sourceId = String(state["sourceReportId"] || (state["sourceEntity"] === "resident-reports" ? state["sourceRecordId"] || "" : "") || "");
     if (sourceId && (deletedComplaintIds.has(sourceId) || !liveComplaintIds.has(sourceId))) return true;
     const refs = [state["complaintNo"], state["sourceRef"], state["sourceInspectionRef"]]

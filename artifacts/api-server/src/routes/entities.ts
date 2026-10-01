@@ -11,6 +11,7 @@ import {
   canAssignStaff,
   canSuperintendentEAssignResidentReport,
   canApproveLeaveForEmployee,
+  shouldAlertLeaveReviewer,
   canApproveLeaveDuration,
   canDeleteOperationalRecords,
   canCreateEntity,
@@ -1090,7 +1091,7 @@ router.post("/v1/:entity", async (req, res, next) => {
       } as Pick<Actor, "id" | "role" | "position" | "developments">;
       if (
         (reviewerActor.role === "human_resources" && entityDevelopmentAllowed(reviewerActor, entity, development)) ||
-        (reviewerActor.role === "management" && canApproveLeaveForEmployee(reviewerActor, employeeForLeave))
+        (reviewerActor.role === "management" && shouldAlertLeaveReviewer(reviewerActor, employeeForLeave))
       ) {
         await notify(
           actor,
@@ -3383,6 +3384,48 @@ router.post(
   },
 );
 
+// Every live record that points at `root` — by id (sourceReportId,
+// sourceRecordId, violationId, inspectionId, reportId …) or by its complaint /
+// violation / tracking number — is soft-deleted, recursively, with its alerts.
+const CASCADE_ENTITIES = new Set([
+  "route-assignments", "building-violations", "violations", "priority-violations", "inspections",
+  "hud-inspections", "procurement", "procurement-bids", "vendor-quotes", "change-orders",
+  "manpower-requests", "project-notes", "project-reviews", "elevator-jobs", "emergency-jobs",
+]);
+async function cascadeDelete(tenantId: string, root: typeof entityRecords.$inferSelect): Promise<string[]> {
+  const removed: string[] = [];
+  const queue: Array<typeof entityRecords.$inferSelect> = [root];
+  const seen = new Set<string>([root.id]);
+  while (queue.length && removed.length < 500) {
+    const node = queue.shift()!;
+    const tokens = [node.id,
+      String(node.state["complaintNo"] || ""), String(node.state["violationNo"] || ""),
+      String(node.state["trackingId"] || ""), String(node.state["sourceRef"] || "")]
+      .map((t) => t.trim()).filter((t) => t.length >= 6);
+    if (!tokens.length) continue;
+    const pattern = tokens.map((t) => t.replace(/[%_\\]/g, (c) => "\\" + c));
+    const hits = await db.select().from(entityRecords).where(and(
+      eq(entityRecords.tenantId, tenantId),
+      eq(entityRecords.deleted, false),
+      inArray(entityRecords.entity, [...CASCADE_ENTITIES]),
+      or(...pattern.map((p) => sql`${entityRecords.state}::text ILIKE ${"%" + p + "%"}`)),
+    ));
+    for (const hit of hits) {
+      if (seen.has(hit.id)) continue;
+      seen.add(hit.id);
+      // Only records that came OUT of the node: a number that merely appears in
+      // free text still counts, which is what "deleted is deleted" asks for.
+      await db.update(entityRecords)
+        .set({ deleted: true, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() })
+        .where(and(eq(entityRecords.id, hit.id), eq(entityRecords.tenantId, tenantId), eq(entityRecords.deleted, false)));
+      await db.delete(notifications).where(and(eq(notifications.tenantId, tenantId), eq(notifications.reportId, hit.id)));
+      removed.push(hit.id);
+      queue.push(hit);
+    }
+  }
+  return removed;
+}
+
 router.delete("/v1/:entity/:id", async (req, res, next) => {
   const entity = req.params["entity"];
   if (!validEntity(entity)) {
@@ -3489,6 +3532,18 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   await audit(actor, `${entity}.deleted`, `Deleted ${entity} record`, current.id);
+  // Deleted means gone everywhere: the work that came out of this record (a
+  // violation sent to an inspector, the inspection, the route assignment, the
+  // scope, the trade request, change orders) goes with it, along with their
+  // alerts, so nothing lingers in inboxes or on the scores.
+  if (actor.role === "administrator" && !isHrEntity(entity) && entity !== "vendor-contacts") {
+    try {
+      const cascaded = await cascadeDelete(actor.tenantId, current);
+      if (cascaded.length) await audit(actor, `${entity}.deleted.cascade`, `Also removed ${cascaded.length} linked record(s)`, current.id);
+    } catch (err) {
+      logger.warn({ err, recordId: current.id }, "Cascade delete failed");
+    }
+  }
   res.status(204).send();
 });
 

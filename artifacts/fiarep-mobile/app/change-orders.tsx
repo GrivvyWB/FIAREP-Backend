@@ -87,7 +87,8 @@ export default function ChangeOrders() {
       const history = items.filter((c) => c.status === 'cost_approved' || c.status === 'declined');
       const renderCO = (co: ChangeOrder) => {
         const st = STATUS[co.status] || { label: co.status, color: '#666' };
-        const canMgmt = isMgmt && co.status === 'submitted';
+        // Management on the app is view-only: approvals happen on fiarep.com.
+        const canMgmt = isMgmt && !readOnlyBanner && co.status === 'submitted';
         return (
           <Pressable key={co.id} style={[ui.card, { gap: 6 }]} onPress={() => co.reportId && router.push('/report-detail?id=' + co.reportId)}>
             <View style={ui.line}><Text style={ui.lineK}>Job</Text><Text style={ui.lineV}>{co.reportRef}</Text></View>

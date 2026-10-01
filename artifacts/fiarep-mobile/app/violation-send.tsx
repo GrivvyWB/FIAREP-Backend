@@ -101,7 +101,16 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
     // Emergency request from the app (view-only supervisors): emergency crews only.
     // Emergency request: every emergency crew member, whatever their
     // development or trade (crews respond across developments).
-    if (emergencyOnly) return s.role === 'emergency';
+    if (emergencyOnly) {
+      // The Borough Director raises the emergency to UPPER management (Property
+      // Manager, APM, Regional / Assistant Regional Director), who send it on to
+      // the development's management, supervisors and crews.
+      if ((currentPosition || '').trim().toLowerCase() === 'borough director') {
+        return s.role === 'management' && ['property manager', 'assistant property manager', 'regional director', 'assistant regional director']
+          .includes((s.position || '').trim().toLowerCase());
+      }
+      return s.role === 'emergency';
+    }
     if (complaintMode) {
       const eligibleRole = ['management', 'worker', 'inspector', 'emergency'].includes(s.role);
       const eligiblePosition = s.position !== 'Borough Director' && s.position !== 'Superintendent Ⓔ' && s.position !== 'Director';

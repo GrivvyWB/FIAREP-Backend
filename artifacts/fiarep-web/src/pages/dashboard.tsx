@@ -82,7 +82,7 @@ export default function Dashboard() {
     ...reports.map((item) => ({ item, label: "Resident report", href: `/reports?id=${encodeURIComponent(item.id)}`, icon: FileSearch })),
     ...emergencies.map((item) => ({ item, label: "Emergency", href: "/emergency", icon: AlertTriangle })),
     ...projects.map((item) => ({ item, label: "Project", href: "/projects", icon: FolderKanban })),
-    ...leave.map((item) => ({ item, label: "Leave request", href: staff?.role === "management" || staff?.role === "administrator" ? "/leave?view=team" : "/leave", icon: Plane })),
+    ...(staff?.position === "Borough Director" ? [] : leave).map((item) => ({ item, label: "Leave request", href: staff?.role === "management" || staff?.role === "administrator" ? "/leave?view=team" : "/leave", icon: Plane })),
     ...repairs.map((item) => ({ item, label: "Repair scope", href: "/repairs", icon: Wrench })),
   ].filter((entry) => hasModuleAccess(staff, entry.href.startsWith("/emergency") ? "emergency" : entry.href.startsWith("/reports") ? "reports" : entry.href.startsWith("/inspections") ? "inspections" : entry.href.startsWith("/projects") ? "projects" : entry.href.startsWith("/repairs") ? "repairs" : "leave"))
     .sort((a, b) => dateOf(b.item) - dateOf(a.item)).slice(0, 7);

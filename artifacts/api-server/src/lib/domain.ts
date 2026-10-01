@@ -1023,6 +1023,25 @@ export function canApproveLeaveForEmployee(
     actor.developments.some((development) => employee.developments.includes(development));
 }
 
+/** Who gets the ALERT for a new leave request: HR, and the managers who will
+ * actually decide it — a worker's request goes to the supervisors / managers
+ * assigned to that development (office-based upper management is not
+ * alerted, it can still act), a supervisor's or manager's own request goes to
+ * upper management. The Borough Director is never alerted. */
+export function shouldAlertLeaveReviewer(
+  reviewer: Actor,
+  employee: Pick<Actor, "id" | "role" | "position" | "developments">,
+): boolean {
+  if (reviewer.id === employee.id) return false;
+  if (reviewer.role === "human_resources") return true;
+  if (reviewer.role !== "management" || isBoroughDirector(reviewer)) return false;
+  if (!canApproveLeaveForEmployee(reviewer, employee)) return false;
+  const employeeIsManagement = employee.role === "management" || employee.role === "administrator";
+  if (employeeIsManagement) return true;
+  if (!employee.developments.length) return true;
+  return reviewer.developments.some((development) => employee.developments.includes(development));
+}
+
 export function canReadStaffDirectoryEmployee(
   actor: Actor,
   employee: Pick<Actor, "id" | "role" | "position" | "developments">,

@@ -113,7 +113,7 @@ export default function AuditLog() {
       {filtered.map((e) => (
         <Pressable key={e.id} style={[ui.card, { gap: 4 }]} onPress={() => { const rid = e.reportId; const act = (e.action || '').toLowerCase(); if (act.includes('elevator')) { router.push('/elevator-dashboard'); return; } if (act.includes('change order') || act.includes('change work order')) { router.push('/change-orders'); return; } if (act.includes('inspection')) { router.push('/inspection-approvals'); return; } if (!rid) return; if (rid.startsWith('proj:')) router.push('/project/' + rid.slice(5)); else if (rid.startsWith('hud:')) router.push('/hud-view?id=' + rid.slice(4)); else router.push('/report-detail?id=' + rid); }}>
           <Text style={{ fontSize: 12, color: '#999' }}>{fmtTime(e.at)}</Text>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{e.action}{e.reportId ? '  \u203a' : ''}</Text>
+          <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{e.action}</Text>
           {!!e.detail && <Text style={{ fontSize: 14, color: '#333' }}>{e.detail}</Text>}
           <Text style={{ fontSize: 12, color: '#666' }}>
             {e.actorName ? e.actorName + ' \u00b7 ' : ''}{e.actorRole || 'unknown'}

@@ -46,7 +46,14 @@ export default function ManageRequests() {
   const load = useCallback(() => {
     listResidentReports().then(setReports);
     listChangeOrders().then(setOrders);
-    listAllNotifications().then(setNotifs);
+    // Administrators manage everyone's alerts; management sees only its own
+    // inbox here (no clutter from alerts addressed to other people).
+    getCurrentActor().then(async (actor) => {
+      const all = await listAllNotifications();
+      if (actor.role === 'administrator') { setNotifs(all); return; }
+      const mine = new Set([actor.id, actor.name, actor.role].map((v) => String(v || '').trim().toLowerCase()).filter(Boolean));
+      setNotifs(all.filter((n) => mine.has(String(n.target || '').trim().toLowerCase())));
+    }).catch(() => listAllNotifications().then(setNotifs));
   }, []);
   useFocusEffect(useCallback(() => {
     if (!authorized) return;
@@ -121,7 +128,7 @@ export default function ManageRequests() {
       {open['notifs'] && groupedNotifs.map(({ notification: n, ids }) => (
         <View key={`${n.reportId || n.detail || n.id}:${n.message}`} style={[ui.card, { gap: 4 }]}>
           <Pressable onPress={() => router.push('/message?id=' + encodeURIComponent(n.id))}>
-            <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{n.message}  \u203a</Text>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{n.message}</Text>
             {!!n.detail && <Text style={{ fontSize: 13, color: '#333' }}>{n.detail}</Text>}
             <Text style={{ fontSize: 12, color: '#999' }}>{fmt(n.at)}{/^[0-9a-f-]{20,}$/i.test(n.target || '') ? '' : n.target ? ' \u00b7 to ' + n.target : ''}</Text>
             <Text style={{ fontSize: 12, color: ACCENT, marginTop: 2 }}>Tap to open</Text>
