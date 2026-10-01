@@ -2715,14 +2715,46 @@ export async function clearResidentReportForStaff(id: string): Promise<void> {
   }
 }
 
+// Delete on the server FIRST when online, so a refusal (deletion turned off
+// for the organization, not allowed for this role) is shown to the person
+// instead of the record quietly coming back on the next sync. Offline, the
+// delete is queued and lands when service returns.
+async function deleteOnServerOrQueue(entity: string, id: string): Promise<void> {
+  if (!(await getAccessToken())) { await queueMutation(entity, id, null, 'delete'); return; }
+  const api = await import('@workspace/api-client-react');
+  let version: number | null = null;
+  try {
+    const rec: any = await api.getEntityRecord(entity, id);
+    version = typeof rec?.version === 'number' ? rec.version : null;
+  } catch (e: any) {
+    if (e?.status === 404) return; // never reached the server, or already gone
+    if (!e?.status) { await queueMutation(entity, id, null, 'delete'); return; } // no network
+    throw e;
+  }
+  if (version == null) return;
+  try {
+    await api.deleteEntityRecord(entity, id, { version });
+  } catch (e: any) {
+    if (e?.status === 404) return;
+    if (e?.status === 409) {
+      const rec: any = await api.getEntityRecord(entity, id).catch(() => null);
+      if (rec && typeof rec.version === 'number') { await api.deleteEntityRecord(entity, id, { version: rec.version }); return; }
+      return;
+    }
+    if (!e?.status) { await queueMutation(entity, id, null, 'delete'); return; }
+    const msg = String(e?.data?.error || e?.message || '');
+    throw Object.assign(new Error(msg || 'The server refused the delete.'), { status: e.status, data: e?.data });
+  }
+}
+
 export async function deleteResidentReport(id: string): Promise<void> {
   const d = await db();
   await ensureResidentTable(d);
-  await queueMutation('resident-reports', id, null, 'delete');
+  await deleteOnServerOrQueue('resident-reports', id);
   await d.runAsync('DELETE FROM resident_reports WHERE id = ?', id);
   await import('./sync').then(({ syncAllEntities }) =>
     syncAllEntities({ refreshEntities: ['resident-reports'] })
-  );
+  ).catch(() => undefined);
   const a = await getCurrentActor();
   await logAudit(a.role || 'administrator', a.name, 'Report deleted', id);
 }
@@ -2730,7 +2762,7 @@ export async function deleteResidentReport(id: string): Promise<void> {
 export async function deleteChangeOrder(id: string): Promise<void> {
   const d = await db();
   await ensureChangeTable(d);
-  await queueMutation('change-orders', id, null, 'delete');
+  await deleteOnServerOrQueue('change-orders', id);
   await d.runAsync('DELETE FROM change_orders WHERE id = ?', id);
   const a = await getCurrentActor();
   await logAudit(a.role || 'administrator', a.name, 'Change order deleted', id);
