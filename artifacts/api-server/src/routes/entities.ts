@@ -12,6 +12,7 @@ import {
   canSuperintendentEAssignResidentReport,
   canApproveLeaveForEmployee,
   shouldAlertLeaveReviewer,
+  leaveNeedsHr,
   canApproveLeaveDuration,
   canDeleteOperationalRecords,
   canCreateEntity,
@@ -53,6 +54,7 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 import type { Actor } from "../lib/auth";
 import { emailAwardedVendor, emailReleasedScope, emailVendorChangeOrderStatus } from "../lib/vendorEmail";
 import { logger } from "../lib/logger";
+import { emailHrLeaveRequest } from "../lib/staffEmail";
 import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopment";
 import { rateLimit } from "../lib/rateLimit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
@@ -1120,6 +1122,25 @@ router.post("/v1/:entity", async (req, res, next) => {
         );
       }
     }
+    // Over the 30 days management may decide: HR gets an email as well.
+    const hrDays = leaveRequestDurationDays(persistedCreatedState);
+    if (hrDays !== null && leaveNeedsHr(hrDays)) {
+      try {
+        const [org] = await db.select({ hrEmail: organizations.hrEmail }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+        if (org?.hrEmail) await emailHrLeaveRequest({
+          hrEmail: org.hrEmail,
+          employee: String(persistedCreatedState["employee"] || actor.name),
+          title: String(persistedCreatedState["title"] || actor.position || ""),
+          development: development || undefined,
+          startAt: String(persistedCreatedState["startAt"] || persistedCreatedState["startDate"] || ""),
+          endAt: String(persistedCreatedState["endAt"] || persistedCreatedState["endDate"] || ""),
+          days: hrDays,
+          reason: String(persistedCreatedState["reason"] || ""),
+        });
+      } catch (err) {
+        logger.warn({ err, leaveId: id }, "HR leave email failed");
+      }
+    }
   } else if (entity === "manpower-requests") {
     await notify(
       actor,
@@ -1743,6 +1764,7 @@ router.post(
       approve: "Approved",
       deny: "Denied",
       cancel: "Cancelled",
+      "send-to-hr": "Pending",
     },
     "hud-inspections": {
       approve: "Approved",
@@ -1871,6 +1893,27 @@ router.post(
   ) {
     res.status(403).json({ error: "An employee may not approve their own departure" });
     return;
+  }
+  if (entity === "leave-requests" && action === "send-to-hr") {
+    if (String(current.state["status"] || "Pending") !== "Pending") {
+      res.status(409).json({ error: "This leave request has already been decided" });
+      return;
+    }
+    const employeeForHr = {
+      id: String(current.state["employeeStaffId"] || ""),
+      role: String(current.state["employeeRole"] || "worker"),
+      position: String(current.state["title"] || ""),
+      developments: typeof current.state["development"] === "string" && current.state["development"] ? [String(current.state["development"])] : [],
+    } as Pick<Actor, "id" | "role" | "position" | "developments">;
+    if (!canApproveLeaveForEmployee(actor, employeeForHr)) {
+      res.status(403).json({ error: "Only this employee's management may send the request to HR" });
+      return;
+    }
+    state["sentToHrAt"] = new Date().toISOString();
+    state["sentToHrById"] = actor.id;
+    state["sentToHrByName"] = actor.name;
+    state["sentToHrByPosition"] = actor.position;
+    if (typeof body["note"] === "string" && body["note"].trim()) state["sentToHrNote"] = body["note"].trim().slice(0, 1000);
   }
   if (entity === "leave-requests" && (action === "approve" || action === "deny")) {
     // Whoever decides first completes it.
@@ -3325,7 +3368,24 @@ router.post(
         current.development || undefined,
         `violation-scope:${current.id}`,
       );
-    } else if (entity === "procurement" && (action === "reject" || action === "return")) {
+    } else if (entity === "leave-requests" && action === "send-to-hr") {
+    const hrStaff = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+      eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"), eq(staffAccounts.role, "human_resources"),
+    ));
+    const who = String(current.state["employee"] || "");
+    for (const hr of hrStaff) await notify(actor, hr.id, "Leave request sent to HR by " + actor.name, who, current.id);
+    try {
+      const [org] = await db.select({ hrEmail: organizations.hrEmail }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+      const days = leaveRequestDurationDays(current.state) ?? 0;
+      if (org?.hrEmail) await emailHrLeaveRequest({
+        hrEmail: org.hrEmail, employee: who, title: String(current.state["title"] || ""), development: current.development || undefined,
+        startAt: String(current.state["startAt"] || current.state["startDate"] || ""), endAt: String(current.state["endAt"] || current.state["endDate"] || ""),
+        days, reason: String(current.state["reason"] || ""), sentBy: `${actor.name} (${actor.position})`, note: String(state["sentToHrNote"] || ""),
+      });
+    } catch (err) {
+      logger.warn({ err, leaveId: current.id }, "HR leave email (send to HR) failed");
+    }
+  } else if (entity === "procurement" && (action === "reject" || action === "return")) {
       const [origin] = await db.select({ id: staffAccounts.id, position: staffAccounts.position })
         .from(staffAccounts)
         .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.id, current.createdBy || "")))

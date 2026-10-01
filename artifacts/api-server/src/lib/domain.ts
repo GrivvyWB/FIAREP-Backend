@@ -1446,6 +1446,10 @@ export function canPerformEntityAction(
       return actor.role === "human_resources" || actor.role === "administrator" ||
         (actor.role === "management" && !isBoroughDirector(actor));
     }
+    // A supervisor / manager who could decide it may instead send it up to HR.
+    if (action === "send-to-hr") {
+      return actor.role === "management" && !isBoroughDirector(actor) && String(state["status"] || "Pending") === "Pending";
+    }
     if (action !== "cancel") return false;
     return state["requesterStaffId"] === actor.id;
   }
