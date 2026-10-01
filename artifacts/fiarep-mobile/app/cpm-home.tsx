@@ -5,7 +5,7 @@ import { useState, useCallback } from 'react';
 import { syncAllEntities } from '../lib/sync';
 import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition, listResidentReports, listRoutedInspectionsFor, listManpowerRequests } from '../lib/store';
 import { useAppMode } from './_layout';
-import { useModuleAccess, useRawModules } from '../lib/module-access';
+import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
 import { hasAnyMeasurementAccess } from '../lib/measurement-access';
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
@@ -141,7 +141,7 @@ export default function CpmHome() {
             {sec.heading}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {sec.tiles.map((t, i) => {
+            {sec.tiles.filter((t) => tileEnabled(t.label, rawModules)).map((t, i) => {
               const solid = t.tone === 'solid';
               const tint = t.tone === 'tint';
               return (

@@ -139,6 +139,42 @@ const MEASUREMENT_MATERIALS = [
 ];
 const measurementKey = (trade: string, material: string) => `meas.${trade}.${material}`;
 
+// Every tile on the app's home screens, by screen. A tab switched OFF here is
+// hidden in the app for everyone in this organization (features.modules
+// "apptab.<slug>" = false). Keep labels exactly as the app shows them.
+const APP_TABS: Array<{ screen: string; tabs: string[] }> = [
+  { screen: "Management / Supervisor home", tabs: [
+    "Review Reports", "Send Violation", "Assign a Job", "In-house assignments", "Staff Member Jobs", "Cover a Site", "Create Report", "+ New Project",
+    "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
+    "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
+    "Default rates", "Audit Log", "Request Time Off", "Leave Calendar", "Attendance",
+  ] },
+  { screen: "Administrator home", tabs: [
+    "Manage All Requests", "Resident Reports", "Send Violation", "Assign a Job", "Staff Member Jobs", "Add Job for Mgmt", "Projects / Inspections",
+    "HUD Inspections", "Change Orders", "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score",
+    "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
+  ] },
+  { screen: "CPM / Inspector home", tabs: [
+    "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Inbox",
+  ] },
+  { screen: "Worker home", tabs: [
+    "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off",
+  ] },
+];
+const appTabKey = (label: string) =>
+  "apptab." + label.replace(/\s*\(\d+\)\s*$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+function configuredAppTabs(organization: OrganizationWithUsage): Record<string, boolean> {
+  const value = organization.features?.modules;
+  const saved = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const result: Record<string, boolean> = {};
+  for (const group of APP_TABS) for (const tab of group.tabs) {
+    const key = appTabKey(tab);
+    result[key] = saved[key] !== false;
+  }
+  return result;
+}
+
 function configuredProjectTools(organization: OrganizationWithUsage): Record<string, boolean> {
   const value = organization.features?.modules;
   const saved = value && typeof value === "object" && !Array.isArray(value)
@@ -200,6 +236,7 @@ export default function OwnerModules() {
   const [modules, setModules] = useState<Record<string, boolean>>({});
   const [projectTools, setProjectTools] = useState<Record<string, boolean>>({});
   const [measurementAccess, setMeasurementAccess] = useState<Record<string, boolean>>({});
+  const [appTabs, setAppTabs] = useState<Record<string, boolean>>({});
   const [projToolAccess, setProjToolAccess] = useState<Record<string, boolean>>({});
   const [deletionEnabled, setDeletionEnabled] = useState(false);
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
@@ -225,6 +262,7 @@ export default function OwnerModules() {
     setModules(configuredModules(organization));
     setProjectTools(configuredProjectTools(organization));
     setMeasurementAccess(configuredMeasurementAccess(organization));
+    setAppTabs(configuredAppTabs(organization));
     setProjToolAccess(configuredProjToolAccess(organization));
     setDeletionEnabled(organization.features?.deletionEnabled === true);
     const configured = organization.features?.modules;
@@ -241,6 +279,11 @@ export default function OwnerModules() {
 
   const toggleModule = (moduleId: string, enabled: boolean) => {
     setModules((current) => ({ ...current, [moduleId]: enabled }));
+    setDirty(true);
+  };
+
+  const toggleAppTab = (key: string, enabled: boolean) => {
+    setAppTabs((current) => ({ ...current, [key]: enabled }));
     setDirty(true);
   };
 
@@ -310,7 +353,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, residentPhotoAiViolationReader: residentPhotoAiEnabled },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled },
             deletionEnabled,
           },
         },
@@ -383,6 +426,43 @@ export default function OwnerModules() {
             <Metric label="Company status" value={organization.status} />
             <Metric label="Development limit" value={organization.propertyLimit === null ? "Unlimited" : String(organization.propertyLimit)} />
           </div>
+
+          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+              <div>
+                <h2 className="font-semibold text-slate-950">App tabs</h2>
+                <p className="text-xs text-slate-500">Switch off any tab on the app's home screens for this client. Off here means nobody in the organization sees it in the app.</p>
+              </div>
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{Object.values(appTabs).filter((v) => v === false).length} off</span>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {APP_TABS.map((group) => (
+                <div key={group.screen} className="px-5 py-3">
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.screen}</p>
+                  <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
+                    {group.tabs.map((tab) => {
+                      const key = appTabKey(tab);
+                      const on = appTabs[key] !== false;
+                      return (
+                        <label key={key} className="flex cursor-pointer items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
+                          <span className={on ? "text-slate-800" : "text-slate-400 line-through"}>{tab}</span>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={on}
+                            onClick={() => toggleAppTab(key, !on)}
+                            className={`relative h-5 w-9 shrink-0 rounded-full transition ${on ? "bg-[#E0A526]" : "bg-slate-300"}`}
+                          >
+                            <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${on ? "left-[18px]" : "left-0.5"}`} />
+                          </button>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
 
           {modules["measurement"] === true && (
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

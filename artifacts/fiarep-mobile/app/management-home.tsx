@@ -11,7 +11,7 @@ import { unreadCount, getCurrentActor, displayStaffPosition } from '../lib/store
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
-import { useModuleAccess, moduleForTile } from '../lib/module-access';
+import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
 
 type Tone = 'solid' | 'outline' | 'tint';
 type Tile = { label: string; onPress: () => void; tone: Tone };
@@ -23,12 +23,14 @@ export default function ManagementHome() {
   const [unread, setUnread] = useState(0);
   const [position, setPosition] = useState('');
   const modules = useModuleAccess();
+  const rawModules = useRawModules();
   // View-only on the app: action tiles live on fiarep.com.
   const readOnlyState = useAppReadOnly();
   const readOnly = readOnlyState === true;
   const [positionLoaded, setPositionLoaded] = useState(false);
   const actionTiles = new Set(['Send Violation', 'Inspection Approvals', 'HUD Inspections', 'In-house assignments', 'Assign a Job', 'Cover a Site', 'Create Report', '+ New Project', 'Manage Trucks', 'Add Job for Mgmt', 'Assign Route', 'Assign Emergency Unit', 'Staff Member Jobs', 'Review Reports', 'CPM Supervisor Scope Review', 'CPM Supervisor', 'Default rates']);
   const enabledTiles = (tiles: Tile[]) => tiles.filter((tile) => {
+    if (!tileEnabled(tile.label, rawModules)) return false;
     if (readOnly && actionTiles.has(tile.label)) return false;
     const module = moduleForTile(tile.label);
     return !module || modules[module];
@@ -75,7 +77,7 @@ export default function ManagementHome() {
         { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone },
         { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone },
         ...personalTiles,
-       ].filter((t) => { if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
+       ].filter((t) => { if (!tileEnabled(t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
       <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
     </ScrollView>;
   }

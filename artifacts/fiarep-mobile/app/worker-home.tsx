@@ -14,7 +14,7 @@ import {
   listManpowerRequests,
 } from '../lib/store';
 import { ui } from '../lib/ui';
-import { useModuleAccess, useRawModules } from '../lib/module-access';
+import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
 import { hasAnyMeasurementAccess, tradeKeyForPosition } from '../lib/measurement-access';
 import { catalogForTrade } from '../lib/trade-catalogs';
 
@@ -92,46 +92,46 @@ export default function WorkerHome() {
         View your assigned jobs and check report status.
       </Text>
 
-      <Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
+      {tileEnabled('My Jobs', rawModules) && (<Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
         <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
-      </Pressable>
-      {modules['proj-new'] && canStartProject(position) && (
+      </Pressable>)}
+      {modules['proj-new'] && canStartProject(position) && tileEnabled('+ New Project', rawModules) && (
         <Pressable style={ui.btn} onPress={() => router.push('/?new=1')}>
           <Text style={ui.btnText}>+ New Project</Text>
         </Pressable>
       )}
-      {position === 'Elevator Service' && (
+      {position === 'Elevator Service' && tileEnabled('Elevator Jobs', rawModules) && (
         <Pressable style={ui.btn} onPress={() => router.push('/elevator-jobs')}>
           <Text style={ui.btnText}>Elevator Jobs</Text>
         </Pressable>
       )}
       {(hasAnyMeasurementAccess(position, rawModules) || (modules['measurement'] && !!catalogForTrade(tradeKeyForPosition(position)))) && (
         <>
-          <Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
+          {tileEnabled('Measurement', rawModules) && (<Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
             <Text style={ui.btnText}>Measurement</Text>
-          </Pressable>
-          <Pressable style={ui.btnOutline} onPress={() => router.push('/saved-measurements')}>
+          </Pressable>)}
+          {tileEnabled('Saved Measurements', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/saved-measurements')}>
             <Text style={ui.btnOutlineText}>Saved Measurements</Text>
-          </Pressable>
+          </Pressable>)}
         </>
       )}
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
+      {tileEnabled('Inbox', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
         <Text style={ui.btnOutlineText}>Inbox</Text>
-      </Pressable>
-      {isEmergencyMaintenance && (
+      </Pressable>)}
+      {isEmergencyMaintenance && tileEnabled('Emergency Units', rawModules) && (
         <Pressable style={ui.btnOutline} onPress={() => router.push('/emergency-units')}>
           <Text style={ui.btnOutlineText}>Emergency Units</Text>
         </Pressable>
       )}
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
+      {tileEnabled('Attendance', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
         <Text style={ui.btnOutlineText}>Attendance</Text>
-      </Pressable>
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
+      </Pressable>)}
+      {tileEnabled('Change Work Order', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
         <Text style={ui.btnOutlineText}>Change Work Order</Text>
-      </Pressable>
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
+      </Pressable>)}
+      {tileEnabled('Request Time Off', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
         <Text style={ui.btnOutlineText}>Request Time Off</Text>
-      </Pressable>
+      </Pressable>)}
       {!isTradeWorker && <Pressable style={ui.btnOutline} onPress={() => router.push('/resident-lookup')}>
         <Text style={ui.btnOutlineText}>Check Report Status</Text>
       </Pressable>}
