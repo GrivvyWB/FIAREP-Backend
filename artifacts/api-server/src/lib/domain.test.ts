@@ -258,6 +258,17 @@ test("Borough Director stays read-only but, as upper management, may delete any 
   }
 });
 
+test("leave requests are HR's alone to delete", () => {
+  assert.equal(canDeleteEntity(actor({ role: "human_resources", position: "HR" }), "leave-requests", {}), true);
+  for (const who of [
+    actor({ role: "administrator", position: "Administrator" }),
+    actor({ role: "management", position: "Borough Director" }),
+    actor({ role: "management", position: "Property Manager" }),
+    actor({ role: "management", position: "Plumbing Supervisor" }),
+  ]) assert.equal(canDeleteEntity(who, "leave-requests", {}), false);
+  assert.equal(canDeleteEntity(actor({ role: "human_resources", position: "HR" }), "procurement", {}), false);
+});
+
 test("administrators can delete every entity while other roles retain deletion boundaries", () => {
   const administrator = actor({ role: "administrator", position: "Administrator" });
   for (const entity of [

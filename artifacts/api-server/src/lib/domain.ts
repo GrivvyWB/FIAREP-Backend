@@ -889,8 +889,9 @@ export function canDeleteEntity(
   if (entity === "resident-reports") {
     return actor.role === "administrator" || canDeleteOperationalRecords(actor);
   }
+  // Leave requests: HR only (a mistake — wrong person). Nobody else.
+  if (entity === "leave-requests") return canHrDeleteLeave(actor, entity);
   if (actor.role === "administrator") return true;
-  if (canHrDeleteLeave(actor, entity)) return true;
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
   // entity deletion route.

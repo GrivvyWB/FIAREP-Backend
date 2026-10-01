@@ -3676,7 +3676,13 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
   }
   const ownWorkDelete = !vendorListEdit && actor.role === "management" && !isDeleteOverrideManager(actor);
   // HR fixing its own mistake: a leave request for the wrong person.
+  // Leave requests are HR's alone to delete — not management, not an
+  // administrator.
   const hrLeaveDelete = canHrDeleteLeave(actor, entity);
+  if (entity === "leave-requests" && !hrLeaveDelete) {
+    res.status(403).json({ error: "Only HR can delete a leave request" });
+    return;
+  }
   if (!vendorListEdit && !canDeleteOperationalRecords(actor) && !ownWorkDelete && !hrLeaveDelete) {
     res.status(403).json({ error: "Only higher management can delete records" });
     return;
