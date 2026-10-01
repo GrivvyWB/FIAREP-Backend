@@ -62,7 +62,7 @@ export default function Leave() {
   const overrideDelete = useOverrideDelete();
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(() => initialParams.get("q") || "");
   const [open, setOpen] = useState(() => initialParams.get("new") === "1");
   const [editing, setEditing] = useState<Row | null>(null);
   const [draft, setDraft] = useState<LeaveDraft>(() => emptyDraft(initialEmployee));
