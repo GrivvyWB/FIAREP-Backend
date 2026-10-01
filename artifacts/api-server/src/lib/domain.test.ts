@@ -1032,13 +1032,15 @@ test("leave duration routes short requests to supervisors and long requests to H
   assert.equal(leaveRequestDurationDays({ startDate: "2026-09-01", endDate: "2026-09-14" }), 14);
   assert.equal(leaveRequestDurationDays({ startDate: "2026-09-01", endDate: "2026-09-30" }), 30);
   assert.equal(validLeaveRequestDuration(14), true);
-  assert.equal(validLeaveRequestDuration(15), false);
-  assert.equal(validLeaveRequestDuration(29), false);
+  assert.equal(validLeaveRequestDuration(15), true);
+  assert.equal(validLeaveRequestDuration(29), true);
   assert.equal(validLeaveRequestDuration(30), true);
   assert.equal(validLeaveRequestDuration(365), true);
   assert.equal(validLeaveRequestDuration(366), false);
+  assert.equal(validLeaveRequestDuration(0), false);
   assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 14), true);
-  assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 30), false);
+  assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 30), true);
+  assert.equal(canApproveLeaveDuration(actor({ role: "management" }), 31), false);
   assert.equal(canApproveLeaveDuration(actor({ role: "administrator" }), 14), true);
   assert.equal(canApproveLeaveDuration(actor({ role: "worker" }), 14), false);
   assert.equal(canApproveLeaveDuration(actor({ role: "inspector" }), 14), false);

@@ -1031,10 +1031,14 @@ export function canApproveLeaveForEmployee(
 export function shouldAlertLeaveReviewer(
   reviewer: Actor,
   employee: Pick<Actor, "id" | "role" | "position" | "developments">,
+  days?: number,
 ): boolean {
   if (reviewer.id === employee.id) return false;
-  if (reviewer.role === "human_resources") return true;
+  // HR is alerted only for leave over 30 days (it looks anyone up by name
+  // in the HR workspace otherwise); management is alerted for the rest.
+  if (reviewer.role === "human_resources") return days === undefined || leaveNeedsHr(days);
   if (reviewer.role !== "management" || isBoroughDirector(reviewer)) return false;
+  if (days !== undefined && leaveNeedsHr(days)) return false;
   if (!canApproveLeaveForEmployee(reviewer, employee)) return false;
   const employeeIsManagement = employee.role === "management" || employee.role === "administrator";
   if (employeeIsManagement) return true;
@@ -1102,8 +1106,14 @@ function parseLeaveDateTime(value: string): Date | null {
     ? date
     : null;
 }
+/** Any length from one day to a year. Up to 30 days is decided by management;
+ * over 30 days goes to HR (HR_LEAVE_THRESHOLD_DAYS). */
+export const HR_LEAVE_THRESHOLD_DAYS = 30;
 export function validLeaveRequestDuration(days: number): boolean {
-  return (days >= 1 && days <= 14) || (days >= 30 && days <= 365);
+  return days >= 1 && days <= 365;
+}
+export function leaveNeedsHr(days: number): boolean {
+  return days > HR_LEAVE_THRESHOLD_DAYS;
 }
 
 export function canApproveLeaveDuration(
@@ -1112,8 +1122,8 @@ export function canApproveLeaveDuration(
 ): boolean {
   if (days < 1 || days > 365) return false;
   if (actor.role === "human_resources" || actor.role === "administrator") return true;
-  // Management and supervisors decide up to two weeks; longer goes to HR.
-  return actor.role === "management" && days <= 14;
+  // Management and supervisors decide up to 30 days; longer goes to HR.
+  return actor.role === "management" && days <= HR_LEAVE_THRESHOLD_DAYS;
 }
 
 /**

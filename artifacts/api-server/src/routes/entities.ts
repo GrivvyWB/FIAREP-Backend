@@ -896,7 +896,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     }
     const leaveDays = leaveRequestDurationDays(createdState);
     if (leaveDays === null || !validLeaveRequestDuration(leaveDays)) {
-      res.status(400).json({ error: "Time off must be 1 to 14 days or 30 to 365 days" });
+      res.status(400).json({ error: "Time off must be 1 to 365 days" });
       return;
     }
     if (
@@ -1089,9 +1089,10 @@ router.post("/v1/:entity", async (req, res, next) => {
         position: String(persistedCreatedState["title"] || actor.position),
         developments: development ? [development] : actor.developments,
       } as Pick<Actor, "id" | "role" | "position" | "developments">;
+      const leaveDaysForAlert = leaveRequestDurationDays(persistedCreatedState) ?? undefined;
       if (
-        (reviewerActor.role === "human_resources" && entityDevelopmentAllowed(reviewerActor, entity, development)) ||
-        (reviewerActor.role === "management" && shouldAlertLeaveReviewer(reviewerActor, employeeForLeave))
+        (reviewerActor.role === "human_resources" && entityDevelopmentAllowed(reviewerActor, entity, development) && shouldAlertLeaveReviewer(reviewerActor, employeeForLeave, leaveDaysForAlert)) ||
+        (reviewerActor.role === "management" && shouldAlertLeaveReviewer(reviewerActor, employeeForLeave, leaveDaysForAlert))
       ) {
         await notify(
           actor,
@@ -1273,7 +1274,7 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
   if (entity === "leave-requests") {
     const leaveDays = leaveRequestDurationDays(current.state);
     if (leaveDays === null || !validLeaveRequestDuration(leaveDays)) {
-      res.status(400).json({ error: "Time off must be 1 to 14 days or 30 to 365 days" });
+      res.status(400).json({ error: "Time off must be 1 to 365 days" });
       return;
     }
     if (
@@ -1867,8 +1868,8 @@ router.post(
     if (leaveDays === null || !canApproveLeaveDuration(actor, leaveDays)) {
       res.status(403).json({
         error: actor.role === "human_resources"
-          ? "HR may decide time off from 30 to 365 days"
-          : "Management and supervisors may decide up to 14 days",
+          ? "HR may decide time off up to 365 days"
+          : "Management and supervisors may decide up to 30 days; longer goes to HR",
       });
       return;
     }

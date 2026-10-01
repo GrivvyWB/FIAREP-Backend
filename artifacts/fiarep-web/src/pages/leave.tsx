@@ -87,7 +87,11 @@ export default function Leave() {
         String(state.employee || "").trim().toLowerCase() ===
         String(staff?.name || "").trim().toLowerCase());
   });
-  const visibleRows = teamView ? rows : ownRows;
+  // HR decides leave over 30 days, so its list shows only those until a name
+  // is typed in the search — then everything for that person comes up.
+  const isHr = staff?.role === "human_resources";
+  const daysOf = (s: Record<string, any>) => requestedDays(String(s.startAt || s.startDate || "").slice(0, 10), String(s.endAt || s.endDate || s.startAt || "").slice(0, 10));
+  const visibleRows = (teamView ? rows : ownRows).filter((row) => !(isHr && teamView && !search.trim()) || daysOf(row.state || {}) > 30);
   const filtered = visibleRows.filter((row) => {
     const s = row.state || {};
     return [row.id, row.development, s.employee, s.reason, s.status].filter(Boolean).join(" ").toLowerCase().includes(search.toLowerCase());
@@ -96,15 +100,15 @@ export default function Leave() {
   const draftDays = draft.startAt
     ? requestedDays(draft.startAt.slice(0, 10), (draft.endAt || draft.startAt).slice(0, 10))
     : 0;
-  const validDraftDuration = (draftDays >= 1 && draftDays <= 14) || (draftDays >= 30 && draftDays <= 365);
-  const longLeave = draftDays >= 30;
+  const validDraftDuration = draftDays >= 1 && draftDays <= 365;
+  const longLeave = draftDays > 30;
   const save = async () => {
     try {
       if (!draft.employee.trim() || !draft.startAt || !draft.endAt || !draft.returnAt) {
         throw new Error("Complete all required leave request fields.");
       }
       if (!validDraftDuration) {
-        throw new Error("Time off must be 1 to 14 days or 30 to 365 days.");
+        throw new Error("Time off must be 1 to 365 days.");
       }
       if (longLeave && !draft.reasonableAccommodation.trim()) {
         throw new Error("A reasonable accommodation is required for 30 to 365 days off.");
@@ -154,7 +158,7 @@ export default function Leave() {
   };
   const needsCode = staff?.role === "human_resources";
   return <div className="space-y-6">
-    <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight">{teamView ? "Pending Leave" : "Leave"}</h1><p className="text-sm text-muted-foreground">{teamView ? "Review staff leave requests and their current approval status." : "Enter and review your leave time."}</p></div>{!teamView && <Button onClick={() => { setEditing(null); setDraft(emptyDraft(staff?.name || "")); setOpen(true); }}>New leave request</Button>}</div>
+    <div className="flex items-start justify-between gap-4"><div><h1 className="text-2xl font-bold tracking-tight">{teamView ? "Pending Leave" : "Leave"}</h1><p className="text-sm text-muted-foreground">{teamView ? (staff?.role === "human_resources" ? "Leave over 30 days comes to HR. Type a name to see everything for that person." : "Review staff leave requests and their current approval status.") : "Enter and review your leave time."}</p></div>{!teamView && <Button onClick={() => { setEditing(null); setDraft(emptyDraft(staff?.name || "")); setOpen(true); }}>New leave request</Button>}</div>
     <div className="rounded-[14px] border border-border bg-card shadow-sm"><div className="border-b border-border p-4"><div className="relative max-w-md"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" /><Input className="pl-9" placeholder="Search employee, reason, status…" value={search} onChange={(e) => setSearch(e.target.value)} /></div></div><div className="p-4">
       {query.isLoading && <div className="p-10 text-center text-muted-foreground">Loading leave requests…</div>}
       {query.isError && <div className="p-10 text-center text-destructive">Unable to load leave requests. <Button variant="outline" onClick={() => query.refetch()}>Retry</Button></div>}
