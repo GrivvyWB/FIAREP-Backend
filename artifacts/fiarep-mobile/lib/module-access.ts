@@ -105,7 +105,7 @@ export async function refreshModuleConfig(): Promise<ModuleConfig | null> {
 
 export function useModuleAccess(): Record<string, boolean> {
   const [config, setConfig] = useState<ModuleConfig | null>(cached);
-  useEffect(() => { loadModuleConfig().then(setConfig).catch(() => undefined); }, []);
+  useEffect(() => { loadModuleConfig().then(setConfig).catch(() => undefined); refreshModuleConfig().then(setConfig).catch(() => undefined); }, []);
   return new Proxy({}, { get: (_target, key: string) => moduleEnabled(key as ModuleId, config) }) as Record<string, boolean>;
 }
 
@@ -114,7 +114,10 @@ export function useModuleAccess(): Record<string, boolean> {
 // read as `=== true` rather than through the default-on module proxy.
 export function useRawModules(): Record<string, boolean> {
   const [cfg, setCfg] = useState<ModuleConfig | null>(cached);
-  useEffect(() => { loadModuleConfig().then(setCfg).catch(() => undefined); }, []);
+  // Show the cached copy at once, then pull the live control-panel settings so
+  // a switch flipped on fiarep.com applies the next time a home screen opens
+  // (not only at sign-in). Offline, refresh falls back to the cache.
+  useEffect(() => { loadModuleConfig().then(setCfg).catch(() => undefined); refreshModuleConfig().then(setCfg).catch(() => undefined); }, []);
   return (cfg?.features?.modules || {}) as Record<string, boolean>;
 }
 
