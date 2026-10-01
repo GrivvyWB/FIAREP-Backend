@@ -28,6 +28,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 import { canApproveWork } from "@/lib/access-policy";
+import { useOverrideDelete } from "@/components/override-delete";
 import { useAuth } from "@/hooks/use-auth";
 
 const formSchema = z.object({
@@ -79,6 +80,7 @@ export function GenericEntityPage({
   const createMutation = useCreateEntityRecord();
   const updateMutation = useUpdateEntityRecord();
   const deleteMutation = useDeleteEntityRecord();
+  const overrideDelete = useOverrideDelete();
   const actionMutation = usePerformEntityAction();
   
   const queryClient = useQueryClient();
@@ -220,11 +222,9 @@ export function GenericEntityPage({
     const deletingRecord = data?.find((record) => record.id === deletingRecordId);
     if (!deletingRecord) return;
     try {
-      await deleteMutation.mutateAsync({
-        entity,
-        id: deletingRecordId,
-        data: { version: deletingRecord.version },
-      });
+      const st = (deletingRecord.state || {}) as Record<string, any>;
+      const done = await overrideDelete.remove(entity, deletingRecordId, deletingRecord.version, [st.trackingId, st.complaintNo, st.violationNo, st.address, st.employee, st.description].map((v) => String(v || "").trim()).filter(Boolean).slice(0, 3).join(" · ") || entity);
+      if (!done) return;
       toast({ title: "Deleted successfully" });
       await invalidateOperationalQueries(queryClient, entity, deletingRecordId, isProcurement ? ["procurement-bids"] : []);
     } catch (err: any) {
@@ -299,6 +299,7 @@ export function GenericEntityPage({
 
   return (
     <div className="space-y-6">
+      {overrideDelete.dialog}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">{title}</h1>

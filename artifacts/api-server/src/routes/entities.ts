@@ -15,6 +15,7 @@ import {
   leaveNeedsHr,
   canApproveLeaveDuration,
   canDeleteOperationalRecords,
+  isDeleteOverrideManager,
   canCreateEntity,
   canPerformAssignedWorkflowAction,
   canDeleteEntity,
@@ -139,8 +140,149 @@ router.get("/v1/deletion-policy", async (_req, res) => {
   res.json({
     enabled: organization?.features?.["deletionEnabled"] === true,
     canDelete: canDeleteOperationalRecords(actor),
+    // Supervisors / management may delete their own work (a copy stays in the
+    // Deleted items box); upper management deletes anyone's with a code.
+    canDeleteOwn: actor.role === "management" && !isDeleteOverrideManager(actor),
+    overrideRequired: isDeleteOverrideManager(actor),
   });
 });
+
+// ── Delete override codes ─────────────────────────────────────────────────
+// Upper management deletes on the website only, with a one-time three-digit
+// code issued to them for ten minutes. The code is written on the audit
+// trail and into the alert the record's supervisor gets, so it is always
+// clear who deleted what.
+const deleteOverrides = new Map<string, { code: string; issuedAt: number; expiresAt: number }>();
+const OVERRIDE_TTL_MS = 10 * 60 * 1000;
+function issueDeleteOverride(actorId: string): { code: string; expiresAt: number } {
+  const code = String(100 + (randomBytes(2).readUInt16BE(0) % 900));
+  const now = Date.now();
+  const entry = { code, issuedAt: now, expiresAt: now + OVERRIDE_TTL_MS };
+  deleteOverrides.set(actorId, entry);
+  return { code, expiresAt: entry.expiresAt };
+}
+function consumeDeleteOverride(actorId: string, code: unknown): boolean {
+  const entry = deleteOverrides.get(actorId);
+  if (!entry) return false;
+  if (Date.now() > entry.expiresAt) { deleteOverrides.delete(actorId); return false; }
+  if (String(code ?? "").trim() !== entry.code) return false;
+  deleteOverrides.delete(actorId);
+  return true;
+}
+
+router.post("/v1/delete-override", async (_req, res) => {
+  const actor = actorFrom(res);
+  if (!isDeleteOverrideManager(actor) && actor.role !== "administrator") {
+    res.status(403).json({ error: "Only upper management may request a delete override code" });
+    return;
+  }
+  const [organization] = await db
+    .select({ features: organizations.features })
+    .from(organizations)
+    .where(eq(organizations.id, actor.tenantId))
+    .limit(1);
+  if (organization?.features?.["deletionEnabled"] !== true) {
+    res.status(403).json({ error: "Deletion is disabled for this organization" });
+    return;
+  }
+  const issued = issueDeleteOverride(actor.id);
+  await audit(actor, "delete-override.issued", `Delete override code ${issued.code} issued to ${actor.name} (${actor.position})`);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ code: issued.code, expiresAt: new Date(issued.expiresAt).toISOString(), ttlMinutes: 10 });
+});
+
+// ── Deleted items box (upper management / administrators) ───────────────
+// Every soft-deleted operational record, with who deleted it. Searched by the
+// member's name (who deleted, or whose work it was). No alerts — it is a box
+// upper management opens when they want to look.
+router.get("/v1/deleted-items", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!isDeleteOverrideManager(actor) && actor.role !== "administrator") {
+    res.status(403).json({ error: "Upper management only" });
+    return;
+  }
+  const q = String(req.query["q"] ?? "").trim().toLowerCase();
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, true),
+  )).orderBy(desc(entityRecords.updatedAt)).limit(2000);
+  const staff = await db.select({ id: staffAccounts.id, name: staffAccounts.name, position: staffAccounts.position })
+    .from(staffAccounts).where(eq(staffAccounts.tenantId, actor.tenantId));
+  const nameOf = new Map(staff.map((s) => [s.id, s.name]));
+  const items = rows.filter((row) => !isHrEntity(row.entity)).map((row) => {
+    const st = row.state as Record<string, unknown>;
+    const owners = [...new Set([row.createdBy, st["assignedStaffId"], st["handoffTargetId"], st["cpmSupervisorId"], st["cpmId"], st["employeeStaffId"], st["requesterStaffId"]]
+      .map((v) => String(v || "")).filter((v) => v && nameOf.has(v)).map((v) => nameOf.get(v)!))];
+    for (const n of [st["cpmName"], st["employee"], st["assignedTo"], st["assignedStaffName"], st["vendor"]]) if (typeof n === "string" && n.trim()) owners.push(n.trim());
+    return {
+      id: row.id, entity: row.entity, development: row.development, label: deletionLabel(row.entity, row),
+      deletedAt: String(st["deletedAt"] || row.updatedAt.toISOString()),
+      deletedByName: String(st["deletedByName"] || nameOf.get(String(st["deletedById"] || "")) || ""),
+      deletedByPosition: String(st["deletedByPosition"] || ""),
+      overrideCode: String(st["deleteOverrideCode"] || ""),
+      owners: [...new Set(owners)],
+      state: st,
+    };
+  }).filter((item) => !q || [item.deletedByName, ...item.owners, item.label].some((v) => String(v || "").toLowerCase().includes(q)));
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ items, members: staff.map((s) => ({ id: s.id, name: s.name, position: s.position })).sort((a, b) => a.name.localeCompare(b.name)) });
+});
+
+// Purge several at once (a member's whole list, or the ones ticked).
+router.post("/v1/deleted-items/purge", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!isDeleteOverrideManager(actor) && actor.role !== "administrator") {
+    res.status(403).json({ error: "Upper management only" });
+    return;
+  }
+  const ids = Array.isArray((req.body as any)?.ids) ? ((req.body as any).ids as unknown[]).map((v) => String(v)).filter(Boolean).slice(0, 500) : [];
+  if (!ids.length) { res.status(400).json({ error: "ids required" }); return; }
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.deleted, true), inArray(entityRecords.id, ids),
+  ));
+  let purged = 0;
+  for (const row of rows) {
+    if (isHrEntity(row.entity)) continue;
+    await db.delete(notifications).where(and(eq(notifications.tenantId, actor.tenantId), eq(notifications.reportId, row.id)));
+    await db.delete(entityRecords).where(and(eq(entityRecords.id, row.id), eq(entityRecords.tenantId, actor.tenantId)));
+    await audit(actor, `${row.entity}.purged`, `Permanently removed by ${actor.name} (${actor.position}): ${deletionLabel(row.entity, row)}`, row.id);
+    purged += 1;
+  }
+  res.json({ purged });
+});
+
+router.delete("/v1/deleted-items/:id", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!isDeleteOverrideManager(actor) && actor.role !== "administrator") {
+    res.status(403).json({ error: "Upper management only" });
+    return;
+  }
+  const [row] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, req.params["id"]!), eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.deleted, true),
+  )).limit(1);
+  if (!row || isHrEntity(row.entity)) { res.status(404).json({ error: "Deleted item not found" }); return; }
+  await db.delete(notifications).where(and(eq(notifications.tenantId, actor.tenantId), eq(notifications.reportId, row.id)));
+  await db.delete(entityRecords).where(and(eq(entityRecords.id, row.id), eq(entityRecords.tenantId, actor.tenantId)));
+  await audit(actor, `${row.entity}.purged`, `Permanently removed by ${actor.name} (${actor.position}): ${deletionLabel(row.entity, row)}`, row.id);
+  res.status(204).send();
+});
+
+/** Who should hear that a record was deleted: the supervisor / person it was with. */
+function deletionWatchers(row: typeof entityRecords.$inferSelect): string[] {
+  const st = row.state as Record<string, unknown>;
+  const ids = [st["assignedStaffId"], st["handoffTargetId"], st["cpmSupervisorId"], st["assignedByStaffId"],
+    st["targetStaffId"], st["directedToStaffId"], st["employeeStaffId"], st["requesterStaffId"], st["cpmId"], row.createdBy]
+    .map((v) => String(v || "").trim())
+    .filter((v) => v && !v.startsWith("public-"));
+  return [...new Set(ids)];
+}
+function deletionLabel(entity: string, row: typeof entityRecords.$inferSelect): string {
+  const st = row.state as Record<string, unknown>;
+  const ref = [st["complaintNo"], st["violationNo"], st["trackingId"], st["sourceRef"]].map((v) => String(v || "").trim()).find(Boolean) || "";
+  const where = [st["address"], st["unit"] ? `Unit ${st["unit"]}` : "", st["building"]].map((v) => String(v || "").trim()).filter(Boolean).join(" ");
+  const what = String(st["description"] || st["scope"] || st["reason"] || st["employee"] || "").trim().slice(0, 80);
+  return [entity.replace(/-/g, " "), ref, where, what].filter(Boolean).join(" · ");
+}
 
 /** Complaint / violation number carried on a scope from its source record. */
 function scopeSourceRef(sourceEntity: string, state: Record<string, unknown>) {
@@ -3525,9 +3667,20 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(403).json({ error: "Deletion is disabled for this organization" });
     return;
   }
-  if (!vendorListEdit && !canDeleteOperationalRecords(actor)) {
+  const ownWorkDelete = !vendorListEdit && actor.role === "management" && !isDeleteOverrideManager(actor);
+  if (!vendorListEdit && !canDeleteOperationalRecords(actor) && !ownWorkDelete) {
     res.status(403).json({ error: "Only higher management can delete records" });
     return;
+  }
+  // Upper management deletes with a one-time override code (website only).
+  let overrideCode = "";
+  if (!vendorListEdit && actor.role === "management" && !ownWorkDelete) {
+    const supplied = (req.body as { overrideCode?: unknown })?.overrideCode;
+    if (!consumeDeleteOverride(actor.id, supplied)) {
+      res.status(403).json({ error: "Enter your delete override code (request a new one if it expired)" });
+      return;
+    }
+    overrideCode = String(supplied).trim();
   }
   const [current] = await db
     .select()
@@ -3552,7 +3705,17 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(409).json({ error: "Approved company approval evidence is immutable" });
     return;
   }
-  if (!(await canReadRecordForActor(actor, current)) ||
+  if (ownWorkDelete) {
+    // A supervisor / manager removes work that is theirs: created by them, or
+    // sent to / handled by them. A copy stays in the Deleted items box.
+    const st = current.state as Record<string, unknown>;
+    const mine = [current.createdBy, st["assignedStaffId"], st["handoffTargetId"], st["cpmSupervisorId"], st["assignedByStaffId"], st["targetStaffId"], st["requesterStaffId"]]
+      .map((v) => String(v || "")).includes(actor.id);
+    if (!mine || isHrEntity(entity)) {
+      res.status(403).json({ error: "You can delete only your own work. Upper management deletes anyone's with an override code." });
+      return;
+    }
+  } else if (!(await canReadRecordForActor(actor, current)) ||
       !(vendorListEdit || canDeleteEntity(actor, entity, current.state))) {
     res.status(403).json({ error: "Not allowed to delete this record" });
     return;
@@ -3608,12 +3771,30 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(409).json({ error: "Concurrent update detected" });
     return;
   }
-  await audit(actor, `${entity}.deleted`, `Deleted ${entity} record`, current.id);
+  const label = deletionLabel(entity, current);
+  await audit(actor, `${entity}.deleted`, overrideCode
+    ? `Deleted by ${actor.name} (${actor.position}) with override code ${overrideCode}: ${label}`
+    : `Deleted ${entity} record: ${label}`, current.id);
+  // Keep who deleted it on the record itself (soft-deleted rows stay in the table).
+  try {
+    await db.update(entityRecords)
+      .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ deletedById: actor.id, deletedByName: actor.name, deletedByPosition: actor.position, deletedAt: new Date().toISOString(), ...(overrideCode ? { deleteOverrideCode: overrideCode } : {}) })}::jsonb` })
+      .where(and(eq(entityRecords.id, current.id), eq(entityRecords.tenantId, actor.tenantId)));
+  } catch (err) {
+    logger.warn({ err, recordId: current.id }, "Could not stamp deletion on record");
+  }
+  // The supervisor / person who had the record is told who deleted it.
+  if (overrideCode) {
+    for (const watcher of deletionWatchers(current)) {
+      if (watcher === actor.id) continue;
+      await notify(actor, watcher, `Deleted by ${actor.name} (${actor.position}) — override code ${overrideCode}`, label);
+    }
+  }
   // Deleted means gone everywhere: the work that came out of this record (a
   // violation sent to an inspector, the inspection, the route assignment, the
   // scope, the trade request, change orders) goes with it, along with their
   // alerts, so nothing lingers in inboxes or on the scores.
-  if (actor.role === "administrator" && !isHrEntity(entity) && entity !== "vendor-contacts") {
+  if ((actor.role === "administrator" || overrideCode || ownWorkDelete) && !isHrEntity(entity) && entity !== "vendor-contacts") {
     try {
       const cascaded = await cascadeDelete(actor.tenantId, current);
       if (cascaded.length) await audit(actor, `${entity}.deleted.cascade`, `Also removed ${cascaded.length} linked record(s)`, current.id);

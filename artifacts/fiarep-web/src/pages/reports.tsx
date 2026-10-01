@@ -36,6 +36,7 @@ import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/sta
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 import { canHandleResidentReports, isProcurementDesk } from "@/lib/access-policy";
+import { useOverrideDelete } from "@/components/override-delete";
 import { CreateReportButton, SendAsViolationPanel } from "@/components/report-actions";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
@@ -292,6 +293,7 @@ export default function Reports() {
   });
   const action = usePerformEntityAction();
   const deleteMutation = useDeleteEntityRecord();
+  const overrideDelete = useOverrideDelete();
   const { data: deletionPolicy } = useGetDeletionPolicy();
   const requestUpload = useRequestFileUploadUrl();
   const [search, setSearch] = useState("");
@@ -418,7 +420,9 @@ export default function Reports() {
     if (!deletingReportId) return;
     const target = reports.find((r) => r.id === deletingReportId);
     try {
-      await deleteMutation.mutateAsync({ entity: "resident-reports", id: deletingReportId, ...(target ? { data: { version: (target as any).version } } : {}) });
+      const st = (target?.state || {}) as Record<string, any>;
+      const done = await overrideDelete.remove("resident-reports", deletingReportId, Number((target as any)?.version || 0), [st.complaintNo, st.address, st.unit ? `Unit ${st.unit}` : ""].filter(Boolean).join(" · ") || "this report");
+      if (!done) return;
       toast({ title: "Report deleted" });
       await invalidateOperationalQueries(queryClient, "resident-reports", deletingReportId);
       if (selected?.id === deletingReportId) setSelected(null);
@@ -531,6 +535,7 @@ export default function Reports() {
 
   return (
     <div className="space-y-6">
+      {overrideDelete.dialog}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Reports</h1>
@@ -588,7 +593,7 @@ export default function Reports() {
                  {canActOn(report) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canReview(report) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
                 <Button size="sm" variant="ghost" onClick={() => openReport(report, "details")}>View details</Button>
-                {deletionPolicy?.enabled && deletionPolicy.canDelete && <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingReportId(report.id); setIsDeleteDialogOpen(true); }} title="Delete report"><Trash2 className="h-3.5 w-3.5" /></Button>}
+                {deletionPolicy?.enabled && (deletionPolicy.canDelete || ((deletionPolicy as any).canDeleteOwn && [report.createdBy, state.assignedStaffId, state.assignedByStaffId, state.directedToStaffId].map((v) => String(v || "")).includes(actor?.id || ""))) && <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingReportId(report.id); setIsDeleteDialogOpen(true); }} title="Delete report"><Trash2 className="h-3.5 w-3.5" /></Button>}
               </div>
             </div>;
           })}</div>}

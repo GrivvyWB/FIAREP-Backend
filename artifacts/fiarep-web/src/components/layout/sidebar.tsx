@@ -26,7 +26,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info, Ruler } from "lucide-react";
+  Info, Ruler, Trash2 } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -61,6 +61,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
       { name: "Emergency", href: "/emergency", icon: BellRing, module: "emergency" as const },
       ...(staff?.role === "emergency" ? [] : [
       { name: "Scores", href: "/scores", icon: Target, module: "scores" as const },
+      ...((staff?.role === "administrator" || ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager"].includes(staff?.position || "")) ? [{ name: "Deleted items", href: "/deleted-items", icon: Trash2, module: "dashboard" as const }] : []),
       ]),
     ] : []),
     { name: "Change Orders", href: "/change-orders", icon: FileCog, module: "change-orders" as const },

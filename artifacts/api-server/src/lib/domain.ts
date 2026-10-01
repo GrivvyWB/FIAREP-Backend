@@ -37,10 +37,18 @@ export function canUseGeneralStaffLogin(role: string): boolean {
   return isStaffAccountRole(role);
 }
 
+/** Upper management may delete anyone's work on the website, with a one-time
+ * override code that records who deleted what. */
+export const DELETE_OVERRIDE_POSITIONS = new Set([
+  "Borough Director", "Regional Director", "Assistant Regional Director",
+  "Property Manager", "Assistant Property Manager",
+]);
+export function isDeleteOverrideManager(actor: Pick<Actor, "role" | "position">): boolean {
+  return actor.role === "management" && DELETE_OVERRIDE_POSITIONS.has(String(actor.position || "").trim());
+}
+
 export function canDeleteOperationalRecords(actor: Actor): boolean {
-  return actor.role === "administrator" ||
-    (actor.role === "management" &&
-      ["Borough Director", "Regional Director"].includes(actor.position));
+  return actor.role === "administrator" || isDeleteOverrideManager(actor);
 }
 
 export function canDeleteStaffAccounts(actor: Actor): boolean {
@@ -876,13 +884,13 @@ export function canDeleteEntity(
     return actor.role === "administrator" || canDeleteOperationalRecords(actor);
   }
   if (actor.role === "administrator") return true;
-  // A Borough Director cleans up the complaint flow (reports, change orders)
-  // but remains read-only for dispatch, elevator, procurement and HR records.
-  if (isBoroughDirector(actor)) return entity === "change-orders";
   // HR lifecycle records and company approval evidence are retained as
   // employment history. No role may soft-delete them through the generic
   // entity deletion route.
   if (isHrEntity(entity)) return false;
+  // Upper management (with the override code, checked by the route) may
+  // delete any operational record.
+  if (isDeleteOverrideManager(actor)) return true;
   if (entity === "hud-inspections") return false;
   if (ELEVATOR_ENTITIES.has(entity)) {
     return (

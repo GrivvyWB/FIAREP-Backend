@@ -242,19 +242,19 @@ test("operational deletion is limited to higher management", () => {
   assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Borough Director" })), true);
   assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Regional Director" })), true);
   assert.equal(canDeleteOperationalRecords(actor({ role: "administrator", position: "Administrator" })), true);
-  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Property Manager" })), false);
+  // Upper management (with an override code on the website) deletes anyone's work.
+  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Property Manager" })), true);
+  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Assistant Property Manager" })), true);
+  assert.equal(canDeleteOperationalRecords(actor({ role: "management", position: "Plumbing Supervisor" })), false);
   assert.equal(canDeleteOperationalRecords(actor({ role: "inspector", position: "Supervisor" })), false);
 });
 
-test("Borough Director may delete resident reports but remains read-only elsewhere", () => {
+test("Borough Director stays read-only but, as upper management, may delete any operational record (never HR)", () => {
   const boroughDirector = actor({ role: "management", position: "Borough Director" });
   for (const entity of ["resident-reports", "emergency-jobs", "elevators", "procurement", "hr-approvals"]) {
     assert.equal(canCreateEntity(boroughDirector, entity), false);
     assert.equal(canMutateEntity(boroughDirector, entity), false);
-    assert.equal(
-      canDeleteEntity(boroughDirector, entity, {}),
-      entity === "resident-reports",
-    );
+    assert.equal(canDeleteEntity(boroughDirector, entity, {}), entity !== "hr-approvals");
   }
 });
 
@@ -271,7 +271,8 @@ test("administrators can delete every entity while other roles retain deletion b
     assert.equal(canDeleteEntity(administrator, entity, {}), true);
   }
   assert.equal(canDeleteEntity(actor({ role: "management", position: "Regional Director" }), "procurement", {}), true);
-  assert.equal(canDeleteEntity(actor({ role: "management", position: "Borough Director" }), "procurement", {}), false);
+  assert.equal(canDeleteEntity(actor({ role: "management", position: "Borough Director" }), "procurement", {}), true);
+  assert.equal(canDeleteEntity(actor({ role: "management", position: "Plumbing Supervisor" }), "procurement", {}), false);
   assert.equal(canDeleteEntity(actor({ role: "inspector", position: "CPM" }), "procurement", {}), false);
   assert.equal(canDeleteEntity(actor({ role: "human_resources" }), "hr-exits", {}), false);
   assert.equal(canDeleteEntity(actor({ role: "management" }), "hr-approvals", {}), false);

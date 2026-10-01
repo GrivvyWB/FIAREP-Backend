@@ -38,6 +38,7 @@ import ProcurementLogin from '@/pages/procurement-login';
 import ScopeReview from '@/pages/scope-review';
 import ScopeWriting from '@/pages/scope-writing';
 import Scores from '@/pages/scores';
+import DeletedItems from '@/pages/deleted-items';
 import HudInspections from '@/pages/hud-inspections';
 import InspectionApprovals from '@/pages/inspection-approvals';
 import MyInspections from '@/pages/my-inspections';
@@ -230,6 +231,7 @@ function AppRouter() {
           <Route path="/emergency" component={EmergencyRoute} />
           <Route path="/change-orders" component={ManagementRouteChangeOrders} />
           <Route path="/scores" component={ManagementRouteScores} />
+          <Route path="/deleted-items" component={DeletedItemsRoute} />
           <Route path="/elevators" component={ElevatorsRoute} />
           <Route path="/leave" component={LeaveRoute} />
           <Route path="/notifications" component={NotificationsRoute} />
@@ -298,6 +300,14 @@ function ManagementRoute({ children }: { children: ReactNode }) {
 
 function ManagementRouteChangeOrders() {
   return <ModuleRoute module="change-orders"><ChangeOrders /></ModuleRoute>;
+}
+
+function DeletedItemsRoute() {
+  const [, setLocation] = useLocation();
+  const { staff } = useAuth();
+  const allowed = staff?.role === "administrator" || (staff?.role === "management" && ["Borough Director", "Regional Director", "Assistant Regional Director", "Property Manager", "Assistant Property Manager"].includes(staff?.position || ""));
+  useEffect(() => { if (!allowed) setLocation("/dashboard"); }, [allowed, setLocation]);
+  return allowed ? <DeletedItems /> : null;
 }
 
 function ManagementRouteScores() {
