@@ -34,6 +34,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/staff-assignment";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 import { invalidateOperationalQueries } from "@/lib/query-invalidation";
 import { canHandleResidentReports, isProcurementDesk } from "@/lib/access-policy";
 import { useOverrideDelete } from "@/components/override-delete";
@@ -82,12 +83,13 @@ function Photos({ reportId, savedScans }: {
     };
   }, [photoIds]);
 
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
   const open = async (id: string) => {
     setBusy(id);
     try {
       const existingUrl = photoUrls[id];
       const url = existingUrl || (await requestResidentReportPhotoDownload(id)).downloadUrl;
-      window.open(url, "_blank", "noopener,noreferrer");
+      setViewPhoto(url);
     } finally { setBusy(null); }
   };
   const saveName = async (id: string, currentName: string) => {
@@ -138,6 +140,7 @@ function Photos({ reportId, savedScans }: {
   if (isLoading) return <span className="text-xs text-muted-foreground">Loading photos…</span>;
   if (!photos.length) return <span className="text-xs text-muted-foreground">No photos attached</span>;
   return <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+    {viewPhoto && <PhotoLightbox src={viewPhoto} alt="Complaint photo" onClose={() => setViewPhoto(null)} />}
     {photos.map((photo) => {
       const scan = scanResults[photo.id] || savedScans?.[photo.id];
       return (

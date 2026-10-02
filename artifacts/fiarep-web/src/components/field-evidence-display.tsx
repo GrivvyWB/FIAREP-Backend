@@ -1,4 +1,5 @@
 import { MapPin, Image as ImageIcon, Map as MapIcon, Clock, Navigation, AlertCircle, MessageSquareText } from "lucide-react";
+import { PhotoLightbox } from "@/components/photo-lightbox";
 import { format } from "date-fns";
 import { useState, useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -263,12 +264,12 @@ function PhotoDisplay({ photo, isResidentReport }: { photo: any, isResidentRepor
     };
   }, [photo.objectPath, photo.id, isResidentReport]);
 
-  const handleOpen = () => {
-    if (url) window.open(url, "_blank", "noopener,noreferrer");
-  };
+  const [viewing, setViewing] = useState(false);
+  const handleOpen = () => { if (url) setViewing(true); };
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
+      {viewing && url && <PhotoLightbox src={url} alt={photo.name} onClose={() => setViewing(false)} />}
       <button 
         type="button" 
         className="block w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary" 
