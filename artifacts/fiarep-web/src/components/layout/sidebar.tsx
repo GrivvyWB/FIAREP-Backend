@@ -82,11 +82,11 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
           open ? "translate-x-0 md:w-[264px]" : "-translate-x-full md:w-0 md:overflow-hidden"
         }`}
       >
-        <div className="relative w-[264px] border-b border-sidebar-border shrink-0 overflow-hidden bg-white">
+        <div className="relative flex h-14 w-[264px] shrink-0 items-center border-b border-sidebar-border bg-white px-3">
           <img
-            src={`${import.meta.env.BASE_URL}fiarep-sidebar-logo.png`}
+            src={`${import.meta.env.BASE_URL}fiarep-logo.png`}
             alt="FIAREP"
-            className="block h-auto w-full"
+            className="block h-9 w-auto"
           />
           <button
             type="button"
