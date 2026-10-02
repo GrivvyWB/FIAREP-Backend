@@ -61,7 +61,6 @@ import { repairLegacyResidentDevelopment } from "../lib/legacyResidentDevelopmen
 import { rateLimit } from "../lib/rateLimit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
-import { residentReportRecipientIds } from "../lib/notificationVisibility";
 import { routedComplaintRecipientIds } from "../lib/complaintRouting";
 
 const router: IRouter = Router();
@@ -1202,19 +1201,27 @@ router.post("/v1/:entity", async (req, res, next) => {
   }
   await audit(actor, `${entity}.created`, `Created ${entity} record`, id);
   if (entity === "building-violations") {
-    // To the development's own management and supervisors (the people who
-    // review it), never the Borough Director or upper management's inboxes.
-    const dev = String(persistedCreatedState["development"] || rawState["development"] || "").trim().toLowerCase();
-    const managers = await db.select().from(staffAccounts).where(and(
-      eq(staffAccounts.tenantId, actor.tenantId),
-      eq(staffAccounts.status, "approved"),
-      eq(staffAccounts.role, "management"),
-    ));
+    // Same routing as a complaint: the development's on-site supervisors, the
+    // emergency supervisor, and the trade supervisor whose trade it is — all
+    // at THIS development. An electrical supervisor never hears about a
+    // plumbing leak, and nobody hears about another development's work
+    // (they look that up themselves with their development code). Never the
+    // Borough Director or upper management. No development → no inbox alerts.
+    const dev = String(development || persistedCreatedState["development"] || rawState["development"] || "").trim();
+    const routedIds = dev
+      ? await routedComplaintRecipientIds(actor.tenantId, dev, { ...persistedCreatedState, ...rawState }, true)
+      : [];
+    const managers = routedIds.length
+      ? await db.select().from(staffAccounts).where(and(
+        eq(staffAccounts.tenantId, actor.tenantId),
+        eq(staffAccounts.status, "approved"),
+        inArray(staffAccounts.id, routedIds),
+      ))
+      : [];
     const reviewers = managers.filter((m) =>
       m.id !== actor.id &&
       !isBoroughDirector({ role: m.role, position: m.position } as Actor) &&
-      !LEAVE_UPPER_MANAGEMENT_TITLES.has(String(m.position || "").trim()) &&
-      (!dev || (m.developments || []).some((d) => d.trim().toLowerCase() === dev)));
+      !LEAVE_UPPER_MANAGEMENT_TITLES.has(String(m.position || "").trim()));
     for (const reviewer of reviewers) {
       await notify(
         actor,
@@ -1671,14 +1678,10 @@ router.post("/v1/:entity/:id/attach-measurement", async (req, res, next) => {
   } else {
     ["assignedByStaffId", "cpmSupervisorId", "dispatchingSupervisorId", "directedToStaffId", "approvedByStaffId"]
       .forEach((field) => { if (typeof state[field] === "string" && state[field]) recipients.add(state[field] as string); });
-    if (entity === "resident-reports") {
-      (await routedComplaintRecipientIds(actor.tenantId, development, state)).forEach((id) => recipients.add(id));
-    } else {
-      const supervisors = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
-        eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"), eq(staffAccounts.position, "Supervisor Inspector")));
-      supervisors.forEach((row) => recipients.add(row.id));
-      (await residentReportRecipientIds(actor.tenantId, development)).forEach((id) => recipients.add(id));
-    }
+    // Complaints and violations alike: this development's on-site supervisors,
+    // the emergency supervisor, and the matching trade supervisor here — not
+    // every supervisor at the development, and nobody from another one.
+    (await routedComplaintRecipientIds(actor.tenantId, development, state, entity === "building-violations")).forEach((id) => recipients.add(id));
   }
   recipients.delete(actor.id);
   const existing = Array.isArray(state["measurements"]) ? (state["measurements"] as unknown[]) : [];
@@ -1760,9 +1763,7 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
       .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ directedToStaffId: target.id, directedToName: target.name, directedAt: new Date().toISOString() })}::jsonb` })
       .where(and(eq(entityRecords.id, report.id), eq(entityRecords.tenantId, actor.tenantId)));
   } else {
-    recipients = entity === "resident-reports"
-      ? await routedComplaintRecipientIds(actor.tenantId, development, report.state)
-      : await residentReportRecipientIds(actor.tenantId, development);
+    recipients = await routedComplaintRecipientIds(actor.tenantId, development, report.state, entity === "building-violations");
   }
   if (recipients.length) {
     const created = await db.insert(notifications).values(recipients.map((target) => ({
@@ -3400,9 +3401,7 @@ router.post(
       String(state["address"] || state["building"] || development),
       photoReady ? "Repair photo ready for review" : "Repair completed for review",
     ].filter(Boolean).join(" · ");
-    let recipients: string[] = entity === "resident-reports"
-      ? await routedComplaintRecipientIds(actor.tenantId, development, { ...current.state, ...state })
-      : await residentReportRecipientIds(actor.tenantId, development);
+    let recipients: string[] = await routedComplaintRecipientIds(actor.tenantId, development, { ...current.state, ...state }, entity === "building-violations");
     // The supervisor who assigned the complaint (e.g. an office-based CPM
     // Supervisor with no base development) must get the completed work back.
     const assignedBy = String(state["assignedByStaffId"] || current.state["assignedByStaffId"] || "");
