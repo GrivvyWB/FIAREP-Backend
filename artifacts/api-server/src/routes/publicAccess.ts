@@ -151,6 +151,13 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     res.status(400).json({ error: "The selected building address does not belong to this development" });
     return;
   }
+  // A building address is not a development. Without this, a resident who
+  // types the address into the Development box creates a one-building
+  // "development" on the complaint dashboard.
+  if (!resolvedDevelopment && normalize(requestedDevelopment) === normalizedAddress) {
+    res.status(400).json({ error: "Enter the development this building belongs to, not the building address" });
+    return;
+  }
   let tenantId = property?.organizationId ?? "default";
   if (!property) {
     const customerOrganizations = await db

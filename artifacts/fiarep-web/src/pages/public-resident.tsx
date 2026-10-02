@@ -259,7 +259,7 @@ export default function PublicResident() {
                   <FormField control={reportForm.control} name="development" render={({ field }) => (
                     <FormItem>
                       <FormLabel>Development</FormLabel>
-                      <FormControl><Input {...field} list="resident-development-options" /></FormControl>
+                      <FormControl><Input {...field} list="resident-development-options" placeholder="Development name (not the street address)" /></FormControl>
                       <datalist id="resident-development-options">
                         {developmentOptions.map((development) => (
                           <option key={development.id} value={development.name} />
