@@ -96,6 +96,7 @@ export default function AdminHome() {
       heading: 'System',
       color: '#4A5560',
       tiles: [
+        { label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' },
         { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
       ],
     },

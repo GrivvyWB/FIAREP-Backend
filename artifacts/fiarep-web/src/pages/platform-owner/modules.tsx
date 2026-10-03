@@ -150,6 +150,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Default rates", "Audit Log", "Request Time Off", "Leave Calendar", "Attendance",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
+    "Audit Log",
     "Manage All Requests", "Resident Reports", "Send Violation", "Assign a Job", "Staff Member Jobs", "Add Job for Mgmt", "Projects / Inspections",
     "HUD Inspections", "Change Orders", "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score",
     "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
