@@ -1,8 +1,9 @@
 import { notificationHref, notificationTitle } from "@/lib/notification-text";
-import { useListNotifications, useMarkNotificationRead } from "@workspace/api-client-react";
+import { customFetch, useListNotifications, useMarkNotificationRead } from "@workspace/api-client-react";
 import { getListNotificationsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { Bell, Check, CheckCircle2, ExternalLink, Loader2, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Bell, Check, CheckCircle2, ExternalLink, Loader2, RefreshCw, Trash2 } from "lucide-react";
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
@@ -42,6 +43,14 @@ export default function Notifications() {
     },
   });
   const markRead = useMarkNotificationRead();
+  const [removing, setRemoving] = useState<string | null>(null);
+  const handleRemove = async (id: string) => {
+    setRemoving(id);
+    try {
+      await customFetch<void>(`/api/v1/notifications/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await queryClient.invalidateQueries({ queryKey: getListNotificationsQueryKey() });
+    } finally { setRemoving(null); }
+  };
   const items = notifications ?? [];
   const unread = items.filter((notification) => !notification.read);
 
@@ -188,6 +197,19 @@ export default function Notifications() {
                       >
                         <CheckCircle2 className="w-4 h-4" />
                         Mark read
+                      </Button>
+                    )}
+                    {!pendingEmployee && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 h-8 px-2 text-muted-foreground hover:text-destructive"
+                        onClick={() => void handleRemove(notification.id)}
+                        disabled={removing === notification.id}
+                        aria-label="Delete alert"
+                        title="Delete alert"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </Button>
                     )}
                   </div>

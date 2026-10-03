@@ -2,14 +2,15 @@ import { notificationHref, notificationTitle } from "@/lib/notification-text";
 import { useAuth } from "@/hooks/use-auth";
 import { hasModuleAccess } from "@/lib/access-policy";
 import {
-  getListEntityRecordsQueryKey, getListNotificationsQueryKey,
+  customFetch, getListEntityRecordsQueryKey, getListNotificationsQueryKey,
   useListEntityRecords, useListNotifications,
 } from "@workspace/api-client-react";
 import {
   AlertTriangle, Bell, Building2, CalendarClock, ClipboardCheck, FileSearch,
-  FolderKanban, Layers, Loader2, Plane, ShieldCheck, Wrench,
+  FolderKanban, Layers, Loader2, Plane, ShieldCheck, Trash2, Wrench,
 } from "lucide-react";
 import { Link } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 
 type RecordItem = {
   id: string;
@@ -64,6 +65,14 @@ export default function Dashboard() {
   const watchlistNotifications = notifications.filter(
     (notification) => !/^leave requests?\b/i.test(notification.message.trim()),
   );
+  const queryClient = useQueryClient();
+  // Anyone can clear an alert that was sent to them once they've seen it.
+  const removeNotification = async (id: string) => {
+    try {
+      await customFetch<void>(`/api/v1/notifications/${encodeURIComponent(id)}`, { method: "DELETE" });
+      await queryClient.invalidateQueries({ queryKey: getListNotificationsQueryKey() });
+    } catch { /* the list refresh shows whether it went */ }
+  };
   const firstName = staff?.name?.split(" ")[0] || "User";
   const unread = notifications.filter((notification) => !notification.read).length;
 
@@ -133,12 +142,14 @@ export default function Dashboard() {
                       <div className="w-[34px] h-[34px] rounded-[9px] shrink-0 bg-[#fff5d6] text-[#F5B301] grid place-items-center"><Bell className="w-[17px] h-[17px]" /></div>
                       <div><b className="text-[13.5px] font-semibold">{notificationTitle(notification.message)}</b><span className="text-xs text-muted-foreground block mt-0.5">{notification.detail || formatDate(notification.at)}{!notification.read && " · Unread"}</span></div>
                     </>;
+                    const remove = <button type="button" className="ml-auto shrink-0 self-start rounded-md p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive" aria-label="Delete alert" title="Delete alert" onClick={(e) => { e.preventDefault(); e.stopPropagation(); void removeNotification(notification.id); }}><Trash2 className="h-4 w-4" /></button>;
                     return notification.reportId ? (
-                      <Link key={notification.id} href={notificationHref(notification.message, notification.reportId, { staff, modules: organizationModules })} className={`${className} rounded-md hover:bg-muted/50 transition-colors`}>
-                        {content}
-                      </Link>
+                      <div key={notification.id} className={`${className} rounded-md hover:bg-muted/50 transition-colors`}>
+                        <Link href={notificationHref(notification.message, notification.reportId, { staff, modules: organizationModules })} className="flex min-w-0 flex-1 gap-3.5">{content}</Link>
+                        {remove}
+                      </div>
                     ) : (
-                      <div key={notification.id} className={className}>{content}</div>
+                      <div key={notification.id} className={className}>{content}{remove}</div>
                     );
                   })}
           </div>
