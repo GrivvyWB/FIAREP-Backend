@@ -265,9 +265,9 @@ export function isElevated(actor: Actor): boolean {
 }
 
 /** Audit history is restricted to the two organization-wide directors. */
+/** The audit log is the administrator's alone — no management position. */
 export function canReadAuditLog(actor: Actor): boolean {
-  return isBoroughDirector(actor) ||
-    (actor.role === "management" && actor.position === "Regional Director");
+  return actor.role === "administrator";
 }
 
 // Shared default rates (waste multiplier, drywall, labor, paint, flooring …)

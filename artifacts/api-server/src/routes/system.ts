@@ -121,7 +121,7 @@ router.put("/v1/settings/:key", async (req, res) => {
 router.get("/v1/audit-log", async (_req, res) => {
   const actor = actorFrom(res);
   if (!canReadAuditLog(actor)) {
-    res.status(403).json({ error: "Audit Log is restricted to Borough and Regional Directors" });
+    res.status(403).json({ error: "Audit Log is restricted to administrators" });
     return;
   }
   const rows = await db

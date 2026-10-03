@@ -151,7 +151,6 @@ export default function ManagementHome() {
       tiles: [
         ...(mode === 'management' && isElevated ? [{ label: unread > 0 ? 'Manage All Requests (' + unread + ')' : 'Manage All Requests', onPress: () => router.push('/manage-requests'), tone: 'solid' as Tone }] : []),
         ...(director ? [{ label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' as Tone }] : []),
-        ...(director ? [{ label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' as Tone }] : []),
         ...(!restricted ? [{ label: 'Default rates', onPress: () => router.push('/settings'), tone: 'tint' as Tone }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
