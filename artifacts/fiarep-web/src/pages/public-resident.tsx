@@ -336,7 +336,7 @@ export default function PublicResident() {
                   )} />
                   {showWater && (
                     <div className="space-y-1.5">
-                      <FormLabel>Water — is it hot or cold?</FormLabel>
+                      <p className="text-sm font-medium">Water — is it hot or cold?</p>
                       <div className="flex gap-2">
                         {['Hot water', 'Cold water'].map((w) => (
                           <Button
