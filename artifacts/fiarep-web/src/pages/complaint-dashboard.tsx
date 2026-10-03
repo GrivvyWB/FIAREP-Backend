@@ -4,6 +4,8 @@ import {
   getListNychaDevelopmentsQueryKey,
   useListEntityRecords,
   useListNychaDevelopments,
+  getSearchNychaAddressesQueryKey,
+  useSearchNychaAddresses,
   type NychaDevelopment,
 } from "@workspace/api-client-react";
 import { 
@@ -91,7 +93,25 @@ function isCorrected(status: string) {
 function addressOf(r: Report, developmentAddress?: string | null) {
   return getField(r, ["address", "buildingAddress", "building"], developmentAddress || "Unknown Address");
 }
-function categoryOf(r: Report) { return getField(r, ["category", "type", "complaintType"], "Uncategorized"); }
+// A complaint's category: what it was filed as, else the trade it was routed
+// to (plumbing, heating, electrical …), else the AI assessment's trade.
+const TRADE_CATEGORY: Record<string, string> = {
+  plumber: "Plumbing", plumbing: "Plumbing", "heating service": "Heating", heating: "Heating",
+  electrician: "Electrical", electrical: "Electrical", carpenter: "Carpentry", carpentry: "Carpentry",
+  painter: "Painting", painting: "Painting", plasterer: "Plastering", plastering: "Plastering",
+  bricklayer: "Masonry", mason: "Masonry", masonry: "Masonry", roofer: "Roofing", roofing: "Roofing",
+  glazier: "Glazing", exterminator: "Pest control", elevator: "Elevator", grounds: "Grounds",
+};
+function categoryOf(r: Report) {
+  const filed = getField(r, ["category", "type", "complaintType"], "");
+  if (filed) return filed;
+  const s = r.state || {};
+  const routed = Array.isArray(s.routedTrades) ? (s.routedTrades as unknown[]).map((t) => String(t || "").trim()).filter(Boolean) : [];
+  const assessment = s.assessment && typeof s.assessment === "object" ? (s.assessment as Record<string, unknown>) : {};
+  const trade = routed[0] || String(assessment.trade || s.trade || "").trim();
+  if (!trade) return "General";
+  return TRADE_CATEGORY[trade.toLowerCase()] || trade.replace(/\b\w/g, (c) => c.toUpperCase());
+}
 function boroughOf(r: Report) { return getField(r, ["borough"], "Unknown"); }
 function tradeOf(r: Report) { return getField(r, ["trade", "assignedTrade", "tradeName"], "Unassigned"); }
 
@@ -180,11 +200,6 @@ export default function ComplaintDashboard() {
   const [selectedDev, setSelectedDev] = useState<string | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
   const selectedCatalogDevelopment = verifiedDevelopmentFor(selectedDev);
-  const selectedHasCoordinates = selectedCatalogDevelopment?.latitude != null
-    && selectedCatalogDevelopment.longitude != null;
-  const mapUrl = selectedHasCoordinates
-    ? mapUrlFor(selectedCatalogDevelopment.latitude!, selectedCatalogDevelopment.longitude!)
-    : NYC_MAP_URL;
 
   const filterOptions = useMemo(() => {
     const boroughs = new Set<string>();
@@ -352,6 +367,20 @@ export default function ComplaintDashboard() {
         .sort((a, b) => sortOrder === "desc" ? b.activeCount - a.activeCount : a.activeCount - b.activeCount)
     : [];
   const selectedBldgData = selectedBuilding ? devBuildings.find(b => b.name === selectedBuilding) : null;
+
+  // The map pins the building with the complaint (the one picked, else the
+  // busiest active one), not the development's catalog headquarters address.
+  const focusAddress = selectedBldgData?.name || devBuildings[0]?.name || "";
+  const focusParams = { development: selectedDev || undefined, query: focusAddress || undefined, limit: 5 };
+  const { data: focusAddresses = [] } = useSearchNychaAddresses(focusParams, {
+    query: { enabled: Boolean(selectedDev && focusAddress), queryKey: getSearchNychaAddressesQueryKey(focusParams), staleTime: 30 * 60 * 1000 },
+  });
+  const focusPin = focusAddresses.find((a) => a.latitude != null && a.longitude != null) || null;
+  const mapLatitude = focusPin?.latitude ?? selectedCatalogDevelopment?.latitude ?? null;
+  const mapLongitude = focusPin?.longitude ?? selectedCatalogDevelopment?.longitude ?? null;
+  const mapAddress = focusPin?.address || focusAddress || selectedCatalogDevelopment?.address || "";
+  const selectedHasCoordinates = mapLatitude != null && mapLongitude != null;
+  const mapUrl = selectedHasCoordinates ? mapUrlFor(mapLatitude!, mapLongitude!) : NYC_MAP_URL;
 
   return (
     <div className="relative min-h-[calc(100vh-4rem)] bg-[#f4f6f9] text-slate-900 pb-8 overflow-hidden font-sans -m-4 md:-m-[28px_30px_40px]">
@@ -554,9 +583,9 @@ export default function ComplaintDashboard() {
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-slate-50 px-6 text-center">
                   <AlertCircle className="h-8 w-8 text-amber-500" />
                   <div className="font-bold text-slate-900">Location unavailable</div>
-                  {selectedCatalogDevelopment?.address && (
+                  {mapAddress && (
                     <div className="text-sm font-semibold text-slate-600">
-                      {selectedCatalogDevelopment.address}
+                      {mapAddress}
                     </div>
                   )}
                 </div>
@@ -572,9 +601,9 @@ export default function ComplaintDashboard() {
                       <div className="absolute inset-x-0 top-4 flex justify-center px-4 pointer-events-none">
                         <div className="max-w-full rounded-full border border-slate-200 bg-white px-4 py-1.5 text-center shadow-lg shadow-red-500/10 ring-1 ring-red-100">
                           <div className="truncate text-sm font-bold text-slate-800">{selectedDev}</div>
-                          {selectedCatalogDevelopment.address && (
+                          {mapAddress && (
                             <div className="truncate text-[10px] font-semibold text-slate-500">
-                              {selectedCatalogDevelopment.address}
+                              {mapAddress}
                             </div>
                           )}
                         </div>
