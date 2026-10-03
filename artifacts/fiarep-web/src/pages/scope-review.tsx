@@ -221,7 +221,9 @@ export default function ScopeReview() {
     {(() => {
       const followed = (allScopes as any[]).filter((row) => {
         const state = row.state || {};
-        return state.handoffTargetId === staff?.id && !["submitted", "draft"].includes(String(state.status || ""));
+        // Only work still in motion. Closed / completed scopes are done — no
+        // job is out on them — so they drop off this list.
+        return state.handoffTargetId === staff?.id && !["submitted", "draft", "closed", "in_house_completed"].includes(String(state.status || ""));
       });
       if (!followed.length) return null;
       const label: Record<string, string> = {
