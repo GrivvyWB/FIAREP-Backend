@@ -59,6 +59,8 @@ function ReferenceLookup({ onUse }: { onUse: (record: LookupRecord) => void }) {
     try {
       const found = await customFetch<LookupResult>(`/api/v1/reference-lookup?ref=${encodeURIComponent(value)}`, { responseType: "json" } as never);
       setResult(found);
+      // The record's development, address and unit go straight into the form.
+      onUse(found.record);
     } catch (error) {
       toast({ variant: "destructive", title: "Not found", description: error instanceof Error ? error.message : "No complaint or violation with that number." });
     } finally { setBusy(false); }
@@ -100,7 +102,6 @@ function ReferenceLookup({ onUse }: { onUse: (record: LookupRecord) => void }) {
             </div>
             {r.description && <p className="mt-1">{r.description}</p>}
             <p className="mt-1 text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}{r.assignedTo ? ` · Assigned to ${r.assignedTo}` : ""}{r.directedToName ? ` · Sent to ${r.directedToName}` : ""}</p>
-            <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => onUse(r)}>Use this address for a new report</Button>
           </div>
           <div>
             <p className="font-medium">Previous issues here ({result!.history.length})</p>
