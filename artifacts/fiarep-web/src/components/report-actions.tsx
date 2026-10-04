@@ -121,7 +121,11 @@ function ReferenceLookup({ onUse }: { onUse: (record: LookupRecord) => void }) {
             <p className="font-medium">Send it to</p>
             <select className={selectClass} value={targetId} onChange={(event) => setTargetId(event.target.value)}>
               <option value="">Choose a supervisor or manager</option>
-              {choices.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.position}{Array.isArray(m.developments) && m.developments.length ? ` · ${m.developments.join(", ")}` : ""}</option>)}
+              {choices.map((m) => {
+                const devs: string[] = Array.isArray(m.developments) ? m.developments : [];
+                const where = devs.length === 0 ? "" : devs.length <= 2 ? ` · ${devs.join(", ")}` : ` · ${devs.length} developments`;
+                return <option key={m.id} value={m.id}>{m.name} · {m.position}{where}</option>;
+              })}
             </select>
             <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Note (optional)" />
             <Button type="button" className="w-full" onClick={() => void send()} disabled={!targetId || sending}>{sending ? "Sending…" : "Send"}</Button>
