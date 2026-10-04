@@ -1770,6 +1770,7 @@ router.post("/v1/:entity/:id/attach-measurement", async (req, res, next) => {
   res.json({ ok: true, notified: recipients.size, alreadyAttached: already });
 });
 
+const FINISHED_SENT_ON = new Set(["work_approved", "approved", "completed", "done", "resolved", "closed", "in_house_completed", "denied", "cancelled"]);
 router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
   const entity = req.params["entity"];
   if (!validEntity(entity) || !["resident-reports", "building-violations"].includes(entity)) { next(); return; }
@@ -1825,8 +1826,28 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
     directedTo = target.name || "";
     // Asking a specific supervisor sends the complaint to them: record it on
     // the complaint so it shows in their inbox and Reports until it's assigned.
+    const now = new Date().toISOString();
+    const patch: Record<string, unknown> = { directedToStaffId: target.id, directedToName: target.name, directedAt: now };
+    // A finished complaint sent to another supervisor to check becomes an
+    // open complaint again for them: back to submitted, assignment cleared,
+    // so they can send it to their own team. The earlier work stays in the
+    // history.
+    const currentStatus = String(report.state["status"] || "").toLowerCase();
+    if (FINISHED_SENT_ON.has(currentStatus)) {
+      const updates = Array.isArray(report.state["updates"]) ? (report.state["updates"] as unknown[]) : [];
+      Object.assign(patch, {
+        status: "submitted",
+        reopenedAt: now, reopenedById: actor.id, reopenedByName: actor.name, reopenedFromStatus: currentStatus,
+        assignedStaffId: null, assignedTo: null, assignedAt: null, assignedByStaffId: null,
+        completedAt: null, completedByName: null, completedBy: null, completionNote: null,
+        workApprovedAt: null, workApprovedByName: null,
+        updates: [...updates, { at: now, by: actor.name || "management", status: "submitted", note: `Reopened and sent to ${target.name} to check: ${note}` }],
+      });
+      // Its prior alerts are stale now.
+      await db.delete(notifications).where(and(eq(notifications.tenantId, actor.tenantId), eq(notifications.reportId, report.id)));
+    }
     await db.update(entityRecords)
-      .set({ state: sql`${entityRecords.state} || ${JSON.stringify({ directedToStaffId: target.id, directedToName: target.name, directedAt: new Date().toISOString() })}::jsonb` })
+      .set({ state: sql`${entityRecords.state} || ${JSON.stringify(patch)}::jsonb`, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() })
       .where(and(eq(entityRecords.id, report.id), eq(entityRecords.tenantId, actor.tenantId)));
   } else {
     recipients = await routedComplaintRecipientIds(actor.tenantId, development, report.state, entity === "building-violations");
@@ -1836,7 +1857,7 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
       id: randomUUID(),
       tenantId: actor.tenantId,
       target,
-      message: "Urgent: assignment requested",
+      message: FINISHED_SENT_ON.has(String(report.state["status"] || "").toLowerCase()) && rawTarget ? "Complaint reopened and sent to you" : "Urgent: assignment requested",
       detail: `${actor.name || "Management"}: ${note}${complaintNo ? ` \u00b7 ${complaintNo}` : ""}`,
       reportId: report.id,
     }))).returning();

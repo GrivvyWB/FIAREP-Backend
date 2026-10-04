@@ -77,6 +77,7 @@ function ReferenceLookup({ onUse }: { onUse: (record: LookupRecord) => void }) {
       const who = choices.find((m) => m.id === targetId);
       toast({ title: `${result.record.ref || "Record"} sent to ${who?.name || "the supervisor"}` });
       setNote("");
+      await lookup();
     } catch (error) {
       toast({ variant: "destructive", title: "Could not send", description: error instanceof Error ? error.message : "Please try again." });
     } finally { setSending(false); }
