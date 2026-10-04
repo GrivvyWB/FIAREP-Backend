@@ -1136,6 +1136,22 @@ router.post("/v1/:entity", async (req, res, next) => {
       assignedTo: actor.name,
     };
   }
+  // A trade supervisor (plumbing, electrical, CPM Supervisor …) normally acts
+  // on a complaint only once it is sent to them. One they file themselves is
+  // theirs from the start: mark it sent to them so they can assign it.
+  if (
+    entity === "resident-reports" &&
+    actor.role === "management" &&
+    waitsToBeSentComplaints(actor) &&
+    typeof createdState["directedToStaffId"] !== "string"
+  ) {
+    createdState = {
+      ...createdState,
+      directedToStaffId: actor.id,
+      directedToName: actor.name,
+      directedAt: new Date().toISOString(),
+    };
+  }
   const canonicalCreated = await canonicalizeAssignment(
     actor,
     entity,
