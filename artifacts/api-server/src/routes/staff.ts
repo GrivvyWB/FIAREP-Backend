@@ -105,7 +105,7 @@ function safe(
   const permissions = actor
     ? {
         canManage: canManageStaff(actor, staff),
-        canResetCode: actor.role === "human_resources" && canManageStaff(actor, staff),
+        canResetCode: actor.role === "administrator" || (actor.role === "human_resources" && canManageStaff(actor, staff)),
         canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
         canDelete:
           actor.id !== staff.id &&
@@ -129,7 +129,7 @@ function issueSafe(
       actor.role === "human_resources" || actor.role === "administrator",
     ),
     canManage: canManageStaff(actor, staff),
-    canResetCode: actor.role === "human_resources" && canManageStaff(actor, staff),
+    canResetCode: actor.role === "administrator" || (actor.role === "human_resources" && canManageStaff(actor, staff)),
     canRevoke: canManageStaff(actor, staff) && staff.status !== "revoked",
     canDelete:
       actor.id !== staff.id &&
@@ -677,8 +677,12 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     res.status(404).json({ error: "Staff account not found" });
     return;
   }
-  if (actor.role !== "human_resources" || !canManageStaff(actor, target)) {
-    res.status(403).json({ error: "Only Human Resources may issue a replacement code" });
+  // HR issues replacement codes for the staff it manages. An administrator
+  // may reset anyone's — including HR's own — so nobody is ever locked out
+  // with no one able to help.
+  const adminReset = actor.role === "administrator";
+  if (!adminReset && (actor.role !== "human_resources" || !canManageStaff(actor, target))) {
+    res.status(403).json({ error: "Only Human Resources or an administrator may issue a replacement code" });
     return;
   }
   if (req.body && "code" in req.body) {
@@ -692,7 +696,8 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     sql`${entityRecords.state}->>'employeeStaffId' = ${target.id}`,
   )).limit(1);
   const employeeEmail = String(employeeRecord?.state["email"] || "").trim();
-  if (!employeeEmail.includes("@")) {
+  const canEmail = employeeEmail.includes("@");
+  if (!canEmail && !adminReset) {
     res.status(400).json({ error: "Add the employee email address before issuing a replacement code" });
     return;
   }
@@ -711,7 +716,7 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     const nextEmailAt = current?.codeEmailedAt
       ? new Date(current.codeEmailedAt.getTime() + CODE_EMAIL_COOLDOWN_MS)
       : null;
-    if (nextEmailAt && nextEmailAt.getTime() > Date.now() && !needsTruckCodeUpgrade) {
+    if (canEmail && !adminReset && nextEmailAt && nextEmailAt.getTime() > Date.now() && !needsTruckCodeUpgrade) {
       throw Object.assign(new Error("Next email in 24 hrs for code"), { status: 429, nextEmailAt });
     }
     let existingUnit: { id: string; state: Record<string, unknown> } | undefined;
@@ -833,6 +838,7 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
         eq(entityRecords.tenantId, actor.tenantId),
       ));
     }
+    if (!canEmail) return { updated, emailedCode: false };
     await emailStaffAccessCode({
       email: employeeEmail,
       employeeName: updated.name,
@@ -846,7 +852,7 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
       eq(staffAccounts.tenantId, actor.tenantId),
     )).returning();
     if (!emailed) throw Object.assign(new Error("Staff account not found"), { status: 404 });
-    return { updated: emailed };
+    return { updated: emailed, emailedCode: true };
   }).catch((error: any) => {
     if (error?.status) {
       res.status(error.status).json({
@@ -859,9 +865,9 @@ router.post("/v1/staff/:id/reset-code", async (req, res) => {
     return null;
   });
   if (!updatedResult) return;
-  const { updated } = updatedResult;
+  const { updated, emailedCode } = updatedResult;
   await audit(actor, "staff.code_reset", `Reset code for ${updated.name}`, updated.id);
-  await audit(actor, "staff.code_emailed", `Emailed replacement access code to ${updated.name}`, updated.id);
+  if (emailedCode) await audit(actor, "staff.code_emailed", `Emailed replacement access code to ${updated.name}`, updated.id);
   res.json(issueSafe(updated, actor));
 });
 

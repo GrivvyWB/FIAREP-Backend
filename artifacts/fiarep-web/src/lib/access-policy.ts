@@ -80,7 +80,9 @@ export function hasModuleAccess(
   if (OPT_IN_MODULES.has(module) && organizationModules?.[module] !== true) return false;
   // The Team (staff management) page is restricted to Human Resources only —
   // no other role, including Administrator or Borough Director, sees it.
-  if (module === "team") return staff.role === "human_resources";
+  // Team: HR runs it; an administrator gets in too, so a locked-out HR
+  // account (or anyone) can have its access code reset by someone.
+  if (module === "team") return staff.role === "human_resources" || staff.role === "administrator";
   // Measurements are a field tool (the app). Management, supervisors and
   // administrators don't get the website page; only the people who take
   // measurements in the field (workers, CPMs, inspectors) see them.
