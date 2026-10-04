@@ -1,7 +1,8 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   NYCHA_DEVELOPMENT_NAMES,
+  customFetch,
   useCreateEntityRecord,
   useSearchNychaAddresses,
   type Staff,
@@ -25,6 +26,109 @@ function newId() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
     : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+type LookupRecord = {
+  id: string; entity: string; ref: string; status: string; description: string; location: string; unit: string;
+  assignedTo: string; createdAt: string; directedToName: string; development?: string; address?: string; reporterName?: string;
+};
+type LookupResult = { record: LookupRecord; history: LookupRecord[] };
+
+/** Supervisors only: type a complaint / violation number, see the address and
+ * everything logged there before, and send it to whoever should handle it. */
+function ReferenceLookup({ onUse }: { onUse: (record: LookupRecord) => void }) {
+  const { toast } = useToast();
+  const [ref, setRef] = useState("");
+  const [result, setResult] = useState<LookupResult | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [targetId, setTargetId] = useState("");
+  const [note, setNote] = useState("");
+  const [sending, setSending] = useState(false);
+  const { data: supervisors = [] } = useQuery({
+    queryKey: ["staff-supervisors"],
+    queryFn: () => customFetch<any[]>("/api/v1/staff/supervisors"),
+    staleTime: 60_000,
+  });
+  const choices = (supervisors as any[]).filter((m) => m && String(m.position || "") !== "Director" &&
+    !["procurement", "human_resources", "vendor", "resident", "worker", "emergency"].includes(String(m.role || "")));
+
+  async function lookup() {
+    const value = ref.trim();
+    if (!value) return;
+    setBusy(true); setResult(null); setTargetId("");
+    try {
+      const found = await customFetch<LookupResult>(`/api/v1/reference-lookup?ref=${encodeURIComponent(value)}`, { responseType: "json" } as never);
+      setResult(found);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Not found", description: error instanceof Error ? error.message : "No complaint or violation with that number." });
+    } finally { setBusy(false); }
+  }
+
+  async function send() {
+    if (!result || !targetId) return;
+    setSending(true);
+    try {
+      await customFetch(`/api/v1/${result.record.entity}/${result.record.id}/request-assignment`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: note.trim() || "Please handle this.", targetStaffId: targetId }), responseType: "json",
+      } as never);
+      const who = choices.find((m) => m.id === targetId);
+      toast({ title: `${result.record.ref || "Record"} sent to ${who?.name || "the supervisor"}` });
+      setNote("");
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not send", description: error instanceof Error ? error.message : "Please try again." });
+    } finally { setSending(false); }
+  }
+
+  const r = result?.record;
+  return (
+    <div className="rounded-lg border border-dashed border-border bg-muted/30 p-3 space-y-2">
+      <p className="text-sm font-medium">Have a complaint / violation #?</p>
+      <div className="flex gap-2">
+        <Input value={ref} onChange={(event) => setRef(event.target.value.toUpperCase())} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); void lookup(); } }} placeholder="e.g. RC-12345 or violation #" />
+        <Button type="button" variant="outline" onClick={() => void lookup()} disabled={busy || !ref.trim()}>{busy ? "Looking…" : "Look up"}</Button>
+      </div>
+      {r && (
+        <div className="space-y-2 text-sm">
+          <div className="rounded-md border bg-background p-3">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p className="font-semibold">{r.ref} · {r.entity === "building-violations" ? "Violation" : "Complaint"}</p>
+                <p className="text-muted-foreground">{[r.development, r.address, r.unit ? `Unit ${r.unit}` : ""].filter(Boolean).join(" · ")}</p>
+              </div>
+              <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold capitalize">{r.status.replace(/_/g, " ")}</span>
+            </div>
+            {r.description && <p className="mt-1">{r.description}</p>}
+            <p className="mt-1 text-xs text-muted-foreground">{new Date(r.createdAt).toLocaleString()}{r.assignedTo ? ` · Assigned to ${r.assignedTo}` : ""}{r.directedToName ? ` · Sent to ${r.directedToName}` : ""}</p>
+            <Button type="button" variant="link" className="h-auto p-0 text-xs" onClick={() => onUse(r)}>Use this address for a new report</Button>
+          </div>
+          <div>
+            <p className="font-medium">Previous issues here ({result!.history.length})</p>
+            {result!.history.length === 0 ? <p className="text-muted-foreground">None on file for this address{r.unit ? " / unit" : ""}.</p> : (
+              <ul className="mt-1 max-h-40 space-y-1 overflow-y-auto">
+                {result!.history.map((h) => (
+                  <li key={h.id} className="rounded-md border bg-background px-2 py-1.5">
+                    <span className="font-medium">{h.ref || (h.entity === "building-violations" ? "Violation" : "Complaint")}</span>
+                    <span className="text-muted-foreground"> · {new Date(h.createdAt).toLocaleDateString()} · {h.status.replace(/_/g, " ")}</span>
+                    {h.description && <div className="text-muted-foreground">{h.description}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="space-y-2 rounded-md border bg-background p-3">
+            <p className="font-medium">Send it to</p>
+            <select className={selectClass} value={targetId} onChange={(event) => setTargetId(event.target.value)}>
+              <option value="">Choose a supervisor or manager</option>
+              {choices.map((m) => <option key={m.id} value={m.id}>{m.name} · {m.position}{Array.isArray(m.developments) && m.developments.length ? ` · ${m.developments.join(", ")}` : ""}</option>)}
+            </select>
+            <Input value={note} onChange={(event) => setNote(event.target.value)} placeholder="Note (optional)" />
+            <Button type="button" className="w-full" onClick={() => void send()} disabled={!targetId || sending}>{sending ? "Sending…" : "Send"}</Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** "Create report" button + dialog: a manager files a complaint (e.g. a building issue). */
@@ -100,12 +204,19 @@ export function CreateReportButton() {
     <>
       <Button onClick={() => setOpen(true)} data-testid="button-create-report">Create report</Button>
       <Dialog open={open} onOpenChange={(value) => { setOpen(value); if (!value) reset(); }}>
-        <DialogContent className="sm:max-w-[540px]">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[560px]">
           <DialogHeader>
             <DialogTitle>Create report</DialogTitle>
             <DialogDescription>File a complaint for a building or unit. It appears in Reports ready to assign.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
+            {actor?.role === "management" && (
+              <ReferenceLookup onUse={(record) => {
+                if (record.development) setDevelopment(record.development);
+                if (record.address) setAddress(record.address);
+                if (record.unit) { setUnit(record.unit); setLocation("Apartment/Unit"); }
+              }} />
+            )}
             <div>
               <p className="mb-1 text-sm font-medium">Location</p>
               <select className={selectClass} value={location} onChange={(event) => setLocation(event.target.value)}>

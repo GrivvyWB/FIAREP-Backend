@@ -129,6 +129,72 @@ function containsHrProtectedFields(value: Record<string, unknown>): boolean {
   return Object.keys(value).some((key) => isHrProtectedField(key));
 }
 
+// Supervisors look a complaint / violation up by its number (RC-12345,
+// a violation number, a tracking id) and get the record plus every other
+// issue logged at that address / unit, so they can send it to whoever
+// should handle it.
+router.get("/v1/reference-lookup", async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.role !== "management" && actor.role !== "administrator") {
+    res.status(403).json({ error: "Only supervisors and management may look up a complaint or violation number" });
+    return;
+  }
+  const ref = String(req.query["ref"] || "").trim().toUpperCase();
+  if (ref.length < 3) { res.status(400).json({ error: "Enter the complaint or violation number" }); return; }
+  const like = `%${ref.replace(/[%_\\]/g, (c) => "\\" + c)}%`;
+  const candidates = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+    inArray(entityRecords.entity, ["resident-reports", "building-violations"]),
+    or(
+      sql`upper(${entityRecords.state}->>'complaintNo') LIKE ${like}`,
+      sql`upper(${entityRecords.state}->>'violationNo') LIKE ${like}`,
+      sql`upper(${entityRecords.state}->>'trackingId') LIKE ${like}`,
+      sql`upper(${entityRecords.state}->>'sourceRef') LIKE ${like}`,
+    ),
+  )).orderBy(desc(entityRecords.createdAt)).limit(5);
+  const exact = candidates.find((row) => [row.state["complaintNo"], row.state["violationNo"], row.state["trackingId"]]
+    .some((v) => String(v || "").trim().toUpperCase() === ref)) || candidates[0];
+  if (!exact || !(await canReadRecordForActor(actor, exact))) {
+    res.status(404).json({ error: "No complaint or violation with that number" });
+    return;
+  }
+  const st = exact.state as Record<string, unknown>;
+  const address = String(st["address"] || st["building"] || "").trim();
+  const unit = String(st["unit"] || "").trim();
+  const norm = (v: unknown) => String(v || "").trim().toLowerCase().replace(/\s+/g, " ");
+  const summary = (row: typeof entityRecords.$inferSelect) => {
+    const s = row.state as Record<string, unknown>;
+    return {
+      id: row.id, entity: row.entity,
+      ref: String(s["complaintNo"] || s["violationNo"] || s["trackingId"] || ""),
+      status: String(s["status"] || ""),
+      description: String(s["description"] || s["issue"] || s["title"] || "").slice(0, 200),
+      location: String(s["location"] || ""), unit: String(s["unit"] || ""),
+      assignedTo: String(s["assignedTo"] || ""), createdAt: row.createdAt,
+      directedToName: String(s["directedToName"] || ""),
+    };
+  };
+  let history: ReturnType<typeof summary>[] = [];
+  if (address) {
+    const rows = await db.select().from(entityRecords).where(and(
+      eq(entityRecords.tenantId, actor.tenantId),
+      eq(entityRecords.deleted, false),
+      inArray(entityRecords.entity, ["resident-reports", "building-violations"]),
+      sql`lower(coalesce(${entityRecords.state}->>'address', ${entityRecords.state}->>'building', '')) = ${norm(address)}`,
+    )).orderBy(desc(entityRecords.createdAt)).limit(60);
+    history = rows
+      .filter((row) => row.id !== exact.id && (!unit || norm((row.state as Record<string, unknown>)["unit"]) === norm(unit)))
+      .slice(0, 20).map(summary);
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.json({
+    record: { ...summary(exact), development: exact.development || String(st["development"] || ""), address, unit, version: exact.version,
+      reporterName: String(st["reporterName"] || ""), createdAt: exact.createdAt },
+    history,
+  });
+});
+
 router.get("/v1/deletion-policy", async (_req, res) => {
   const actor = actorFrom(res);
   const [organization] = await db
