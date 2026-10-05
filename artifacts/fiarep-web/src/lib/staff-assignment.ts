@@ -204,6 +204,9 @@ function titleFamily(position: string) {
 }
 
 export function roleForPosition(position: string): Staff["role"] {
+  // Community Coordinator titles are their own unit, supervisor included —
+  // never management.
+  if (/^community coordinator( supervisor)?$/i.test(position.trim())) return "community_coordinator" as Staff["role"];
   if (position === "CPM" || position === "Inspector") return "inspector";
   if (position === "Procurement") return "procurement";
   if (

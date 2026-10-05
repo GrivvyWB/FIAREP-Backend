@@ -1194,6 +1194,7 @@ router.put("/v1/staff/:id/assignment", async (req, res) => {
     "Assistant Superintendent",
   ]);
   if (
+    role !== "community_coordinator" &&
     (developmentRequiredPositions.has(position) || position.toLowerCase().includes("supervisor")) &&
     developments.length === 0
   ) {

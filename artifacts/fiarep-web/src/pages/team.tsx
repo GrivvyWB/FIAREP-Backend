@@ -647,7 +647,7 @@ export default function Team() {
               setActionError("");
             }}
             data-testid={`button-move-member-${member.id}`}
-          ><MoveRight className="mr-1 h-3 w-3" />Move</Button>}
+          ><MoveRight className="mr-1 h-3 w-3" />Move / change title</Button>}
           {actor?.role === "human_resources" && member.status === "approved" && <Button size="sm" variant="outline" onClick={() => {
             const params = new URLSearchParams({
               new: "1",
@@ -884,6 +884,7 @@ export default function Team() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Move {moveTarget?.name}</DialogTitle>
+            <DialogDescription>Change the title (promote or demote) and the developments they cover. Access follows the title from their next sign-in.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
              <div>
