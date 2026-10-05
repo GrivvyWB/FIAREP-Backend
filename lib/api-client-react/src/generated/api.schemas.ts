@@ -622,6 +622,7 @@ export const StaffRole = {
   vendor: 'vendor',
   resident: 'resident',
   emergency: 'emergency',
+  community_coordinator: 'community_coordinator',
 } as const;
 
 export type StaffPosition = typeof StaffPosition[keyof typeof StaffPosition];
@@ -674,6 +675,8 @@ export const StaffPosition = {
   Human_Resources: 'Human Resources',
   Procurement: 'Procurement',
   Janitorial_Staff: 'Janitorial Staff',
+  Community_Coordinator: 'Community Coordinator',
+  Community_Coordinator_Supervisor: 'Community Coordinator Supervisor',
   Other: 'Other',
 } as const;
 
@@ -813,6 +816,7 @@ export const StaffInputRole = {
   procurement: 'procurement',
   vendor: 'vendor',
   emergency: 'emergency',
+  community_coordinator: 'community_coordinator',
 } as const;
 
 export type StaffInputPosition = typeof StaffInputPosition[keyof typeof StaffInputPosition];
@@ -865,6 +869,8 @@ export const StaffInputPosition = {
   Human_Resources: 'Human Resources',
   Procurement: 'Procurement',
   Janitorial_Staff: 'Janitorial Staff',
+  Community_Coordinator: 'Community Coordinator',
+  Community_Coordinator_Supervisor: 'Community Coordinator Supervisor',
   Other: 'Other',
 } as const;
 
@@ -919,6 +925,7 @@ export const StaffAssignmentUpdateRole = {
   procurement: 'procurement',
   vendor: 'vendor',
   emergency: 'emergency',
+  community_coordinator: 'community_coordinator',
 } as const;
 
 export interface StaffAssignmentUpdate {

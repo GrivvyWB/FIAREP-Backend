@@ -8,7 +8,8 @@ export type StaffModule =
   | "clients" | "team" | "violations" | "procurement" | "scope-review"
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
-   | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections";
+   | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections"
+   | "community";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -28,6 +29,15 @@ const CPM_ONLY_MODULES = new Set<StaffModule>([
   "change-orders",
 ]);
 
+/** Community Coordinators (field outreach) and their supervisor. Their
+ * records stay inside that unit; they see nothing else on the website. */
+export function isCommunityCoordinator(staff: Staff | null | undefined): boolean {
+  return String(staff?.role || "") === "community_coordinator";
+}
+export function isCommunityCoordinatorSupervisor(staff: Staff | null | undefined): boolean {
+  return isCommunityCoordinator(staff) && sameTitle(staff?.position, "Community Coordinator Supervisor");
+}
+
 export function isSupervisor(staff: Staff | null | undefined): boolean {
   const position = staff?.position?.trim().toLowerCase() || "";
   return isSupervisorTitle(position) ||
@@ -44,7 +54,7 @@ export function isSupervisor(staff: Staff | null | undefined): boolean {
 export function isCoverageEligible(staff: Staff | null | undefined): boolean {
   if (!staff) return false;
   if (staff.role === "administrator") return true;
-  if (["human_resources", "procurement", "vendor", "resident", "worker", "emergency"].includes(staff.role)) {
+  if (["human_resources", "procurement", "vendor", "resident", "worker", "emergency", "community_coordinator"].includes(staff.role)) {
     return false;
   }
   return isSupervisor(staff);
@@ -78,6 +88,10 @@ export function hasModuleAccess(
   // Opt-in modules are OFF until the platform owner enables them for the
   // organization (Platform -> Module Management). Keeps parity with mobile.
   if (OPT_IN_MODULES.has(module) && organizationModules?.[module] !== true) return false;
+  // Community Coordinators: their own section, alerts and settings — nothing else,
+  // and nobody else gets their section.
+  if (module === "community") return isCommunityCoordinator(staff);
+  if (isCommunityCoordinator(staff)) return module === "notifications" || module === "settings";
   // The Team (staff management) page is restricted to Human Resources only —
   // no other role, including Administrator or Borough Director, sees it.
   // Team: HR runs it; an administrator gets in too, so a locked-out HR

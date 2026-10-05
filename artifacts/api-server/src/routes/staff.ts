@@ -191,6 +191,9 @@ function canHrAssignPositionRole(position: string, role: string): boolean {
     "Housing Assistant",
     "Director",
   ]);
+  const communityPosition = position === "Community Coordinator" || position === "Community Coordinator Supervisor";
+  if (role === "community_coordinator") return communityPosition;
+  if (communityPosition) return false;
   const managementPosition =
     managementPositions.has(position) ||
     position.toLowerCase().includes("supervisor");
@@ -399,6 +402,10 @@ router.post("/v1/staff", async (req, res) => {
     res.status(400).json({ error: "Truck designation is limited to emergency maintenance workers" });
     return;
   }
+  if (position.startsWith("Community Coordinator") !== (role === "community_coordinator")) {
+    res.status(400).json({ error: "Community Coordinator titles go with the Community Coordinator role" });
+    return;
+  }
   const developmentRequiredPositions = new Set([
     "Regional Director",
     "Assistant Regional Director",
@@ -408,6 +415,7 @@ router.post("/v1/staff", async (req, res) => {
     "Assistant Superintendent",
   ]);
   if (
+    role !== "community_coordinator" &&
     (developmentRequiredPositions.has(position) ||
       position.toLowerCase().includes("supervisor")) &&
     developments.length === 0

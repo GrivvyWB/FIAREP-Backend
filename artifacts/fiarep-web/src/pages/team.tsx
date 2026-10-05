@@ -41,7 +41,7 @@ const allRoles = Object.values(StaffRole).filter((r) => r !== "resident");
 const roleLabels: Record<string, string> = {
   administrator: "Administrator", human_resources: "Human Resources", management: "Management", worker: "Worker",
   inspector: "Inspector", cpm: "CPM", procurement: "Procurement", vendor: "Vendor",
-  resident: "Resident", emergency: "Emergency",
+  resident: "Resident", emergency: "Emergency", community_coordinator: "Community Coordinator",
 };
 
 const HR_DISPLAY_MEMBER_IDS = new Set([
@@ -155,7 +155,7 @@ export default function Team() {
       return hasActiveHr ? ["administrator"] : ["human_resources", "administrator"];
     }
     if (actor.role === "human_resources") {
-      return ["management", "worker", "inspector", "cpm", "procurement", "emergency"];
+      return ["management", "worker", "inspector", "cpm", "procurement", "emergency", "community_coordinator"];
     }
     if (actor.role === "administrator") {
       return allRoles
@@ -399,6 +399,7 @@ export default function Team() {
     setRole(nextRole);
     if (nextRole === "human_resources") setPosition("Human Resources");
     if (nextRole === "procurement") setPosition("Procurement");
+    if (nextRole === "community_coordinator") setPosition("Community Coordinator");
     if (nextRole === "administrator" && actor?.position === "Borough Director") {
       setPosition("Borough Director");
     }

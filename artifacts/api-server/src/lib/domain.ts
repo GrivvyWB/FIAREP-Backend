@@ -21,7 +21,34 @@ export const STAFF_ROLES = new Set([
   "vendor",
   "resident",
   "emergency",
+  "community_coordinator",
 ]);
+
+/**
+ * Community Coordinators go door to door: resident and owner contact details,
+ * how many apartments a building has, and the critical things tenants tell
+ * them. That information stays inside their unit — the coordinator who logged
+ * it and the Community Coordinator Supervisor. Not administrators, directors,
+ * HR or any other supervisor.
+ */
+export const COMMUNITY_ENTITIES = new Set(["community-residents", "community-buildings"]);
+export function isCommunityEntity(entity: string): boolean {
+  return COMMUNITY_ENTITIES.has(entity);
+}
+export function isCommunityCoordinator(actor: Pick<Actor, "role">): boolean {
+  return actor.role === "community_coordinator";
+}
+export function isCommunityCoordinatorSupervisor(actor: Pick<Actor, "role" | "position">): boolean {
+  return actor.role === "community_coordinator" &&
+    sameTitle(actor.position, "Community Coordinator Supervisor");
+}
+export function canReadCommunityRecord(
+  actor: Pick<Actor, "id" | "role" | "position">,
+  row: { createdBy: string | null; deleted: boolean },
+): boolean {
+  if (!isCommunityCoordinator(actor) || row.deleted) return false;
+  return isCommunityCoordinatorSupervisor(actor) || row.createdBy === actor.id;
+}
 
 const PUBLIC_ACCESS_ROLES = new Set(["resident", "vendor"]);
 
@@ -109,6 +136,8 @@ export const STAFF_POSITIONS = [
   "Bricklayer",
   "Bricklayer Supervisor",
   "Heating Service Supervisor",
+  "Community Coordinator",
+  "Community Coordinator Supervisor",
 ] as const;
 
 /**
@@ -164,6 +193,8 @@ export const ENTITIES = new Set([
   "hr-training-compliance",
   "hr-exits",
   "hr-approvals",
+  "community-residents",
+  "community-buildings",
 ]);
 
 export const HR_ENTITIES = new Set([
@@ -338,7 +369,7 @@ export function isSupervisorPosition(actor: Actor): boolean {
  */
 export function isCoverageEligible(actor: Actor): boolean {
   if (actor.role === "administrator") return true;
-  if (["human_resources", "procurement", "vendor", "resident", "worker", "emergency"].includes(actor.role)) {
+  if (["human_resources", "procurement", "vendor", "resident", "worker", "emergency", "community_coordinator"].includes(actor.role)) {
     return false;
   }
   return isManagementSupervisor(actor) || isSupervisorPosition(actor);
@@ -377,6 +408,10 @@ export function canBrowseStaffDirectory(actor: Actor): boolean {
 }
 
 export function canReadEntity(actor: Actor, entity: string): boolean {
+  // Community outreach records: the coordinator unit only — not even an
+  // administrator. Coordinators, in turn, see nothing else.
+  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
+  if (isCommunityCoordinator(actor)) return false;
   if (actor.role === "administrator") return true;
   const isEmergencyMaintenance =
     actor.role === "emergency" && actor.position === "Maintenance Worker";
@@ -526,6 +561,8 @@ export function entityDevelopmentAllowed(
   ) {
     return false;
   }
+  // Outreach happens at any building, NYCHA or private.
+  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
   return developmentAllowed(actor, development);
 }
 
@@ -650,6 +687,8 @@ export function canReadEntityRecord(
   // here prevents synchronous consumers from accidentally bypassing the
   // supervisory scope boundary.
   if (isHrEntity(row.entity)) return false;
+  if (isCommunityEntity(row.entity)) return canReadCommunityRecord(actor, row);
+  if (isCommunityCoordinator(actor)) return false;
   if (
     row.entity === "building-violations" &&
     isCpmSupervisor(actor) &&
@@ -772,6 +811,8 @@ export function canUploadToEntityRecord(
 }
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
+  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
+  if (isCommunityCoordinator(actor)) return false;
   // The vendor email list belongs to Procurement.
   if (entity === "vendor-contacts") return actor.role === "procurement" || actor.role === "administrator";
   const isEmergencyMaintenance =
@@ -841,6 +882,10 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 }
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
+  // A coordinator edits their own entries (the record read rule scopes it);
+  // the Community Coordinator Supervisor edits any.
+  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
+  if (isCommunityCoordinator(actor)) return false;
   // The vendor email list belongs to Procurement.
   if (entity === "vendor-contacts") return actor.role === "procurement" || actor.role === "administrator";
   const isEmergencyMaintenance =
@@ -889,6 +934,9 @@ export function canDeleteEntity(
   if (entity === "resident-reports") {
     return actor.role === "administrator" || canDeleteOperationalRecords(actor);
   }
+  // Community outreach records: the Community Coordinator Supervisor only.
+  if (isCommunityEntity(entity)) return isCommunityCoordinatorSupervisor(actor);
+  if (isCommunityCoordinator(actor)) return false;
   // Leave requests: HR only (a mistake — wrong person). Nobody else.
   if (entity === "leave-requests") return canHrDeleteLeave(actor, entity);
   if (actor.role === "administrator") return true;
@@ -1296,6 +1344,7 @@ export function canPerformEntityAction(
   action: string,
   state: Record<string, unknown>,
 ): boolean {
+  if (isCommunityEntity(entity) || isCommunityCoordinator(actor)) return false;
   if (isHrEntity(entity)) {
     if (entity === "hr-approvals") {
       return action === "approve" &&

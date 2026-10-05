@@ -347,7 +347,7 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
       ? record.state["assignedDevelopments"].filter((value): value is string => typeof value === "string" && Boolean(value.trim()))
       : [];
     if (!firstName || !lastName || !email.includes("@") ||
-        !["management", "worker", "inspector", "procurement", "emergency"].includes(role) ||
+        !["management", "worker", "inspector", "procurement", "emergency", "community_coordinator"].includes(role) ||
         position === "Borough Director" ||
         !isAcceptedStaffPosition(position) ||
         !canIssueStaffAccountRole(role)) {

@@ -43,6 +43,7 @@ import HudInspections from '@/pages/hud-inspections';
 import InspectionApprovals from '@/pages/inspection-approvals';
 import MyInspections from '@/pages/my-inspections';
 import ComplaintDashboard from '@/pages/complaint-dashboard';
+import CommunityCoordinators from '@/pages/community';
 
 // Owner Pages
 import Access from '@/pages/access';
@@ -238,6 +239,7 @@ function AppRouter() {
           <Route path="/settings" component={SettingsRoute} />
           <Route path="/shared-data" component={SharedDataRoute} />
           <Route path="/complaint-dashboard" component={ComplaintDashboardRoute} />
+          <Route path="/community" component={CommunityRoute} />
           <Route path="/platform" component={Platform} />
           <Route component={NotFound} />
         </Switch>
@@ -251,12 +253,13 @@ function ModuleRoute({ module, children }: { module: StaffModule; children: Reac
   const { staff, organizationModules } = useAuth();
   const allowed = hasModuleAccess(staff, module, organizationModules);
   useEffect(() => {
-    if (!allowed) setLocation(staff?.role === "procurement" ? "/procurement" : "/dashboard");
+    if (!allowed) setLocation(staff?.role === "procurement" ? "/procurement" : String(staff?.role) === "community_coordinator" ? "/community" : "/dashboard");
   }, [allowed, setLocation, staff?.role]);
   return allowed ? <>{children}</> : null;
 }
 
 const DashboardRoute = () => <ModuleRoute module="dashboard"><Dashboard /></ModuleRoute>;
+const CommunityRoute = () => <ModuleRoute module="community"><CommunityCoordinators /></ModuleRoute>;
 const InspectionsRoute = () => <ModuleRoute module="inspections"><Inspections /></ModuleRoute>;
 const HudInspectionsRoute = () => <ModuleRoute module="hud-inspections"><HudInspections /></ModuleRoute>;
 const InspectionApprovalsRoute = () => <ModuleRoute module="inspection-approvals"><InspectionApprovals /></ModuleRoute>;

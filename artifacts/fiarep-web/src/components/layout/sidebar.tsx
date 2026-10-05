@@ -1,7 +1,7 @@
 import { isCpmSupervisorTitle } from "@/lib/titles";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { hasModuleAccess, isProcurementDesk } from "@/lib/access-policy";
+import { hasModuleAccess, isCommunityCoordinator, isProcurementDesk } from "@/lib/access-policy";
 import { 
   LayoutDashboard, 
   ClipboardCheck, 
@@ -38,6 +38,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" as const },
     { name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const },
+    { name: "Community Coordinators", href: "/community", icon: UsersRound, module: "community" as const },
     { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },
     { name: "HUD Inspections", href: "/hud-inspections", icon: ClipboardCheck, module: "hud-inspections" as const },
     { name: "Inspection Approvals", href: "/inspection-approvals", icon: ClipboardCheck, module: "inspection-approvals" as const },
@@ -70,6 +71,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     ...((staff?.role === "management" || staff?.role === "administrator") ? [
       { name: "Manage All Requests", href: "/notifications", icon: BellRing, module: "notifications" as const },
     ] : []),
+    ...(isCommunityCoordinator(staff) ? [{ name: "Alerts", href: "/notifications", icon: BellRing, module: "notifications" as const }] : []),
     { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },
     { name: "Settings", href: "/settings", icon: Settings, module: "settings" as const },
     { name: "What is FIAREP?", href: "/platform", icon: Info, module: "dashboard" as const },

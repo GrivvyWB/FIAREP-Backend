@@ -1939,10 +1939,10 @@ components:
         lastName: { type: string, nullable: true }
         role:
           type: string
-          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, resident, emergency]
+          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, resident, emergency, community_coordinator]
         position:
           type: string
-          enum: [Borough Director, Regional Director, Assistant Regional Director, Property Manager, Assistant Property Manager, Superintendent, Superintendent Ⓔ, Assistant Superintendent, Housing Assistant, Director, Supervisor Inspector, CPM Supervisor, Plumbing Supervisor, Plumber Supervisor, Electrical Supervisor, Electric Supervisor, Elevator Supervisor, Painter Supervisor, Carpenter Supervisor, Heating Service Supervisor, Bricklayer Supervisor, Maintenance Supervisor, Grounds Supervisor, Inspector, CPM, Plumber, Electrician, Elevator Service, Painter, Carpenter, Heating Service, Bricklayer, Roofer, General Construction, CCTV Installation, Maintenance Worker, Caretaker, Porter, Laborer, Groundskeeper, Staff Worker, Administrative Staff, Other Support Staff, Human Resources, Procurement, Janitorial Staff, Other]
+          enum: [Borough Director, Regional Director, Assistant Regional Director, Property Manager, Assistant Property Manager, Superintendent, Superintendent Ⓔ, Assistant Superintendent, Housing Assistant, Director, Supervisor Inspector, CPM Supervisor, Plumbing Supervisor, Plumber Supervisor, Electrical Supervisor, Electric Supervisor, Elevator Supervisor, Painter Supervisor, Carpenter Supervisor, Heating Service Supervisor, Bricklayer Supervisor, Maintenance Supervisor, Grounds Supervisor, Inspector, CPM, Plumber, Electrician, Elevator Service, Painter, Carpenter, Heating Service, Bricklayer, Roofer, General Construction, CCTV Installation, Maintenance Worker, Caretaker, Porter, Laborer, Groundskeeper, Staff Worker, Administrative Staff, Other Support Staff, Human Resources, Procurement, Janitorial Staff, Community Coordinator, Community Coordinator Supervisor, Other]
         status: { type: string }
         developments:
           type: array
@@ -2022,10 +2022,10 @@ components:
         lastName: { type: string }
         role:
           type: string
-          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, emergency]
+          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, emergency, community_coordinator]
         position:
           type: string
-          enum: [Borough Director, Regional Director, Assistant Regional Director, Property Manager, Assistant Property Manager, Superintendent, Superintendent Ⓔ, Assistant Superintendent, Housing Assistant, Director, Supervisor Inspector, CPM Supervisor, Plumbing Supervisor, Plumber Supervisor, Electrical Supervisor, Electric Supervisor, Elevator Supervisor, Painter Supervisor, Carpenter Supervisor, Heating Service Supervisor, Bricklayer Supervisor, Maintenance Supervisor, Grounds Supervisor, Inspector, CPM, Plumber, Electrician, Elevator Service, Painter, Carpenter, Heating Service, Bricklayer, Roofer, General Construction, CCTV Installation, Maintenance Worker, Caretaker, Porter, Laborer, Groundskeeper, Staff Worker, Administrative Staff, Other Support Staff, Human Resources, Procurement, Janitorial Staff, Other]
+          enum: [Borough Director, Regional Director, Assistant Regional Director, Property Manager, Assistant Property Manager, Superintendent, Superintendent Ⓔ, Assistant Superintendent, Housing Assistant, Director, Supervisor Inspector, CPM Supervisor, Plumbing Supervisor, Plumber Supervisor, Electrical Supervisor, Electric Supervisor, Elevator Supervisor, Painter Supervisor, Carpenter Supervisor, Heating Service Supervisor, Bricklayer Supervisor, Maintenance Supervisor, Grounds Supervisor, Inspector, CPM, Plumber, Electrician, Elevator Service, Painter, Carpenter, Heating Service, Bricklayer, Roofer, General Construction, CCTV Installation, Maintenance Worker, Caretaker, Porter, Laborer, Groundskeeper, Staff Worker, Administrative Staff, Other Support Staff, Human Resources, Procurement, Janitorial Staff, Community Coordinator, Community Coordinator Supervisor, Other]
         developments:
           type: array
           items: { type: string }
@@ -2068,7 +2068,7 @@ components:
         position: { type: string }
         role:
           type: string
-          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, emergency]
+          enum: [administrator, human_resources, management, worker, inspector, procurement, vendor, emergency, community_coordinator]
         developments:
           type: array
           items: { type: string }

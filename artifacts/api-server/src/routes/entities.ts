@@ -47,7 +47,7 @@ import {
   waitsToBeSentComplaints,
 } from "../lib/domain";
 import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "../lib/coverage";
-import { isCoverageEligible, isSuperintendentE } from "../lib/domain";
+import { isCommunityCoordinator, isCommunityCoordinatorSupervisor, isCommunityEntity, isCoverageEligible, isSuperintendentE } from "../lib/domain";
 import { isCpmSupervisorTitle, isCrewForTrade, isOfficeTradeSupervisorTitle, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "../lib/titles";
 import { APP_READ_ONLY_MESSAGE, appReadOnlyDecision, isAppReadOnlyActor, isMobileAppRequest } from "../lib/appReadOnly";
 import { hasScopePackage, snapshotElevator, snapshotEstimate, snapshotScope } from "../lib/scopeSnapshot";
@@ -281,7 +281,7 @@ router.get("/v1/deleted-items", async (req, res) => {
   const staff = await db.select({ id: staffAccounts.id, name: staffAccounts.name, position: staffAccounts.position })
     .from(staffAccounts).where(eq(staffAccounts.tenantId, actor.tenantId));
   const nameOf = new Map(staff.map((s) => [s.id, s.name]));
-  const items = rows.filter((row) => !isHrEntity(row.entity)).map((row) => {
+  const items = rows.filter((row) => !isHrEntity(row.entity) && !isCommunityEntity(row.entity)).map((row) => {
     const st = row.state as Record<string, unknown>;
     const owners = [...new Set([row.createdBy, st["assignedStaffId"], st["handoffTargetId"], st["cpmSupervisorId"], st["cpmId"], st["employeeStaffId"], st["requesterStaffId"]]
       .map((v) => String(v || "")).filter((v) => v && nameOf.has(v)).map((v) => nameOf.get(v)!))];
@@ -1016,7 +1016,13 @@ router.post("/v1/:entity", async (req, res, next) => {
     development = actor.developments[0]!;
   }
   // Vendor contacts are one company-wide list, not tied to a development.
-  const companyWide = entity === "vendor-contacts";
+  // Community outreach happens at any building, NYCHA or private.
+  const companyWide = entity === "vendor-contacts" || isCommunityEntity(entity);
+  if (isCommunityEntity(entity)) {
+    rawState["loggedById"] = actor.id;
+    rawState["loggedByName"] = actor.name;
+    rawState["loggedByPosition"] = actor.position;
+  }
   if (!development && !companyWide && !isBoroughDirector(actor) && !isHrEntity(entity)) {
     res.status(403).json({ error: "A development is required for scoped records" });
     return;
@@ -1282,6 +1288,30 @@ router.post("/v1/:entity", async (req, res, next) => {
     return;
   }
   await audit(actor, `${entity}.created`, `Created ${entity} record`, id);
+  if (isCommunityEntity(entity) && !isCommunityCoordinatorSupervisor(actor)) {
+    // The coordinator's supervisor hears about every visit — nobody else.
+    const supervisors = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+      eq(staffAccounts.tenantId, actor.tenantId),
+      eq(staffAccounts.status, "approved"),
+      eq(staffAccounts.role, "community_coordinator"),
+      sql`lower(${staffAccounts.position}) = 'community coordinator supervisor'`,
+    ));
+    if (supervisors.length) {
+      const st = persistedCreatedState;
+      const what = entity === "community-residents"
+        ? `${String(st["name"] || "Resident")} · ${String(st["address"] || "")}${st["apartment"] ? ` Apt ${String(st["apartment"])}` : ""}`
+        : `${String(st["address"] || "Building")}${st["units"] ? ` · ${String(st["units"])} units` : ""}`;
+      const alerts = await db.insert(notifications).values(supervisors.map((target) => ({
+        id: randomUUID(),
+        tenantId: actor.tenantId,
+        target: target.id,
+        message: st["critical"] === true ? "Critical: community visit logged" : (entity === "community-residents" ? "Community visit logged" : "Building added by a coordinator"),
+        detail: `${actor.name}: ${what}`,
+        reportId: id,
+      }))).returning();
+      for (const alert of alerts) void deliverPushNotification(alert).catch(() => undefined);
+    }
+  }
   if (entity === "building-violations") {
     // Same routing as a complaint: the development's on-site supervisors, the
     // emergency supervisor, and the trade supervisor whose trade it is — all
@@ -1448,6 +1478,9 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
   if (!patch) {
     res.status(400).json({ error: "A JSON update is required" });
     return;
+  }
+  if (isCommunityEntity(entity)) {
+    delete patch["loggedById"]; delete patch["loggedByName"]; delete patch["loggedByPosition"];
   }
   if (isHrEntity(entity) && containsHrProtectedFields(patch)) {
     res.status(403).json({ error: "HR linkage, employee, exit type, and status fields are server controlled" });
@@ -3772,7 +3805,13 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     .from(organizations)
     .where(eq(organizations.id, actor.tenantId))
     .limit(1);
-  if (!vendorListEdit && organization?.features?.["deletionEnabled"] !== true) {
+  // The Community Coordinator Supervisor keeps their unit's records tidy.
+  const communityDelete = isCommunityEntity(entity) && isCommunityCoordinatorSupervisor(actor);
+  if (isCommunityEntity(entity) && !communityDelete) {
+    res.status(403).json({ error: "Only the Community Coordinator Supervisor can delete this" });
+    return;
+  }
+  if (!vendorListEdit && !communityDelete && organization?.features?.["deletionEnabled"] !== true) {
     res.status(403).json({ error: "Deletion is disabled for this organization" });
     return;
   }
@@ -3785,7 +3824,7 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
     res.status(403).json({ error: "Only HR can delete a leave request" });
     return;
   }
-  if (!vendorListEdit && !canDeleteOperationalRecords(actor) && !ownWorkDelete && !hrLeaveDelete) {
+  if (!vendorListEdit && !communityDelete && !canDeleteOperationalRecords(actor) && !ownWorkDelete && !hrLeaveDelete) {
     res.status(403).json({ error: "Only higher management can delete records" });
     return;
   }

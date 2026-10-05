@@ -918,6 +918,7 @@ export default function HRWorkspace() {
                       <option value="inspector">Inspector</option>
                       <option value="procurement">Procurement</option>
                       <option value="emergency">Emergency</option>
+                      <option value="community_coordinator">Community Coordinator</option>
                     </select>
                   ) : sectionField.key === "position" ? (
                     <select
