@@ -1022,6 +1022,15 @@ router.post("/v1/:entity", async (req, res, next) => {
     rawState["loggedById"] = actor.id;
     rawState["loggedByName"] = actor.name;
     rawState["loggedByPosition"] = actor.position;
+    // Every visit waits for the Community Coordinator Supervisor to read it
+    // and confirm they received it. The supervisor's own entries need no one.
+    delete rawState["reviewedById"]; delete rawState["reviewedByName"]; delete rawState["reviewedAt"];
+    if (isCommunityCoordinatorSupervisor(actor)) {
+      rawState["reviewStatus"] = "approved";
+      rawState["reviewedById"] = actor.id; rawState["reviewedByName"] = actor.name; rawState["reviewedAt"] = new Date().toISOString();
+    } else {
+      rawState["reviewStatus"] = "submitted";
+    }
   }
   if (!development && !companyWide && !isBoroughDirector(actor) && !isHrEntity(entity)) {
     res.status(403).json({ error: "A development is required for scoped records" });
@@ -1546,6 +1555,21 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
       ["approved", "consumed"].includes(normalizeStatus(current.state["status"]))) {
     res.status(409).json({ error: "Approved company approval evidence is immutable" });
     return;
+  }
+  if (isCommunityEntity(entity)) {
+    // Only the Community Coordinator Supervisor approves ("received"); the
+    // server stamps who and when. A coordinator's edit sends it back for
+    // review. Approval fields never come from the client.
+    delete patch["reviewedById"]; delete patch["reviewedByName"]; delete patch["reviewedAt"];
+    if (isCommunityCoordinatorSupervisor(actor)) {
+      if (patch["reviewStatus"] === "approved") {
+        patch["reviewedById"] = actor.id; patch["reviewedByName"] = actor.name; patch["reviewedAt"] = new Date().toISOString();
+      } else {
+        delete patch["reviewStatus"];
+      }
+    } else {
+      patch["reviewStatus"] = current.state["reviewStatus"] === "approved" ? "updated" : "submitted";
+    }
   }
   if (entity === "procurement" &&
       actor.role === "inspector" && actor.position === "CPM" &&

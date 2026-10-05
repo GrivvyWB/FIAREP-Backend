@@ -74,6 +74,7 @@ export default function CommunityCoordinators() {
   const [search, setSearch] = useState("");
   const [who, setWho] = useState("");
   const [criticalOnly, setCriticalOnly] = useState(false);
+  const [review, setReview] = useState<"all" | "pending" | "approved" | "today">("all");
   const q = { query: { staleTime: 15_000, refetchOnMount: "always" as const, refetchInterval: 30_000 } };
   const residentsQuery = useListEntityRecords("community-residents", undefined, { ...q, query: { ...q.query, queryKey: getListEntityRecordsQueryKey("community-residents") } });
   const buildingsQuery = useListEntityRecords("community-buildings", undefined, { ...q, query: { ...q.query, queryKey: getListEntityRecordsQueryKey("community-buildings") } });
@@ -92,6 +93,10 @@ export default function CommunityCoordinators() {
   const matches = (r: Rec) => {
     if (who && s(r.state.loggedById) !== who) return false;
     if (criticalOnly && r.state.critical !== true) return false;
+    const rs = s(r.state.reviewStatus) || "submitted";
+    if (review === "pending" && rs === "approved") return false;
+    if (review === "approved" && rs !== "approved") return false;
+    if (review === "today" && s(r.state.visitedOn) !== today()) return false;
     const needle = search.trim().toLowerCase();
     if (!needle) return true;
     return Object.values(r.state).some((v) => typeof v === "string" && v.toLowerCase().includes(needle)) ||
@@ -121,6 +126,17 @@ export default function CommunityCoordinators() {
     } finally { setDeleting(null); }
   }
   const canEdit = (r: Rec) => supervisor || s(r.state.loggedById) === staff?.id;
+  const pendingCount = [...residents, ...buildings].filter((r) => (s(r.state.reviewStatus) || "submitted") !== "approved").length;
+  const update = useUpdateEntityRecord();
+  async function approve(entity: string, r: Rec) {
+    try {
+      await update.mutateAsync({ entity, id: r.id, data: { id: r.id, version: r.version, state: { reviewStatus: "approved" } } as never });
+      toast({ title: "Approved — received" });
+      await refresh();
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not approve", description: error instanceof Error ? error.message : "Try again." });
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -143,6 +159,7 @@ export default function CommunityCoordinators() {
         <Stat label="Residents on file" value={residents.length} />
         <Stat label="Buildings on file" value={buildings.length} />
         <Stat label="Critical" value={residents.filter((r) => r.state.critical === true).length} tone="warn" />
+        <Stat label={supervisor ? "Waiting for your review" : "Waiting for supervisor"} value={pendingCount} tone="warn" />
         <Stat label="Apartment units covered" value={buildings.reduce((sum, b) => sum + (Number(b.state.units) || 0), 0)} />
       </div>
 
@@ -167,6 +184,12 @@ export default function CommunityCoordinators() {
         {tab === "residents" && (
           <label className="flex items-center gap-2 text-sm"><Checkbox checked={criticalOnly} onCheckedChange={(v) => setCriticalOnly(v === true)} />Critical only</label>
         )}
+        <select className={`${selectClass} w-auto`} value={review} onChange={(e) => setReview(e.target.value as typeof review)}>
+          <option value="all">All</option>
+          <option value="today">Done today</option>
+          <option value="pending">{supervisor ? "Needs my review" : "Waiting for supervisor"}</option>
+          <option value="approved">Approved</option>
+        </select>
       </div>
 
       {tab === "residents" ? (
@@ -202,6 +225,7 @@ export default function CommunityCoordinators() {
                     )}
                     {s(st.notes) && <p className="whitespace-pre-wrap">{s(st.notes)}</p>}
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
+                    <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-residents", r)} busy={update.isPending} />
                     <div className="mt-1 flex flex-wrap gap-1">
                       <Button size="sm" variant="outline" onClick={() => printReport(r)}><Printer className="mr-1 h-3.5 w-3.5" />Print / PDF</Button>
                       <Button size="sm" variant="outline" onClick={() => copyReport(r).then(() => toast({ title: "Report copied" })).catch(() => toast({ variant: "destructive", title: "Could not copy" }))}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>
@@ -241,6 +265,7 @@ export default function CommunityCoordinators() {
                     <p className="text-muted-foreground">{residentsAt(s(st.address))} resident{residentsAt(s(st.address)) === 1 ? "" : "s"} on file here</p>
                     {s(st.notes) && <p className="whitespace-pre-wrap">{s(st.notes)}</p>}
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
+                    <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-buildings", b)} busy={update.isPending} />
                   </div>
                 </div>
               );
@@ -264,6 +289,20 @@ export default function CommunityCoordinators() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+/** Supervisor acknowledges a visit; the coordinator sees who received it and when. */
+function ReviewLine({ st, supervisor, onApprove, busy }: { st: Record<string, any>; supervisor: boolean; onApprove: () => void; busy: boolean }) {
+  const status = s(st.reviewStatus) || "submitted";
+  if (status === "approved") {
+    return <p className="text-xs text-emerald-700 font-medium">Approved — received by {s(st.reviewedByName) || "supervisor"} {st.reviewedAt ? new Date(String(st.reviewedAt)).toLocaleString() : ""}</p>;
+  }
+  return (
+    <div className="flex items-center gap-2">
+      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">{status === "updated" ? "Updated — needs review again" : "Waiting for supervisor"}</span>
+      {supervisor && <Button size="sm" onClick={onApprove} disabled={busy}>Approve — received</Button>}
     </div>
   );
 }

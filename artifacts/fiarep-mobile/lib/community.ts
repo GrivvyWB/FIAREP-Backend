@@ -87,6 +87,13 @@ export async function shareResidentText(record: CommunityRecord): Promise<void> 
   await Share.share({ message: residentReportText(record.state, str(record.development)) });
 }
 
+/** The Community Coordinator Supervisor confirms they read and received a visit. */
+export async function approveCommunity(entity: CommunityEntity, record: CommunityRecord): Promise<CommunityRecord> {
+  return (await updateEntityRecord(entity, record.id, {
+    id: record.id, version: record.version, state: { reviewStatus: 'approved' },
+  } as never)) as CommunityRecord;
+}
+
 export async function removeCommunity(entity: CommunityEntity, record: CommunityRecord): Promise<void> {
   await deleteEntityRecord(entity, record.id, { version: record.version } as never);
 }

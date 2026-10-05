@@ -5,7 +5,7 @@ import { clearAppMode, getCurrentActor, getSessionIdentity, logout } from '../li
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 import {
-  isCommunitySupervisor, listCommunity, removeCommunity, shareResidentPdf, shareResidentText, str, type CommunityRecord,
+  approveCommunity, isCommunitySupervisor, listCommunity, removeCommunity, shareResidentPdf, shareResidentText, str, today, type CommunityRecord,
 } from '../lib/community';
 import { sectionsOnRecord } from '../lib/community-report';
 
@@ -17,6 +17,7 @@ export default function CommunityHome() {
   const [tab, setTab] = useState<'residents' | 'buildings'>('residents');
   const [search, setSearch] = useState('');
   const [criticalOnly, setCriticalOnly] = useState(false);
+  const [review, setReview] = useState<'all' | 'today' | 'pending' | 'approved'>('all');
   const [who, setWho] = useState('');
   const [supervisor, setSupervisor] = useState(false);
   const [meId, setMeId] = useState('');
@@ -54,6 +55,10 @@ export default function CommunityHome() {
   const matches = (r: CommunityRecord) => {
     if (who && str(r.state.loggedById) !== who) return false;
     if (criticalOnly && tab === 'residents' && r.state.critical !== true) return false;
+    const rs = str(r.state.reviewStatus) || 'submitted';
+    if (review === 'pending' && rs === 'approved') return false;
+    if (review === 'approved' && rs !== 'approved') return false;
+    if (review === 'today' && str(r.state.visitedOn) !== today()) return false;
     const needle = search.trim().toLowerCase();
     if (!needle) return true;
     return Object.values(r.state).some((v) => typeof v === 'string' && v.toLowerCase().includes(needle)) ||
@@ -61,6 +66,12 @@ export default function CommunityHome() {
   };
   const rows = (tab === 'residents' ? residents : buildings).filter(matches);
   const canEdit = (r: CommunityRecord) => supervisor || str(r.state.loggedById) === meId;
+  const pendingCount = [...residents, ...buildings].filter((r) => (str(r.state.reviewStatus) || 'submitted') !== 'approved').length;
+  async function approve(r: CommunityRecord) {
+    const entity = tab === 'residents' ? 'community-residents' : 'community-buildings';
+    try { await approveCommunity(entity, r); await load(); }
+    catch (e: any) { Alert.alert('Could not approve', e?.message || 'Try again.'); }
+  }
   const residentsAt = (address: string) => residents.filter((r) => str(r.state.address).toLowerCase() === address.toLowerCase()).length;
 
   function confirmDelete(r: CommunityRecord) {
@@ -94,6 +105,10 @@ export default function CommunityHome() {
         <View style={[ui.card, { flex: 1, padding: 12 }]}><Text style={ui.label}>Buildings</Text><Text style={{ fontSize: 22, fontWeight: '700' }}>{buildings.length}</Text></View>
         <View style={[ui.card, { flex: 1, padding: 12, borderColor: residents.some((r) => r.state.critical === true) ? ACCENT : '#e0e0e0' }]}><Text style={ui.label}>Critical</Text><Text style={{ fontSize: 22, fontWeight: '700' }}>{residents.filter((r) => r.state.critical === true).length}</Text></View>
       </View>
+      <View style={[ui.card, { padding: 12, borderColor: pendingCount > 0 ? ACCENT : '#e0e0e0' }]}>
+        <Text style={ui.label}>{supervisor ? 'Waiting for your review' : 'Waiting for supervisor'}</Text>
+        <Text style={{ fontSize: 22, fontWeight: '700' }}>{pendingCount}</Text>
+      </View>
 
       <Pressable style={ui.btn} onPress={() => router.push('/community-resident')}>
         <Text style={ui.btnText}>+ Log a resident</Text>
@@ -106,6 +121,12 @@ export default function CommunityHome() {
         {chip(`Residents (${residents.length})`, tab === 'residents', () => setTab('residents'))}
         {chip(`Buildings (${buildings.length})`, tab === 'buildings', () => setTab('buildings'))}
         {tab === 'residents' && chip('Critical', criticalOnly, () => setCriticalOnly((v) => !v))}
+      </View>
+      <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+        {chip('All', review === 'all', () => setReview('all'))}
+        {chip('Done today', review === 'today', () => setReview('today'))}
+        {chip(supervisor ? 'Needs my review' : 'Waiting', review === 'pending', () => setReview('pending'))}
+        {chip('Approved', review === 'approved', () => setReview('approved'))}
       </View>
       <TextInput style={ui.input} value={search} onChangeText={setSearch} placeholder="Search name, address, phone, notes…" autoCapitalize="none" />
       {supervisor && coordinators.length > 0 && (
@@ -148,6 +169,14 @@ export default function CommunityHome() {
                 <Text style={ui.listSub}>{residentsAt(str(st.address))} resident(s) on file here</Text>
                 {!!str(st.notes) && <Text style={{ marginTop: 6 }}>{str(st.notes)}</Text>}
               </>
+            )}
+            {(str(st.reviewStatus) || 'submitted') === 'approved' ? (
+              <Text style={{ fontSize: 12, color: '#047857', fontWeight: '600', marginTop: 6 }}>Approved — received by {str(st.reviewedByName) || 'supervisor'}{st.reviewedAt ? ` · ${new Date(String(st.reviewedAt)).toLocaleString()}` : ''}</Text>
+            ) : (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 }}>
+                <Text style={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: '700', fontSize: 12, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 }}>{str(st.reviewStatus) === 'updated' ? 'UPDATED — REVIEW AGAIN' : 'WAITING FOR SUPERVISOR'}</Text>
+                {supervisor && <Pressable onPress={() => void approve(r)} style={{ backgroundColor: ACCENT, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}><Text style={{ fontWeight: '700' }}>Approve — received</Text></Pressable>}
+              </View>
             )}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
               <Text style={{ fontSize: 12, color: '#888' }}>
