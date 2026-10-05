@@ -30,6 +30,7 @@ const HOME_FOR_MODE: Record<AppMode, string> = {
   resident: '/resident-home',
   vendor: '/vendor-home',
   emergency: '/worker-home',
+  community_coordinator: '/community-home',
 };
 
 function Screen({ children }: { children: React.ReactNode }) {
@@ -62,7 +63,7 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
       if (ok) {
         const actor = await restoreServerSession();
         await refreshModuleConfig().catch(() => undefined);
-        const supportedRoles: AppMode[] = ['administrator', 'management', 'worker', 'inspector', 'emergency'];
+        const supportedRoles: AppMode[] = ['administrator', 'management', 'worker', 'inspector', 'emergency', 'community_coordinator'];
         const actualRole = actor?.role;
         if (!actualRole || !supportedRoles.includes(actualRole as AppMode)) {
           setMsg('This account has an unsupported mobile staff role. Contact an administrator.');
@@ -390,6 +391,22 @@ function EmergencyStack() {
   );
 }
 
+// Community Coordinators: field outreach only. Their records never leave
+// the coordinator unit (the server enforces it), so this stack has no
+// complaints, projects or inspections.
+function CommunityStack() {
+  return (
+    <Stack initialRouteName="community-home">
+      <Stack.Screen name="community-home" options={{ title: 'Community Coordinators', headerBackVisible: false }} />
+      <Stack.Screen name="community-resident" options={{ title: 'Resident' }} />
+      <Stack.Screen name="community-building" options={{ title: 'Building & owner' }} />
+      <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="message" options={{ title: 'Message' }} />
+      <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+    </Stack>
+  );
+}
+
 function ResidentStack() {
   return (
     <Stack initialRouteName="resident-home">
@@ -471,7 +488,7 @@ export default function Layout() {
           await clearAppMode().catch(() => undefined);
           await clearRememberedStaff('procurement').catch(() => undefined);
           if (mounted) setNotice('The Procurement mobile role is no longer available. Choose another FIAREP role.');
-        } else if (restored && ['administrator', 'management', 'worker', 'inspector', 'emergency'].includes(restored.role)) {
+        } else if (restored && ['administrator', 'management', 'worker', 'inspector', 'emergency', 'community_coordinator'].includes(restored.role)) {
           await syncAllEntities().catch(() => undefined);
           if (mounted) setMode(restored.role === 'emergency' ? 'emergency' : restored.role as AppMode);
         } else {
@@ -560,6 +577,8 @@ export default function Layout() {
     content = <AdministratorStack />;
   } else if (mode === 'vendor') {
     content = <VendorStack />;
+  } else if (mode === 'community_coordinator') {
+    content = <CommunityStack />;
   } else {
     content = <ManagementStack />;
   }

@@ -1099,7 +1099,7 @@ export async function setReportDevelopment(id: string, name: string): Promise<vo
 }
 
 
-export type AppMode = 'resident' | 'administrator' | 'management' | 'worker' | 'inspector' | 'vendor' | 'emergency';
+export type AppMode = 'resident' | 'administrator' | 'management' | 'worker' | 'inspector' | 'vendor' | 'emergency' | 'community_coordinator';
 
 export async function getInstallationPersona(): Promise<InstallationPersona | null> {
   const d = await db();
@@ -1136,6 +1136,7 @@ export async function getAppMode(): Promise<AppMode | null> {
   if (v === 'management' || v === 'staff') return 'management'; // 'staff' migrated
   if (v === 'vendor') return 'vendor';
   if (v === 'emergency') return 'emergency';
+  if (v === 'community_coordinator') return 'community_coordinator';
   return null;
 }
 
