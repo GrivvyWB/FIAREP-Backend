@@ -32,7 +32,10 @@ const CPM_ONLY_MODULES = new Set<StaffModule>([
 /** Community Coordinators (field outreach) and their supervisor. Their
  * records stay inside that unit; they see nothing else on the website. */
 export function isCommunityCoordinator(staff: Staff | null | undefined): boolean {
-  return String(staff?.role || "") === "community_coordinator";
+  if (!staff) return false;
+  if (String(staff.role || "") === "community_coordinator") return true;
+  // The title decides, whatever role the account was saved with.
+  return /^community coordinator( supervisor)?$/i.test(String(staff.position || "").trim());
 }
 export function isCommunityCoordinatorSupervisor(staff: Staff | null | undefined): boolean {
   return isCommunityCoordinator(staff) && sameTitle(staff?.position, "Community Coordinator Supervisor");

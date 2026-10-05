@@ -109,14 +109,24 @@ function fieldTitle(position: string): "CPM" | "Inspector" | null {
   return null;
 }
 
+// Community Coordinator titles are their own unit whatever role the account
+// was saved with (an HR intake that picked "Management", say): the title
+// decides, so the record never falls into the management / supervisor rules.
+function communityTitle(position: string): "Community Coordinator" | "Community Coordinator Supervisor" | null {
+  if (sameTitle(position, "Community Coordinator Supervisor")) return "Community Coordinator Supervisor";
+  if (sameTitle(position, "Community Coordinator")) return "Community Coordinator";
+  return null;
+}
+
 export function actorFromStaff(staff: StaffAccount): Actor {
   const field = fieldTitle(staff.position);
+  const community = communityTitle(staff.position);
   return {
     id: staff.id,
     tenantId: staff.tenantId,
     name: staff.name,
-    role: field && staff.role === "worker" ? "inspector" : staff.role,
-    position: field ?? staff.position,
+    role: community ? "community_coordinator" : field && staff.role === "worker" ? "inspector" : staff.role,
+    position: community ?? field ?? staff.position,
     developments: staff.developments,
     sessionVersion: staff.sessionVersion,
   };
