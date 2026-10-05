@@ -11,9 +11,11 @@ import {
   useGetHrWorkspace,
   usePerformEntityAction,
   useUpdateEntityRecord,
+  useUpdateStaffAssignment,
   StaffPosition,
   type EntityRecord,
 } from "@workspace/api-client-react";
+import { roleForPosition } from "@/lib/staff-assignment";
 import { 
   BriefcaseBusiness, Check, Clock3, Pencil, Plus, ShieldCheck,
   History, Search, FileText, User, AlertCircle, Folder, Mail, KeyRound, Trash2
@@ -180,6 +182,7 @@ export default function HRWorkspace() {
   const { data: developmentOptions = [] } = useListStaffDevelopments();
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
+  const updateAssignment = useUpdateStaffAssignment();
   const action = usePerformEntityAction();
   const deleteHrRecord = useDeleteHrRecord();
   const deleteStaff = useDeleteStaff();
@@ -357,6 +360,27 @@ export default function HRWorkspace() {
             },
           },
         });
+        // A title change on an employee who already has an account (promote /
+        // demote) goes through the staff assignment route, which updates the
+        // account and this record together. Access follows the new title at
+        // the next sign-in.
+        const nextPosition = String(sectionValues.position || "").trim();
+        if (
+          linkedEmployeeRecord &&
+          nextPosition &&
+          nextPosition !== String(editingRecord.state.position || "").trim()
+        ) {
+          await updateAssignment.mutateAsync({
+            id: String(editingRecord.state.employeeStaffId),
+            data: {
+              position: nextPosition,
+              role: roleForPosition(nextPosition) as never,
+              developments: assignedDevelopments.length
+                ? assignedDevelopments
+                : (Array.isArray(editingRecord.state.assignedDevelopments) ? editingRecord.state.assignedDevelopments : []),
+            },
+          });
+        }
         if (maintenanceAssignmentChanged) {
           const response = await fetch(
             `/api/v1/hr/employee-records/${encodeURIComponent(editingRecord.id)}/maintenance-assignment`,
