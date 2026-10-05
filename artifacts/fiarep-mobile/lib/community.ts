@@ -9,7 +9,11 @@ import {
   updateEntityRecord,
   type EntityRecord,
 } from '@workspace/api-client-react';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { Share } from 'react-native';
 import { getSessionIdentity } from './store';
+import { residentReportHtml, residentReportText } from './community-report';
 
 export type CommunityEntity = 'community-residents' | 'community-buildings';
 export type CommunityRecord = EntityRecord & { state: Record<string, any> };
@@ -21,7 +25,7 @@ export const PROGRAMS = [
   'Emergency Housing & Relocation (vacate orders, fire, displacement)',
 ];
 export const CRITICAL_TAGS = [
-  'No heat / hot water', 'Mold', 'Lead paint', 'Pests', 'Vacate order', 'Fire damage',
+  'No heat / hot water', 'Vacate order', 'Fire damage', 'Gas leak', 'No water',
   'Elderly / disabled resident', 'Children in unit', 'Owner unresponsive', 'Other',
 ];
 export const BOROUGHS = ['Manhattan', 'Brooklyn', 'Bronx', 'Queens', 'Staten Island'];
@@ -65,6 +69,22 @@ export async function saveCommunity(
   return (await createEntityRecord(entity, {
     id: newId(), version: 1, development: development || undefined, state,
   } as never)) as CommunityRecord;
+}
+
+/** Visit report as a PDF, handed to the share sheet (Mail, Files, print…). */
+export async function shareResidentPdf(record: CommunityRecord): Promise<void> {
+  const html = residentReportHtml(record.state, str(record.development));
+  const { uri } = await Print.printToFileAsync({ html });
+  if (await Sharing.isAvailableAsync()) {
+    await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Visit report', UTI: 'com.adobe.pdf' });
+  } else {
+    await Print.printAsync({ html });
+  }
+}
+
+/** Visit report as text (copy, paste into an email or message). */
+export async function shareResidentText(record: CommunityRecord): Promise<void> {
+  await Share.share({ message: residentReportText(record.state, str(record.development)) });
 }
 
 export async function removeCommunity(entity: CommunityEntity, record: CommunityRecord): Promise<void> {

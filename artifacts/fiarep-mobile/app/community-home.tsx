@@ -5,8 +5,9 @@ import { clearAppMode, getCurrentActor, getSessionIdentity, logout } from '../li
 import { useAppMode } from './_layout';
 import { ui } from '../lib/ui';
 import {
-  isCommunitySupervisor, listCommunity, removeCommunity, str, type CommunityRecord,
+  isCommunitySupervisor, listCommunity, removeCommunity, shareResidentPdf, shareResidentText, str, type CommunityRecord,
 } from '../lib/community';
+import { sectionsOnRecord } from '../lib/community-report';
 
 const ACCENT = '#F2C14E';
 
@@ -132,7 +133,9 @@ export default function CommunityHome() {
                 <Text style={ui.listSub}>{[str(st.address), st.apartment ? `Apt ${str(st.apartment)}` : '', str(r.development), str(st.borough)].filter(Boolean).join(' · ')}</Text>
                 {!!str(st.phone) && <Text style={ui.listSub}>{str(st.phone)}{str(st.email) ? ` · ${str(st.email)}` : ''}</Text>}
                 {!!str(st.program) && <Text style={ui.listSub}>{str(st.program)}</Text>}
-                {Array.isArray(st.criticalTags) && st.criticalTags.length > 0 && <Text style={[ui.listSub, { color: '#92400e' }]}>{st.criticalTags.join(', ')}</Text>}
+                {(sectionsOnRecord(st).length > 0 || (Array.isArray(st.criticalTags) && st.criticalTags.length > 0)) && (
+                  <Text style={[ui.listSub, { color: '#92400e', fontWeight: '600' }]}>{[...sectionsOnRecord(st), ...(Array.isArray(st.criticalTags) ? st.criticalTags : [])].join(' · ')}</Text>
+                )}
                 {!!str(st.notes) && <Text style={{ marginTop: 6 }}>{str(st.notes)}</Text>}
               </>
             ) : (
@@ -141,6 +144,7 @@ export default function CommunityHome() {
                 <Text style={ui.listSub}>{[str(r.development), str(st.borough), st.units ? `${st.units} apartment units` : '', st.floors ? `${st.floors} floors` : ''].filter(Boolean).join(' · ')}</Text>
                 <Text style={ui.listSub}>Owner: {str(st.ownerName) || '—'}{str(st.ownerPhone) ? ` · ${str(st.ownerPhone)}` : ''}</Text>
                 {!!str(st.managementCompany) && <Text style={ui.listSub}>Managed by {str(st.managementCompany)}{str(st.managementPhone) ? ` · ${str(st.managementPhone)}` : ''}</Text>}
+                {!!str(st.superName) && <Text style={ui.listSub}>Super: {str(st.superName)}{str(st.superPhone) ? ` · ${str(st.superPhone)}` : ''}{str(st.superApartment) ? ` · Apt ${str(st.superApartment)}` : ''}</Text>}
                 <Text style={ui.listSub}>{residentsAt(str(st.address))} resident(s) on file here</Text>
                 {!!str(st.notes) && <Text style={{ marginTop: 6 }}>{str(st.notes)}</Text>}
               </>
@@ -150,6 +154,8 @@ export default function CommunityHome() {
                 Visited {str(st.visitedOn)}{supervisor && str(st.loggedByName) ? ` · ${str(st.loggedByName)}` : ''}
               </Text>
               <View style={{ flexDirection: 'row', gap: 14 }}>
+                {tab === 'residents' && <Pressable onPress={() => shareResidentPdf(r).catch((e) => Alert.alert('Could not make the PDF', e?.message || 'Try again.'))}><Text style={{ color: '#111', fontWeight: '600' }}>PDF</Text></Pressable>}
+                {tab === 'residents' && <Pressable onPress={() => shareResidentText(r).catch(() => undefined)}><Text style={{ color: '#111', fontWeight: '600' }}>Share</Text></Pressable>}
                 {canEdit(r) && <Text style={{ color: '#2563eb', fontWeight: '600' }}>Edit</Text>}
                 {supervisor && <Pressable onPress={() => confirmDelete(r)}><Text style={{ color: '#b91c1c', fontWeight: '600' }}>Delete</Text></Pressable>}
               </View>

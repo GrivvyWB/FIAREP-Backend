@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
-  NYCHA_DEVELOPMENT_NAMES,
   customFetch,
   getListEntityRecordsQueryKey,
   useCreateEntityRecord,
@@ -18,7 +17,12 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { isCommunityCoordinatorSupervisor } from "@/lib/access-policy";
-import { AlertTriangle, Building2, Edit2, Phone, Plus, Search, Trash2, UserRound, Users } from "lucide-react";
+import { AlertTriangle, Building2, Copy, Edit2, Mail, Phone, Plus, Printer, Search, Trash2, UserRound, Users } from "lucide-react";
+import {
+  LEAD_DOCUMENTS, LEAD_TESTED, MOLD_EXTENT, VERMIN_FREQUENCY, VERMIN_TYPES,
+  residentReportHtml, residentReportText, sectionsOnRecord,
+  type AffidavitInfo, type LeadInfo, type MoldInfo, type VerminInfo,
+} from "@/lib/community-report";
 
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 
@@ -30,7 +34,7 @@ const PROGRAMS = [
   "Emergency Housing & Relocation (vacate orders, fire, displacement)",
 ];
 const CRITICAL_TAGS = [
-  "No heat / hot water", "Mold", "Lead paint", "Pests", "Vacate order", "Fire damage",
+  "No heat / hot water", "Vacate order", "Fire damage", "Gas leak", "No water",
   "Elderly / disabled resident", "Children in unit", "Owner unresponsive", "Other",
 ];
 const BOROUGHS = ["Manhattan", "Brooklyn", "Bronx", "Queens", "Staten Island"];
@@ -44,6 +48,23 @@ async function removeRecord(entity: string, id: string, version: number) {
   await customFetch<void>(`/api/v1/${entity}/${encodeURIComponent(id)}`, {
     method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ version }),
   } as never);
+}
+
+function printReport(r: Rec) {
+  const w = window.open("", "_blank", "width=900,height=1000");
+  if (!w) return;
+  w.document.write(residentReportHtml(r.state, s(r.development)));
+  w.document.close();
+  w.focus();
+  setTimeout(() => w.print(), 300);
+}
+async function copyReport(r: Rec) {
+  await navigator.clipboard.writeText(residentReportText(r.state, s(r.development)));
+}
+function emailReport(r: Rec) {
+  const subject = `Visit report — ${s(r.state.name)} · ${s(r.state.address)}${r.state.apartment ? ` Apt ${s(r.state.apartment)}` : ""}`;
+  const body = residentReportText(r.state, s(r.development));
+  window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 export default function CommunityCoordinators() {
@@ -173,9 +194,19 @@ export default function CommunityCoordinators() {
                   <div className="mt-2 grid gap-1 text-sm">
                     {s(st.phone) && <p className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-muted-foreground" /><a className="underline" href={`tel:${s(st.phone)}`}>{s(st.phone)}</a>{s(st.email) && <span className="text-muted-foreground">· {s(st.email)}</span>}</p>}
                     {s(st.program) && <p className="text-muted-foreground">{s(st.program)}</p>}
-                    {Array.isArray(st.criticalTags) && st.criticalTags.length > 0 && <p className="flex flex-wrap gap-1">{st.criticalTags.map((t: string) => <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-xs">{t}</span>)}</p>}
+                    {(sectionsOnRecord(st).length > 0 || (Array.isArray(st.criticalTags) && st.criticalTags.length > 0)) && (
+                      <p className="flex flex-wrap gap-1">
+                        {sectionsOnRecord(st).map((t) => <span key={t} className="rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-900">{t}</span>)}
+                        {(Array.isArray(st.criticalTags) ? st.criticalTags : []).map((t: string) => <span key={t} className="rounded bg-muted px-1.5 py-0.5 text-xs">{t}</span>)}
+                      </p>
+                    )}
                     {s(st.notes) && <p className="whitespace-pre-wrap">{s(st.notes)}</p>}
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
+                    <div className="mt-1 flex flex-wrap gap-1">
+                      <Button size="sm" variant="outline" onClick={() => printReport(r)}><Printer className="mr-1 h-3.5 w-3.5" />Print / PDF</Button>
+                      <Button size="sm" variant="outline" onClick={() => copyReport(r).then(() => toast({ title: "Report copied" })).catch(() => toast({ variant: "destructive", title: "Could not copy" }))}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>
+                      <Button size="sm" variant="outline" onClick={() => emailReport(r)}><Mail className="mr-1 h-3.5 w-3.5" />Email</Button>
+                    </div>
                   </div>
                 </div>
               );
@@ -206,6 +237,7 @@ export default function CommunityCoordinators() {
                     <p><span className="text-muted-foreground">Owner:</span> {s(st.ownerName) || "—"}{s(st.ownerPhone) && <> · <a className="underline" href={`tel:${s(st.ownerPhone)}`}>{s(st.ownerPhone)}</a></>}{s(st.ownerEmail) && <span className="text-muted-foreground"> · {s(st.ownerEmail)}</span>}</p>
                     {s(st.ownerAddress) && <p><span className="text-muted-foreground">Owner address:</span> {s(st.ownerAddress)}</p>}
                     {s(st.managementCompany) && <p><span className="text-muted-foreground">Managed by:</span> {s(st.managementCompany)}{s(st.managementPhone) ? ` · ${s(st.managementPhone)}` : ""}</p>}
+                    {s(st.superName) && <p><span className="text-muted-foreground">Super:</span> {s(st.superName)}{s(st.superPhone) ? <> · <a className="underline" href={`tel:${s(st.superPhone)}`}>{s(st.superPhone)}</a></> : null}{s(st.superApartment) ? ` · lives in Apt ${s(st.superApartment)}` : ""}</p>}
                     <p className="text-muted-foreground">{residentsAt(s(st.address))} resident{residentsAt(s(st.address)) === 1 ? "" : "s"} on file here</p>
                     {s(st.notes) && <p className="whitespace-pre-wrap">{s(st.notes)}</p>}
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
@@ -248,26 +280,22 @@ function Empty({ text }: { text: string }) {
   return <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
-function useDevelopments() {
-  const { staff } = useAuth();
-  return useMemo(() => {
-    const own = (staff?.developments || []).filter(Boolean);
-    return own.length ? own : [...NYCHA_DEVELOPMENT_NAMES];
-  }, [staff?.developments]);
-}
-
 function ResidentDialog({ record, buildings, onClose }: { record: Rec | null; buildings: Rec[]; onClose: (saved: boolean) => void }) {
   const { toast } = useToast();
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
-  const developments = useDevelopments();
   const st = record?.state || {};
   const [form, setForm] = useState({
-    name: s(st.name), phone: s(st.phone), email: s(st.email), development: s(record?.development || st.development),
+    name: s(st.name), phone: s(st.phone), email: s(st.email),
     borough: s(st.borough), address: s(st.address), apartment: s(st.apartment), program: s(st.program) || PROGRAMS[0]!,
     critical: st.critical === true, criticalTags: (Array.isArray(st.criticalTags) ? st.criticalTags : []) as string[],
     notes: s(st.notes), visitedOn: s(st.visitedOn) || today(),
+    mold: { present: false, locations: "", extent: "", since: "", notes: "", ...(st.mold || {}) } as MoldInfo,
+    vermin: { present: false, types: [], locations: "", frequency: "", notes: "", ...(st.vermin || {}) } as VerminInfo,
+    lead: { present: false, childUnder6: false, peelingPaint: "", tested: "", documents: [], notes: "", ...(st.lead || {}) } as LeadInfo,
+    affidavit: { given: false, statement: "", affiantName: "", date: "", witnessName: "", affirmed: false, ...(st.affidavit || {}) } as AffidavitInfo,
   });
+  const sub = <K extends "mold" | "vermin" | "lead" | "affidavit">(k: K, patch: Partial<typeof form[K]>) => setForm((f) => ({ ...f, [k]: { ...f[k], ...patch } }));
   const set = (k: keyof typeof form, v: unknown) => setForm((f) => ({ ...f, [k]: v }));
   const knownAddresses = [...new Set(buildings.map((b) => s(b.state.address)).filter(Boolean))].sort();
   const [busy, setBusy] = useState(false);
@@ -281,10 +309,10 @@ function ResidentDialog({ record, buildings, onClose }: { record: Rec | null; bu
     const state = { ...form, name: form.name.trim(), address: form.address.trim(), criticalTags: form.critical ? form.criticalTags : [] };
     try {
       if (record) {
-        await update.mutateAsync({ entity: "community-residents", id: record.id, data: { id: record.id, version: record.version, development: form.development || undefined, state } as never });
+        await update.mutateAsync({ entity: "community-residents", id: record.id, data: { id: record.id, version: record.version, state } as never });
         toast({ title: "Resident updated" });
       } else {
-        await create.mutateAsync({ entity: "community-residents", data: { id: crypto.randomUUID(), version: 1, development: form.development || undefined, state } as never });
+        await create.mutateAsync({ entity: "community-residents", data: { id: crypto.randomUUID(), version: 1, state } as never });
         toast({ title: "Resident logged" });
       }
       onClose(true);
@@ -305,12 +333,6 @@ function ResidentDialog({ record, buildings, onClose }: { record: Rec | null; bu
           <Field label="Phone"><Input type="tel" value={form.phone} onChange={(e) => set("phone", e.target.value)} placeholder="(718) 555-0100" /></Field>
           <Field label="Email"><Input type="email" value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>
           <Field label="Visit date"><Input type="date" value={form.visitedOn} onChange={(e) => set("visitedOn", e.target.value)} /></Field>
-          <Field label="Development (if NYCHA)">
-            <select className={selectClass} value={form.development} onChange={(e) => set("development", e.target.value)}>
-              <option value="">Not a NYCHA development</option>
-              {developments.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </Field>
           <Field label="Borough">
             <select className={selectClass} value={form.borough} onChange={(e) => set("borough", e.target.value)}>
               <option value="">Select</option>
@@ -339,6 +361,38 @@ function ResidentDialog({ record, buildings, onClose }: { record: Rec | null; bu
               </div>
             )}
           </div>
+          <Section title="Mold" on={!!form.mold.present} onToggle={(v) => sub("mold", { present: v })}>
+            <Field label="Where in the apartment"><Input value={form.mold.locations || ""} onChange={(e) => sub("mold", { locations: e.target.value })} placeholder="Bathroom ceiling, bedroom wall near window…" /></Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="How much"><select className={selectClass} value={form.mold.extent || ""} onChange={(e) => sub("mold", { extent: e.target.value })}><option value="">Select</option>{MOLD_EXTENT.map((o) => <option key={o} value={o}>{o}</option>)}</select></Field>
+              <Field label="Since when"><Input value={form.mold.since || ""} onChange={(e) => sub("mold", { since: e.target.value })} placeholder="e.g. March 2026" /></Field>
+            </div>
+            <Field label="Mold notes"><Textarea rows={2} value={form.mold.notes || ""} onChange={(e) => sub("mold", { notes: e.target.value })} placeholder="Leak source, previous repairs, health complaints…" /></Field>
+          </Section>
+          <Section title="Vermin / pests" on={!!form.vermin.present} onToggle={(v) => sub("vermin", { present: v })}>
+            <Field label="Type"><div className="grid grid-cols-2 gap-1 text-sm">{VERMIN_TYPES.map((t) => <label key={t} className="flex items-center gap-2"><Checkbox checked={(form.vermin.types || []).includes(t)} onCheckedChange={(v) => sub("vermin", { types: v === true ? [...(form.vermin.types || []), t] : (form.vermin.types || []).filter((x) => x !== t) })} />{t}</label>)}</div></Field>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <Field label="Where"><Input value={form.vermin.locations || ""} onChange={(e) => sub("vermin", { locations: e.target.value })} placeholder="Kitchen, under sink, hallway…" /></Field>
+              <Field label="How often"><select className={selectClass} value={form.vermin.frequency || ""} onChange={(e) => sub("vermin", { frequency: e.target.value })}><option value="">Select</option>{VERMIN_FREQUENCY.map((o) => <option key={o} value={o}>{o}</option>)}</select></Field>
+            </div>
+            <Field label="Vermin notes"><Textarea rows={2} value={form.vermin.notes || ""} onChange={(e) => sub("vermin", { notes: e.target.value })} placeholder="Extermination history, entry points, bites…" /></Field>
+          </Section>
+          <Section title="Lead paint" on={!!form.lead.present} onToggle={(v) => sub("lead", { present: v })}>
+            <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!form.lead.childUnder6} onCheckedChange={(v) => sub("lead", { childUnder6: v === true })} />A child under 6 lives in or regularly visits the unit</label>
+            <Field label="Peeling / chipping paint — where"><Input value={form.lead.peelingPaint || ""} onChange={(e) => sub("lead", { peelingPaint: e.target.value })} placeholder="Window sills, bedroom door frame…" /></Field>
+            <Field label="Testing"><select className={selectClass} value={form.lead.tested || ""} onChange={(e) => sub("lead", { tested: e.target.value })}><option value="">Select</option>{LEAD_TESTED.map((o) => <option key={o} value={o}>{o}</option>)}</select></Field>
+            <Field label="Lead documents provided"><div className="grid grid-cols-2 gap-1 text-sm">{LEAD_DOCUMENTS.map((t) => <label key={t} className="flex items-center gap-2"><Checkbox checked={(form.lead.documents || []).includes(t)} onCheckedChange={(v) => sub("lead", { documents: v === true ? [...(form.lead.documents || []), t] : (form.lead.documents || []).filter((x) => x !== t) })} />{t}</label>)}</div></Field>
+            <Field label="Lead notes"><Textarea rows={2} value={form.lead.notes || ""} onChange={(e) => sub("lead", { notes: e.target.value })} placeholder="Blood lead level if known, doctor, HPD case #…" /></Field>
+          </Section>
+          <Section title="Affidavit" on={!!form.affidavit.given} onToggle={(v) => sub("affidavit", { given: v, affiantName: form.affidavit.affiantName || form.name, date: form.affidavit.date || form.visitedOn })}>
+            <Field label="Resident's statement"><Textarea rows={5} value={form.affidavit.statement || ""} onChange={(e) => sub("affidavit", { statement: e.target.value })} placeholder="In the resident's own words: what happened, when, who they told, what was done…" /></Field>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <Field label="Affiant (resident)"><Input value={form.affidavit.affiantName || ""} onChange={(e) => sub("affidavit", { affiantName: e.target.value })} /></Field>
+              <Field label="Date"><Input type="date" value={form.affidavit.date || ""} onChange={(e) => sub("affidavit", { date: e.target.value })} /></Field>
+              <Field label="Witness"><Input value={form.affidavit.witnessName || ""} onChange={(e) => sub("affidavit", { witnessName: e.target.value })} placeholder="Coordinator or other witness" /></Field>
+            </div>
+            <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!form.affidavit.affirmed} onCheckedChange={(v) => sub("affidavit", { affirmed: v === true })} />The resident affirms this statement is true and correct (signature lines print on the PDF)</label>
+          </Section>
           <div className="sm:col-span-2">
             <Field label="Notes"><Textarea rows={4} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="What the resident reported, who was present, what was promised…" /></Field>
           </div>
@@ -356,12 +410,12 @@ function BuildingDialog({ record, onClose }: { record: Rec | null; onClose: (sav
   const { toast } = useToast();
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
-  const developments = useDevelopments();
   const st = record?.state || {};
   const [form, setForm] = useState({
-    address: s(st.address), development: s(record?.development || st.development), borough: s(st.borough),
+    address: s(st.address), borough: s(st.borough),
     units: s(st.units), floors: s(st.floors), ownerName: s(st.ownerName), ownerPhone: s(st.ownerPhone), ownerEmail: s(st.ownerEmail),
     ownerAddress: s(st.ownerAddress), managementCompany: s(st.managementCompany), managementPhone: s(st.managementPhone),
+    superName: s(st.superName), superPhone: s(st.superPhone), superApartment: s(st.superApartment),
     notes: s(st.notes), visitedOn: s(st.visitedOn) || today(),
   });
   const set = (k: keyof typeof form, v: string) => setForm((f) => ({ ...f, [k]: v }));
@@ -374,10 +428,10 @@ function BuildingDialog({ record, onClose }: { record: Rec | null; onClose: (sav
     const state = { ...form, address: form.address.trim(), units: form.units ? Number(form.units) : "", floors: form.floors ? Number(form.floors) : "" };
     try {
       if (record) {
-        await update.mutateAsync({ entity: "community-buildings", id: record.id, data: { id: record.id, version: record.version, development: form.development || undefined, state } as never });
+        await update.mutateAsync({ entity: "community-buildings", id: record.id, data: { id: record.id, version: record.version, state } as never });
         toast({ title: "Building updated" });
       } else {
-        await create.mutateAsync({ entity: "community-buildings", data: { id: crypto.randomUUID(), version: 1, development: form.development || undefined, state } as never });
+        await create.mutateAsync({ entity: "community-buildings", data: { id: crypto.randomUUID(), version: 1, state } as never });
         toast({ title: "Building added" });
       }
       onClose(true);
@@ -395,12 +449,6 @@ function BuildingDialog({ record, onClose }: { record: Rec | null; onClose: (sav
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="sm:col-span-2"><Field label="Building address *"><Input value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="262 Ralph Ave, Brooklyn" /></Field></div>
-          <Field label="Development (if NYCHA)">
-            <select className={selectClass} value={form.development} onChange={(e) => set("development", e.target.value)}>
-              <option value="">Not a NYCHA development</option>
-              {developments.map((d) => <option key={d} value={d}>{d}</option>)}
-            </select>
-          </Field>
           <Field label="Borough">
             <select className={selectClass} value={form.borough} onChange={(e) => set("borough", e.target.value)}>
               <option value="">Select</option>
@@ -415,6 +463,9 @@ function BuildingDialog({ record, onClose }: { record: Rec | null; onClose: (sav
           <Field label="Owner mailing address"><Input value={form.ownerAddress} onChange={(e) => set("ownerAddress", e.target.value)} /></Field>
           <Field label="Management company"><Input value={form.managementCompany} onChange={(e) => set("managementCompany", e.target.value)} /></Field>
           <Field label="Management phone"><Input type="tel" value={form.managementPhone} onChange={(e) => set("managementPhone", e.target.value)} /></Field>
+          <Field label="Super's name"><Input value={form.superName} onChange={(e) => set("superName", e.target.value)} /></Field>
+          <Field label="Super's phone"><Input type="tel" value={form.superPhone} onChange={(e) => set("superPhone", e.target.value)} /></Field>
+          <Field label="Super's apartment (if they live in the building)"><Input value={form.superApartment} onChange={(e) => set("superApartment", e.target.value)} placeholder="1A" /></Field>
           <Field label="Visit date"><Input type="date" value={form.visitedOn} onChange={(e) => set("visitedOn", e.target.value)} /></Field>
           <div className="sm:col-span-2"><Field label="Notes"><Textarea rows={3} value={form.notes} onChange={(e) => set("notes", e.target.value)} placeholder="Condition of the building, access, super's name…" /></Field></div>
         </div>
@@ -424,6 +475,15 @@ function BuildingDialog({ record, onClose }: { record: Rec | null; onClose: (sav
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function Section({ title, on, onToggle, children }: { title: string; on: boolean; onToggle: (v: boolean) => void; children: ReactNode }) {
+  return (
+    <div className={`sm:col-span-2 rounded-md border p-3 space-y-2 ${on ? "border-amber-400" : ""}`}>
+      <label className="flex items-center gap-2 text-sm font-medium"><Checkbox checked={on} onCheckedChange={(v) => onToggle(v === true)} />{title}</label>
+      {on && <div className="space-y-2">{children}</div>}
+    </div>
   );
 }
 

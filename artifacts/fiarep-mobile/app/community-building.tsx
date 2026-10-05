@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-nativ
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ui } from '../lib/ui';
 import { BOROUGHS, getCommunity, saveCommunity, str, today, type CommunityRecord } from '../lib/community';
-import { Chips, DevelopmentPicker } from '../lib/community-ui';
+import { Chips } from '../lib/community-ui';
 
 export default function CommunityBuilding() {
   const router = useRouter();
@@ -13,8 +13,9 @@ export default function CommunityBuilding() {
   const [loaded, setLoaded] = useState(!id);
   const [busy, setBusy] = useState(false);
   const [f, setF] = useState({
-    address: '', development: '', borough: '', units: '', floors: '', ownerName: '', ownerPhone: '', ownerEmail: '',
-    ownerAddress: '', managementCompany: '', managementPhone: '', notes: '', visitedOn: today(),
+    address: '', borough: '', units: '', floors: '', ownerName: '', ownerPhone: '', ownerEmail: '',
+    ownerAddress: '', managementCompany: '', managementPhone: '', superName: '', superPhone: '', superApartment: '',
+    notes: '', visitedOn: today(),
   });
   const set = (k: keyof typeof f, v: string) => setF((c) => ({ ...c, [k]: v }));
 
@@ -24,9 +25,10 @@ export default function CommunityBuilding() {
       const st = r.state || {};
       setRecord(r);
       setF({
-        address: str(st.address), development: str(r.development || st.development), borough: str(st.borough),
+        address: str(st.address), borough: str(st.borough),
         units: str(st.units), floors: str(st.floors), ownerName: str(st.ownerName), ownerPhone: str(st.ownerPhone), ownerEmail: str(st.ownerEmail),
         ownerAddress: str(st.ownerAddress), managementCompany: str(st.managementCompany), managementPhone: str(st.managementPhone),
+        superName: str(st.superName), superPhone: str(st.superPhone), superApartment: str(st.superApartment),
         notes: str(st.notes), visitedOn: str(st.visitedOn) || today(),
       });
       setLoaded(true);
@@ -39,7 +41,7 @@ export default function CommunityBuilding() {
     setBusy(true);
     try {
       const state = { ...f, address: f.address.trim(), units: f.units ? Number(f.units) : '', floors: f.floors ? Number(f.floors) : '' };
-      await saveCommunity('community-buildings', record, state, f.development);
+      await saveCommunity('community-buildings', record, state, '');
       router.back();
     } catch (e: any) {
       Alert.alert('Could not save', e?.message || 'Check your connection and try again.');
@@ -58,7 +60,6 @@ export default function CommunityBuilding() {
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
       <Text style={ui.label}>The building, how many apartments are in it, and who owns or manages it.</Text>
       {field('Building address *', 'address', { placeholder: '262 Ralph Ave, Brooklyn' })}
-      <DevelopmentPicker value={f.development} onChange={(v) => set('development', v)} />
       <Text style={ui.label}>Borough</Text>
       <Chips options={BOROUGHS} value={f.borough} onChange={(v) => set('borough', v === f.borough ? '' : v)} />
       <View style={ui.row}>
@@ -72,6 +73,10 @@ export default function CommunityBuilding() {
       {field('Owner mailing address', 'ownerAddress')}
       {field('Management company', 'managementCompany', { autoCapitalize: 'words' })}
       {field('Management phone', 'managementPhone', { keyboardType: 'phone-pad' })}
+      <Text style={[ui.h, { marginTop: 4 }]}>Super</Text>
+      {field("Super's name", 'superName', { autoCapitalize: 'words' })}
+      {field("Super's phone", 'superPhone', { keyboardType: 'phone-pad' })}
+      {field("Super's apartment (if they live in the building)", 'superApartment', { placeholder: '1A', autoCapitalize: 'characters' })}
       <Text style={ui.label}>Notes</Text>
       <TextInput style={[ui.input, { minHeight: 90, textAlignVertical: 'top' }]} multiline value={f.notes} onChangeText={(v) => set('notes', v)} placeholder="Condition of the building, access, super's name…" />
       {field('Visit date (YYYY-MM-DD)', 'visitedOn', { placeholder: today() })}
