@@ -71,7 +71,7 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
             </div>
             <div className="hidden md:block leading-tight text-left">
               <b className="text-[13.5px] font-bold block">{staff?.name || "User"}</b>
-              <span className="text-[11.5px] text-muted-foreground block capitalize">{staff?.role || "Staff"}</span>
+              <span className="text-[11.5px] text-muted-foreground block">{staff?.position || String(staff?.role || "Staff").replace(/_/g, " ")}</span>
             </div>
             <ChevronDown className="w-4 h-4 text-muted-foreground hidden md:block" />
           </DropdownMenuTrigger>
