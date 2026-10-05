@@ -1562,11 +1562,13 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     // review. Approval fields never come from the client.
     delete patch["reviewedById"]; delete patch["reviewedByName"]; delete patch["reviewedAt"];
     if (isCommunityCoordinatorSupervisor(actor)) {
-      if (patch["reviewStatus"] === "approved") {
-        patch["reviewedById"] = actor.id; patch["reviewedByName"] = actor.name; patch["reviewedAt"] = new Date().toISOString();
-      } else {
-        delete patch["reviewStatus"];
+      // The supervisor reads and approves — they never change what the
+      // coordinator wrote.
+      if (patch["reviewStatus"] !== "approved" || Object.keys(patch).some((key) => key !== "reviewStatus")) {
+        res.status(403).json({ error: "The Community Coordinator Supervisor reads and approves; only the coordinator who logged it can change it" });
+        return;
       }
+      patch["reviewedById"] = actor.id; patch["reviewedByName"] = actor.name; patch["reviewedAt"] = new Date().toISOString();
     } else {
       patch["reviewStatus"] = current.state["reviewStatus"] === "approved" ? "updated" : "submitted";
     }

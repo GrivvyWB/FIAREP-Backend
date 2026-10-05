@@ -811,7 +811,8 @@ export function canUploadToEntityRecord(
 }
 
 export function canCreateEntity(actor: Actor, entity: string): boolean {
-  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
+  // Coordinators log the visits; their supervisor only reads and approves.
+  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor) && !isCommunityCoordinatorSupervisor(actor);
   if (isCommunityCoordinator(actor)) return false;
   // The vendor email list belongs to Procurement.
   if (entity === "vendor-contacts") return actor.role === "procurement" || actor.role === "administrator";
@@ -883,7 +884,8 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
   // A coordinator edits their own entries (the record read rule scopes it);
-  // the Community Coordinator Supervisor edits any.
+  // the Community Coordinator Supervisor only approves (the route limits
+  // their patch to the review status).
   if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
   if (isCommunityCoordinator(actor)) return false;
   // The vendor email list belongs to Procurement.

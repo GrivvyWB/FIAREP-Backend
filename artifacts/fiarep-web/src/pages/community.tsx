@@ -125,7 +125,8 @@ export default function CommunityCoordinators() {
       toast({ variant: "destructive", title: "Could not delete", description: error instanceof Error ? error.message : "Try again." });
     } finally { setDeleting(null); }
   }
-  const canEdit = (r: Rec) => supervisor || s(r.state.loggedById) === staff?.id;
+  // The coordinator who logged it edits it; the supervisor reads and approves.
+  const canEdit = (r: Rec) => !supervisor && s(r.state.loggedById) === staff?.id;
   const pendingCount = [...residents, ...buildings].filter((r) => (s(r.state.reviewStatus) || "submitted") !== "approved").length;
   const update = useUpdateEntityRecord();
   async function approve(entity: string, r: Rec) {
@@ -149,10 +150,12 @@ export default function CommunityCoordinators() {
               : "Only you and your Community Coordinator Supervisor can see what you log here."}
           </p>
         </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setEditResident("new")}><Plus className="mr-1 h-4 w-4" />Log resident</Button>
-          <Button variant="outline" onClick={() => setEditBuilding("new")}><Building2 className="mr-1 h-4 w-4" />Add building / owner</Button>
-        </div>
+        {!supervisor && (
+          <div className="flex gap-2">
+            <Button onClick={() => setEditResident("new")}><Plus className="mr-1 h-4 w-4" />Log resident</Button>
+            <Button variant="outline" onClick={() => setEditBuilding("new")}><Building2 className="mr-1 h-4 w-4" />Add building / owner</Button>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-3 sm:grid-cols-4">
@@ -207,12 +210,10 @@ export default function CommunityCoordinators() {
                       </p>
                       <p className="text-sm text-muted-foreground">{[s(st.address), st.apartment ? `Apt ${s(st.apartment)}` : "", s(r.development), s(st.borough)].filter(Boolean).join(" · ")}</p>
                     </div>
-                    {canEdit(r) && (
-                      <div className="flex gap-1 shrink-0">
-                        <Button size="sm" variant="ghost" onClick={() => setEditResident(r)}><Edit2 className="h-4 w-4" /></Button>
-                        {supervisor && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting({ entity: "community-residents", rec: r, label: `${s(st.name)} · ${s(st.address)}` })}><Trash2 className="h-4 w-4" /></Button>}
-                      </div>
-                    )}
+                    <div className="flex gap-1 shrink-0">
+                      {canEdit(r) && <Button size="sm" variant="ghost" onClick={() => setEditResident(r)}><Edit2 className="h-4 w-4" /></Button>}
+                      {supervisor && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting({ entity: "community-residents", rec: r, label: `${s(st.name)} · ${s(st.address)}` })}><Trash2 className="h-4 w-4" /></Button>}
+                    </div>
                   </div>
                   <div className="mt-2 grid gap-1 text-sm">
                     {s(st.phone) && <p className="flex items-center gap-2"><Phone className="h-3.5 w-3.5 text-muted-foreground" /><a className="underline" href={`tel:${s(st.phone)}`}>{s(st.phone)}</a>{s(st.email) && <span className="text-muted-foreground">· {s(st.email)}</span>}</p>}
@@ -250,12 +251,10 @@ export default function CommunityCoordinators() {
                       <p className="font-semibold flex items-center gap-2"><Building2 className="h-4 w-4" />{s(st.address) || "Address missing"}</p>
                       <p className="text-sm text-muted-foreground">{[s(b.development), s(st.borough), st.units ? `${st.units} apartment units` : "", st.floors ? `${st.floors} floors` : ""].filter(Boolean).join(" · ")}</p>
                     </div>
-                    {canEdit(b) && (
-                      <div className="flex gap-1 shrink-0">
-                        <Button size="sm" variant="ghost" onClick={() => setEditBuilding(b)}><Edit2 className="h-4 w-4" /></Button>
-                        {supervisor && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting({ entity: "community-buildings", rec: b, label: s(st.address) })}><Trash2 className="h-4 w-4" /></Button>}
-                      </div>
-                    )}
+                    <div className="flex gap-1 shrink-0">
+                      {canEdit(b) && <Button size="sm" variant="ghost" onClick={() => setEditBuilding(b)}><Edit2 className="h-4 w-4" /></Button>}
+                      {supervisor && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting({ entity: "community-buildings", rec: b, label: s(st.address) })}><Trash2 className="h-4 w-4" /></Button>}
+                    </div>
                   </div>
                   <div className="mt-2 grid gap-1 text-sm">
                     <p><span className="text-muted-foreground">Owner:</span> {s(st.ownerName) || "—"}{s(st.ownerPhone) && <> · <a className="underline" href={`tel:${s(st.ownerPhone)}`}>{s(st.ownerPhone)}</a></>}{s(st.ownerEmail) && <span className="text-muted-foreground"> · {s(st.ownerEmail)}</span>}</p>

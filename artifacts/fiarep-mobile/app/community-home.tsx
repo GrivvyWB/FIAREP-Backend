@@ -65,7 +65,8 @@ export default function CommunityHome() {
       str(r.development).toLowerCase().includes(needle);
   };
   const rows = (tab === 'residents' ? residents : buildings).filter(matches);
-  const canEdit = (r: CommunityRecord) => supervisor || str(r.state.loggedById) === meId;
+  // The coordinator who logged it edits it; the supervisor reads and approves.
+  const canEdit = (r: CommunityRecord) => !supervisor && str(r.state.loggedById) === meId;
   const pendingCount = [...residents, ...buildings].filter((r) => (str(r.state.reviewStatus) || 'submitted') !== 'approved').length;
   async function approve(r: CommunityRecord) {
     const entity = tab === 'residents' ? 'community-residents' : 'community-buildings';
@@ -110,12 +111,16 @@ export default function CommunityHome() {
         <Text style={{ fontSize: 22, fontWeight: '700' }}>{pendingCount}</Text>
       </View>
 
-      <Pressable style={ui.btn} onPress={() => router.push('/community-resident')}>
-        <Text style={ui.btnText}>+ Log a resident</Text>
-      </Pressable>
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/community-building')}>
-        <Text style={ui.btnOutlineText}>+ Add building / owner</Text>
-      </Pressable>
+      {!supervisor && (
+        <>
+          <Pressable style={ui.btn} onPress={() => router.push('/community-resident')}>
+            <Text style={ui.btnText}>+ Log a resident</Text>
+          </Pressable>
+          <Pressable style={ui.btnOutline} onPress={() => router.push('/community-building')}>
+            <Text style={ui.btnOutlineText}>+ Add building / owner</Text>
+          </Pressable>
+        </>
+      )}
 
       <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
         {chip(`Residents (${residents.length})`, tab === 'residents', () => setTab('residents'))}
