@@ -8,16 +8,16 @@ export function JoinFiarepTab() {
   const [location, setLocation] = useLocation();
   if (location === "/join") return null;
   return (
-    <button
-      type="button"
-      onClick={() => setLocation("/join")}
+    <a
+      href="/join"
+      onClick={(e) => { e.preventDefault(); setLocation("/join"); }}
       aria-label="Join FIAREP — management service and expediting"
-      className="flex items-center gap-3 rounded-2xl border border-amber-500/40 bg-white p-2 pr-4 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+      className="flex cursor-pointer items-center gap-3 rounded-2xl border border-amber-500/40 bg-white p-2 pr-4 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
     >
       <img src="/platform-media/fiarep-247-logo.png" alt="24/7 FIAREP Management Service / Expediting" className="h-28 w-auto sm:h-32" />
       <span className="text-left">
         <span className="block text-2xl font-bold text-slate-900">Join FIAREP</span>
       </span>
-    </button>
+    </a>
   );
 }

@@ -127,6 +127,9 @@ function AppRouter() {
   if (location === "/platform") {
     return <RoutedErrorBoundary><Platform /></RoutedErrorBoundary>;
   }
+  if (location === "/join") {
+    return <RoutedErrorBoundary><JoinFiarep /></RoutedErrorBoundary>;
+  }
 
   const persona = getStoredPersona();
 
