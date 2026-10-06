@@ -22,7 +22,9 @@ function fmt(iso: string): string {
 const CLASS_COLOR: Record<HazardClass, string> = { A: '#1E7D4F', B: '#B4741A', C: '#C0392B' };
 
 export default function InspectorViolations() {
-  const { preBuilding, preUnit, preViolationNo, preNote, preDevelopment, routeAssignmentId } = useLocalSearchParams<{ preBuilding?: string; preUnit?: string; preViolationNo?: string; preNote?: string; preDevelopment?: string; routeAssignmentId?: string }>();
+  const { preBuilding, preUnit, preViolationNo, preNote, preDevelopment, routeAssignmentId, lookup } = useLocalSearchParams<{ preBuilding?: string; preUnit?: string; preViolationNo?: string; preNote?: string; preDevelopment?: string; routeAssignmentId?: string; lookup?: string }>();
+  // ?lookup=1: anyone on staff checks a building's HPD / DOB record; no logging.
+  const lookupMode = String(lookup || '') === '1';
   const router = useRouter();
   const [authorized, setAuthorized] = useState(false);
   // CPMs open this from a complaint to look up DOB/HPD records; only field
@@ -62,12 +64,12 @@ export default function InspectorViolations() {
       const pos = position.trim().toLowerCase();
       const inspector = actor.role === 'inspector' && pos === 'inspector';
       const cpm = pos === 'cpm';
-      const allowed = inspector || cpm;
+      const allowed = inspector || cpm || lookupMode;
       if (!allowed) router.replace('/cpm-home');
-      setLookupOnly(!inspector && cpm);
+      setLookupOnly(lookupMode || (!inspector && cpm));
       setAuthorized(allowed);
-    }).catch(() => router.replace('/cpm-home'));
-  }, [router]));
+    }).catch(() => { if (!lookupMode) router.replace('/cpm-home'); else setAuthorized(true); });
+  }, [router, lookupMode]));
 
   const load = useCallback(() => {
     if (building.trim()) listBuildingViolations(building, violationNo).then(setItems);

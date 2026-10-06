@@ -200,7 +200,10 @@ export default function CommunityHome() {
         );
       })}
 
-      {modules['translator'] && <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/translator')}>
+      {modules['property-lookup'] && <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/inspector-violations?lookup=1')}>
+        <Text style={ui.btnOutlineText}>🏢 Check HPD / DOB</Text>
+      </Pressable>}
+      {modules['translator'] && <Pressable style={ui.btnOutline} onPress={() => router.push('/translator')}>
         <Text style={ui.btnOutlineText}>🌐 Translator</Text>
       </Pressable>}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>

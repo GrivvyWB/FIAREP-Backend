@@ -76,6 +76,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "settings", name: "Settings", description: "Organization settings", icon: Settings },
   { id: "shared-data", name: "Shared Data", description: "Shared platform data", icon: Package },
   { id: "measurement", name: "Measurement", description: "AR/LiDAR material take-off (concrete, sheetrock, window openings)", icon: Building2 },
+  { id: "property-lookup", name: "HPD / DOB Lookup", description: "Look up a building's HPD and DOB violations by address (app, all staff)", icon: AlertTriangle },
   { id: "translator", name: "Translator", description: "Voice-to-voice interpreter for talking with residents (website and app)", icon: Users },
 ];
 

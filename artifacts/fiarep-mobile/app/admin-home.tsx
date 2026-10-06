@@ -97,6 +97,7 @@ export default function AdminHome() {
       color: '#4A5560',
       tiles: [
         { label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' },
+        ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
         ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
       ],

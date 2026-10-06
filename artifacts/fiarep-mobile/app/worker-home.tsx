@@ -136,6 +136,9 @@ export default function WorkerHome() {
         <Text style={ui.btnOutlineText}>Check Report Status</Text>
       </Pressable>}
 
+      {modules['property-lookup'] && <Pressable style={[ui.btnOutline]} onPress={() => router.push('/inspector-violations?lookup=1')}>
+        <Text style={ui.btnOutlineText}>🏢 Check HPD / DOB</Text>
+      </Pressable>}
       {modules['translator'] && <Pressable style={ui.btnOutline} onPress={() => router.push('/translator')}>
         <Text style={ui.btnOutlineText}>🌐 Translator</Text>
       </Pressable>}
