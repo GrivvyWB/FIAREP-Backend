@@ -1,18 +1,28 @@
 import { useMemo, useState } from "react";
+import { Button } from "@/components/ui/button";
 
 /** "What it costs" on the Join FIAREP page: expediter fee ranges, the full
  * cost picture for a typical 20-unit NYC building, how each agency works,
  * and a live estimator. Figures are typical NYC ranges, not a quote. */
 
 const FEES = [
-  ["Simple cure — Class A, smoke / CO detector, minor electrical", "$350 – $800 per violation", "Certificate of correction, proof of fix, administrative non-compliance."],
-  ["Standard DOB / HPD violation removal", "$1,500 – $3,500 flat", "Records research, post-approval permits, inspections with city officials, certifying compliance."],
-  ["Complex DOB cure — PE / RA sign-off, DOB NOW filings", "$1,800 – $7,500+", "Unpermitted structural or mechanical work, multi-trade coordination, engineer letters. PE / RA certification letters typically $500 – $2,000+."],
-  ["Stop Work / Vacate Order removal", "$1,500 – $8,000+", "Emergency filings, examiner negotiations, rescinding the order."],
-  ["OATH / ECB hearing representation", "$300 – $950 per hearing", "Appearance and mitigation argument. Case preparation billed separately when needed."],
-  ["Motion to vacate a default judgment", "$175 – $1,000 per violation", "Within 60 days of the default at the low end; special-motions filings at the high end."],
-  ["Permit filings", "$500 – $3,000 per permit", "Alt-3 $500 – $1,000 · Alt-2 $750 – $1,500 · Alt-1 $1,500 – $3,000 · open-permit closures $500 – $3,000. DOB filing fees are separate."],
-  ["Monthly retainer", "from $500 / month", "Covers a set number of simple cures each month plus hearing representation; volume pricing above that."],
+  ["Simple cure — Class A, smoke / CO detector, minor electrical, HPD certification of correction", "$400 per violation", "Certificate of correction, proof of fix, administrative non-compliance."],
+  ["Standard DOB / HPD violation removal", "$1,500 flat · $1,000 each from the 3rd on the same building", "Records research, post-approval permits, inspections with city officials, certifying compliance."],
+  ["Complex DOB cure — PE / RA sign-off, DOB NOW filings", "$2,500 + engineer at cost", "Unpermitted structural or mechanical work, multi-trade coordination, engineer letters (typically $500 – $2,000+)."],
+  ["Stop Work / Vacate Order removal", "$3,000", "Emergency filings, examiner negotiations, rescinding the order. More if plans must be filed."],
+  ["OATH / ECB hearing appearance", "$600 per hearing · $250 to admit and cure", "Appearance and mitigation argument; case preparation included."],
+  ["Motion to vacate a default judgment", "$350 within 60 days · $850 special motion", "Gets a defaulted summons back in front of a hearing officer."],
+  ["Permit filings", "Alt-3 $750 · Alt-2 $1,200 · Alt-1 $2,250", "DOB filing fees are separate. Open-permit closures $750 per permit."],
+  ["Hourly — research, zoning, multi-agency", "$175 per hour", "Extensive records research, complex zoning questions, multi-agency coordination."],
+];
+
+const RETAINER_INCLUDES = [
+  "The FIAREP platform — app and website — for all of your staff and residents",
+  "24 / 7 complaint line; every call tracked and the resident told at each step",
+  "HPD / DOB monitoring of every address in the development",
+  "1 simple cure per 10 units each month (a 100-unit development: 10 cures a month)",
+  "OATH hearings at $400 instead of $600; everything else 20% off the rates below",
+  "Pilot: first 60 days at half price, no contract",
 ];
 
 const BUCKETS = [
@@ -50,11 +60,26 @@ export function JoinPricing() {
   return (
     <section className="mt-12">
       <h2 className="text-2xl font-semibold text-white">What it costs</h2>
-      <p className="mt-1 text-sm text-slate-400">Current New York City market rates and official DOB / HPD penalty schedules, checked October 2026. Your number depends on how many violations are open, how old they are, and how severe — not just the unit count. Every pilot gets a written quote.</p>
+      <p className="mt-1 text-sm text-slate-400">FIAREP rates, set against current New York City market rates and the official DOB / HPD penalty schedules (October 2026). Every pilot gets a written quote before any work starts.</p>
+
+      <div className="mt-4 rounded-2xl border-2 border-amber-500/60 bg-gradient-to-br from-amber-500/15 to-slate-900/80 p-6">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">The FIAREP plan — best value</p>
+            <h3 className="mt-1 text-2xl font-bold text-white">$20 per unit per month</h3>
+            <p className="text-sm text-slate-300">Minimum $1,000 / month. A 20-unit building is $1,000; 100 units is $2,000; 500 units is $10,000.</p>
+          </div>
+          <Button className="bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Start the 60-day pilot</Button>
+        </div>
+        <ul className="mt-4 grid gap-2 sm:grid-cols-2">
+          {RETAINER_INCLUDES.map((line) => <li key={line} className="flex gap-2 text-sm text-slate-200"><span className="text-amber-400">✓</span>{line}</li>)}
+        </ul>
+        <p className="mt-3 text-xs text-slate-400">City penalties, DOB re-inspection fees ($225) and HPD dismissal requests ($250 – $1,000) pass through at cost on every plan.</p>
+      </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-          <h3 className="font-semibold text-white">FIAREP expediting fees</h3>
+          <h3 className="font-semibold text-white">Per-job rates (no plan)</h3>
           <table className="mt-3 w-full text-sm">
             <tbody>
               {FEES.map(([k, price, what]) => (
@@ -65,7 +90,7 @@ export function JoinPricing() {
               ))}
             </tbody>
           </table>
-          <p className="mt-3 text-xs text-slate-500">Billed flat per violation or task for routine dismissals and Certificates of Correction; hourly for research-heavy work.</p>
+          <p className="mt-3 text-xs text-slate-500">Flat per violation or task; hourly only for research-heavy work. Plan members pay 20% less.</p>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
