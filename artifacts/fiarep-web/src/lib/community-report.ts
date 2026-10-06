@@ -9,7 +9,8 @@ export const LEAD_DOCUMENTS = ["Lead test results", "XRF report", "Doctor's note
 
 export type MoldInfo = { present?: boolean; locations?: string; extent?: string; since?: string; notes?: string };
 export type VerminInfo = { present?: boolean; types?: string[]; locations?: string; frequency?: string; notes?: string };
-export type LeadInfo = { present?: boolean; childUnder6?: boolean; peelingPaint?: string; tested?: string; documents?: string[]; notes?: string };
+export type LeadChild = { name?: string; age?: string; dob?: string };
+export type LeadInfo = { present?: boolean; childUnder6?: boolean; children?: LeadChild[]; peelingPaint?: string; tested?: string; documents?: string[]; notes?: string };
 export type AffidavitInfo = { given?: boolean; statement?: string; affiantName?: string; date?: string; witnessName?: string; affirmed?: boolean };
 
 export type ResidentState = Record<string, any> & {
@@ -54,7 +55,10 @@ function residentRows(st: ResidentState, development: string): { title: string; 
   if (st.lead?.present) blocks.push({
     title: "Lead paint",
     rows: [
-      ["Child under 6 in the unit", yes(st.lead.childUnder6)], ["Peeling / chipping paint", s(st.lead.peelingPaint)],
+      ["Child under 6 in the unit", yes(st.lead.childUnder6)],
+      ["Children", (Array.isArray(st.lead.children) ? st.lead.children : []).filter((c: LeadChild) => s(c.name) || s(c.dob) || s(c.age))
+        .map((c: LeadChild) => [s(c.name) || "Child", s(c.age) ? `age ${s(c.age)}` : "", s(c.dob) ? `DOB ${s(c.dob)}` : ""].filter(Boolean).join(", ")).join("; ")],
+      ["Peeling / chipping paint", s(st.lead.peelingPaint)],
       ["Testing", s(st.lead.tested)], ["Documents provided", list(st.lead.documents)], ["Notes", s(st.lead.notes)],
     ],
   });

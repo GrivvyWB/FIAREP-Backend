@@ -8,7 +8,7 @@ import {
 import { Chips } from '../lib/community-ui';
 import {
   LEAD_DOCUMENTS, LEAD_TESTED, MOLD_EXTENT, VERMIN_FREQUENCY, VERMIN_TYPES,
-  type AffidavitInfo, type LeadInfo, type MoldInfo, type VerminInfo,
+  type AffidavitInfo, type LeadChild, type LeadInfo, type MoldInfo, type VerminInfo,
 } from '../lib/community-report';
 
 export default function CommunityResident() {
@@ -23,7 +23,7 @@ export default function CommunityResident() {
     program: PROGRAMS[0]!, critical: false, criticalTags: [] as string[], notes: '', visitedOn: today(),
     mold: { present: false, locations: '', extent: '', since: '', notes: '' } as MoldInfo,
     vermin: { present: false, types: [], locations: '', frequency: '', notes: '' } as VerminInfo,
-    lead: { present: false, childUnder6: false, peelingPaint: '', tested: '', documents: [], notes: '' } as LeadInfo,
+    lead: { present: false, childUnder6: false, children: [], peelingPaint: '', tested: '', documents: [], notes: '' } as LeadInfo,
     affidavit: { given: false, statement: '', affiantName: '', date: '', witnessName: '', affirmed: false } as AffidavitInfo,
   });
   const set = (k: keyof typeof f, v: unknown) => setF((c) => ({ ...c, [k]: v }));
@@ -41,7 +41,7 @@ export default function CommunityResident() {
         notes: str(st.notes), visitedOn: str(st.visitedOn) || today(),
         mold: { present: false, locations: '', extent: '', since: '', notes: '', ...(st.mold || {}) },
         vermin: { present: false, types: [], locations: '', frequency: '', notes: '', ...(st.vermin || {}) },
-        lead: { present: false, childUnder6: false, peelingPaint: '', tested: '', documents: [], notes: '', ...(st.lead || {}) },
+        lead: { present: false, childUnder6: false, children: [], peelingPaint: '', tested: '', documents: [], notes: '', ...(st.lead || {}) },
         affidavit: { given: false, statement: '', affiantName: '', date: '', witnessName: '', affirmed: false, ...(st.affidavit || {}) },
       });
       setLoaded(true);
@@ -110,8 +110,27 @@ export default function CommunityResident() {
       <Section title="Lead paint" on={!!f.lead.present} onToggle={(v) => sub('lead', { present: v })}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={{ flex: 1 }}>A child under 6 lives in or regularly visits the unit</Text>
-          <Switch value={!!f.lead.childUnder6} onValueChange={(v) => sub('lead', { childUnder6: v })} />
+          <Switch value={!!f.lead.childUnder6} onValueChange={(v) => sub('lead', { childUnder6: v, children: v && !(f.lead.children || []).length ? [{ name: '', age: '', dob: '' }] : f.lead.children })} />
         </View>
+        {f.lead.childUnder6 && (
+          <View style={{ gap: 8, borderWidth: 1, borderColor: '#e0e0e0', borderRadius: 8, padding: 8 }}>
+            <Text style={ui.label}>Children under 6</Text>
+            {(f.lead.children || []).map((child: LeadChild, i: number) => {
+              const setChild = (patch: Partial<LeadChild>) => sub('lead', { children: (f.lead.children || []).map((c, j) => j === i ? { ...c, ...patch } : c) });
+              return (
+                <View key={i} style={{ gap: 6, paddingBottom: 8, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' }}>
+                  <TextInput style={ui.input} value={child.name || ''} onChangeText={(v) => setChild({ name: v })} placeholder="Child's name" autoCapitalize="words" />
+                  <View style={ui.row}>
+                    <TextInput style={[ui.input, { flex: 1 }]} value={child.age || ''} onChangeText={(v) => setChild({ age: v })} placeholder="Age" keyboardType="number-pad" />
+                    <TextInput style={[ui.input, { flex: 2 }]} value={child.dob || ''} onChangeText={(v) => setChild({ dob: v, age: ageFromDob(v) ?? child.age })} placeholder="Date of birth (YYYY-MM-DD)" />
+                  </View>
+                  <Pressable onPress={() => sub('lead', { children: (f.lead.children || []).filter((_, j) => j !== i) })}><Text style={{ color: '#b91c1c', fontWeight: '600' }}>Remove</Text></Pressable>
+                </View>
+              );
+            })}
+            <Pressable style={ui.btnOutline} onPress={() => sub('lead', { children: [...(f.lead.children || []), { name: '', age: '', dob: '' }] })}><Text style={ui.btnOutlineText}>+ Add another child</Text></Pressable>
+          </View>
+        )}
         <Text style={ui.label}>Peeling / chipping paint — where</Text>
         <TextInput style={ui.input} value={f.lead.peelingPaint || ''} onChangeText={(v) => sub('lead', { peelingPaint: v })} placeholder="Window sills, bedroom door frame…" />
         <Text style={ui.label}>Testing</Text>
@@ -157,4 +176,13 @@ function Section({ title, on, onToggle, children }: { title: string; on: boolean
       {on && children}
     </View>
   );
+}
+
+function ageFromDob(dob: string): string | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) return null;
+  const d = new Date(dob); if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age -= 1;
+  return age >= 0 ? String(age) : null;
 }

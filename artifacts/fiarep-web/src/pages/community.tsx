@@ -21,7 +21,7 @@ import { AlertTriangle, Building2, Copy, Edit2, Mail, Phone, Plus, Printer, Sear
 import {
   LEAD_DOCUMENTS, LEAD_TESTED, MOLD_EXTENT, VERMIN_FREQUENCY, VERMIN_TYPES,
   residentReportHtml, residentReportText, sectionsOnRecord,
-  type AffidavitInfo, type LeadInfo, type MoldInfo, type VerminInfo,
+  type AffidavitInfo, type LeadChild, type LeadInfo, type MoldInfo, type VerminInfo,
 } from "@/lib/community-report";
 
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
@@ -330,7 +330,7 @@ function ResidentDialog({ record, buildings, onClose }: { record: Rec | null; bu
     notes: s(st.notes), visitedOn: s(st.visitedOn) || today(),
     mold: { present: false, locations: "", extent: "", since: "", notes: "", ...(st.mold || {}) } as MoldInfo,
     vermin: { present: false, types: [], locations: "", frequency: "", notes: "", ...(st.vermin || {}) } as VerminInfo,
-    lead: { present: false, childUnder6: false, peelingPaint: "", tested: "", documents: [], notes: "", ...(st.lead || {}) } as LeadInfo,
+    lead: { present: false, childUnder6: false, children: [], peelingPaint: "", tested: "", documents: [], notes: "", ...(st.lead || {}) } as LeadInfo,
     affidavit: { given: false, statement: "", affiantName: "", date: "", witnessName: "", affirmed: false, ...(st.affidavit || {}) } as AffidavitInfo,
   });
   const sub = <K extends "mold" | "vermin" | "lead" | "affidavit">(k: K, patch: Partial<typeof form[K]>) => setForm((f) => ({ ...f, [k]: { ...f[k], ...patch } }));
@@ -416,7 +416,21 @@ function ResidentDialog({ record, buildings, onClose }: { record: Rec | null; bu
             <Field label="Vermin notes"><Textarea rows={2} value={form.vermin.notes || ""} onChange={(e) => sub("vermin", { notes: e.target.value })} placeholder="Extermination history, entry points, bites…" /></Field>
           </Section>
           <Section title="Lead paint" on={!!form.lead.present} onToggle={(v) => sub("lead", { present: v })}>
-            <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!form.lead.childUnder6} onCheckedChange={(v) => sub("lead", { childUnder6: v === true })} />A child under 6 lives in or regularly visits the unit</label>
+            <label className="flex items-center gap-2 text-sm"><Checkbox checked={!!form.lead.childUnder6} onCheckedChange={(v) => sub("lead", { childUnder6: v === true, children: v === true && !(form.lead.children || []).length ? [{ name: "", age: "", dob: "" }] : form.lead.children })} />A child under 6 lives in or regularly visits the unit</label>
+            {form.lead.childUnder6 && (
+              <div className="space-y-2 rounded-md border bg-muted/30 p-2">
+                <p className="text-xs font-medium text-muted-foreground">Children under 6</p>
+                {(form.lead.children || []).map((child: LeadChild, i: number) => (
+                  <div key={i} className="grid grid-cols-[1fr_70px_1fr_auto] items-end gap-2">
+                    <Field label="Name"><Input value={child.name || ""} onChange={(e) => sub("lead", { children: (form.lead.children || []).map((c, j) => j === i ? { ...c, name: e.target.value } : c) })} /></Field>
+                    <Field label="Age"><Input inputMode="numeric" value={child.age || ""} onChange={(e) => sub("lead", { children: (form.lead.children || []).map((c, j) => j === i ? { ...c, age: e.target.value } : c) })} /></Field>
+                    <Field label="Date of birth"><Input type="date" value={child.dob || ""} onChange={(e) => { const dob = e.target.value; const age = ageFromDob(dob); sub("lead", { children: (form.lead.children || []).map((c, j) => j === i ? { ...c, dob, age: age ?? c.age } : c) }); }} /></Field>
+                    <Button type="button" size="sm" variant="ghost" className="text-destructive" onClick={() => sub("lead", { children: (form.lead.children || []).filter((_, j) => j !== i) })}>Remove</Button>
+                  </div>
+                ))}
+                <Button type="button" size="sm" variant="outline" onClick={() => sub("lead", { children: [...(form.lead.children || []), { name: "", age: "", dob: "" }] })}><Plus className="mr-1 h-3.5 w-3.5" />Add another child</Button>
+              </div>
+            )}
             <Field label="Peeling / chipping paint — where"><Input value={form.lead.peelingPaint || ""} onChange={(e) => sub("lead", { peelingPaint: e.target.value })} placeholder="Window sills, bedroom door frame…" /></Field>
             <Field label="Testing"><select className={selectClass} value={form.lead.tested || ""} onChange={(e) => sub("lead", { tested: e.target.value })}><option value="">Select</option>{LEAD_TESTED.map((o) => <option key={o} value={o}>{o}</option>)}</select></Field>
             <Field label="Lead documents provided"><div className="grid grid-cols-2 gap-1 text-sm">{LEAD_DOCUMENTS.map((t) => <label key={t} className="flex items-center gap-2"><Checkbox checked={(form.lead.documents || []).includes(t)} onCheckedChange={(v) => sub("lead", { documents: v === true ? [...(form.lead.documents || []), t] : (form.lead.documents || []).filter((x) => x !== t) })} />{t}</label>)}</div></Field>
@@ -514,6 +528,15 @@ function BuildingDialog({ record, onClose }: { record: Rec | null; onClose: (sav
       </DialogContent>
     </Dialog>
   );
+}
+
+function ageFromDob(dob: string): string | null {
+  if (!dob) return null;
+  const d = new Date(dob); if (Number.isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getFullYear() - d.getFullYear();
+  if (now.getMonth() < d.getMonth() || (now.getMonth() === d.getMonth() && now.getDate() < d.getDate())) age -= 1;
+  return age >= 0 ? String(age) : null;
 }
 
 function Section({ title, on, onToggle, children }: { title: string; on: boolean; onToggle: (v: boolean) => void; children: ReactNode }) {
