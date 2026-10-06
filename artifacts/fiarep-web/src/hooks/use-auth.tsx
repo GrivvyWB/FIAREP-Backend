@@ -7,6 +7,7 @@ interface AuthContextType {
   staff: Staff | null;
   organizationModules: Record<string, boolean>;
   propertyLimit: number | null;
+  organizationName: string;
   isLoading: boolean;
   login: (name: string, code: string, organizationId?: string) => Promise<
     { status: "authenticated" } |
@@ -25,6 +26,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [staff, setStaff] = useState<Staff | null>(null);
   const [organizationModules, setOrganizationModules] = useState<Record<string, boolean>>({});
   const [propertyLimit, setPropertyLimit] = useState<number | null>(null);
+  const [organizationName, setOrganizationName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   const loadOrganizationConfig = async (accessToken?: string) => {
@@ -40,8 +42,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!response.ok) throw new Error("Organization configuration could not be loaded");
     const config = await response.json() as {
       propertyLimit: number | null;
+      name?: string;
       features?: { modules?: Record<string, unknown> };
     };
+    setOrganizationName(typeof config.name === "string" ? config.name.trim() : "");
     const saved = config.features?.modules;
     setOrganizationModules(
       saved && typeof saved === "object" && !Array.isArray(saved)
@@ -230,6 +234,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         staff,
         organizationModules,
         propertyLimit,
+        organizationName,
         isLoading,
         login,
         procurementLogin,

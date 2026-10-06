@@ -13,6 +13,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import { Share } from 'react-native';
 import { getSessionIdentity } from './store';
+import { loadModuleConfig } from './module-access';
 import { residentReportHtml, residentReportText } from './community-report';
 
 export type CommunityEntity = 'community-residents' | 'community-buildings';
@@ -72,8 +73,13 @@ export async function saveCommunity(
 }
 
 /** Visit report as a PDF, handed to the share sheet (Mail, Files, print…). */
+async function orgName(): Promise<string> {
+  const config = await loadModuleConfig().catch(() => null);
+  return str(config?.name) || 'FIAREP';
+}
+
 export async function shareResidentPdf(record: CommunityRecord): Promise<void> {
-  const html = residentReportHtml(record.state, str(record.development));
+  const html = residentReportHtml(record.state, str(record.development), await orgName());
   const { uri } = await Print.printToFileAsync({ html });
   if (await Sharing.isAvailableAsync()) {
     await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Visit report', UTI: 'com.adobe.pdf' });
@@ -84,7 +90,7 @@ export async function shareResidentPdf(record: CommunityRecord): Promise<void> {
 
 /** Visit report as text (copy, paste into an email or message). */
 export async function shareResidentText(record: CommunityRecord): Promise<void> {
-  await Share.share({ message: residentReportText(record.state, str(record.development)) });
+  await Share.share({ message: residentReportText(record.state, str(record.development), await orgName()) });
 }
 
 /** The Community Coordinator Supervisor confirms they read and received a visit. */

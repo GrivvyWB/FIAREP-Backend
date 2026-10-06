@@ -72,7 +72,7 @@ function residentRows(st: ResidentState, development: string): { title: string; 
 }
 
 export function residentReportText(st: ResidentState, development: string, orgName = "FIAREP"): string {
-  const lines: string[] = [`${orgName} — Community Coordinator Visit Report`, ""];
+  const lines: string[] = [orgName, "Community Coordinator Visit Report (FIAREP)", ""];
   for (const b of residentRows(st, development)) {
     lines.push(b.title.toUpperCase());
     for (const [k, v] of b.rows) if (v) lines.push(`${k}: ${v}`);
@@ -96,7 +96,7 @@ export function residentReportHtml(st: ResidentState, development: string, orgNa
   <style>
     body{font-family:-apple-system,Helvetica,Arial,sans-serif;color:#111;margin:36px;font-size:13px}
     header{display:flex;justify-content:space-between;align-items:flex-end;border-bottom:3px solid #f2c14e;padding-bottom:10px;margin-bottom:18px}
-    header h1{margin:0;font-size:20px} header .brand{font-weight:800;font-size:22px} header .brand b{color:#d99a00}
+    header h1{margin:0;font-size:20px} header .brand{font-weight:800;font-size:22px;max-width:70%} header .brand b{color:#d99a00}
     .meta{color:#555;font-size:12px}
     section{margin-bottom:16px;page-break-inside:avoid} h2{font-size:14px;margin:0 0 6px;border-bottom:1px solid #ddd;padding-bottom:3px}
     table{border-collapse:collapse;width:100%} th{text-align:left;color:#555;font-weight:600;width:34%;padding:3px 8px 3px 0;vertical-align:top} td{padding:3px 0;vertical-align:top}
@@ -109,6 +109,6 @@ export function residentReportHtml(st: ResidentState, development: string, orgNa
   <header><div><div class="brand">${esc(orgName)}</div><h1>Community Coordinator Visit Report</h1></div>
   <div class="meta">${esc(st.visitedOn)}${st.critical === true ? ' <span class="critical">CRITICAL</span>' : ""}</div></header>
   ${body}
-  <footer>${esc(s(st.loggedByName) ? `Logged by ${s(st.loggedByName)}${s(st.loggedByPosition) ? ` (${s(st.loggedByPosition)})` : ""}` : "")} · Confidential: for the Community Coordinator unit only.</footer>
+  <footer>${esc(s(st.loggedByName) ? `Logged by ${s(st.loggedByName)}${s(st.loggedByPosition) ? ` (${s(st.loggedByPosition)})` : ""}` : "")} · Confidential: for the Community Coordinator unit only. · Powered by FIAREP</footer>
   </body></html>`;
 }

@@ -50,25 +50,26 @@ async function removeRecord(entity: string, id: string, version: number) {
   } as never);
 }
 
-function printReport(r: Rec) {
+function printReport(r: Rec, orgName: string) {
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) return;
-  w.document.write(residentReportHtml(r.state, s(r.development)));
+  w.document.write(residentReportHtml(r.state, s(r.development), orgName));
   w.document.close();
   w.focus();
   setTimeout(() => w.print(), 300);
 }
-async function copyReport(r: Rec) {
-  await navigator.clipboard.writeText(residentReportText(r.state, s(r.development)));
+async function copyReport(r: Rec, orgName: string) {
+  await navigator.clipboard.writeText(residentReportText(r.state, s(r.development), orgName));
 }
-function emailReport(r: Rec) {
-  const subject = `Visit report — ${s(r.state.name)} · ${s(r.state.address)}${r.state.apartment ? ` Apt ${s(r.state.apartment)}` : ""}`;
-  const body = residentReportText(r.state, s(r.development));
+function emailReport(r: Rec, orgName: string) {
+  const subject = `${orgName} visit report — ${s(r.state.name)} · ${s(r.state.address)}${r.state.apartment ? ` Apt ${s(r.state.apartment)}` : ""}`;
+  const body = residentReportText(r.state, s(r.development), orgName);
   window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
 export default function CommunityCoordinators() {
-  const { staff } = useAuth();
+  const { staff, organizationName } = useAuth();
+  const orgName = organizationName || "FIAREP";
   const supervisor = isCommunityCoordinatorSupervisor(staff);
   const [tab, setTab] = useState<"residents" | "buildings">("residents");
   const [search, setSearch] = useState("");
@@ -228,9 +229,9 @@ export default function CommunityCoordinators() {
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
                     <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-residents", r)} busy={update.isPending} />
                     <div className="mt-1 flex flex-wrap gap-1">
-                      <Button size="sm" variant="outline" onClick={() => printReport(r)}><Printer className="mr-1 h-3.5 w-3.5" />Print / PDF</Button>
-                      <Button size="sm" variant="outline" onClick={() => copyReport(r).then(() => toast({ title: "Report copied" })).catch(() => toast({ variant: "destructive", title: "Could not copy" }))}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>
-                      <Button size="sm" variant="outline" onClick={() => emailReport(r)}><Mail className="mr-1 h-3.5 w-3.5" />Email</Button>
+                      <Button size="sm" variant="outline" onClick={() => printReport(r, orgName)}><Printer className="mr-1 h-3.5 w-3.5" />Print / PDF</Button>
+                      <Button size="sm" variant="outline" onClick={() => copyReport(r, orgName).then(() => toast({ title: "Report copied" })).catch(() => toast({ variant: "destructive", title: "Could not copy" }))}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>
+                      <Button size="sm" variant="outline" onClick={() => emailReport(r, orgName)}><Mail className="mr-1 h-3.5 w-3.5" />Email</Button>
                     </div>
                   </div>
                 </div>
