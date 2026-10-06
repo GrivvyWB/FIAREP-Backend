@@ -5,14 +5,14 @@ import { useMemo, useState } from "react";
  * and a live estimator. Figures are typical NYC ranges, not a quote. */
 
 const FEES = [
-  ["Simple cure — Class A, smoke / CO detector, minor electrical", "$350 – $800 per violation", "Certificate of correction, proof of fix, administrative non-compliance. Published: ViolationWatch $350 flat; PermitExperts $500 – $2,500 violation removal."],
-  ["Standard DOB / HPD violation removal", "$1,500 – $3,500 flat", "Records research, post-approval permits, inspections with city officials, certifying compliance. Published: All Boro Expediter $1,500 – $10,000+ by count and severity."],
-  ["Complex DOB cure — PE / RA sign-off, DOB NOW filings", "$1,800 – $7,500+", "Unpermitted structural or mechanical work, multi-trade coordination, engineer letters. Published: ViolationWatch from $1,800; PE/RA certification $500 – $2,000+ (PermitExperts)."],
-  ["Stop Work / Vacate Order removal", "$1,500 – $8,000+", "Emergency filings, examiner negotiations, rescinding the order. Published: All Boro Expediter $1,500 – $8,000+."],
-  ["OATH / ECB hearing representation", "$300 – $950 per hearing", "Appearance and mitigation argument. Published: ViolationRemoval.com $300 per violation + $500 case prep; ViolationWatch $950 per docketed hearing."],
-  ["Motion to vacate a default judgment", "$175 – $1,000 per violation", "Published: ViolationRemoval.com — $175 within 60 days, $750 – $1,000 special motions."],
-  ["Permit filings", "$500 – $3,000 per permit", "Published: PermitExperts Alt-3 $500 – $1,000 · Alt-2 $750 – $1,500 · Alt-1 $1,500 – $3,000; open-permit closures $500 – $3,000 (All Boro)."],
-  ["Monthly retainer", "from $500 / month", "Published: ViolationWatch $500 / month covers up to 8 simple cures plus OATH representation."],
+  ["Simple cure — Class A, smoke / CO detector, minor electrical", "$350 – $800 per violation", "Certificate of correction, proof of fix, administrative non-compliance."],
+  ["Standard DOB / HPD violation removal", "$1,500 – $3,500 flat", "Records research, post-approval permits, inspections with city officials, certifying compliance."],
+  ["Complex DOB cure — PE / RA sign-off, DOB NOW filings", "$1,800 – $7,500+", "Unpermitted structural or mechanical work, multi-trade coordination, engineer letters. PE / RA certification letters typically $500 – $2,000+."],
+  ["Stop Work / Vacate Order removal", "$1,500 – $8,000+", "Emergency filings, examiner negotiations, rescinding the order."],
+  ["OATH / ECB hearing representation", "$300 – $950 per hearing", "Appearance and mitigation argument. Case preparation billed separately when needed."],
+  ["Motion to vacate a default judgment", "$175 – $1,000 per violation", "Within 60 days of the default at the low end; special-motions filings at the high end."],
+  ["Permit filings", "$500 – $3,000 per permit", "Alt-3 $500 – $1,000 · Alt-2 $750 – $1,500 · Alt-1 $1,500 – $3,000 · open-permit closures $500 – $3,000. DOB filing fees are separate."],
+  ["Monthly retainer", "from $500 / month", "Covers a set number of simple cures each month plus hearing representation; volume pricing above that."],
 ];
 
 const BUCKETS = [
@@ -25,7 +25,7 @@ const BUCKETS = [
 const AGENCIES = [
   { name: "DOB — Department of Buildings", lines: ["Work Without a Permit: 21× the permit fee on multi-family buildings — minimum $6,000, maximum $15,000 (6×, $600 – $10,000 on 1–2 family homes).", "OATH penalties: Class 1 $2,500 standard / $12,500 default / $25,000 max; Class 2 $1,250 / $6,250 / $10,000; Class 3 $500. Re-inspection after a failure to correct: $225.", "We draft the Certificate of Correction, coordinate DOB inspection sign-offs and file DOB NOW."] },
   { name: "HPD — Housing Preservation & Development", lines: ["Class A $50 – $150 (+$25 / day) · Class B $75 – $500 (+$25 – $125 / day) · Class C over 5 units $150 – $1,200 (+$150 – $1,200 / day) · lead paint $250 / day up to $10,000 · heat / hot water $350 – $1,250 / day.", "Certification of correction is free; a dismissal request runs $250 – $1,000 by property type and count.", "We file the certification or Notice of Correction before the deadline — 24 hours for Class C, 30 days B, 90 days A — so court fines never start."] },
-  { name: "OATH / ECB — hearings", lines: ["A missed summons defaults: Class 1 $12,500, up to $25,000 per summons, plus up to $1,000 per day uncorrected.", "We file motions to vacate default judgments and represent you at the hearing.", "Published market rate: $300 – $950 per hearing appearance."] },
+  { name: "OATH / ECB — hearings", lines: ["A missed summons defaults: Class 1 $12,500, up to $25,000 per summons, plus up to $1,000 per day uncorrected.", "We file motions to vacate default judgments and represent you at the hearing.", "$300 – $950 per hearing appearance."] },
 ];
 
 const REPAIR = [["Minor", 1500], ["Medium", 5000], ["Major", 12000], ["Heavy", 25000]] as const;
@@ -50,11 +50,11 @@ export function JoinPricing() {
   return (
     <section className="mt-12">
       <h2 className="text-2xl font-semibold text-white">What it costs</h2>
-      <p className="mt-1 text-sm text-slate-400">Typical New York City ranges. Your number depends on how many violations are open, how old they are, and how severe — not just the unit count. Every pilot gets a written quote.</p>
+      <p className="mt-1 text-sm text-slate-400">Current New York City market rates and official DOB / HPD penalty schedules, checked October 2026. Your number depends on how many violations are open, how old they are, and how severe — not just the unit count. Every pilot gets a written quote.</p>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-          <h3 className="font-semibold text-white">Expediting fees — what the market charges</h3>
+          <h3 className="font-semibold text-white">FIAREP expediting fees</h3>
           <table className="mt-3 w-full text-sm">
             <tbody>
               {FEES.map(([k, price, what]) => (
