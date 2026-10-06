@@ -45,6 +45,7 @@ import MyInspections from '@/pages/my-inspections';
 import ComplaintDashboard from '@/pages/complaint-dashboard';
 import CommunityCoordinators from '@/pages/community';
 import Translator from '@/pages/translator';
+import PropertyLookup from '@/pages/property-lookup';
 
 // Owner Pages
 import Access from '@/pages/access';
@@ -242,6 +243,7 @@ function AppRouter() {
           <Route path="/complaint-dashboard" component={ComplaintDashboardRoute} />
           <Route path="/community" component={CommunityRoute} />
           <Route path="/translator" component={TranslatorRoute} />
+          <Route path="/property-lookup" component={PropertyLookupRoute} />
           <Route path="/platform" component={Platform} />
           <Route component={NotFound} />
         </Switch>
@@ -263,6 +265,7 @@ function ModuleRoute({ module, children }: { module: StaffModule; children: Reac
 const DashboardRoute = () => <ModuleRoute module="dashboard"><Dashboard /></ModuleRoute>;
 const CommunityRoute = () => <ModuleRoute module="community"><CommunityCoordinators /></ModuleRoute>;
 const TranslatorRoute = () => <ModuleRoute module="translator"><Translator /></ModuleRoute>;
+const PropertyLookupRoute = () => <ModuleRoute module="property-lookup"><PropertyLookup /></ModuleRoute>;
 const InspectionsRoute = () => <ModuleRoute module="inspections"><Inspections /></ModuleRoute>;
 const HudInspectionsRoute = () => <ModuleRoute module="hud-inspections"><HudInspections /></ModuleRoute>;
 const InspectionApprovalsRoute = () => <ModuleRoute module="inspection-approvals"><InspectionApprovals /></ModuleRoute>;
