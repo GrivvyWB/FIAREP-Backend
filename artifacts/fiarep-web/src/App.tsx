@@ -106,7 +106,7 @@ function AppRouter() {
     }
 
     if (currentPersona === 'staff') {
-      if (!isAuthenticated && location !== '/login' && location !== '/procurement/login') {
+      if (!isAuthenticated && location !== '/login' && location !== '/procurement/login' && location !== '/join') {
         sessionStorage.setItem('fiarep_return_to', location);
         setLocation('/login');
       } else if (isAuthenticated && staff?.role === "procurement" &&

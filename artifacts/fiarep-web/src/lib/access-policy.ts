@@ -330,7 +330,7 @@ export function evaluateAccess(
   path: string,
   isAuthenticated: boolean
 ): AccessEvaluation {
-  if (path === "/platform") return {};
+  if (path === "/platform" || path === "/join") return {};
   const isProcurement = path === '/procurement' || path.startsWith('/procurement/');
 
   // Nobody is signed in yet: the landing page opens first, and the sign-in
