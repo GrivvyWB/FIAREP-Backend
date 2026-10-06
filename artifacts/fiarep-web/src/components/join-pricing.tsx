@@ -21,7 +21,7 @@ const BUCKETS = [
 ];
 
 const AGENCIES = [
-  { name: "DOB — Department of Buildings", lines: ["Work Without a Permit: civil penalty of 14× the permit fee on multi-family buildings (minimum $600 – $6,000).", "We draft the Certificate of Correction, coordinate DOB inspection sign-offs and file DOB NOW.", "Typical: expediter $1,500 – $3,500 + architect plans $3,000 – $6,000 + DOB fines."] },
+  { name: "DOB — Department of Buildings", lines: ["Work Without a Permit: civil penalty of 14× the permit fee on multi-family buildings (minimum $5,000; 4× and minimum $500 on 1–2 family homes).", "We draft the Certificate of Correction, coordinate DOB inspection sign-offs and file DOB NOW.", "Typical: expediter $1,500 – $3,500 + architect plans $3,000 – $6,000 + DOB fines."] },
   { name: "HPD — Housing Preservation & Development", lines: ["Class A, B (hazardous — leaks) and C (immediately hazardous — lead paint, window guards, no heat / hot water).", "We submit eClearance or Notice of Correction filings before the statutory deadline so court fines never start.", "Typical: $300 – $600 per batch filing + contractor repairs."] },
   { name: "OATH / ECB — hearings", lines: ["A missed or contested summons can default to $10,000 – $25,000 per summons.", "We file motions to vacate default judgments and represent you at the hearing.", "Typical: $400 – $800 per hearing appearance."] },
 ];
@@ -48,7 +48,7 @@ export function JoinPricing() {
   return (
     <section className="mt-12">
       <h2 className="text-2xl font-semibold text-white">What it costs</h2>
-      <p className="mt-1 text-sm text-slate-400">Typical New York City ranges. Your number depends on how many violations are open, how old they are, and how severe — not just the unit count. Every pilot gets a written quote.</p>
+      <p className="mt-1 text-sm text-slate-400">Typical New York City ranges, reviewed October 2026. Your number depends on how many violations are open, how old they are, and how severe — not just the unit count. Every pilot gets a written quote.</p>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
