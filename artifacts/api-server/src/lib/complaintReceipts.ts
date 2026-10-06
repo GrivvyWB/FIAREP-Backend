@@ -9,6 +9,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, entityRecords, notifications, staffAccounts } from "@workspace/db";
 import { deliverPushNotification } from "./push";
 import type { Actor } from "./auth";
+import { routedComplaintRecipientIds } from "./complaintRouting";
 
 export type Receipt = { id: string; name: string; position: string; at: string };
 export type EtaNotice = { eta: string; crew: string; note: string; byId: string; byName: string; byPosition: string; at: string };
@@ -27,7 +28,7 @@ export const CREW_OPTIONS = [
   "Heating / boiler", "Painter", "Bricklayer / mason", "Roofer", "Emergency crew", "Superintendent",
 ];
 
-type Row = { id: string; tenantId: string; entity: string; state: Record<string, unknown>; createdBy: string | null };
+type Row = { id: string; tenantId: string; entity: string; state: Record<string, unknown>; createdBy: string | null; development?: string | null };
 
 const receipts = (value: unknown): Receipt[] =>
   Array.isArray(value) ? value.filter((v): v is Receipt => !!v && typeof v === "object" && typeof (v as Receipt).id === "string") : [];
@@ -75,18 +76,36 @@ export async function recordOpened(actor: Actor, row: Row): Promise<{ isNew: boo
   if (opens.some((o) => o.id === actor.id)) return { isNew: false, opens };
   const at = new Date().toISOString();
   const next = [...opens, { id: actor.id, name: actor.name, position: actor.position, at }];
-  await mergeState(row, { opens: next });
+  // The resident sees it too: "Opened by …" lands in the complaint's history,
+  // which their complaint-number lookup shows.
+  const updates = Array.isArray(row.state["updates"]) ? row.state["updates"] as unknown[] : [];
+  await mergeState(row, {
+    opens: next,
+    updates: [...updates, { at, by: actor.name, status: String(row.state["status"] || ""), note: `Opened by ${actor.name} (${actor.position})` }],
+  });
+  // Who hears about it: whoever sent / assigned it. A resident-filed
+  // complaint has no sender, so when a worker, inspector or emergency crew
+  // member opens one, their supervisors for that development hear instead.
+  const targets = new Set<string>();
   const sender = senderStaffId(row.state, row.createdBy);
-  if (sender && sender !== actor.id) {
-    const [n] = await db.insert(notifications).values({
+  if (sender) targets.add(sender);
+  else if (["worker", "inspector", "emergency"].includes(actor.role)) {
+    const dev = String(row.development || row.state["development"] || "").trim();
+    if (dev) {
+      for (const id of await routedComplaintRecipientIds(row.tenantId, dev, row.state, row.entity === "building-violations").catch(() => [] as string[])) targets.add(id);
+    }
+  }
+  targets.delete(actor.id);
+  if (targets.size) {
+    const created = await db.insert(notifications).values([...targets].map((target) => ({
       id: randomUUID(),
       tenantId: row.tenantId,
-      target: sender,
+      target,
       message: `${refOf(row.state)} was opened`,
       detail: `${actor.name} (${actor.position}) opened it at ${new Date(at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`,
       reportId: row.id,
-    }).returning();
-    if (n) void deliverPushNotification(n).catch(() => undefined);
+    }))).returning();
+    for (const n of created) void deliverPushNotification(n).catch(() => undefined);
   }
   return { isNew: true, opens: next };
 }
