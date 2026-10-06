@@ -62,6 +62,7 @@ import { rateLimit } from "../lib/rateLimit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
 import { routedComplaintRecipientIds } from "../lib/complaintRouting";
+import { CREW_OPTIONS, ETA_OPTIONS, recordEta, recordNotifiedStaff, recordOpened, tracksReceipts } from "../lib/complaintReceipts";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -1352,6 +1353,7 @@ router.post("/v1/:entity", async (req, res, next) => {
         id,
       );
     }
+    await recordNotifiedStaff(actor.tenantId, id, reviewers.map((r) => r.id));
   } else if (entity === "resident-reports" && actor.role === "inspector") {
     await notify(
       actor,
@@ -1937,9 +1939,60 @@ router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
       reportId: report.id,
     }))).returning();
     for (const notification of created) void deliverPushNotification(notification).catch(() => undefined);
+    await recordNotifiedStaff(actor.tenantId, report.id, recipients);
   }
   await audit(actor, `${entity}.assignment-requested`, note, report.id);
   res.json({ ok: true, notified: recipients.length, directedTo });
+});
+
+// ── Read receipts: who opened a complaint, and "on my way" ────────────────
+async function receiptRow(req: any, res: any) {
+  const entity = String(req.params["entity"] || "");
+  const actor = actorFrom(res);
+  if (!tracksReceipts(entity)) { res.status(404).json({ error: "Not found" }); return null; }
+  const [row] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, String(req.params["id"] || "")),
+    eq(entityRecords.entity, entity),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!row || !(await canReadRecordForActor(actor, row))) { res.status(404).json({ error: "Record not found" }); return null; }
+  return { actor, row };
+}
+
+// The person opened the complaint: stamp it, and tell whoever sent it.
+router.post("/v1/:entity/:id/opened", async (req, res) => {
+  const found = await receiptRow(req, res); if (!found) return;
+  const { actor, row } = found;
+  if (!["management", "administrator", "worker", "inspector", "emergency"].includes(actor.role)) { res.json({ opens: [] }); return; }
+  const result = await recordOpened(actor, row);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(result);
+});
+
+// "On my way — 15 minutes" / "Plumber on the way": logged on the complaint,
+// sent to whoever sent it (and whoever it is assigned to).
+router.post("/v1/:entity/:id/eta", async (req, res) => {
+  const found = await receiptRow(req, res); if (!found) return;
+  const { actor, row } = found;
+  const body = (req.body || {}) as { eta?: unknown; crew?: unknown; note?: unknown };
+  const eta = typeof body.eta === "string" ? body.eta.trim() : "";
+  const crew = typeof body.crew === "string" ? body.crew.trim() : "";
+  const note = typeof body.note === "string" ? body.note.trim() : "";
+  if (!eta && !crew) { res.status(400).json({ error: "Pick a time or a crew" }); return; }
+  const assigned = String(row.state["assignedStaffId"] || "") === actor.id || String(row.state["directedToStaffId"] || "") === actor.id;
+  if (!["management", "administrator"].includes(actor.role) && !assigned) {
+    res.status(403).json({ error: "Only the supervisor or the person assigned can send an arrival time" });
+    return;
+  }
+  const notice = await recordEta(actor, row, { eta, crew, note });
+  await audit(actor, `${row.entity}.eta`, `${notice.eta}${notice.crew ? ` · ${notice.crew}` : ""}`, row.id);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ ok: true, eta: notice, options: { eta: ETA_OPTIONS, crew: CREW_OPTIONS } });
+});
+
+router.get("/v1/eta-options", (_req, res) => {
+  res.json({ eta: ETA_OPTIONS, crew: CREW_OPTIONS });
 });
 
 router.post(

@@ -10,6 +10,7 @@ import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/p
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
+import ComplaintReceipts from '../components/ComplaintReceipts';
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
 import { requestFileDownloadUrl } from '@workspace/api-client-react';
@@ -235,6 +236,9 @@ export default function ReportDetail() {
           <Text>{r.description}</Text>
         </View>
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
+      </View>
+      <ComplaintReceipts entity="resident-reports" reportId={r.id} readOnly={readOnly} canSendEta={mode === 'management' || mode === 'administrator' || (!!actorId && r.assignedStaffId === actorId)} />
+      <View style={[ui.card, { gap: 8 }]}>
         {(mode === 'management' || mode === 'administrator' || mode === 'inspector') && (() => {
           const scans = (r as any).aiPhotoScans && typeof (r as any).aiPhotoScans === 'object' ? Object.values((r as any).aiPhotoScans) : [];
           const hasPhotos = (r.photos && r.photos.length > 0) || remotePhotoUris.length > 0;

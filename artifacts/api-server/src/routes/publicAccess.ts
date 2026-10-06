@@ -21,6 +21,7 @@ import { fileStorage } from "../lib/fileStorage";
 import { isBoroughDirector, isCoverageEligible } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { routedComplaintRecipientIds, tradesForComplaint } from "../lib/complaintRouting";
+import { recordNotifiedStaff } from "../lib/complaintReceipts";
 import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
 import { rateLimit } from "../lib/rateLimit";
 import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
@@ -227,6 +228,7 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   for (const notification of created.createdNotifications) {
     void deliverPushNotification(notification).catch(() => undefined);
   }
+  await recordNotifiedStaff(tenantId, id, created.createdNotifications.map((n) => n.target)).catch(() => undefined);
   res.status(201).json({ ...record(created.row!), statusToken: residentToken });
 });
 

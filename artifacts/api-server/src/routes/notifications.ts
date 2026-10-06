@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
-import { db, notifications, staffAccounts } from "@workspace/db";
+import { db, entityRecords, notifications, staffAccounts } from "@workspace/db";
+import { recordOpened, tracksReceipts } from "../lib/complaintReceipts";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { visibleNotificationsFor } from "../lib/notificationVisibility";
 import { canDeleteOperationalRecords } from "../lib/domain";
@@ -91,6 +92,13 @@ router.post("/v1/notifications/:id/read", async (req, res) => {
     return;
   }
   await markReadForActor(actor, [candidate]);
+  // Opening the alert is opening the complaint: whoever sent it hears so.
+  if (candidate.reportId && ["management", "administrator", "worker", "inspector", "emergency"].includes(actor.role)) {
+    const [row] = await db.select().from(entityRecords).where(and(
+      eq(entityRecords.id, candidate.reportId), eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.deleted, false),
+    )).limit(1);
+    if (row && tracksReceipts(row.entity)) await recordOpened(actor, row).catch(() => undefined);
+  }
   res.json({ ...candidate, read: true });
 });
 
