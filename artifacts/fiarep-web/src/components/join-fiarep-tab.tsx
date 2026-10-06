@@ -18,7 +18,6 @@ export function JoinFiarepTab() {
       <img src="/platform-media/fiarep-247-logo.png" alt="24/7 FIAREP Management Service / Expediting" className="h-14 w-auto sm:h-16" />
       <span className="text-left">
         <span className="block text-sm font-bold text-slate-900">Join FIAREP</span>
-        <span className="block text-xs text-slate-600">Management service · Expediting</span>
       </span>
     </button>
   );
