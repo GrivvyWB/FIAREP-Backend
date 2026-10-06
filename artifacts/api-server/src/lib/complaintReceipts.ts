@@ -10,6 +10,7 @@ import { db, entityRecords, notifications, staffAccounts } from "@workspace/db";
 import { deliverPushNotification } from "./push";
 import type { Actor } from "./auth";
 import { routedComplaintRecipientIds } from "./complaintRouting";
+import { notifyResident } from "./residentNotify";
 
 export type Receipt = { id: string; name: string; position: string; at: string };
 export type EtaNotice = { eta: string; crew: string; note: string; byId: string; byName: string; byPosition: string; at: string };
@@ -83,6 +84,7 @@ export async function recordOpened(actor: Actor, row: Row): Promise<{ isNew: boo
     opens: next,
     updates: [...updates, { at, by: actor.name, status: String(row.state["status"] || ""), note: `Opened by ${actor.name} (${actor.position})` }],
   });
+  void notifyResident(row, "Opened", `${actor.name} (${actor.position}) opened your complaint.`);
   // Who hears about it: whoever sent / assigned it. A resident-filed
   // complaint has no sender, so when a worker, inspector or emergency crew
   // member opens one, their supervisors for that development hear instead.
@@ -124,6 +126,7 @@ export async function recordEta(actor: Actor, row: Row, input: { eta: string; cr
     eta: notice,
     updates: [...updates, { at, by: actor.name, status: String(row.state["status"] || ""), note: line }],
   });
+  void notifyResident(row, "On the way", `${line} — ${actor.name} (${actor.position})`);
   const targets = new Set<string>();
   const sender = senderStaffId(row.state, row.createdBy);
   if (sender && sender !== actor.id) targets.add(sender);

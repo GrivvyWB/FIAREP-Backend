@@ -63,6 +63,7 @@ import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
 import { routedComplaintRecipientIds } from "../lib/complaintRouting";
 import { CREW_OPTIONS, ETA_OPTIONS, recordEta, recordNotifiedStaff, recordOpened, tracksReceipts } from "../lib/complaintReceipts";
+import { notifyResident, residentMessageForAction } from "../lib/residentNotify";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -3483,6 +3484,11 @@ router.post(
       `${action} ${entity} record`,
       current.id,
     );
+  }
+  // The resident hears about it on their phone (app) or by email (website).
+  if (entity === "resident-reports") {
+    const msg = residentMessageForAction(action, updated.state, actor.name);
+    if (msg) void notifyResident(updated, msg.title, msg.body);
   }
   // Once the CPM Supervisor has acted on a scope, the "waiting for your
   // review" alert is done — take it out of the inbox.

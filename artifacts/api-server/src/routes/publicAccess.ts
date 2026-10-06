@@ -190,6 +190,12 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     tenantId = resolved.tenantId;
   }
   delete rawState.companyCode;
+  // The app sends the phone's push token so the resident hears every update.
+  const residentPushToken = String(rawState.residentPushToken ?? "").trim();
+  delete rawState.residentPushToken;
+  const residentPush = /^(ExponentPushToken|ExpoPushToken)\[.+\]$/.test(residentPushToken)
+    ? { token: residentPushToken, platform: "expo", at: new Date().toISOString() }
+    : undefined;
   const now = new Date();
   const id = typeof input.id === "string" && input.id.trim() ? input.id.trim() : randomUUID();
   let complaintNo = "";
@@ -211,6 +217,7 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     const state = {
       ...rawState, id, complaintNo, address: reportAddress, propertyId: property?.id ?? null,
       development: reportDevelopment,
+      ...(residentPush ? { residentPush } : {}),
       description, status: "submitted", photos: [],
       updates: [{ status: "submitted", by: "resident", at: now.toISOString() }], createdAt: now.toISOString(),
     } as Record<string, unknown>;

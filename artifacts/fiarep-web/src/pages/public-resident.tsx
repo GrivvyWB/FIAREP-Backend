@@ -424,7 +424,7 @@ export default function PublicResident() {
                   </div>
                   <FormField control={reportForm.control} name="reporterEmail" render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Email Address (Optional)</FormLabel>
+                      <FormLabel>Email (optional — we email you each update: opened, assigned, on the way, done)</FormLabel>
                       <FormControl><Input type="email" {...field} /></FormControl>
                       <FormMessage />
                     </FormItem>

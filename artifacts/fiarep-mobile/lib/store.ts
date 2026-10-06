@@ -601,10 +601,15 @@ function normalizeResidentReport(r: any): ResidentReport {
 
 export async function createResidentReport(unit: string, development: string, description: string, photos: string[] = [], residentName: string = '', location: string = '', contact: string = '', address: string = '', companyCode: string = ''): Promise<ResidentReport> {
   const now = new Date().toISOString();
+  // This phone gets a push for every update on the complaint (opened,
+  // assigned, on the way, done). No login needed — the token rides along.
+  let residentPushToken = '';
+  try { const { registerForPush } = await import('./push'); residentPushToken = (await registerForPush()) || ''; } catch { residentPushToken = ''; }
   const submitted = await submitPublicResidentReport({
     id: uid(),
     development: development.trim() || undefined,
     state: {
+      ...(residentPushToken ? { residentPushToken } : {}),
       residentName: residentName.trim(),
       contact: contact.trim() || undefined,
       location: location.trim(),
