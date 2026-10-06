@@ -16,6 +16,8 @@ import timeClockRouter from "./timeClock";
 import hrRouter from "./hr";
 import nychaRouter from "./nycha";
 import coverageRouter from "./coverage";
+import companyFormsRouter from "./companyForms";
+import joinRouter from "./join";
 
 const router: IRouter = Router();
 
@@ -23,6 +25,8 @@ router.use(healthRouter);
 router.use(authRouter);
 router.use(organizationsRouter);
 router.use(publicAccessRouter);
+router.use(joinRouter);
+router.use(companyFormsRouter);
 router.use(nychaRouter);
 router.use(coverageRouter);
 router.use(staffRouter);

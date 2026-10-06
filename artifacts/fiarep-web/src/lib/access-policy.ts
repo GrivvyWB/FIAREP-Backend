@@ -9,7 +9,7 @@ export type StaffModule =
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
    | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections"
-   | "community" | "translator" | "property-lookup";
+   | "community" | "translator" | "property-lookup" | "company-forms";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -20,7 +20,7 @@ const isElevatorTitle = (position: string | null | undefined) =>
   sameTitle(position, "Elevator Service") || supervisedTradeForPosition(position) === "Elevator Service";
 // Modules that are OFF until the platform owner enables them (none today;
 // the per-tool Project switches are handled in Module Management).
-const OPT_IN_MODULES = new Set<StaffModule>([]);
+const OPT_IN_MODULES = new Set<StaffModule>(["company-forms"]);
 const CPM_ONLY_MODULES = new Set<StaffModule>([
   "estimates",
   "repairs",
@@ -150,6 +150,9 @@ export function hasModuleAccess(
   // Community Coordinators: their own section, alerts and settings — nothing else,
   // and nobody else gets their section.
   if (module === "community") return isCommunityCoordinator(staff);
+  // Company Forms: FIAREP's locked folder. Only an organization the platform
+  // owner unlocked (opt-in above), and only its staff — never residents or vendors.
+  if (module === "company-forms") return !["vendor", "resident", "procurement"].includes(String(staff.role));
   // The live translator: every signed-in staff member who talks to residents.
   if (module === "translator") return !["vendor", "resident", "procurement"].includes(String(staff.role));
   // HPD / DOB lookup (read-only): staff who work a building, unless the

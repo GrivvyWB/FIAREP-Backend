@@ -77,6 +77,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "settings", name: "Settings", description: "Organization settings", icon: Settings },
   { id: "shared-data", name: "Shared Data", description: "Shared platform data", icon: Package },
   { id: "measurement", name: "Measurement", description: "AR/LiDAR material take-off (concrete, sheetrock, window openings)", icon: Building2 },
+  { id: "company-forms", name: "Company Forms (locked folder)", description: "FIAREP's own compliance forms — DOB certificate of correction, vermin, lead, tenant notices. OFF for every client; switch on only for FIAREP's organization", icon: AlertTriangle },
   { id: "property-lookup", name: "HPD / DOB Lookup", description: "Look up a building's HPD and DOB violations by address (website and app) — pick the trades below", icon: AlertTriangle },
   { id: "translator", name: "Translator", description: "Voice-to-voice interpreter for talking with residents (website and app)", icon: Users },
 ];
@@ -230,7 +231,7 @@ function configuredModules(organization: OrganizationWithUsage): Record<string, 
 
   // These modules are opt-in: they read as OFF until explicitly enabled for
   // the client, so the switch reflects the true default.
-  const OPT_IN = new Set<string>(["measurement"]);
+  const OPT_IN = new Set<string>(["measurement", "company-forms"]);
   return MODULES.reduce<Record<string, boolean>>((result, module) => {
     const value = saved[module.id];
     result[module.id] = typeof value === "boolean"
