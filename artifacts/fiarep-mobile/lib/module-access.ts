@@ -9,7 +9,7 @@ export type ModuleId =
   | 'violations' | 'procurement' | 'scope-review' | 'scope-writing' | 'emergency'
   | 'change-orders' | 'scores' | 'elevators' | 'leave' | 'hr' | 'notifications'
   | 'settings' | 'shared-data' | 'hud-inspections' | 'trade-requests' | 'my-jobs'
-  | 'complaint-dashboard' | 'measurement'
+  | 'complaint-dashboard' | 'measurement' | 'translator'
   // Per-tool, per-client construction-PM switches (all opt-in / OFF by default).
   | 'proj-new' | 'proj-room' | 'proj-rates' | 'proj-checklist' | 'proj-inspection'
   | 'proj-estimate' | 'proj-scope' | 'proj-intake' | 'proj-elevator'
@@ -127,7 +127,7 @@ const ROUTE_MODULES: Array<[string, ModuleId]> = [
   ['/my-jobs', 'my-jobs'], ['/change-orders', 'change-orders'], ['/cpm-change-order', 'change-orders'],
   ['/scope-submit', 'scope-writing'], ['/scope-', 'scope-review'], ['/dispatch-job', 'trade-requests'], ['/in-house-assignments', 'trade-requests'],
   ['/assign-route', 'calendar'], ['/leave-', 'leave'], ['/attendance', 'calendar'],
-  ['/notifications', 'notifications'], ['/settings', 'settings'], ['/contractor-scores', 'scores'],
+  ['/notifications', 'notifications'], ['/settings', 'settings'], ['/contractor-scores', 'scores'], ['/translator', 'translator'],
   ['/dev-scores', 'scores'], ['/property-scores', 'scores'], ['/truck-scores', 'scores'],
   ['/elevator-', 'elevators'], ['/project/elevator', 'elevators'], ['/emergency-', 'emergency'],
   ['/manage-trucks', 'emergency'], ['/assign-emergency', 'emergency'], ['/management', 'complaint-dashboard'],

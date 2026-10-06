@@ -124,7 +124,7 @@ export default function CpmHome() {
       color: '#4A5560',
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
-        { label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' },
+        ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },

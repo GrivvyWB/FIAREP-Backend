@@ -78,7 +78,7 @@ export default function ManagementHome() {
         { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone },
         ...personalTiles,
        ].filter((t) => { if (!tileEnabled('management', t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
-      <Pressable onPress={() => router.push('/translator')} style={{ marginTop: 12, padding: 12, borderWidth: 1.5, borderColor: '#1E7D4F', borderRadius: 30, alignItems: 'center' }}><Text style={{ color: '#1E7D4F', fontWeight: '600' }}>🌐 Translator</Text></Pressable>
+      {modules['translator'] && <Pressable onPress={() => router.push('/translator')} style={{ marginTop: 12, padding: 12, borderWidth: 1.5, borderColor: '#1E7D4F', borderRadius: 30, alignItems: 'center' }}><Text style={{ color: '#1E7D4F', fontWeight: '600' }}>🌐 Translator</Text></Pressable>}
       <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
     </ScrollView>;
   }

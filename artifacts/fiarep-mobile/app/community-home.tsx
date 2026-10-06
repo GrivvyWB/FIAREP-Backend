@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, RefreshControl, Alert } f
 import { useFocusEffect, useRouter } from 'expo-router';
 import { clearAppMode, getCurrentActor, getSessionIdentity, logout } from '../lib/store';
 import { useAppMode } from './_layout';
+import { useModuleAccess } from '../lib/module-access';
 import { ui } from '../lib/ui';
 import {
   approveCommunity, isCommunitySupervisor, listCommunity, removeCommunity, shareResidentPdf, shareResidentText, str, today, type CommunityRecord,
@@ -14,6 +15,7 @@ const ACCENT = '#F2C14E';
 export default function CommunityHome() {
   const router = useRouter();
   const { refresh } = useAppMode();
+  const modules = useModuleAccess();
   const [tab, setTab] = useState<'residents' | 'buildings'>('residents');
   const [search, setSearch] = useState('');
   const [criticalOnly, setCriticalOnly] = useState(false);
@@ -198,9 +200,9 @@ export default function CommunityHome() {
         );
       })}
 
-      <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/translator')}>
+      {modules['translator'] && <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/translator')}>
         <Text style={ui.btnOutlineText}>🌐 Translator</Text>
-      </Pressable>
+      </Pressable>}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
         <Text style={ui.btnOutlineText}>Inbox</Text>
       </Pressable>
