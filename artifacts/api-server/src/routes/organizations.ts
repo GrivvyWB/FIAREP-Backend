@@ -5,7 +5,7 @@ import { db, entityRecords, organizationProperties, organizations, staffAccounts
 import { requirePlatformOwner } from "../middlewares/auth";
 import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
-import { newResidentCode, residentCodeOf, withResidentCode } from "../lib/residentRouting";
+import { ensureResidentCode, newResidentCode, withResidentCode } from "../lib/residentRouting";
 import {
   getTimeClockConfig,
   mergeTimeClockConfig,
@@ -182,6 +182,11 @@ function publicOrganization(org: typeof organizations.$inferSelect) {
 router.get("/v1/platform/organizations", async (_req, res) => {
   await evaluateLicense("default");
   const rows = await db.select().from(organizations);
+  for (const org of rows) {
+    if (org.id === "default") continue;
+    const code = await ensureResidentCode(org);
+    org.features = withResidentCode(org.features, code);
+  }
   const result = await Promise.all(rows.map(async (org) => {
     const [staffRows, propertyRows, recordRows] = await Promise.all([
       db.select({
@@ -380,10 +385,10 @@ router.post("/v1/platform/organizations", async (req, res) => {
     return;
   }
    const requestedFeatures = typeof body["features"] === "object" && body["features"] !== null && !Array.isArray(body["features"]) ? body["features"] as Record<string, unknown> : {};
-   const features = addOrganizationNameForDevelopmentType(
+   const features = withResidentCode(addOrganizationNameForDevelopmentType(
      mergeTimeClockConfig(requestedFeatures, { integrationEnabled: false, provider: null }),
      name,
-   );
+   ), await newResidentCode());
   const unrestricted = body["unrestricted"] === true;
   try {
     const result = await db.transaction(async (tx) => {
@@ -423,8 +428,7 @@ router.post("/v1/platform/organizations/:id/resident-code", async (req, res) => 
   const [before] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
   if (!before) { res.status(404).json({ error: "Organization not found" }); return; }
   const regenerate = !!(req.body && typeof req.body === "object" && (req.body as { regenerate?: unknown }).regenerate === true);
-  const existing = residentCodeOf(before.features);
-  if (existing && !regenerate) { res.json({ code: existing, created: false }); return; }
+  if (!regenerate) { res.json({ code: await ensureResidentCode(before), created: false }); return; }
   const code = await newResidentCode();
   const [org] = await db.update(organizations)
     .set({ features: withResidentCode(before.features, code), updatedAt: new Date() })

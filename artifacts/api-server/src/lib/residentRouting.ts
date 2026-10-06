@@ -55,6 +55,25 @@ export async function newResidentCode(): Promise<string> {
   throw new Error("Could not pick a resident code");
 }
 
+/** Every company has a resident code; issue one the first time it is needed. */
+export async function ensureResidentCode(org: Org): Promise<string> {
+  const existing = residentCodeOf(org.features);
+  if (existing) return existing;
+  const code = await newResidentCode();
+  await db.update(organizations)
+    .set({ features: withResidentCode(org.features, code), updatedAt: new Date() })
+    .where(eq(organizations.id, org.id));
+  return code;
+}
+
+/** The company behind a resident code, for the resident's phone to confirm it. */
+export async function organizationForResidentCode(code: string): Promise<{ id: string; name: string } | null> {
+  const clean = code.replace(/\D/g, "");
+  if (!/^\d{6}$/.test(clean)) return null;
+  const match = (await licensedOrganizations()).find((org) => residentCodeOf(org.features) === clean);
+  return match ? { id: match.id, name: match.name } : null;
+}
+
 async function coversDevelopment(org: Org, development: string): Promise<boolean> {
   const wanted = norm(development);
   if (!wanted) return false;

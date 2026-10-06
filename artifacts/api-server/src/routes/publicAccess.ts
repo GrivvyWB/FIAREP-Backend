@@ -21,7 +21,7 @@ import { isBoroughDirector, isCoverageEligible } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { routedComplaintRecipientIds, tradesForComplaint } from "../lib/complaintRouting";
 import { recordNotifiedStaff } from "../lib/complaintReceipts";
-import { resolveResidentOrganization } from "../lib/residentRouting";
+import { organizationForResidentCode, resolveResidentOrganization } from "../lib/residentRouting";
 import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
 import { rateLimit } from "../lib/rateLimit";
 import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
@@ -89,6 +89,14 @@ function record(row: typeof entityRecords.$inferSelect) {
     version: row.version, createdAt: row.createdAt, updatedAt: row.updatedAt,
   };
 }
+
+// The resident's phone checks the code once and keeps it.
+router.get("/v1/public/resident-code/:code", async (req, res) => {
+  const org = await organizationForResidentCode(String(req.params.code || ""));
+  res.setHeader("Cache-Control", "no-store");
+  if (!org) { res.status(404).json({ error: "That resident code isn't recognized. Call your management office for the code." }); return; }
+  res.json({ code: String(req.params.code || "").replace(/\D/g, ""), organizationName: org.name });
+});
 
 router.post("/v1/public/resident-reports", async (req, res) => {
   const input = req.body && typeof req.body === "object" ? req.body : {};

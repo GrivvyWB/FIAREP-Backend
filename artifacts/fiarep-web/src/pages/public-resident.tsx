@@ -20,6 +20,7 @@ import {
   useSubmitPublicResidentReport,
 } from '@workspace/api-client-react';
 import { ArrowLeft, LogOut } from 'lucide-react';
+import { customFetch } from '@workspace/api-client-react';
 import { useLocation } from 'wouter';
 import { clearStoredPersona, getStoredPersona, lockPersona } from '@/lib/access-policy';
 
@@ -29,7 +30,6 @@ const reportSchema = z.object({
   location: z.enum(['Apartment/Unit', 'Building', 'Hallways', 'Compactor', 'Elevator', 'Other']),
   unit: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
-  companyCode: z.string().optional().refine((v) => !v || /^\d{6}$/.test(v.replace(/\D/g, '')), 'The resident code is 6 digits'),
   reporterName: z.string().optional(),
   reporterPhone: z.string().optional(),
   reporterEmail: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -49,6 +49,28 @@ export default function PublicResident() {
   const [photo, setPhoto] = useState<File | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
   const [addressFocused, setAddressFocused] = useState(false);
+  // Resident code from the management office: entered once, remembered in
+  // this browser, sent with every complaint so it reaches that company.
+  const readSavedCode = (): { code: string; organizationName: string } | null => {
+    try { const v = JSON.parse(localStorage.getItem('fiarep_resident_code') || 'null'); return v && /^\d{6}$/.test(String(v.code || '')) ? { code: String(v.code), organizationName: String(v.organizationName || '') } : null; } catch { return null; }
+  };
+  const [savedCode, setSavedCode] = useState<{ code: string; organizationName: string } | null>(readSavedCode);
+  const [codeEntry, setCodeEntry] = useState('');
+  const [codeBusy, setCodeBusy] = useState(false);
+  const [changingCode, setChangingCode] = useState(false);
+  const saveResidentCode = async () => {
+    const clean = codeEntry.replace(/\D/g, '');
+    if (clean.length !== 6) return;
+    setCodeBusy(true);
+    try {
+      const r = await customFetch<{ code: string; organizationName: string }>(`/api/v1/public/resident-code/${clean}`, { responseType: 'json' } as never);
+      const v = { code: clean, organizationName: String(r.organizationName || '') };
+      try { localStorage.setItem('fiarep_resident_code', JSON.stringify(v)); } catch { /* private mode */ }
+      setSavedCode(v); setCodeEntry(''); setChangingCode(false);
+    } catch (err: any) {
+      toast({ variant: 'destructive', title: 'Resident code', description: err?.data?.error || err?.message || "That code isn't recognized. Call your management office for the code." });
+    } finally { setCodeBusy(false); }
+  };
   const [waterType, setWaterType] = useState('');
   
   const { toast } = useToast();
@@ -110,9 +132,10 @@ export default function PublicResident() {
 
   const onReportSubmit = (values: z.infer<typeof reportSchema>) => {
     const includeWater = waterType && /(leak|water|flood|stoppage)/i.test(values.description || '');
-    const state = includeWater
-      ? { ...values, description: `${waterType}. ${(values.description || '').trim()}`.trim() }
-      : values;
+    const state = {
+      ...(includeWater ? { ...values, description: `${waterType}. ${(values.description || '').trim()}`.trim() } : values),
+      companyCode: savedCode?.code || '',
+    };
     submitReport.mutate({
       data: {
         id: crypto.randomUUID(),
@@ -178,8 +201,8 @@ export default function PublicResident() {
       },
       onError: (err: any) => {
         const needsCode = err?.data?.needsCompanyCode === true;
-        if (needsCode) reportForm.setError('companyCode', { message: 'Enter your management company resident code' });
-        toast({ variant: 'destructive', title: needsCode ? 'Which company manages your building?' : 'Submission Failed', description: err?.data?.error || err.message || 'Could not submit report.' });
+        if (needsCode) { try { localStorage.removeItem('fiarep_resident_code'); } catch { /* ignore */ } setSavedCode(null); setView('options'); }
+        toast({ variant: 'destructive', title: needsCode ? 'Enter your resident code' : 'Submission Failed', description: err?.data?.error || err.message || 'Could not submit report.' });
       }
     });
   };
@@ -216,7 +239,22 @@ export default function PublicResident() {
 
         {view === 'options' && (
           <div className="space-y-6">
-            <Card className="hover:border-primary transition-colors cursor-pointer shadow-md" onClick={() => setView('submit')}>
+            {savedCode && !changingCode ? (
+              <p className="text-center text-sm text-muted-foreground">Your building is managed by <span className="font-semibold text-foreground">{savedCode.organizationName || `resident code ${savedCode.code}`}</span> · <button type="button" className="underline" onClick={() => setChangingCode(true)}>change resident code</button></p>
+            ) : (
+              <Card className="shadow-md border-primary/40">
+                <CardHeader>
+                  <CardTitle>Enter your resident code</CardTitle>
+                  <CardDescription>The 6-digit code from your management office. You only enter it once — this browser remembers it. Lost it? Call the office.</CardDescription>
+                </CardHeader>
+                <CardContent className="flex gap-2">
+                  <Input value={codeEntry} inputMode="numeric" maxLength={6} placeholder="6-digit resident code" onChange={(e) => setCodeEntry(e.target.value.replace(/\D/g, '').slice(0, 6))} />
+                  <Button onClick={() => void saveResidentCode()} disabled={codeBusy || codeEntry.length !== 6}>{codeBusy ? 'Checking…' : 'Save'}</Button>
+                  {changingCode && <Button variant="ghost" onClick={() => { setChangingCode(false); setCodeEntry(''); }}>Keep</Button>}
+                </CardContent>
+              </Card>
+            )}
+            <Card className={`transition-colors shadow-md ${savedCode ? 'hover:border-primary cursor-pointer' : 'opacity-60'}`} onClick={() => { if (savedCode) setView('submit'); }}>
               <CardHeader>
                 <CardTitle>Submit a Report</CardTitle>
               </CardHeader>
@@ -326,14 +364,6 @@ export default function PublicResident() {
                     <FormItem>
                        <FormLabel>{selectedLocation === 'Apartment/Unit' ? 'Apartment / Unit' : 'Apartment / Unit (Optional)'}</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )} />
-                  <FormField control={reportForm.control} name="companyCode" render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Management company resident code (optional)</FormLabel>
-                      <FormControl><Input {...field} inputMode="numeric" maxLength={6} placeholder="6-digit code from your management office" /></FormControl>
-                      <p className="text-xs text-muted-foreground">Only needed if more than one company manages buildings in your development.</p>
                       <FormMessage />
                     </FormItem>
                   )} />

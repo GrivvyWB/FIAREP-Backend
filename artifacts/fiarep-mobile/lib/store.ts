@@ -1102,6 +1102,28 @@ export async function setReportDevelopment(id: string, name: string): Promise<vo
 
 export type AppMode = 'resident' | 'administrator' | 'management' | 'worker' | 'inspector' | 'vendor' | 'emergency' | 'community_coordinator';
 
+/** The resident code from the management office: entered once, kept on this
+ * phone, sent with every complaint so it reaches that company. */
+export type ResidentCode = { code: string; organizationName: string };
+export async function getResidentCode(): Promise<ResidentCode | null> {
+  const d = await db();
+  const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', 'resident_code');
+  if (!row?.value) return null;
+  try { const v = JSON.parse(row.value); return v && /^\d{6}$/.test(String(v.code || '')) ? { code: String(v.code), organizationName: String(v.organizationName || '') } : null; } catch { return null; }
+}
+export async function setResidentCode(value: ResidentCode | null): Promise<void> {
+  const d = await db();
+  if (!value) { await d.runAsync('DELETE FROM settings WHERE key = ?', 'resident_code'); return; }
+  await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'resident_code', JSON.stringify(value));
+}
+/** Ask the server which company a code belongs to. */
+export async function checkResidentCode(code: string): Promise<ResidentCode> {
+  const clean = code.replace(/\D/g, '');
+  if (clean.length !== 6) throw new Error('The resident code is 6 digits.');
+  const r = await customFetch<{ code: string; organizationName: string }>('/api/v1/public/resident-code/' + clean, { responseType: 'json' } as never);
+  return { code: clean, organizationName: String(r.organizationName || '') };
+}
+
 export async function getInstallationPersona(): Promise<InstallationPersona | null> {
   const d = await db();
   const row = await d.getFirstAsync<{ value: string }>(

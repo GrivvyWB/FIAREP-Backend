@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { useRouter } from 'expo-router';
-import { createResidentReport, LOCATION_CATEGORIES, listDevelopmentNames } from '../lib/store';
+import { createResidentReport, getResidentCode, LOCATION_CATEGORIES, listDevelopmentNames } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import AddressInput from '../components/AddressInput';
@@ -36,7 +36,6 @@ export default function ResidentScreen() {
   const [development, setDevelopment] = useState('');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
-  const [companyCode, setCompanyCode] = useState('');
   const [waterType, setWaterType] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -98,7 +97,8 @@ export default function ResidentScreen() {
       const reportDescription = showWater && waterType
         ? `${waterType}. ${description.trim()}`
         : description.trim();
-      const report = await createResidentReport(unit.trim(), development.trim(), reportDescription, photos, name.trim(), effLoc, '', address.trim(), companyCode);
+      const savedCode = await getResidentCode();
+      const report = await createResidentReport(unit.trim(), development.trim(), reportDescription, photos, name.trim(), effLoc, '', address.trim(), savedCode?.code || '');
       const failures = (report as any).photoUploadFailures as string[] | undefined;
       Alert.alert('Report submitted', `Complaint number: ${report.complaintNo}\n\nThis report is saved on this device for status checks.${failures?.length ? `\n\n${failures.length} photo(s) could not be uploaded.` : ''}`, [
         { text: 'OK', onPress: () => router.back() },
@@ -166,18 +166,6 @@ export default function ResidentScreen() {
         placeholder="Select your building address"
         style={styles.input}
       />
-
-      <Text style={styles.label}>Management company resident code (optional)</Text>
-      <TextInput
-        style={styles.input}
-        value={companyCode}
-        onChangeText={(v) => setCompanyCode(v.replace(/\D/g, '').slice(0, 6))}
-        placeholder="6-digit code from your management office"
-        placeholderTextColor="#999"
-        keyboardType="number-pad"
-        maxLength={6}
-      />
-      <Text style={{ fontSize: 12, color: '#666', marginTop: -6, marginBottom: 6 }}>Only needed if more than one company manages buildings in your development.</Text>
 
       <Text style={styles.label}>Description</Text>
       <TextInput

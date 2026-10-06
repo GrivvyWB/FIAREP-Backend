@@ -138,7 +138,7 @@ export default function OwnerDashboard() {
         { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regenerate }), responseType: "json" } as never,
       );
       try { await navigator.clipboard.writeText(r.code); } catch { /* clipboard unavailable */ }
-      toast({ title: `${org.name} resident code: ${r.code}`, description: r.created ? "Copied. Give this code to residents (and HR) — they enter it on the complaint form." : "Copied to clipboard." });
+      toast({ title: `${org.name} resident code: ${r.code}`, description: r.created ? "New code issued and copied. Residents enter it once on their phone." : "Copied to clipboard. Residents enter it once on their phone." });
       if (r.created) queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Could not issue code", description: err?.data?.error || err?.message || "Try again." });
@@ -390,7 +390,7 @@ export default function OwnerDashboard() {
                               <KeyRound className="w-4 h-4 mr-2 text-slate-400" /> Reset admin / director code
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => void residentCode(org, false)}>
-                              <Copy className="w-4 h-4 mr-2 text-slate-400" /> {residentCodeOf(org) ? `Resident code ${residentCodeOf(org)} — copy` : "Create resident code"}
+                              <Copy className="w-4 h-4 mr-2 text-slate-400" /> {residentCodeOf(org) ? `Resident code ${residentCodeOf(org)} — copy` : "Resident code — copy"}
                             </DropdownMenuItem>
                             {residentCodeOf(org) && (
                               <DropdownMenuItem onClick={() => void residentCode(org, true)}>
