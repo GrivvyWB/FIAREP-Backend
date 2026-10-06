@@ -599,7 +599,7 @@ function normalizeResidentReport(r: any): ResidentReport {
   } as ResidentReport;
 }
 
-export async function createResidentReport(unit: string, development: string, description: string, photos: string[] = [], residentName: string = '', location: string = '', contact: string = '', address: string = ''): Promise<ResidentReport> {
+export async function createResidentReport(unit: string, development: string, description: string, photos: string[] = [], residentName: string = '', location: string = '', contact: string = '', address: string = '', companyCode: string = ''): Promise<ResidentReport> {
   const now = new Date().toISOString();
   const submitted = await submitPublicResidentReport({
     id: uid(),
@@ -612,6 +612,7 @@ export async function createResidentReport(unit: string, development: string, de
       address: address.trim(),
       development: development.trim(),
       description: description.trim(),
+      ...(companyCode.replace(/\D/g, '') ? { companyCode: companyCode.replace(/\D/g, '') } : {}),
       photos: [],
       status: 'submitted',
       updates: [{ status: 'submitted', by: 'resident', at: now }],

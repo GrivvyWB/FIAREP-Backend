@@ -9,7 +9,6 @@ import {
   nychaAddresses,
   nychaDevelopments,
   organizationProperties,
-  organizations,
   publicAccessCodes,
   residentReportPhotos,
   residentPhotoUploadGrants,
@@ -22,6 +21,7 @@ import { isBoroughDirector, isCoverageEligible } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { routedComplaintRecipientIds, tradesForComplaint } from "../lib/complaintRouting";
 import { recordNotifiedStaff } from "../lib/complaintReceipts";
+import { resolveResidentOrganization } from "../lib/residentRouting";
 import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
 import { rateLimit } from "../lib/rateLimit";
 import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
@@ -159,29 +159,29 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     res.status(400).json({ error: "Enter the development this building belongs to, not the building address" });
     return;
   }
-  let tenantId = property?.organizationId ?? "default";
-  if (!property) {
-    const customerOrganizations = await db
-      .select({ id: organizations.id })
-      .from(organizations);
-    const licensedCustomerIds: string[] = [];
-    for (const organization of customerOrganizations) {
-      if (organization.id === "default") continue;
-      const license = await evaluateLicense(organization.id);
-      if (licenseAllows(license, organization.id)) {
-        licensedCustomerIds.push(organization.id);
-      }
-    }
-    if (licensedCustomerIds.length === 1) {
-      tenantId = licensedCustomerIds[0]!;
-    }
-  }
   const reportAddress = property?.displayAddress ?? catalogAddress?.address ?? address;
   const reportDevelopment =
     property?.development ??
     catalogAddress?.development ??
     nychaAddress?.development ??
     requestedDevelopment;
+  // Which company gets it: the property's owner, else the company whose
+  // resident code the resident typed, else the one company covering this
+  // development. Several companies share this server, so "nobody" is not
+  // an answer — the resident is asked for the code instead.
+  let tenantId = property?.organizationId ?? "";
+  if (!tenantId) {
+    const resolved = await resolveResidentOrganization({
+      development: reportDevelopment,
+      companyCode: String(rawState.companyCode ?? ""),
+    });
+    if (!resolved.ok) {
+      res.status(resolved.status).json({ error: resolved.error, needsCompanyCode: resolved.needsCompanyCode === true });
+      return;
+    }
+    tenantId = resolved.tenantId;
+  }
+  delete rawState.companyCode;
   const now = new Date();
   const id = typeof input.id === "string" && input.id.trim() ? input.id.trim() : randomUUID();
   let complaintNo = "";

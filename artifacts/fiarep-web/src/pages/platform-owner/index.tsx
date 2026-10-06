@@ -124,6 +124,26 @@ export default function OwnerDashboard() {
     setOrganizationPreset("nycha");
     setIsDialogOpen(true);
   };
+  // The 6-digit code residents type on the complaint form so it reaches
+  // this company when several companies share the server.
+  const residentCodeOf = (org: OrganizationWithUsage) => {
+    const code = (org.features as Record<string, unknown> | undefined)?.["residentCode"];
+    return typeof code === "string" && /^\d{6}$/.test(code) ? code : "";
+  };
+  const residentCode = async (org: OrganizationWithUsage, regenerate: boolean) => {
+    if (regenerate && !window.confirm(`Issue a new resident code for ${org.name}? Residents using the old code will be told it isn't recognized.`)) return;
+    try {
+      const r = await customFetch<{ code: string; created: boolean }>(
+        `/api/v1/platform/organizations/${encodeURIComponent(org.id)}/resident-code`,
+        { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ regenerate }), responseType: "json" } as never,
+      );
+      try { await navigator.clipboard.writeText(r.code); } catch { /* clipboard unavailable */ }
+      toast({ title: `${org.name} resident code: ${r.code}`, description: r.created ? "Copied. Give this code to residents (and HR) — they enter it on the complaint form." : "Copied to clipboard." });
+      if (r.created) queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not issue code", description: err?.data?.error || err?.message || "Try again." });
+    }
+  };
   const handleStatusChange = async (
     org: OrganizationWithUsage,
     newStatus: "active" | "suspended" | "expired",
@@ -369,6 +389,14 @@ export default function OwnerDashboard() {
                             <DropdownMenuItem onClick={() => void openCodeReset(org)}>
                               <KeyRound className="w-4 h-4 mr-2 text-slate-400" /> Reset admin / director code
                             </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => void residentCode(org, false)}>
+                              <Copy className="w-4 h-4 mr-2 text-slate-400" /> {residentCodeOf(org) ? `Resident code ${residentCodeOf(org)} — copy` : "Create resident code"}
+                            </DropdownMenuItem>
+                            {residentCodeOf(org) && (
+                              <DropdownMenuItem onClick={() => void residentCode(org, true)}>
+                                <RotateCcw className="w-4 h-4 mr-2 text-slate-400" /> New resident code
+                              </DropdownMenuItem>
+                            )}
                             <DropdownMenuSeparator />
                             
                             {!isActive && (

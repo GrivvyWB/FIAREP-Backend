@@ -5,6 +5,7 @@ import { db, entityRecords, organizationProperties, organizations, staffAccounts
 import { requirePlatformOwner } from "../middlewares/auth";
 import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
+import { newResidentCode, residentCodeOf, withResidentCode } from "../lib/residentRouting";
 import {
   getTimeClockConfig,
   mergeTimeClockConfig,
@@ -413,6 +414,24 @@ router.post("/v1/platform/organizations", async (req, res) => {
     }
     throw error;
   }
+});
+
+// The 6-digit code residents type so their complaint lands with this
+// company when the address alone can't tell companies apart.
+router.post("/v1/platform/organizations/:id/resident-code", async (req, res) => {
+  const id = String(req.params.id || "");
+  const [before] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
+  if (!before) { res.status(404).json({ error: "Organization not found" }); return; }
+  const regenerate = !!(req.body && typeof req.body === "object" && (req.body as { regenerate?: unknown }).regenerate === true);
+  const existing = residentCodeOf(before.features);
+  if (existing && !regenerate) { res.json({ code: existing, created: false }); return; }
+  const code = await newResidentCode();
+  const [org] = await db.update(organizations)
+    .set({ features: withResidentCode(before.features, code), updatedAt: new Date() })
+    .where(eq(organizations.id, id)).returning();
+  const owner = res.locals["platformOwner"] as { name: string };
+  await platformAudit(owner.name, "organization.resident-code", id, before, org);
+  res.json({ code, created: true });
 });
 
 router.patch("/v1/platform/organizations/:id/deletion-policy", async (req, res) => {

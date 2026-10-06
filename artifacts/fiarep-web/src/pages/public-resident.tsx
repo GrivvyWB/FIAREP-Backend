@@ -29,6 +29,7 @@ const reportSchema = z.object({
   location: z.enum(['Apartment/Unit', 'Building', 'Hallways', 'Compactor', 'Elevator', 'Other']),
   unit: z.string().optional(),
   description: z.string().min(1, 'Description is required'),
+  companyCode: z.string().optional().refine((v) => !v || /^\d{6}$/.test(v.replace(/\D/g, '')), 'The resident code is 6 digits'),
   reporterName: z.string().optional(),
   reporterPhone: z.string().optional(),
   reporterEmail: z.string().email('Invalid email').optional().or(z.literal('')),
@@ -176,7 +177,9 @@ export default function PublicResident() {
         setPhoto(null);
       },
       onError: (err: any) => {
-        toast({ variant: 'destructive', title: 'Submission Failed', description: err.message || 'Could not submit report.' });
+        const needsCode = err?.data?.needsCompanyCode === true;
+        if (needsCode) reportForm.setError('companyCode', { message: 'Enter your management company resident code' });
+        toast({ variant: 'destructive', title: needsCode ? 'Which company manages your building?' : 'Submission Failed', description: err?.data?.error || err.message || 'Could not submit report.' });
       }
     });
   };
@@ -323,6 +326,14 @@ export default function PublicResident() {
                     <FormItem>
                        <FormLabel>{selectedLocation === 'Apartment/Unit' ? 'Apartment / Unit' : 'Apartment / Unit (Optional)'}</FormLabel>
                       <FormControl><Input {...field} /></FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )} />
+                  <FormField control={reportForm.control} name="companyCode" render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Management company resident code (optional)</FormLabel>
+                      <FormControl><Input {...field} inputMode="numeric" maxLength={6} placeholder="6-digit code from your management office" /></FormControl>
+                      <p className="text-xs text-muted-foreground">Only needed if more than one company manages buildings in your development.</p>
                       <FormMessage />
                     </FormItem>
                   )} />

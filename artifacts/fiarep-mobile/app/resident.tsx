@@ -36,6 +36,7 @@ export default function ResidentScreen() {
   const [development, setDevelopment] = useState('');
   const [address, setAddress] = useState('');
   const [description, setDescription] = useState('');
+  const [companyCode, setCompanyCode] = useState('');
   const [waterType, setWaterType] = useState('');
   const [photos, setPhotos] = useState<string[]>([]);
   const [submitting, setSubmitting] = useState(false);
@@ -97,13 +98,13 @@ export default function ResidentScreen() {
       const reportDescription = showWater && waterType
         ? `${waterType}. ${description.trim()}`
         : description.trim();
-      const report = await createResidentReport(unit.trim(), development.trim(), reportDescription, photos, name.trim(), effLoc, '', address.trim());
+      const report = await createResidentReport(unit.trim(), development.trim(), reportDescription, photos, name.trim(), effLoc, '', address.trim(), companyCode);
       const failures = (report as any).photoUploadFailures as string[] | undefined;
       Alert.alert('Report submitted', `Complaint number: ${report.complaintNo}\n\nThis report is saved on this device for status checks.${failures?.length ? `\n\n${failures.length} photo(s) could not be uploaded.` : ''}`, [
         { text: 'OK', onPress: () => router.back() },
       ]);
     } catch (e: any) {
-      Alert.alert('Submit failed', e?.message ?? 'Could not submit report.');
+      Alert.alert(e?.data?.needsCompanyCode ? 'Which company manages your building?' : 'Submit failed', e?.data?.error ?? e?.message ?? 'Could not submit report.');
       setSubmitting(false);
     }
   }
@@ -165,6 +166,18 @@ export default function ResidentScreen() {
         placeholder="Select your building address"
         style={styles.input}
       />
+
+      <Text style={styles.label}>Management company resident code (optional)</Text>
+      <TextInput
+        style={styles.input}
+        value={companyCode}
+        onChangeText={(v) => setCompanyCode(v.replace(/\D/g, '').slice(0, 6))}
+        placeholder="6-digit code from your management office"
+        placeholderTextColor="#999"
+        keyboardType="number-pad"
+        maxLength={6}
+      />
+      <Text style={{ fontSize: 12, color: '#666', marginTop: -6, marginBottom: 6 }}>Only needed if more than one company manages buildings in your development.</Text>
 
       <Text style={styles.label}>Description</Text>
       <TextInput
