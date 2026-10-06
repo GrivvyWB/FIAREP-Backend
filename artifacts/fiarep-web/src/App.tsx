@@ -50,7 +50,6 @@ import PropertyLookup from '@/pages/property-lookup';
 // Owner Pages
 import Access from '@/pages/access';
 import JoinFiarep from '@/pages/join';
-import { JoinFiarepTab } from '@/components/join-fiarep-tab';
 import PublicResident from '@/pages/public-resident';
 import PublicVendor from '@/pages/public-vendor';
 import OwnerLogin from '@/pages/platform-owner/login';
@@ -157,7 +156,6 @@ function AppRouter() {
     // Resident / Vendor / Staff; the website locks to the person on sign-in.
     return (
       <RoutedErrorBoundary>
-        <JoinFiarepTab />
         <Switch>
           <Route path="/" component={Platform} />
           <Route path="/platform" component={Platform} />

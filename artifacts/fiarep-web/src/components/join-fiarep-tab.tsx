@@ -13,10 +13,10 @@ export function JoinFiarepTab() {
       onClick={() => setLocation("/join")}
       aria-label="Join FIAREP — management service and expediting"
       title="Join FIAREP"
-      className="fixed bottom-4 right-4 z-50 flex items-center gap-3 rounded-2xl border border-amber-500/40 bg-white/95 p-2 pr-4 shadow-xl backdrop-blur transition hover:-translate-y-0.5 hover:shadow-2xl focus:outline-none focus:ring-2 focus:ring-amber-500"
+      className="flex items-center gap-3 rounded-2xl border border-amber-500/40 bg-white p-2 pr-4 shadow-lg transition hover:-translate-y-0.5 hover:shadow-xl focus:outline-none focus:ring-2 focus:ring-amber-500"
     >
       <img src="/platform-media/fiarep-247-logo.png" alt="24/7 FIAREP Management Service / Expediting" className="h-14 w-auto sm:h-16" />
-      <span className="hidden text-left sm:block">
+      <span className="text-left">
         <span className="block text-sm font-bold text-slate-900">Join FIAREP</span>
         <span className="block text-xs text-slate-600">Management service · Expediting</span>
       </span>
