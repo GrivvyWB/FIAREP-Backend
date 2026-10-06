@@ -69,6 +69,7 @@
   },
   "dependencies": {
     "exceljs": "4.4.0",
+    "expo-audio": "^57.0.5",
     "expo-secure-store": "~57.0.4"
   }
 }
