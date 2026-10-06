@@ -81,6 +81,62 @@ export function canReadSharedDefaultRates(staff: Staff | null | undefined): bool
 /** One client-side policy shared by navigation, routes, and data surfaces.
  * The API remains the final authority; this prevents unauthorized UI from
  * mounting and issuing requests in the first place. */
+// HPD / DOB Lookup access by trade (control panel). Stored as lookup.<trade>
+// inside features.modules; every trade is ON unless switched off.
+export const LOOKUP_TRADES: Array<{ key: string; label: string }> = [
+  { key: "superintendent", label: "Superintendent" },
+  { key: "maintenance", label: "Maintenance Worker" },
+  { key: "plumber", label: "Plumber" },
+  { key: "electrician", label: "Electrician" },
+  { key: "carpenter", label: "Carpenter" },
+  { key: "painter", label: "Painter" },
+  { key: "mason", label: "Mason / Bricklayer" },
+  { key: "roofer", label: "Roofer" },
+  { key: "heating", label: "Heating / Boiler" },
+  { key: "elevator", label: "Elevator Mechanic" },
+  { key: "exterminator", label: "Exterminator" },
+  { key: "worker", label: "Other workers" },
+  { key: "emergency", label: "Emergency Crew" },
+  { key: "inspector", label: "Inspector" },
+  { key: "supervisor-inspector", label: "Supervisor Inspector" },
+  { key: "cpm", label: "CPM" },
+  { key: "cpm-supervisor", label: "CPM Supervisor" },
+  { key: "property-manager", label: "Property Manager" },
+  { key: "director", label: "Director" },
+  { key: "supervisor", label: "Other supervisors / management" },
+  { key: "administrator", label: "Administrator" },
+  { key: "community", label: "Community Coordinator" },
+];
+
+/** Which lookup-access switch applies to a person, from their title (and role as a fallback). */
+export function lookupTradeFor(position: string, role: string): string {
+  const p = (position || "").trim().toLowerCase();
+  const r = (role || "").trim().toLowerCase();
+  if (r === "community_coordinator" || p.includes("community coordinator")) return "community";
+  if (p.includes("cpm supervisor") || p.includes("cpm-supervisor")) return "cpm-supervisor";
+  if (p === "cpm" || p.includes("cpm")) return "cpm";
+  if (p.includes("supervisor") && p.includes("inspect")) return "supervisor-inspector";
+  if (p.includes("inspector")) return "inspector";
+  if (p.includes("property manager")) return "property-manager";
+  if (p.includes("director")) return "director";
+  if (p.includes("superintendent") || p === "super") return "superintendent";
+  if (p.includes("plumb")) return "plumber";
+  if (p.includes("electric")) return "electrician";
+  if (p.includes("carpent")) return "carpenter";
+  if (p.includes("paint")) return "painter";
+  if (p.includes("mason") || p.includes("brick") || p.includes("concrete")) return "mason";
+  if (p.includes("roof")) return "roofer";
+  if (p.includes("heat") || p.includes("boiler") || p.includes("hvac")) return "heating";
+  if (p.includes("elevator")) return "elevator";
+  if (p.includes("exterm") || p.includes("pest")) return "exterminator";
+  if (p.includes("maintenance") || p.includes("caretaker")) return "maintenance";
+  if (r === "emergency") return "emergency";
+  if (r === "administrator") return "administrator";
+  if (r === "management") return "supervisor";
+  if (r === "inspector") return "inspector";
+  return "worker";
+}
+
 export function hasModuleAccess(
   staff: Staff | null | undefined,
   module: StaffModule,
@@ -96,8 +152,12 @@ export function hasModuleAccess(
   if (module === "community") return isCommunityCoordinator(staff);
   // The live translator: every signed-in staff member who talks to residents.
   if (module === "translator") return !["vendor", "resident", "procurement"].includes(String(staff.role));
-  // HPD / DOB lookup (read-only): every staff member who works a building.
-  if (module === "property-lookup") return !["vendor", "resident", "procurement", "human_resources"].includes(String(staff.role));
+  // HPD / DOB lookup (read-only): staff who work a building, unless the
+  // platform owner switched it off for their trade (Platform -> Modules).
+  if (module === "property-lookup") {
+    if (["vendor", "resident", "procurement", "human_resources"].includes(String(staff.role))) return false;
+    return organizationModules?.[`lookup.${lookupTradeFor(staff.position || "", String(staff.role))}`] !== false;
+  }
   if (isCommunityCoordinator(staff)) return module === "notifications" || module === "settings";
   // The Team (staff management) page is restricted to Human Resources only —
   // no other role, including Administrator or Borough Director, sees it.

@@ -37,6 +37,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
+import { LOOKUP_TRADES } from "@/lib/access-policy";
 import type { StaffModule } from "@/lib/access-policy";
 
 type ModuleDefinition = {
@@ -76,7 +77,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "settings", name: "Settings", description: "Organization settings", icon: Settings },
   { id: "shared-data", name: "Shared Data", description: "Shared platform data", icon: Package },
   { id: "measurement", name: "Measurement", description: "AR/LiDAR material take-off (concrete, sheetrock, window openings)", icon: Building2 },
-  { id: "property-lookup", name: "HPD / DOB Lookup", description: "Look up a building's HPD and DOB violations by address (website and app, all staff)", icon: AlertTriangle },
+  { id: "property-lookup", name: "HPD / DOB Lookup", description: "Look up a building's HPD and DOB violations by address (website and app) — pick the trades below", icon: AlertTriangle },
   { id: "translator", name: "Translator", description: "Voice-to-voice interpreter for talking with residents (website and app)", icon: Users },
 ];
 
@@ -205,6 +206,14 @@ function configuredMeasurementAccess(organization: OrganizationWithUsage): Recor
   return result;
 }
 
+function configuredLookupAccess(organization: OrganizationWithUsage): Record<string, boolean> {
+  const value = organization.features?.modules;
+  const saved = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+  const result: Record<string, boolean> = {};
+  for (const trade of LOOKUP_TRADES) result[`lookup.${trade.key}`] = saved[`lookup.${trade.key}`] !== false; // on unless switched off
+  return result;
+}
+
 function configuredProjToolAccess(organization: OrganizationWithUsage): Record<string, boolean> {
   const value = organization.features?.modules;
   const saved = value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
@@ -242,6 +251,7 @@ export default function OwnerModules() {
   const [measurementAccess, setMeasurementAccess] = useState<Record<string, boolean>>({});
   const [appTabs, setAppTabs] = useState<Record<string, boolean>>({});
   const [projToolAccess, setProjToolAccess] = useState<Record<string, boolean>>({});
+  const [lookupAccess, setLookupAccess] = useState<Record<string, boolean>>({});
   const [deletionEnabled, setDeletionEnabled] = useState(false);
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
   const [deletionSaving, setDeletionSaving] = useState(false);
@@ -268,6 +278,7 @@ export default function OwnerModules() {
     setMeasurementAccess(configuredMeasurementAccess(organization));
     setAppTabs(configuredAppTabs(organization));
     setProjToolAccess(configuredProjToolAccess(organization));
+    setLookupAccess(configuredLookupAccess(organization));
     setDeletionEnabled(organization.features?.deletionEnabled === true);
     const configured = organization.features?.modules;
     setResidentPhotoAiEnabled(
@@ -293,6 +304,11 @@ export default function OwnerModules() {
 
   const toggleMeasurement = (key: string, enabled: boolean) => {
     setMeasurementAccess((current) => ({ ...current, [key]: enabled }));
+    setDirty(true);
+  };
+
+  const toggleLookup = (key: string, enabled: boolean) => {
+    setLookupAccess((current) => ({ ...current, [key]: enabled }));
     setDirty(true);
   };
 
@@ -357,7 +373,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled },
             deletionEnabled,
           },
         },
@@ -506,6 +522,31 @@ export default function OwnerModules() {
                     ))}
                   </tbody>
                 </table>
+              </div>
+            </section>
+          )}
+          {modules["property-lookup"] !== false && (
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+                <div>
+                  <h2 className="font-semibold text-slate-950">HPD / DOB Lookup by trade</h2>
+                  <p className="text-xs text-slate-500">Who gets the "Check HPD / DOB" button (app) and the HPD / DOB Lookup page (website). A person's title decides their trade. Everything is on until you switch it off.</p>
+                </div>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={() => { setLookupAccess(Object.fromEntries(LOOKUP_TRADES.map((t) => [`lookup.${t.key}`, true]))); setDirty(true); }}>All on</Button>
+                  <Button variant="outline" size="sm" onClick={() => { setLookupAccess(Object.fromEntries(LOOKUP_TRADES.map((t) => [`lookup.${t.key}`, false]))); setDirty(true); }}>All off</Button>
+                </div>
+              </div>
+              <div className="grid gap-x-6 gap-y-2 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
+                {LOOKUP_TRADES.map((t) => {
+                  const key = `lookup.${t.key}`;
+                  return (
+                    <label key={t.key} className="flex items-center gap-2 text-sm text-slate-800">
+                      <input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={lookupAccess[key] !== false} onChange={(e) => toggleLookup(key, e.target.checked)} />
+                      {t.label}
+                    </label>
+                  );
+                })}
               </div>
             </section>
           )}

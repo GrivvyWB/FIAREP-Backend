@@ -19,12 +19,14 @@ export type ModuleConfig = { propertyLimit?: number; name?: string; features?: {
 let cached: ModuleConfig | null = null;
 let cachedStaffId = '';
 let cachedPosition = '';
+let cachedRole = '';
 let cachedOwner = '';
 
 async function settingKey(): Promise<string> {
   const identity = await getSessionIdentity();
   cachedStaffId = identity?.staffId || cachedStaffId;
   cachedPosition = identity?.position || cachedPosition;
+  cachedRole = identity?.role || cachedRole;
   return `organization_module_config:${identity?.tenantId || 'default'}:${identity?.staffId || ''}`;
 }
 
@@ -53,9 +55,72 @@ function projectRoleForPosition(position: string): string | null {
   return null;
 }
 
+// HPD / DOB Lookup access by trade (control panel). Stored as lookup.<trade>
+// inside features.modules; every trade is ON unless switched off.
+const LOOKUP_TRADES: Array<{ key: string; label: string }> = [
+  { key: 'superintendent', label: 'Superintendent' },
+  { key: 'maintenance', label: 'Maintenance Worker' },
+  { key: 'plumber', label: 'Plumber' },
+  { key: 'electrician', label: 'Electrician' },
+  { key: 'carpenter', label: 'Carpenter' },
+  { key: 'painter', label: 'Painter' },
+  { key: 'mason', label: 'Mason / Bricklayer' },
+  { key: 'roofer', label: 'Roofer' },
+  { key: 'heating', label: 'Heating / Boiler' },
+  { key: 'elevator', label: 'Elevator Mechanic' },
+  { key: 'exterminator', label: 'Exterminator' },
+  { key: 'worker', label: 'Other workers' },
+  { key: 'emergency', label: 'Emergency Crew' },
+  { key: 'inspector', label: 'Inspector' },
+  { key: 'supervisor-inspector', label: 'Supervisor Inspector' },
+  { key: 'cpm', label: 'CPM' },
+  { key: 'cpm-supervisor', label: 'CPM Supervisor' },
+  { key: 'property-manager', label: 'Property Manager' },
+  { key: 'director', label: 'Director' },
+  { key: 'supervisor', label: 'Other supervisors / management' },
+  { key: 'administrator', label: 'Administrator' },
+  { key: 'community', label: 'Community Coordinator' },
+];
+
+/** Which lookup-access switch applies to a person, from their title (and role as a fallback). */
+export function lookupTradeFor(position: string, role: string): string {
+  const p = (position || '').trim().toLowerCase();
+  const r = (role || '').trim().toLowerCase();
+  if (r === 'community_coordinator' || p.includes('community coordinator')) return 'community';
+  if (p.includes('cpm supervisor') || p.includes('cpm-supervisor')) return 'cpm-supervisor';
+  if (p === 'cpm' || p.includes('cpm')) return 'cpm';
+  if (p.includes('supervisor') && p.includes('inspect')) return 'supervisor-inspector';
+  if (p.includes('inspector')) return 'inspector';
+  if (p.includes('property manager')) return 'property-manager';
+  if (p.includes('director')) return 'director';
+  if (p.includes('superintendent') || p === 'super') return 'superintendent';
+  if (p.includes('plumb')) return 'plumber';
+  if (p.includes('electric')) return 'electrician';
+  if (p.includes('carpent')) return 'carpenter';
+  if (p.includes('paint')) return 'painter';
+  if (p.includes('mason') || p.includes('brick') || p.includes('concrete')) return 'mason';
+  if (p.includes('roof')) return 'roofer';
+  if (p.includes('heat') || p.includes('boiler') || p.includes('hvac')) return 'heating';
+  if (p.includes('elevator')) return 'elevator';
+  if (p.includes('exterm') || p.includes('pest')) return 'exterminator';
+  if (p.includes('maintenance') || p.includes('caretaker')) return 'maintenance';
+  if (r === 'emergency') return 'emergency';
+  if (r === 'administrator') return 'administrator';
+  if (r === 'management') return 'supervisor';
+  if (r === 'inspector') return 'inspector';
+  return 'worker';
+}
+void LOOKUP_TRADES;
+
 export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = cached): boolean {
   const modulesMap = config?.features?.modules || {};
   const value = modulesMap[module];
+  // HPD / DOB lookup: the client switch, then the per-trade switch for this
+  // person's title (Platform -> Modules -> "HPD / DOB Lookup by trade").
+  if (module === 'property-lookup') {
+    if (value === false) return false;
+    return modulesMap['lookup.' + lookupTradeFor(cachedPosition, cachedRole)] !== false;
+  }
   if (OPT_IN_MODULES.has(module)) {
     if (value !== true) return false;
     // Per-user project-tool assignment: if any worker is individually assigned
