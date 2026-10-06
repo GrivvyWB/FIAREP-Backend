@@ -1,4 +1,4 @@
-import { useCallback, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { ui } from '../lib/ui';
@@ -6,6 +6,8 @@ import {
   BOROUGHS, CRITICAL_TAGS, PROGRAMS, getCommunity, saveCommunity, str, today, type CommunityRecord,
 } from '../lib/community';
 import { Chips } from '../lib/community-ui';
+import { listCommunity } from '../lib/community';
+import { getSessionIdentity } from '../lib/store';
 import {
   LEAD_DOCUMENTS, LEAD_TESTED, MOLD_EXTENT, VERMIN_FREQUENCY, VERMIN_TYPES,
   type AffidavitInfo, type LeadChild, type LeadInfo, type MoldInfo, type VerminInfo,
@@ -27,6 +29,19 @@ export default function CommunityResident() {
     affidavit: { given: false, statement: '', affiantName: '', date: '', witnessName: '', affirmed: false } as AffidavitInfo,
   });
   const set = (k: keyof typeof f, v: unknown) => setF((c) => ({ ...c, [k]: v }));
+  // "Same building as my last visit": the address and borough of the last
+  // resident this coordinator logged, one tap away.
+  const [last, setLast] = useState<{ address: string; borough: string } | null>(null);
+  const [sameBuilding, setSameBuilding] = useState(false);
+  useEffect(() => {
+    if (id) return;
+    (async () => {
+      const [identity, rows] = await Promise.all([getSessionIdentity().catch(() => null), listCommunity('community-residents').catch(() => [])]);
+      const mine = rows.filter((r) => !identity?.staffId || str(r.state.loggedById) === identity.staffId);
+      const r = mine[0] || rows[0];
+      if (r && str(r.state.address)) setLast({ address: str(r.state.address), borough: str(r.state.borough) });
+    })();
+  }, [id]);
   const sub = <K extends 'mold' | 'vermin' | 'lead' | 'affidavit'>(k: K, patch: Partial<typeof f[K]>) => setF((c) => ({ ...c, [k]: { ...c[k], ...patch } }));
 
   useFocusEffect(useCallback(() => {
@@ -73,7 +88,15 @@ export default function CommunityResident() {
       <Text style={ui.label}>Borough</Text>
       <Chips options={BOROUGHS} value={f.borough} onChange={(v) => set('borough', v === f.borough ? '' : v)} />
       <Text style={ui.label}>Building address *</Text>
-      <TextInput style={ui.input} value={f.address} onChangeText={(v) => set('address', v)} placeholder="262 Ralph Ave" />
+      {!!last?.address && (
+        <Pressable onPress={() => { const on = !sameBuilding; setSameBuilding(on); if (on) setF((c) => ({ ...c, address: last.address, borough: last.borough || c.borough })); }} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: sameBuilding ? '#F2C14E' : '#e0e0e0', borderRadius: 8, padding: 10, backgroundColor: sameBuilding ? '#fff8e1' : '#fafafa' }}>
+          <View style={{ width: 22, height: 22, borderRadius: 5, borderWidth: 2, borderColor: '#111', alignItems: 'center', justifyContent: 'center', backgroundColor: sameBuilding ? '#111' : '#fff' }}>
+            {sameBuilding && <Text style={{ color: '#fff', fontWeight: '800', fontSize: 14 }}>✓</Text>}
+          </View>
+          <Text style={{ flex: 1 }}>Same building as my last visit — <Text style={{ fontWeight: '600' }}>{last.address}</Text></Text>
+        </Pressable>
+      )}
+      <TextInput style={[ui.input, sameBuilding && { backgroundColor: '#f0f0f0' }]} value={f.address} onChangeText={(v) => { setSameBuilding(false); set('address', v); }} placeholder="262 Ralph Ave" editable={!sameBuilding} />
       <Text style={ui.label}>Apartment</Text>
       <TextInput style={ui.input} value={f.apartment} onChangeText={(v) => set('apartment', v)} placeholder="4C" autoCapitalize="characters" />
       <Text style={ui.label}>Program / reason for the visit</Text>

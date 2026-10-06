@@ -274,7 +274,7 @@ export default function CommunityCoordinators() {
         )
       )}
 
-      {editResident && <ResidentDialog record={editResident === "new" ? null : editResident} buildings={buildings} onClose={async (saved) => { setEditResident(null); if (saved) await refresh(); }} />}
+      {editResident && <ResidentDialog record={editResident === "new" ? null : editResident} buildings={buildings} lastResident={residents.filter((r) => s(r.state.loggedById) === staff?.id)[0] || residents[0] || null} onClose={async (saved) => { setEditResident(null); if (saved) await refresh(); }} />}
       {editBuilding && <BuildingDialog record={editBuilding === "new" ? null : editBuilding} onClose={async (saved) => { setEditBuilding(null); if (saved) await refresh(); }} />}
 
       <AlertDialog open={!!deleting} onOpenChange={(open) => { if (!open) setDeleting(null); }}>
@@ -319,7 +319,11 @@ function Empty({ text }: { text: string }) {
   return <div className="rounded-lg border border-dashed p-8 text-center text-sm text-muted-foreground">{text}</div>;
 }
 
-function ResidentDialog({ record, buildings, onClose }: { record: Rec | null; buildings: Rec[]; onClose: (saved: boolean) => void }) {
+function ResidentDialog({ record, buildings, lastResident, onClose }: { record: Rec | null; buildings: Rec[]; lastResident: Rec | null; onClose: (saved: boolean) => void }) {
+  // "Same building as my last visit": one tap carries the address and borough
+  // over, so logging several tenants in one building means typing it once.
+  const last = lastResident && !record ? { address: s(lastResident.state.address), borough: s(lastResident.state.borough) } : null;
+  const [sameBuilding, setSameBuilding] = useState(false);
   const { toast } = useToast();
   const create = useCreateEntityRecord();
   const update = useUpdateEntityRecord();
@@ -379,7 +383,13 @@ function ResidentDialog({ record, buildings, onClose }: { record: Rec | null; bu
             </select>
           </Field>
           <Field label="Building address *">
-            <Input list="community-known-addresses" value={form.address} onChange={(e) => set("address", e.target.value)} placeholder="262 Ralph Ave" />
+            {last?.address && (
+              <label className="mb-2 flex items-center gap-2 rounded-md border bg-muted/40 px-2 py-1.5 text-sm">
+                <Checkbox checked={sameBuilding} onCheckedChange={(v) => { const on = v === true; setSameBuilding(on); if (on) setForm((f) => ({ ...f, address: last.address, borough: last.borough || f.borough })); }} />
+                <span>Same building as my last visit — <span className="font-medium">{last.address}</span></span>
+              </label>
+            )}
+            <Input list="community-known-addresses" value={form.address} onChange={(e) => { setSameBuilding(false); set("address", e.target.value); }} placeholder="262 Ralph Ave" readOnly={sameBuilding} className={sameBuilding ? "bg-muted" : ""} />
             <datalist id="community-known-addresses">{knownAddresses.map((a) => <option key={a} value={a} />)}</datalist>
           </Field>
           <Field label="Apartment"><Input value={form.apartment} onChange={(e) => set("apartment", e.target.value)} placeholder="4C" /></Field>
