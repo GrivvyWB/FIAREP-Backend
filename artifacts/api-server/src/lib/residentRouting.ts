@@ -74,6 +74,24 @@ export async function organizationForResidentCode(code: string): Promise<{ id: s
   return match ? { id: match.id, name: match.name } : null;
 }
 
+/** Companies whose name matches what the resident typed, with their codes. */
+export async function residentCompaniesNamed(query: string): Promise<Array<{ code: string; organizationName: string }>> {
+  const q = norm(query).replace(/[.,'"]/g, "");
+  if (q.length < 2) return [];
+  const words = q.split(" ").filter(Boolean);
+  const out: Array<{ code: string; organizationName: string }> = [];
+  for (const org of await licensedOrganizations()) {
+    if (org.id === "default") continue;
+    const name = norm(org.name).replace(/[.,'"]/g, "");
+    const hit = name === q || name.includes(q) || words.every((w) => name.includes(w));
+    if (!hit) continue;
+    out.push({ code: await ensureResidentCode(org), organizationName: org.name });
+  }
+  // An exact name wins outright.
+  const exact = out.filter((o) => norm(o.organizationName).replace(/[.,'"]/g, "") === q);
+  return exact.length === 1 ? exact : out;
+}
+
 async function coversDevelopment(org: Org, development: string): Promise<boolean> {
   const wanted = norm(development);
   if (!wanted) return false;

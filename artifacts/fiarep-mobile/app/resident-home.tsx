@@ -2,33 +2,43 @@ import { useCallback, useState } from 'react';
 import { Text, TextInput, Pressable, ScrollView, View, Alert } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ui } from '../lib/ui';
-import { checkResidentCode, getResidentCode, setResidentCode, type ResidentCode } from '../lib/store';
+import { findResidentCompany, getResidentCode, setResidentCode, type ResidentCode } from '../lib/store';
 
+/**
+ * First time in: the resident types their management company's name. The
+ * server hands back that company's resident code, the phone keeps it, and
+ * every complaint from this phone goes to that company. Done once.
+ */
 export default function ResidentHome() {
   const router = useRouter();
-  // The resident code from the management office: entered once, kept on
-  // this phone. Every complaint from this phone goes to that company.
   const [saved, setSaved] = useState<ResidentCode | null | undefined>(undefined);
   const [entry, setEntry] = useState('');
   const [busy, setBusy] = useState(false);
   const [changing, setChanging] = useState(false);
+  const [choices, setChoices] = useState<ResidentCode[]>([]);
   useFocusEffect(useCallback(() => { void getResidentCode().then(setSaved); }, []));
 
-  async function saveCode() {
+  async function keep(v: ResidentCode) {
+    await setResidentCode(v);
+    setSaved(v); setEntry(''); setChoices([]); setChanging(false);
+    Alert.alert('Saved', `${v.organizationName}\nResident code ${v.code}\n\nThis phone remembers it — you won't be asked again.`);
+  }
+
+  async function lookUp() {
     setBusy(true);
     try {
-      const v = await checkResidentCode(entry);
-      await setResidentCode(v);
-      setSaved(v); setEntry(''); setChanging(false);
+      const matches = await findResidentCompany(entry);
+      if (matches.length === 1) await keep(matches[0]!);
+      else setChoices(matches);
     } catch (e: any) {
-      Alert.alert('Resident code', e?.data?.error || e?.message || "That code isn't recognized. Call your management office for the code.");
+      Alert.alert('Company not found', e?.data?.error || e?.message || 'Check the spelling with your management office.');
     } finally { setBusy(false); }
   }
 
-  const needsCode = saved === null || changing;
+  const needsCompany = saved === null || changing;
 
   return (
-    <ScrollView contentContainerStyle={[ui.wrap, { paddingTop: 40 }]}>
+    <ScrollView contentContainerStyle={[ui.wrap, { paddingTop: 40 }]} keyboardShouldPersistTaps="handled">
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center', marginBottom: 6 }}>
         Resident Services
       </Text>
@@ -39,29 +49,42 @@ export default function ResidentHome() {
       {saved && !changing && (
         <View style={{ alignItems: 'center', marginBottom: 16 }}>
           <Text style={{ fontSize: 13, color: '#555' }}>Your building is managed by</Text>
-          <Text style={{ fontSize: 16, fontWeight: '700' }}>{saved.organizationName || `Resident code ${saved.code}`}</Text>
-          <Pressable onPress={() => setChanging(true)}><Text style={{ fontSize: 12, color: '#2563eb', marginTop: 4 }}>Change resident code</Text></Pressable>
+          <Text style={{ fontSize: 16, fontWeight: '700' }}>{saved.organizationName || 'your management company'}</Text>
+          <Text style={{ fontSize: 12, color: '#777' }}>Resident code {saved.code}</Text>
+          <Pressable onPress={() => setChanging(true)}><Text style={{ fontSize: 12, color: '#2563eb', marginTop: 4 }}>Change management company</Text></Pressable>
         </View>
       )}
 
-      {needsCode && (
+      {needsCompany && (
         <View style={[ui.card, { gap: 8, marginBottom: 16 }]}>
-          <Text style={ui.cardTitle}>Enter your resident code</Text>
-          <Text style={ui.listSub}>The 6-digit code from your management office. You only enter it once — this phone remembers it. Lost it? Call the office.</Text>
+          <Text style={ui.cardTitle}>Who manages your building?</Text>
+          <Text style={ui.listSub}>Type your management company's name. You do this once — this phone remembers it.</Text>
           <TextInput
             style={ui.input}
             value={entry}
-            onChangeText={(v) => setEntry(v.replace(/\D/g, '').slice(0, 6))}
-            placeholder="6-digit resident code"
+            onChangeText={(v) => { setEntry(v); setChoices([]); }}
+            placeholder="e.g. ABC Inc."
             placeholderTextColor="#999"
-            keyboardType="number-pad"
-            maxLength={6}
+            autoCapitalize="words"
+            autoCorrect={false}
+            returnKeyType="search"
+            onSubmitEditing={() => { if (entry.trim().length >= 2) void lookUp(); }}
             autoFocus={saved === null}
           />
-          <Pressable style={[ui.btn, (busy || entry.length !== 6) && ui.btnMuted]} disabled={busy || entry.length !== 6} onPress={() => void saveCode()}>
-            <Text style={ui.btnText}>{busy ? 'Checking…' : 'Save code'}</Text>
+          {choices.length > 1 && (
+            <View style={{ gap: 6 }}>
+              <Text style={ui.label}>Which one?</Text>
+              {choices.map((c) => (
+                <Pressable key={c.code} style={ui.btnOutline} onPress={() => void keep(c)}>
+                  <Text style={ui.btnOutlineText}>{c.organizationName}</Text>
+                </Pressable>
+              ))}
+            </View>
+          )}
+          <Pressable style={[ui.btn, (busy || entry.trim().length < 2) && ui.btnMuted]} disabled={busy || entry.trim().length < 2} onPress={() => void lookUp()}>
+            <Text style={ui.btnText}>{busy ? 'Looking up…' : 'Find my company'}</Text>
           </Pressable>
-          {changing && <Pressable onPress={() => { setChanging(false); setEntry(''); }}><Text style={{ textAlign: 'center', color: '#666' }}>Keep current code</Text></Pressable>}
+          {changing && <Pressable onPress={() => { setChanging(false); setEntry(''); setChoices([]); }}><Text style={{ textAlign: 'center', color: '#666' }}>Keep current company</Text></Pressable>}
         </View>
       )}
 

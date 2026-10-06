@@ -1121,6 +1121,13 @@ export async function setResidentCode(value: ResidentCode | null): Promise<void>
   if (!value) { await d.runAsync('DELETE FROM settings WHERE key = ?', 'resident_code'); return; }
   await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', 'resident_code', JSON.stringify(value));
 }
+/** The resident types the company's name; back comes its resident code. */
+export async function findResidentCompany(name: string): Promise<ResidentCode[]> {
+  const q = name.trim();
+  if (q.length < 2) throw new Error("Type your management company's name.");
+  const r = await customFetch<{ matches: ResidentCode[] }>('/api/v1/public/resident-company?name=' + encodeURIComponent(q), { responseType: 'json' } as never);
+  return Array.isArray(r?.matches) ? r.matches : [];
+}
 /** Ask the server which company a code belongs to. */
 export async function checkResidentCode(code: string): Promise<ResidentCode> {
   const clean = code.replace(/\D/g, '');

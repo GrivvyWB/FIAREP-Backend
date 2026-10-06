@@ -21,7 +21,7 @@ import { isBoroughDirector, isCoverageEligible } from "../lib/domain";
 import { deliverPushNotification } from "../lib/push";
 import { routedComplaintRecipientIds, tradesForComplaint } from "../lib/complaintRouting";
 import { recordNotifiedStaff } from "../lib/complaintReceipts";
-import { organizationForResidentCode, resolveResidentOrganization } from "../lib/residentRouting";
+import { organizationForResidentCode, residentCompaniesNamed, resolveResidentOrganization } from "../lib/residentRouting";
 import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
 import { rateLimit } from "../lib/rateLimit";
 import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
@@ -89,6 +89,17 @@ function record(row: typeof entityRecords.$inferSelect) {
     version: row.version, createdAt: row.createdAt, updatedAt: row.updatedAt,
   };
 }
+
+// The resident types their management company's name once; the phone gets
+// that company's resident code back and keeps it.
+router.get("/v1/public/resident-company", async (req, res) => {
+  const name = String(req.query["name"] ?? "").trim().slice(0, 120);
+  res.setHeader("Cache-Control", "no-store");
+  if (name.length < 2) { res.status(400).json({ error: "Type your management company's name." }); return; }
+  const matches = await residentCompaniesNamed(name);
+  if (!matches.length) { res.status(404).json({ error: `No management company named "${name}" uses FIAREP. Check the spelling with your management office.` }); return; }
+  res.json({ matches });
+});
 
 // The resident's phone checks the code once and keeps it.
 router.get("/v1/public/resident-code/:code", async (req, res) => {

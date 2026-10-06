@@ -58,17 +58,24 @@ export default function PublicResident() {
   const [codeEntry, setCodeEntry] = useState('');
   const [codeBusy, setCodeBusy] = useState(false);
   const [changingCode, setChangingCode] = useState(false);
-  const saveResidentCode = async () => {
-    const clean = codeEntry.replace(/\D/g, '');
-    if (clean.length !== 6) return;
+  const [companyChoices, setCompanyChoices] = useState<{ code: string; organizationName: string }[]>([]);
+  const keepCompany = (v: { code: string; organizationName: string }) => {
+    try { localStorage.setItem('fiarep_resident_code', JSON.stringify(v)); } catch { /* private mode */ }
+    setSavedCode(v); setCodeEntry(''); setCompanyChoices([]); setChangingCode(false);
+    toast({ title: v.organizationName, description: `Resident code ${v.code} saved — this browser remembers it.` });
+  };
+  // The resident types the company's name; the server hands back its code.
+  const findCompany = async () => {
+    const q = codeEntry.trim();
+    if (q.length < 2) return;
     setCodeBusy(true);
     try {
-      const r = await customFetch<{ code: string; organizationName: string }>(`/api/v1/public/resident-code/${clean}`, { responseType: 'json' } as never);
-      const v = { code: clean, organizationName: String(r.organizationName || '') };
-      try { localStorage.setItem('fiarep_resident_code', JSON.stringify(v)); } catch { /* private mode */ }
-      setSavedCode(v); setCodeEntry(''); setChangingCode(false);
+      const r = await customFetch<{ matches: { code: string; organizationName: string }[] }>(`/api/v1/public/resident-company?name=${encodeURIComponent(q)}`, { responseType: 'json' } as never);
+      const matches = Array.isArray(r?.matches) ? r.matches : [];
+      if (matches.length === 1) keepCompany(matches[0]!);
+      else setCompanyChoices(matches);
     } catch (err: any) {
-      toast({ variant: 'destructive', title: 'Resident code', description: err?.data?.error || err?.message || "That code isn't recognized. Call your management office for the code." });
+      toast({ variant: 'destructive', title: 'Company not found', description: err?.data?.error || err?.message || 'Check the spelling with your management office.' });
     } finally { setCodeBusy(false); }
   };
   const [waterType, setWaterType] = useState('');
@@ -240,17 +247,25 @@ export default function PublicResident() {
         {view === 'options' && (
           <div className="space-y-6">
             {savedCode && !changingCode ? (
-              <p className="text-center text-sm text-muted-foreground">Your building is managed by <span className="font-semibold text-foreground">{savedCode.organizationName || `resident code ${savedCode.code}`}</span> · <button type="button" className="underline" onClick={() => setChangingCode(true)}>change resident code</button></p>
+              <p className="text-center text-sm text-muted-foreground">Your building is managed by <span className="font-semibold text-foreground">{savedCode.organizationName || 'your management company'}</span> · resident code {savedCode.code} · <button type="button" className="underline" onClick={() => setChangingCode(true)}>change</button></p>
             ) : (
               <Card className="shadow-md border-primary/40">
                 <CardHeader>
-                  <CardTitle>Enter your resident code</CardTitle>
-                  <CardDescription>The 6-digit code from your management office. You only enter it once — this browser remembers it. Lost it? Call the office.</CardDescription>
+                  <CardTitle>Who manages your building?</CardTitle>
+                  <CardDescription>Type your management company's name. You do this once — this browser remembers it.</CardDescription>
                 </CardHeader>
-                <CardContent className="flex gap-2">
-                  <Input value={codeEntry} inputMode="numeric" maxLength={6} placeholder="6-digit resident code" onChange={(e) => setCodeEntry(e.target.value.replace(/\D/g, '').slice(0, 6))} />
-                  <Button onClick={() => void saveResidentCode()} disabled={codeBusy || codeEntry.length !== 6}>{codeBusy ? 'Checking…' : 'Save'}</Button>
-                  {changingCode && <Button variant="ghost" onClick={() => { setChangingCode(false); setCodeEntry(''); }}>Keep</Button>}
+                <CardContent className="space-y-2">
+                  <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); void findCompany(); }}>
+                    <Input value={codeEntry} placeholder="e.g. ABC Inc." autoComplete="organization" onChange={(e) => { setCodeEntry(e.target.value); setCompanyChoices([]); }} />
+                    <Button type="submit" disabled={codeBusy || codeEntry.trim().length < 2}>{codeBusy ? 'Looking up…' : 'Find my company'}</Button>
+                    {changingCode && <Button type="button" variant="ghost" onClick={() => { setChangingCode(false); setCodeEntry(''); setCompanyChoices([]); }}>Keep</Button>}
+                  </form>
+                  {companyChoices.length > 1 && (
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Which one?</p>
+                      {companyChoices.map((c) => <Button key={c.code} type="button" variant="outline" className="w-full justify-start" onClick={() => keepCompany(c)}>{c.organizationName}</Button>)}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             )}
