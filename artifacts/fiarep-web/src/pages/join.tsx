@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { JoinPricing } from "@/components/join-pricing";
 import { ArrowLeft, Building2, CheckCircle2, Phone, Plus, ShieldCheck, Trash2, Zap } from "lucide-react";
 
 /**
@@ -99,7 +100,9 @@ export default function JoinFiarep() {
           </div>
         </section>
 
-        {/* ── Window 2: pilot sign-up ── */}
+        <JoinPricing />
+
+        {/* ── Window 3: pilot sign-up ── */}
         <section id="signup" className="mt-12 rounded-2xl border border-amber-500/30 bg-slate-900/80 p-6 shadow-xl">
           <h2 className="text-2xl font-semibold text-white">Start a pilot</h2>
           <p className="mt-1 text-sm text-slate-400">Tell us about your portfolio and which developments you want to start with. We call you back the same business day.</p>

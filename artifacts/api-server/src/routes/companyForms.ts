@@ -3,8 +3,9 @@
 // list or download them; client organizations never see them.
 import { Router, type IRouter } from "express";
 import { access, readFile } from "node:fs/promises";
-import { eq } from "drizzle-orm";
-import { db, organizations } from "@workspace/db";
+import { randomUUID } from "node:crypto";
+import { and, desc, eq, sql } from "drizzle-orm";
+import { db, entityRecords, organizations } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 
 export const COMPANY_FORMS: Array<{ file: string; title: string; group: string; description: string }> = [
@@ -42,6 +43,57 @@ router.get("/v1/company-forms", requireAuth, async (_req, res) => {
   if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
   res.setHeader("Cache-Control", "no-store");
   res.json(COMPANY_FORMS);
+});
+
+// ── Filled-in forms: saved per organization, only where the folder is unlocked ──
+const RECORD_ENTITY = "compliance-forms";
+const rowOut = (r: typeof entityRecords.$inferSelect) => ({ id: r.id, formId: String(r.state["formId"] || ""), values: (r.state["values"] as Record<string, unknown>) || {}, label: String(r.state["label"] || ""), createdBy: String(r.state["createdByName"] || ""), updatedBy: String(r.state["updatedByName"] || ""), createdAt: r.createdAt, updatedAt: r.updatedAt });
+
+router.get("/v1/company-forms/records", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  const formId = String(req.query["form"] || "");
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, RECORD_ENTITY), eq(entityRecords.deleted, false),
+    ...(formId ? [sql`${entityRecords.state}->>'formId' = ${formId}`] : []),
+  )).orderBy(desc(entityRecords.updatedAt)).limit(500);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(rows.map(rowOut));
+});
+
+router.post("/v1/company-forms/records", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const formId = String(b["formId"] || "").trim();
+  const values = b["values"] && typeof b["values"] === "object" && !Array.isArray(b["values"]) ? b["values"] as Record<string, unknown> : null;
+  if (!formId || !values) { res.status(400).json({ error: "formId and values are required" }); return; }
+  if (JSON.stringify(values).length > 200_000) { res.status(400).json({ error: "Form is too large" }); return; }
+  const now = new Date();
+  const id = typeof b["id"] === "string" && b["id"] ? String(b["id"]) : randomUUID();
+  const label = String(b["label"] || "").slice(0, 200);
+  const [existing] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, id), eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, RECORD_ENTITY))).limit(1);
+  if (existing) {
+    const [row] = await db.update(entityRecords).set({
+      state: { ...existing.state, formId, values, label, updatedByName: actor.name, updatedById: actor.id },
+      version: sql`${entityRecords.version} + 1`, updatedAt: now,
+    }).where(eq(entityRecords.id, id)).returning();
+    res.json(rowOut(row!)); return;
+  }
+  const [row] = await db.insert(entityRecords).values({
+    id, tenantId: actor.tenantId, entity: RECORD_ENTITY, development: null,
+    state: { formId, values, label, createdByName: actor.name, createdById: actor.id, updatedByName: actor.name, updatedById: actor.id },
+    createdBy: actor.id, createdAt: now, updatedAt: now,
+  }).returning();
+  res.status(201).json(rowOut(row!));
+});
+
+router.delete("/v1/company-forms/records/:id", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  await db.update(entityRecords).set({ deleted: true, updatedAt: new Date() })
+    .where(and(eq(entityRecords.id, String(req.params.id || "")), eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, RECORD_ENTITY)));
+  res.json({ ok: true });
 });
 
 router.get("/v1/company-forms/:file", requireAuth, async (req, res) => {
