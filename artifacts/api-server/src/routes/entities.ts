@@ -1980,9 +1980,9 @@ router.post("/v1/:entity/:id/eta", async (req, res) => {
   const crew = typeof body.crew === "string" ? body.crew.trim() : "";
   const note = typeof body.note === "string" ? body.note.trim() : "";
   if (!eta && !crew) { res.status(400).json({ error: "Pick a time or a crew" }); return; }
-  const assigned = String(row.state["assignedStaffId"] || "") === actor.id || String(row.state["directedToStaffId"] || "") === actor.id;
-  if (!["management", "administrator"].includes(actor.role) && !assigned) {
-    res.status(403).json({ error: "Only the supervisor or the person assigned can send an arrival time" });
+  // Supervisors, the super, and any crew member on the job can send it.
+  if (!["management", "administrator", "worker", "inspector", "emergency"].includes(actor.role)) {
+    res.status(403).json({ error: "Only staff on the complaint can send an arrival time" });
     return;
   }
   const notice = await recordEta(actor, row, { eta, crew, note });
@@ -2872,6 +2872,19 @@ router.post(
     // later even if their coverage for the site has since lapsed.
     state["assignedByStaffId"] = actor.id;
     state["assignedByStaffName"] = actor.name;
+    // The resident's status check reads state.updates: tell them who it went
+    // to. The app already appends this line itself; the website did not.
+    if (entity === "resident-reports") {
+      const who = String(state["assignedTo"] || body["assignedTo"] || "").trim();
+      const existing = Array.isArray(state["updates"])
+        ? state["updates"].filter((item): item is Record<string, unknown> => Boolean(item && typeof item === "object"))
+        : [];
+      const last = existing[existing.length - 1];
+      const alreadyNoted = !!last && String(last["status"] || "") === "assigned" && String(last["note"] || "").startsWith("Assigned to");
+      if (who && !alreadyNoted) {
+        state["updates"] = [...existing, { status: "assigned", note: `Assigned to ${who}`, by: actor.name, at: now.toISOString() }];
+      }
+    }
   }
   if (action === "start") {
     state["startedByStaffId"] = actor.id;

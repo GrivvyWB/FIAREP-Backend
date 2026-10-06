@@ -237,7 +237,7 @@ export default function ReportDetail() {
         </View>
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
       </View>
-      <ComplaintReceipts entity="resident-reports" reportId={r.id} readOnly={readOnly} canSendEta={mode === 'management' || mode === 'administrator' || (!!actorId && r.assignedStaffId === actorId)} />
+      <ComplaintReceipts entity="resident-reports" reportId={r.id} readOnly={readOnly} canSendEta={['management', 'administrator', 'worker', 'inspector', 'emergency'].includes(mode)} />
       <View style={[ui.card, { gap: 8 }]}>
         {(mode === 'management' || mode === 'administrator' || mode === 'inspector') && (() => {
           const scans = (r as any).aiPhotoScans && typeof (r as any).aiPhotoScans === 'object' ? Object.values((r as any).aiPhotoScans) : [];

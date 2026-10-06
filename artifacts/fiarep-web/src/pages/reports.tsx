@@ -621,7 +621,7 @@ export default function Reports() {
               <div className="space-y-4 pt-2">
                 <div className="grid grid-cols-2 gap-3 text-sm"><div><span className="text-muted-foreground">Status</span><p className="font-medium capitalize">{statusLabel(currentStatus)}</p></div><div><span className="text-muted-foreground">Development</span><p className="font-medium">{selected.development || "—"}</p></div><div><span className="text-muted-foreground">Complaint number</span><p className="font-medium">{String(state.complaintNo || "—")}</p></div><div><span className="text-muted-foreground">Address</span><p className="font-medium">{String(state.address || "—")}</p></div></div>
                  {!!String(state.description || "") && <div><p className="text-sm text-muted-foreground mb-1">Details</p><p className="text-sm whitespace-pre-wrap">{String(state.description)}</p></div>}
-                 <ComplaintReceipts entity="resident-reports" reportId={selected.id} state={state as Record<string, unknown>} canSendEta={canActOn(selected) || String(state.assignedStaffId || "") === actor?.id} />
+                 <ComplaintReceipts entity="resident-reports" reportId={selected.id} state={state as Record<string, unknown>} canSendEta={canActOn(selected) || ["management", "administrator", "worker", "inspector", "emergency"].includes(String(actor?.role || ""))} />
                 <div>
                   <p className="text-sm font-semibold text-foreground mb-2">Before — resident's photo</p>
                   <Photos

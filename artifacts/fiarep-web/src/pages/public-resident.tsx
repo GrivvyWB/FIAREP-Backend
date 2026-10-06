@@ -450,9 +450,9 @@ export default function PublicResident() {
                     {statusResult.updates.map((update, idx) => (
                       <div key={idx} className="border-l-2 border-primary pl-3 py-1">
                         <div className="text-xs text-muted-foreground mb-1">
-                          {update.timestamp ? new Date(update.timestamp as string).toLocaleString() : 'Update'}
+                          {(update.at || update.timestamp) ? new Date((update.at || update.timestamp) as string).toLocaleString() : 'Update'}{update.by ? ` · ${String(update.by)}` : ''}
                         </div>
-                        <div className="text-sm">{update.note as string}</div>
+                        <div className="text-sm">{String(update.note || update.status || '')}</div>
                       </div>
                     ))}
                   </div>
