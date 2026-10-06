@@ -97,6 +97,7 @@ export default function AdminHome() {
       color: '#4A5560',
       tiles: [
         { label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' },
+        { label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' },
         { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
       ],
     },

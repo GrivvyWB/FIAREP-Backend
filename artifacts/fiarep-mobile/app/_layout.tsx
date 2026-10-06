@@ -195,6 +195,7 @@ function AdministratorStack() {
   return (
     <Stack initialRouteName="admin-home">
       <Stack.Screen name="admin-home" options={{ title: 'Administrator', headerBackVisible: false }} />
+      <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
       <Stack.Screen name="in-house-assignments" options={{ title: 'In-house assignments' }} />
@@ -245,6 +246,7 @@ function InspectorStack() {
   return (
     <Stack initialRouteName="cpm-home">
       <Stack.Screen name="cpm-home" options={{ title: 'CPM / Inspector', headerBackVisible: false }} />
+      <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="my-inspections" options={{ title: 'My Inspections' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="create-report" options={{ title: 'Create Report' }} />
@@ -284,6 +286,7 @@ function ManagementStack() {
   return (
     <Stack initialRouteName="management-home">
       <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false }} />
+      <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="manage-requests" options={{ title: 'Manage Requests' }} />
@@ -341,6 +344,7 @@ function WorkerStack() {
     <Stack initialRouteName="worker-home">
       <Stack.Screen name="elevator-jobs" options={{ title: 'My Elevator Jobs' }} />
       <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false }} />
+      <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="index" options={{ title: 'Projects' }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
@@ -374,6 +378,7 @@ function EmergencyStack() {
   return (
     <Stack initialRouteName="worker-home">
       <Stack.Screen name="worker-home" options={{ title: 'Emergency Maintenance', headerBackVisible: false }} />
+      <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
@@ -398,6 +403,7 @@ function CommunityStack() {
   return (
     <Stack initialRouteName="community-home">
       <Stack.Screen name="community-home" options={{ title: 'Community Coordinators', headerBackVisible: false }} />
+      <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="community-resident" options={{ title: 'Resident' }} />
       <Stack.Screen name="community-building" options={{ title: 'Building & owner' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />

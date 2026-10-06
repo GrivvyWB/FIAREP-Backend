@@ -26,7 +26,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info, Ruler, Trash2 } from "lucide-react";
+  Info, Ruler, Trash2, Languages } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -39,6 +39,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" as const },
     { name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const },
     { name: "Community Coordinators", href: "/community", icon: UsersRound, module: "community" as const },
+    { name: "Translator", href: "/translator", icon: Languages, module: "translator" as const },
     { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },
     { name: "HUD Inspections", href: "/hud-inspections", icon: ClipboardCheck, module: "hud-inspections" as const },
     { name: "Inspection Approvals", href: "/inspection-approvals", icon: ClipboardCheck, module: "inspection-approvals" as const },

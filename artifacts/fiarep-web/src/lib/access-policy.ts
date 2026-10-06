@@ -9,7 +9,7 @@ export type StaffModule =
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
    | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections"
-   | "community";
+   | "community" | "translator";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -94,6 +94,8 @@ export function hasModuleAccess(
   // Community Coordinators: their own section, alerts and settings — nothing else,
   // and nobody else gets their section.
   if (module === "community") return isCommunityCoordinator(staff);
+  // The live translator: every signed-in staff member who talks to residents.
+  if (module === "translator") return !["vendor", "resident", "procurement"].includes(String(staff.role));
   if (isCommunityCoordinator(staff)) return module === "notifications" || module === "settings";
   // The Team (staff management) page is restricted to Human Resources only —
   // no other role, including Administrator or Borough Director, sees it.

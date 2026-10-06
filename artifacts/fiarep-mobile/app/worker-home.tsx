@@ -136,6 +136,9 @@ export default function WorkerHome() {
         <Text style={ui.btnOutlineText}>Check Report Status</Text>
       </Pressable>}
 
+      <Pressable style={ui.btnOutline} onPress={() => router.push('/translator')}>
+        <Text style={ui.btnOutlineText}>🌐 Translator</Text>
+      </Pressable>
       <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onSignOut}>
         <Text style={ui.btnOutlineText}>Sign out</Text>
       </Pressable>

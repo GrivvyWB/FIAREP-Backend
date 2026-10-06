@@ -198,7 +198,10 @@ export default function CommunityHome() {
         );
       })}
 
-      <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/notifications')}>
+      <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/translator')}>
+        <Text style={ui.btnOutlineText}>🌐 Translator</Text>
+      </Pressable>
+      <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
         <Text style={ui.btnOutlineText}>Inbox</Text>
       </Pressable>
       <Pressable style={ui.btnOutline} onPress={() => router.push('/settings')}>
