@@ -148,9 +148,9 @@ export function JoinPricing() {
         </div>
         <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_1fr]">
           <div className="space-y-4">
-            <Slider label="DOB violations (Class 1 / 2)" value={dob} min={0} max={20} onChange={setDob} />
-            <Slider label="HPD violations (Class B / C)" value={hpd} min={0} max={40} onChange={setHpd} />
-            <Slider label="Existing civil fines" value={fines} min={0} max={30000} step={250} onChange={setFines} display={money(fines)} />
+            <Slider label="DOB violations (Class 1 / 2)" value={dob} min={0} max={1000} onChange={setDob} />
+            <Slider label="HPD violations (Class B / C)" value={hpd} min={0} max={1000} onChange={setHpd} />
+            <Slider label="Existing civil fines" value={fines} min={0} max={1000000} step={250} onChange={setFines} money />
             <div>
               <p className="text-sm text-slate-300">Contractor work scale</p>
               <div className="mt-1 flex flex-wrap gap-2">
@@ -179,11 +179,24 @@ export function JoinPricing() {
   );
 }
 
-function Slider({ label, value, min, max, step = 1, onChange, display }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; display?: string }) {
+function Slider({ label, value, min, max, step = 1, onChange, money: isMoney }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; money?: boolean }) {
+  const clamp = (n: number) => Math.min(max, Math.max(min, Number.isFinite(n) ? Math.round(n) : min));
   return (
     <div>
-      <div className="flex justify-between text-sm"><span className="text-slate-300">{label}</span><span className="font-semibold text-slate-100">{display ?? value}</span></div>
+      <div className="flex items-center justify-between gap-3 text-sm">
+        <span className="text-slate-300">{label}</span>
+        <span className="flex items-center gap-1 font-semibold text-slate-100">
+          {isMoney && <span>$</span>}
+          <input
+            type="number" inputMode="numeric" min={min} max={max} step={step} value={value}
+            onChange={(e) => onChange(clamp(Number(e.target.value)))}
+            className="w-24 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none"
+            aria-label={label}
+          />
+        </span>
+      </div>
       <input type="range" className="mt-1 w-full accent-amber-500" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <div className="flex justify-between text-[10px] text-slate-500"><span>{isMoney ? money(min) : min}</span><span>{isMoney ? money(max) : max.toLocaleString()}</span></div>
     </div>
   );
 }
