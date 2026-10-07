@@ -47,6 +47,16 @@ const REPAIR = [
   ["Major", 120000, "lead abatement in several units ($10k – $30k each), mold remediation, roof patching, pointing"],
   ["Heavy", 400000, "boiler / burner ($70k – $276k), roof replacement ($34+ / sq ft), risers ($20.9k / unit), rewiring ($20.9k / unit)"],
 ] as const;
+// Architect / engineer (PE / RA) work per building, 2026 NYC market; plus a
+// per-DOB-violation letter because each cited condition needs its own sign-off.
+const ENGINEER = [
+  ["None", 0, "no plans or professional certification needed"],
+  ["Letter / certification", 2500, "PE / RA site visit ($500 – $2,500), structural report or TR-1 compliance letter, DOB-ready stamp"],
+  ["Alt-2 legalization", 9000, "as-built drawings, DOB NOW Alt-2 filing, energy and special inspections ($3k – $15k market)"],
+  ["Alt-1 / structural", 30000, "stamped structural plans, Alt-1 filing, special inspections and sign-off ($10k – $50k+ market)"],
+  ["Building-wide program", 150000, "Local Law 11 facade / parapet inspection and report, gas piping (LL152), boiler and elevator consultants"],
+] as const;
+const ENGINEER_PER_DOB = 750;  // engineer letter per DOB condition
 const REPAIR_PER_HPD = 450;   // average physical fix behind an HPD Class B/C violation
 const REPAIR_PER_DOB = 3500;  // average physical fix behind a DOB Class 1/2 violation
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -57,18 +67,19 @@ export function JoinPricing() {
   const [fines, setFines] = useState(15000);
   const [repair, setRepair] = useState(2);
   const [customRepair, setCustomRepair] = useState(0);
-  const [plans, setPlans] = useState(true);
+  const [eng, setEng] = useState(1);
+  const [customEng, setCustomEng] = useState(0);
   const est = useMemo(() => {
     // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD simple cure $400.
     const expediter = Math.min(dob, 2) * 1500 + Math.max(dob - 2, 0) * 1000 + hpd * 400;
-    const engineering = plans ? 2500 + dob * 500 : 0;
+    const engineering = customEng > 0 ? customEng : (ENGINEER[eng]![1] > 0 ? ENGINEER[eng]![1] + dob * ENGINEER_PER_DOB : 0);
     // What the City charges if the violations sit: DOB standard penalty, HPD Class B/C civil penalty.
     const penalties = fines + dob * 1250 + hpd * 300;
     const repairs = customRepair > 0 ? customRepair : REPAIR[repair]![1] + hpd * REPAIR_PER_HPD + dob * REPAIR_PER_DOB;
     // If HPD's Emergency Repair Program does the work instead: 2–3× contractor cost + 15% admin fee, 9% interest.
     const erp = Math.round(repairs * 2.5 * 1.15);
     return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + penalties + repairs };
-  }, [dob, hpd, fines, repair, plans]);
+  }, [dob, hpd, fines, repair, customRepair, eng, customEng]);
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
   const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["Fines & penalties", est.penalties, "bg-rose-400"], ["Repairs", est.repairs, "bg-emerald-400"]];
 
@@ -180,10 +191,22 @@ export function JoinPricing() {
                 <input type="number" inputMode="numeric" min={0} step={500} value={customRepair || ""} placeholder="0" onChange={(e) => setCustomRepair(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
               </label>
             </div>
-            <label className="flex items-center gap-2 text-sm text-slate-300">
-              <input type="checkbox" className="h-4 w-4 accent-amber-500" checked={plans} onChange={(e) => setPlans(e.target.checked)} />
-              Engineering drawings required (stamped architectural or structural plans)
-            </label>
+            <div>
+              <p className="text-sm text-slate-300">Architect / engineer <span className="text-xs text-slate-500">— plus {money(ENGINEER_PER_DOB)} per DOB violation when any professional work is needed</span></p>
+              <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                {ENGINEER.map(([label, amount, what], i) => (
+                  <button key={label} type="button" onClick={() => { setEng(i); setCustomEng(0); }} className={`rounded-lg border px-3 py-2 text-left text-sm ${eng === i && !customEng ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>
+                    <span className="font-semibold">{label} — {money(amount)}</span>
+                    <span className="block text-xs opacity-80">{what}</span>
+                  </button>
+                ))}
+              </div>
+              <label className="mt-2 flex items-center gap-2 text-sm text-slate-300">
+                <span>Or your own engineer quote:</span>
+                <span className="font-semibold text-slate-100">$</span>
+                <input type="number" inputMode="numeric" min={0} step={500} value={customEng || ""} placeholder="0" onChange={(e) => setCustomEng(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
+              </label>
+            </div>
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
