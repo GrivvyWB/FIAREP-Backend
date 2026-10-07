@@ -89,12 +89,12 @@ export function JoinPricing() {
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <h3 className="font-semibold text-white">Per-job rates (no plan)</h3>
-          <table className="mt-3 w-full text-sm">
+          <table className="mt-3 w-full table-fixed text-sm">
             <tbody>
               {FEES.map(([k, price, what]) => (
                 <tr key={k} className="border-t border-slate-800 align-top">
                   <td className="py-2 pr-3"><p className="font-medium text-slate-100">{k}</p><p className="text-xs text-slate-400">{what}</p></td>
-                  <td className="whitespace-nowrap py-2 text-right font-semibold text-amber-300">{price}</td>
+                  <td className="w-32 py-2 pl-3 text-right align-top font-semibold leading-snug text-amber-300 sm:w-44">{price.split(" · ").map((line) => <span key={line} className="block">{line}</span>)}</td>
                 </tr>
               ))}
             </tbody>
@@ -105,17 +105,17 @@ export function JoinPricing() {
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <h3 className="font-semibold text-white">The whole picture — a 20-unit building</h3>
           <p className="text-xs text-slate-400">The expediter fee covers consulting, paperwork, tracking and city liaison. Three more buckets usually apply:</p>
-          <table className="mt-3 w-full text-sm">
+          <table className="mt-3 w-full table-fixed text-sm">
             <tbody>
               {BUCKETS.map(([k, price, what]) => (
                 <tr key={k} className="border-t border-slate-800 align-top">
                   <td className="py-2 pr-3"><p className="font-medium text-slate-100">{k}</p><p className="text-xs text-slate-400">{what}</p></td>
-                  <td className="whitespace-nowrap py-2 text-right font-semibold text-amber-300">{price}</td>
+                  <td className="w-32 py-2 pl-3 text-right align-top font-semibold leading-snug text-amber-300 sm:w-44">{price.split(" · ").map((line) => <span key={line} className="block">{line}</span>)}</td>
                 </tr>
               ))}
               <tr className="border-t-2 border-amber-500/40">
                 <td className="py-2 pr-3 font-semibold text-white">Estimated total project cost</td>
-                <td className="whitespace-nowrap py-2 text-right text-lg font-bold text-amber-300">$8,300 – $51,000+</td>
+                <td className="w-32 py-2 pl-3 text-right text-lg font-bold leading-snug text-amber-300 sm:w-44">$8,300 – $51,000+</td>
               </tr>
             </tbody>
           </table>
