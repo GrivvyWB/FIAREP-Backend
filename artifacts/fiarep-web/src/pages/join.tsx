@@ -76,7 +76,6 @@ export default function JoinFiarep() {
         <div className="flex flex-col items-center gap-6 text-center sm:flex-row sm:text-left">
           <img src="/platform-media/fiarep-247-logo.png" alt="24/7 FIAREP Management Service / Expediting" className="h-40 w-auto rounded-xl bg-white p-2 shadow-lg sm:h-52" />
           <div>
-            <p className="text-sm font-semibold uppercase tracking-widest text-amber-400">24 / 7 · Management Service · Expediting</p>
             <h1 className="mt-1 text-3xl font-bold sm:text-5xl">Join FIAREP</h1>
             <p className="mt-3 max-w-xl text-lg text-slate-300">We take the violations off your buildings, monitor your residents' complaints around the clock through the platform and app, and expedite whatever the job is waiting on. Pilot it on one development or your whole portfolio.</p>
             <div className="mt-4 flex flex-wrap gap-3">
