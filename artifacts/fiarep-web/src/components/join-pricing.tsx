@@ -175,38 +175,6 @@ export function JoinPricing() {
             <Slider label="DOB violations (Class 1 / 2)" value={dob} min={0} max={1000} onChange={setDob} />
             <Slider label="HPD violations (Class B / C)" value={hpd} min={0} max={1000} onChange={setHpd} />
             <Slider label="Existing civil fines" value={fines} min={0} max={1000000} step={250} onChange={setFines} money />
-            <div>
-              <p className="text-sm text-slate-300">Contractor work scale <span className="text-xs text-slate-500">— building-wide base, plus {money(REPAIR_PER_HPD)} per HPD and {money(REPAIR_PER_DOB)} per DOB violation</span></p>
-              <div className="mt-1 grid gap-2 sm:grid-cols-2">
-                {REPAIR.map(([label, amount, what], i) => (
-                  <button key={label} type="button" onClick={() => { setRepair(i); setCustomRepair(0); }} className={`rounded-lg border px-3 py-2 text-left text-sm ${repair === i && !customRepair ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>
-                    <span className="font-semibold">{label} — {money(amount)}</span>
-                    <span className="block text-xs opacity-80">{what}</span>
-                  </button>
-                ))}
-              </div>
-              <label className="mt-2 flex items-center gap-2 text-sm text-slate-300">
-                <span>Or your own contractor total:</span>
-                <span className="font-semibold text-slate-100">$</span>
-                <input type="number" inputMode="numeric" min={0} step={500} value={customRepair || ""} placeholder="0" onChange={(e) => setCustomRepair(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
-              </label>
-            </div>
-            <div>
-              <p className="text-sm text-slate-300">Architect / engineer <span className="text-xs text-slate-500">— plus {money(ENGINEER_PER_DOB)} per DOB violation when any professional work is needed</span></p>
-              <div className="mt-1 grid gap-2 sm:grid-cols-2">
-                {ENGINEER.map(([label, amount, what], i) => (
-                  <button key={label} type="button" onClick={() => { setEng(i); setCustomEng(0); }} className={`rounded-lg border px-3 py-2 text-left text-sm ${eng === i && !customEng ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>
-                    <span className="font-semibold">{label} — {money(amount)}</span>
-                    <span className="block text-xs opacity-80">{what}</span>
-                  </button>
-                ))}
-              </div>
-              <label className="mt-2 flex items-center gap-2 text-sm text-slate-300">
-                <span>Or your own engineer quote:</span>
-                <span className="font-semibold text-slate-100">$</span>
-                <input type="number" inputMode="numeric" min={0} step={500} value={customEng || ""} placeholder="0" onChange={(e) => setCustomEng(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
-              </label>
-            </div>
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
@@ -235,6 +203,42 @@ export function JoinPricing() {
             </div>
             <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). Fines & penalties are what the City charges if the violations sit — clearing them on time is how most of that goes away. Engineering and repairs are quoted after we look at the actual violations.</p>
           </div>
+        </div>
+        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+          <div>
+            <p className="text-sm font-semibold text-slate-200">Contractor work scale</p>
+            <p className="text-xs text-slate-500">Building-wide base, plus {money(REPAIR_PER_HPD)} per HPD and {money(REPAIR_PER_DOB)} per DOB violation.</p>
+            <div className="mt-2 grid gap-2">
+              {REPAIR.map(([label, amount, what], i) => (
+                <button key={label} type="button" onClick={() => { setRepair(i); setCustomRepair(0); }} className={`min-h-[64px] rounded-lg border px-3 py-2 text-left text-sm ${repair === i && !customRepair ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>
+                  <span className="flex items-baseline justify-between gap-2"><span className="font-semibold">{label}</span><span className="font-semibold text-amber-300">{money(amount)}</span></span>
+                  <span className="mt-0.5 block text-xs leading-snug opacity-80">{what}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-semibold text-slate-200">Architect / engineer</p>
+            <p className="text-xs text-slate-500">Plus {money(ENGINEER_PER_DOB)} per DOB violation when any professional work is needed.</p>
+            <div className="mt-2 grid gap-2">
+              {ENGINEER.map(([label, amount, what], i) => (
+                <button key={label} type="button" onClick={() => { setEng(i); setCustomEng(0); }} className={`min-h-[64px] rounded-lg border px-3 py-2 text-left text-sm ${eng === i && !customEng ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>
+                  <span className="flex items-baseline justify-between gap-2"><span className="font-semibold">{label}</span><span className="font-semibold text-amber-300">{money(amount)}</span></span>
+                  <span className="mt-0.5 block text-xs leading-snug opacity-80">{what}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
+            <span>Or your own contractor total</span>
+            <span className="flex items-center gap-1 font-semibold text-slate-100">$<input type="number" inputMode="numeric" min={0} step={500} value={customRepair || ""} placeholder="0" onChange={(e) => setCustomRepair(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" /></span>
+          </label>
+          <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
+            <span>Or your own engineer quote</span>
+            <span className="flex items-center gap-1 font-semibold text-slate-100">$<input type="number" inputMode="numeric" min={0} step={500} value={customEng || ""} placeholder="0" onChange={(e) => setCustomEng(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" /></span>
+          </label>
         </div>
       </div>
     </section>
