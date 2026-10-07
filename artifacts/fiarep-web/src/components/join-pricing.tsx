@@ -61,7 +61,8 @@ const REPAIR_PER_HPD = 450;   // average physical fix behind an HPD Class B/C vi
 const REPAIR_PER_DOB = 3500;  // average physical fix behind a DOB Class 1/2 violation
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
-export function JoinPricing() {
+export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean; pending: boolean; onUnlock: (code: string) => Promise<void> }) {
+  const [code, setCode] = useState("");
   const [dob, setDob] = useState(8);
   const [hpd, setHpd] = useState(120);
   const [fines, setFines] = useState(15000);
@@ -159,7 +160,8 @@ export function JoinPricing() {
       </div>
 
       {/* Estimator */}
-      <div className="mt-4 rounded-2xl border border-amber-500/30 bg-slate-900/80 p-5">
+      <div className="relative mt-4 overflow-hidden rounded-2xl border border-amber-500/30 bg-slate-900/80 p-5">
+        <div className={unlocked ? "" : "pointer-events-none select-none blur-md"} aria-hidden={!unlocked}>
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
             <h3 className="font-semibold text-white">Violation resolution estimator</h3>
@@ -240,6 +242,21 @@ export function JoinPricing() {
             <span className="flex items-center gap-1 font-semibold text-slate-100">$<input type="number" inputMode="numeric" min={0} step={500} value={customEng || ""} placeholder="0" onChange={(e) => setCustomEng(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" /></span>
           </label>
         </div>
+        </div>
+        {!unlocked && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center">
+            <div className="mx-4 w-full max-w-xl rounded-xl border border-amber-500/50 bg-slate-950/95 p-5 text-center shadow-2xl">
+              <p className="text-lg font-bold text-white">🔒 Violation resolution estimator</p>
+              <p className="mt-1 text-sm text-slate-300">{pending ? "Your pilot request is in. The estimator unlocks the moment FIAREP approves it." : "Sign up for a pilot and get approved to unlock the estimator."}</p>
+              {!pending && <Button className="mt-3 bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Sign up</Button>}
+              <form className="mt-4 flex items-center justify-center gap-2" onSubmit={(e) => { e.preventDefault(); if (code.length === 3) void onUnlock(code); }}>
+                <span className="text-xs text-slate-400">Have an access code?</span>
+                <input maxLength={3} autoCapitalize="off" autoCorrect="off" spellCheck={false} value={code} onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 3))} placeholder="e.g. k3L" className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-center text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
+                <Button type="submit" size="sm" variant="outline" className="border-amber-500/60 text-amber-200 hover:bg-amber-500/10" disabled={code.length !== 3}>Unlock</Button>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     </section>
   );

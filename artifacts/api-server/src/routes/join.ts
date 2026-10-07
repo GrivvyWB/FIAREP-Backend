@@ -1,20 +1,52 @@
 // "Join FIAREP": a management company, owner or agency asks to pilot the
-// service. Saved for the platform owner and emailed to FIAREP.
-import { randomUUID } from "node:crypto";
+// service. Saved for the platform owner and emailed to FIAREP. Once the
+// owner approves it, the requester gets an access code that unlocks the
+// estimator on the Join page.
+import { randomInt, randomUUID } from "node:crypto";
+
+// 3-character access code, letters and numbers, case-sensitive (k3L, 3tT).
+// No 0/O or 1/l/I so it reads the same on paper and on a phone.
+const CODE_CHARS = "abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789";
+const newAccessCode = () => Array.from({ length: 3 }, () => CODE_CHARS[randomInt(CODE_CHARS.length)]).join("");
 import { Router, type IRouter } from "express";
 import { ReplitConnectors } from "@replit/connectors-sdk";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, entityRecords } from "@workspace/db";
 import { rateLimit } from "../lib/rateLimit";
+import { requirePlatformOwner } from "../middlewares/auth";
+import { platformAudit } from "../lib/audit";
 
 const connectors = new ReplitConnectors();
 const JOIN_INBOX = process.env["JOIN_REQUEST_EMAIL"] || "fiarep@outlook.com";
+const SITE = (process.env["PUBLIC_WEB_URL"] || "https://fiarep.com").replace(/\/$/, "");
 const esc = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const str = (v: unknown, max = 300) => String(v ?? "").trim().slice(0, max);
+const ENTITY = "join-requests";
 
 type Development = { name: string; address: string; units: string };
 
+async function sendMail(to: string, subject: string, html: string): Promise<boolean> {
+  try {
+    const response = await connectors.proxy("outlook", "/v1.0/me/sendMail", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: { subject, body: { contentType: "HTML", content: html }, toRecipients: [{ emailAddress: { address: to } }] }, saveToSentItems: true }),
+    });
+    return response.ok;
+  } catch { return false; }
+}
+
+const publicView = (row: typeof entityRecords.$inferSelect) => ({
+  id: row.id,
+  status: String(row.state["status"] || "new"),
+  company: String(row.state["company"] || ""),
+  // The code travels only once the owner approved — and only to the browser
+  // that filed the request (it knows the id) or by email.
+  accessCode: String(row.state["status"] || "") === "approved" ? String(row.state["accessCode"] || "") : "",
+});
+
 const router: IRouter = Router();
-router.use("/v1/public/join-requests", rateLimit("join-requests", 10));
+router.use("/v1/public/join-requests", rateLimit("join-requests", 20));
 
 router.post("/v1/public/join-requests", async (req, res) => {
   const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
@@ -40,39 +72,82 @@ router.post("/v1/public/join-requests", async (req, res) => {
   const id = randomUUID();
   const state = { company, contactName, phone, email, address, portfolioSize, developments, services, notes, status: "new", createdAt: now.toISOString() };
   await db.insert(entityRecords).values({
-    id, tenantId: "default", entity: "join-requests", development: company, state,
+    id, tenantId: "default", entity: ENTITY, development: company, state,
     createdBy: "public-join", createdAt: now, updatedAt: now,
   });
-  // Email FIAREP. The request is saved either way.
+  const rows = developments.map((d, i) => `<tr><td>${i + 1}</td><td>${esc(d.name)}</td><td>${esc(d.address)}</td><td>${esc(d.units)}</td></tr>`).join("");
+  const emailed = await sendMail(JOIN_INBOX, `Join FIAREP: ${company} (${developments.length} development${developments.length === 1 ? "" : "s"})`, [
+    `<h2>${esc(company)} wants to pilot FIAREP</h2>`,
+    `<p><strong>Contact:</strong> ${esc(contactName)}<br><strong>Phone:</strong> ${esc(phone)}<br><strong>Email:</strong> ${esc(email)}<br><strong>Office:</strong> ${esc(address)}</p>`,
+    `<p><strong>Portfolio size:</strong> ${esc(portfolioSize)}</p>`,
+    rows ? `<table border="1" cellpadding="6" cellspacing="0"><tr><th>#</th><th>Development</th><th>Address</th><th>Units</th></tr>${rows}</table>` : "<p>No developments listed.</p>",
+    services.length ? `<p><strong>Services wanted:</strong> ${services.map(esc).join(", ")}</p>` : "",
+    notes ? `<p><strong>Notes:</strong><br>${esc(notes).replaceAll("\n", "<br>")}</p>` : "",
+    `<p>Approve it in Platform Control → Join requests: <a href="${SITE}/platform-owner/join-requests">${SITE}/platform-owner/join-requests</a></p>`,
+    `<p style="color:#666;font-size:12px">Request ${id} · ${now.toLocaleString("en-US", { timeZone: "America/New_York" })} ET</p>`,
+  ].join(""));
+  res.status(201).json({ ok: true, id, status: "new", emailed });
+});
+
+// The browser that filed the request checks whether it was approved.
+router.get("/v1/public/join-requests/:id", async (req, res) => {
+  const [row] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, String(req.params.id || "")), eq(entityRecords.entity, ENTITY), eq(entityRecords.deleted, false),
+  )).limit(1);
+  res.setHeader("Cache-Control", "no-store");
+  if (!row) { res.status(404).json({ error: "Request not found" }); return; }
+  res.json(publicView(row));
+});
+
+// An approved company types its access code (from the approval email) on any device. Case-sensitive.
+router.post("/v1/public/join-requests/unlock", async (req, res) => {
+  const code = String((req.body as Record<string, unknown> | undefined)?.["code"] ?? "").trim();
+  res.setHeader("Cache-Control", "no-store");
+  if (!/^[A-Za-z0-9]{3}$/.test(code)) { res.status(400).json({ error: "The access code is 3 letters or numbers." }); return; }
+  const [row] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.entity, ENTITY), eq(entityRecords.deleted, false),
+    sql`${entityRecords.state}->>'accessCode' = ${code}`, sql`${entityRecords.state}->>'status' = 'approved'`,
+  )).limit(1);
+  if (!row) { res.status(404).json({ error: "That access code isn't recognized or hasn't been approved yet." }); return; }
+  res.json(publicView(row));
+});
+
+// ── Platform Control: review and approve ──
+router.use("/v1/platform/join-requests", requirePlatformOwner);
+
+router.get("/v1/platform/join-requests", async (_req, res) => {
+  const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, ENTITY), eq(entityRecords.deleted, false)))
+    .orderBy(desc(entityRecords.createdAt)).limit(500);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(rows.map((r) => ({ id: r.id, createdAt: r.createdAt, ...r.state })));
+});
+
+router.post("/v1/platform/join-requests/:id/:decision", async (req, res) => {
+  const decision = String(req.params.decision || "");
+  if (!["approve", "decline"].includes(decision)) { res.status(404).json({ error: "Not found" }); return; }
+  const [before] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, String(req.params.id || "")), eq(entityRecords.entity, ENTITY))).limit(1);
+  if (!before) { res.status(404).json({ error: "Request not found" }); return; }
+  const owner = res.locals["platformOwner"] as { name: string };
+  const now = new Date();
+  const status = decision === "approve" ? "approved" : "declined";
+  // The code is made here, at approval, by Platform Control.
+  const accessCode = status === "approved" ? (String(before.state["accessCode"] || "") || newAccessCode()) : String(before.state["accessCode"] || "");
+  const [row] = await db.update(entityRecords).set({
+    state: { ...before.state, status, accessCode, decidedAt: now.toISOString(), decidedBy: owner.name },
+    updatedAt: now,
+  }).where(eq(entityRecords.id, before.id)).returning();
+  await platformAudit(owner.name, `join-request.${status}`, before.id, before, row);
   let emailed = false;
-  try {
-    const rows = developments.map((d, i) => `<tr><td>${i + 1}</td><td>${esc(d.name)}</td><td>${esc(d.address)}</td><td>${esc(d.units)}</td></tr>`).join("");
-    const response = await connectors.proxy("outlook", "/v1.0/me/sendMail", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        message: {
-          subject: `Join FIAREP: ${company} (${developments.length} development${developments.length === 1 ? "" : "s"})`,
-          body: {
-            contentType: "HTML",
-            content: [
-              `<h2>${esc(company)} wants to pilot FIAREP</h2>`,
-              `<p><strong>Contact:</strong> ${esc(contactName)}<br><strong>Phone:</strong> ${esc(phone)}<br><strong>Email:</strong> ${esc(email)}<br><strong>Office:</strong> ${esc(address)}</p>`,
-              `<p><strong>Portfolio size:</strong> ${esc(portfolioSize)}</p>`,
-              rows ? `<table border="1" cellpadding="6" cellspacing="0"><tr><th>#</th><th>Development</th><th>Address</th><th>Units</th></tr>${rows}</table>` : "<p>No developments listed.</p>",
-              services.length ? `<p><strong>Services wanted:</strong> ${services.map(esc).join(", ")}</p>` : "",
-              notes ? `<p><strong>Notes:</strong><br>${esc(notes).replaceAll("\n", "<br>")}</p>` : "",
-              `<p style="color:#666;font-size:12px">Request ${id} · ${now.toLocaleString("en-US", { timeZone: "America/New_York" })} ET</p>`,
-            ].join(""),
-          },
-          toRecipients: [{ emailAddress: { address: JOIN_INBOX } }],
-        },
-        saveToSentItems: true,
-      }),
-    });
-    emailed = response.ok;
-  } catch { emailed = false; }
-  res.status(201).json({ ok: true, id, emailed });
+  const email = String(before.state["email"] || "");
+  if (status === "approved" && email) {
+    emailed = await sendMail(email, "FIAREP: your pilot request is approved", [
+      `<p>Hello ${esc(before.state["contactName"])},</p>`,
+      `<p>FIAREP approved the pilot request for <strong>${esc(before.state["company"])}</strong>.</p>`,
+      `<p>Your access code is <strong style="font-size:20px">${esc(accessCode)}</strong>. Open <a href="${SITE}/join">${SITE}/join</a>, scroll to the Violation resolution estimator and enter the code to unlock it.</p>`,
+      `<p>We will call you at ${esc(before.state["phone"] || email)} to set up the pilot.</p>`,
+    ].join(""));
+  }
+  res.json({ ok: true, status, accessCode, emailed });
 });
 
 export default router;

@@ -64,6 +64,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
             <PanelsTopLeft className="h-4 w-4" />
             Module Management
           </Link>
+          <Link
+            href="/platform-owner/join-requests"
+            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/join-requests"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <Building2 className="h-4 w-4" />
+            Join requests
+          </Link>
         </div>
       </nav>
 
