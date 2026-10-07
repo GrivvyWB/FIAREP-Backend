@@ -38,14 +38,25 @@ const AGENCIES = [
   { name: "OATH / ECB — hearings", lines: ["A missed summons defaults: Class 1 $12,500, up to $25,000 per summons, plus up to $1,000 per day uncorrected.", "We file motions to vacate default judgments and represent you at the hearing.", "$300 – $950 per hearing appearance."] },
 ];
 
-const REPAIR = [["Minor", 1500], ["Medium", 5000], ["Major", 12000], ["Heavy", 25000]] as const;
+// Contractor work per building, 2026 NYC. Bases from the NYS HCR reasonable-cost
+// schedule (Jan 2026) and current abatement pricing; plus a per-violation average
+// because the bill scales with how many conditions the City cited.
+const REPAIR = [
+  ["Minor", 7500, "paint / plaster, caulking, smoke & CO detectors, window guards, door hardware"],
+  ["Medium", 35000, "plumbing leaks and fixtures, electrical repairs, vermin treatment program, apartment doors"],
+  ["Major", 120000, "lead abatement in several units ($10k – $30k each), mold remediation, roof patching, pointing"],
+  ["Heavy", 400000, "boiler / burner ($70k – $276k), roof replacement ($34+ / sq ft), risers ($20.9k / unit), rewiring ($20.9k / unit)"],
+] as const;
+const REPAIR_PER_HPD = 450;   // average physical fix behind an HPD Class B/C violation
+const REPAIR_PER_DOB = 3500;  // average physical fix behind a DOB Class 1/2 violation
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
 export function JoinPricing() {
-  const [dob, setDob] = useState(2);
-  const [hpd, setHpd] = useState(4);
-  const [fines, setFines] = useState(2500);
-  const [repair, setRepair] = useState(1);
+  const [dob, setDob] = useState(8);
+  const [hpd, setHpd] = useState(120);
+  const [fines, setFines] = useState(15000);
+  const [repair, setRepair] = useState(2);
+  const [customRepair, setCustomRepair] = useState(0);
   const [plans, setPlans] = useState(true);
   const est = useMemo(() => {
     // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD simple cure $400.
@@ -53,8 +64,10 @@ export function JoinPricing() {
     const engineering = plans ? 2500 + dob * 500 : 0;
     // What the City charges if the violations sit: DOB standard penalty, HPD Class B/C civil penalty.
     const penalties = fines + dob * 1250 + hpd * 300;
-    const repairs = REPAIR[repair]![1];
-    return { expediter, engineering, penalties, repairs, total: expediter + engineering + penalties + repairs };
+    const repairs = customRepair > 0 ? customRepair : REPAIR[repair]![1] + hpd * REPAIR_PER_HPD + dob * REPAIR_PER_DOB;
+    // If HPD's Emergency Repair Program does the work instead: 2–3× contractor cost + 15% admin fee, 9% interest.
+    const erp = Math.round(repairs * 2.5 * 1.15);
+    return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + penalties + repairs };
   }, [dob, hpd, fines, repair, plans]);
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
   const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["Fines & penalties", est.penalties, "bg-rose-400"], ["Repairs", est.repairs, "bg-emerald-400"]];
@@ -152,12 +165,20 @@ export function JoinPricing() {
             <Slider label="HPD violations (Class B / C)" value={hpd} min={0} max={1000} onChange={setHpd} />
             <Slider label="Existing civil fines" value={fines} min={0} max={1000000} step={250} onChange={setFines} money />
             <div>
-              <p className="text-sm text-slate-300">Contractor work scale</p>
-              <div className="mt-1 flex flex-wrap gap-2">
-                {REPAIR.map(([label, amount], i) => (
-                  <button key={label} type="button" onClick={() => setRepair(i)} className={`rounded-lg border px-3 py-1.5 text-sm ${repair === i ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>{label} ({money(amount)})</button>
+              <p className="text-sm text-slate-300">Contractor work scale <span className="text-xs text-slate-500">— building-wide base, plus {money(REPAIR_PER_HPD)} per HPD and {money(REPAIR_PER_DOB)} per DOB violation</span></p>
+              <div className="mt-1 grid gap-2 sm:grid-cols-2">
+                {REPAIR.map(([label, amount, what], i) => (
+                  <button key={label} type="button" onClick={() => { setRepair(i); setCustomRepair(0); }} className={`rounded-lg border px-3 py-2 text-left text-sm ${repair === i && !customRepair ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>
+                    <span className="font-semibold">{label} — {money(amount)}</span>
+                    <span className="block text-xs opacity-80">{what}</span>
+                  </button>
                 ))}
               </div>
+              <label className="mt-2 flex items-center gap-2 text-sm text-slate-300">
+                <span>Or your own contractor total:</span>
+                <span className="font-semibold text-slate-100">$</span>
+                <input type="number" inputMode="numeric" min={0} step={500} value={customRepair || ""} placeholder="0" onChange={(e) => setCustomRepair(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
+              </label>
             </div>
             <label className="flex items-center gap-2 text-sm text-slate-300">
               <input type="checkbox" className="h-4 w-4 accent-amber-500" checked={plans} onChange={(e) => setPlans(e.target.checked)} />
@@ -171,6 +192,10 @@ export function JoinPricing() {
                 <div className="mt-1 h-3 w-full rounded-full bg-slate-800"><div className={`h-3 rounded-full ${color}`} style={{ width: `${Math.max(2, (amount / max) * 100)}%` }} /></div>
               </div>
             ))}
+            <div className="rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-sm">
+              <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: ~{money(est.erp)}</p>
+              <p className="text-xs text-rose-200/80">HPD bills 2–3× contractor cost plus a 15% administrative fee, 9% interest, and a lien on the building. Owners of the 250 buildings in the 2026 Alternative Enforcement Program already owe $4.5M for emergency repairs.</p>
+            </div>
             <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). Fines & penalties are what the City charges if the violations sit — clearing them on time is how most of that goes away. Engineering and repairs are quoted after we look at the actual violations.</p>
           </div>
         </div>
