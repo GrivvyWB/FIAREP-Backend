@@ -211,7 +211,21 @@ export function JoinPricing() {
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
               <div key={label}>
-                <div className="flex justify-between text-sm"><span className="text-slate-300">{label}</span><span className="font-semibold text-slate-100">{money(amount)}</span></div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="text-slate-300">{label}</span>
+                  {label === "Engineering" || label === "Repairs" ? (
+                    <span className="flex items-center gap-1 font-semibold text-slate-100">
+                      <span>$</span>
+                      <input
+                        type="number" inputMode="numeric" min={0} step={500}
+                        value={amount}
+                        onChange={(e) => { const n = Math.max(0, Math.round(Number(e.target.value) || 0)); if (label === "Engineering") setCustomEng(n); else setCustomRepair(n); }}
+                        className="w-28 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none"
+                        aria-label={`${label} amount`}
+                      />
+                    </span>
+                  ) : <span className="font-semibold text-slate-100">{money(amount)}</span>}
+                </div>
                 <div className="mt-1 h-3 w-full rounded-full bg-slate-800"><div className={`h-3 rounded-full ${color}`} style={{ width: `${Math.max(2, (amount / max) * 100)}%` }} /></div>
               </div>
             ))}
