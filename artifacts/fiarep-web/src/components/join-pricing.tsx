@@ -46,59 +46,6 @@ const AGENCIES = [
   { name: "OATH / ECB — hearings", lines: ["A missed summons defaults: Class 1 $12,500, up to $25,000 per summons, plus up to $1,000 per day uncorrected.", "We file motions to vacate default judgments and represent you at the hearing.", "$300 – $950 per hearing appearance."] },
 ];
 
-// Contractor repair prices: what HPD paid its own contractors per Emergency
-// Repair / Open Market Order since Jan 2024 (NYC Open Data mdbu-nrqn, average
-// award per order by the work described). Smoke / CO is retail + labor — HPD
-// almost never orders those. Priced per item; nothing is added building-wide.
-const REPAIR_ITEMS = [
-  ["exterm", "Extermination (roaches / mice)", 1800, "per order", "one visit covers several apartments"],
-  ["guards", "Window guards", 175, "per order", ""],
-  ["smoke", "Smoke / CO detector, installed", 125, "each", "combo unit + labor"],
-  ["door", "Apartment door / self-closer", 1100, "each", ""],
-  ["firedoor", "Fire-rated door + jamb, replaced", 2450, "each", ""],
-  ["plaster", "Plaster / paint repair", 2500, "per order", ""],
-  ["leak", "Plumbing leak", 3100, "each", ""],
-  ["elec", "Electrical", 2900, "each", ""],
-  ["roof", "Roof repair", 2900, "each", ""],
-  ["mold", "Mold remediation", 3400, "each", ""],
-  ["lead", "Lead paint abatement", 6500, "per apartment", ""],
-  ["heat", "Heat / boiler repair", 4200, "each", "full replacement: type your quote"],
-] as const;
-// By the square foot / piece: NYS HCR reasonable-cost schedule (MCI, Update 5,
-// Jan 2026) for roofing, masonry, flooring, windows, doors, piping, wiring and
-// boilers; carpentry and sheetrock from 2026 HomeAdvisor / HomeGnome NYC figures.
-const REPAIR_SQFT = [
-  ["sheetrock", "Sheetrock / drywall replaced", 5, "per sq ft", "removal + new board, taped"],
-  ["subfloor", "Subfloor replaced", 8, "per sq ft", ""],
-  ["hardwood", "Hardwood flooring", 19, "per sq ft", ""],
-  ["tile", "Ceramic tile floor", 27, "per sq ft", ""],
-  ["joist", "Floor joist replaced", 1500, "each", "sistered: $300"],
-  ["rafter", "Roof rafter replaced", 1500, "each", ""],
-  ["roofmb", "Flat roof — modified bitumen", 43, "per sq ft", ""],
-  ["roofepdm", "Flat roof — EPDM rubber", 36, "per sq ft", ""],
-  ["pointing", "Masonry pointing", 22, "per sq ft", ""],
-  ["stitch", "Brick stitching (cracks)", 53, "per linear ft", ""],
-  ["limestone", "Limestone patching", 226, "per sq ft", ""],
-  ["window", "Window replaced", 1665, "each", "aluminum or wood"],
-  ["aptdoor", "Apartment entry steel door, new", 2420, "each", ""],
-  ["bldgdoor", "Building entry door", 5307, "each", ""],
-  ["gas", "Gas piping", 36505, "per apartment", ""],
-  ["water", "Hot / cold water risers", 20864, "per apartment", ""],
-  ["wiring", "Rewiring", 20854, "per apartment", ""],
-  ["intercom", "Video intercom", 1955, "per apartment", ""],
-  ["boiler", "Boiler, steel, new", 276032, "each", ""],
-] as const;
-type RepairKey = (typeof REPAIR_ITEMS)[number][0] | (typeof REPAIR_SQFT)[number][0];
-// Architect / engineer (PE / RA) work per building, 2026 NYC market; plus a
-// per-DOB-violation letter because each cited condition needs its own sign-off.
-const ENGINEER = [
-  ["None", 0, "no plans or professional certification needed"],
-  ["Letter / certification", 2500, "PE / RA site visit ($500 – $2,500), structural report or TR-1 compliance letter, DOB-ready stamp"],
-  ["Alt-2 legalization", 9000, "as-built drawings, DOB NOW Alt-2 filing, energy and special inspections ($3k – $15k market)"],
-  ["Alt-1 / structural", 30000, "stamped structural plans, Alt-1 filing, special inspections and sign-off ($10k – $50k+ market)"],
-  ["Building-wide program", 150000, "Local Law 11 facade / parapet inspection and report, gas piping (LL152), boiler and elevator consultants"],
-] as const;
-const ENGINEER_PER_DOB = 750;  // engineer letter per DOB condition
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
 export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean; pending: boolean; onUnlock: (code: string) => Promise<void> }) {
@@ -111,39 +58,21 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const hpd = hpdA + hpdB + hpdC;
   // What the building owes the City, from the Department of Finance lookup (or typed).
   const [dofOwed, setDofOwed] = useState(0);
-  const [repairCounts, setRepairCounts] = useState<Partial<Record<RepairKey, number>>>({});
+  // Engineering and repairs are typed in — the price book lives in Platform Control, FIAREP only.
   const [customRepair, setCustomRepair] = useState(0);
-  const setCount = (key: RepairKey, n: number) => { setCustomRepair(0); setRepairCounts((c) => ({ ...c, [key]: Math.max(0, Math.round(n) || 0) })); };
-  const [eng, setEng] = useState(1);
   const [customEng, setCustomEng] = useState(0);
   const est = useMemo(() => {
     // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD simple cure $400.
     const expediter = Math.min(dob, 2) * 1500 + Math.max(dob - 2, 0) * 1000 + hpd * 400;
-    const engineering = customEng > 0 ? customEng : (ENGINEER[eng]![1] > 0 ? ENGINEER[eng]![1] + dob * ENGINEER_PER_DOB : 0);
+    const engineering = customEng;
     // DOF: what the building owes the City right now — from the lookup, never estimated from counts.
     const penalties = dofOwed;
-    const itemized = [...REPAIR_ITEMS, ...REPAIR_SQFT].reduce((n, [key, , price]) => n + (repairCounts[key] || 0) * price, 0);
-    const repairs = customRepair > 0 ? customRepair : itemized;
+    const repairs = customRepair;
     // If HPD's Emergency Repair Program does the work instead: 2–3× contractor cost + 15% admin fee, 9% interest.
     const erp = Math.round(repairs * 2.5 * 1.15);
     // FIAREP total: what we quote. DOF penalties are the City's, shown for reference only.
     return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + repairs };
-  }, [dob, hpd, dofOwed, repairCounts, customRepair, eng, customEng]);
-  const row = ([key, label, price, unit, note]: readonly [RepairKey, string, number, string, string]) => {
-    const n = repairCounts[key] || 0;
-    return (
-      <label key={key} className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${n > 0 && !customRepair ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300"}`}>
-        <span className="min-w-0">
-          <span className="font-semibold">{label}</span>
-          <span className="block text-xs opacity-80">{money(price)} {unit}{note ? ` · ${note}` : ""}</span>
-        </span>
-        <span className="flex shrink-0 items-center gap-2">
-          <input type="number" inputMode="numeric" min={0} step={1} value={n || ""} placeholder="0" onChange={(e) => setCount(key, Number(e.target.value))} className="w-16 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
-          <span className={`w-24 text-right font-semibold ${n > 0 ? "text-amber-300" : "text-slate-600"}`}>{money(n * price)}</span>
-        </span>
-      </label>
-    );
-  };
+  }, [dob, hpd, dofOwed, customRepair, customEng]);
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
   const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["DOF owed", est.penalties, "bg-slate-500"], ["Repairs", est.repairs, "bg-emerald-400"]];
 
@@ -310,40 +239,8 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: ~{money(est.erp)}</p>
               <p className="text-xs text-rose-200/80">HPD bills 2–3× contractor cost plus a 15% administrative fee, 9% interest, and a lien on the building. Owners of the 250 buildings in the 2026 Alternative Enforcement Program already owe $4.5M for emergency repairs.</p>
             </div>
-            <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts carry no price of their own. Engineering and repairs are quoted after we look at the actual violations.</p>
+            <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts carry no price of their own. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
           </div>
-        </div>
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
-          <div>
-            <p className="text-sm font-semibold text-slate-200">What needs fixing</p>
-            <p className="text-xs text-slate-500">Type how many of each. Prices are what HPD paid its contractors per order since 2024 (NYC Open Data) — nothing is added building-wide.</p>
-            <div className="mt-2 grid gap-1.5">{REPAIR_ITEMS.map((item) => row(item))}</div>
-            <p className="mt-4 text-sm font-semibold text-slate-200">By the square foot / piece</p>
-            <p className="text-xs text-slate-500">NYS HCR reasonable-cost schedule, Jan 2026 (roofing, masonry, flooring, windows, doors, piping, wiring, boilers); sheetrock and carpentry from 2026 NYC contractor cost guides.</p>
-            <div className="mt-2 grid gap-1.5">{REPAIR_SQFT.map((item) => row(item))}</div>
-          </div>
-          <div>
-            <p className="text-sm font-semibold text-slate-200">Architect / engineer</p>
-            <p className="text-xs text-slate-500">Plus {money(ENGINEER_PER_DOB)} per DOB violation when any professional work is needed.</p>
-            <div className="mt-2 grid gap-2">
-              {ENGINEER.map(([label, amount, what], i) => (
-                <button key={label} type="button" onClick={() => { setEng(i); setCustomEng(0); }} className={`min-h-[64px] rounded-lg border px-3 py-2 text-left text-sm ${eng === i && !customEng ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>
-                  <span className="flex items-baseline justify-between gap-2"><span className="font-semibold">{label}</span><span className="font-semibold text-amber-300">{money(amount)}</span></span>
-                  <span className="mt-0.5 block text-xs leading-snug opacity-80">{what}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2">
-          <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
-            <span>Or your own contractor total</span>
-            <span className="flex items-center gap-1 font-semibold text-slate-100">$<input type="number" inputMode="numeric" min={0} step={500} value={customRepair || ""} placeholder="0" onChange={(e) => setCustomRepair(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" /></span>
-          </label>
-          <label className="flex items-center justify-between gap-3 rounded-lg border border-slate-700 bg-slate-950/60 px-3 py-2 text-sm text-slate-300">
-            <span>Or your own engineer quote</span>
-            <span className="flex items-center gap-1 font-semibold text-slate-100">$<input type="number" inputMode="numeric" min={0} step={500} value={customEng || ""} placeholder="0" onChange={(e) => setCustomEng(Math.max(0, Math.round(Number(e.target.value) || 0)))} className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" /></span>
-          </label>
         </div>
         </div>
         {!unlocked && <LockBand title="Violation resolution estimator" />}
