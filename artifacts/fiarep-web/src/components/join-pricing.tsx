@@ -79,10 +79,11 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
     const repairs = customRepair > 0 ? customRepair : REPAIR[repair]![1] + hpd * REPAIR_PER_HPD + dob * REPAIR_PER_DOB;
     // If HPD's Emergency Repair Program does the work instead: 2–3× contractor cost + 15% admin fee, 9% interest.
     const erp = Math.round(repairs * 2.5 * 1.15);
-    return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + penalties + repairs };
+    // FIAREP total: what we quote. DOF penalties are the City's, shown for reference only.
+    return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + repairs };
   }, [dob, hpd, fines, repair, customRepair, eng, customEng]);
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
-  const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["Fines & penalties", est.penalties, "bg-rose-400"], ["Repairs", est.repairs, "bg-emerald-400"]];
+  const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["DOF penalties", est.penalties, "bg-slate-500"], ["Repairs", est.repairs, "bg-emerald-400"]];
 
   return (
     <section className="mt-12">
@@ -168,7 +169,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <p className="text-xs text-slate-400">Move the sliders to see a projected cost to clear DOB and HPD violations on one building.</p>
           </div>
           <div className="text-right">
-            <p className="text-xs uppercase tracking-wide text-slate-400">Total estimated expense</p>
+            <p className="text-xs uppercase tracking-wide text-slate-400">FIAREP total</p>
             <p className="text-3xl font-bold text-amber-300">{money(est.total)}</p>
           </div>
         </div>
@@ -176,13 +177,13 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
           <div className="space-y-4">
             <Slider label="DOB violations (Class 1 / 2)" value={dob} min={0} max={1000} onChange={setDob} />
             <Slider label="HPD violations (Class B / C)" value={hpd} min={0} max={1000} onChange={setHpd} />
-            <Slider label="Existing civil fines" value={fines} min={0} max={1000000} step={250} onChange={setFines} money />
+            <Slider label="Existing civil fines (DOF)" value={fines} min={0} max={1000000} step={250} onChange={setFines} money muted />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
-              <div key={label}>
+              <div key={label} className={label === "DOF penalties" ? "opacity-60" : ""}>
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-slate-300">{label}</span>
+                  <span className="text-slate-300">{label}{label === "DOF penalties" && <span className="ml-2 text-xs text-slate-500">Department of Finance — not in FIAREP total</span>}</span>
                   {label === "Engineering" || label === "Repairs" ? (
                     <span className="flex items-center gap-1 font-semibold text-slate-100">
                       <span>$</span>
@@ -194,7 +195,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
                         aria-label={`${label} amount`}
                       />
                     </span>
-                  ) : <span className="font-semibold text-slate-100">{money(amount)}</span>}
+                  ) : <span className={`font-semibold ${label === "DOF penalties" ? "text-slate-400" : "text-slate-100"}`}>{money(amount)}</span>}
                 </div>
                 <div className="mt-1 h-3 w-full rounded-full bg-slate-800"><div className={`h-3 rounded-full ${color}`} style={{ width: `${Math.max(2, (amount / max) * 100)}%` }} /></div>
               </div>
@@ -203,7 +204,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: ~{money(est.erp)}</p>
               <p className="text-xs text-rose-200/80">HPD bills 2–3× contractor cost plus a 15% administrative fee, 9% interest, and a lien on the building. Owners of the 250 buildings in the 2026 Alternative Enforcement Program already owe $4.5M for emergency repairs.</p>
             </div>
-            <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). Fines & penalties are what the City charges if the violations sit — clearing them on time is how most of that goes away. Engineering and repairs are quoted after we look at the actual violations.</p>
+            <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF penalties are what the City charges if the violations sit (existing fines plus what the open violations add) — shown grayed for reference, not part of the FIAREP total; clearing them on time is how most of that goes away. Engineering and repairs are quoted after we look at the actual violations.</p>
           </div>
         </div>
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -262,12 +263,12 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   );
 }
 
-function Slider({ label, value, min, max, step = 1, onChange, money: isMoney }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; money?: boolean }) {
+function Slider({ label, value, min, max, step = 1, onChange, money: isMoney, muted }: { label: string; value: number; min: number; max: number; step?: number; onChange: (v: number) => void; money?: boolean; muted?: boolean }) {
   const clamp = (n: number) => Math.min(max, Math.max(min, Number.isFinite(n) ? Math.round(n) : min));
   return (
-    <div>
+    <div className={muted ? "opacity-60" : ""}>
       <div className="flex items-center justify-between gap-3 text-sm">
-        <span className="text-slate-300">{label}</span>
+        <span className="text-slate-300">{label}{muted && <span className="ml-2 text-xs text-slate-500">not in FIAREP total</span>}</span>
         <span className="flex items-center gap-1 font-semibold text-slate-100">
           {isMoney && <span>$</span>}
           <input
@@ -278,7 +279,7 @@ function Slider({ label, value, min, max, step = 1, onChange, money: isMoney }: 
           />
         </span>
       </div>
-      <input type="range" className="mt-1 w-full accent-amber-500" min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
+      <input type="range" className={`mt-1 w-full ${muted ? "accent-slate-500" : "accent-amber-500"}`} min={min} max={max} step={step} value={value} onChange={(e) => onChange(Number(e.target.value))} />
       <div className="flex justify-between text-[10px] text-slate-500"><span>{isMoney ? money(min) : min}</span><span>{isMoney ? money(max) : max.toLocaleString()}</span></div>
     </div>
   );
