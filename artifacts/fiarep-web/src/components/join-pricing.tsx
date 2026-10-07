@@ -98,9 +98,40 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
   const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["DOF owed", est.penalties, "bg-slate-500"], ["Repairs", est.repairs, "bg-emerald-400"]];
 
+  // Prices only: the words stay readable, the numbers blur until approved.
+  const hide = unlocked ? "" : "blur-sm select-none";
+
+  // The blur band: FIAREP's prices and the estimator stay on the page but
+  // can't be read until the pilot request is approved (or a code is typed).
+  const LockBand = ({ title }: { title: string }) => (
+    <div className="absolute inset-0 z-10 flex items-center justify-center">
+      <div className="mx-4 w-full max-w-xl rounded-xl border border-amber-500/50 bg-slate-950/95 p-5 text-center shadow-2xl">
+        <p className="text-lg font-bold text-white">🔒 {title}</p>
+        <p className="mt-1 text-sm text-slate-300">{pending ? "Your pilot request is in. This unlocks the moment FIAREP approves it." : "Sign up for a pilot and get approved to see FIAREP's pricing."}</p>
+        {!pending && <Button className="mt-3 bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Sign up</Button>}
+        <form className="mt-4 flex items-center justify-center gap-2" onSubmit={(e) => { e.preventDefault(); if (code.length === 3) void onUnlock(code); }}>
+          <span className="text-xs text-slate-400">Have an access code?</span>
+          <input maxLength={3} autoCapitalize="off" autoCorrect="off" spellCheck={false} value={code} onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 3))} placeholder="e.g. k3L" className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-center text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
+          <Button type="submit" size="sm" variant="outline" className="border-amber-500/60 text-amber-200 hover:bg-amber-500/10" disabled={code.length !== 3}>Unlock</Button>
+        </form>
+      </div>
+    </div>
+  );
+
   return (
     <section className="mt-12">
       <h2 className="text-2xl font-semibold text-white">What it costs</h2>
+      {!unlocked && (
+        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-amber-500/50 bg-slate-950/90 px-4 py-3">
+          <p className="text-sm text-slate-200">🔒 {pending ? "Your pilot request is in — prices and the estimator unlock the moment FIAREP approves it." : "Prices and the estimator unlock when you sign up for a pilot and get approved."}</p>
+          {!pending && <Button size="sm" className="bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Sign up</Button>}
+          <form className="ml-auto flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (code.length === 3) void onUnlock(code); }}>
+            <span className="text-xs text-slate-400">Have an access code?</span>
+            <input maxLength={3} autoCapitalize="off" autoCorrect="off" spellCheck={false} value={code} onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 3))} placeholder="e.g. k3L" className="w-24 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-center text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
+            <Button type="submit" size="sm" variant="outline" className="border-amber-500/60 text-amber-200 hover:bg-amber-500/10" disabled={code.length !== 3}>Unlock</Button>
+          </form>
+        </div>
+      )}
       <p className="mt-1 text-sm text-slate-400">FIAREP rates, set against current New York City market rates and the official DOB / HPD penalty schedules (October 2026). Every pilot gets a written quote before any work starts.</p>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_1fr]">
@@ -108,20 +139,20 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">The FIAREP plan — best value</p>
-            <h3 className="mt-1 text-2xl font-bold text-white">$20 per unit per month</h3>
-            <p className="text-sm text-slate-300">Minimum $1,000 / month. A 20-unit building is $1,000; 100 units is $2,000; 500 units is $10,000.</p>
+            <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>$20 per unit per month</h3>
+            <p className={`text-sm text-slate-300 ${hide}`}>Minimum $1,000 / month. A 20-unit building is $1,000; 100 units is $2,000; 500 units is $10,000.</p>
           </div>
           <Button className="bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Start the 60-day pilot</Button>
         </div>
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
-          {RETAINER_INCLUDES.map((line) => <li key={line} className="flex gap-2 text-sm text-slate-200"><span className="text-amber-400">✓</span>{line}</li>)}
+          {RETAINER_INCLUDES.map((line) => <li key={line} className={`flex gap-2 text-sm text-slate-200 ${line.includes("$") ? hide : ""}`}><span className="text-amber-400">✓</span>{line}</li>)}
         </ul>
-        <p className="mt-3 text-xs text-slate-400">City penalties, DOB re-inspection fees ($225) and HPD dismissal requests ($250 – $1,000) pass through at cost on every plan.</p>
+        <p className="mt-3 text-xs text-slate-400">City penalties, DOB re-inspection fees and HPD dismissal requests pass through at cost on every plan.</p>
       </div>
         <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Platform only — software, no FIAREP labor</p>
-          <h3 className="mt-1 text-2xl font-bold text-white">$4 per unit per month</h3>
-          <p className="text-sm text-slate-300">Minimum $400 / month. Setup and staff training $1,500 one time per organization.</p>
+          <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>$4 per unit per month</h3>
+          <p className={`text-sm text-slate-300 ${hide}`}>Minimum $400 / month. Setup and staff training $1,500 one time per organization.</p>
           <ul className="mt-4 grid gap-2">
             {PLATFORM_INCLUDES.map((line) => <li key={line} className="flex gap-2 text-sm text-slate-200"><span className="text-slate-400">✓</span>{line}</li>)}
           </ul>
@@ -146,7 +177,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               {FEES.map(([k, price, what]) => (
                 <tr key={k} className="border-t border-slate-800 align-top">
                   <td className="py-2 pr-3"><p className="font-medium text-slate-100">{k}</p><p className="text-xs text-slate-400">{what}</p></td>
-                  <td className="w-32 py-2 pl-3 text-right align-top font-semibold leading-snug text-amber-300 sm:w-44">{price.split(" · ").map((line) => <span key={line} className="block">{line}</span>)}</td>
+                  <td className={`w-32 py-2 pl-3 text-right align-top font-semibold leading-snug text-amber-300 sm:w-44 ${hide}`}>{price.split(" · ").map((line) => <span key={line} className="block">{line}</span>)}</td>
                 </tr>
               ))}
             </tbody>
@@ -270,20 +301,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
           </label>
         </div>
         </div>
-        {!unlocked && (
-          <div className="absolute inset-0 z-10 flex items-center justify-center">
-            <div className="mx-4 w-full max-w-xl rounded-xl border border-amber-500/50 bg-slate-950/95 p-5 text-center shadow-2xl">
-              <p className="text-lg font-bold text-white">🔒 Violation resolution estimator</p>
-              <p className="mt-1 text-sm text-slate-300">{pending ? "Your pilot request is in. The estimator unlocks the moment FIAREP approves it." : "Sign up for a pilot and get approved to unlock the estimator."}</p>
-              {!pending && <Button className="mt-3 bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Sign up</Button>}
-              <form className="mt-4 flex items-center justify-center gap-2" onSubmit={(e) => { e.preventDefault(); if (code.length === 3) void onUnlock(code); }}>
-                <span className="text-xs text-slate-400">Have an access code?</span>
-                <input maxLength={3} autoCapitalize="off" autoCorrect="off" spellCheck={false} value={code} onChange={(e) => setCode(e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 3))} placeholder="e.g. k3L" className="w-32 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-center text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
-                <Button type="submit" size="sm" variant="outline" className="border-amber-500/60 text-amber-200 hover:bg-amber-500/10" disabled={code.length !== 3}>Unlock</Button>
-              </form>
-            </div>
-          </div>
-        )}
+        {!unlocked && <LockBand title="Violation resolution estimator" />}
       </div>
     </section>
   );
