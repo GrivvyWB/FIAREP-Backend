@@ -26,6 +26,8 @@ router.use(authRouter);
 router.use(organizationsRouter);
 router.use(publicAccessRouter);
 router.use(joinRouter);
+// Before the staff routers: its public DOF lookup must not hit their requireAuth.
+router.use(propertyRouter);
 router.use(companyFormsRouter);
 router.use(nychaRouter);
 router.use(coverageRouter);
@@ -38,7 +40,6 @@ router.use(hrRouter);
 router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);
-router.use(propertyRouter);
 router.use(timeClockRouter);
 
 export default router;

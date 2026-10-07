@@ -17,6 +17,13 @@ const FEES = [
   ["Hourly — research, zoning, multi-agency", "$175 per hour", "Extensive records research, complex zoning questions, multi-agency coordination."],
 ];
 
+const PLATFORM_INCLUDES = [
+  "App and website for all of your staff — complaints, violations, projects, scopes, time clock, scores, reports",
+  "Resident app: file complaints, check status, push notifications at every step",
+  "HPD / DOB lookup, translator, vendor portal, Community Coordinators, Company Forms — the modules you switch on",
+  "Resident code setup and staff onboarding",
+];
+
 const RETAINER_INCLUDES = [
   "The FIAREP platform — app and website — for all of your staff and residents",
   "24 / 7 complaint monitoring through the platform and app — every complaint tracked and the resident told at each step",
@@ -96,7 +103,8 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
       <h2 className="text-2xl font-semibold text-white">What it costs</h2>
       <p className="mt-1 text-sm text-slate-400">FIAREP rates, set against current New York City market rates and the official DOB / HPD penalty schedules (October 2026). Every pilot gets a written quote before any work starts.</p>
 
-      <div className="mt-4 rounded-2xl border-2 border-amber-500/60 bg-gradient-to-br from-amber-500/15 to-slate-900/80 p-6">
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1.25fr_1fr]">
+      <div className="rounded-2xl border-2 border-amber-500/60 bg-gradient-to-br from-amber-500/15 to-slate-900/80 p-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">The FIAREP plan — best value</p>
@@ -109,6 +117,16 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
           {RETAINER_INCLUDES.map((line) => <li key={line} className="flex gap-2 text-sm text-slate-200"><span className="text-amber-400">✓</span>{line}</li>)}
         </ul>
         <p className="mt-3 text-xs text-slate-400">City penalties, DOB re-inspection fees ($225) and HPD dismissal requests ($250 – $1,000) pass through at cost on every plan.</p>
+      </div>
+        <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Platform only — software, no FIAREP labor</p>
+          <h3 className="mt-1 text-2xl font-bold text-white">$4 per unit per month</h3>
+          <p className="text-sm text-slate-300">Minimum $400 / month. Setup and staff training $1,500 one time per organization.</p>
+          <ul className="mt-4 grid gap-2">
+            {PLATFORM_INCLUDES.map((line) => <li key={line} className="flex gap-2 text-sm text-slate-200"><span className="text-slate-400">✓</span>{line}</li>)}
+          </ul>
+          <p className="mt-3 text-xs text-slate-400">Violation removal, expediting and hearings available any time at the per-job rates below (no plan discount). Upgrade to the FIAREP plan whenever you want us on it.</p>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
