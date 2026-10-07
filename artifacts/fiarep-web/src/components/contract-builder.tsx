@@ -1,10 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Mail, Printer } from "lucide-react";
-import { BRAND, KIND_LABEL, buildContractHtml, contractNumber, monthlyFee, scopeTotal, type Building, type ContractInput, type ContractKind, type ScopeLine } from "@/lib/contract";
+import { BRAND, KIND_LABEL, agencyDefaultFee, buildContractHtml, contractNumber, monthlyFee, scopeTotal, type Building, type ContractInput, type ContractKind, type ScopeLine } from "@/lib/contract";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -20,6 +20,7 @@ export function ContractBuilder({ scope, engineering, onClearScope }: { scope: S
   const [client, setClient] = useState({ company: "", contact: "", title: "", address: "", email: "", phone: "" });
   const [buildings, setBuildings] = useState<Building[]>([{ name: "", address: "", units: 0 }]);
   const [flatFee, setFlatFee] = useState(0);
+  const [feeEdited, setFeeEdited] = useState(false);
   const [pilot, setPilot] = useState(true);
   const [startDate, setStartDate] = useState(today);
   const [termMonths, setTermMonths] = useState(12);
@@ -29,6 +30,9 @@ export function ContractBuilder({ scope, engineering, onClearScope }: { scope: S
   const [busy, setBusy] = useState("");
 
   const units = buildings.reduce((n, b) => n + (b.units || 0), 0);
+  // Agency fee follows units × tier rate until the owner types their own number.
+  const suggested = agencyDefaultFee(kind, units);
+  useEffect(() => { if (!feeEdited) setFlatFee(suggested); }, [suggested, feeEdited]);
   const input: ContractInput = useMemo(() => ({
     kind, number, date: today(), fiarepSigner, fiarepEntity, client, buildings: buildings.filter((b) => b.name || b.address || b.units), units, flatFee, pilot, startDate, termMonths, scope, engineering, notes,
   }), [kind, number, fiarepSigner, fiarepEntity, client, buildings, units, flatFee, pilot, startDate, termMonths, scope, engineering, notes]);
@@ -86,7 +90,8 @@ export function ContractBuilder({ scope, engineering, onClearScope }: { scope: S
         </label>
         {isAgency && (
           <label className="text-sm text-slate-700">Flat monthly fee $
-            <Input type="number" inputMode="numeric" min={0} step={500} value={flatFee || ""} placeholder="0" onChange={(e) => setFlatFee(num(e.target.value))} className="mt-1" />
+            <Input type="number" inputMode="numeric" min={0} step={500} value={flatFee || ""} placeholder="0" onChange={(e) => { setFeeEdited(true); setFlatFee(num(e.target.value)); }} className="mt-1" />
+            <span className="text-xs text-slate-500">Default {money(suggested)} — {kind === "agency-small" ? "$15 per unit, minimum $5,000" : "$10 per unit, minimum $25,000"}.{feeEdited && <button type="button" className="ml-1 underline" onClick={() => { setFeeEdited(false); setFlatFee(suggested); }}>Use default</button>}</span>
           </label>
         )}
         {kind === "fiarep" && (

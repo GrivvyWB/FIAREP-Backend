@@ -3,6 +3,9 @@ export const PLAN = {
   fiarep: { name: "The FIAREP plan", perUnit: 20, minimum: 1000, pilotDays: 60 },
   platform: { name: "Platform only", perUnit: 4, minimum: 400, setup: 1500 },
   agencyMinUnits: 2500,
+  // Housing authorities / agencies: flat monthly fee, defaulted from units × rate.
+  agencySmall: { perUnit: 15, minimum: 5000 },   // under 2,500 units
+  agencyMajor: { perUnit: 10, minimum: 25000 },  // 2,500 units and up
 } as const;
 
 export const FEES = [

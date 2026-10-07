@@ -39,7 +39,14 @@ const longDate = (iso: string) => (iso ? new Date(iso + "T12:00:00").toLocaleDat
 export function monthlyFee(c: ContractInput): { monthly: number; basis: string; setup: number } {
   if (c.kind === "fiarep") return { monthly: Math.max(c.units * PLAN.fiarep.perUnit, PLAN.fiarep.minimum), basis: `${c.units.toLocaleString()} units × $${PLAN.fiarep.perUnit} (minimum ${money(PLAN.fiarep.minimum)})`, setup: 0 };
   if (c.kind === "platform") return { monthly: Math.max(c.units * PLAN.platform.perUnit, PLAN.platform.minimum), basis: `${c.units.toLocaleString()} units × $${PLAN.platform.perUnit} (minimum ${money(PLAN.platform.minimum)})`, setup: PLAN.platform.setup };
-  return { monthly: c.flatFee, basis: `flat fee for ${c.units.toLocaleString()} units across ${c.buildings.length} development${c.buildings.length === 1 ? "" : "s"}`, setup: 0 };
+  const tier = c.kind === "agency-small" ? PLAN.agencySmall : PLAN.agencyMajor;
+  return { monthly: c.flatFee, basis: `flat fee for ${c.units.toLocaleString()} units across ${c.buildings.length} development${c.buildings.length === 1 ? "" : "s"}; $${tier.perUnit} per unit, minimum ${money(tier.minimum)}`, setup: 0 };
+}
+/** Default flat fee for an agency contract: units × rate, floored. */
+export function agencyDefaultFee(kind: ContractKind, units: number): number {
+  if (kind === "agency-small") return Math.max(units * PLAN.agencySmall.perUnit, PLAN.agencySmall.minimum);
+  if (kind === "agency-major") return Math.max(units * PLAN.agencyMajor.perUnit, PLAN.agencyMajor.minimum);
+  return 0;
 }
 export const scopeTotal = (c: ContractInput) => c.scope.reduce((n, l) => n + l.qty * l.price, 0) + (c.engineering?.amount || 0);
 
