@@ -80,7 +80,7 @@ export function DofLookupPanel({ onResult }: { onResult: (total: number, result:
             <div className="rounded-lg border border-slate-800 p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-2">
                 <p className="text-xs uppercase tracking-wide text-slate-500">Property tax (DOF) · tax class {data.propertyTax.taxClass} · {data.propertyTax.year} roll</p>
-                <a href={data.propertyTax.dofLink} target="_blank" rel="noreferrer" className="text-xs text-amber-300 underline">Open the DOF tax account — balance & bills</a>
+                <a href={data.propertyTax.dofLink} target="_blank" rel="noreferrer" className="text-xs text-amber-300 underline">Open on DOF — Property Tax Account for balance & bills</a>
               </div>
               <div className="mt-1 grid gap-x-4 gap-y-1 text-xs text-slate-400 sm:grid-cols-4">
                 <p>Market value<br /><span className="text-base font-semibold text-slate-200">{money(data.propertyTax.marketValue)}</span></p>

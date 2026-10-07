@@ -99,7 +99,7 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
           year: text(r["year"]), taxClass, marketValue: num(r["curmkttot"]), assessedValue: num(r["curacttot"]), taxableValue: taxable,
           taxRate: rate, estimatedAnnualTax: rate == null ? null : Math.round(taxable * rate),
           owner: text(r["owner"]), units: num(r["units"]), yearBuilt: text(r["yrbuilt"]),
-          dofLink: `https://a836-pts-access.nyc.gov/care/datalets/datalet.aspx?mode=profileall_v2&UseSearch=no&pin=${bbl}`,
+          dofLink: `https://propertyinformationportal.nyc.gov/parcels/parcel/${bbl}`,
         };
       }
     } catch (error) { warnings.push(`DOF property tax: ${error instanceof Error ? error.message : "unavailable"}`); }
