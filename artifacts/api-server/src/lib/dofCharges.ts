@@ -6,6 +6,9 @@ import { geocodeNycAddress, socrataUrl } from "./nycProperty";
 
 const OATH_CASES = "jz4z-kudi";      // OATH Hearings Division Case Status
 const HPD_OMO_CHARGES = "mdbu-nrqn"; // HPD Open Market Order (ERP) charges
+const PROPERTY_VALUATION = "8y4t-faws"; // DOF Property Valuation and Assessment Data (current)
+// DOF property tax rates by class (FY2026) — used only to estimate the annual bill.
+const TAX_RATES: Record<string, number> = { "1": 0.20085, "2": 0.125, "3": 0.11181, "4": 0.10762 };
 
 const BOROUGH_NAMES: Record<string, string> = { "1": "MANHATTAN", "2": "BRONX", "3": "BROOKLYN", "4": "QUEENS", "5": "STATEN ISLAND" };
 const text = (v: unknown): string => (v == null ? "" : String(v).trim());
@@ -24,8 +27,14 @@ export type DofSummons = {
 };
 export type HpdCharge = { omo: string; createdAt: string | null; workType: string; description: string; amount: number; lifecycle: string };
 
+export type PropertyTax = {
+  year: string; taxClass: string; marketValue: number; assessedValue: number; taxableValue: number; taxRate: number | null;
+  estimatedAnnualTax: number | null; owner: string; units: number; yearBuilt: string; dofLink: string;
+};
+
 export type DofLookup = {
   property: { query: string; formattedAddress: string; borough: string; block: string | null; lot: string | null; bbl: string | null; bin: string | null };
+  propertyTax: PropertyTax | null;
   oath: { openBalance: number; openCount: number; penaltiesImposed: number; paid: number; items: DofSummons[]; byAgency: Array<{ agency: string; balance: number; count: number }> };
   hpdCharges: { total: number; count: number; items: HpdCharge[] };
   warnings: string[];
@@ -75,6 +84,27 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
     amount: num(r["omoawardamount"]) + num(r["netchangeorders"]), lifecycle: text(r["lifecycle"]),
   })).filter((c) => c.amount > 0);
 
+  // DOF assessment roll: the values the property-tax bill is built on. The
+  // balance itself is not on Open Data — the DOF link opens the live account.
+  let propertyTax: PropertyTax | null = null;
+  if (bbl) {
+    try {
+      const rows = (await fetchJson(socrataUrl(PROPERTY_VALUATION, `parid='${bbl}'`, "year DESC", 1))) as Record<string, unknown>[];
+      const r = rows[0];
+      if (r) {
+        const taxClass = text(r["curtaxclass"]);
+        const rate = TAX_RATES[taxClass.slice(0, 1)] ?? null;
+        const taxable = num(r["curtxbtot"]);
+        propertyTax = {
+          year: text(r["year"]), taxClass, marketValue: num(r["curmkttot"]), assessedValue: num(r["curacttot"]), taxableValue: taxable,
+          taxRate: rate, estimatedAnnualTax: rate == null ? null : Math.round(taxable * rate),
+          owner: text(r["owner"]), units: num(r["units"]), yearBuilt: text(r["yrbuilt"]),
+          dofLink: `https://a836-pts-access.nyc.gov/care/datalets/datalet.aspx?mode=profileall_v2&UseSearch=no&pin=${bbl}`,
+        };
+      }
+    } catch (error) { warnings.push(`DOF property tax: ${error instanceof Error ? error.message : "unavailable"}`); }
+  }
+
   return {
     property: {
       query: address.trim(), formattedAddress: text(props["label"]) || address.trim(), borough: boroughName, block, lot, bbl, bin,
@@ -84,6 +114,7 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
       penaltiesImposed: items.reduce((n, i) => n + i.penalty, 0), paid: items.reduce((n, i) => n + i.paid, 0),
       items: open.slice(0, 200), byAgency,
     },
+    propertyTax,
     hpdCharges: { total: hpdItems.reduce((n, c) => n + c.amount, 0), count: hpdItems.length, items: hpdItems.slice(0, 100) },
     warnings,
     retrievedAt: new Date().toISOString(),

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 export type DofLookup = {
   property: { formattedAddress: string; borough: string; block: string | null; lot: string | null; bbl: string | null; bin: string | null };
   oath: { openBalance: number; openCount: number; penaltiesImposed: number; paid: number; byAgency: Array<{ agency: string; balance: number; count: number }>; items: Array<{ ticket: string; agency: string; violationDate: string | null; hearingDate: string | null; hearingStatus: string; complianceStatus: string; charge: string; penalty: number; paid: number; lateFees: number; balance: number }> };
+  propertyTax: { year: string; taxClass: string; marketValue: number; assessedValue: number; taxableValue: number; taxRate: number | null; estimatedAnnualTax: number | null; owner: string; units: number; yearBuilt: string; dofLink: string } | null;
   hpdCharges: { total: number; count: number; items: Array<{ omo: string; createdAt: string | null; workType: string; description: string; amount: number }> };
   warnings: string[];
   retrievedAt: string;
@@ -51,6 +52,7 @@ export function DofLookupPanel({ onResult }: { onResult: (total: number, result:
             <div>
               <p className="font-semibold text-slate-100">{data.property.formattedAddress}</p>
               <p className="text-xs text-slate-400">{data.property.borough} · Block {data.property.block || "—"} · Lot {data.property.lot || "—"}{data.property.bbl ? ` · BBL ${data.property.bbl}` : ""}{data.property.bin ? ` · BIN ${data.property.bin}` : ""}</p>
+              <p className="text-sm font-semibold text-amber-300">{data.propertyTax?.units ? `${data.propertyTax.units} units` : "Units not on file"}{data.propertyTax?.yearBuilt ? <span className="font-normal text-slate-400"> · built {data.propertyTax.yearBuilt}</span> : null}</p>
             </div>
             <div className="text-right">
               <p className="text-xs uppercase tracking-wide text-slate-500">Owed to the City</p>
@@ -74,6 +76,21 @@ export function DofLookupPanel({ onResult }: { onResult: (total: number, result:
               {data.hpdCharges.items.slice(0, 4).map((c) => <p key={c.omo} className="mt-0.5 truncate text-xs text-slate-400">{c.createdAt} · {c.workType} · {money(c.amount)}</p>)}
             </div>
           </div>
+          {data.propertyTax && (
+            <div className="rounded-lg border border-slate-800 p-3">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Property tax (DOF) · tax class {data.propertyTax.taxClass} · {data.propertyTax.year} roll</p>
+                <a href={data.propertyTax.dofLink} target="_blank" rel="noreferrer" className="text-xs text-amber-300 underline">Open the DOF tax account — balance & bills</a>
+              </div>
+              <div className="mt-1 grid gap-x-4 gap-y-1 text-xs text-slate-400 sm:grid-cols-4">
+                <p>Market value<br /><span className="text-base font-semibold text-slate-200">{money(data.propertyTax.marketValue)}</span></p>
+                <p>Assessed value<br /><span className="text-base font-semibold text-slate-200">{money(data.propertyTax.assessedValue)}</span></p>
+                <p>Taxable value<br /><span className="text-base font-semibold text-slate-200">{money(data.propertyTax.taxableValue)}</span></p>
+                <p>Est. annual tax{data.propertyTax.taxRate != null ? ` @ ${(data.propertyTax.taxRate * 100).toFixed(3)}%` : ""}<br /><span className="text-base font-semibold text-slate-200">{data.propertyTax.estimatedAnnualTax == null ? "—" : money(data.propertyTax.estimatedAnnualTax)}</span></p>
+              </div>
+              <p className="mt-1 text-[11px] text-slate-500">Owner of record {data.propertyTax.owner || "—"}. The amount owed is on the DOF account (link above) — it is not published on Open Data.</p>
+            </div>
+          )}
           {data.oath.items.length > 0 && (
             <div>
               <button type="button" className="text-xs text-amber-300 underline" onClick={() => setShowAll((v) => !v)}>{showAll ? "Hide" : "Show"} the {data.oath.items.length} open summons</button>
@@ -94,7 +111,7 @@ export function DofLookupPanel({ onResult }: { onResult: (total: number, result:
             </div>
           )}
           {data.warnings.length > 0 && <p className="text-xs text-amber-500">{data.warnings.join(" · ")}</p>}
-          <p className="text-[11px] text-slate-500">NYC Open Data (OATH case status, HPD charges) · retrieved {new Date(data.retrievedAt).toLocaleString()}. DOF property tax and water charges are not included.</p>
+          <p className="text-[11px] text-slate-500">NYC Open Data (OATH case status, HPD charges, DOF assessment roll) · retrieved {new Date(data.retrievedAt).toLocaleString()}. Property tax and water balances are not in the total — open the DOF account for those.</p>
         </div>
       )}
     </div>
