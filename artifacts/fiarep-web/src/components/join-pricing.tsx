@@ -77,6 +77,15 @@ export function JoinPricing() {
         <p className="mt-3 text-xs text-slate-400">City penalties, DOB re-inspection fees ($225) and HPD dismissal requests ($250 – $1,000) pass through at cost on every plan.</p>
       </div>
 
+      <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Housing authorities, agencies & large portfolios</p>
+          <p className="mt-1 font-semibold text-white">2,500 units or more? The per-unit plan doesn't apply — you get a per-development quote.</p>
+          <p className="text-sm text-slate-400">Platform license tiered by volume, services on a fixed rate card your procurement office can attach to a contract, and a 2–3 development pilot to start.</p>
+        </div>
+        <Button variant="outline" className="border-amber-500/60 text-amber-200 hover:bg-amber-500/10" asChild><a href="mailto:fiarep@outlook.com?subject=FIAREP%20per-development%20quote">Request a per-development quote</a></Button>
+      </div>
+
       <div className="mt-4 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
           <h3 className="font-semibold text-white">Per-job rates (no plan)</h3>
