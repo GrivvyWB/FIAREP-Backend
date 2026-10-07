@@ -28,7 +28,7 @@ async function fetchJson(url: string): Promise<unknown> {
   throw new Error(`NYC service returned HTTP ${lastStatus}`);
 }
 
-function socrataUrl(dataset: string, where: string, order: string, limit: number): string {
+export function socrataUrl(dataset: string, where: string, order: string, limit: number): string {
   const params = new URLSearchParams({
     "$where": where,
     "$order": order,
@@ -45,7 +45,7 @@ function escapeSoql(value: string): string {
   return value.replaceAll("'", "''").toUpperCase();
 }
 
-async function geocodeNycAddress(address: string) {
+export async function geocodeNycAddress(address: string) {
   const geoUrl = new URL(GEOSEARCH_URL);
   geoUrl.searchParams.set("text", `${address.trim()}, New York, NY`);
   geoUrl.searchParams.set("size", "5");

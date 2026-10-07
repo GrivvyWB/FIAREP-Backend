@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { DofLookupPanel } from "@/components/dof-lookup";
 
 /** "What it costs" on the Join FIAREP page: expediter fee ranges, the full
  * cost picture for a typical 20-unit NYC building, how each agency works,
@@ -64,8 +65,13 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean; pending: boolean; onUnlock: (code: string) => Promise<void> }) {
   const [code, setCode] = useState("");
   const [dob, setDob] = useState(8);
-  const [hpd, setHpd] = useState(120);
-  const [fines, setFines] = useState(15000);
+  // HPD violations by class: counts only — the City's money comes from the DOF lookup, not from these.
+  const [hpdA, setHpdA] = useState(40);
+  const [hpdB, setHpdB] = useState(60);
+  const [hpdC, setHpdC] = useState(20);
+  const hpd = hpdA + hpdB + hpdC;
+  // What the building owes the City, from the Department of Finance lookup (or typed).
+  const [dofOwed, setDofOwed] = useState(0);
   const [repair, setRepair] = useState(2);
   const [customRepair, setCustomRepair] = useState(0);
   const [eng, setEng] = useState(1);
@@ -74,16 +80,16 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
     // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD simple cure $400.
     const expediter = Math.min(dob, 2) * 1500 + Math.max(dob - 2, 0) * 1000 + hpd * 400;
     const engineering = customEng > 0 ? customEng : (ENGINEER[eng]![1] > 0 ? ENGINEER[eng]![1] + dob * ENGINEER_PER_DOB : 0);
-    // What the City charges if the violations sit: DOB standard penalty, HPD Class B/C civil penalty.
-    const penalties = fines + dob * 1250 + hpd * 300;
+    // DOF: what the building owes the City right now — from the lookup, never estimated from counts.
+    const penalties = dofOwed;
     const repairs = customRepair > 0 ? customRepair : REPAIR[repair]![1] + hpd * REPAIR_PER_HPD + dob * REPAIR_PER_DOB;
     // If HPD's Emergency Repair Program does the work instead: 2–3× contractor cost + 15% admin fee, 9% interest.
     const erp = Math.round(repairs * 2.5 * 1.15);
     // FIAREP total: what we quote. DOF penalties are the City's, shown for reference only.
     return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + repairs };
-  }, [dob, hpd, fines, repair, customRepair, eng, customEng]);
+  }, [dob, hpd, dofOwed, repair, customRepair, eng, customEng]);
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
-  const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["DOF penalties", est.penalties, "bg-slate-500"], ["Repairs", est.repairs, "bg-emerald-400"]];
+  const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["DOF owed", est.penalties, "bg-slate-500"], ["Repairs", est.repairs, "bg-emerald-400"]];
 
   return (
     <section className="mt-12">
@@ -176,26 +182,28 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
         <div className="mt-4 grid gap-5 lg:grid-cols-[1fr_1fr]">
           <div className="space-y-4">
             <Slider label="DOB violations (Class 1 / 2)" value={dob} min={0} max={1000} onChange={setDob} />
-            <Slider label="HPD violations (Class B / C)" value={hpd} min={0} max={1000} onChange={setHpd} />
-            <Slider label="Existing civil fines (DOF)" value={fines} min={0} max={1000000} step={250} onChange={setFines} money muted />
+            <Slider label="HPD Class A violations (non-hazardous)" value={hpdA} min={0} max={1000} onChange={setHpdA} />
+            <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
+            <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
-              <div key={label} className={label === "DOF penalties" ? "opacity-60" : ""}>
+              <div key={label} className={label === "DOF owed" ? "opacity-60" : ""}>
                 <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="text-slate-300">{label}{label === "DOF penalties" && <span className="ml-2 text-xs text-slate-500">Department of Finance — not in FIAREP total</span>}</span>
-                  {label === "Engineering" || label === "Repairs" ? (
+                  <span className="text-slate-300">{label}{label === "DOF owed" && <span className="ml-2 text-xs text-slate-500">Department of Finance — not in FIAREP total</span>}</span>
+                  {label === "Engineering" || label === "Repairs" || label === "DOF owed" ? (
                     <span className="flex items-center gap-1 font-semibold text-slate-100">
                       <span>$</span>
                       <input
                         type="number" inputMode="numeric" min={0} step={500}
                         value={amount}
-                        onChange={(e) => { const n = Math.max(0, Math.round(Number(e.target.value) || 0)); if (label === "Engineering") setCustomEng(n); else setCustomRepair(n); }}
+                        onChange={(e) => { const n = Math.max(0, Math.round(Number(e.target.value) || 0)); if (label === "Engineering") setCustomEng(n); else if (label === "Repairs") setCustomRepair(n); else setDofOwed(n); }}
                         className="w-28 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none"
                         aria-label={`${label} amount`}
                       />
                     </span>
-                  ) : <span className={`font-semibold ${label === "DOF penalties" ? "text-slate-400" : "text-slate-100"}`}>{money(amount)}</span>}
+                  ) : <span className={`font-semibold ${label === "DOF owed" ? "text-slate-400" : "text-slate-100"}`}>{money(amount)}</span>}
                 </div>
                 <div className="mt-1 h-3 w-full rounded-full bg-slate-800"><div className={`h-3 rounded-full ${color}`} style={{ width: `${Math.max(2, (amount / max) * 100)}%` }} /></div>
               </div>
@@ -204,7 +212,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: ~{money(est.erp)}</p>
               <p className="text-xs text-rose-200/80">HPD bills 2–3× contractor cost plus a 15% administrative fee, 9% interest, and a lien on the building. Owners of the 250 buildings in the 2026 Alternative Enforcement Program already owe $4.5M for emergency repairs.</p>
             </div>
-            <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF penalties are what the City charges if the violations sit (existing fines plus what the open violations add) — shown grayed for reference, not part of the FIAREP total; clearing them on time is how most of that goes away. Engineering and repairs are quoted after we look at the actual violations.</p>
+            <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts carry no price of their own. Engineering and repairs are quoted after we look at the actual violations.</p>
           </div>
         </div>
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
