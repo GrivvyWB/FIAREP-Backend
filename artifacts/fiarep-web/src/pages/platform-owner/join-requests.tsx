@@ -2,9 +2,11 @@ import { useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, KeyRound, X } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Check, KeyRound, Plus, X } from "lucide-react";
 
 type Dev = { name: string; address: string; units: string };
+type DemoCode = { id: string; label: string; accessCode: string; active: boolean; uses: number; lastUsedAt: string | null; createdAt: string; createdBy: string };
 type JoinRequest = {
   id: string; createdAt: string; status: string; company: string; contactName: string; phone: string; email: string;
   address: string; portfolioSize: string; developments: Dev[]; services: string[]; notes: string; accessCode?: string; decidedAt?: string; decidedBy?: string;
@@ -19,10 +21,34 @@ export default function OwnerJoinRequests() {
   const [rows, setRows] = useState<JoinRequest[]>([]);
   const [busy, setBusy] = useState("");
   const [filter, setFilter] = useState<"new" | "approved" | "declined" | "all">("new");
+  const [codes, setCodes] = useState<DemoCode[]>([]);
+  const [label, setLabel] = useState("");
 
   async function reload() {
-    try { setRows(await customFetch<JoinRequest[]>("/api/v1/platform/join-requests", { responseType: "json" } as never)); }
-    catch (err: any) { toast({ variant: "destructive", title: "Could not load join requests", description: err?.data?.error || err?.message }); }
+    try {
+      setRows(await customFetch<JoinRequest[]>("/api/v1/platform/join-requests", { responseType: "json" } as never));
+      setCodes(await customFetch<DemoCode[]>("/api/v1/platform/join-codes", { responseType: "json" } as never));
+    } catch (err: any) { toast({ variant: "destructive", title: "Could not load join requests", description: err?.data?.error || err?.message }); }
+  }
+
+  // Demo / sales codes: unlock the estimator for FIAREP's own people and reps.
+  async function makeCode() {
+    setBusy("code");
+    try {
+      const c = await customFetch<DemoCode>("/api/v1/platform/join-codes", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ label: label.trim() || "Demo" }), responseType: "json" } as never);
+      setLabel("");
+      try { await navigator.clipboard.writeText(c.accessCode); } catch { /* clipboard unavailable */ }
+      toast({ title: `Code ${c.accessCode} — ${c.label}`, description: "Copied. It unlocks the estimator on fiarep.com/join." });
+      await reload();
+    } catch (err: any) { toast({ variant: "destructive", title: "Could not create code", description: err?.data?.error || err?.message }); }
+    finally { setBusy(""); }
+  }
+  async function revoke(c: DemoCode) {
+    if (!window.confirm(`Revoke code ${c.accessCode} (${c.label})? It stops working right away.`)) return;
+    setBusy(c.id);
+    try { await customFetch(`/api/v1/platform/join-codes/${encodeURIComponent(c.id)}/revoke`, { method: "POST", responseType: "json" } as never); await reload(); }
+    catch (err: any) { toast({ variant: "destructive", title: "Could not revoke", description: err?.data?.error || err?.message }); }
+    finally { setBusy(""); }
   }
   useEffect(() => { void reload(); }, []);
 
@@ -54,6 +80,35 @@ export default function OwnerJoinRequests() {
           ))}
         </div>
       </div>
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h2 className="font-semibold text-slate-950">Demo / sales codes</h2>
+            <p className="text-xs text-slate-500">Codes for you and your reps to open the estimator in front of a client — no request needed. Case-sensitive.</p>
+          </div>
+          <form className="flex items-center gap-2" onSubmit={(e) => { e.preventDefault(); void makeCode(); }}>
+            <Input className="w-48" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Who it's for (e.g. Tim, Sales — J. Rivera)" />
+            <Button type="submit" size="sm" disabled={busy === "code"}><Plus className="mr-1 h-4 w-4" />New code</Button>
+          </form>
+        </div>
+        {codes.length > 0 && (
+          <table className="mt-3 w-full text-sm">
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Code</th><th>For</th><th>Uses</th><th>Last used</th><th>Made</th><th></th></tr></thead>
+            <tbody>
+              {codes.map((c) => (
+                <tr key={c.id} className={`border-t border-slate-100 ${c.active ? "" : "text-slate-400 line-through"}`}>
+                  <td className="py-2 font-mono text-lg font-bold">{c.accessCode}</td>
+                  <td>{c.label}</td>
+                  <td>{c.uses}</td>
+                  <td>{c.lastUsedAt ? when(String(c.lastUsedAt)) : "—"}</td>
+                  <td className="text-xs text-slate-500">{when(c.createdAt)} · {c.createdBy}</td>
+                  <td className="text-right">{c.active && <Button size="sm" variant="ghost" className="text-slate-500 hover:text-red-600" disabled={busy === c.id} onClick={() => void revoke(c)}>Revoke</Button>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
       {shown.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">No {filter === "all" ? "" : filter} requests.</p>}
       {shown.map((r) => (
         <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

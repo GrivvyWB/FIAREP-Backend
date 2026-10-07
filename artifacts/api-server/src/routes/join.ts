@@ -22,6 +22,7 @@ const SITE = (process.env["PUBLIC_WEB_URL"] || "https://fiarep.com").replace(/\/
 const esc = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const str = (v: unknown, max = 300) => String(v ?? "").trim().slice(0, max);
 const ENTITY = "join-requests";
+const CODE_ENTITY = "join-codes";
 
 type Development = { name: string; address: string; units: string };
 
@@ -108,8 +109,18 @@ router.post("/v1/public/join-requests/unlock", async (req, res) => {
     eq(entityRecords.entity, ENTITY), eq(entityRecords.deleted, false),
     sql`${entityRecords.state}->>'accessCode' = ${code}`, sql`${entityRecords.state}->>'status' = 'approved'`,
   )).limit(1);
-  if (!row) { res.status(404).json({ error: "That access code isn't recognized or hasn't been approved yet." }); return; }
-  res.json(publicView(row));
+  if (row) { res.json(publicView(row)); return; }
+  // Demo / sales codes made in Platform Control: unlock without a request.
+  const [demo] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.entity, CODE_ENTITY), eq(entityRecords.deleted, false),
+    sql`${entityRecords.state}->>'accessCode' = ${code}`, sql`${entityRecords.state}->>'active' = 'true'`,
+  )).limit(1);
+  if (demo) {
+    await db.update(entityRecords).set({ state: { ...demo.state, uses: Number(demo.state["uses"] || 0) + 1, lastUsedAt: new Date().toISOString() }, updatedAt: new Date() }).where(eq(entityRecords.id, demo.id));
+    res.json({ id: demo.id, status: "approved", company: String(demo.state["label"] || "FIAREP demo"), accessCode: code });
+    return;
+  }
+  res.status(404).json({ error: "That access code isn't recognized or hasn't been approved yet." });
 });
 
 // ── Platform Control: review and approve ──
@@ -120,6 +131,45 @@ router.get("/v1/platform/join-requests", async (_req, res) => {
     .orderBy(desc(entityRecords.createdAt)).limit(500);
   res.setHeader("Cache-Control", "no-store");
   res.json(rows.map((r) => ({ id: r.id, createdAt: r.createdAt, ...r.state })));
+});
+
+// ── Demo / sales codes: unlock the estimator for FIAREP's own people ──
+router.use("/v1/platform/join-codes", requirePlatformOwner);
+const codeOut = (r: typeof entityRecords.$inferSelect) => ({ id: r.id, label: String(r.state["label"] || ""), accessCode: String(r.state["accessCode"] || ""), active: r.state["active"] === true, uses: Number(r.state["uses"] || 0), lastUsedAt: r.state["lastUsedAt"] || null, createdAt: r.createdAt, createdBy: String(r.state["createdBy"] || "") });
+
+router.get("/v1/platform/join-codes", async (_req, res) => {
+  const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, CODE_ENTITY), eq(entityRecords.deleted, false))).orderBy(desc(entityRecords.createdAt)).limit(200);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(rows.map(codeOut));
+});
+
+router.post("/v1/platform/join-codes", async (req, res) => {
+  const label = str((req.body as Record<string, unknown> | undefined)?.["label"], 80) || "Demo";
+  const owner = res.locals["platformOwner"] as { name: string };
+  const now = new Date();
+  // Unique against every live code, request or demo.
+  let accessCode = newAccessCode();
+  for (let i = 0; i < 20; i++) {
+    const [clash] = await db.select({ id: entityRecords.id }).from(entityRecords).where(and(eq(entityRecords.deleted, false), sql`${entityRecords.state}->>'accessCode' = ${accessCode}`)).limit(1);
+    if (!clash) break;
+    accessCode = newAccessCode();
+  }
+  const [row] = await db.insert(entityRecords).values({
+    id: randomUUID(), tenantId: "default", entity: CODE_ENTITY, development: null,
+    state: { label, accessCode, active: true, uses: 0, createdBy: owner.name, createdAt: now.toISOString() },
+    createdBy: "platform-owner", createdAt: now, updatedAt: now,
+  }).returning();
+  await platformAudit(owner.name, "join-code.created", row!.id, null, row);
+  res.status(201).json(codeOut(row!));
+});
+
+router.post("/v1/platform/join-codes/:id/revoke", async (req, res) => {
+  const [before] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, String(req.params.id || "")), eq(entityRecords.entity, CODE_ENTITY))).limit(1);
+  if (!before) { res.status(404).json({ error: "Code not found" }); return; }
+  const owner = res.locals["platformOwner"] as { name: string };
+  const [row] = await db.update(entityRecords).set({ state: { ...before.state, active: false, revokedAt: new Date().toISOString() }, updatedAt: new Date() }).where(eq(entityRecords.id, before.id)).returning();
+  await platformAudit(owner.name, "join-code.revoked", before.id, before, row);
+  res.json(codeOut(row!));
 });
 
 router.post("/v1/platform/join-requests/:id/:decision", async (req, res) => {
