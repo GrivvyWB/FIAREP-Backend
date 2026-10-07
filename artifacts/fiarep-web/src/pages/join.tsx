@@ -28,6 +28,8 @@ const emptyDev = (): Dev => ({ name: "", address: "", units: "" });
 
 export default function JoinFiarep() {
   const [, setLocation] = useLocation();
+  // Opened from the tab at the bottom of the site: start at the top.
+  useEffect(() => { window.scrollTo(0, 0); }, []);
   const { toast } = useToast();
   const [company, setCompany] = useState("");
   const [contactName, setContactName] = useState("");
