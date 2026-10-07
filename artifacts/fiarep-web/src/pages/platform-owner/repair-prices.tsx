@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ENGINEER, ENGINEER_PER_DOB, REPAIR_ITEMS, REPAIR_SQFT, type PriceKey } from "@/lib/repair-prices";
+import { ContractBuilder } from "@/components/contract-builder";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 type Line = readonly [PriceKey, string, number, string, string, ...unknown[]];
@@ -112,6 +113,12 @@ export default function OwnerRepairPrices() {
         </div>
       </details>
       <p className="text-xs text-slate-400">Sources and ranges behind every line: FIAREP_Repair_Prices_HPD.xlsx. City schedule figures are ceilings for tax-benefit purposes; real bids land above or below.</p>
+
+      <ContractBuilder
+        scope={lines.map(([key, label, price, unit]) => ({ label, qty: counts[key] || 0, unit, price }))}
+        engineering={engineering > 0 ? { label: `${ENGINEER[eng]![0]}${dob > 0 ? ` + ${dob} DOB sign-off${dob === 1 ? "" : "s"}` : ""}`, amount: engineering } : null}
+        onClearScope={() => { setCounts({}); setEng(0); setDob(0); }}
+      />
     </div>
   );
 }

@@ -200,4 +200,26 @@ router.post("/v1/platform/join-requests/:id/:decision", async (req, res) => {
   res.json({ ok: true, status, accessCode, emailed });
 });
 
+// Platform owner: email a built service agreement to the client from the
+// FIAREP mailbox. The HTML comes from the browser (lib/contract.ts); what was
+// sent is kept as a "contracts" record.
+router.post("/v1/platform/contracts/email", requirePlatformOwner, async (req, res) => {
+  const body = (req.body || {}) as Record<string, unknown>;
+  const to = str(body["to"]);
+  const html = String(body["html"] ?? "");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { res.status(400).json({ error: "A valid client email is required." }); return; }
+  if (!html.includes("Service Agreement") || html.length > 400_000) { res.status(400).json({ error: "Contract body missing or too large." }); return; }
+  const subject = str(body["subject"]) || "FIAREP Service Agreement";
+  const owner = res.locals["platformOwner"] as { name: string };
+  const emailed = await sendMail(to, subject, html);
+  const now = new Date();
+  const [row] = await db.insert(entityRecords).values({
+    id: randomUUID(), tenantId: "default", entity: "contracts", development: str(body["company"]) || null,
+    state: { number: str(body["number"]), company: str(body["company"]), kind: str(body["kind"]), monthly: Number(body["monthly"]) || 0, scopeTotal: Number(body["scopeTotal"]) || 0, to, emailed, sentAt: now.toISOString(), sentBy: owner.name },
+    createdBy: "platform-owner", createdAt: now, updatedAt: now,
+  }).returning();
+  await platformAudit(owner.name, "contract.emailed", row!.id, null, row);
+  res.json({ ok: true, emailed });
+});
+
 export default router;
