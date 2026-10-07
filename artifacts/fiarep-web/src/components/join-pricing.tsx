@@ -48,9 +48,11 @@ export function JoinPricing() {
   const [repair, setRepair] = useState(1);
   const [plans, setPlans] = useState(true);
   const est = useMemo(() => {
-    const expediter = 600 + dob * 650 + hpd * 300;
+    // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD simple cure $400.
+    const expediter = Math.min(dob, 2) * 1500 + Math.max(dob - 2, 0) * 1000 + hpd * 400;
     const engineering = plans ? 2500 + dob * 500 : 0;
-    const penalties = fines + dob * 1200 + hpd * 250;
+    // What the City charges if the violations sit: DOB standard penalty, HPD Class B/C civil penalty.
+    const penalties = fines + dob * 1250 + hpd * 300;
     const repairs = REPAIR[repair]![1];
     return { expediter, engineering, penalties, repairs, total: expediter + engineering + penalties + repairs };
   }, [dob, hpd, fines, repair, plans]);
@@ -169,7 +171,7 @@ export function JoinPricing() {
                 <div className="mt-1 h-3 w-full rounded-full bg-slate-800"><div className={`h-3 rounded-full ${color}`} style={{ width: `${Math.max(2, (amount / max) * 100)}%` }} /></div>
               </div>
             ))}
-            <p className="pt-2 text-xs text-slate-500">Projection only — expediter and engineering fees, municipal fines and repair work are each quoted after we look at the actual violations.</p>
+            <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). Fines & penalties are what the City charges if the violations sit — clearing them on time is how most of that goes away. Engineering and repairs are quoted after we look at the actual violations.</p>
           </div>
         </div>
       </div>
