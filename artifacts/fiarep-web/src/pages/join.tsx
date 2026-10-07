@@ -16,7 +16,7 @@ import { ArrowLeft, Building2, CheckCircle2, Phone, Plus, ShieldCheck, Trash2, Z
 
 const SERVICES = [
   { key: "violations", icon: ShieldCheck, title: "Violation removal", body: "DOB, HPD, ECB / OATH. We inspect the condition, get it corrected, file the Certificate of Correction and the proof, and push it through until the violation is cleared and the penalty is waived or reduced." },
-  { key: "complaints", icon: Phone, title: "Complaint calls, 24 / 7", body: "Residents reach a live line any hour. Every call becomes a tracked complaint — received, opened, assigned, on the way, done — and the resident is told at each step." },
+  { key: "complaints", icon: Phone, title: "Complaints monitored 24 / 7", body: "Residents file through the app or website any hour; FIAREP monitors every complaint on the platform — received, opened, assigned, on the way, done — and the resident is told at each step." },
   { key: "expediting", icon: Zap, title: "Expediting — whatever is needed", body: "Permits, filings, inspections, sign-offs, agency appointments. If the job is waiting on paper, we move the paper." },
   { key: "pest", icon: Building2, title: "Vermin / pest compliance", body: "Treatment requests, licensed extermination, multi-visit treatment logs and tenant acknowledgments that stand up to an HPD or NYCHA inspection." },
   { key: "lead", icon: ShieldCheck, title: "Lead paint compliance", body: "Disclosure, XRF and dust-wipe tracking, EPA RRP contractors, daily work logs, clearance exams and violation closure — with children under 6 flagged." },
@@ -78,7 +78,7 @@ export default function JoinFiarep() {
           <div>
             <p className="text-sm font-semibold uppercase tracking-widest text-amber-400">24 / 7 · Management Service · Expediting</p>
             <h1 className="mt-1 text-3xl font-bold sm:text-5xl">Join FIAREP</h1>
-            <p className="mt-3 max-w-xl text-lg text-slate-300">We take the violations off your buildings, answer your residents' complaint calls around the clock, and expedite whatever the job is waiting on. Pilot it on one development or your whole portfolio.</p>
+            <p className="mt-3 max-w-xl text-lg text-slate-300">We take the violations off your buildings, monitor your residents' complaints around the clock through the platform and app, and expedite whatever the job is waiting on. Pilot it on one development or your whole portfolio.</p>
             <div className="mt-4 flex flex-wrap gap-3">
               <Button className="bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Start a pilot</Button>
               <Button variant="outline" className="border-slate-700 text-slate-200 hover:bg-slate-800" asChild><a href="mailto:fiarep@outlook.com?subject=Join%20FIAREP">Email FIAREP</a></Button>

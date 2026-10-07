@@ -18,7 +18,7 @@ const FEES = [
 
 const RETAINER_INCLUDES = [
   "The FIAREP platform — app and website — for all of your staff and residents",
-  "24 / 7 complaint line; every call tracked and the resident told at each step",
+  "24 / 7 complaint monitoring through the platform and app — every complaint tracked and the resident told at each step",
   "HPD / DOB monitoring of every address in the development",
   "1 simple cure per 10 units each month (a 100-unit development: 10 cures a month)",
   "OATH hearings at $400 instead of $600; everything else 20% off the rates below",
