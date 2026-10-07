@@ -46,15 +46,49 @@ const AGENCIES = [
   { name: "OATH / ECB — hearings", lines: ["A missed summons defaults: Class 1 $12,500, up to $25,000 per summons, plus up to $1,000 per day uncorrected.", "We file motions to vacate default judgments and represent you at the hearing.", "$300 – $950 per hearing appearance."] },
 ];
 
-// Contractor work per building, 2026 NYC. Bases from the NYS HCR reasonable-cost
-// schedule (Jan 2026) and current abatement pricing; plus a per-violation average
-// because the bill scales with how many conditions the City cited.
-const REPAIR = [
-  ["Minor", 7500, "paint / plaster, caulking, smoke & CO detectors, window guards, door hardware"],
-  ["Medium", 35000, "plumbing leaks and fixtures, electrical repairs, vermin treatment program, apartment doors"],
-  ["Major", 120000, "lead abatement in several units ($10k – $30k each), mold remediation, roof patching, pointing"],
-  ["Heavy", 400000, "boiler / burner ($70k – $276k), roof replacement ($34+ / sq ft), risers ($20.9k / unit), rewiring ($20.9k / unit)"],
+// Contractor repair prices: what HPD paid its own contractors per Emergency
+// Repair / Open Market Order since Jan 2024 (NYC Open Data mdbu-nrqn, average
+// award per order by the work described). Smoke / CO is retail + labor — HPD
+// almost never orders those. Priced per item; nothing is added building-wide.
+const REPAIR_ITEMS = [
+  ["exterm", "Extermination (roaches / mice)", 1800, "per order", "one visit covers several apartments"],
+  ["guards", "Window guards", 175, "per order", ""],
+  ["smoke", "Smoke / CO detector, installed", 125, "each", "combo unit + labor"],
+  ["door", "Apartment door / self-closer", 1100, "each", ""],
+  ["firedoor", "Fire-rated door + jamb, replaced", 2450, "each", ""],
+  ["plaster", "Plaster / paint repair", 2500, "per order", ""],
+  ["leak", "Plumbing leak", 3100, "each", ""],
+  ["elec", "Electrical", 2900, "each", ""],
+  ["roof", "Roof repair", 2900, "each", ""],
+  ["mold", "Mold remediation", 3400, "each", ""],
+  ["lead", "Lead paint abatement", 6500, "per apartment", ""],
+  ["heat", "Heat / boiler repair", 4200, "each", "full replacement: type your quote"],
 ] as const;
+// By the square foot / piece: NYS HCR reasonable-cost schedule (MCI, Update 5,
+// Jan 2026) for roofing, masonry, flooring, windows, doors, piping, wiring and
+// boilers; carpentry and sheetrock from 2026 HomeAdvisor / HomeGnome NYC figures.
+const REPAIR_SQFT = [
+  ["sheetrock", "Sheetrock / drywall replaced", 5, "per sq ft", "removal + new board, taped"],
+  ["subfloor", "Subfloor replaced", 8, "per sq ft", ""],
+  ["hardwood", "Hardwood flooring", 19, "per sq ft", ""],
+  ["tile", "Ceramic tile floor", 27, "per sq ft", ""],
+  ["joist", "Floor joist replaced", 1500, "each", "sistered: $300"],
+  ["rafter", "Roof rafter replaced", 1500, "each", ""],
+  ["roofmb", "Flat roof — modified bitumen", 43, "per sq ft", ""],
+  ["roofepdm", "Flat roof — EPDM rubber", 36, "per sq ft", ""],
+  ["pointing", "Masonry pointing", 22, "per sq ft", ""],
+  ["stitch", "Brick stitching (cracks)", 53, "per linear ft", ""],
+  ["limestone", "Limestone patching", 226, "per sq ft", ""],
+  ["window", "Window replaced", 1665, "each", "aluminum or wood"],
+  ["aptdoor", "Apartment entry steel door, new", 2420, "each", ""],
+  ["bldgdoor", "Building entry door", 5307, "each", ""],
+  ["gas", "Gas piping", 36505, "per apartment", ""],
+  ["water", "Hot / cold water risers", 20864, "per apartment", ""],
+  ["wiring", "Rewiring", 20854, "per apartment", ""],
+  ["intercom", "Video intercom", 1955, "per apartment", ""],
+  ["boiler", "Boiler, steel, new", 276032, "each", ""],
+] as const;
+type RepairKey = (typeof REPAIR_ITEMS)[number][0] | (typeof REPAIR_SQFT)[number][0];
 // Architect / engineer (PE / RA) work per building, 2026 NYC market; plus a
 // per-DOB-violation letter because each cited condition needs its own sign-off.
 const ENGINEER = [
@@ -65,8 +99,6 @@ const ENGINEER = [
   ["Building-wide program", 150000, "Local Law 11 facade / parapet inspection and report, gas piping (LL152), boiler and elevator consultants"],
 ] as const;
 const ENGINEER_PER_DOB = 750;  // engineer letter per DOB condition
-const REPAIR_PER_HPD = 450;   // average physical fix behind an HPD Class B/C violation
-const REPAIR_PER_DOB = 3500;  // average physical fix behind a DOB Class 1/2 violation
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
 export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean; pending: boolean; onUnlock: (code: string) => Promise<void> }) {
@@ -79,8 +111,9 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const hpd = hpdA + hpdB + hpdC;
   // What the building owes the City, from the Department of Finance lookup (or typed).
   const [dofOwed, setDofOwed] = useState(0);
-  const [repair, setRepair] = useState(2);
+  const [repairCounts, setRepairCounts] = useState<Partial<Record<RepairKey, number>>>({});
   const [customRepair, setCustomRepair] = useState(0);
+  const setCount = (key: RepairKey, n: number) => { setCustomRepair(0); setRepairCounts((c) => ({ ...c, [key]: Math.max(0, Math.round(n) || 0) })); };
   const [eng, setEng] = useState(1);
   const [customEng, setCustomEng] = useState(0);
   const est = useMemo(() => {
@@ -89,12 +122,28 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
     const engineering = customEng > 0 ? customEng : (ENGINEER[eng]![1] > 0 ? ENGINEER[eng]![1] + dob * ENGINEER_PER_DOB : 0);
     // DOF: what the building owes the City right now — from the lookup, never estimated from counts.
     const penalties = dofOwed;
-    const repairs = customRepair > 0 ? customRepair : REPAIR[repair]![1] + hpd * REPAIR_PER_HPD + dob * REPAIR_PER_DOB;
+    const itemized = [...REPAIR_ITEMS, ...REPAIR_SQFT].reduce((n, [key, , price]) => n + (repairCounts[key] || 0) * price, 0);
+    const repairs = customRepair > 0 ? customRepair : itemized;
     // If HPD's Emergency Repair Program does the work instead: 2–3× contractor cost + 15% admin fee, 9% interest.
     const erp = Math.round(repairs * 2.5 * 1.15);
     // FIAREP total: what we quote. DOF penalties are the City's, shown for reference only.
     return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + repairs };
-  }, [dob, hpd, dofOwed, repair, customRepair, eng, customEng]);
+  }, [dob, hpd, dofOwed, repairCounts, customRepair, eng, customEng]);
+  const row = ([key, label, price, unit, note]: readonly [RepairKey, string, number, string, string]) => {
+    const n = repairCounts[key] || 0;
+    return (
+      <label key={key} className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm ${n > 0 && !customRepair ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300"}`}>
+        <span className="min-w-0">
+          <span className="font-semibold">{label}</span>
+          <span className="block text-xs opacity-80">{money(price)} {unit}{note ? ` · ${note}` : ""}</span>
+        </span>
+        <span className="flex shrink-0 items-center gap-2">
+          <input type="number" inputMode="numeric" min={0} step={1} value={n || ""} placeholder="0" onChange={(e) => setCount(key, Number(e.target.value))} className="w-16 rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-right text-sm font-semibold text-slate-100 focus:border-amber-400 focus:outline-none" />
+          <span className={`w-24 text-right font-semibold ${n > 0 ? "text-amber-300" : "text-slate-600"}`}>{money(n * price)}</span>
+        </span>
+      </label>
+    );
+  };
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
   const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["DOF owed", est.penalties, "bg-slate-500"], ["Repairs", est.repairs, "bg-emerald-400"]];
 
@@ -266,16 +315,12 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
         </div>
         <div className="mt-5 grid gap-5 lg:grid-cols-2">
           <div>
-            <p className="text-sm font-semibold text-slate-200">Contractor work scale</p>
-            <p className="text-xs text-slate-500">Building-wide base, plus {money(REPAIR_PER_HPD)} per HPD and {money(REPAIR_PER_DOB)} per DOB violation.</p>
-            <div className="mt-2 grid gap-2">
-              {REPAIR.map(([label, amount, what], i) => (
-                <button key={label} type="button" onClick={() => { setRepair(i); setCustomRepair(0); }} className={`min-h-[64px] rounded-lg border px-3 py-2 text-left text-sm ${repair === i && !customRepair ? "border-amber-400 bg-amber-500/20 text-amber-200" : "border-slate-700 text-slate-300 hover:bg-slate-800"}`}>
-                  <span className="flex items-baseline justify-between gap-2"><span className="font-semibold">{label}</span><span className="font-semibold text-amber-300">{money(amount)}</span></span>
-                  <span className="mt-0.5 block text-xs leading-snug opacity-80">{what}</span>
-                </button>
-              ))}
-            </div>
+            <p className="text-sm font-semibold text-slate-200">What needs fixing</p>
+            <p className="text-xs text-slate-500">Type how many of each. Prices are what HPD paid its contractors per order since 2024 (NYC Open Data) — nothing is added building-wide.</p>
+            <div className="mt-2 grid gap-1.5">{REPAIR_ITEMS.map((item) => row(item))}</div>
+            <p className="mt-4 text-sm font-semibold text-slate-200">By the square foot / piece</p>
+            <p className="text-xs text-slate-500">NYS HCR reasonable-cost schedule, Jan 2026 (roofing, masonry, flooring, windows, doors, piping, wiring, boilers); sheetrock and carpentry from 2026 NYC contractor cost guides.</p>
+            <div className="mt-2 grid gap-1.5">{REPAIR_SQFT.map((item) => row(item))}</div>
           </div>
           <div>
             <p className="text-sm font-semibold text-slate-200">Architect / engineer</p>
