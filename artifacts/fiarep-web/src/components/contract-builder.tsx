@@ -17,8 +17,10 @@ export function ContractBuilder({ scope, engineering, onClearScope }: { scope: S
   const { toast } = useToast();
   const [kind, setKind] = useState<ContractKind>("fiarep");
   const [number, setNumber] = useState(contractNumber);
-  const [client, setClient] = useState({ company: "", contact: "", title: "", address: "", email: "", phone: "" });
-  const [buildings, setBuildings] = useState<Building[]>([{ name: "", address: "", units: 0 }]);
+  // Prefilled when opened from Job requests → Build contract (?company=…&building=…&units=…).
+  const q = useMemo(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search), []);
+  const [client, setClient] = useState({ company: q.get("company") || "", contact: q.get("contact") || "", title: "", address: "", email: q.get("email") || "", phone: q.get("phone") || "" });
+  const [buildings, setBuildings] = useState<Building[]>([{ name: q.get("building") || "", address: q.get("building") || "", units: num(q.get("units") || "") }]);
   const [flatFee, setFlatFee] = useState(0);
   const [feeEdited, setFeeEdited] = useState(false);
   const [pilot, setPilot] = useState(true);

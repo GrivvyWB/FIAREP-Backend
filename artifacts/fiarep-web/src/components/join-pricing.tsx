@@ -186,7 +186,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <Slider label="HPD Class A violations (non-hazardous)" value={hpdA} min={0} max={1000} onChange={setHpdA} />
             <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
             <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
-            <DofLookupPanel onResult={(total) => setDofOwed(total)} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); }} canSubmit={unlocked} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (

@@ -6,6 +6,8 @@ import { geocodeNycAddress, socrataUrl } from "./nycProperty";
 
 const OATH_CASES = "jz4z-kudi";      // OATH Hearings Division Case Status
 const HPD_OMO_CHARGES = "mdbu-nrqn"; // HPD Open Market Order (ERP) charges
+const HPD_VIOLATIONS = "wvxf-dwi5";    // HPD housing maintenance code violations
+const DOB_VIOLATIONS = "3h2n-5cm9";    // DOB violations
 const PROPERTY_VALUATION = "8y4t-faws"; // DOF Property Valuation and Assessment Data (current)
 // DOF property tax rates by class (FY2026) — used only to estimate the annual bill.
 const TAX_RATES: Record<string, number> = { "1": 0.20085, "2": 0.125, "3": 0.11181, "4": 0.10762 };
@@ -13,6 +15,12 @@ const TAX_RATES: Record<string, number> = { "1": 0.20085, "2": 0.125, "3": 0.111
 const BOROUGH_NAMES: Record<string, string> = { "1": "MANHATTAN", "2": "BRONX", "3": "BROOKLYN", "4": "QUEENS", "5": "STATEN ISLAND" };
 const text = (v: unknown): string => (v == null ? "" : String(v).trim());
 const num = (v: unknown): number => { const n = Number(String(v ?? "").replace(/[^0-9.-]/g, "")); return Number.isFinite(n) ? n : 0; };
+
+function soql(dataset: string, params: Record<string, string>): string {
+  const u = new URL(`https://data.cityofnewyork.us/resource/${dataset}.json`);
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  return u.toString();
+}
 
 async function fetchJson(url: string): Promise<unknown[]> {
   const response = await fetch(url, { headers: { accept: "application/json", "user-agent": "FIAREP/1.0 DOF lookup" }, signal: AbortSignal.timeout(15_000) });
@@ -32,9 +40,12 @@ export type PropertyTax = {
   estimatedAnnualTax: number | null; owner: string; units: number; yearBuilt: string; dofLink: string;
 };
 
+export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number };
+
 export type DofLookup = {
   property: { query: string; formattedAddress: string; borough: string; block: string | null; lot: string | null; bbl: string | null; bin: string | null };
   propertyTax: PropertyTax | null;
+  violations: ViolationCounts | null;
   oath: { openBalance: number; openCount: number; penaltiesImposed: number; paid: number; items: DofSummons[]; byAgency: Array<{ agency: string; balance: number; count: number }> };
   hpdCharges: { total: number; count: number; items: HpdCharge[] };
   warnings: string[];
@@ -105,6 +116,28 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
     } catch (error) { warnings.push(`DOF property tax: ${error instanceof Error ? error.message : "unavailable"}`); }
   }
 
+  // Open violation counts — HPD by class on the BBL, DOB active on the BIN.
+  let violations: ViolationCounts | null = null;
+  if (bbl || bin) {
+    const counts: ViolationCounts = { hpdA: 0, hpdB: 0, hpdC: 0, hpdOpen: 0, dobActive: 0 };
+    try {
+      if (bbl) {
+        const url = soql(HPD_VIOLATIONS, { $select: "class,count(*) as n", $where: `bbl='${bbl}' AND violationstatus='Open'`, $group: "class" });
+        for (const r of (await fetchJson(url)) as Record<string, unknown>[]) {
+          const n = num(r["n"]); const cls = text(r["class"]).toUpperCase();
+          counts.hpdOpen += n;
+          if (cls === "A") counts.hpdA += n; else if (cls === "B") counts.hpdB += n; else if (cls === "C") counts.hpdC += n;
+        }
+      }
+      if (bin) {
+        const url = soql(DOB_VIOLATIONS, { $select: "count(*) as n", $where: `bin='${bin}' AND violation_category like '%ACTIVE%'` });
+        const [r] = (await fetchJson(url)) as Record<string, unknown>[];
+        counts.dobActive = num(r?.["n"]);
+      }
+      violations = counts;
+    } catch (error) { warnings.push(`Open violations: ${error instanceof Error ? error.message : "unavailable"}`); }
+  }
+
   return {
     property: {
       query: address.trim(), formattedAddress: text(props["label"]) || address.trim(), borough: boroughName, block, lot, bbl, bin,
@@ -115,6 +148,7 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
       items: open.slice(0, 200), byAgency,
     },
     propertyTax,
+    violations,
     hpdCharges: { total: hpdItems.reduce((n, c) => n + c.amount, 0), count: hpdItems.length, items: hpdItems.slice(0, 100) },
     warnings,
     retrievedAt: new Date().toISOString(),

@@ -18,6 +18,7 @@ import nychaRouter from "./nycha";
 import coverageRouter from "./coverage";
 import companyFormsRouter from "./companyForms";
 import joinRouter from "./join";
+import workRequestsRouter from "./workRequests";
 
 const router: IRouter = Router();
 
@@ -26,6 +27,7 @@ router.use(authRouter);
 router.use(organizationsRouter);
 router.use(publicAccessRouter);
 router.use(joinRouter);
+router.use(workRequestsRouter);
 // Before the staff routers: its public DOF lookup must not hit their requireAuth.
 router.use(propertyRouter);
 router.use(companyFormsRouter);

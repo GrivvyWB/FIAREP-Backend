@@ -58,6 +58,7 @@ import OwnerDashboard from '@/pages/platform-owner/index';
 import OwnerModules from '@/pages/platform-owner/modules';
 import OwnerJoinRequests from '@/pages/platform-owner/join-requests';
 import OwnerRepairPrices from '@/pages/platform-owner/repair-prices';
+import OwnerWorkRequests from '@/pages/platform-owner/work-requests';
 import { getStoredPersona, setStoredPersona, evaluateAccess, Persona, hasModuleAccess, isProcurementDesk, type StaffModule } from '@/lib/access-policy';
 import { useState } from 'react';
 import HRWorkspace from '@/pages/hr';
@@ -367,6 +368,7 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/modules" component={OwnerModules} />
           <Route path="/platform-owner/join-requests" component={OwnerJoinRequests} />
           <Route path="/platform-owner/repair-prices" component={OwnerRepairPrices} />
+          <Route path="/platform-owner/work-requests" component={OwnerWorkRequests} />
           <Route path="/platform-owner" component={OwnerDashboard} />
           <Route component={NotFound} />
         </Switch>
