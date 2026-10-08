@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { BRAND } from "@/lib/contract";
 
 export type DofLookup = {
   property: { formattedAddress: string; borough: string; block: string | null; lot: string | null; bbl: string | null; bin: string | null };
@@ -76,8 +77,8 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
     } catch (err: any) { setError(err?.data?.error || err?.message || "Could not submit — try again."); }
     finally { setSending(false); }
   }
-  // Submit only with the email on file — the one FIAREP approved; nothing typed on the site is used.
-  const canSend = canSubmit && data && !!lockedEmail && contact.company.trim() && contact.contact.trim();
+  // Goes to FIAREP's inbox; the client's reply email is the one on their approved join request (set in Platform Control).
+  const canSend = canSubmit && data && contact.company.trim() && contact.contact.trim() && (lockedEmail || contact.phone.trim());
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
       <p className="font-semibold text-slate-200">Department of Finance — what the building owes now</p>
@@ -148,7 +149,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} placeholder="Company" className={text} />
                   <input value={contact.contact} onChange={(e) => setContact({ ...contact, contact: e.target.value })} placeholder="Your name" className={text} />
-                  <span className={`${text} flex items-center justify-between gap-2 border-slate-800 ${lockedEmail ? "text-slate-400" : "text-rose-300"}`} title="Email on file with FIAREP — only FIAREP can change it"><span className="truncate">{lockedEmail || "No email on file — ask FIAREP to add it"}</span><span className="text-[10px] uppercase tracking-wide text-slate-500">on file</span></span>
+                  <span className={`${text} flex items-center justify-between gap-2 border-slate-800 text-slate-300`} title="Every job request goes to FIAREP at this address"><span className="truncate">{BRAND.email}</span><span className="text-[10px] uppercase tracking-wide text-slate-500">sent to FIAREP</span></span>
                   <input value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} placeholder="Phone" className={text} />
                 </div>
                 <textarea value={contact.notes} onChange={(e) => setContact({ ...contact, notes: e.target.value })} placeholder="Anything we should know (optional)" rows={2} className={`${text} w-full`} />
@@ -158,7 +159,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
                 </div>
               </form>
             )}
-            {submitted && <p className="mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">Submitted. FIAREP has {data.property.formattedAddress} with {counts.hpdA + counts.hpdB + counts.hpdC} HPD and {counts.dob} DOB violations — we'll confirm by {contact.email ? "email" : "phone"} and send the repair quote after we look. Reference {submitted.id.slice(0, 8)}.</p>}
+            {submitted && <p className="mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">Submitted. FIAREP has {data.property.formattedAddress} with {counts.hpdA + counts.hpdB + counts.hpdC} HPD and {counts.dob} DOB violations — we'll confirm by {lockedEmail ? "email" : "phone"} and send the repair quote after we look. Reference {submitted.id.slice(0, 8)}.</p>}
           </div>
           {data.oath.items.length > 0 && (
             <div>

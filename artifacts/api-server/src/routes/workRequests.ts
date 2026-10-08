@@ -39,12 +39,12 @@ router.post("/v1/public/work-requests", async (req, res) => {
   const contact = str(b["contact"], 200);
   const phone = str(b["phone"], 60);
   const address = str(b["address"], 300);
-  if (!company || !contact || !address) { res.status(400).json({ error: "Company, contact and building address are required." }); return; }
-  // The email is the one FIAREP has on file for the approved company — nothing typed on the site is used.
+  // Always delivered to the FIAREP inbox. The client's reply email is never typed on
+  // the site: it is the one on their approved join request (set in Platform Control).
   const joinId = str(b["joinId"], 80);
   const [join] = joinId ? await db.select().from(entityRecords).where(and(eq(entityRecords.id, joinId), eq(entityRecords.entity, "join-requests"), eq(entityRecords.deleted, false))).limit(1) : [];
-  const email = String(join?.state["email"] || "").toLowerCase();
-  if (!join || String(join.state["status"] || "") !== "approved" || !email) { res.status(403).json({ error: "Job requests go out under the email FIAREP has on file for your approved company. Ask FIAREP to add it in Platform Control." }); return; }
+  const email = join && String(join.state["status"] || "") === "approved" ? String(join.state["email"] || "").toLowerCase() : "";
+  if (!company || !contact || !address || (!email && !phone)) { res.status(400).json({ error: "Company, your name, the building address, and a phone number are required." }); return; }
   const now = new Date();
   const id = randomUUID();
   const state = {
