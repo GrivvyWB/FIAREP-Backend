@@ -41,6 +41,8 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const [hpdB, setHpdB] = useState(60);
   const [hpdC, setHpdC] = useState(20);
   const hpd = hpdA + hpdB + hpdC;
+  // Apartments / locations the HPD violations are in — the cure is priced per apartment, not per violation.
+  const [hpdApts, setHpdApts] = useState(25);
   // What the building owes the City, from the Department of Finance lookup (or typed).
   const [dofOwed, setDofOwed] = useState(0);
   // What the open violations are, by type — from the DOF / violation lookup.
@@ -49,8 +51,8 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const [customRepair, setCustomRepair] = useState(0);
   const [customEng, setCustomEng] = useState(0);
   const est = useMemo(() => {
-    // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD simple cure $400.
-    const expediter = Math.min(dob, 2) * 1500 + Math.max(dob - 2, 0) * 1000 + hpd * 400;
+    // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD cure $400 per apartment cited.
+    const expediter = Math.min(dob, 2) * 1500 + Math.max(dob - 2, 0) * 1000 + hpdApts * 400;
     const engineering = customEng;
     // DOF: what the building owes the City right now — from the lookup, never estimated from counts.
     const penalties = dofOwed;
@@ -59,7 +61,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
     const erp = Math.round(repairs * 2.5 * 1.15);
     // FIAREP total: what we quote. DOF penalties are the City's, shown for reference only.
     return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + repairs };
-  }, [dob, hpd, dofOwed, customRepair, customEng]);
+  }, [dob, hpdApts, dofOwed, customRepair, customEng]);
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
   const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["DOF owed", est.penalties, "bg-slate-500"], ["Repairs", est.repairs, "bg-emerald-400"]];
 
@@ -199,7 +201,8 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <Slider label="HPD Class A violations (non-hazardous)" value={hpdA} min={0} max={1000} onChange={setHpdA} />
             <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
             <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
-            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.hpdTypes || c.dobTypes) { setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); setCustomRepair((c.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * (REPAIR_PER_JOB[t.type] || 0), 0)); } }} canSubmit={unlocked} />
+            <Slider label="Apartments / locations with HPD violations" value={hpdApts} min={0} max={500} onChange={setHpdApts} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); if (c.hpdTypes || c.dobTypes) { setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); setCustomRepair((c.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * (REPAIR_PER_JOB[t.type] || 0), 0)); } }} canSubmit={unlocked} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
@@ -250,7 +253,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
                 <p className="mt-1 text-[11px] text-slate-500">From the City's open HPD / DOB violation notices for this block & lot. Expediter clears and certifies every one. Repair est. is one job per apartment cited (Apts), at FIAREP's price book rates, and fills the Repairs box above — change it if you have your own quote; types marked "after we look" are priced on site.</p>
               </div>
             ) : null}
-            <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts carry no price of their own. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
+            <p className="pt-2 text-xs text-slate-500">Expediter: $400 per apartment with HPD violations — all of them certified together — plus the DOB rate per violation (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts show what's open; the apartment count is what's billed. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
           </div>
         </div>
         </div>

@@ -7,7 +7,7 @@ import { Check, FileText, X } from "lucide-react";
 
 type WorkRequest = {
   id: string; createdAt: string; status: string; company: string; contact: string; email: string; phone: string;
-  address: string; borough: string; block: string; lot: string; bbl: string; bin: string; units: number;
+  address: string; borough: string; block: string; lot: string; bbl: string; bin: string; units: number; apartments?: number;
   hpdA: number; hpdB: number; hpdC: number; dob: number; dofOwed: number; notes: string;
   hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes?: Array<{ type: string; count: number }>; decidedAt?: string; decidedBy?: string; message?: string;
 };
@@ -78,8 +78,8 @@ export default function OwnerWorkRequests() {
               {r.status !== "declined" && <Button size="sm" variant="outline" disabled={busy === r.id} onClick={() => void decide(r, "decline")}><X className="mr-1 h-4 w-4" />Decline</Button>}
             </div>
           </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-5">
-            {([["HPD Class A", r.hpdA], ["HPD Class B", r.hpdB], ["HPD Class C", r.hpdC], ["DOB", r.dob]] as const).map(([label, n]) => (
+          <div className="mt-3 grid gap-2 sm:grid-cols-6">
+            {([["HPD Class A", r.hpdA], ["HPD Class B", r.hpdB], ["HPD Class C", r.hpdC], ["Apts cited", r.apartments || 0], ["DOB", r.dob]] as const).map(([label, n]) => (
               <div key={label} className="rounded-lg border border-slate-200 px-3 py-2"><p className="text-xs uppercase tracking-wide text-slate-400">{label}</p><p className="text-xl font-bold text-slate-900">{n || 0}</p></div>
             ))}
             <div className="rounded-lg border border-slate-200 px-3 py-2"><p className="text-xs uppercase tracking-wide text-slate-400">Owed to the City</p><p className="text-xl font-bold text-slate-900">{money(r.dofOwed || 0)}</p></div>

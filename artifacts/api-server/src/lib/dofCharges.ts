@@ -42,7 +42,7 @@ export type PropertyTax = {
 
 // jobs = distinct apartments / locations cited for this type: one repair order each.
 export type ViolationType = { type: string; count: number; a: number; b: number; c: number; jobs: number };
-export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number; hpdTypes: ViolationType[]; dobTypes: Array<{ type: string; count: number }> };
+export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; hpdApartments: number; dobActive: number; hpdTypes: ViolationType[]; dobTypes: Array<{ type: string; count: number }> };
 
 // What an HPD violation is about, from its notice text — first match wins.
 const HPD_TYPES: Array<[string, RegExp]> = [
@@ -160,12 +160,13 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
   // Open violation counts — HPD by class on the BBL, DOB active on the BIN.
   let violations: ViolationCounts | null = null;
   if (bbl || bin) {
-    const counts: ViolationCounts = { hpdA: 0, hpdB: 0, hpdC: 0, hpdOpen: 0, dobActive: 0, hpdTypes: [], dobTypes: [] };
+    const counts: ViolationCounts = { hpdA: 0, hpdB: 0, hpdC: 0, hpdOpen: 0, hpdApartments: 0, dobActive: 0, hpdTypes: [], dobTypes: [] };
     try {
       if (bbl) {
         // Every open violation with its notice text, so the client sees what they are.
         const url = soql(HPD_VIOLATIONS, { $select: "class,novdescription", $where: `bbl='${bbl}' AND violationstatus='Open'`, $limit: "5000" });
         const byType = new Map<string, ViolationType & { places: Set<string> }>();
+        const allPlaces = new Set<string>();
         for (const r of (await fetchJson(url)) as Record<string, unknown>[]) {
           const cls = text(r["class"]).toUpperCase();
           counts.hpdOpen += 1;
@@ -174,9 +175,11 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
           const type = hpdViolationType(desc);
           const t = byType.get(type) || { type, count: 0, a: 0, b: 0, c: 0, jobs: 0, places: new Set<string>() };
           t.count += 1; if (cls === "A") t.a += 1; else if (cls === "B") t.b += 1; else if (cls === "C") t.c += 1;
-          t.places.add(hpdViolationPlace(desc));
+          const place = hpdViolationPlace(desc);
+          t.places.add(place); allPlaces.add(place);
           byType.set(type, t);
         }
+        counts.hpdApartments = allPlaces.size;
         counts.hpdTypes = [...byType.values()].map(({ places, ...t }) => ({ ...t, jobs: places.size })).sort((x, y) => y.count - x.count);
       }
       if (bin) {

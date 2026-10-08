@@ -9,7 +9,7 @@ export const PLAN = {
 } as const;
 
 export const FEES = [
-  ["Simple cure — Class A, smoke / CO detector, minor electrical, HPD certification of correction", "$400 per violation", "Certificate of correction, proof of fix, administrative non-compliance."],
+  ["HPD cure — every open violation in one apartment certified together (Class A / B / C, smoke / CO detectors, minor electrical)", "$400 per apartment", "Certificate of correction for the whole apartment, proof of fix, dismissal request. Public areas count as one apartment."],
   ["Standard DOB / HPD violation removal", "$1,500 flat · $1,000 each from the 3rd on the same building", "Records research, post-approval permits, inspections with city officials, certifying compliance."],
   ["Complex DOB cure — PE / RA sign-off, DOB NOW filings", "$2,500 + engineer at cost", "Unpermitted structural or mechanical work, multi-trade coordination, engineer letters (typically $500 – $2,000+)."],
   ["Stop Work / Vacate Order removal", "$3,000", "Emergency filings, examiner negotiations, rescinding the order. More if plans must be filed."],
