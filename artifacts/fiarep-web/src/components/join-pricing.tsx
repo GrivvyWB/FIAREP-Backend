@@ -51,7 +51,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const [customRepair, setCustomRepair] = useState(0);
   const [customEng, setCustomEng] = useState(0);
   const est = useMemo(() => {
-    // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD cure $400 per apartment cited.
+    // FIAREP per-job rates (no plan): DOB $1,500 for the first two, $1,000 each after; HPD cure $600 per apartment cited.
     const expediter = expediterFee(hpdApts, dob).total;
     const engineering = customEng;
     // DOF: what the building owes the City right now — from the lookup, never estimated from counts.
@@ -253,7 +253,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
                 <p className="mt-1 text-[11px] text-slate-500">From the City's open HPD / DOB violation notices for this block & lot. Expediter clears and certifies every one. Repair est. is one job per apartment cited (Apts), at FIAREP's price book rates, and fills the Repairs box above — change it if you have your own quote; types marked "after we look" are priced on site.</p>
               </div>
             ) : null}
-            <p className="pt-2 text-xs text-slate-500">Expediter: $400 per apartment with HPD violations — all of them certified together — plus the DOB rate per violation (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts show what's open; the apartment count is what's billed. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
+            <p className="pt-2 text-xs text-slate-500">Expediter: $600 per apartment with HPD violations — all of them certified together — plus the DOB rate per violation (on the FIAREP plan: $400 per apartment and 20% off DOB, {money(expediterFee(hpdApts, dob).plan)}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts show what's open; the apartment count is what's billed. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
           </div>
         </div>
         </div>

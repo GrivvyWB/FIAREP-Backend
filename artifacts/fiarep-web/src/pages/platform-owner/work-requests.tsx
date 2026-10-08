@@ -74,7 +74,7 @@ export default function OwnerWorkRequests() {
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h2 className="font-semibold text-slate-950">Expediter fee — violations only</h2>
-            <p className="text-xs text-slate-500">${EXPEDITER.perApartment} per apartment / location with HPD violations (all certified together) · DOB ${EXPEDITER.dobFirstTwo.toLocaleString()} each for the first two, ${EXPEDITER.dobAfter.toLocaleString()} each after. Plan members {EXPEDITER.planDiscount * 100}% off. No repairs in this number.</p>
+            <p className="text-xs text-slate-500">${EXPEDITER.perApartment} per apartment / location with HPD violations (all certified together), ${EXPEDITER.perApartmentPlan} on the FIAREP plan · DOB ${EXPEDITER.dobFirstTwo.toLocaleString()} each for the first two, ${EXPEDITER.dobAfter.toLocaleString()} each after, plan members {EXPEDITER.planDiscount * 100}% off. No repairs in this number.</p>
           </div>
           <div className="flex flex-wrap items-end gap-3 text-sm">
             <label className="text-slate-700">Apartments cited<input type="number" inputMode="numeric" min={0} value={quick.apartments || ""} placeholder="0" onChange={(e) => setQuick({ ...quick, apartments: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="mt-1 block w-24 rounded-md border border-slate-300 px-2 py-1 text-right font-semibold text-slate-900 focus:border-amber-500 focus:outline-none" /></label>

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Mail, Printer } from "lucide-react";
-import { BRAND, KIND_LABEL, agencyDefaultFee, buildContractHtml, contractNumber, grandTotal, monthlyFee, scopeTotal, type Building, type ContractInput, type ContractKind, type ScopeLine } from "@/lib/contract";
+import { BRAND, KIND_LABEL, agencyDefaultFee, buildContractHtml, contractNumber, expediterFor, grandTotal, monthlyFee, scopeTotal, type Building, type ContractInput, type ContractKind, type ScopeLine } from "@/lib/contract";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -82,7 +82,7 @@ export function ContractBuilder({ scope, engineering, expediter, onClearScope }:
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-right text-sm">
           <p className="text-xs uppercase tracking-wide text-slate-400">{kind === "work" ? "Work total" : "Monthly"}</p>
           <p className="text-xl font-bold text-slate-950">{money(kind === "work" ? grandTotal(input) : fee.monthly)}</p>
-          <p className="text-xs text-slate-500">{fee.setup ? `+ ${money(fee.setup)} setup · ` : ""}{expediter ? `expediting ${money(expediter.total)} · ` : ""}repairs {money(scopeTotal(input))}{expediter ? ` · to approve ${money(grandTotal(input))}` : ""}</p>
+          <p className="text-xs text-slate-500">{fee.setup ? `+ ${money(fee.setup)} setup · ` : ""}{expediter ? `expediting ${money(expediterFor(input)?.total || 0)} · ` : ""}repairs {money(scopeTotal(input))}{expediter ? ` · to approve ${money(grandTotal(input))}` : ""}</p>
         </div>
       </div>
 
@@ -135,7 +135,7 @@ export function ContractBuilder({ scope, engineering, expediter, onClearScope }:
 
       <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
         {expediter && (
-          <p className="mb-2 flex justify-between gap-3 border-b border-slate-200 pb-2 text-slate-700"><span><b>Section 4 — violation work</b> · {expediter.address}: {expediter.hpdOpen} HPD open in {expediter.apartments} apartment{expediter.apartments === 1 ? "" : "s"} × $400{expediter.dob ? ` + ${expediter.dob} DOB` : ""}</span><span className="font-semibold">{money(expediter.total)}</span></p>
+          <p className="mb-2 flex justify-between gap-3 border-b border-slate-200 pb-2 text-slate-700"><span><b>Section 4 — violation work</b> · {expediter.address}: {expediter.hpdOpen} HPD open in {expediter.apartments} apartment{expediter.apartments === 1 ? "" : "s"} × {money(expediterFor(input)?.rate || 0)}{expediter.dob ? ` + ${expediter.dob} DOB` : ""}</span><span className="font-semibold">{money(expediterFor(input)?.total || 0)}</span></p>
         )}
         <p className="font-semibold text-slate-900">Section {expediter ? "4a" : "4"} — repairs going into this contract</p>
         {scope.length === 0 && !engineering ? <p className="text-slate-500">Nothing yet — fill in counts in the price book above.</p> : (

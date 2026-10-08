@@ -82,7 +82,7 @@ export default function OwnerRepairPrices() {
             <div className="text-right">
               <p className="text-xs uppercase tracking-wide text-slate-400">Expediting</p>
               <p className="text-2xl font-bold text-amber-300">{money(expediter.total)}</p>
-              <p className="text-xs text-slate-400">{expediter.apartments} × $400 = {money(expediter.hpd)}{expediter.dob ? ` · DOB ${money(expediter.dobFee)}` : ""}</p>
+              <p className="text-xs text-slate-400">{expediter.apartments} × $600 = {money(expediter.hpd)}{expediter.dob ? ` · DOB ${money(expediter.dobFee)}` : ""} · on the FIAREP plan {money(expediterFee(request.apartments || 0, request.dob || 0).plan)}</p>
             </div>
           </div>
           <p className="mt-2 text-xs text-slate-400">The violation types filled in the repair counts below, one job per apartment cited — check them, add what the City's notices don't show, then build the contract. The client approves expediting + repairs in one document.</p>

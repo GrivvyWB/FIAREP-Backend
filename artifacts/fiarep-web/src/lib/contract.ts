@@ -1,7 +1,7 @@
 // FIAREP service agreement — built in Platform Control from the repair price
 // book and the client's details, then printed to PDF or emailed. All clause
 // text lives here so it can be edited in one place.
-import { FEES, PLAN, PLATFORM_INCLUDES, RETAINER_INCLUDES } from "./fiarep-plans";
+import { EXPEDITER, FEES, PLAN, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "./fiarep-plans";
 
 export type ContractKind = "work" | "fiarep" | "platform" | "agency-major" | "agency-small";
 export type Building = { name: string; address: string; units: number };
@@ -53,7 +53,14 @@ export function agencyDefaultFee(kind: ContractKind, units: number): number {
   return 0;
 }
 export const scopeTotal = (c: ContractInput) => c.scope.reduce((n, l) => n + l.qty * l.price, 0) + (c.engineering?.amount || 0);
-export const grandTotal = (c: ContractInput) => scopeTotal(c) + (c.expediter?.total || 0);
+/** Expediting priced for this contract: plan contracts get the plan rates, work / platform contracts the full rates. */
+export function expediterFor(c: ContractInput) {
+  if (!c.expediter) return null;
+  const f = expediterFee(c.expediter.apartments, c.expediter.dob);
+  const plan = c.kind === "fiarep" || c.kind === "agency-major" || c.kind === "agency-small";
+  return { ...c.expediter, hpd: plan ? f.planHpd : f.hpd, dobFee: plan ? f.planDob : f.dob, total: plan ? f.plan : f.total, rate: plan ? EXPEDITER.perApartmentPlan : EXPEDITER.perApartment, plan };
+}
+export const grandTotal = (c: ContractInput) => scopeTotal(c) + (expediterFor(c)?.total || 0);
 
 export function contractNumber(date = new Date()): string {
   const d = date.toISOString().slice(0, 10).replaceAll("-", "");
@@ -63,6 +70,7 @@ export function contractNumber(date = new Date()): string {
 /** Self-contained HTML: prints to Letter from the browser and reads the same in email. */
 export function buildContractHtml(c: ContractInput): string {
   const fee = monthlyFee(c);
+  const ex = expediterFor(c);
   const WORK_INCLUDES = ["Clearing and certifying the open HPD and DOB violations listed in Section 4 — records research, proof of correction, certification filings, dismissal requests, inspections with City officials", "The repairs and professional work listed in Section 4a, performed by licensed, insured contractors and design professionals engaged by FIAREP", "Progress reported to Client as each violation is certified and each repair is completed"];
   const includes = c.kind === "work" ? WORK_INCLUDES : c.kind === "platform" ? PLATFORM_INCLUDES : RETAINER_INCLUDES.filter((l) => !l.startsWith("Pilot"));
   const repairs = c.scope.reduce((n, l) => n + l.qty * l.price, 0);
@@ -72,10 +80,10 @@ export function buildContractHtml(c: ContractInput): string {
   const planClause = c.kind === "work"
     ? `There is no monthly fee and no platform subscription under this Agreement. Client pays FIAREP for the work in Section 4 at the prices stated there — expediting at the Section 5 rates with no plan discount, repairs and professional work at the unit prices listed — totalling <b>${money(grandTotal(c))}</b>. Half is due on signing; the balance is invoiced as the work is completed and certified.`
     : c.kind === "fiarep"
-    ? `Client pays FIAREP a monthly service fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}). The fee covers the services in Section 2. Work beyond the included cures is billed at the Section 5 rates: OATH hearings at $400 instead of $600, and 20% off every other rate.${c.pilot ? ` <b>Pilot:</b> the first ${PLAN.fiarep.pilotDays} days are billed at half the monthly fee (${money(Math.round(fee.monthly / 2))}) and either party may end this Agreement during the pilot on written notice.` : ""}`
+    ? `Client pays FIAREP a monthly service fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}). The fee covers the services in Section 2. Work beyond the included cures is billed at the Section 5 rates: HPD cures and OATH hearings at $400 instead of $600, and 20% off every other rate.${c.pilot ? ` <b>Pilot:</b> the first ${PLAN.fiarep.pilotDays} days are billed at half the monthly fee (${money(Math.round(fee.monthly / 2))}) and either party may end this Agreement during the pilot on written notice.` : ""}`
     : c.kind === "platform"
       ? `Client pays FIAREP a monthly platform fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}) plus a one-time setup and staff-training fee of <b>${money(fee.setup)}</b>. Violation removal, expediting and hearings are available at the Section 5 rates with no plan discount.`
-      : `Client pays FIAREP a flat monthly fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}), covering the services in Section 2 for every development listed in Section 1. Work beyond the included cures is billed at the Section 5 rates with the plan discount: OATH hearings at $400 instead of $600, and 20% off every other rate.`;
+      : `Client pays FIAREP a flat monthly fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}), covering the services in Section 2 for every development listed in Section 1. Work beyond the included cures is billed at the Section 5 rates with the plan discount: HPD cures and OATH hearings at $400 instead of $600, and 20% off every other rate.`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(BRAND.name)} Service Agreement ${esc(c.number)}</title>
 <style>
   @page { size: Letter; margin: 0.75in; }
@@ -115,19 +123,19 @@ ${c.kind === "work" ? `<p class="muted">No platform, app or monthly service is i
 <p>${planClause}</p>
 <p>City penalties, DOB re-inspection fees, HPD dismissal-request fees, DOB filing fees and any permit or agency charge pass through to Client at cost. ${c.kind === "work" ? "Invoices are due within 15 days." : "Fees are invoiced monthly in advance and due within 15 days of the invoice."}</p>
 
-${c.expediter ? `<h2>4. Violation work — ${esc(c.expediter.address)}</h2>
+${ex ? `<h2>4. Violation work — ${esc(ex.address)}</h2>
 <table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>
-<tr><td>HPD violations certified and cleared — ${c.expediter.hpdOpen.toLocaleString()} open violation${c.expediter.hpdOpen === 1 ? "" : "s"}, every violation in an apartment certified together</td><td class="r">${c.expediter.apartments}</td><td>per apartment</td><td class="r">$400</td><td class="r">${money(c.expediter.hpd)}</td></tr>
-${c.expediter.dob > 0 ? `<tr><td>DOB violations cleared — $1,500 each for the first two, $1,000 each after</td><td class="r">${c.expediter.dob}</td><td>per violation</td><td class="r">—</td><td class="r">${money(c.expediter.dobFee)}</td></tr>` : ""}
-<tr class="total"><td colspan="4">Expediting</td><td class="r">${money(c.expediter.total)}</td></tr></tbody></table>
+<tr><td>HPD violations certified and cleared — ${ex.hpdOpen.toLocaleString()} open violation${ex.hpdOpen === 1 ? "" : "s"}, every violation in an apartment certified together${ex.plan ? " (FIAREP plan rate)" : ""}</td><td class="r">${ex.apartments}</td><td>per apartment</td><td class="r">${money(ex.rate)}</td><td class="r">${money(ex.hpd)}</td></tr>
+${ex.dob > 0 ? `<tr><td>DOB violations cleared — $1,500 each for the first two, $1,000 each after${ex.plan ? ", 20% off on the FIAREP plan" : ""}</td><td class="r">${ex.dob}</td><td>per violation</td><td class="r">—</td><td class="r">${money(ex.dobFee)}</td></tr>` : ""}
+<tr class="total"><td colspan="4">Expediting</td><td class="r">${money(ex.total)}</td></tr></tbody></table>
 <p class="muted">Records research, proof of correction, certification filings and dismissal requests with HPD and DOB for the violations above. City fees pass through at cost (Section 3).</p>
 <h2>4a. Repairs and professional work</h2>` : `<h2>4. Scope of repairs and professional work</h2>`}
-${c.scope.length || c.engineering ? `<table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>${rows}${c.engineering ? `<tr><td>Architect / engineer — ${esc(c.engineering.label)}</td><td class="r">1</td><td>each</td><td class="r">${money(c.engineering.amount)}</td><td class="r">${money(c.engineering.amount)}</td></tr>` : ""}<tr class="total"><td colspan="4">Repairs ${money(repairs)}${c.engineering ? ` + engineering ${money(c.engineering.amount)}` : ""}</td><td class="r">${money(scopeTotal(c))}</td></tr>${c.expediter ? `<tr class="total"><td colspan="4">Expediting + repairs + engineering — Client approves this total to proceed</td><td class="r">${money(grandTotal(c))}</td></tr>` : ""}</tbody></table>
+${c.scope.length || c.engineering ? `<table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>${rows}${c.engineering ? `<tr><td>Architect / engineer — ${esc(c.engineering.label)}</td><td class="r">1</td><td>each</td><td class="r">${money(c.engineering.amount)}</td><td class="r">${money(c.engineering.amount)}</td></tr>` : ""}<tr class="total"><td colspan="4">Repairs ${money(repairs)}${c.engineering ? ` + engineering ${money(c.engineering.amount)}` : ""}</td><td class="r">${money(scopeTotal(c))}</td></tr>${ex ? `<tr class="total"><td colspan="4">Expediting + repairs + engineering — Client approves this total to proceed</td><td class="r">${money(grandTotal(c))}</td></tr>` : ""}</tbody></table>
 <p class="muted">Unit prices are FIAREP's contract prices for this work, drawn from HPD's contractor awards and the City's published cost schedules. Work is performed by licensed, insured contractors and design professionals engaged by FIAREP. Quantities found to differ on site are adjusted at the same unit price with Client's written approval before the work proceeds.</p>` : `<p class="muted">No repair scope at signing. Repairs and professional work are quoted per item from FIAREP's price book and added by written change order.</p>`}
 
 <h2>5. Per-job rates</h2>
 <table><thead><tr><th>Service</th><th class="r">Rate</th></tr></thead><tbody>${feeRows}</tbody></table>
-<p class="muted">${c.kind === "platform" || c.kind === "work" ? "The rates above apply with no discount." : "Plan clients: OATH hearings $400; all other rates 20% off."}</p>
+<p class="muted">${c.kind === "platform" || c.kind === "work" ? "The rates above apply with no discount." : "Plan clients: HPD cures $400 per apartment, OATH hearings $400; all other rates 20% off."}</p>
 
 <h2>6. Term</h2>
 ${c.kind === "work" ? `<p>This Agreement starts on ${esc(longDate(c.startDate))} and ends when the work in Section 4 is completed and certified, or ${c.termMonths} months after the start date, whichever comes first. Either party may end it on 30 days' written notice; Client pays for work completed to that date.</p>` : `<p>This Agreement starts on ${esc(longDate(c.startDate))} and runs for ${c.termMonths} months, then continues month to month. Either party may end it after the initial term on 30 days' written notice. Client may add or remove developments on written notice; the monthly fee adjusts from the next invoice.</p>`}

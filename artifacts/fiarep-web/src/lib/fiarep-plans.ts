@@ -9,7 +9,7 @@ export const PLAN = {
 } as const;
 
 export const FEES = [
-  ["HPD cure — every open violation in one apartment certified together (Class A / B / C, smoke / CO detectors, minor electrical)", "$400 per apartment", "Certificate of correction for the whole apartment, proof of fix, dismissal request. Public areas count as one apartment."],
+  ["HPD cure — every open violation in one apartment certified together (Class A / B / C, smoke / CO detectors, minor electrical)", "$600 per apartment · $400 on the FIAREP plan", "Certificate of correction for the whole apartment, proof of fix, dismissal request. Public areas count as one apartment."],
   ["Standard DOB / HPD violation removal", "$1,500 flat · $1,000 each from the 3rd on the same building", "Records research, post-approval permits, inspections with city officials, certifying compliance."],
   ["Complex DOB cure — PE / RA sign-off, DOB NOW filings", "$2,500 + engineer at cost", "Unpermitted structural or mechanical work, multi-trade coordination, engineer letters (typically $500 – $2,000+)."],
   ["Stop Work / Vacate Order removal", "$3,000", "Emergency filings, examiner negotiations, rescinding the order. More if plans must be filed."],
@@ -31,18 +31,22 @@ export const RETAINER_INCLUDES = [
   "24 / 7 complaint monitoring through the platform and app — every complaint tracked and the resident told at each step",
   "HPD / DOB monitoring of every address in the development",
   "1 simple cure per 10 units each month (a 100-unit development: 10 cures a month)",
-  "OATH hearings at $400 instead of $600; everything else 20% off the rates below",
+  "HPD cures and OATH hearings at $400 instead of $600; everything else 20% off the rates below",
   "Pilot: first 60 days at half price, no contract",
 ];
 
 
-// FIAREP expediter fee — violations only, no repairs. HPD: $400 per apartment /
-// location cited, every violation in it certified together. DOB: $1,500 for the
-// first two violations on a building, $1,000 each after.
-export const EXPEDITER = { perApartment: 400, dobFirstTwo: 1500, dobAfter: 1000, planDiscount: 0.2 } as const;
+// FIAREP expediter fee — violations only, no repairs. HPD: per apartment /
+// location cited, every violation in it certified together — $600 with no
+// plan, $400 on the FIAREP plan. DOB: $1,500 for the first two violations on a
+// building, $1,000 each after; plan members 20% off the DOB part.
+export const EXPEDITER = { perApartment: 600, perApartmentPlan: 400, dobFirstTwo: 1500, dobAfter: 1000, planDiscount: 0.2 } as const;
 export function expediterFee(apartments: number, dob: number) {
-  const hpd = Math.max(0, apartments) * EXPEDITER.perApartment;
+  const apts = Math.max(0, apartments);
+  const hpd = apts * EXPEDITER.perApartment;
   const dobFee = Math.min(Math.max(0, dob), 2) * EXPEDITER.dobFirstTwo + Math.max(dob - 2, 0) * EXPEDITER.dobAfter;
   const total = hpd + dobFee;
-  return { hpd, dob: dobFee, total, plan: Math.round(total * (1 - EXPEDITER.planDiscount)) };
+  const planHpd = apts * EXPEDITER.perApartmentPlan;
+  const planDob = Math.round(dobFee * (1 - EXPEDITER.planDiscount));
+  return { hpd, dob: dobFee, total, plan: planHpd + planDob, planHpd, planDob };
 }
