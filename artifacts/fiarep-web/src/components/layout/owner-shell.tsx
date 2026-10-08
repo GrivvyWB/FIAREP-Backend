@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { useOwnerAuth } from "@/hooks/use-owner-auth";
 import { Button } from "@/components/ui/button";
-import { Building2, ClipboardList, LogOut, PanelsTopLeft, ShieldAlert, Hammer } from "lucide-react";
+import { Building2, ClipboardList, Landmark, LogOut, PanelsTopLeft, ShieldAlert, Hammer } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function OwnerShell({ children }: { children: ReactNode }) {
@@ -85,6 +85,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           >
             <ClipboardList className="h-4 w-4" />
             Job requests
+          </Link>
+          <Link
+            href="/platform-owner/aep"
+            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/aep"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <Landmark className="h-4 w-4" />
+            AEP registry
           </Link>
           <Link
             href="/platform-owner/repair-prices"
