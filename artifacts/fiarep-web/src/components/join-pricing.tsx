@@ -32,6 +32,8 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const hpd = hpdA + hpdB + hpdC;
   // What the building owes the City, from the Department of Finance lookup (or typed).
   const [dofOwed, setDofOwed] = useState(0);
+  // What the open violations are, by type — from the DOF / violation lookup.
+  const [violations, setViolations] = useState<{ address?: string; hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number }>; dobTypes?: Array<{ type: string; count: number }> } | null>(null);
   // Engineering and repairs are typed in — the price book lives in Platform Control, FIAREP only.
   const [customRepair, setCustomRepair] = useState(0);
   const [customEng, setCustomEng] = useState(0);
@@ -186,7 +188,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <Slider label="HPD Class A violations (non-hazardous)" value={hpdA} min={0} max={1000} onChange={setHpdA} />
             <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
             <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
-            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); }} canSubmit={unlocked} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.hpdTypes || c.dobTypes) setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); }} canSubmit={unlocked} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
@@ -213,6 +215,30 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: ~{money(est.erp)}</p>
               <p className="text-xs text-rose-200/80">HPD bills 2–3× contractor cost plus a 15% administrative fee, 9% interest, and a lien on the building. Owners of the 250 buildings in the 2026 Alternative Enforcement Program already owe $4.5M for emergency repairs.</p>
             </div>
+            {violations && (violations.hpdTypes?.length || violations.dobTypes?.length) ? (
+              <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-500">What the open violations are — {violations.address}</p>
+                <table className="mt-1 w-full text-xs text-slate-300">
+                  <thead><tr className="text-slate-500"><th className="py-0.5 text-left font-normal">HPD</th><th className="py-0.5 text-right font-normal">A</th><th className="py-0.5 text-right font-normal">B</th><th className="py-0.5 text-right font-normal">C</th><th className="py-0.5 text-right font-normal">Total</th></tr></thead>
+                  <tbody>
+                    {violations.hpdTypes?.map((t) => (
+                      <tr key={t.type} className="border-t border-slate-800"><td className="py-0.5">{t.type}</td><td className="py-0.5 text-right text-slate-500">{t.a || ""}</td><td className="py-0.5 text-right text-slate-500">{t.b || ""}</td><td className="py-0.5 text-right text-slate-500">{t.c || ""}</td><td className="py-0.5 text-right font-semibold text-slate-100">{t.count}</td></tr>
+                    ))}
+                    <tr className="border-t border-slate-700"><td className="py-1 font-semibold text-slate-100">HPD open</td><td className="py-1 text-right text-slate-400">{hpdA}</td><td className="py-1 text-right text-slate-400">{hpdB}</td><td className="py-1 text-right text-slate-400">{hpdC}</td><td className="py-1 text-right font-semibold text-amber-300">{hpdA + hpdB + hpdC}</td></tr>
+                  </tbody>
+                </table>
+                {violations.dobTypes && violations.dobTypes.length > 0 && (
+                  <table className="mt-2 w-full text-xs text-slate-300">
+                    <thead><tr className="text-slate-500"><th className="py-0.5 text-left font-normal">DOB active</th><th className="py-0.5 text-right font-normal">Total</th></tr></thead>
+                    <tbody>
+                      {violations.dobTypes.map((t) => <tr key={t.type} className="border-t border-slate-800"><td className="py-0.5">{t.type}</td><td className="py-0.5 text-right font-semibold text-slate-100">{t.count}</td></tr>)}
+                      <tr className="border-t border-slate-700"><td className="py-1 font-semibold text-slate-100">DOB open</td><td className="py-1 text-right font-semibold text-amber-300">{dob}</td></tr>
+                    </tbody>
+                  </table>
+                )}
+                <p className="mt-1 text-[11px] text-slate-500">From the City's open HPD / DOB violation notices for this block & lot. Expediter clears and certifies every one; the fixes themselves are repairs, quoted separately.</p>
+              </div>
+            ) : null}
             <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts carry no price of their own. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
           </div>
         </div>

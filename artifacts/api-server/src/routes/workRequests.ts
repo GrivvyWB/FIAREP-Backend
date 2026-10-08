@@ -50,12 +50,15 @@ router.post("/v1/public/work-requests", async (req, res) => {
     borough: str(b["borough"], 40), block: str(b["block"], 10), lot: str(b["lot"], 10), bbl: str(b["bbl"], 12), bin: str(b["bin"], 10),
     units: int(b["units"]), hpdA: int(b["hpdA"]), hpdB: int(b["hpdB"]), hpdC: int(b["hpdC"]), dob: int(b["dob"]),
     dofOwed: Number(b["dofOwed"]) || 0, notes: str(b["notes"], 2000),
+    hpdTypes: (Array.isArray(b["hpdTypes"]) ? b["hpdTypes"] : []).slice(0, 40).map((t) => { const x = (t && typeof t === "object" ? t : {}) as Record<string, unknown>; return { type: str(x["type"], 60), count: int(x["count"]), a: int(x["a"]), b: int(x["b"]), c: int(x["c"]) }; }).filter((t) => t.type),
+    dobTypes: (Array.isArray(b["dobTypes"]) ? b["dobTypes"] : []).slice(0, 40).map((t) => { const x = (t && typeof t === "object" ? t : {}) as Record<string, unknown>; return { type: str(x["type"], 80), count: int(x["count"]) }; }).filter((t) => t.type),
   };
   await db.insert(entityRecords).values({ id, tenantId: "default", entity: ENTITY, development: company, state, createdBy: "public-join", createdAt: now, updatedAt: now });
   const emailed = await sendMail(INBOX, `Job request: ${address} — ${company} (${state.hpdA + state.hpdB + state.hpdC} HPD · ${state.dob} DOB)`, [
     `<h2>${esc(company)} submitted a building</h2>`,
     `<p><strong>${esc(address)}</strong><br>${esc(state.borough)} · Block ${esc(state.block)} · Lot ${esc(state.lot)} · BBL ${esc(state.bbl)} · BIN ${esc(state.bin)} · ${state.units} units</p>`,
     `<table border="1" cellpadding="6" cellspacing="0"><tr><th>HPD A</th><th>HPD B</th><th>HPD C</th><th>DOB</th><th>Owed to the City</th></tr><tr><td>${state.hpdA}</td><td>${state.hpdB}</td><td>${state.hpdC}</td><td>${state.dob}</td><td>${money(state.dofOwed)}</td></tr></table>`,
+    state.hpdTypes.length ? `<p><strong>What they are:</strong> ${state.hpdTypes.map((t) => `${esc(t.type)} ${t.count}`).join(" · ")}${state.dobTypes.length ? ` · DOB: ${state.dobTypes.map((t) => `${esc(t.type)} ${t.count}`).join(", ")}` : ""}</p>` : "",
     `<p><strong>Contact:</strong> ${esc(contact)} · ${esc(phone)} · ${esc(email)}</p>`,
     state.notes ? `<p><strong>Notes:</strong><br>${esc(state.notes).replaceAll("\n", "<br>")}</p>` : "",
     `<p>Accept it in Platform Control → Job requests: <a href="${SITE}/platform-owner/work-requests">${SITE}/platform-owner/work-requests</a></p>`,

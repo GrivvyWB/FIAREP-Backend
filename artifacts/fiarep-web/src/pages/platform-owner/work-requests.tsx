@@ -8,7 +8,8 @@ import { Check, FileText, X } from "lucide-react";
 type WorkRequest = {
   id: string; createdAt: string; status: string; company: string; contact: string; email: string; phone: string;
   address: string; borough: string; block: string; lot: string; bbl: string; bin: string; units: number;
-  hpdA: number; hpdB: number; hpdC: number; dob: number; dofOwed: number; notes: string; decidedAt?: string; decidedBy?: string; message?: string;
+  hpdA: number; hpdB: number; hpdC: number; dob: number; dofOwed: number; notes: string;
+  hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number }>; dobTypes?: Array<{ type: string; count: number }>; decidedAt?: string; decidedBy?: string; message?: string;
 };
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -83,6 +84,12 @@ export default function OwnerWorkRequests() {
             ))}
             <div className="rounded-lg border border-slate-200 px-3 py-2"><p className="text-xs uppercase tracking-wide text-slate-400">Owed to the City</p><p className="text-xl font-bold text-slate-900">{money(r.dofOwed || 0)}</p></div>
           </div>
+          {(r.hpdTypes?.length || r.dobTypes?.length) ? (
+            <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
+              {r.hpdTypes?.map((t) => <span key={t.type} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-700">{t.type} <b>{t.count}</b>{t.c ? <span className="text-rose-600"> · C {t.c}</span> : null}</span>)}
+              {r.dobTypes?.map((t) => <span key={t.type} className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-amber-800">DOB · {t.type} <b>{t.count}</b></span>)}
+            </div>
+          ) : null}
           {r.notes && <p className="mt-2 whitespace-pre-wrap text-sm text-slate-700">{r.notes}</p>}
           {(r.status || "new") === "new" && (
             <textarea value={message[r.id] || ""} onChange={(e) => setMessage({ ...message, [r.id]: e.target.value })} placeholder="Note to the client with the decision (optional)" rows={2} className="mt-3 block w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm text-slate-900 focus:border-amber-500 focus:outline-none" />

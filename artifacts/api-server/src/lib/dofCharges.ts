@@ -40,7 +40,38 @@ export type PropertyTax = {
   estimatedAnnualTax: number | null; owner: string; units: number; yearBuilt: string; dofLink: string;
 };
 
-export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number };
+export type ViolationType = { type: string; count: number; a: number; b: number; c: number };
+export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number; hpdTypes: ViolationType[]; dobTypes: Array<{ type: string; count: number }> };
+
+// What an HPD violation is about, from its notice text — first match wins.
+const HPD_TYPES: Array<[string, RegExp]> = [
+  ["Smoke detector", /SMOKE DETECT/],
+  ["Carbon monoxide detector", /CARBON MONOXIDE/],
+  ["Window guards", /WINDOW GUARD/],
+  ["Roaches", /ROACH/],
+  ["Mice / rats", /MICE|RATS|RODENT/],
+  ["Bed bugs", /BEDBUG|BED BUG/],
+  ["Lead paint", /LEAD[- ]BASED PAINT|LEAD PAINT|27-2056/],
+  ["Mold", /MOLD/],
+  ["Heat / hot water", /HOT WATER|HEAT(ING)? SYSTEM|PROVIDE HEAT|ADEQUATE HEAT|27-2029|27-2031/],
+  ["Peeling paint / plaster", /PEELING PAINT|PAINT WITH|PLASTER/],
+  ["Leak / plumbing", /LEAK|FAUCET|WASH BASIN|SINK|BATHTUB|TOILET|WATER CLOSET|SHOWER|PIPE/],
+  ["Electrical", /ELECTRIC|OUTLET|LIGHT FIXTURE|WIRING/],
+  ["Door / self-closing", /DOOR|SELF[- ]CLOS/],
+  ["Window", /WINDOW|SASH/],
+  ["Floor", /FLOOR/],
+  ["Ceiling / wall", /CEILING|WALL/],
+  ["Fire escape", /FIRE ESCAPE/],
+  ["Caulking / tile / surfaces", /CAULK|TILE|GROUT/],
+  ["Lighting (public hall)", /LIGHTING|PUBLIC HALL/],
+  ["Garbage / cleanliness", /GARBAGE|REFUSE|RUBBISH|CLEAN/],
+  ["Registration / certificate", /REGISTER|REGISTRATION|CERTIFICATE|POST|SIGN/],
+];
+export function hpdViolationType(description: string): string {
+  const d = description.toUpperCase();
+  for (const [label, re] of HPD_TYPES) if (re.test(d)) return label;
+  return "Other";
+}
 
 export type DofLookup = {
   property: { query: string; formattedAddress: string; borough: string; block: string | null; lot: string | null; bbl: string | null; bin: string | null };
@@ -119,20 +150,29 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
   // Open violation counts — HPD by class on the BBL, DOB active on the BIN.
   let violations: ViolationCounts | null = null;
   if (bbl || bin) {
-    const counts: ViolationCounts = { hpdA: 0, hpdB: 0, hpdC: 0, hpdOpen: 0, dobActive: 0 };
+    const counts: ViolationCounts = { hpdA: 0, hpdB: 0, hpdC: 0, hpdOpen: 0, dobActive: 0, hpdTypes: [], dobTypes: [] };
     try {
       if (bbl) {
-        const url = soql(HPD_VIOLATIONS, { $select: "class,count(*) as n", $where: `bbl='${bbl}' AND violationstatus='Open'`, $group: "class" });
+        // Every open violation with its notice text, so the client sees what they are.
+        const url = soql(HPD_VIOLATIONS, { $select: "class,novdescription", $where: `bbl='${bbl}' AND violationstatus='Open'`, $limit: "5000" });
+        const byType = new Map<string, ViolationType>();
         for (const r of (await fetchJson(url)) as Record<string, unknown>[]) {
-          const n = num(r["n"]); const cls = text(r["class"]).toUpperCase();
-          counts.hpdOpen += n;
-          if (cls === "A") counts.hpdA += n; else if (cls === "B") counts.hpdB += n; else if (cls === "C") counts.hpdC += n;
+          const cls = text(r["class"]).toUpperCase();
+          counts.hpdOpen += 1;
+          if (cls === "A") counts.hpdA += 1; else if (cls === "B") counts.hpdB += 1; else if (cls === "C") counts.hpdC += 1;
+          const type = hpdViolationType(text(r["novdescription"]));
+          const t = byType.get(type) || { type, count: 0, a: 0, b: 0, c: 0 };
+          t.count += 1; if (cls === "A") t.a += 1; else if (cls === "B") t.b += 1; else if (cls === "C") t.c += 1;
+          byType.set(type, t);
         }
+        counts.hpdTypes = [...byType.values()].sort((x, y) => y.count - x.count);
       }
       if (bin) {
-        const url = soql(DOB_VIOLATIONS, { $select: "count(*) as n", $where: `bin='${bin}' AND violation_category like '%ACTIVE%'` });
-        const [r] = (await fetchJson(url)) as Record<string, unknown>[];
-        counts.dobActive = num(r?.["n"]);
+        const url = soql(DOB_VIOLATIONS, { $select: "violation_type,count(*) as n", $where: `bin='${bin}' AND violation_category like '%ACTIVE%'`, $group: "violation_type", $order: "n DESC" });
+        for (const r of (await fetchJson(url)) as Record<string, unknown>[]) {
+          const n = num(r["n"]); counts.dobActive += n;
+          counts.dobTypes.push({ type: text(r["violation_type"]).replace(/^[A-Z0-9]+-/, "").trim() || "DOB violation", count: n });
+        }
       }
       violations = counts;
     } catch (error) { warnings.push(`Open violations: ${error instanceof Error ? error.message : "unavailable"}`); }

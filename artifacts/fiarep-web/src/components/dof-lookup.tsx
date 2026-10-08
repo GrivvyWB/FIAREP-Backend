@@ -6,7 +6,7 @@ export type DofLookup = {
   property: { formattedAddress: string; borough: string; block: string | null; lot: string | null; bbl: string | null; bin: string | null };
   oath: { openBalance: number; openCount: number; penaltiesImposed: number; paid: number; byAgency: Array<{ agency: string; balance: number; count: number }>; items: Array<{ ticket: string; agency: string; violationDate: string | null; hearingDate: string | null; hearingStatus: string; complianceStatus: string; charge: string; penalty: number; paid: number; lateFees: number; balance: number }> };
   propertyTax: { year: string; taxClass: string; marketValue: number; assessedValue: number; taxableValue: number; taxRate: number | null; estimatedAnnualTax: number | null; owner: string; units: number; yearBuilt: string; dofLink: string } | null;
-  violations: { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number } | null;
+  violations: { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number; hpdTypes: Array<{ type: string; count: number; a: number; b: number; c: number }>; dobTypes: Array<{ type: string; count: number }> } | null;
   hpdCharges: { total: number; count: number; items: Array<{ omo: string; createdAt: string | null; workType: string; description: string; amount: number }> };
   warnings: string[];
   retrievedAt: string;
@@ -16,7 +16,7 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 /** Department of Finance window: type the building address, get the block &
  * lot and what the building owes the City right now — OATH / ECB summons
  * balances by agency and HPD emergency-repair charges. Check it any time. */
-export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; dob: number };
+export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; dob: number; hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number }>; dobTypes?: Array<{ type: string; count: number }>; address?: string };
 type JoinInfo = { id?: string; company?: string };
 const readJoin = (): JoinInfo => { try { return JSON.parse(localStorage.getItem("fiarep_join") || "{}") as JoinInfo; } catch { return {}; } };
 const SUBMIT_KEY = "fiarep_work_requests";
@@ -43,7 +43,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
       const r = await customFetch<DofLookup>(`/api/v1/public/dof-charges?address=${encodeURIComponent(q)}`, { responseType: "json" } as never);
       setData(r); setShowAll(false); setSubmitted(null);
       onResult(r.oath.openBalance + r.hpdCharges.total, r);
-      setCounts({ hpdA: r.violations?.hpdA || 0, hpdB: r.violations?.hpdB || 0, hpdC: r.violations?.hpdC || 0, dob: r.violations?.dobActive || 0 });
+      setCounts({ hpdA: r.violations?.hpdA || 0, hpdB: r.violations?.hpdB || 0, hpdC: r.violations?.hpdC || 0, dob: r.violations?.dobActive || 0, hpdTypes: r.violations?.hpdTypes || [], dobTypes: r.violations?.dobTypes || [], address: r.property.formattedAddress });
     } catch (err: any) {
       setData(null); setError(err?.data?.error || err?.message || "That address could not be matched to an NYC property.");
       onResult(0, null);
@@ -65,6 +65,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
           joinId: readJoin().id || "", ...contact,
           address: data.property.formattedAddress, borough: data.property.borough, block: data.property.block, lot: data.property.lot, bbl: data.property.bbl, bin: data.property.bin,
           units: data.propertyTax?.units || 0, hpdA: counts.hpdA, hpdB: counts.hpdB, hpdC: counts.hpdC, dob: counts.dob, dofOwed: total,
+          hpdTypes: counts.hpdTypes || [], dobTypes: counts.dobTypes || [],
         }),
       } as never);
       setSubmitted({ id: r.id, emailed: r.emailed });
