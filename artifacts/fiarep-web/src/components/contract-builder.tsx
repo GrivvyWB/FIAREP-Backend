@@ -14,13 +14,14 @@ const num = (v: string) => Math.max(0, Math.round(Number(v) || 0));
  * filled in on the price book above (scope + engineering). Print → PDF, or
  * email it to the client from the FIAREP mailbox. */
 type Expediter = NonNullable<ContractInput["expediter"]>;
-export function ContractBuilder({ scope, engineering, expediter, onClearScope }: { scope: ScopeLine[]; engineering: { label: string; amount: number } | null; expediter?: Expediter | null; onClearScope: () => void }) {
+export function ContractBuilder({ scope, engineering, expediter, onClearScope, onKindChange }: { scope: ScopeLine[]; engineering: { label: string; amount: number } | null; expediter?: Expediter | null; onClearScope: () => void; onKindChange?: (kind: ContractKind) => void }) {
   const { toast } = useToast();
   const [number, setNumber] = useState(contractNumber);
   // Prefilled when opened from Job requests → Build contract (?company=…&building=…&units=…).
   const q = useMemo(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search), []);
   // From a job request the default is the work contract — just the violations and repairs, no plan.
   const [kind, setKind] = useState<ContractKind>(q.get("request") ? "work" : "fiarep");
+  useEffect(() => { onKindChange?.(kind); }, [kind, onKindChange]);
   const [client, setClient] = useState({ company: q.get("company") || "", contact: q.get("contact") || "", title: "", address: "", email: q.get("email") || "", phone: q.get("phone") || "" });
   const [buildings, setBuildings] = useState<Building[]>([{ name: q.get("building") || "", address: q.get("building") || "", units: num(q.get("units") || "") }]);
   const [flatFee, setFlatFee] = useState(0);
