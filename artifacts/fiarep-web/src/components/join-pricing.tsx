@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DofLookupPanel } from "@/components/dof-lookup";
-import { FEES, PLATFORM_INCLUDES, RETAINER_INCLUDES } from "@/lib/fiarep-plans";
+import { FEES, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "@/lib/fiarep-plans";
 
 /** "What it costs" on the Join FIAREP page: expediter fee ranges, the full
  * cost picture for a typical 20-unit NYC building, how each agency works,
@@ -52,7 +52,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const [customEng, setCustomEng] = useState(0);
   const est = useMemo(() => {
     // FIAREP per-job rates: DOB $1,500 for the first two, $1,000 each after; HPD cure $400 per apartment cited.
-    const expediter = Math.min(dob, 2) * 1500 + Math.max(dob - 2, 0) * 1000 + hpdApts * 400;
+    const expediter = expediterFee(hpdApts, dob).total;
     const engineering = customEng;
     // DOF: what the building owes the City right now — from the lookup, never estimated from counts.
     const penalties = dofOwed;

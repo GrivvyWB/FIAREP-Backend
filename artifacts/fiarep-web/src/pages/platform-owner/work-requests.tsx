@@ -4,6 +4,7 @@ import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Check, FileText, X } from "lucide-react";
+import { EXPEDITER, expediterFee } from "@/lib/fiarep-plans";
 
 type WorkRequest = {
   id: string; createdAt: string; status: string; company: string; contact: string; email: string; phone: string;
@@ -25,6 +26,12 @@ export default function OwnerWorkRequests() {
   const [busy, setBusy] = useState("");
   const [filter, setFilter] = useState<"new" | "accepted" | "declined" | "all">("new");
   const [message, setMessage] = useState<Record<string, string>>({});
+  // Expediter fee per request: computed from the counts that came over; FIAREP can adjust apartments / DOB here.
+  const [adj, setAdj] = useState<Record<string, { apartments: number; dob: number }>>({});
+  const feeFor = (r: WorkRequest) => { const a = adj[r.id] || { apartments: r.apartments || 0, dob: r.dob || 0 }; return { ...a, ...expediterFee(a.apartments, a.dob) }; };
+  // Quick pricing for a building that didn't come through the site.
+  const [quick, setQuick] = useState({ apartments: 0, dob: 0 });
+  const quickFee = expediterFee(quick.apartments, quick.dob);
 
   async function reload() {
     try { setRows(await customFetch<WorkRequest[]>("/api/v1/platform/work-requests", { responseType: "json" } as never)); }
@@ -62,6 +69,23 @@ export default function OwnerWorkRequests() {
           ))}
         </div>
       </div>
+      <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div>
+            <h2 className="font-semibold text-slate-950">Expediter fee — violations only</h2>
+            <p className="text-xs text-slate-500">${EXPEDITER.perApartment} per apartment / location with HPD violations (all certified together) · DOB ${EXPEDITER.dobFirstTwo.toLocaleString()} each for the first two, ${EXPEDITER.dobAfter.toLocaleString()} each after. Plan members {EXPEDITER.planDiscount * 100}% off. No repairs in this number.</p>
+          </div>
+          <div className="flex flex-wrap items-end gap-3 text-sm">
+            <label className="text-slate-700">Apartments cited<input type="number" inputMode="numeric" min={0} value={quick.apartments || ""} placeholder="0" onChange={(e) => setQuick({ ...quick, apartments: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="mt-1 block w-24 rounded-md border border-slate-300 px-2 py-1 text-right font-semibold text-slate-900 focus:border-amber-500 focus:outline-none" /></label>
+            <label className="text-slate-700">DOB violations<input type="number" inputMode="numeric" min={0} value={quick.dob || ""} placeholder="0" onChange={(e) => setQuick({ ...quick, dob: Math.max(0, Math.round(Number(e.target.value) || 0)) })} className="mt-1 block w-24 rounded-md border border-slate-300 px-2 py-1 text-right font-semibold text-slate-900 focus:border-amber-500 focus:outline-none" /></label>
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-2 text-right">
+              <p className="text-xs uppercase tracking-wide text-amber-700">FIAREP makes</p>
+              <p className="text-xl font-bold text-slate-950">{money(quickFee.total)}</p>
+              <p className="text-xs text-slate-600">HPD {money(quickFee.hpd)} · DOB {money(quickFee.dob)} · plan member {money(quickFee.plan)}</p>
+            </div>
+          </div>
+        </div>
+      </section>
       {shown.length === 0 && <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">No {filter === "all" ? "" : filter} job requests.</p>}
       {shown.map((r) => (
         <div key={r.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -78,12 +102,17 @@ export default function OwnerWorkRequests() {
               {r.status !== "declined" && <Button size="sm" variant="outline" disabled={busy === r.id} onClick={() => void decide(r, "decline")}><X className="mr-1 h-4 w-4" />Decline</Button>}
             </div>
           </div>
-          <div className="mt-3 grid gap-2 sm:grid-cols-6">
-            {([["HPD Class A", r.hpdA], ["HPD Class B", r.hpdB], ["HPD Class C", r.hpdC], ["Apts cited", r.apartments || 0], ["DOB", r.dob]] as const).map(([label, n]) => (
+          {(() => { const f = feeFor(r); return (
+          <div className="mt-3 grid gap-2 sm:grid-cols-4 lg:grid-cols-7">
+            {([["HPD Class A", r.hpdA], ["HPD Class B", r.hpdB], ["HPD Class C", r.hpdC]] as const).map(([label, n]) => (
               <div key={label} className="rounded-lg border border-slate-200 px-3 py-2"><p className="text-xs uppercase tracking-wide text-slate-400">{label}</p><p className="text-xl font-bold text-slate-900">{n || 0}</p></div>
             ))}
+            <label className="rounded-lg border border-slate-200 px-3 py-2"><span className="text-xs uppercase tracking-wide text-slate-400">Apts cited</span><input type="number" inputMode="numeric" min={0} value={f.apartments || ""} placeholder="0" onChange={(e) => setAdj({ ...adj, [r.id]: { apartments: Math.max(0, Math.round(Number(e.target.value) || 0)), dob: f.dob === undefined ? 0 : (adj[r.id]?.dob ?? r.dob ?? 0) } })} className="mt-0.5 block w-full rounded-md border border-slate-300 px-2 py-0.5 text-xl font-bold text-slate-900 focus:border-amber-500 focus:outline-none" /></label>
+            <label className="rounded-lg border border-slate-200 px-3 py-2"><span className="text-xs uppercase tracking-wide text-slate-400">DOB</span><input type="number" inputMode="numeric" min={0} value={(adj[r.id]?.dob ?? r.dob) || ""} placeholder="0" onChange={(e) => setAdj({ ...adj, [r.id]: { apartments: adj[r.id]?.apartments ?? r.apartments ?? 0, dob: Math.max(0, Math.round(Number(e.target.value) || 0)) } })} className="mt-0.5 block w-full rounded-md border border-slate-300 px-2 py-0.5 text-xl font-bold text-slate-900 focus:border-amber-500 focus:outline-none" /></label>
             <div className="rounded-lg border border-slate-200 px-3 py-2"><p className="text-xs uppercase tracking-wide text-slate-400">Owed to the City</p><p className="text-xl font-bold text-slate-900">{money(r.dofOwed || 0)}</p></div>
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2"><p className="text-xs uppercase tracking-wide text-amber-700">Expediter fee</p><p className="text-xl font-bold text-slate-950">{money(f.total)}</p><p className="text-[11px] text-slate-600">HPD {money(f.hpd)} · DOB {money(f.dob)} · plan {money(f.plan)}</p></div>
           </div>
+          ); })()}
           {(r.hpdTypes?.length || r.dobTypes?.length) ? (
             <div className="mt-2 flex flex-wrap gap-1.5 text-xs">
               {r.hpdTypes?.map((t) => <span key={t.type} className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-slate-700">{t.type} <b>{t.count}</b>{t.c ? <span className="text-rose-600"> · C {t.c}</span> : null}</span>)}

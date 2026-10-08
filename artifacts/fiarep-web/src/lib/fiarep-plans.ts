@@ -35,3 +35,14 @@ export const RETAINER_INCLUDES = [
   "Pilot: first 60 days at half price, no contract",
 ];
 
+
+// FIAREP expediter fee — violations only, no repairs. HPD: $400 per apartment /
+// location cited, every violation in it certified together. DOB: $1,500 for the
+// first two violations on a building, $1,000 each after.
+export const EXPEDITER = { perApartment: 400, dobFirstTwo: 1500, dobAfter: 1000, planDiscount: 0.2 } as const;
+export function expediterFee(apartments: number, dob: number) {
+  const hpd = Math.max(0, apartments) * EXPEDITER.perApartment;
+  const dobFee = Math.min(Math.max(0, dob), 2) * EXPEDITER.dobFirstTwo + Math.max(dob - 2, 0) * EXPEDITER.dobAfter;
+  const total = hpd + dobFee;
+  return { hpd, dob: dobFee, total, plan: Math.round(total * (1 - EXPEDITER.planDiscount)) };
+}
