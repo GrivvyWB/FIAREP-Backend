@@ -25,14 +25,31 @@ const SUBMIT_KEY = "fiarep_work_requests";
 type Tracked = { id: string; address: string; at: string; status?: string; quotedTotal?: number; message?: string };
 const readTracked = (): Tracked[] => { try { return JSON.parse(localStorage.getItem(SUBMIT_KEY) || "[]") as Tracked[]; } catch { return []; } };
 
-export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted }: { onResult: (total: number, result: DofLookup | null) => void; onCounts?: (c: ViolationCounts) => void; canSubmit?: boolean; quoted?: { expediter: number; repairs: number } }) {
-  const [address, setAddress] = useState("");
+type Persisted = { address: string; data: DofLookup; counts: ViolationCounts };
+function readPersisted(key?: string): Persisted | null {
+  if (!key) return null;
+  try { const raw = localStorage.getItem(key); return raw ? (JSON.parse(raw) as Persisted) : null; } catch { return null; }
+}
+
+/** `persistKey`: keep the last result in this browser until Close is pressed —
+ * leaving the page and coming back shows it again without another lookup. */
+export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted, persistKey }: { onResult: (total: number, result: DofLookup | null) => void; onCounts?: (c: ViolationCounts) => void; canSubmit?: boolean; quoted?: { expediter: number; repairs: number }; persistKey?: string }) {
+  const saved = readPersisted(persistKey);
+  const [address, setAddress] = useState(saved?.address || "");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [data, setData] = useState<DofLookup | null>(null);
+  const [data, setData] = useState<DofLookup | null>(saved?.data || null);
   const [showAll, setShowAll] = useState(false);
   // Open-violation counts: filled from HPD / DOB open data, the client corrects them.
-  const [counts, setCountsState] = useState<ViolationCounts>({ hpdA: 0, hpdB: 0, hpdC: 0, dob: 0 });
+  const [counts, setCountsState] = useState<ViolationCounts>(saved?.counts || { hpdA: 0, hpdB: 0, hpdC: 0, dob: 0 });
+  useEffect(() => {
+    if (!persistKey) return;
+    try { if (data) localStorage.setItem(persistKey, JSON.stringify({ address, data, counts } satisfies Persisted)); else localStorage.removeItem(persistKey); } catch { /* storage unavailable */ }
+  }, [persistKey, address, data, counts]);
+  function close() {
+    setData(null); setAddress(""); setError(""); setShowAll(false); setCountsState({ hpdA: 0, hpdB: 0, hpdC: 0, dob: 0 });
+    onResult(0, null);
+  }
   const setCounts = (c: ViolationCounts) => { setCountsState(c); onCounts?.(c); };
   // Submit the building to FIAREP as a job.
   const join = readJoin();
@@ -121,9 +138,12 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted }: { onRe
               <p className="text-xs text-slate-400">{data.property.borough} · Block {data.property.block || "—"} · Lot {data.property.lot || "—"}{data.property.bbl ? ` · BBL ${data.property.bbl}` : ""}{data.property.bin ? ` · BIN ${data.property.bin}` : ""}</p>
               <p className="text-sm font-semibold text-amber-300">{data.propertyTax?.units ? `${data.propertyTax.units} units` : "Units not on file"}{data.propertyTax?.yearBuilt ? <span className="font-normal text-slate-400"> · built {data.propertyTax.yearBuilt}</span> : null}</p>
             </div>
-            <div className="text-right">
-              <p className="text-xs uppercase tracking-wide text-slate-500">Owed to the City</p>
-              <p className="text-2xl font-bold text-slate-200">{money(total)}</p>
+            <div className="flex items-start gap-3">
+              <div className="text-right">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Owed to the City</p>
+                <p className="text-2xl font-bold text-slate-200">{money(total)}</p>
+              </div>
+              {persistKey && <Button type="button" size="sm" variant="outline" className="border-slate-600 bg-transparent text-slate-200 hover:bg-slate-800 hover:text-white" onClick={close}>Close</Button>}
             </div>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">

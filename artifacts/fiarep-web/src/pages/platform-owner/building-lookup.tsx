@@ -11,7 +11,7 @@ export default function OwnerBuildingLookup() {
         <p className="text-sm text-slate-500">What a building owes the City and what is open on it — OATH / ECB summonses, HPD emergency-repair charges, property tax, and HPD / DOB violations by type.</p>
       </div>
       <div className="rounded-2xl bg-slate-950 p-4 text-slate-100">
-        <DofLookupPanel onResult={() => undefined} canSubmit={false} />
+        <DofLookupPanel onResult={() => undefined} canSubmit={false} persistKey="fiarep_owner_building_lookup" />
       </div>
     </div>
   );
