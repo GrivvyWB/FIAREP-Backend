@@ -88,7 +88,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted }: { onRe
       const r = await customFetch<{ ok: boolean; id: string; emailed: boolean }>("/api/v1/public/work-requests", {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
         body: JSON.stringify({
-          joinId: join.id || "", ...contact, email: lockedEmail,
+          joinId: join.id || "", ...contact,
           address: data.property.formattedAddress, borough: data.property.borough, block: data.property.block, lot: data.property.lot, bbl: data.property.bbl, bin: data.property.bin,
           units: data.propertyTax?.units || 0, hpdA: counts.hpdA, hpdB: counts.hpdB, hpdC: counts.hpdC, dob: counts.dob, dofOwed: total,
           quotedExpediter: quoted?.expediter || 0, quotedRepairs: quoted?.repairs || 0,
@@ -102,8 +102,9 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted }: { onRe
     } catch (err: any) { setError(err?.data?.error || err?.message || "Could not submit — try again."); }
     finally { setSending(false); }
   }
-  // Goes to FIAREP's inbox; the client's reply email is the one on their approved join request (set in Platform Control).
-  const canSend = canSubmit && data && contact.company.trim() && contact.contact.trim() && (lockedEmail || contact.phone.trim());
+  // Always goes to FIAREP's inbox. We need a way back: email or phone.
+  const canSend = canSubmit && data && contact.company.trim() && contact.contact.trim() && (contact.email.trim() || contact.phone.trim());
+  const missing = !contact.company.trim() ? "your company" : !contact.contact.trim() ? "your name" : !(contact.email.trim() || contact.phone.trim()) ? "an email or phone number" : "";
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
       <p className="font-semibold text-slate-200">Department of Finance — what the building owes now</p>
@@ -174,13 +175,13 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted }: { onRe
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} placeholder="Company" className={text} />
                   <input value={contact.contact} onChange={(e) => setContact({ ...contact, contact: e.target.value })} placeholder="Your name" className={text} />
-                  <span className={`${text} flex items-center justify-between gap-2 border-slate-800 text-slate-300`} title="Every job request goes to FIAREP at this address"><span className="truncate">{BRAND.email}</span><span className="text-[10px] uppercase tracking-wide text-slate-500">sent to FIAREP</span></span>
+                  <input type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} placeholder="Your email" className={text} />
                   <input value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} placeholder="Phone" className={text} />
                 </div>
                 <textarea value={contact.notes} onChange={(e) => setContact({ ...contact, notes: e.target.value })} placeholder="Anything we should know (optional)" rows={2} className={`${text} w-full`} />
                 <div className="flex flex-wrap items-center gap-3">
                   <Button type="submit" className="bg-amber-500 text-slate-950 hover:bg-amber-400" disabled={!canSend || sending}>{sending ? "Submitting…" : "Submit to FIAREP"}</Button>
-                  <span className="text-xs text-slate-500">{counts.hpdA + counts.hpdB + counts.hpdC} HPD · {counts.dob} DOB violations go with the address. Repairs are quoted separately after we look.</span>
+                  <span className="text-xs text-slate-500">{missing ? <span className="text-amber-300">Add {missing} to submit. </span> : null}Goes to FIAREP at {BRAND.email}. {counts.hpdA + counts.hpdB + counts.hpdC} HPD · {counts.dob} DOB violations go with the address; repairs are quoted after we look.</span>
                 </div>
               </form>
             )}
@@ -200,7 +201,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted }: { onRe
                 </ul>
               </div>
             )}
-            {submitted && <p className="mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">Submitted. FIAREP has {data.property.formattedAddress} with {counts.hpdA + counts.hpdB + counts.hpdC} HPD and {counts.dob} DOB violations — we'll confirm by {lockedEmail ? "email" : "phone"} and send the repair quote after we look. Reference {submitted.id.slice(0, 8)}.</p>}
+            {submitted && <p className="mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">Submitted. FIAREP has {data.property.formattedAddress} with {counts.hpdA + counts.hpdB + counts.hpdC} HPD and {counts.dob} DOB violations — we'll confirm by {contact.email.trim() ? "email" : "phone"} and send the repair quote after we look. Reference {submitted.id.slice(0, 8)}.</p>}
           </div>
           {data.oath.items.length > 0 && (
             <div>

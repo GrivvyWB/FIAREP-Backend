@@ -43,8 +43,11 @@ router.post("/v1/public/work-requests", async (req, res) => {
   // the site: it is the one on their approved join request (set in Platform Control).
   const joinId = str(b["joinId"], 80);
   const [join] = joinId ? await db.select().from(entityRecords).where(and(eq(entityRecords.id, joinId), eq(entityRecords.entity, "join-requests"), eq(entityRecords.deleted, false))).limit(1) : [];
-  const email = join && String(join.state["status"] || "") === "approved" ? String(join.state["email"] || "").toLowerCase() : "";
-  if (!company || !contact || !address || (!email && !phone)) { res.status(400).json({ error: "Company, your name, the building address, and a phone number are required." }); return; }
+  const typed = str(b["email"], 200).toLowerCase();
+  const onFile = join && String(join.state["status"] || "") === "approved" ? String(join.state["email"] || "").toLowerCase() : "";
+  const email = typed || onFile;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400).json({ error: "Enter a valid email." }); return; }
+  if (!company || !contact || !address || (!email && !phone)) { res.status(400).json({ error: "Company, your name, the building address, and an email or phone number are required." }); return; }
   const now = new Date();
   const id = randomUUID();
   const state = {
