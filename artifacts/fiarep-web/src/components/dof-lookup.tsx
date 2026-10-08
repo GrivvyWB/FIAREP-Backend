@@ -46,11 +46,12 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted }: { onRe
     const check = async () => {
       const next = await Promise.all(tracked.map(async (t) => {
         try { const r = await customFetch<{ status: string; quotedTotal?: number; message?: string }>(`/api/v1/public/work-requests/${encodeURIComponent(t.id)}`, { responseType: "json" } as never); return { ...t, status: r.status, quotedTotal: r.quotedTotal, message: r.message }; }
-        catch { return t; }
+        catch (err: any) { return err?.status === 404 || err?.response?.status === 404 ? null : t; }
       }));
       if (!alive) return;
-      setTracked(next);
-      try { localStorage.setItem(SUBMIT_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+      const kept = next.filter((t): t is Tracked => t !== null);
+      setTracked(kept);
+      try { localStorage.setItem(SUBMIT_KEY, JSON.stringify(kept)); } catch { /* storage unavailable */ }
     };
     void check();
     const id = setInterval(() => void check(), 30_000);

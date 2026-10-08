@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { ReplitConnectors } from "@replit/connectors-sdk";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { db, entityRecords } from "@workspace/db";
 import { rateLimit } from "../lib/rateLimit";
 import { requirePlatformOwner } from "../middlewares/auth";
@@ -112,6 +112,18 @@ router.post("/v1/platform/work-requests/:id/:decision", async (req, res) => {
     ].join(""));
   }
   res.json({ ok: true, status, emailed });
+});
+
+// Permanently delete a job request and the contract records sent for it. Gone for good.
+router.delete("/v1/platform/work-requests/:id", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const id = String(req.params["id"]);
+  const [before] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, id), eq(entityRecords.entity, ENTITY))).limit(1);
+  if (!before) { res.status(404).json({ error: "Not found" }); return; }
+  await platformAudit(owner.name, "work-request.deleted", before.id, before, null);
+  await db.delete(entityRecords).where(and(eq(entityRecords.entity, "contracts"), sql`${entityRecords.state}->>'requestId' = ${id}`));
+  await db.delete(entityRecords).where(eq(entityRecords.id, id));
+  res.json({ ok: true });
 });
 
 export default router;

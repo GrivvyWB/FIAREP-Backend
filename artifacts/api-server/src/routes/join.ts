@@ -236,7 +236,7 @@ router.post("/v1/platform/contracts/email", requirePlatformOwner, async (req, re
   const now = new Date();
   const [row] = await db.insert(entityRecords).values({
     id: randomUUID(), tenantId: "default", entity: "contracts", development: str(body["company"]) || null,
-    state: { number: str(body["number"]), company: str(body["company"]), kind: str(body["kind"]), monthly: Number(body["monthly"]) || 0, scopeTotal: Number(body["scopeTotal"]) || 0, to, emailed, sentAt: now.toISOString(), sentBy: owner.name },
+    state: { number: str(body["number"]), company: str(body["company"]), kind: str(body["kind"]), monthly: Number(body["monthly"]) || 0, scopeTotal: Number(body["scopeTotal"]) || 0, to, emailed, sentAt: now.toISOString(), sentBy: owner.name, requestId: str(body["requestId"], 80) },
     createdBy: "platform-owner", createdAt: now, updatedAt: now,
   }).returning();
   await platformAudit(owner.name, "contract.emailed", row!.id, null, row);

@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
-import { Check, FileText, X } from "lucide-react";
+import { Check, FileText, Trash2, X } from "lucide-react";
 import { EXPEDITER, expediterFee } from "@/lib/fiarep-plans";
 
 type WorkRequest = {
@@ -48,6 +48,13 @@ export default function OwnerWorkRequests() {
       toast({ title: `${r.address} ${out.status}`, description: out.emailed ? `Emailed ${r.email}.` : r.email ? "Email did not send — call them." : "No email on the request — call them." });
       await reload();
     } catch (err: any) { toast({ variant: "destructive", title: "Could not update", description: err?.data?.error || err?.message }); }
+    finally { setBusy(""); }
+  }
+  async function remove(r: WorkRequest) {
+    if (!window.confirm(`Permanently delete ${r.address} (${r.company})? This removes the request and any contract sent for it. It cannot be undone.`)) return;
+    setBusy(r.id);
+    try { await customFetch(`/api/v1/platform/work-requests/${encodeURIComponent(r.id)}`, { method: "DELETE", responseType: "json" } as never); toast({ title: `Deleted ${r.address}` }); await reload(); }
+    catch (err: any) { toast({ variant: "destructive", title: "Could not delete", description: err?.data?.error || err?.message }); }
     finally { setBusy(""); }
   }
   function buildContract(r: WorkRequest) {
@@ -102,6 +109,7 @@ export default function OwnerWorkRequests() {
               <Button size="sm" variant="outline" onClick={() => buildContract(r)}><FileText className="mr-1 h-4 w-4" />Build contract</Button>
               {r.status !== "accepted" && r.status !== "quoted" && <Button size="sm" disabled={busy === r.id} onClick={() => void decide(r, "accept")}><Check className="mr-1 h-4 w-4" />Accept</Button>}
               {r.status !== "declined" && <Button size="sm" variant="outline" disabled={busy === r.id} onClick={() => void decide(r, "decline")}><X className="mr-1 h-4 w-4" />Decline</Button>}
+              <Button size="sm" variant="ghost" className="text-slate-400 hover:text-red-600" disabled={busy === r.id} onClick={() => void remove(r)} title="Permanently delete"><Trash2 className="mr-1 h-4 w-4" />Delete</Button>
             </div>
           </div>
           {(() => { const f = feeFor(r); return (
