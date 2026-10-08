@@ -65,7 +65,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
       const r = await customFetch<{ ok: boolean; id: string; emailed: boolean }>("/api/v1/public/work-requests", {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
         body: JSON.stringify({
-          joinId: join.id || "", ...contact, email: lockedEmail || contact.email,
+          joinId: join.id || "", ...contact, email: lockedEmail,
           address: data.property.formattedAddress, borough: data.property.borough, block: data.property.block, lot: data.property.lot, bbl: data.property.bbl, bin: data.property.bin,
           units: data.propertyTax?.units || 0, hpdA: counts.hpdA, hpdB: counts.hpdB, hpdC: counts.hpdC, dob: counts.dob, dofOwed: total,
           apartments: counts.apartments || 0, hpdTypes: counts.hpdTypes || [], dobTypes: counts.dobTypes || [],
@@ -76,7 +76,8 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
     } catch (err: any) { setError(err?.data?.error || err?.message || "Could not submit — try again."); }
     finally { setSending(false); }
   }
-  const canSend = canSubmit && data && contact.company.trim() && contact.contact.trim() && ((lockedEmail || contact.email).trim() || contact.phone.trim());
+  // Submit only with the email on file — the one FIAREP approved; nothing typed on the site is used.
+  const canSend = canSubmit && data && !!lockedEmail && contact.company.trim() && contact.contact.trim();
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
       <p className="font-semibold text-slate-200">Department of Finance — what the building owes now</p>
@@ -147,9 +148,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} placeholder="Company" className={text} />
                   <input value={contact.contact} onChange={(e) => setContact({ ...contact, contact: e.target.value })} placeholder="Your name" className={text} />
-                  {lockedEmail
-                    ? <span className={`${text} flex items-center justify-between gap-2 border-slate-800 text-slate-400`} title="Email on file with FIAREP — change it through FIAREP"><span className="truncate">{lockedEmail}</span><span className="text-[10px] uppercase tracking-wide text-slate-500">on file</span></span>
-                    : <input type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} placeholder="Email" className={text} />}
+                  <span className={`${text} flex items-center justify-between gap-2 border-slate-800 ${lockedEmail ? "text-slate-400" : "text-rose-300"}`} title="Email on file with FIAREP — only FIAREP can change it"><span className="truncate">{lockedEmail || "No email on file — ask FIAREP to add it"}</span><span className="text-[10px] uppercase tracking-wide text-slate-500">on file</span></span>
                   <input value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} placeholder="Phone" className={text} />
                 </div>
                 <textarea value={contact.notes} onChange={(e) => setContact({ ...contact, notes: e.target.value })} placeholder="Anything we should know (optional)" rows={2} className={`${text} w-full`} />

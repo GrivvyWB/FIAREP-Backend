@@ -37,18 +37,14 @@ router.post("/v1/public/work-requests", async (req, res) => {
   const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
   const company = str(b["company"], 200);
   const contact = str(b["contact"], 200);
-  let email = str(b["email"], 200).toLowerCase();
   const phone = str(b["phone"], 60);
   const address = str(b["address"], 300);
-  // An approved join request locks the email to the one on file — the site can't change it.
+  if (!company || !contact || !address) { res.status(400).json({ error: "Company, contact and building address are required." }); return; }
+  // The email is the one FIAREP has on file for the approved company — nothing typed on the site is used.
   const joinId = str(b["joinId"], 80);
-  if (joinId) {
-    const [join] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, joinId), eq(entityRecords.entity, "join-requests"), eq(entityRecords.deleted, false))).limit(1);
-    const onFile = String(join?.state["email"] || "").toLowerCase();
-    if (join && String(join.state["status"] || "") === "approved" && onFile) email = onFile;
-  }
-  if (!company || !contact || !address || (!email && !phone)) { res.status(400).json({ error: "Company, contact, building address, and a phone or email are required." }); return; }
-  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400).json({ error: "Enter a valid email." }); return; }
+  const [join] = joinId ? await db.select().from(entityRecords).where(and(eq(entityRecords.id, joinId), eq(entityRecords.entity, "join-requests"), eq(entityRecords.deleted, false))).limit(1) : [];
+  const email = String(join?.state["email"] || "").toLowerCase();
+  if (!join || String(join.state["status"] || "") !== "approved" || !email) { res.status(403).json({ error: "Job requests go out under the email FIAREP has on file for your approved company. Ask FIAREP to add it in Platform Control." }); return; }
   const now = new Date();
   const id = randomUUID();
   const state = {
