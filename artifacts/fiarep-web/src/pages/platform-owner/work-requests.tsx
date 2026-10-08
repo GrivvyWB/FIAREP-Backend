@@ -10,7 +10,8 @@ type WorkRequest = {
   id: string; createdAt: string; status: string; company: string; contact: string; email: string; phone: string;
   address: string; borough: string; block: string; lot: string; bbl: string; bin: string; units: number; apartments?: number;
   hpdA: number; hpdB: number; hpdC: number; dob: number; dofOwed: number; notes: string;
-  hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes?: Array<{ type: string; count: number }>; decidedAt?: string; decidedBy?: string; message?: string;
+  hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes?: Array<{ type: string; count: number }>;
+  quotedExpediter?: number; quotedRepairs?: number; quotedTotal?: number; quotedAt?: string; contractNumber?: string; decidedAt?: string; decidedBy?: string; message?: string;
 };
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -24,7 +25,7 @@ export default function OwnerWorkRequests() {
   const [, setLocation] = useLocation();
   const [rows, setRows] = useState<WorkRequest[]>([]);
   const [busy, setBusy] = useState("");
-  const [filter, setFilter] = useState<"new" | "accepted" | "declined" | "all">("new");
+  const [filter, setFilter] = useState<"new" | "accepted" | "quoted" | "declined" | "all">("new");
   const [message, setMessage] = useState<Record<string, string>>({});
   // Expediter fee per request: computed from the counts that came over; FIAREP can adjust apartments / DOB here.
   const [adj, setAdj] = useState<Record<string, { apartments: number; dob: number }>>({});
@@ -64,7 +65,7 @@ export default function OwnerWorkRequests() {
           <p className="text-sm text-slate-500">Buildings clients submitted from fiarep.com/join with their open-violation counts. Accept to start the violation work; build the contract for the repair quote.</p>
         </div>
         <div className="flex gap-1 rounded-lg border border-slate-200 bg-white p-1 text-sm">
-          {(["new", "accepted", "declined", "all"] as const).map((f) => (
+          {(["new", "accepted", "quoted", "declined", "all"] as const).map((f) => (
             <button key={f} type="button" onClick={() => setFilter(f)} className={`rounded-md px-3 py-1 capitalize ${filter === f ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>{f}{f !== "all" ? ` (${count(f)})` : ""}</button>
           ))}
         </div>
@@ -94,11 +95,12 @@ export default function OwnerWorkRequests() {
               <p className="text-lg font-semibold text-slate-950">{r.address}</p>
               <p className="text-sm text-slate-600">{r.borough} · Block {r.block || "—"} · Lot {r.lot || "—"}{r.bbl ? ` · BBL ${r.bbl}` : ""}{r.bin ? ` · BIN ${r.bin}` : ""}{r.units ? ` · ${r.units} units` : ""}</p>
               <p className="text-sm text-slate-600">{r.company} — {r.contact}{r.phone ? ` · ${r.phone}` : ""}{r.email ? ` · ${r.email}` : ""}</p>
-              <p className="mt-1 text-xs text-slate-400">Received {when(r.createdAt)}{r.decidedAt ? ` · ${r.status} ${when(r.decidedAt)} by ${r.decidedBy}` : ""}</p>
+              <p className="mt-1 text-xs text-slate-400">Received {when(r.createdAt)}{r.decidedAt ? ` · ${r.status === "quoted" ? "accepted" : r.status} ${when(r.decidedAt)} by ${r.decidedBy}` : ""}{r.quotedAt ? ` · quoted ${money(r.quotedTotal || 0)} ${when(r.quotedAt)} (${r.contractNumber})` : ""}</p>
+              {(r.quotedExpediter || r.quotedRepairs) ? <p className="text-xs text-slate-500">Client saw on the site: expediting {money(r.quotedExpediter || 0)} · repairs est. {money(r.quotedRepairs || 0)}</p> : null}
             </div>
             <div className="flex items-center gap-2">
               <Button size="sm" variant="outline" onClick={() => buildContract(r)}><FileText className="mr-1 h-4 w-4" />Build contract</Button>
-              {r.status !== "accepted" && <Button size="sm" disabled={busy === r.id} onClick={() => void decide(r, "accept")}><Check className="mr-1 h-4 w-4" />Accept</Button>}
+              {r.status !== "accepted" && r.status !== "quoted" && <Button size="sm" disabled={busy === r.id} onClick={() => void decide(r, "accept")}><Check className="mr-1 h-4 w-4" />Accept</Button>}
               {r.status !== "declined" && <Button size="sm" variant="outline" disabled={busy === r.id} onClick={() => void decide(r, "decline")}><X className="mr-1 h-4 w-4" />Decline</Button>}
             </div>
           </div>

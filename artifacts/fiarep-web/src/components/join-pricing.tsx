@@ -202,7 +202,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
             <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
             <Slider label="Apartments / locations with HPD violations" value={hpdApts} min={0} max={500} onChange={setHpdApts} />
-            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); if (c.hpdTypes || c.dobTypes) { setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); setCustomRepair((c.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * (REPAIR_PER_JOB[t.type] || 0), 0)); } }} canSubmit={unlocked} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); if (c.hpdTypes || c.dobTypes) { setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); setCustomRepair((c.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * (REPAIR_PER_JOB[t.type] || 0), 0)); } }} canSubmit={unlocked} quoted={{ expediter: est.expediter, repairs: est.repairs }} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (

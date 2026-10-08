@@ -53,6 +53,7 @@ router.post("/v1/public/work-requests", async (req, res) => {
     borough: str(b["borough"], 40), block: str(b["block"], 10), lot: str(b["lot"], 10), bbl: str(b["bbl"], 12), bin: str(b["bin"], 10),
     units: int(b["units"]), apartments: int(b["apartments"]), hpdA: int(b["hpdA"]), hpdB: int(b["hpdB"]), hpdC: int(b["hpdC"]), dob: int(b["dob"]),
     dofOwed: Number(b["dofOwed"]) || 0, notes: str(b["notes"], 2000),
+    quotedExpediter: Number(b["quotedExpediter"]) || 0, quotedRepairs: Number(b["quotedRepairs"]) || 0,
     hpdTypes: (Array.isArray(b["hpdTypes"]) ? b["hpdTypes"] : []).slice(0, 40).map((t) => { const x = (t && typeof t === "object" ? t : {}) as Record<string, unknown>; return { type: str(x["type"], 60), count: int(x["count"]), a: int(x["a"]), b: int(x["b"]), c: int(x["c"]), jobs: int(x["jobs"]) }; }).filter((t) => t.type),
     dobTypes: (Array.isArray(b["dobTypes"]) ? b["dobTypes"] : []).slice(0, 40).map((t) => { const x = (t && typeof t === "object" ? t : {}) as Record<string, unknown>; return { type: str(x["type"], 80), count: int(x["count"]) }; }).filter((t) => t.type),
   };
@@ -61,6 +62,7 @@ router.post("/v1/public/work-requests", async (req, res) => {
     `<h2>${esc(company)} submitted a building</h2>`,
     `<p><strong>${esc(address)}</strong><br>${esc(state.borough)} · Block ${esc(state.block)} · Lot ${esc(state.lot)} · BBL ${esc(state.bbl)} · BIN ${esc(state.bin)} · ${state.units} units</p>`,
     `<table border="1" cellpadding="6" cellspacing="0"><tr><th>HPD A</th><th>HPD B</th><th>HPD C</th><th>Apartments cited</th><th>DOB</th><th>Owed to the City</th></tr><tr><td>${state.hpdA}</td><td>${state.hpdB}</td><td>${state.hpdC}</td><td>${state.apartments}</td><td>${state.dob}</td><td>${money(state.dofOwed)}</td></tr></table>`,
+    `<p><strong>Client saw on the site:</strong> expediting ${money(state.quotedExpediter)} · repairs est. ${money(state.quotedRepairs)}</p>`,
     state.hpdTypes.length ? `<p><strong>What they are:</strong> ${state.hpdTypes.map((t) => `${esc(t.type)} ${t.count}`).join(" · ")}${state.dobTypes.length ? ` · DOB: ${state.dobTypes.map((t) => `${esc(t.type)} ${t.count}`).join(", ")}` : ""}</p>` : "",
     `<p><strong>Contact:</strong> ${esc(contact)} · ${esc(phone)} · ${esc(email)}</p>`,
     state.notes ? `<p><strong>Notes:</strong><br>${esc(state.notes).replaceAll("\n", "<br>")}</p>` : "",
@@ -74,7 +76,7 @@ router.post("/v1/public/work-requests", async (req, res) => {
 router.get("/v1/public/work-requests/:id", async (req, res) => {
   const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, String(req.params["id"])), eq(entityRecords.entity, ENTITY), eq(entityRecords.deleted, false))).limit(1);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json({ id: row.id, status: String(row.state["status"] || "new"), address: String(row.state["address"] || ""), decidedAt: row.state["decidedAt"] || null, message: String(row.state["message"] || "") });
+  res.json({ id: row.id, status: String(row.state["status"] || "new"), address: String(row.state["address"] || ""), decidedAt: row.state["decidedAt"] || null, message: String(row.state["message"] || ""), quotedTotal: Number(row.state["quotedTotal"]) || 0, quotedAt: row.state["quotedAt"] || null });
 });
 
 router.use("/v1/platform/work-requests", requirePlatformOwner);

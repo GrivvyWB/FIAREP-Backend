@@ -240,6 +240,15 @@ router.post("/v1/platform/contracts/email", requirePlatformOwner, async (req, re
     createdBy: "platform-owner", createdAt: now, updatedAt: now,
   }).returning();
   await platformAudit(owner.name, "contract.emailed", row!.id, null, row);
+  // Contract built from a job request: mark it quoted so the client's page shows the answer.
+  const requestId = str(body["requestId"], 80);
+  if (requestId && emailed) {
+    const [wr] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, requestId), eq(entityRecords.entity, "work-requests"), eq(entityRecords.deleted, false))).limit(1);
+    if (wr) {
+      const state = { ...wr.state, status: "quoted", quotedTotal: Number(body["scopeTotal"]) || 0, quotedAt: now.toISOString(), quotedBy: owner.name, contractNumber: str(body["number"]) };
+      await db.update(entityRecords).set({ state, updatedAt: now }).where(eq(entityRecords.id, wr.id));
+    }
+  }
   res.json({ ok: true, emailed });
 });
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { BRAND } from "@/lib/contract";
@@ -22,7 +22,10 @@ type JoinInfo = { id?: string; company?: string; email?: string; contactName?: s
 const readJoin = (): JoinInfo => { try { return JSON.parse(localStorage.getItem("fiarep_join") || "{}") as JoinInfo; } catch { return {}; } };
 const SUBMIT_KEY = "fiarep_work_requests";
 
-export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (total: number, result: DofLookup | null) => void; onCounts?: (c: ViolationCounts) => void; canSubmit?: boolean }) {
+type Tracked = { id: string; address: string; at: string; status?: string; quotedTotal?: number; message?: string };
+const readTracked = (): Tracked[] => { try { return JSON.parse(localStorage.getItem(SUBMIT_KEY) || "[]") as Tracked[]; } catch { return []; } };
+
+export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted }: { onResult: (total: number, result: DofLookup | null) => void; onCounts?: (c: ViolationCounts) => void; canSubmit?: boolean; quoted?: { expediter: number; repairs: number } }) {
   const [address, setAddress] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -37,6 +40,25 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
   const lockedEmail = join.status === "approved" && join.email ? join.email : "";
   const [contact, setContact] = useState(() => ({ company: join.company || "", contact: join.contactName || "", email: lockedEmail, phone: join.phone || "", notes: "" }));
   const [submitted, setSubmitted] = useState<{ id: string; emailed: boolean } | null>(null);
+  // Buildings this browser already sent in, with FIAREP's answer as it comes.
+  const [tracked, setTracked] = useState<Tracked[]>(readTracked);
+  useEffect(() => {
+    if (!tracked.length) return;
+    let alive = true;
+    const check = async () => {
+      const next = await Promise.all(tracked.map(async (t) => {
+        try { const r = await customFetch<{ status: string; quotedTotal?: number; message?: string }>(`/api/v1/public/work-requests/${encodeURIComponent(t.id)}`, { responseType: "json" } as never); return { ...t, status: r.status, quotedTotal: r.quotedTotal, message: r.message }; }
+        catch { return t; }
+      }));
+      if (!alive) return;
+      setTracked(next);
+      try { localStorage.setItem(SUBMIT_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+    };
+    void check();
+    const id = setInterval(() => void check(), 30_000);
+    return () => { alive = false; clearInterval(id); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tracked.length]);
   const [sending, setSending] = useState(false);
 
   async function lookUp() {
@@ -69,11 +91,14 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
           joinId: join.id || "", ...contact, email: lockedEmail,
           address: data.property.formattedAddress, borough: data.property.borough, block: data.property.block, lot: data.property.lot, bbl: data.property.bbl, bin: data.property.bin,
           units: data.propertyTax?.units || 0, hpdA: counts.hpdA, hpdB: counts.hpdB, hpdC: counts.hpdC, dob: counts.dob, dofOwed: total,
+          quotedExpediter: quoted?.expediter || 0, quotedRepairs: quoted?.repairs || 0,
           apartments: counts.apartments || 0, hpdTypes: counts.hpdTypes || [], dobTypes: counts.dobTypes || [],
         }),
       } as never);
       setSubmitted({ id: r.id, emailed: r.emailed });
-      try { const prev = JSON.parse(localStorage.getItem(SUBMIT_KEY) || "[]") as unknown[]; localStorage.setItem(SUBMIT_KEY, JSON.stringify([...prev, { id: r.id, address: data.property.formattedAddress, at: new Date().toISOString() }])); } catch { /* storage unavailable */ }
+      const entry: Tracked = { id: r.id, address: data.property.formattedAddress, at: new Date().toISOString(), status: "new" };
+      setTracked((prev) => [...prev, entry]);
+      try { localStorage.setItem(SUBMIT_KEY, JSON.stringify([...readTracked(), entry])); } catch { /* storage unavailable */ }
     } catch (err: any) { setError(err?.data?.error || err?.message || "Could not submit — try again."); }
     finally { setSending(false); }
   }
@@ -158,6 +183,22 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
                   <span className="text-xs text-slate-500">{counts.hpdA + counts.hpdB + counts.hpdC} HPD · {counts.dob} DOB violations go with the address. Repairs are quoted separately after we look.</span>
                 </div>
               </form>
+            )}
+            {tracked.length > 0 && (
+              <div className="mt-3 rounded-md border border-slate-800 bg-slate-950/60 p-3 text-sm">
+                <p className="text-xs uppercase tracking-wide text-slate-500">Your buildings with FIAREP</p>
+                <ul className="mt-1 space-y-1">
+                  {tracked.map((t) => (
+                    <li key={t.id} className="flex flex-wrap items-baseline justify-between gap-2 text-slate-300">
+                      <span>{t.address}</span>
+                      <span className={`text-xs font-semibold ${t.status === "quoted" ? "text-emerald-300" : t.status === "accepted" ? "text-sky-300" : t.status === "declined" ? "text-rose-300" : "text-amber-300"}`}>
+                        {t.status === "quoted" ? `FIAREP quoted ${money(t.quotedTotal || 0)} — contract sent to your email` : t.status === "accepted" ? "Accepted — repair quote on the way" : t.status === "declined" ? "Not taken" : "Waiting for FIAREP"}
+                      </span>
+                      {t.message && <span className="basis-full text-xs text-slate-500">{t.message}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {submitted && <p className="mt-3 rounded-md border border-emerald-500/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">Submitted. FIAREP has {data.property.formattedAddress} with {counts.hpdA + counts.hpdB + counts.hpdC} HPD and {counts.dob} DOB violations — we'll confirm by {lockedEmail ? "email" : "phone"} and send the repair quote after we look. Reference {submitted.id.slice(0, 8)}.</p>}
           </div>
