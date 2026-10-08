@@ -2,8 +2,12 @@
 // Alternative Enforcement Program, their latest HPD registration and the
 // registered contacts — owners, agents, officers. All from NYC Open Data;
 // the building list is cached for six hours.
+import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
+import { and, desc, eq } from "drizzle-orm";
+import { db, entityRecords } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
+import { platformAudit } from "../lib/audit";
 
 const AEP = "hcir-3275";       // HPD Alternative Enforcement Program buildings
 const REGISTRATIONS = "tesw-yqqr"; // HPD multiple dwelling registrations
@@ -128,17 +132,72 @@ router.get("/v1/platform/aep/likely", async (_req, res) => {
   catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
 });
 
+// HPD's public registration file lists names, corporations and business
+// addresses only — it carries no phone numbers.
+async function loadContacts(registrationId: string) {
+  const rows = await fetchJson(soql(CONTACTS, { registrationid: registrationId, $limit: "500" }));
+  return rows.map((c) => ({
+    id: text(c["registrationcontactid"]), type: text(c["type"]), description: text(c["contactdescription"]), title: text(c["title"]),
+    name: [text(c["firstname"]), text(c["middleinitial"]), text(c["lastname"])].filter(Boolean).join(" "), organization: text(c["corporationname"]),
+    address: [[text(c["businesshousenumber"]), text(c["businessstreetname"])].filter(Boolean).join(" "), text(c["businessapartment"]), text(c["businesscity"]), text(c["businessstate"]), text(c["businesszip"])].filter(Boolean).join(", "),
+  }));
+}
+
 router.get("/v1/platform/aep/contacts/:registrationId", async (req, res) => {
   const id = String(req.params["registrationId"]).replace(/\D/g, "");
   if (!id) { res.status(400).json({ error: "registrationId required" }); return; }
+  try { res.json(await loadContacts(id)); }
+  catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
+});
+
+// Contacts for a building that is not (yet) in AEP: find its latest HPD
+// registration by borough / block / lot, then the contacts on it.
+router.get("/v1/platform/aep/contacts-by-bbl/:bbl", async (req, res) => {
+  const bbl = String(req.params["bbl"]).replace(/\D/g, "");
+  if (!/^\d{10}$/.test(bbl)) { res.status(400).json({ error: "10-digit BBL required" }); return; }
   try {
-    const rows = await fetchJson(soql(CONTACTS, { registrationid: id, $limit: "500" }));
-    res.json(rows.map((c) => ({
-      id: text(c["registrationcontactid"]), type: text(c["type"]), description: text(c["contactdescription"]), title: text(c["title"]),
-      name: [text(c["firstname"]), text(c["middleinitial"]), text(c["lastname"])].filter(Boolean).join(" "), organization: text(c["corporationname"]),
-      address: [[text(c["businesshousenumber"]), text(c["businessstreetname"])].filter(Boolean).join(" "), text(c["businessapartment"]), text(c["businesscity"]), text(c["businessstate"]), text(c["businesszip"])].filter(Boolean).join(", "),
-    })));
+    const regs = await fetchJson(soql(REGISTRATIONS, { $where: `boroid=${Number(bbl[0])} AND block=${Number(bbl.slice(1, 6))} AND lot=${Number(bbl.slice(6))}`, $order: "lastregistrationdate DESC", $limit: "5" }));
+    const reg = regs[0];
+    if (!reg) { res.json({ registrationId: null, registeredAt: null, registrationEnds: null, contacts: [] }); return; }
+    const registrationId = text(reg["registrationid"]);
+    res.json({ registrationId, registeredAt: text(reg["lastregistrationdate"]).slice(0, 10) || null, registrationEnds: text(reg["registrationenddate"]).slice(0, 10) || null, contacts: await loadContacts(registrationId) });
   } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
+});
+
+// Saved searches: a named snapshot of a list as it was on screen — the rows and
+// any contacts already opened — so it reopens without touching NYC Open Data.
+const SAVED = "aep-saved-searches";
+const savedView = (r: { id: string; state: Record<string, unknown>; createdAt: Date }) => ({ id: r.id, ...r.state, savedAt: r.createdAt.toISOString() });
+
+router.get("/v1/platform/aep/saved", async (_req, res) => {
+  const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, SAVED), eq(entityRecords.deleted, false))).orderBy(desc(entityRecords.createdAt)).limit(200);
+  res.json(rows.map((r) => savedView(r as never)));
+});
+
+router.post("/v1/platform/aep/saved", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const name = text(b["name"]).slice(0, 120);
+  const mode = ["active", "discharged", "likely"].includes(text(b["mode"])) ? text(b["mode"]) : "";
+  const rows = Array.isArray(b["rows"]) ? (b["rows"] as unknown[]).slice(0, 2000) : [];
+  if (!name || !mode || rows.length === 0) { res.status(400).json({ error: "A name and at least one row are required." }); return; }
+  const contacts = b["contacts"] && typeof b["contacts"] === "object" ? (b["contacts"] as Record<string, unknown>) : {};
+  const now = new Date();
+  const id = randomUUID();
+  const state = { name, mode, search: text(b["search"]).slice(0, 200), borough: text(b["borough"]).slice(0, 40), count: rows.length, rows, contacts };
+  await db.insert(entityRecords).values({ id, tenantId: "default", entity: SAVED, development: name, state, createdBy: owner.name, createdAt: now, updatedAt: now });
+  await platformAudit(owner.name, "aep-search.saved", id, null, { name, mode, count: rows.length });
+  res.json(savedView({ id, state, createdAt: now }));
+});
+
+router.delete("/v1/platform/aep/saved/:id", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const id = String(req.params["id"]);
+  const [before] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, id), eq(entityRecords.entity, SAVED))).limit(1);
+  if (!before) { res.status(404).json({ error: "Not found" }); return; }
+  await platformAudit(owner.name, "aep-search.deleted", id, { name: before.state["name"] }, null);
+  await db.delete(entityRecords).where(eq(entityRecords.id, id));
+  res.json({ ok: true });
 });
 
 export default router;
