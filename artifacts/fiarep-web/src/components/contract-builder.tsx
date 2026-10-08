@@ -16,10 +16,11 @@ const num = (v: string) => Math.max(0, Math.round(Number(v) || 0));
 type Expediter = NonNullable<ContractInput["expediter"]>;
 export function ContractBuilder({ scope, engineering, expediter, onClearScope }: { scope: ScopeLine[]; engineering: { label: string; amount: number } | null; expediter?: Expediter | null; onClearScope: () => void }) {
   const { toast } = useToast();
-  const [kind, setKind] = useState<ContractKind>("fiarep");
   const [number, setNumber] = useState(contractNumber);
   // Prefilled when opened from Job requests → Build contract (?company=…&building=…&units=…).
   const q = useMemo(() => new URLSearchParams(typeof window === "undefined" ? "" : window.location.search), []);
+  // From a job request the default is the work contract — just the violations and repairs, no plan.
+  const [kind, setKind] = useState<ContractKind>(q.get("request") ? "work" : "fiarep");
   const [client, setClient] = useState({ company: q.get("company") || "", contact: q.get("contact") || "", title: "", address: "", email: q.get("email") || "", phone: q.get("phone") || "" });
   const [buildings, setBuildings] = useState<Building[]>([{ name: q.get("building") || "", address: q.get("building") || "", units: num(q.get("units") || "") }]);
   const [flatFee, setFlatFee] = useState(0);
@@ -79,8 +80,8 @@ export function ContractBuilder({ scope, engineering, expediter, onClearScope }:
           <p className="text-xs text-slate-500">{BRAND.name} — {BRAND.long}. The scope filled in above goes into Section 4. Print to PDF or email it to the client.</p>
         </div>
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-right text-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Monthly</p>
-          <p className="text-xl font-bold text-slate-950">{money(fee.monthly)}</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{kind === "work" ? "Work total" : "Monthly"}</p>
+          <p className="text-xl font-bold text-slate-950">{money(kind === "work" ? grandTotal(input) : fee.monthly)}</p>
           <p className="text-xs text-slate-500">{fee.setup ? `+ ${money(fee.setup)} setup · ` : ""}{expediter ? `expediting ${money(expediter.total)} · ` : ""}repairs {money(scopeTotal(input))}{expediter ? ` · to approve ${money(grandTotal(input))}` : ""}</p>
         </div>
       </div>

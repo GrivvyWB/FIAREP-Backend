@@ -3,7 +3,7 @@
 // text lives here so it can be edited in one place.
 import { FEES, PLAN, PLATFORM_INCLUDES, RETAINER_INCLUDES } from "./fiarep-plans";
 
-export type ContractKind = "fiarep" | "platform" | "agency-major" | "agency-small";
+export type ContractKind = "work" | "fiarep" | "platform" | "agency-major" | "agency-small";
 export type Building = { name: string; address: string; units: number };
 export type ScopeLine = { label: string; qty: number; unit: string; price: number };
 export type ContractInput = {
@@ -28,6 +28,7 @@ export type ContractInput = {
 
 export const BRAND = { name: "FIAREP", long: "Field Infrastructure, Asset, Reporting and Evaluation Performance", site: "fiarep.com", email: "fiarep@outlook.com" };
 export const KIND_LABEL: Record<ContractKind, string> = {
+  work: "Work contract — violations and repairs on this building only, no plan, no platform",
   fiarep: `${PLAN.fiarep.name} — $${PLAN.fiarep.perUnit} per unit per month`,
   platform: `${PLAN.platform.name} — $${PLAN.platform.perUnit} per unit per month`,
   "agency-major": `Housing authority / agency — major portfolio (${PLAN.agencyMinUnits.toLocaleString()}+ units), flat monthly fee`,
@@ -39,6 +40,7 @@ const esc = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll(
 const longDate = (iso: string) => (iso ? new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "____________");
 
 export function monthlyFee(c: ContractInput): { monthly: number; basis: string; setup: number } {
+  if (c.kind === "work") return { monthly: 0, basis: "no monthly fee — this Agreement covers the work in Section 4 only", setup: 0 };
   if (c.kind === "fiarep") return { monthly: Math.max(c.units * PLAN.fiarep.perUnit, PLAN.fiarep.minimum), basis: `${c.units.toLocaleString()} units × $${PLAN.fiarep.perUnit} (minimum ${money(PLAN.fiarep.minimum)})`, setup: 0 };
   if (c.kind === "platform") return { monthly: Math.max(c.units * PLAN.platform.perUnit, PLAN.platform.minimum), basis: `${c.units.toLocaleString()} units × $${PLAN.platform.perUnit} (minimum ${money(PLAN.platform.minimum)})`, setup: PLAN.platform.setup };
   const tier = c.kind === "agency-small" ? PLAN.agencySmall : PLAN.agencyMajor;
@@ -61,12 +63,15 @@ export function contractNumber(date = new Date()): string {
 /** Self-contained HTML: prints to Letter from the browser and reads the same in email. */
 export function buildContractHtml(c: ContractInput): string {
   const fee = monthlyFee(c);
-  const includes = c.kind === "platform" ? PLATFORM_INCLUDES : RETAINER_INCLUDES.filter((l) => !l.startsWith("Pilot"));
+  const WORK_INCLUDES = ["Clearing and certifying the open HPD and DOB violations listed in Section 4 — records research, proof of correction, certification filings, dismissal requests, inspections with City officials", "The repairs and professional work listed in Section 4a, performed by licensed, insured contractors and design professionals engaged by FIAREP", "Progress reported to Client as each violation is certified and each repair is completed"];
+  const includes = c.kind === "work" ? WORK_INCLUDES : c.kind === "platform" ? PLATFORM_INCLUDES : RETAINER_INCLUDES.filter((l) => !l.startsWith("Pilot"));
   const repairs = c.scope.reduce((n, l) => n + l.qty * l.price, 0);
   const rows = c.scope.map((l) => `<tr><td>${esc(l.label)}</td><td class="r">${l.qty.toLocaleString()}</td><td>${esc(l.unit)}</td><td class="r">${money(l.price)}</td><td class="r">${money(l.qty * l.price)}</td></tr>`).join("");
   const bld = c.buildings.map((b) => `<tr><td>${esc(b.name)}</td><td>${esc(b.address)}</td><td class="r">${b.units.toLocaleString()}</td></tr>`).join("");
   const feeRows = FEES.map(([what, rate, detail]) => `<tr><td>${esc(what)}<div class="muted">${esc(detail)}</div></td><td class="r nowrap">${esc(rate)}</td></tr>`).join("");
-  const planClause = c.kind === "fiarep"
+  const planClause = c.kind === "work"
+    ? `There is no monthly fee and no platform subscription under this Agreement. Client pays FIAREP for the work in Section 4 at the prices stated there — expediting at the Section 5 rates with no plan discount, repairs and professional work at the unit prices listed — totalling <b>${money(grandTotal(c))}</b>. Half is due on signing; the balance is invoiced as the work is completed and certified.`
+    : c.kind === "fiarep"
     ? `Client pays FIAREP a monthly service fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}). The fee covers the services in Section 2. Work beyond the included cures is billed at the Section 5 rates: OATH hearings at $400 instead of $600, and 20% off every other rate.${c.pilot ? ` <b>Pilot:</b> the first ${PLAN.fiarep.pilotDays} days are billed at half the monthly fee (${money(Math.round(fee.monthly / 2))}) and either party may end this Agreement during the pilot on written notice.` : ""}`
     : c.kind === "platform"
       ? `Client pays FIAREP a monthly platform fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}) plus a one-time setup and staff-training fee of <b>${money(fee.setup)}</b>. Violation removal, expediting and hearings are available at the Section 5 rates with no plan discount.`
@@ -104,11 +109,11 @@ export function buildContractHtml(c: ContractInput): string {
 
 <h2>2. Services</h2>
 <ul>${includes.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
-<p class="muted">Residents and staff use the FIAREP app and website; supervisors and management see the development's complaints, violations and work in real time. FIAREP monitors complaints through the platform 24 / 7 and keeps the resident informed at each step.</p>
+${c.kind === "work" ? `<p class="muted">No platform, app or monthly service is included. Client may add the FIAREP plan or the platform at any time under a separate agreement.</p>` : `<p class="muted">Residents and staff use the FIAREP app and website; supervisors and management see the development's complaints, violations and work in real time. FIAREP monitors complaints through the platform 24 / 7 and keeps the resident informed at each step.</p>`}
 
 <h2>3. Fees</h2>
 <p>${planClause}</p>
-<p>City penalties, DOB re-inspection fees, HPD dismissal-request fees, DOB filing fees and any permit or agency charge pass through to Client at cost. Fees are invoiced monthly in advance and due within 15 days of the invoice.</p>
+<p>City penalties, DOB re-inspection fees, HPD dismissal-request fees, DOB filing fees and any permit or agency charge pass through to Client at cost. ${c.kind === "work" ? "Invoices are due within 15 days." : "Fees are invoiced monthly in advance and due within 15 days of the invoice."}</p>
 
 ${c.expediter ? `<h2>4. Violation work — ${esc(c.expediter.address)}</h2>
 <table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>
@@ -122,10 +127,10 @@ ${c.scope.length || c.engineering ? `<table><thead><tr><th>Item</th><th class="r
 
 <h2>5. Per-job rates</h2>
 <table><thead><tr><th>Service</th><th class="r">Rate</th></tr></thead><tbody>${feeRows}</tbody></table>
-<p class="muted">${c.kind === "platform" ? "Platform-only clients pay the rates above with no discount." : "Plan clients: OATH hearings $400; all other rates 20% off."}</p>
+<p class="muted">${c.kind === "platform" || c.kind === "work" ? "The rates above apply with no discount." : "Plan clients: OATH hearings $400; all other rates 20% off."}</p>
 
 <h2>6. Term</h2>
-<p>This Agreement starts on ${esc(longDate(c.startDate))} and runs for ${c.termMonths} months, then continues month to month. Either party may end it after the initial term on 30 days' written notice. Client may add or remove developments on written notice; the monthly fee adjusts from the next invoice.</p>
+${c.kind === "work" ? `<p>This Agreement starts on ${esc(longDate(c.startDate))} and ends when the work in Section 4 is completed and certified, or ${c.termMonths} months after the start date, whichever comes first. Either party may end it on 30 days' written notice; Client pays for work completed to that date.</p>` : `<p>This Agreement starts on ${esc(longDate(c.startDate))} and runs for ${c.termMonths} months, then continues month to month. Either party may end it after the initial term on 30 days' written notice. Client may add or remove developments on written notice; the monthly fee adjusts from the next invoice.</p>`}
 
 <h2>7. General</h2>
 <p>FIAREP is an independent contractor and is not a law firm, an architecture or engineering firm, or a general contractor; licensed professionals and contractors engaged for Client's work are identified on each scope. FIAREP's liability under this Agreement is limited to the fees Client paid in the three months before the claim. Client is responsible for giving FIAREP access to its properties, records and City accounts needed to perform the services. This Agreement is governed by the laws of the State of New York and is the entire agreement between the parties; changes must be in writing and signed by both.</p>
