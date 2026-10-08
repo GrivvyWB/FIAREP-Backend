@@ -60,8 +60,8 @@ export default function OwnerRepairPrices() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3 lg:flex-nowrap">
         <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-slate-950">Repair price book</h1>
-          <p className="text-sm text-slate-500">FIAREP only — HPD's own contractor prices and the City's cost schedules, footing to roof. Type how many of each a building needs.</p>
+          <h1 className="text-2xl font-bold text-slate-950">FIAREP</h1>
+          <p className="text-sm text-slate-500">Field Infrastructure, Asset, Reporting and Evaluation Performance</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-right shadow-sm">
           <p className="text-xs uppercase tracking-wide text-slate-400">{expediter ? "Expediting + repairs + engineering" : "Repairs + engineering"}</p>
