@@ -123,7 +123,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
           <ul className="mt-4 grid gap-2">
             {PLATFORM_INCLUDES.map((line) => <li key={line} className="flex gap-2 text-sm text-slate-200"><span className="text-slate-400">✓</span>{line}</li>)}
           </ul>
-          <p className="mt-3 text-xs text-slate-400">Violation removal, expediting and hearings available any time at the per-job rates below (no plan discount). Upgrade to the FIAREP plan whenever you want us on it.</p>
+          <p className="mt-3 text-xs text-slate-400">HPD cures at $400 per apartment; violation removal, expediting and hearings any time at the per-job rates below. Upgrade to the FIAREP plan whenever you want us on it.</p>
         </div>
       </div>
 

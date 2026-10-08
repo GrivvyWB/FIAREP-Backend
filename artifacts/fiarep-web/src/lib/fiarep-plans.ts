@@ -9,7 +9,7 @@ export const PLAN = {
 } as const;
 
 export const FEES = [
-  ["HPD cure — every open violation in one apartment certified together (Class A / B / C, smoke / CO detectors, minor electrical)", "$600 per apartment · $400 on the FIAREP plan", "Certificate of correction for the whole apartment, proof of fix, dismissal request. Public areas count as one apartment."],
+  ["HPD cure — every open violation in one apartment certified together (Class A / B / C, smoke / CO detectors, minor electrical)", "$600 per apartment · $400 on the FIAREP plan or the platform", "Certificate of correction for the whole apartment, proof of fix, dismissal request. Public areas count as one apartment."],
   ["Standard DOB / HPD violation removal", "$1,500 flat · $1,000 each from the 3rd on the same building", "Records research, post-approval permits, inspections with city officials, certifying compliance."],
   ["Complex DOB cure — PE / RA sign-off, DOB NOW filings", "$2,500 + engineer at cost", "Unpermitted structural or mechanical work, multi-trade coordination, engineer letters (typically $500 – $2,000+)."],
   ["Stop Work / Vacate Order removal", "$3,000", "Emergency filings, examiner negotiations, rescinding the order. More if plans must be filed."],
@@ -48,5 +48,6 @@ export function expediterFee(apartments: number, dob: number) {
   const total = hpd + dobFee;
   const planHpd = apts * EXPEDITER.perApartmentPlan;
   const planDob = Math.round(dobFee * (1 - EXPEDITER.planDiscount));
-  return { hpd, dob: dobFee, total, plan: planHpd + planDob, planHpd, planDob };
+  // Platform-only clients: the $400 cure, DOB at full rate.
+  return { hpd, dob: dobFee, total, plan: planHpd + planDob, planHpd, planDob, platform: planHpd + dobFee };
 }

@@ -47,7 +47,7 @@ export default function OwnerRepairPrices() {
   }, []);
   const expediter = request ? (() => { const f = expediterFee(request.apartments || 0, request.dob || 0); return { address: request.address, apartments: request.apartments || 0, hpdOpen: (request.hpdA || 0) + (request.hpdB || 0) + (request.hpdC || 0), dob: request.dob || 0, hpd: f.hpd, dobFee: f.dob, total: f.total }; })() : null;
   // The figure for the contract type selected below.
-  const exShown = expediter ? (() => { const f = expediterFee(expediter.apartments, expediter.dob); return onPlan ? { hpd: f.planHpd, dobFee: f.planDob, total: f.plan, rate: EXPEDITER.perApartmentPlan } : { hpd: f.hpd, dobFee: f.dob, total: f.total, rate: EXPEDITER.perApartment }; })() : null;
+  const exShown = expediter ? (() => { const f = expediterFee(expediter.apartments, expediter.dob); return onPlan ? { hpd: f.planHpd, dobFee: f.planDob, total: f.plan, rate: EXPEDITER.perApartmentPlan } : contractKind === "platform" ? { hpd: f.planHpd, dobFee: f.dob, total: f.platform, rate: EXPEDITER.perApartmentPlan } : { hpd: f.hpd, dobFee: f.dob, total: f.total, rate: EXPEDITER.perApartment }; })() : null;
   const set = (key: PriceKey, n: number) => setCounts((c) => ({ ...c, [key]: Math.max(0, Math.round(n) || 0) }));
 
   const groups = useMemo(() => {
@@ -86,7 +86,7 @@ export default function OwnerRepairPrices() {
               <p className="text-slate-300">{expediter.hpdOpen} HPD open ({request.hpdA} A · {request.hpdB} B · {request.hpdC} C) in {expediter.apartments} apartments · {expediter.dob} DOB · {request.units} units</p>
             </div>
             <div className="text-right">
-              <p className="text-xs uppercase tracking-wide text-slate-400">Expediting · {onPlan ? "FIAREP plan rate" : "no plan"}</p>
+              <p className="text-xs uppercase tracking-wide text-slate-400">Expediting · {onPlan ? "FIAREP plan rate" : contractKind === "platform" ? "platform rate" : "no plan"}</p>
               <p className="text-2xl font-bold text-amber-300">{money(exShown!.total)}</p>
               <p className="text-xs text-slate-400">{expediter.apartments} × {money(exShown!.rate)} = {money(exShown!.hpd)}{expediter.dob ? ` · DOB ${money(exShown!.dobFee)}` : ""} · {onPlan ? `no plan ${money(expediter.total)}` : `on the FIAREP plan ${money(expediterFee(expediter.apartments, expediter.dob).plan)}`}</p>
             </div>
