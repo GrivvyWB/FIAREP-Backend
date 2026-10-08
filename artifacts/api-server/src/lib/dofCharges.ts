@@ -73,14 +73,25 @@ export function hpdViolationType(description: string): string {
   for (const [label, re] of HPD_TYPES) if (re.test(d)) return label;
   return "Other";
 }
-// Where the violation is — "APT 5D", or a public area — so repeats in the same
-// apartment count as one repair job.
-export function hpdViolationPlace(description: string): string {
+// Where the violation is, so repeats in the same apartment count as one repair
+// job. HPD's own apartment field is free text — "2NDFL", "SECOND", "2FLOOR",
+// "2" are all the same apartment — so floor-style labels collapse to the story,
+// real apartment numbers (5D, 3B) are kept, and no apartment means a public area.
+const FLOOR_WORDS: Record<string, string> = { FIRST: "1", SECOND: "2", THIRD: "3", FOURTH: "4", FIFTH: "5", SIXTH: "6", BSMT: "0", BASEMENT: "0", CELLAR: "0", GROUND: "1", GRND: "1", TOP: "TOP" };
+export function hpdViolationPlace(description: string, apartment: string, story: string): string {
   const d = description.toUpperCase();
-  const apt = d.match(/\bAPT\.?\s*#?\s*([A-Z0-9-]+)/);
-  if (apt) return `APT ${apt[1]}`;
+  const apt = apartment.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  if (apt) {
+    const floorWord = FLOOR_WORDS[apt.replace(/(FL|FLOOR|FLR|FLO|FLRR)$/, "")];
+    const floorNum = apt.match(/^(\d{1,2})(ST|ND|RD|TH)?(FL|FLOOR|FLR|FLO)?$/);
+    if (floorWord) return `FLOOR ${floorWord}`;
+    if (floorNum) return `FLOOR ${floorNum[1]}`;
+    return `APT ${apt}`;
+  }
+  const fromText = d.match(/\bAPT\.?\s*#?\s*([A-Z0-9-]+)/);
+  if (fromText) return `APT ${fromText[1].replace(/[^A-Z0-9]/g, "")}`;
   for (const place of ["PUBLIC HALL", "BASEMENT", "CELLAR", "ROOF", "BULKHEAD", "YARD", "FIRE ESCAPE", "ENTRANCE", "LOBBY", "STAIR", "BOILER ROOM", "COMPACTOR", "ENTIRE BUILDING"]) if (d.includes(place)) return place;
-  return "BUILDING";
+  return story ? `PUBLIC STORY ${story}` : "BUILDING";
 }
 
 export type DofLookup = {
@@ -164,7 +175,7 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
     try {
       if (bbl) {
         // Every open violation with its notice text, so the client sees what they are.
-        const url = soql(HPD_VIOLATIONS, { $select: "class,novdescription", $where: `bbl='${bbl}' AND violationstatus='Open'`, $limit: "5000" });
+        const url = soql(HPD_VIOLATIONS, { $select: "class,novdescription,apartment,story", $where: `bbl='${bbl}' AND violationstatus='Open'`, $limit: "5000" });
         const byType = new Map<string, ViolationType & { places: Set<string> }>();
         const allPlaces = new Set<string>();
         for (const r of (await fetchJson(url)) as Record<string, unknown>[]) {
@@ -175,12 +186,15 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
           const type = hpdViolationType(desc);
           const t = byType.get(type) || { type, count: 0, a: 0, b: 0, c: 0, jobs: 0, places: new Set<string>() };
           t.count += 1; if (cls === "A") t.a += 1; else if (cls === "B") t.b += 1; else if (cls === "C") t.c += 1;
-          const place = hpdViolationPlace(desc);
+          const place = hpdViolationPlace(desc, text(r["apartment"]), text(r["story"]));
           t.places.add(place); allPlaces.add(place);
           byType.set(type, t);
         }
-        counts.hpdApartments = allPlaces.size;
-        counts.hpdTypes = [...byType.values()].map(({ places, ...t }) => ({ ...t, jobs: places.size })).sort((x, y) => y.count - x.count);
+        // Never more jobs than the building has units, plus a few public areas.
+        const units = propertyTax?.units || 0;
+        const cap = units > 0 ? units + 3 : Number.POSITIVE_INFINITY;
+        counts.hpdApartments = Math.min(allPlaces.size, cap);
+        counts.hpdTypes = [...byType.values()].map(({ places, ...t }) => ({ ...t, jobs: Math.min(places.size, cap, t.count) })).sort((x, y) => y.count - x.count);
       }
       if (bin) {
         const url = soql(DOB_VIOLATIONS, { $select: "violation_type,count(*) as n", $where: `bin='${bin}' AND violation_category like '%ACTIVE%'`, $group: "violation_type", $order: "n DESC" });
