@@ -23,6 +23,19 @@ export default function OwnerJoinRequests() {
   const [filter, setFilter] = useState<"new" | "approved" | "declined" | "all">("new");
   const [codes, setCodes] = useState<DemoCode[]>([]);
   const [label, setLabel] = useState("");
+  // Contact on file — the email job requests are locked to. Edited only here.
+  const [editing, setEditing] = useState<Record<string, { contactName: string; email: string; phone: string }>>({});
+  async function saveContact(r: JoinRequest) {
+    const patch = editing[r.id]; if (!patch) return;
+    setBusy(r.id);
+    try {
+      await customFetch(`/api/v1/platform/join-requests/${encodeURIComponent(r.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch), responseType: "json" } as never);
+      setEditing((e) => { const n = { ...e }; delete n[r.id]; return n; });
+      toast({ title: "Contact updated", description: `${r.company}: job requests now go out under ${patch.email || "no email"}.` });
+      await reload();
+    } catch (err: any) { toast({ variant: "destructive", title: "Could not update", description: err?.data?.error || err?.message }); }
+    finally { setBusy(""); }
+  }
 
   async function reload() {
     try {
@@ -115,7 +128,17 @@ export default function OwnerJoinRequests() {
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className="text-lg font-semibold text-slate-950">{r.company}</p>
-              <p className="text-sm text-slate-600">{r.contactName} · {r.phone}{r.email ? ` · ${r.email}` : ""}</p>
+              {editing[r.id] ? (
+                <form className="mt-1 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void saveContact(r); }}>
+                  <Input className="w-40" placeholder="Contact" value={editing[r.id]!.contactName} onChange={(e) => setEditing({ ...editing, [r.id]: { ...editing[r.id]!, contactName: e.target.value } })} />
+                  <Input className="w-56" type="email" placeholder="Email" value={editing[r.id]!.email} onChange={(e) => setEditing({ ...editing, [r.id]: { ...editing[r.id]!, email: e.target.value } })} />
+                  <Input className="w-36" placeholder="Phone" value={editing[r.id]!.phone} onChange={(e) => setEditing({ ...editing, [r.id]: { ...editing[r.id]!, phone: e.target.value } })} />
+                  <Button type="submit" size="sm" disabled={busy === r.id}>Save</Button>
+                  <Button type="button" size="sm" variant="ghost" onClick={() => setEditing((e) => { const n = { ...e }; delete n[r.id]; return n; })}>Cancel</Button>
+                </form>
+              ) : (
+                <p className="text-sm text-slate-600">{r.contactName} · {r.phone}{r.email ? ` · ${r.email}` : ""} <button type="button" className="ml-1 text-xs text-slate-400 underline hover:text-slate-700" onClick={() => setEditing({ ...editing, [r.id]: { contactName: r.contactName || "", email: r.email || "", phone: r.phone || "" } })}>edit</button></p>
+              )}
               {r.address && <p className="text-sm text-slate-500">{r.address}</p>}
               <p className="mt-1 text-xs text-slate-400">Received {when(r.createdAt)}{r.decidedAt ? ` · ${r.status} ${when(r.decidedAt)} by ${r.decidedBy}` : ""}</p>
             </div>

@@ -44,31 +44,33 @@ export default function JoinFiarep() {
   const [sent, setSent] = useState<string>("");
   // The pilot request this browser filed, and whether FIAREP approved it.
   // Approval unlocks the estimator; the access code works on any device.
-  type JoinState = { id?: string; status?: string; code?: string; company?: string };
+  type JoinState = { id?: string; status?: string; code?: string; company?: string; email?: string; contactName?: string; phone?: string };
   const readJoin = (): JoinState => { try { return JSON.parse(localStorage.getItem("fiarep_join") || "{}") || {}; } catch { return {}; } };
   const [join, setJoinState] = useState<JoinState>(readJoin);
   const setJoin = (v: JoinState) => { setJoinState(v); try { localStorage.setItem("fiarep_join", JSON.stringify(v)); } catch { /* private mode */ } };
   const unlocked = join.status === "approved";
   useEffect(() => {
-    if (!join.id || unlocked) return;
+    if (!join.id) return;
     let alive = true;
     const check = async () => {
       try {
-        const r = await customFetch<{ status: string; accessCode: string; company: string }>(`/api/v1/public/join-requests/${encodeURIComponent(join.id!)}`, { responseType: "json" } as never);
+        const r = await customFetch<{ status: string; accessCode: string; company: string; email?: string; contactName?: string; phone?: string }>(`/api/v1/public/join-requests/${encodeURIComponent(join.id!)}`, { responseType: "json" } as never);
         if (!alive) return;
-        if (r.status === "approved") { setJoin({ ...join, status: "approved", code: r.accessCode, company: r.company }); toast({ title: "Approved", description: "FIAREP approved your pilot — the estimator is unlocked." }); }
-        else if (r.status !== join.status) setJoin({ ...join, status: r.status });
+        const contact = { email: r.email || "", contactName: r.contactName || "", phone: r.phone || "" };
+        if (r.status === "approved" && join.status !== "approved") { setJoin({ ...join, ...contact, status: "approved", code: r.accessCode, company: r.company }); toast({ title: "Approved", description: "FIAREP approved your pilot — the estimator is unlocked." }); }
+        else if (r.status !== join.status || contact.email !== (join.email || "")) setJoin({ ...join, ...contact, status: r.status });
       } catch { /* offline or removed */ }
     };
     void check();
-    const t = setInterval(() => void check(), 20_000);
-    return () => { alive = false; clearInterval(t); };
+    // Waiting for approval: poll. Unlocked: one refresh so a contact change made in Platform Control lands.
+    const t = unlocked ? null : setInterval(() => void check(), 20_000);
+    return () => { alive = false; if (t) clearInterval(t); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [join.id, unlocked]);
   const unlockWithCode = async (code: string) => {
     try {
-      const r = await customFetch<{ status: string; accessCode: string; company: string; id: string }>("/api/v1/public/join-requests/unlock", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }), responseType: "json" } as never);
-      setJoin({ id: r.id, status: "approved", code: r.accessCode, company: r.company });
+      const r = await customFetch<{ status: string; accessCode: string; company: string; id: string; email?: string; contactName?: string; phone?: string }>("/api/v1/public/join-requests/unlock", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }), responseType: "json" } as never);
+      setJoin({ id: r.id, status: "approved", code: r.accessCode, company: r.company, email: r.email || "", contactName: r.contactName || "", phone: r.phone || "" });
       toast({ title: "Unlocked", description: `${r.company} — the estimator is open.` });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Access code", description: err?.data?.error || err?.message || "That code isn't recognized." });

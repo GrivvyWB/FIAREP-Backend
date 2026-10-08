@@ -44,6 +44,10 @@ const publicView = (row: typeof entityRecords.$inferSelect) => ({
   // The code travels only once the owner approved — and only to the browser
   // that filed the request (it knows the id) or by email.
   accessCode: String(row.state["status"] || "") === "approved" ? String(row.state["accessCode"] || "") : "",
+  // Contact on file — the Join page locks job requests to this email; only Platform Control changes it.
+  contactName: String(row.state["contactName"] || ""),
+  email: String(row.state["email"] || ""),
+  phone: String(row.state["phone"] || ""),
 });
 
 const router: IRouter = Router();
@@ -170,6 +174,23 @@ router.post("/v1/platform/join-codes/:id/revoke", async (req, res) => {
   const [row] = await db.update(entityRecords).set({ state: { ...before.state, active: false, revokedAt: new Date().toISOString() }, updatedAt: new Date() }).where(eq(entityRecords.id, before.id)).returning();
   await platformAudit(owner.name, "join-code.revoked", before.id, before, row);
   res.json(codeOut(row!));
+});
+
+// Platform owner edits the contact on file (email, phone, name). The email is
+// what job requests from the Join page are locked to.
+router.patch("/v1/platform/join-requests/:id", requirePlatformOwner, async (req, res) => {
+  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const owner = res.locals["platformOwner"] as { name: string };
+  const [before] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, String(req.params.id || "")), eq(entityRecords.entity, ENTITY), eq(entityRecords.deleted, false))).limit(1);
+  if (!before) { res.status(404).json({ error: "Request not found" }); return; }
+  const patch: Record<string, string> = {};
+  if (typeof b["email"] === "string") { const email = str(b["email"], 200).toLowerCase(); if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400).json({ error: "Enter a valid email" }); return; } patch["email"] = email; }
+  if (typeof b["phone"] === "string") patch["phone"] = str(b["phone"], 60);
+  if (typeof b["contactName"] === "string") patch["contactName"] = str(b["contactName"], 200);
+  const now = new Date();
+  const [row] = await db.update(entityRecords).set({ state: { ...before.state, ...patch, contactUpdatedAt: now.toISOString(), contactUpdatedBy: owner.name }, updatedAt: now }).where(eq(entityRecords.id, before.id)).returning();
+  await platformAudit(owner.name, "join-request.contact-updated", before.id, before, row);
+  res.json({ ok: true, ...patch });
 });
 
 router.post("/v1/platform/join-requests/:id/:decision", async (req, res) => {

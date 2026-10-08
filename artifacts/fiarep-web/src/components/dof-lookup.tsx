@@ -17,7 +17,7 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
  * lot and what the building owes the City right now — OATH / ECB summons
  * balances by agency and HPD emergency-repair charges. Check it any time. */
 export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; dob: number; apartments?: number; hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes?: Array<{ type: string; count: number }>; address?: string };
-type JoinInfo = { id?: string; company?: string };
+type JoinInfo = { id?: string; company?: string; email?: string; contactName?: string; phone?: string; status?: string };
 const readJoin = (): JoinInfo => { try { return JSON.parse(localStorage.getItem("fiarep_join") || "{}") as JoinInfo; } catch { return {}; } };
 const SUBMIT_KEY = "fiarep_work_requests";
 
@@ -31,7 +31,10 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
   const [counts, setCountsState] = useState<ViolationCounts>({ hpdA: 0, hpdB: 0, hpdC: 0, dob: 0 });
   const setCounts = (c: ViolationCounts) => { setCountsState(c); onCounts?.(c); };
   // Submit the building to FIAREP as a job.
-  const [contact, setContact] = useState(() => ({ company: readJoin().company || "", contact: "", email: "", phone: "", notes: "" }));
+  const join = readJoin();
+  // Email is locked to the one on the approved join request — only Platform Control changes it.
+  const lockedEmail = join.status === "approved" && join.email ? join.email : "";
+  const [contact, setContact] = useState(() => ({ company: join.company || "", contact: join.contactName || "", email: lockedEmail, phone: join.phone || "", notes: "" }));
   const [submitted, setSubmitted] = useState<{ id: string; emailed: boolean } | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -62,7 +65,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
       const r = await customFetch<{ ok: boolean; id: string; emailed: boolean }>("/api/v1/public/work-requests", {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
         body: JSON.stringify({
-          joinId: readJoin().id || "", ...contact,
+          joinId: join.id || "", ...contact, email: lockedEmail || contact.email,
           address: data.property.formattedAddress, borough: data.property.borough, block: data.property.block, lot: data.property.lot, bbl: data.property.bbl, bin: data.property.bin,
           units: data.propertyTax?.units || 0, hpdA: counts.hpdA, hpdB: counts.hpdB, hpdC: counts.hpdC, dob: counts.dob, dofOwed: total,
           apartments: counts.apartments || 0, hpdTypes: counts.hpdTypes || [], dobTypes: counts.dobTypes || [],
@@ -73,7 +76,7 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
     } catch (err: any) { setError(err?.data?.error || err?.message || "Could not submit — try again."); }
     finally { setSending(false); }
   }
-  const canSend = canSubmit && data && contact.company.trim() && contact.contact.trim() && (contact.email.trim() || contact.phone.trim());
+  const canSend = canSubmit && data && contact.company.trim() && contact.contact.trim() && ((lockedEmail || contact.email).trim() || contact.phone.trim());
   return (
     <div className="rounded-xl border border-slate-700 bg-slate-950/60 p-4">
       <p className="font-semibold text-slate-200">Department of Finance — what the building owes now</p>
@@ -144,7 +147,9 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit }: { onResult: (t
                 <div className="grid gap-2 sm:grid-cols-2">
                   <input value={contact.company} onChange={(e) => setContact({ ...contact, company: e.target.value })} placeholder="Company" className={text} />
                   <input value={contact.contact} onChange={(e) => setContact({ ...contact, contact: e.target.value })} placeholder="Your name" className={text} />
-                  <input type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} placeholder="Email" className={text} />
+                  {lockedEmail
+                    ? <span className={`${text} flex items-center justify-between gap-2 border-slate-800 text-slate-400`} title="Email on file with FIAREP — change it through FIAREP"><span className="truncate">{lockedEmail}</span><span className="text-[10px] uppercase tracking-wide text-slate-500">on file</span></span>
+                    : <input type="email" value={contact.email} onChange={(e) => setContact({ ...contact, email: e.target.value })} placeholder="Email" className={text} />}
                   <input value={contact.phone} onChange={(e) => setContact({ ...contact, phone: e.target.value })} placeholder="Phone" className={text} />
                 </div>
                 <textarea value={contact.notes} onChange={(e) => setContact({ ...contact, notes: e.target.value })} placeholder="Anything we should know (optional)" rows={2} className={`${text} w-full`} />
