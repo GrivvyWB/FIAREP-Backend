@@ -50,7 +50,7 @@ router.post("/v1/public/work-requests", async (req, res) => {
     borough: str(b["borough"], 40), block: str(b["block"], 10), lot: str(b["lot"], 10), bbl: str(b["bbl"], 12), bin: str(b["bin"], 10),
     units: int(b["units"]), hpdA: int(b["hpdA"]), hpdB: int(b["hpdB"]), hpdC: int(b["hpdC"]), dob: int(b["dob"]),
     dofOwed: Number(b["dofOwed"]) || 0, notes: str(b["notes"], 2000),
-    hpdTypes: (Array.isArray(b["hpdTypes"]) ? b["hpdTypes"] : []).slice(0, 40).map((t) => { const x = (t && typeof t === "object" ? t : {}) as Record<string, unknown>; return { type: str(x["type"], 60), count: int(x["count"]), a: int(x["a"]), b: int(x["b"]), c: int(x["c"]) }; }).filter((t) => t.type),
+    hpdTypes: (Array.isArray(b["hpdTypes"]) ? b["hpdTypes"] : []).slice(0, 40).map((t) => { const x = (t && typeof t === "object" ? t : {}) as Record<string, unknown>; return { type: str(x["type"], 60), count: int(x["count"]), a: int(x["a"]), b: int(x["b"]), c: int(x["c"]), jobs: int(x["jobs"]) }; }).filter((t) => t.type),
     dobTypes: (Array.isArray(b["dobTypes"]) ? b["dobTypes"] : []).slice(0, 40).map((t) => { const x = (t && typeof t === "object" ? t : {}) as Record<string, unknown>; return { type: str(x["type"], 80), count: int(x["count"]) }; }).filter((t) => t.type),
   };
   await db.insert(entityRecords).values({ id, tenantId: "default", entity: ENTITY, development: company, state, createdBy: "public-join", createdAt: now, updatedAt: now });

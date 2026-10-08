@@ -9,7 +9,7 @@ type WorkRequest = {
   id: string; createdAt: string; status: string; company: string; contact: string; email: string; phone: string;
   address: string; borough: string; block: string; lot: string; bbl: string; bin: string; units: number;
   hpdA: number; hpdB: number; hpdC: number; dob: number; dofOwed: number; notes: string;
-  hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number }>; dobTypes?: Array<{ type: string; count: number }>; decidedAt?: string; decidedBy?: string; message?: string;
+  hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes?: Array<{ type: string; count: number }>; decidedAt?: string; decidedBy?: string; message?: string;
 };
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");

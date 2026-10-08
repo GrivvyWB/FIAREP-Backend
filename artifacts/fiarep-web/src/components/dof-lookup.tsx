@@ -6,7 +6,7 @@ export type DofLookup = {
   property: { formattedAddress: string; borough: string; block: string | null; lot: string | null; bbl: string | null; bin: string | null };
   oath: { openBalance: number; openCount: number; penaltiesImposed: number; paid: number; byAgency: Array<{ agency: string; balance: number; count: number }>; items: Array<{ ticket: string; agency: string; violationDate: string | null; hearingDate: string | null; hearingStatus: string; complianceStatus: string; charge: string; penalty: number; paid: number; lateFees: number; balance: number }> };
   propertyTax: { year: string; taxClass: string; marketValue: number; assessedValue: number; taxableValue: number; taxRate: number | null; estimatedAnnualTax: number | null; owner: string; units: number; yearBuilt: string; dofLink: string } | null;
-  violations: { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number; hpdTypes: Array<{ type: string; count: number; a: number; b: number; c: number }>; dobTypes: Array<{ type: string; count: number }> } | null;
+  violations: { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number; hpdTypes: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes: Array<{ type: string; count: number }> } | null;
   hpdCharges: { total: number; count: number; items: Array<{ omo: string; createdAt: string | null; workType: string; description: string; amount: number }> };
   warnings: string[];
   retrievedAt: string;
@@ -16,7 +16,7 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 /** Department of Finance window: type the building address, get the block &
  * lot and what the building owes the City right now — OATH / ECB summons
  * balances by agency and HPD emergency-repair charges. Check it any time. */
-export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; dob: number; hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number }>; dobTypes?: Array<{ type: string; count: number }>; address?: string };
+export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; dob: number; hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes?: Array<{ type: string; count: number }>; address?: string };
 type JoinInfo = { id?: string; company?: string };
 const readJoin = (): JoinInfo => { try { return JSON.parse(localStorage.getItem("fiarep_join") || "{}") as JoinInfo; } catch { return {}; } };
 const SUBMIT_KEY = "fiarep_work_requests";

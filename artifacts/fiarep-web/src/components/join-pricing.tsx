@@ -20,6 +20,17 @@ const AGENCIES = [
   { name: "OATH / ECB — hearings", lines: ["A missed summons defaults: Class 1 $12,500, up to $25,000 per summons, plus up to $1,000 per day uncorrected.", "We file motions to vacate default judgments and represent you at the hearing.", "$300 – $950 per hearing appearance."] },
 ];
 
+// Repair price per job (one apartment or location, whatever the number of
+// violations cited there) by what it is — the same figures as the FIAREP price
+// book: HPD's average per contractor order, HPD / HCR cost schedules. Types
+// with no sourced price stay 0 and are quoted after a look.
+const REPAIR_PER_JOB: Record<string, number> = {
+  "Smoke detector": 125, "Carbon monoxide detector": 125, "Window guards": 175,
+  "Roaches": 1800, "Mice / rats": 1800, "Bed bugs": 1800,
+  "Lead paint": 6500, "Mold": 3400, "Heat / hot water": 4200,
+  "Peeling paint / plaster": 2500, "Leak / plumbing": 3100, "Electrical": 2900,
+  "Door / self-closing": 1100, "Window": 2017, "Floor": 1793, "Ceiling / wall": 2500,
+};
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
 export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean; pending: boolean; onUnlock: (code: string) => Promise<void> }) {
@@ -33,7 +44,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   // What the building owes the City, from the Department of Finance lookup (or typed).
   const [dofOwed, setDofOwed] = useState(0);
   // What the open violations are, by type — from the DOF / violation lookup.
-  const [violations, setViolations] = useState<{ address?: string; hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number }>; dobTypes?: Array<{ type: string; count: number }> } | null>(null);
+  const [violations, setViolations] = useState<{ address?: string; hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes?: Array<{ type: string; count: number }> } | null>(null);
   // Engineering and repairs are typed in — the price book lives in Platform Control, FIAREP only.
   const [customRepair, setCustomRepair] = useState(0);
   const [customEng, setCustomEng] = useState(0);
@@ -188,7 +199,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <Slider label="HPD Class A violations (non-hazardous)" value={hpdA} min={0} max={1000} onChange={setHpdA} />
             <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
             <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
-            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.hpdTypes || c.dobTypes) setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); }} canSubmit={unlocked} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.hpdTypes || c.dobTypes) { setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); setCustomRepair((c.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * (REPAIR_PER_JOB[t.type] || 0), 0)); } }} canSubmit={unlocked} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
@@ -219,12 +230,12 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-sm">
                 <p className="text-xs uppercase tracking-wide text-slate-500">What the open violations are — {violations.address}</p>
                 <table className="mt-1 w-full text-xs text-slate-300">
-                  <thead><tr className="text-slate-500"><th className="py-0.5 text-left font-normal">HPD</th><th className="py-0.5 text-right font-normal">A</th><th className="py-0.5 text-right font-normal">B</th><th className="py-0.5 text-right font-normal">C</th><th className="py-0.5 text-right font-normal">Total</th></tr></thead>
+                  <thead><tr className="text-slate-500"><th className="py-0.5 text-left font-normal">HPD</th><th className="py-0.5 text-right font-normal">A</th><th className="py-0.5 text-right font-normal">B</th><th className="py-0.5 text-right font-normal">C</th><th className="py-0.5 text-right font-normal">Total</th><th className="py-0.5 text-right font-normal">Apts</th><th className="py-0.5 text-right font-normal">Repair est.</th></tr></thead>
                   <tbody>
                     {violations.hpdTypes?.map((t) => (
-                      <tr key={t.type} className="border-t border-slate-800"><td className="py-0.5">{t.type}</td><td className="py-0.5 text-right text-slate-500">{t.a || ""}</td><td className="py-0.5 text-right text-slate-500">{t.b || ""}</td><td className="py-0.5 text-right text-slate-500">{t.c || ""}</td><td className="py-0.5 text-right font-semibold text-slate-100">{t.count}</td></tr>
+                      <tr key={t.type} className="border-t border-slate-800"><td className="py-0.5">{t.type}</td><td className="py-0.5 text-right text-slate-500">{t.a || ""}</td><td className="py-0.5 text-right text-slate-500">{t.b || ""}</td><td className="py-0.5 text-right text-slate-500">{t.c || ""}</td><td className="py-0.5 text-right font-semibold text-slate-100">{t.count}</td><td className="py-0.5 text-right text-slate-400">{t.jobs || t.count}</td><td className="py-0.5 text-right text-emerald-300">{REPAIR_PER_JOB[t.type] ? money((t.jobs || t.count) * REPAIR_PER_JOB[t.type]!) : <span className="text-slate-600">after we look</span>}</td></tr>
                     ))}
-                    <tr className="border-t border-slate-700"><td className="py-1 font-semibold text-slate-100">HPD open</td><td className="py-1 text-right text-slate-400">{hpdA}</td><td className="py-1 text-right text-slate-400">{hpdB}</td><td className="py-1 text-right text-slate-400">{hpdC}</td><td className="py-1 text-right font-semibold text-amber-300">{hpdA + hpdB + hpdC}</td></tr>
+                    <tr className="border-t border-slate-700"><td className="py-1 font-semibold text-slate-100">HPD open</td><td className="py-1 text-right text-slate-400">{hpdA}</td><td className="py-1 text-right text-slate-400">{hpdB}</td><td className="py-1 text-right text-slate-400">{hpdC}</td><td className="py-1 text-right font-semibold text-amber-300">{hpdA + hpdB + hpdC}</td><td className="py-1 text-right text-slate-400">{(violations.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count), 0)}</td><td className="py-1 text-right font-semibold text-emerald-300">{money((violations.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * (REPAIR_PER_JOB[t.type] || 0), 0))}</td></tr>
                   </tbody>
                 </table>
                 {violations.dobTypes && violations.dobTypes.length > 0 && (
@@ -236,7 +247,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
                     </tbody>
                   </table>
                 )}
-                <p className="mt-1 text-[11px] text-slate-500">From the City's open HPD / DOB violation notices for this block & lot. Expediter clears and certifies every one; the fixes themselves are repairs, quoted separately.</p>
+                <p className="mt-1 text-[11px] text-slate-500">From the City's open HPD / DOB violation notices for this block & lot. Expediter clears and certifies every one. Repair est. is one job per apartment cited (Apts), at FIAREP's price book rates, and fills the Repairs box above — change it if you have your own quote; types marked "after we look" are priced on site.</p>
               </div>
             ) : null}
             <p className="pt-2 text-xs text-slate-500">Expediter uses FIAREP's per-job rates above (plan members pay 20% less: {money(Math.round(est.expediter * 0.8))}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts carry no price of their own. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>

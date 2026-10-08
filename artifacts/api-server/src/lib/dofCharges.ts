@@ -40,7 +40,8 @@ export type PropertyTax = {
   estimatedAnnualTax: number | null; owner: string; units: number; yearBuilt: string; dofLink: string;
 };
 
-export type ViolationType = { type: string; count: number; a: number; b: number; c: number };
+// jobs = distinct apartments / locations cited for this type: one repair order each.
+export type ViolationType = { type: string; count: number; a: number; b: number; c: number; jobs: number };
 export type ViolationCounts = { hpdA: number; hpdB: number; hpdC: number; hpdOpen: number; dobActive: number; hpdTypes: ViolationType[]; dobTypes: Array<{ type: string; count: number }> };
 
 // What an HPD violation is about, from its notice text — first match wins.
@@ -71,6 +72,15 @@ export function hpdViolationType(description: string): string {
   const d = description.toUpperCase();
   for (const [label, re] of HPD_TYPES) if (re.test(d)) return label;
   return "Other";
+}
+// Where the violation is — "APT 5D", or a public area — so repeats in the same
+// apartment count as one repair job.
+export function hpdViolationPlace(description: string): string {
+  const d = description.toUpperCase();
+  const apt = d.match(/\bAPT\.?\s*#?\s*([A-Z0-9-]+)/);
+  if (apt) return `APT ${apt[1]}`;
+  for (const place of ["PUBLIC HALL", "BASEMENT", "CELLAR", "ROOF", "BULKHEAD", "YARD", "FIRE ESCAPE", "ENTRANCE", "LOBBY", "STAIR", "BOILER ROOM", "COMPACTOR", "ENTIRE BUILDING"]) if (d.includes(place)) return place;
+  return "BUILDING";
 }
 
 export type DofLookup = {
@@ -155,17 +165,19 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
       if (bbl) {
         // Every open violation with its notice text, so the client sees what they are.
         const url = soql(HPD_VIOLATIONS, { $select: "class,novdescription", $where: `bbl='${bbl}' AND violationstatus='Open'`, $limit: "5000" });
-        const byType = new Map<string, ViolationType>();
+        const byType = new Map<string, ViolationType & { places: Set<string> }>();
         for (const r of (await fetchJson(url)) as Record<string, unknown>[]) {
           const cls = text(r["class"]).toUpperCase();
           counts.hpdOpen += 1;
           if (cls === "A") counts.hpdA += 1; else if (cls === "B") counts.hpdB += 1; else if (cls === "C") counts.hpdC += 1;
-          const type = hpdViolationType(text(r["novdescription"]));
-          const t = byType.get(type) || { type, count: 0, a: 0, b: 0, c: 0 };
+          const desc = text(r["novdescription"]);
+          const type = hpdViolationType(desc);
+          const t = byType.get(type) || { type, count: 0, a: 0, b: 0, c: 0, jobs: 0, places: new Set<string>() };
           t.count += 1; if (cls === "A") t.a += 1; else if (cls === "B") t.b += 1; else if (cls === "C") t.c += 1;
+          t.places.add(hpdViolationPlace(desc));
           byType.set(type, t);
         }
-        counts.hpdTypes = [...byType.values()].sort((x, y) => y.count - x.count);
+        counts.hpdTypes = [...byType.values()].map(({ places, ...t }) => ({ ...t, jobs: places.size })).sort((x, y) => y.count - x.count);
       }
       if (bin) {
         const url = soql(DOB_VIOLATIONS, { $select: "violation_type,count(*) as n", $where: `bin='${bin}' AND violation_category like '%ACTIVE%'`, $group: "violation_type", $order: "n DESC" });
