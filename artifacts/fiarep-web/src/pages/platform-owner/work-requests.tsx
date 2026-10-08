@@ -50,7 +50,7 @@ export default function OwnerWorkRequests() {
     finally { setBusy(""); }
   }
   function buildContract(r: WorkRequest) {
-    const q = new URLSearchParams({ company: r.company, contact: r.contact, email: r.email, phone: r.phone, building: r.address, units: String(r.units || 0), dob: String(r.dob || 0) });
+    const q = new URLSearchParams({ request: r.id, company: r.company, contact: r.contact, email: r.email, phone: r.phone, building: r.address, units: String(r.units || 0), dob: String(r.dob || 0) });
     setLocation(`/platform-owner/repair-prices?${q.toString()}`);
   }
 

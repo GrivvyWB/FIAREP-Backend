@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Mail, Printer } from "lucide-react";
-import { BRAND, KIND_LABEL, agencyDefaultFee, buildContractHtml, contractNumber, monthlyFee, scopeTotal, type Building, type ContractInput, type ContractKind, type ScopeLine } from "@/lib/contract";
+import { BRAND, KIND_LABEL, agencyDefaultFee, buildContractHtml, contractNumber, grandTotal, monthlyFee, scopeTotal, type Building, type ContractInput, type ContractKind, type ScopeLine } from "@/lib/contract";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -13,7 +13,8 @@ const num = (v: string) => Math.max(0, Math.round(Number(v) || 0));
 /** Builds the service agreement from the client's details plus whatever is
  * filled in on the price book above (scope + engineering). Print → PDF, or
  * email it to the client from the FIAREP mailbox. */
-export function ContractBuilder({ scope, engineering, onClearScope }: { scope: ScopeLine[]; engineering: { label: string; amount: number } | null; onClearScope: () => void }) {
+type Expediter = NonNullable<ContractInput["expediter"]>;
+export function ContractBuilder({ scope, engineering, expediter, onClearScope }: { scope: ScopeLine[]; engineering: { label: string; amount: number } | null; expediter?: Expediter | null; onClearScope: () => void }) {
   const { toast } = useToast();
   const [kind, setKind] = useState<ContractKind>("fiarep");
   const [number, setNumber] = useState(contractNumber);
@@ -36,8 +37,8 @@ export function ContractBuilder({ scope, engineering, onClearScope }: { scope: S
   const suggested = agencyDefaultFee(kind, units);
   useEffect(() => { if (!feeEdited) setFlatFee(suggested); }, [suggested, feeEdited]);
   const input: ContractInput = useMemo(() => ({
-    kind, number, date: today(), fiarepSigner, fiarepEntity, client, buildings: buildings.filter((b) => b.name || b.address || b.units), units, flatFee, pilot, startDate, termMonths, scope, engineering, notes,
-  }), [kind, number, fiarepSigner, fiarepEntity, client, buildings, units, flatFee, pilot, startDate, termMonths, scope, engineering, notes]);
+    kind, number, date: today(), fiarepSigner, fiarepEntity, client, buildings: buildings.filter((b) => b.name || b.address || b.units), units, flatFee, pilot, startDate, termMonths, scope, engineering, expediter: expediter || null, notes,
+  }), [kind, number, fiarepSigner, fiarepEntity, client, buildings, units, flatFee, pilot, startDate, termMonths, scope, engineering, expediter, notes]);
   const fee = monthlyFee(input);
   const isAgency = kind.startsWith("agency");
   const ready = client.company.trim() && client.contact.trim() && units > 0 && (!isAgency || flatFee > 0);
@@ -60,7 +61,7 @@ export function ContractBuilder({ scope, engineering, onClearScope }: { scope: S
     try {
       const out = await customFetch<{ ok: boolean; emailed: boolean }>("/api/v1/platform/contracts/email", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: client.email.trim(), subject: `${BRAND.name} Service Agreement ${number} — ${client.company.trim()}`, html: buildContractHtml(input), number, company: client.company.trim(), kind, monthly: fee.monthly, scopeTotal: scopeTotal(input) }),
+        body: JSON.stringify({ to: client.email.trim(), subject: `${BRAND.name} Service Agreement ${number} — ${client.company.trim()}`, html: buildContractHtml(input), number, company: client.company.trim(), kind, monthly: fee.monthly, scopeTotal: grandTotal(input), requestId: q.get("request") || "" }),
         responseType: "json",
       } as never);
       if (out.emailed) toast({ title: `Sent to ${client.email.trim()}`, description: `Agreement ${number}. A copy is in the FIAREP Outlook sent folder.` });
@@ -80,7 +81,7 @@ export function ContractBuilder({ scope, engineering, onClearScope }: { scope: S
         <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-2 text-right text-sm">
           <p className="text-xs uppercase tracking-wide text-slate-400">Monthly</p>
           <p className="text-xl font-bold text-slate-950">{money(fee.monthly)}</p>
-          <p className="text-xs text-slate-500">{fee.setup ? `+ ${money(fee.setup)} setup · ` : ""}scope {money(scopeTotal(input))}</p>
+          <p className="text-xs text-slate-500">{fee.setup ? `+ ${money(fee.setup)} setup · ` : ""}{expediter ? `expediting ${money(expediter.total)} · ` : ""}repairs {money(scopeTotal(input))}{expediter ? ` · to approve ${money(grandTotal(input))}` : ""}</p>
         </div>
       </div>
 
@@ -132,7 +133,10 @@ export function ContractBuilder({ scope, engineering, onClearScope }: { scope: S
       </div>
 
       <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm">
-        <p className="font-semibold text-slate-900">Section 4 — scope going into this contract</p>
+        {expediter && (
+          <p className="mb-2 flex justify-between gap-3 border-b border-slate-200 pb-2 text-slate-700"><span><b>Section 4 — violation work</b> · {expediter.address}: {expediter.hpdOpen} HPD open in {expediter.apartments} apartment{expediter.apartments === 1 ? "" : "s"} × $400{expediter.dob ? ` + ${expediter.dob} DOB` : ""}</span><span className="font-semibold">{money(expediter.total)}</span></p>
+        )}
+        <p className="font-semibold text-slate-900">Section {expediter ? "4a" : "4"} — repairs going into this contract</p>
         {scope.length === 0 && !engineering ? <p className="text-slate-500">Nothing yet — fill in counts in the price book above.</p> : (
           <ul className="mt-1 grid gap-0.5 sm:grid-cols-2">
             {scope.map((l) => <li key={l.label} className="flex justify-between gap-3 text-slate-700"><span>{l.qty} × {l.label}</span><span className="font-semibold">{money(l.qty * l.price)}</span></li>)}

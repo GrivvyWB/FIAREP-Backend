@@ -68,7 +68,7 @@ export const REPAIR_SQFT = [
   ["sheetrock", "Sheetrock / drywall replaced", 5, "per sq ft", "NYC \u00b7 removal + new board, taped", "Interior"],
   ["ceiling", "Ceiling replaced, drywall", 3, "per sq ft", "national avg", "Interior"],
   ["cellarceil", "Cellar ceiling, fireproof board", 4, "per sq ft", "", "Interior"],
-  ["plaster", "Plaster patch", 48, "per sq ft of patch", "national avg", "Interior"],
+  ["plasterpatch", "Plaster patch", 48, "per sq ft of patch", "national avg", "Interior"],
   ["paintroom", "Interior painting", 600, "per room", "NY \u00b7 $2,500 per 1-bedroom apt", "Interior"],
   ["subfloor", "Subfloor replaced", 8, "per sq ft", "national avg", "Interior"],
   ["hardwood", "Hardwood flooring", 19, "per sq ft", "", "Interior"],

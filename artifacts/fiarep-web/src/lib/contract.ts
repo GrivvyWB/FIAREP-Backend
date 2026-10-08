@@ -21,6 +21,8 @@ export type ContractInput = {
   termMonths: number;
   scope: ScopeLine[];
   engineering: { label: string; amount: number } | null;
+  // Violation work from a job request: HPD apartments cited and DOB violations, at FIAREP's expediter rates.
+  expediter: { address: string; apartments: number; hpdOpen: number; dob: number; hpd: number; dobFee: number; total: number } | null;
   notes: string;
 };
 
@@ -49,6 +51,7 @@ export function agencyDefaultFee(kind: ContractKind, units: number): number {
   return 0;
 }
 export const scopeTotal = (c: ContractInput) => c.scope.reduce((n, l) => n + l.qty * l.price, 0) + (c.engineering?.amount || 0);
+export const grandTotal = (c: ContractInput) => scopeTotal(c) + (c.expediter?.total || 0);
 
 export function contractNumber(date = new Date()): string {
   const d = date.toISOString().slice(0, 10).replaceAll("-", "");
@@ -107,8 +110,14 @@ export function buildContractHtml(c: ContractInput): string {
 <p>${planClause}</p>
 <p>City penalties, DOB re-inspection fees, HPD dismissal-request fees, DOB filing fees and any permit or agency charge pass through to Client at cost. Fees are invoiced monthly in advance and due within 15 days of the invoice.</p>
 
-<h2>4. Scope of repairs and professional work</h2>
-${c.scope.length || c.engineering ? `<table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>${rows}${c.engineering ? `<tr><td>Architect / engineer — ${esc(c.engineering.label)}</td><td class="r">1</td><td>each</td><td class="r">${money(c.engineering.amount)}</td><td class="r">${money(c.engineering.amount)}</td></tr>` : ""}<tr class="total"><td colspan="4">Repairs ${money(repairs)}${c.engineering ? ` + engineering ${money(c.engineering.amount)}` : ""}</td><td class="r">${money(scopeTotal(c))}</td></tr></tbody></table>
+${c.expediter ? `<h2>4. Violation work — ${esc(c.expediter.address)}</h2>
+<table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>
+<tr><td>HPD violations certified and cleared — ${c.expediter.hpdOpen.toLocaleString()} open violation${c.expediter.hpdOpen === 1 ? "" : "s"}, every violation in an apartment certified together</td><td class="r">${c.expediter.apartments}</td><td>per apartment</td><td class="r">$400</td><td class="r">${money(c.expediter.hpd)}</td></tr>
+${c.expediter.dob > 0 ? `<tr><td>DOB violations cleared — $1,500 each for the first two, $1,000 each after</td><td class="r">${c.expediter.dob}</td><td>per violation</td><td class="r">—</td><td class="r">${money(c.expediter.dobFee)}</td></tr>` : ""}
+<tr class="total"><td colspan="4">Expediting</td><td class="r">${money(c.expediter.total)}</td></tr></tbody></table>
+<p class="muted">Records research, proof of correction, certification filings and dismissal requests with HPD and DOB for the violations above. City fees pass through at cost (Section 3).</p>
+<h2>4a. Repairs and professional work</h2>` : `<h2>4. Scope of repairs and professional work</h2>`}
+${c.scope.length || c.engineering ? `<table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>${rows}${c.engineering ? `<tr><td>Architect / engineer — ${esc(c.engineering.label)}</td><td class="r">1</td><td>each</td><td class="r">${money(c.engineering.amount)}</td><td class="r">${money(c.engineering.amount)}</td></tr>` : ""}<tr class="total"><td colspan="4">Repairs ${money(repairs)}${c.engineering ? ` + engineering ${money(c.engineering.amount)}` : ""}</td><td class="r">${money(scopeTotal(c))}</td></tr>${c.expediter ? `<tr class="total"><td colspan="4">Expediting + repairs + engineering — Client approves this total to proceed</td><td class="r">${money(grandTotal(c))}</td></tr>` : ""}</tbody></table>
 <p class="muted">Unit prices are FIAREP's contract prices for this work, drawn from HPD's contractor awards and the City's published cost schedules. Work is performed by licensed, insured contractors and design professionals engaged by FIAREP. Quantities found to differ on site are adjusted at the same unit price with Client's written approval before the work proceeds.</p>` : `<p class="muted">No repair scope at signing. Repairs and professional work are quoted per item from FIAREP's price book and added by written change order.</p>`}
 
 <h2>5. Per-job rates</h2>

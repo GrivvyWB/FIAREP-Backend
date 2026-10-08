@@ -1,9 +1,20 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { customFetch } from "@workspace/api-client-react";
+import { expediterFee } from "@/lib/fiarep-plans";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ENGINEER, ENGINEER_PER_DOB, REPAIR_ITEMS, REPAIR_SQFT, type PriceKey } from "@/lib/repair-prices";
 import { ContractBuilder } from "@/components/contract-builder";
 
+// Violation type (from the City's notices) → price book item, one job per apartment cited.
+const TYPE_TO_ITEM: Record<string, PriceKey> = {
+  "Smoke detector": "smoke", "Carbon monoxide detector": "smoke", "Window guards": "guards",
+  "Roaches": "exterm", "Mice / rats": "exterm", "Bed bugs": "exterm",
+  "Lead paint": "lead", "Mold": "mold", "Heat / hot water": "heat",
+  "Peeling paint / plaster": "plaster", "Ceiling / wall": "plaster", "Leak / plumbing": "leak", "Electrical": "elec",
+  "Door / self-closing": "door", "Window": "window", "Floor": "hardwood",
+};
+type JobRequest = { id: string; address: string; company: string; contact: string; email: string; phone: string; units: number; apartments?: number; hpdA: number; hpdB: number; hpdC: number; dob: number; hpdTypes?: Array<{ type: string; count: number; jobs: number }> };
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 type Line = readonly [PriceKey, string, number, string, string, ...unknown[]];
 
@@ -13,6 +24,24 @@ export default function OwnerRepairPrices() {
   const [counts, setCounts] = useState<Partial<Record<PriceKey, number>>>({});
   const [eng, setEng] = useState(0);
   const [dob, setDob] = useState(0);
+  // Opened from Job requests → Build contract: the building's violations fill the scope and the expediter line.
+  const [request, setRequest] = useState<JobRequest | null>(null);
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("request");
+    if (!id) return;
+    void (async () => {
+      try {
+        const rows = await customFetch<JobRequest[]>("/api/v1/platform/work-requests", { responseType: "json" } as never);
+        const r = rows.find((x) => x.id === id);
+        if (!r) return;
+        setRequest(r);
+        const next: Partial<Record<PriceKey, number>> = {};
+        for (const t of r.hpdTypes || []) { const key = TYPE_TO_ITEM[t.type]; if (key) next[key] = (next[key] || 0) + (t.jobs || t.count); }
+        setCounts(next);
+      } catch { /* request list unavailable */ }
+    })();
+  }, []);
+  const expediter = request ? (() => { const f = expediterFee(request.apartments || 0, request.dob || 0); return { address: request.address, apartments: request.apartments || 0, hpdOpen: (request.hpdA || 0) + (request.hpdB || 0) + (request.hpdC || 0), dob: request.dob || 0, hpd: f.hpd, dobFee: f.dob, total: f.total }; })() : null;
   const set = (key: PriceKey, n: number) => setCounts((c) => ({ ...c, [key]: Math.max(0, Math.round(n) || 0) }));
 
   const groups = useMemo(() => {
@@ -35,13 +64,30 @@ export default function OwnerRepairPrices() {
           <p className="text-sm text-slate-500">FIAREP only — HPD's own contractor prices and the City's cost schedules, footing to roof. Type how many of each a building needs.</p>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-right shadow-sm">
-          <p className="text-xs uppercase tracking-wide text-slate-400">Repairs + engineering</p>
-          <p className="text-2xl font-bold text-slate-950">{money(repairs + engineering)}</p>
-          <p className="text-xs text-slate-500">repairs {money(repairs)} · engineering {money(engineering)}</p>
+          <p className="text-xs uppercase tracking-wide text-slate-400">{expediter ? "Expediting + repairs + engineering" : "Repairs + engineering"}</p>
+          <p className="text-2xl font-bold text-slate-950">{money(repairs + engineering + (expediter?.total || 0))}</p>
+          <p className="text-xs text-slate-500">{expediter ? `expediting ${money(expediter.total)} · ` : ""}repairs {money(repairs)} · engineering {money(engineering)}</p>
           {lines.length > 0 && <Button size="sm" variant="ghost" className="mt-1 text-slate-500" onClick={() => { setCounts({}); setEng(0); setDob(0); }}>Clear</Button>}
         </div>
       </div>
 
+      {request && expediter && (
+        <section className="rounded-xl border border-slate-900 bg-slate-900 p-4 text-sm text-white">
+          <div className="flex flex-wrap items-baseline justify-between gap-3">
+            <div>
+              <p className="text-xs uppercase tracking-wide text-amber-300">Job request · {request.company}</p>
+              <p className="text-lg font-semibold">{request.address}</p>
+              <p className="text-slate-300">{expediter.hpdOpen} HPD open ({request.hpdA} A · {request.hpdB} B · {request.hpdC} C) in {expediter.apartments} apartments · {expediter.dob} DOB · {request.units} units</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs uppercase tracking-wide text-slate-400">Expediting</p>
+              <p className="text-2xl font-bold text-amber-300">{money(expediter.total)}</p>
+              <p className="text-xs text-slate-400">{expediter.apartments} × $400 = {money(expediter.hpd)}{expediter.dob ? ` · DOB ${money(expediter.dobFee)}` : ""}</p>
+            </div>
+          </div>
+          <p className="mt-2 text-xs text-slate-400">The violation types filled in the repair counts below, one job per apartment cited — check them, add what the City's notices don't show, then build the contract. The client approves expediting + repairs in one document.</p>
+        </section>
+      )}
       {lines.length > 0 && (
         <section className="rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm">
           <p className="font-semibold text-slate-900">On this estimate</p>
@@ -117,6 +163,7 @@ export default function OwnerRepairPrices() {
       <ContractBuilder
         scope={lines.map(([key, label, price, unit]) => ({ label, qty: counts[key] || 0, unit, price }))}
         engineering={engineering > 0 ? { label: `${ENGINEER[eng]![0]}${dob > 0 ? ` + ${dob} DOB sign-off${dob === 1 ? "" : "s"}` : ""}`, amount: engineering } : null}
+        expediter={expediter}
         onClearScope={() => { setCounts({}); setEng(0); setDob(0); }}
       />
     </div>
