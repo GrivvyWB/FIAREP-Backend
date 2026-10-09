@@ -17,6 +17,7 @@ export const FEES = [
   ["Motion to vacate a default judgment", "$350 within 60 days · $850 special motion", "Gets a defaulted summons back in front of a hearing officer."],
   ["Permit filings", "Alt-3 $750 · Alt-2 $1,200 · Alt-1 $2,250", "DOB filing fees are separate. Open-permit closures $750 per permit."],
   ["Hourly — research, zoning, multi-agency", "$175 per hour", "Extensive records research, complex zoning questions, multi-agency coordination."],
+  ["Portfolio inspection — every building a client owns or manages", "$750 per property · credited to the plan", "Required before any plan starts: walk-through of common areas, exterior, basement and mechanical rooms; violation audit against HPD / DOB records (what is really open, what is duplicated, what is written for the wrong place); photographs; executive summary and risk-exposure report; the priced scope that goes into the contract. On a plan the $750 per property is credited against the monthly fee, starting with the first month and carrying forward until used up — e.g. $250 for the first month on the $1,000 plan. Standalone for owners not on a plan. Apartment inspections are not a separate charge — they are part of the $600 / $400 cure."],
 ];
 
 export const PLATFORM_INCLUDES = [
