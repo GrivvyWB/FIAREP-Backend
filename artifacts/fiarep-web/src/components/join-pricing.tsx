@@ -24,12 +24,19 @@ const AGENCIES = [
 // violations cited there) by what it is — the same figures as the FIAREP price
 // book: HPD's average per contractor order, HPD / HCR cost schedules. Types
 // with no sourced price stay 0 and are quoted after a look.
+// Typical cost of one repair job of each kind, from the FIAREP price book:
+// detectors, guards and doors per piece; extermination per apartment visit
+// ($300); a leak $563 and an electrical device $430 (Angi NYC averages); paint
+// $600 per room; plaster patch 20 sq ft × $48; mold 100 sq ft × $20 (Angi NYC
+// example $1,000–$2,500); lead 100 sq ft × $14 (Angi small room $1,500–$4,000);
+// boiler repair call $425; window $2,017 and floor 100 sq ft × $19 (HPD / HCR
+// schedules). Square-foot jobs are re-measured on site.
 const REPAIR_PER_JOB: Record<string, number> = {
   "Smoke detector": 125, "Carbon monoxide detector": 125, "Window guards": 175,
-  "Roaches": 1800, "Mice / rats": 1800, "Bed bugs": 1800,
-  "Lead paint": 6500, "Mold": 3400, "Heat / hot water": 4200,
-  "Peeling paint / plaster": 2500, "Leak / plumbing": 3100, "Electrical": 2900,
-  "Door / self-closing": 1100, "Window": 2017, "Floor": 1793, "Ceiling / wall": 2500,
+  "Roaches": 300, "Mice / rats": 300, "Bed bugs": 300,
+  "Lead paint": 1400, "Mold": 2000, "Heat / hot water": 425,
+  "Peeling paint / plaster": 600, "Leak / plumbing": 563, "Electrical": 430,
+  "Door / self-closing": 1100, "Window": 2017, "Floor": 1900, "Ceiling / wall": 960,
 };
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 

@@ -3,23 +3,25 @@
 // HPD J-51 Certified Reasonable Cost schedule (July 2025), NYS HCR MCI
 // reasonable-cost schedule (Jan 2026), NYC-labeled contractor guides, national
 // averages marked as such. Full source list: FIAREP_Repair_Prices_HPD.xlsx.
-// Contractor repair prices: what HPD paid its own contractors per Emergency
-// Repair / Open Market Order since Jan 2024 (NYC Open Data mdbu-nrqn, average
-// award per order by the work described). Smoke / CO is retail + labor — HPD
-// almost never orders those. Priced per item; nothing is added building-wide.
+// Common violation cures, priced per the unit the work is actually done in —
+// per apartment visit, per window, per device, per leak, per square foot — so
+// "1" always means one real thing. Sources on every line: Angi cost guides for
+// New York, NY (2026), HPD Open Market Order averages (NYC Open Data
+// mdbu-nrqn) where a City figure exists, retail + labor for detectors. Items
+// that are really square-foot work (paint, plaster, mold, roof) live in the
+// footing-to-roof groups below and are mapped there.
 export const REPAIR_ITEMS = [
-  ["exterm", "Extermination (roaches / mice)", 1800, "per order", "one visit covers several apartments"],
-  ["guards", "Window guards", 175, "per order", ""],
+  ["exterm", "Extermination treatment", 300, "per apartment, per visit", "Angi NYC: $257 avg ($163–$353); roaches $140–$900, rodents $270–$900"],
+  ["guards", "Window guard, installed", 175, "per window", "HPD order avg per guard"],
   ["smoke", "Smoke / CO detector, installed", 125, "each", "combo unit + labor"],
-  ["door", "Apartment door / self-closer", 1100, "each", ""],
-  ["firedoor", "Fire-rated door + jamb, replaced", 2450, "each", ""],
-  ["plaster", "Plaster / paint repair", 2500, "per order", ""],
-  ["leak", "Plumbing leak", 3100, "each", ""],
-  ["elec", "Electrical", 2900, "each", ""],
-  ["roof", "Roof repair", 2900, "each", ""],
-  ["mold", "Mold remediation", 3400, "each", ""],
-  ["lead", "Lead paint abatement", 6500, "per apartment", ""],
-  ["heat", "Heat / boiler repair", 4200, "each", "full replacement: type your quote"],
+  ["door", "Apartment door repaired, self-closer fitted", 1100, "per door", "HPD order avg"],
+  ["firedoor", "Fire-rated door + jamb, replaced", 2450, "per door", "HPD order avg"],
+  ["leak", "Plumbing leak repaired", 563, "per leak", "Angi NYC: $563 avg ($282–$957); exposed pipe from $170, in a ceiling $790–$2,820"],
+  ["clog", "Drain clog cleared", 255, "per drain", "Angi NYC: $170–$340"],
+  ["elec", "Electrical device repaired / replaced", 430, "per outlet, switch or fixture", "Angi NYC: outlet $430–$640, switch $180–$430; $110–$210 per hour"],
+  ["roofpatch", "Roof leak patched", 13, "per sq ft of patch", "Angi NYC: $5.50–$20 per sq ft; a leak repair $600–$2,600"],
+  ["leadsf", "Lead paint abatement, full removal", 14, "per sq ft", "Angi: removal $10–$17, encapsulation $6–$10 per sq ft; small room $1,500–$4,000"],
+  ["heat", "Boiler service / repair call", 425, "per repair + parts", "Angi: $425 avg ($190–$660); circulator pump $300–$1,000; new boiler: see Plumbing & heat"],
 ] as const;
 // Footing to roof, by the square foot / piece. Official NYC schedules first:
 // HPD J-51 Certified Reasonable Cost schedule (July 2025) and the NYS HCR MCI

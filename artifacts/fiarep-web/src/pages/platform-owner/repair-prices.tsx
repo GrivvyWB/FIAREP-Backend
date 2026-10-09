@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { EXPEDITER, expediterFee } from "@/lib/fiarep-plans";
+import { PLAN_DISCOUNT, COST_KEY, TARGET_KEY, readCosts, readTarget } from "@/lib/profit-check";
 import type { ContractKind } from "@/lib/contract";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -8,11 +9,13 @@ import { ENGINEER, ENGINEER_PER_DOB, REPAIR_ITEMS, REPAIR_SQFT, type PriceKey } 
 import { ContractBuilder } from "@/components/contract-builder";
 
 // Violation type (from the City's notices) → price book item, one job per apartment cited.
+// One violation job → one unit of the matching price-book line. Square-foot
+// lines (paint, plaster, mold, lead) start at one typical unit and are edited.
 const TYPE_TO_ITEM: Record<string, PriceKey> = {
   "Smoke detector": "smoke", "Carbon monoxide detector": "smoke", "Window guards": "guards",
   "Roaches": "exterm", "Mice / rats": "exterm", "Bed bugs": "exterm",
-  "Lead paint": "lead", "Mold": "mold", "Heat / hot water": "heat",
-  "Peeling paint / plaster": "plaster", "Ceiling / wall": "plaster", "Leak / plumbing": "leak", "Electrical": "elec",
+  "Lead paint": "leadsf", "Mold": "moldsf", "Heat / hot water": "heat",
+  "Peeling paint / plaster": "paintroom", "Ceiling / wall": "plasterpatch", "Leak / plumbing": "leak", "Electrical": "elec",
   "Door / self-closing": "door", "Window": "window", "Floor": "hardwood",
 };
 type JobRequest = { id: string; address: string; company: string; contact: string; email: string; phone: string; units: number; apartments?: number; hpdA: number; hpdB: number; hpdC: number; dob: number; hpdTypes?: Array<{ type: string; count: number; jobs: number }> };
@@ -52,7 +55,7 @@ export default function OwnerRepairPrices() {
 
   const groups = useMemo(() => {
     const out: Array<{ name: string; note: string; lines: Line[] }> = [
-      { name: "HPD repair orders", note: "What HPD paid its contractors per Emergency Repair / Open Market Order since Jan 2024 (NYC Open Data).", lines: [...REPAIR_ITEMS] },
+      { name: "Common violation cures", note: "Priced per the unit the work is done in — per apartment visit, per window, per leak, per device, per square foot. Angi cost guides for New York, NY (2026) and HPD order averages; every line says which.", lines: [...REPAIR_ITEMS] },
     ];
     for (const cat of [...new Set(REPAIR_SQFT.map((i) => i[5]))]) out.push({ name: cat, note: "", lines: REPAIR_SQFT.filter((i) => i[5] === cat) });
     return out;
@@ -61,6 +64,24 @@ export default function OwnerRepairPrices() {
   const repairs = groups.reduce((n, g) => n + subtotal(g.lines), 0);
   const engineering = ENGINEER[eng]![1] > 0 ? ENGINEER[eng]![1] + dob * ENGINEER_PER_DOB : 0;
   const lines = groups.flatMap((g) => g.lines).filter(([key]) => (counts[key] || 0) > 0);
+  // Profit check — FIAREP's own cost per line (never shown to clients), kept in this browser.
+  const [costs, setCosts] = useState<Record<string, number>>(readCosts);
+  const [target, setTarget] = useState<number>(readTarget);
+  useEffect(() => { try { localStorage.setItem(COST_KEY, JSON.stringify(costs)); } catch { /* ignore */ } }, [costs]);
+  useEffect(() => { try { localStorage.setItem(TARGET_KEY, String(target)); } catch { /* ignore */ } }, [target]);
+  const costOf = (key: string, price: number) => (costs[key] != null ? costs[key]! : Math.round(price * 0.7));
+  const profit = (() => {
+    let sell = 0; let cost = 0;
+    const rows = lines.map(([key, label, price, unit]) => {
+      const qty = counts[key] || 0; const c = costOf(key, price);
+      sell += qty * price; cost += qty * c;
+      const m = price > 0 ? (price - c) / price : 0; const mPlan = price > 0 ? (price * (1 - PLAN_DISCOUNT) - c) / (price * (1 - PLAN_DISCOUNT)) : 0;
+      return { key, label, unit, qty, price, cost: c, margin: m, marginPlan: mPlan, below: mPlan < target / 100 };
+    });
+    const sellPlan = sell * (1 - PLAN_DISCOUNT);
+    return { rows, sell, cost, margin: sell > 0 ? (sell - cost) / sell : 0, sellPlan, marginPlan: sellPlan > 0 ? (sellPlan - cost) / sellPlan : 0 };
+  })();
+  const pct = (n: number) => `${Math.round(n * 100)}%`;
 
   return (
     <div className="space-y-4">
@@ -165,6 +186,37 @@ export default function OwnerRepairPrices() {
         </div>
       </details>
       <p className="text-xs text-slate-400">Sources and ranges behind every line: FIAREP_Repair_Prices_HPD.xlsx. City schedule figures are ceilings for tax-benefit purposes; real bids land above or below.</p>
+
+      {lines.length > 0 && (
+        <section className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 shadow-sm">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-slate-950">Profit check — FIAREP only</h2>
+              <p className="text-xs text-slate-600">Book prices are what the client pays. Type what each line costs you (crew hours × loaded rate + materials, or the sub's invoice); it starts at 70% of price, the industry cost-of-sales average (NAHB, remodelers 2024: cost of sales 70%, gross margin 30%, net 6%). Red = under your target after the {Math.round(PLAN_DISCOUNT * 100)}% plan discount. Nothing here goes on the contract.</p>
+            </div>
+            <label className="text-sm font-medium text-slate-900">Target gross margin
+              <input type="number" min={0} max={90} value={target} onChange={(e) => setTarget(Math.max(0, Math.min(90, Number(e.target.value) || 0)))} className="ml-2 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-right" />%
+            </label>
+          </div>
+          <table className="mt-3 w-full text-sm">
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Line</th><th className="py-1 pr-3 text-right">Qty</th><th className="py-1 pr-3 text-right">Book price</th><th className="py-1 pr-3 text-right">Your cost</th><th className="py-1 pr-3 text-right">Margin</th><th className="py-1 text-right">On plan (−{Math.round(PLAN_DISCOUNT * 100)}%)</th></tr></thead>
+            <tbody>
+              {profit.rows.map((r) => (
+                <tr key={r.key} className={`border-t border-emerald-200 ${r.below ? "bg-rose-50" : ""}`}>
+                  <td className="py-1.5 pr-3 text-slate-900">{r.label}<span className="block text-xs text-slate-500">{r.unit}</span></td>
+                  <td className="py-1.5 pr-3 text-right">{r.qty.toLocaleString()}</td>
+                  <td className="py-1.5 pr-3 text-right">{money(r.price)}</td>
+                  <td className="py-1.5 pr-3 text-right"><input type="number" min={0} value={costs[r.key] ?? Math.round(r.price * 0.7)} onChange={(e) => setCosts((m) => ({ ...m, [r.key]: Math.max(0, Math.round(Number(e.target.value) || 0)) }))} className="w-24 rounded-md border border-slate-300 bg-white px-2 py-1 text-right" aria-label={`Your cost for ${r.label}`} /></td>
+                  <td className={`py-1.5 pr-3 text-right font-semibold ${r.margin < target / 100 ? "text-rose-700" : "text-emerald-700"}`}>{pct(r.margin)}</td>
+                  <td className={`py-1.5 text-right font-semibold ${r.below ? "text-rose-700" : "text-emerald-700"}`}>{pct(r.marginPlan)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot><tr className="border-t-2 border-emerald-300 font-semibold text-slate-950"><td className="py-2 pr-3">Repairs</td><td className="py-2 pr-3 text-right"></td><td className="py-2 pr-3 text-right">{money(profit.sell)}</td><td className="py-2 pr-3 text-right">{money(profit.cost)}</td><td className={`py-2 pr-3 text-right ${profit.margin < target / 100 ? "text-rose-700" : "text-emerald-700"}`}>{pct(profit.margin)} · {money(profit.sell - profit.cost)}</td><td className={`py-2 text-right ${profit.marginPlan < target / 100 ? "text-rose-700" : "text-emerald-700"}`}>{pct(profit.marginPlan)} · {money(profit.sellPlan - profit.cost)}</td></tr></tfoot>
+          </table>
+          <p className="mt-2 text-xs text-slate-600">Rule of thumb: price = cost × 1.5 for a 33% margin, × 1.67 for 40%. If a job's cost × 1.5 comes out above the book price, charge cost × 1.5 and say why. Subbed work: the sub's invoice + 20%. The expediting fee ($600 / $400 per apartment) is on top of all of this and is not in these margins.</p>
+        </section>
+      )}
 
       <ContractBuilder
         scope={lines.map(([key, label, price, unit]) => ({ label, qty: counts[key] || 0, unit, price }))}
