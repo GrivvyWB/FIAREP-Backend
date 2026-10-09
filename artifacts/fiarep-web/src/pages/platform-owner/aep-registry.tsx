@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,30 +11,24 @@ type AepBuilding = {
   registrationId: string | null; registeredAt: string | null; registrationEnds: string | null;
 };
 type Candidate = { bbl: string; address: string; borough: string; units: number; openBC: number; ratio: number; erpCharges: number; criteria: "I" | "II"; inAep: boolean };
-type Contact = { id: string; type: string; description: string; title: string; name: string; organization: string; address: string };
-type ContactInfo = { registrationId: string | null; registeredAt: string | null; registrationEnds: string | null; contacts: Contact[] };
 type Mode = "active" | "discharged" | "likely";
-type Saved = { id: string; name: string; mode: Mode; search: string; borough: string; count: number; rows: (AepBuilding | Candidate)[]; contacts: Record<string, ContactInfo>; savedAt: string };
-type Selected = { key: string; title: string; lines: string[] };
+type Saved = { id: string; name: string; mode: Mode; search: string; borough: string; count: number; rows: (AepBuilding | Candidate)[]; savedAt: string };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const when = (iso: string) => new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
-const TYPE_LABEL: Record<string, string> = {
-  IndividualOwner: "Individual owner", CorporateOwner: "Corporate owner", HeadOfficer: "Head officer", Officer: "Officer", Shareholder: "Shareholder",
-  Agent: "Managing agent", SiteManager: "Site manager", JointOwner: "Joint owner", Lessee: "Lessee",
-};
-const typeLabel = (t: string) => TYPE_LABEL[t] || t.replace(/([a-z])([A-Z])/g, "$1 $2") || "Other contact";
 const MODE_LABEL: Record<Mode, string> = { active: "Active AEP", discharged: "Discharged", likely: "Likely next AEP" };
-const bKey = (b: AepBuilding) => `b:${b.buildingId}`;
-const cKey = (c: Candidate) => `c:${c.bbl}`;
+// View contacts opens the Building lookup page with the address already run:
+// what the building owes, what is open, and who is on the HPD registration.
+const lookupPath = (address: string) => `/platform-owner/building-lookup?address=${encodeURIComponent(address)}`;
 
 /** Platform Control → AEP registry: buildings in HPD's Alternative Enforcement
  * Program (active and discharged), the buildings that meet HPD's criteria for
  * the next round, and the owners, agents and officers on each building's HPD
- * registration. Any list on screen can be saved by name and reopened from the
- * drop-down without going back to NYC Open Data. */
+ * registration (via Building lookup). Any list on screen can be saved by name
+ * and reopened from the drop-down without going back to NYC Open Data. */
 export default function OwnerAepRegistry() {
   const { toast } = useToast();
+  const [, setLocation] = useLocation();
   const [rows, setRows] = useState<AepBuilding[]>([]);
   const [cachedAt, setCachedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -49,10 +44,6 @@ export default function OwnerAepRegistry() {
   const [naming, setNaming] = useState(false);
   const [saveName, setSaveName] = useState("");
   const [saving, setSaving] = useState(false);
-  // Contacts already fetched (or restored from a saved search), by row key
-  const [contactsByKey, setContactsByKey] = useState<Record<string, ContactInfo>>({});
-  const [selected, setSelected] = useState<Selected | null>(null);
-  const [detailLoading, setDetailLoading] = useState(false);
 
   useEffect(() => {
     void (async () => {
@@ -67,44 +58,17 @@ export default function OwnerAepRegistry() {
   }, []);
 
   async function loadLikely() {
-    setMode("likely"); setOpenSaved(null); setSelected(null);
+    setMode("likely"); setOpenSaved(null);
     if (likely) return;
     setLikelyLoading(true);
     try { setLikely(await customFetch<{ rows: Candidate[]; since: string; cachedAt: string }>("/api/v1/platform/aep/likely", { responseType: "json" } as never)); }
     catch (err: any) { toast({ variant: "destructive", title: "Could not work out the likely list", description: err?.data?.error || err?.message }); }
     finally { setLikelyLoading(false); }
   }
-  function switchMode(m: Mode) { setMode(m); setOpenSaved(null); setSelected(null); }
+  function switchMode(m: Mode) { setMode(m); setOpenSaved(null); }
 
-  async function openBuilding(b: AepBuilding) {
-    const key = bKey(b);
-    setSelected({ key, title: `${b.address}, ${b.borough} ${b.zip}`, lines: [
-      `${b.units} units · BBL ${b.bbl || "—"} · BIN ${b.bin || "—"} · HPD building ID ${b.buildingId}`,
-      `In AEP since ${b.aepStart || "—"} (${b.round})${b.dischargeDate ? ` · discharged ${b.dischargeDate}` : ""} · ${b.violationsAtStart.toLocaleString()} Class B / C violations at entry`,
-    ] });
-    if (contactsByKey[key]) return;
-    if (!b.registrationId) { setContactsByKey((m) => ({ ...m, [key]: { registrationId: null, registeredAt: null, registrationEnds: null, contacts: [] } })); return; }
-    setDetailLoading(true);
-    try {
-      const contacts = await customFetch<Contact[]>(`/api/v1/platform/aep/contacts/${encodeURIComponent(b.registrationId)}`, { responseType: "json" } as never);
-      setContactsByKey((m) => ({ ...m, [key]: { registrationId: b.registrationId, registeredAt: b.registeredAt, registrationEnds: b.registrationEnds, contacts } }));
-    } catch (err: any) { toast({ variant: "destructive", title: "Could not load contacts", description: err?.data?.error || err?.message }); }
-    finally { setDetailLoading(false); }
-  }
-  async function openCandidate(c: Candidate) {
-    const key = cKey(c);
-    setSelected({ key, title: `${c.address}, ${c.borough}`, lines: [
-      `${c.units} units · BBL ${c.bbl}`,
-      `${c.openBC.toLocaleString()} open Class B / C violations in 5 years (${c.ratio} per unit) · ${money(c.erpCharges)} HPD repair charges · Criteria ${c.criteria}`,
-    ] });
-    if (contactsByKey[key]) return;
-    setDetailLoading(true);
-    try {
-      const info = await customFetch<ContactInfo>(`/api/v1/platform/aep/contacts-by-bbl/${c.bbl}`, { responseType: "json" } as never);
-      setContactsByKey((m) => ({ ...m, [key]: info }));
-    } catch (err: any) { toast({ variant: "destructive", title: "Could not load contacts", description: err?.data?.error || err?.message }); }
-    finally { setDetailLoading(false); }
-  }
+  const openBuilding = (b: AepBuilding) => setLocation(lookupPath(`${b.address}, ${b.borough} ${b.zip}`.trim()));
+  const openCandidate = (c: Candidate) => setLocation(lookupPath(`${c.address}, ${c.borough}`));
 
   const boroughs = useMemo(() => [...new Set(rows.map((r) => r.borough).filter(Boolean))].sort(), [rows]);
   const q = search.trim().toLowerCase();
@@ -129,12 +93,9 @@ export default function OwnerAepRegistry() {
   async function saveList() {
     const name = saveName.trim();
     if (!name || shownRows.length === 0) return;
-    // Keep the contacts already opened for the rows being saved, so they reopen without a lookup.
-    const contacts: Record<string, ContactInfo> = {};
-    for (const r of shownRows) { const key = "buildingId" in r ? bKey(r) : cKey(r); if (contactsByKey[key]) contacts[key] = contactsByKey[key]; }
     setSaving(true);
     try {
-      const s = await customFetch<Saved>("/api/v1/platform/aep/saved", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, mode: viewMode, search: search.trim(), borough, rows: shownRows, contacts }), responseType: "json" } as never);
+      const s = await customFetch<Saved>("/api/v1/platform/aep/saved", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, mode: viewMode, search: search.trim(), borough, rows: shownRows }), responseType: "json" } as never);
       setSaved((list) => [s, ...list]); setNaming(false);
       toast({ title: "Saved", description: `${name} · ${shownRows.length.toLocaleString()} buildings` });
     } catch (err: any) { toast({ variant: "destructive", title: "Could not save", description: err?.data?.error || err?.message }); }
@@ -143,8 +104,7 @@ export default function OwnerAepRegistry() {
   function openSavedSearch(id: string) {
     const s = saved.find((x) => x.id === id);
     if (!s) return;
-    setOpenSaved(s); setSelected(null); setSearch(""); setBorough("");
-    setContactsByKey((m) => ({ ...s.contacts, ...m }));
+    setOpenSaved(s); setSearch(""); setBorough("");
   }
   async function deleteSaved(s: Saved) {
     if (!window.confirm(`Delete the saved search "${s.name}"?`)) return;
@@ -153,8 +113,6 @@ export default function OwnerAepRegistry() {
       setSaved((list) => list.filter((x) => x.id !== s.id)); setOpenSaved(null);
     } catch (err: any) { toast({ variant: "destructive", title: "Could not delete", description: err?.data?.error || err?.message }); }
   }
-
-  const info = selected ? contactsByKey[selected.key] : undefined;
 
   return (
     <div className="space-y-4">
@@ -190,14 +148,14 @@ export default function OwnerAepRegistry() {
         )}
         <span className="text-slate-500">{shownRows.length.toLocaleString()} building{shownRows.length === 1 ? "" : "s"} on screen</span>
         <span className="mx-1 text-slate-300">|</span>
-        <select value={openSaved?.id || ""} onChange={(e) => { if (e.target.value) openSavedSearch(e.target.value); else { setOpenSaved(null); setSelected(null); } }} className="h-9 rounded-md border border-slate-300 px-2 text-sm text-slate-900">
+        <select value={openSaved?.id || ""} onChange={(e) => { if (e.target.value) openSavedSearch(e.target.value); else { setOpenSaved(null); } }} className="h-9 rounded-md border border-slate-300 px-2 text-sm text-slate-900">
           <option value="">Saved searches{saved.length ? ` (${saved.length})` : " — none yet"}</option>
           {saved.map((s) => <option key={s.id} value={s.id}>{s.name} · {s.count.toLocaleString()} · {when(s.savedAt)}</option>)}
         </select>
         {openSaved && (
           <>
             <span className="rounded-full bg-slate-900 px-2 py-0.5 text-xs font-semibold text-white">Saved {MODE_LABEL[openSaved.mode]} · {when(openSaved.savedAt)}</span>
-            <Button size="sm" variant="outline" onClick={() => { setOpenSaved(null); setSelected(null); }}>Back to live</Button>
+            <Button size="sm" variant="outline" onClick={() => { setOpenSaved(null); }}>Back to live</Button>
             <Button size="sm" variant="outline" className="text-rose-700" onClick={() => void deleteSaved(openSaved)}>Delete saved</Button>
           </>
         )}
@@ -208,37 +166,6 @@ export default function OwnerAepRegistry() {
         <p className="text-sm text-slate-600">{buildingRows.length.toLocaleString()} {mode === "discharged" ? "discharged" : "active"} AEP building{buildingRows.length === 1 ? "" : "s"}{(mode === "discharged" ? dischargedCount : activeCount) !== buildingRows.length ? ` of ${(mode === "discharged" ? dischargedCount : activeCount).toLocaleString()}` : ""}{cachedAt ? ` · records as of ${when(cachedAt)}` : ""}</p>
       )}
 
-      {selected && (
-        <section className="rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold text-slate-950">{selected.title}</h2>
-              {selected.lines.map((l) => <p key={l} className="text-sm text-slate-600">{l}</p>)}
-              {info && <p className="text-xs text-slate-500">HPD registration {info.registrationId || "not found"}{info.registeredAt ? ` · registered ${info.registeredAt}` : ""}{info.registrationEnds ? ` · valid to ${info.registrationEnds}` : ""}</p>}
-            </div>
-            <Button size="sm" variant="outline" onClick={() => setSelected(null)}>Close</Button>
-          </div>
-          {detailLoading && <p className="mt-3 text-sm text-slate-500">Loading contacts…</p>}
-          {info && !info.registrationId && <p className="mt-3 text-sm text-slate-600">No HPD registration on file for this building. Verify the address with the official records.</p>}
-          {info && info.contacts.length > 0 && (
-            <table className="mt-3 w-full text-sm">
-              <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Contact type</th><th className="py-1 pr-3">Name</th><th className="py-1 pr-3">Organization</th><th className="py-1">Business address</th></tr></thead>
-              <tbody>
-                {info.contacts.map((c) => (
-                  <tr key={c.id} className="border-t border-amber-200 align-top">
-                    <td className="py-1.5 pr-3 font-medium text-slate-900">{typeLabel(c.type)}{c.title ? <span className="block text-xs font-normal text-slate-500">{c.title}</span> : null}</td>
-                    <td className="py-1.5 pr-3 text-slate-800">{c.name || "—"}</td>
-                    <td className="py-1.5 pr-3 text-slate-800">{c.organization || "—"}</td>
-                    <td className="py-1.5 text-slate-700">{c.address || "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-          {info && info.registrationId && info.contacts.length === 0 && <p className="mt-3 text-sm text-slate-600">No contacts were returned for this registration.</p>}
-          {info && <p className="mt-2 text-xs text-slate-500">HPD's public registration file lists names, corporations and business addresses only; it does not include phone numbers.</p>}
-        </section>
-      )}
 
       {viewMode === "likely" && (
         <section className="space-y-3">
@@ -254,7 +181,7 @@ export default function OwnerAepRegistry() {
                 <thead><tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><th className="px-3 py-2">#</th><th className="px-3 py-2">Address</th><th className="px-3 py-2">Borough</th><th className="px-3 py-2 text-right">Units</th><th className="px-3 py-2 text-right">Open B / C (5 yrs)</th><th className="px-3 py-2 text-right">Per unit</th><th className="px-3 py-2 text-right">HPD repair charges (5 yrs)</th><th className="px-3 py-2">Criteria</th><th className="px-3 py-2"></th></tr></thead>
                 <tbody>
                   {likelyRows.map((b, i) => (
-                    <tr key={b.bbl} className={`border-t border-slate-100 ${selected?.key === cKey(b) ? "bg-amber-50" : "hover:bg-slate-50"} ${i < 250 ? "" : "text-slate-500"}`}>
+                    <tr key={b.bbl} className={`border-t border-slate-100 hover:bg-slate-50 ${i < 250 ? "" : "text-slate-500"}`}>
                       <td className="px-3 py-2 text-slate-500">{i + 1}</td>
                       <td className="px-3 py-2 font-medium text-slate-900">{b.address}<span className="block text-xs font-normal text-slate-500">BBL {b.bbl}</span></td>
                       <td className="px-3 py-2">{b.borough || "—"}</td>
@@ -263,7 +190,7 @@ export default function OwnerAepRegistry() {
                       <td className="px-3 py-2 text-right font-semibold">{b.ratio}</td>
                       <td className="px-3 py-2 text-right">{money(b.erpCharges)}</td>
                       <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${b.criteria === "I" ? "bg-rose-100 text-rose-700" : "bg-amber-100 text-amber-800"}`}>Criteria {b.criteria}</span></td>
-                      <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => void openCandidate(b)}>{contactsByKey[cKey(b)] ? "Contacts ✓" : "View contacts"}</Button></td>
+                      <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => openCandidate(b)}>View contacts</Button></td>
                     </tr>
                   ))}
                   {likelyRows.length === 0 && <tr><td colSpan={9} className="px-3 py-6 text-center text-slate-500">No buildings match.</td></tr>}
@@ -281,14 +208,14 @@ export default function OwnerAepRegistry() {
             <thead><tr className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><th className="px-3 py-2">Address</th><th className="px-3 py-2">Borough</th><th className="px-3 py-2 text-right">Units</th><th className="px-3 py-2">In AEP since</th>{viewMode === "discharged" && <th className="px-3 py-2">Discharged</th>}<th className="px-3 py-2 text-right">B / C at entry</th><th className="px-3 py-2">Registration</th><th className="px-3 py-2"></th></tr></thead>
             <tbody>
               {buildingRows.map((b) => (
-                <tr key={b.buildingId} className={`border-t border-slate-100 ${selected?.key === bKey(b) ? "bg-amber-50" : "hover:bg-slate-50"}`}>
+                <tr key={b.buildingId} className="border-t border-slate-100 hover:bg-slate-50">
                   <td className="px-3 py-2 font-medium text-slate-900">{b.address}<span className="block text-xs font-normal text-slate-500">{b.zip} · BBL {b.bbl || "—"}</span></td>
                   <td className="px-3 py-2 text-slate-700">{b.borough || "—"}</td>
                   <td className="px-3 py-2 text-right text-slate-700">{b.units || "—"}</td>
                   <td className="px-3 py-2 text-slate-700">{b.aepStart || "—"}<span className="block text-xs text-slate-500">{b.round}</span></td>{viewMode === "discharged" && <td className="px-3 py-2 text-slate-700">{b.dischargeDate || "—"}</td>}
                   <td className="px-3 py-2 text-right text-slate-700">{b.violationsAtStart.toLocaleString()}</td>
                   <td className="px-3 py-2 text-slate-700">{b.registrationId ? <span>{b.registeredAt || "on file"}</span> : <span className="text-rose-600">none</span>}</td>
-                  <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => void openBuilding(b)}>{contactsByKey[bKey(b)] ? "Contacts ✓" : "View contacts"}</Button></td>
+                  <td className="px-3 py-2 text-right"><Button size="sm" variant="outline" onClick={() => openBuilding(b)}>View contacts</Button></td>
                 </tr>
               ))}
               {buildingRows.length === 0 && <tr><td colSpan={8} className="px-3 py-6 text-center text-slate-500">No buildings match.</td></tr>}

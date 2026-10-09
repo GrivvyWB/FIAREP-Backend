@@ -33,7 +33,7 @@ function readPersisted(key?: string): Persisted | null {
 
 /** `persistKey`: keep the last result in this browser until Close is pressed —
  * leaving the page and coming back shows it again without another lookup. */
-export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted, persistKey }: { onResult: (total: number, result: DofLookup | null) => void; onCounts?: (c: ViolationCounts) => void; canSubmit?: boolean; quoted?: { expediter: number; repairs: number }; persistKey?: string }) {
+export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted, persistKey, initialAddress }: { onResult: (total: number, result: DofLookup | null) => void; onCounts?: (c: ViolationCounts) => void; canSubmit?: boolean; quoted?: { expediter: number; repairs: number }; persistKey?: string; initialAddress?: string }) {
   const saved = readPersisted(persistKey);
   const [address, setAddress] = useState(saved?.address || "");
   const [busy, setBusy] = useState(false);
@@ -46,6 +46,14 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted, persistK
     if (!persistKey) return;
     try { if (data) localStorage.setItem(persistKey, JSON.stringify({ address, data, counts } satisfies Persisted)); else localStorage.removeItem(persistKey); } catch { /* storage unavailable */ }
   }, [persistKey, address, data, counts]);
+  // Opened with an address (from the AEP registry): look it up straight away,
+  // unless it is the one already on screen. A restored result is reported too.
+  useEffect(() => {
+    const want = (initialAddress || "").trim();
+    if (want && want !== (saved?.address || "")) { setAddress(want); void lookUp(want); }
+    else if (saved?.data) onResult(saved.data.oath.openBalance + saved.data.hpdCharges.total, saved.data);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialAddress]);
   function close() {
     setData(null); setAddress(""); setError(""); setShowAll(false); setCountsState({ hpdA: 0, hpdB: 0, hpdC: 0, dob: 0 });
     onResult(0, null);
@@ -77,8 +85,8 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted, persistK
   }, [tracked.length]);
   const [sending, setSending] = useState(false);
 
-  async function lookUp() {
-    const q = address.trim();
+  async function lookUp(which?: string) {
+    const q = (which ?? address).trim();
     if (!q) return;
     setBusy(true); setError("");
     try {
