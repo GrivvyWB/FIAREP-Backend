@@ -19,7 +19,11 @@ const when = (iso: string) => new Date(iso).toLocaleString([], { month: "short",
 const MODE_LABEL: Record<Mode, string> = { active: "Active AEP", discharged: "Discharged", likely: "Likely next AEP" };
 // View contacts opens the Building lookup page with the address already run:
 // what the building owes, what is open, and who is on the HPD registration.
-const lookupPath = (address: string) => `/platform-owner/building-lookup?address=${encodeURIComponent(address)}`;
+const lookupPath = (address: string, aep?: Record<string, string | number | null>) => {
+  const q = new URLSearchParams({ address });
+  for (const [k, v] of Object.entries(aep || {})) if (v != null && v !== "") q.set(k, String(v));
+  return `/platform-owner/building-lookup?${q.toString()}`;
+};
 
 /** Platform Control → AEP registry: buildings in HPD's Alternative Enforcement
  * Program (active and discharged), the buildings that meet HPD's criteria for
@@ -67,7 +71,7 @@ export default function OwnerAepRegistry() {
   }
   function switchMode(m: Mode) { setMode(m); setOpenSaved(null); }
 
-  const openBuilding = (b: AepBuilding) => setLocation(lookupPath(`${b.address}, ${b.borough} ${b.zip}`.trim()));
+  const openBuilding = (b: AepBuilding) => setLocation(lookupPath(`${b.address}, ${b.borough} ${b.zip}`.trim(), { units: b.units, bbl: b.bbl, bin: b.bin, buildingId: b.buildingId, aepStart: b.aepStart, round: b.round, violationsAtStart: b.violationsAtStart, status: b.status, dischargeDate: b.dischargeDate }));
   const openCandidate = (c: Candidate) => setLocation(lookupPath(`${c.address}, ${c.borough}`));
 
   const boroughs = useMemo(() => [...new Set(rows.map((r) => r.borough).filter(Boolean))].sort(), [rows]);

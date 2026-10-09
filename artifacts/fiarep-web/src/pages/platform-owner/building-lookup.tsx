@@ -16,7 +16,13 @@ const typeLabel = (t: string) => TYPE_LABEL[t] || t.replace(/([a-z])([A-Z])/g, "
  * the AEP registry with ?address=…, it runs the lookup on arrival. No submit
  * form — this is FIAREP looking, not a client asking. */
 export default function OwnerBuildingLookup() {
-  const initialAddress = useMemo(() => new URLSearchParams(window.location.search).get("address") || "", []);
+  const query = useMemo(() => new URLSearchParams(window.location.search), []);
+  const initialAddress = query.get("address") || "";
+  // AEP record the registry sent along (only when opened from there)
+  const aep = useMemo(() => {
+    const g = (k: string) => query.get(k) || "";
+    return g("buildingId") ? { units: g("units"), bbl: g("bbl"), bin: g("bin"), buildingId: g("buildingId"), aepStart: g("aepStart"), round: g("round"), violationsAtStart: Number(g("violationsAtStart")) || 0, status: g("status"), dischargeDate: g("dischargeDate") } : null;
+  }, [query]);
   const [bbl, setBbl] = useState("");
   const [info, setInfo] = useState<ContactInfo | null>(null);
   const [loading, setLoading] = useState(false);
@@ -43,6 +49,12 @@ export default function OwnerBuildingLookup() {
       {bbl && (
         <section className="rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
           <h2 className="text-lg font-semibold text-slate-950">HPD registration — owners, officers and agents</h2>
+          {aep && aep.bbl === bbl && (
+            <>
+              <p className="text-sm text-slate-600">{aep.units} units · BBL {aep.bbl} · BIN {aep.bin || "—"} · HPD building ID {aep.buildingId}</p>
+              <p className="text-sm text-slate-600">{aep.status === "AEP Discharged" ? `In AEP ${aep.aepStart || "—"} to ${aep.dischargeDate || "—"}` : `In AEP since ${aep.aepStart || "—"}`} ({aep.round}) · {aep.violationsAtStart.toLocaleString()} Class B / C violations at entry</p>
+            </>
+          )}
           {loading && <p className="mt-1 text-sm text-slate-500">Loading contacts…</p>}
           {info && <p className="text-xs text-slate-500">Registration {info.registrationId || "not found"}{info.registeredAt ? ` · registered ${info.registeredAt}` : ""}{info.registrationEnds ? ` · valid to ${info.registrationEnds}` : ""}</p>}
           {info && !info.registrationId && <p className="mt-3 text-sm text-slate-600">No HPD registration on file for this building.</p>}
