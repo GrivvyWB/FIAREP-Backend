@@ -164,6 +164,60 @@ router.get("/v1/platform/aep/contacts-by-bbl/:bbl", async (req, res) => {
   } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
 });
 
+// Portfolio: every other building whose HPD registration names the same
+// people or corporations as this one — what else the owner / manager runs.
+// Matched on person first + last name and on corporation name, so a spelling
+// variant of the LLC (MANAGMENT / MANAGEMENT) still comes in through the person.
+const q = (v: string) => `'${v.replace(/'/g, "''")}'`;
+router.get("/v1/platform/aep/portfolio/:registrationId", async (req, res) => {
+  const id = String(req.params["registrationId"]).replace(/\D/g, "");
+  if (!id) { res.status(400).json({ error: "registrationId required" }); return; }
+  try {
+    const here = await fetchJson(soql(CONTACTS, { registrationid: id, $limit: "500" }));
+    const people = new Set<string>(); const corps = new Set<string>();
+    for (const c of here) {
+      const first = text(c["firstname"]).toUpperCase(); const last = text(c["lastname"]).toUpperCase(); const corp = text(c["corporationname"]).toUpperCase();
+      if (first && last) people.add(`${first}|${last}`);
+      if (corp) corps.add(corp);
+    }
+    const clauses = [
+      ...[...people].map((p) => { const [f, l] = p.split("|"); return `(upper(firstname)=${q(f!)} AND upper(lastname)=${q(l!)})`; }),
+      ...[...corps].map((c) => `upper(corporationname)=${q(c)}`),
+    ];
+    if (clauses.length === 0) { res.json({ names: [], rows: [] }); return; }
+    const matches = await fetchJson(soql(CONTACTS, { $select: "registrationid,type,corporationname,firstname,lastname", $where: clauses.join(" OR "), $limit: "5000" }));
+    const byReg = new Map<string, Set<string>>();
+    for (const m of matches) {
+      const rid = text(m["registrationid"]); if (!rid || rid === id) continue;
+      const who = text(m["corporationname"]) || [text(m["firstname"]), text(m["lastname"])].filter(Boolean).join(" ");
+      if (!byReg.has(rid)) byReg.set(rid, new Set());
+      byReg.get(rid)!.add(`${who} (${text(m["type"]).replace(/([a-z])([A-Z])/g, "$1 $2")})`);
+    }
+    const regIds = [...byReg.keys()].slice(0, 400);
+    const regs: Record<string, unknown>[] = [];
+    for (let i = 0; i < regIds.length; i += 100) regs.push(...await fetchJson(soql(REGISTRATIONS, { $where: `registrationid in (${regIds.slice(i, i + 100).join(",")})`, $limit: "5000" })));
+    // Open HPD violations per building, one grouped query per batch of BBLs.
+    const bbls = regs.map((r) => `${text(r["boroid"])}${text(r["block"]).padStart(5, "0")}${text(r["lot"]).padStart(4, "0")}`);
+    const open = new Map<string, { a: number; b: number; c: number }>();
+    for (let i = 0; i < bbls.length; i += 100) {
+      const batch = bbls.slice(i, i + 100).filter((b) => /^\d{10}$/.test(b)).map((b) => `'${b}'`).join(",");
+      if (!batch) continue;
+      const rows = await fetchJson(soql(HPD_VIOLATIONS, { $select: "bbl,class,count(*) as n", $where: `violationstatus='Open' AND bbl in (${batch})`, $group: "bbl,class", $limit: "5000" }));
+      for (const r of rows) { const k = text(r["bbl"]); const cur = open.get(k) || { a: 0, b: 0, c: 0 }; const cls = text(r["class"]).toLowerCase() as "a" | "b" | "c"; if (cls in cur) cur[cls] += Number(r["n"]) || 0; open.set(k, cur); }
+    }
+    const aepById = new Map((await loadBuildings()).map((b) => [b.buildingId, b]));
+    const rows = regs.map((r, i) => {
+      const bbl = bbls[i]!; const v = open.get(bbl) || { a: 0, b: 0, c: 0 }; const aep = aepById.get(text(r["buildingid"]));
+      return {
+        registrationId: text(r["registrationid"]), buildingId: text(r["buildingid"]), address: `${text(r["housenumber"])} ${text(r["streetname"])}`.trim(), borough: BOROUGH_NAMES[text(r["boroid"])] || text(r["boro"]), zip: text(r["zip"]), bbl, bin: text(r["bin"]),
+        hpdA: v.a, hpdB: v.b, hpdC: v.c, via: [...byReg.get(text(r["registrationid"])) || []].slice(0, 4),
+        aep: aep ? { units: aep.units, buildingId: aep.buildingId, aepStart: aep.aepStart, round: aep.round, violationsAtStart: aep.violationsAtStart, status: aep.status, dischargeDate: aep.dischargeDate } : null,
+      };
+    }).sort((x, y) => (y.hpdB + y.hpdC) - (x.hpdB + x.hpdC));
+    res.json({ names: [...corps, ...[...people].map((p) => p.split("|").join(" "))], rows });
+  } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
+});
+
 // Saved searches: a named snapshot of a list as it was on screen — the rows and
 // any contacts already opened — so it reopens without touching NYC Open Data.
 const SAVED = "aep-saved-searches";

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useLocation, useSearch } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { DofLookupPanel, type DofLookup } from "@/components/dof-lookup";
 
@@ -9,6 +10,8 @@ const TYPE_LABEL: Record<string, string> = {
   Agent: "Managing agent", SiteManager: "Site manager", JointOwner: "Joint owner", Lessee: "Lessee",
 };
 const typeLabel = (t: string) => TYPE_LABEL[t] || t.replace(/([a-z])([A-Z])/g, "$1 $2") || "Other contact";
+type AepLines = { units: number | string; buildingId: string; aepStart: string | null; round: string; violationsAtStart: number; status: string; dischargeDate: string | null };
+type PortfolioRow = { registrationId: string; buildingId: string; address: string; borough: string; zip: string; bbl: string; bin: string; hpdA: number; hpdB: number; hpdC: number; via: string[]; aep: AepLines | null };
 
 /** Platform Control → Building lookup: the same Department of Finance / OATH /
  * HPD / DOB lookup clients use on the join page, for FIAREP's own use, plus the
@@ -16,7 +19,9 @@ const typeLabel = (t: string) => TYPE_LABEL[t] || t.replace(/([a-z])([A-Z])/g, "
  * the AEP registry with ?address=…, it runs the lookup on arrival. No submit
  * form — this is FIAREP looking, not a client asking. */
 export default function OwnerBuildingLookup() {
-  const query = useMemo(() => new URLSearchParams(window.location.search), []);
+  const search = useSearch();
+  const [, setLocation] = useLocation();
+  const query = useMemo(() => new URLSearchParams(search), [search]);
   const initialAddress = query.get("address") || "";
   // AEP record the registry sent along (only when opened from there)
   const aep = useMemo(() => {
@@ -26,6 +31,25 @@ export default function OwnerBuildingLookup() {
   const [bbl, setBbl] = useState("");
   const [info, setInfo] = useState<ContactInfo | null>(null);
   const [loading, setLoading] = useState(false);
+  // Other buildings whose HPD registration names the same owner / manager
+  const [portfolio, setPortfolio] = useState<{ names: string[]; rows: PortfolioRow[] } | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  useEffect(() => {
+    setPortfolio(null);
+    if (!info?.registrationId) return;
+    let alive = true;
+    setPortfolioLoading(true);
+    customFetch<{ names: string[]; rows: PortfolioRow[] }>(`/api/v1/platform/aep/portfolio/${encodeURIComponent(info.registrationId)}`, { responseType: "json" } as never)
+      .then((r) => { if (alive) setPortfolio(r); })
+      .catch(() => { if (alive) setPortfolio({ names: [], rows: [] }); })
+      .finally(() => { if (alive) setPortfolioLoading(false); });
+    return () => { alive = false; };
+  }, [info?.registrationId]);
+  function openPortfolio(r: PortfolioRow) {
+    const p = new URLSearchParams({ address: `${r.address}, ${r.borough} ${r.zip}`.trim() });
+    if (r.aep) { p.set("units", String(r.aep.units)); p.set("bbl", r.bbl); p.set("bin", r.bin); p.set("buildingId", r.aep.buildingId); p.set("aepStart", r.aep.aepStart || ""); p.set("round", r.aep.round); p.set("violationsAtStart", String(r.aep.violationsAtStart)); p.set("status", r.aep.status); p.set("dischargeDate", r.aep.dischargeDate || ""); }
+    setLocation(`/platform-owner/building-lookup?${p.toString()}`);
+  }
   useEffect(() => {
     if (!bbl) { setInfo(null); return; }
     let alive = true;
@@ -75,6 +99,24 @@ export default function OwnerBuildingLookup() {
           )}
           {info && info.registrationId && info.contacts.length === 0 && <p className="mt-3 text-sm text-slate-600">No contacts were returned for this registration.</p>}
           <p className="mt-2 text-xs text-slate-500">HPD's public registration file lists names, corporations and business addresses only; it does not include phone numbers.</p>
+          {info?.registrationId && (
+            <div className="mt-4 border-t border-amber-200 pt-3">
+              <p className="text-sm font-semibold text-slate-900">Other buildings this owner / manager runs</p>
+              {portfolioLoading && <p className="text-xs text-slate-500">Searching HPD registrations for the same names…</p>}
+              {portfolio && portfolio.rows.length === 0 && !portfolioLoading && <p className="text-xs text-slate-500">No other registrations name these people or corporations.</p>}
+              {portfolio && portfolio.rows.length > 0 && (
+                <>
+                  <p className="text-xs text-slate-500">{portfolio.rows.length} building{portfolio.rows.length === 1 ? "" : "s"} registered to {portfolio.names.join(", ")}. Pick one to open it here.</p>
+                  <select defaultValue="" onChange={(e) => { const r = portfolio.rows[Number(e.target.value)]; if (r) openPortfolio(r); }} className="mt-2 h-10 w-full max-w-3xl rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900">
+                    <option value="">Choose a building…</option>
+                    {portfolio.rows.map((r, i) => (
+                      <option key={r.registrationId} value={i}>{r.address}, {r.borough} {r.zip} · {r.hpdA + r.hpdB + r.hpdC} open HPD ({r.hpdB} B · {r.hpdC} C){r.aep?.status === "AEP Active" ? " · IN AEP" : ""} · {r.via[0] || ""}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+            </div>
+          )}
         </section>
       )}
     </div>
