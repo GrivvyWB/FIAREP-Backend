@@ -80,6 +80,8 @@ const MODULES: ModuleDefinition[] = [
   { id: "company-forms", name: "Company Forms (locked folder)", description: "FIAREP's own compliance forms — DOB certificate of correction, vermin, lead, tenant notices. OFF for every client; switch on only for FIAREP's organization", icon: AlertTriangle },
   { id: "property-lookup", name: "HPD / DOB Lookup", description: "Look up a building's HPD and DOB violations by address (website and app) — pick the trades below", icon: AlertTriangle },
   { id: "translator", name: "Translator", description: "Voice-to-voice interpreter for talking with residents (website and app)", icon: Users },
+  { id: "violation-alerts", name: "Violation Alerts (menu page)", description: "New 311 complaints, HPD / DOB violations and OATH summonses on the client's watched buildings, checked every 30 minutes, as a page in their menu. OFF for every client; switch on per client, then assign their buildings on Platform -> Alerts", icon: AlertTriangle },
+  { id: "violation-alerts-command", name: "Violation Alerts — Upper Management Complaint Command", description: "The same alerts as a red strip at the top of the Borough Director's Complaint Command, with its own on / off switch for the director. Separate from the menu page; OFF for every client", icon: AlertTriangle },
 ];
 
 // Per-tool, per-client construction-PM switches. Each is independent and OFF
@@ -231,7 +233,7 @@ function configuredModules(organization: OrganizationWithUsage): Record<string, 
 
   // These modules are opt-in: they read as OFF until explicitly enabled for
   // the client, so the switch reflects the true default.
-  const OPT_IN = new Set<string>(["measurement", "company-forms"]);
+  const OPT_IN = new Set<string>(["measurement", "company-forms", "violation-alerts", "violation-alerts-command"]);
   return MODULES.reduce<Record<string, boolean>>((result, module) => {
     const value = saved[module.id];
     result[module.id] = typeof value === "boolean"

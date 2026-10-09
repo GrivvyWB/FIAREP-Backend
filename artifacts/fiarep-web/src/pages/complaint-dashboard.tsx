@@ -15,6 +15,7 @@ import {
   ShieldAlert, Users, CheckCircle, AlertCircle, Calendar, ArrowDownUp, Trophy
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { ViolationAlertsStrip } from "@/components/violation-alerts-strip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DEVELOPMENT_ROTATION_MS,
@@ -199,6 +200,9 @@ export default function ComplaintDashboard() {
   // Detail View State
   const [selectedDev, setSelectedDev] = useState<string | null>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<string | null>(null);
+  // Summary-card lists (Column 3): every active complaint, developments with
+  // active, buildings with active, or complaints corrected in the last 14 days.
+  const [listView, setListView] = useState<"active" | "devs" | "bldgs" | "corrected" | null>(null);
   const selectedCatalogDevelopment = verifiedDevelopmentFor(selectedDev);
 
   const filterOptions = useMemo(() => {
@@ -328,18 +332,19 @@ export default function ComplaintDashboard() {
     .filter((report) => !isCorrected(statusOf(report)))
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())[0] || null;
 
-  function resetDashboard() {
-    setSearch("");
-    setBoroughFilter("all");
-    setFromDate("");
-    setToDate("");
+  function showList(view: "active" | "devs" | "bldgs" | "corrected") {
     setSelectedDev(null);
     setSelectedBuilding(null);
+    setListView(view);
     void reportsQuery.refetch();
+    window.requestAnimationFrame(() => {
+      document.getElementById("complaint-dashboard-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
   }
 
   function focusDevelopment(development: string | null | undefined, building?: string | null) {
-    if (!development) return;
+    if (!development) { showList("active"); return; }
+    setListView(null);
     setSelectedDev(development);
     setSelectedBuilding(building || null);
     window.requestAnimationFrame(() => {
@@ -347,18 +352,12 @@ export default function ComplaintDashboard() {
     });
   }
 
-  function focusRecentlyCorrected() {
-    const today = new Date(now);
-    const fourteenDaysAgo = new Date(now - 14 * 86400000);
-    setFromDate(fourteenDaysAgo.toISOString().slice(0, 10));
-    setToDate(today.toISOString().slice(0, 10));
-    setSelectedDev(null);
-    setSelectedBuilding(null);
-    void reportsQuery.refetch();
-    window.requestAnimationFrame(() => {
-      document.getElementById("complaint-dashboard-results")?.scrollIntoView({ behavior: "smooth", block: "start" });
-    });
-  }
+  const activeReports = filteredReports
+    .filter((r) => !isCorrected(statusOf(r)))
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  const recentlyCorrectedReports = filteredReports
+    .filter((r) => isCorrected(statusOf(r)) && now - new Date(r.updatedAt || r.createdAt).getTime() <= 14 * 86400000)
+    .sort((a, b) => new Date(b.updatedAt || b.createdAt).getTime() - new Date(a.updatedAt || a.createdAt).getTime());
 
   const selectedDevData = selectedDev ? devStats.find(d => d.name === selectedDev) : null;
   const devBuildings = selectedDevData 
@@ -422,16 +421,18 @@ export default function ComplaintDashboard() {
       </header>
 
       <div className="px-4 md:px-6 space-y-4">
+        {/* Violation alerts (opt-in per organization; director's own on/off switch) */}
+        <ViolationAlertsStrip />
         {/* 7 Summary Panels */}
         <div className="overflow-x-auto pb-1">
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-7 lg:min-w-[980px]">
-            <SummaryCard title="Total Active" value={globalStats.active} icon={ShieldAlert} colorClass="red" testId="metric-total-active" onClick={resetDashboard} />
-            <SummaryCard title="Devs w/ Active" value={devStats.length} icon={Users} colorClass="blue" testId="metric-devs-active" onClick={resetDashboard} />
-            <SummaryCard title="Bldgs w/ Active" value={bldgStats.length} icon={Building2} colorClass="indigo" testId="metric-bldgs-active" onClick={resetDashboard} />
+            <SummaryCard title="Total Active" value={globalStats.active} icon={ShieldAlert} colorClass="red" testId="metric-total-active" onClick={() => showList("active")} />
+            <SummaryCard title="Devs w/ Active" value={devStats.length} icon={Users} colorClass="blue" testId="metric-devs-active" onClick={() => showList("devs")} />
+            <SummaryCard title="Bldgs w/ Active" value={bldgStats.length} icon={Building2} colorClass="indigo" testId="metric-bldgs-active" onClick={() => showList("bldgs")} />
             <SummaryCard title="Most Active Dev" value={topDev?.name || "-"} subValue={topDev ? `${topDev.activeCount} active` : ""} icon={MapPin} colorClass="teal" testId="metric-top-dev" onClick={() => focusDevelopment(topDev?.name)} />
             <SummaryCard title="Most Active Bldg" value={topBldg?.name || "-"} subValue={topBldg ? `${topBldg.activeCount} active` : ""} icon={Building} colorClass="orange" testId="metric-top-bldg" onClick={() => focusDevelopment(topBldg?.reports[0]?.development, topBldg?.name)} />
             <SummaryCard title="Oldest Open" value={globalStats.oldest ? `${Math.floor((now - globalStats.oldest)/86400000)}d ago` : "-"} subValue={globalStats.oldest ? new Date(globalStats.oldest).toLocaleDateString() : ""} icon={Clock} colorClass="purple" testId="metric-oldest" onClick={() => focusDevelopment(oldestOpenReport?.development, oldestOpenReport ? reportAddress(oldestOpenReport) : null)} />
-            <SummaryCard title="Recently Corrected" value={globalStats.recentlyCorrected} subValue="Last 14 days" icon={CheckCircle} colorClass="green" testId="metric-corrected" onClick={focusRecentlyCorrected} />
+            <SummaryCard title="Recently Corrected" value={globalStats.recentlyCorrected} subValue="Last 14 days" icon={CheckCircle} colorClass="green" testId="metric-corrected" onClick={() => showList("corrected")} />
           </div>
         </div>
 
@@ -620,7 +621,54 @@ export default function ComplaintDashboard() {
 
             {/* Column 3: Top 10 OR Drill-down Panel */}
             <div className="w-full xl:w-[350px] 2xl:w-[400px] shrink-0 flex flex-col gap-4 min-h-0 transition-all duration-300">
-              {!selectedDev ? (
+              {listView ? (
+                <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden min-h-0 relative" data-testid={`list-${listView}`}>
+                  <div className="p-3 border-b border-slate-200 bg-slate-50 flex justify-between items-center">
+                    <div className="font-bold text-sm text-slate-900 flex items-center gap-1.5">
+                      {listView === "active" && <><ShieldAlert className="w-4 h-4 text-red-600" />All active complaints ({activeReports.length}) · oldest first</>}
+                      {listView === "devs" && <><Users className="w-4 h-4 text-blue-600" />Developments with active complaints ({devStats.length})</>}
+                      {listView === "bldgs" && <><Building2 className="w-4 h-4 text-indigo-600" />Buildings with active complaints ({bldgStats.length})</>}
+                      {listView === "corrected" && <><CheckCircle className="w-4 h-4 text-emerald-600" />Corrected in the last 14 days ({recentlyCorrectedReports.length})</>}
+                    </div>
+                    <button onClick={() => setListView(null)} className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200 rounded-md transition-colors" data-testid="close-list"><X className="w-3.5 h-3.5" /></button>
+                  </div>
+                  <ScrollArea className="flex-1 p-2 bg-slate-50/50">
+                    <div className="space-y-1">
+                      {(listView === "active" ? activeReports : listView === "corrected" ? recentlyCorrectedReports : []).map((r) => {
+                        const state = r.state || {};
+                        const corrected = listView === "corrected";
+                        return (
+                          <button type="button" key={r.id} onClick={() => focusDevelopment(r.development, reportAddress(r))} className="w-full text-left p-3 bg-white border border-slate-200 shadow-sm rounded-xl hover:border-blue-300 transition-colors" data-testid={`list-complaint-${r.id}`}>
+                            <div className="flex justify-between items-start mb-1 gap-2">
+                              <h4 className="text-xs font-bold text-slate-900 leading-tight">{String(state.title || state.complaintNo || r.id.slice(0, 8))}</h4>
+                              <span className={`text-[9px] px-1.5 py-0.5 rounded uppercase font-bold shrink-0 border ${corrected ? "bg-emerald-50 border-emerald-100 text-emerald-700" : "bg-red-50 border-red-100 text-red-600"}`}>{statusOf(r).replace("_", " ")}</span>
+                            </div>
+                            <div className="text-[11px] font-semibold text-slate-700">{r.development || "Unassigned"} · {reportAddress(r)}</div>
+                            <div className="text-[11px] text-slate-600 line-clamp-2">{String(state.description || "No description provided.")}</div>
+                            <div className="mt-1 flex flex-wrap items-center justify-between gap-2 text-[10px] font-semibold text-slate-500">
+                              <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">{categoryOf(r)}</span>
+                              <span className="flex items-center gap-1"><Clock className="w-3 h-3" />{corrected ? `corrected ${new Date(r.updatedAt || r.createdAt).toLocaleDateString()}` : `${Math.floor((now - new Date(r.createdAt).getTime()) / 86400000)}d open · ${new Date(r.createdAt).toLocaleDateString()}`}</span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                      {listView === "devs" && devStats.map((d, i) => (
+                        <button type="button" key={d.name} onClick={() => focusDevelopment(d.name)} className="w-full flex items-center justify-between p-2.5 text-xs bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 transition-colors" data-testid={`list-dev-${i}`}>
+                          <span className="flex items-center gap-2 truncate pr-2"><span className="font-bold text-slate-900 w-5 shrink-0">{i + 1}.</span><span className="font-semibold text-slate-700 truncate">{d.name}</span></span>
+                          <span className="flex items-center gap-3 shrink-0"><span className="text-emerald-600 font-medium">{d.correctedCount} corr</span><span className="text-red-600 font-bold">{d.activeCount} act</span></span>
+                        </button>
+                      ))}
+                      {listView === "bldgs" && bldgStats.map((b, i) => (
+                        <button type="button" key={b.name} onClick={() => focusDevelopment(b.reports[0]?.development, b.name)} className="w-full flex items-center justify-between p-2.5 text-xs bg-white border border-slate-200 rounded-xl shadow-sm hover:border-blue-300 transition-colors" data-testid={`list-bldg-${i}`}>
+                          <span className="flex items-center gap-2 truncate pr-2"><span className="font-bold text-slate-900 w-5 shrink-0">{i + 1}.</span><span className="font-semibold text-slate-700 truncate">{b.name}</span><span className="text-slate-400 truncate">· {b.reports[0]?.development || "Unassigned"}</span></span>
+                          <span className="text-red-600 font-bold shrink-0">{b.activeCount} act</span>
+                        </button>
+                      ))}
+                      {((listView === "active" && activeReports.length === 0) || (listView === "corrected" && recentlyCorrectedReports.length === 0) || (listView === "devs" && devStats.length === 0) || (listView === "bldgs" && bldgStats.length === 0)) && <div className="p-6 text-center text-xs text-slate-400">Nothing to show.</div>}
+                    </div>
+                  </ScrollArea>
+                </div>
+              ) : !selectedDev ? (
                 <>
                   <div className="flex-1 bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col overflow-hidden min-h-0">
                     <div className="p-3 border-b border-slate-100 flex items-center gap-2 bg-slate-50 rounded-t-xl">

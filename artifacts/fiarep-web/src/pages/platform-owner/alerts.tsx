@@ -5,7 +5,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 
 type Alert = { id: string; watchId: string; kind: string; key: string; date: string; address: string; borough: string; company: string; bbl: string; bin: string; title: string; detail: string; seen: boolean; foundAt: string };
-type Watch = { id: string; address: string; borough: string; company: string; bbl: string; bin: string; addedBy: string; addedAt: string; lastCheckedAt: string | null; lastError: string | null };
+type Watch = { id: string; address: string; borough: string; company: string; organizationId: string; bbl: string; bin: string; addedBy: string; addedAt: string; lastCheckedAt: string | null; lastError: string | null };
+type Org = { id: string; name: string; features?: { modules?: Record<string, unknown> } | null };
 const KIND_STYLE: Record<string, string> = { "HPD complaint": "bg-rose-600 text-white", "HPD violation": "bg-rose-100 text-rose-800", "DOB violation": "bg-amber-100 text-amber-900", "OATH / ECB summons": "bg-amber-500 text-slate-950", "311 call": "bg-sky-100 text-sky-900" };
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never");
 
@@ -20,15 +21,17 @@ export default function OwnerAlerts() {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [filter, setFilter] = useState<"unseen" | "all">("unseen");
-  const [add, setAdd] = useState({ address: "", borough: "", company: "", bbl: "", bin: "" });
+  const [add, setAdd] = useState({ address: "", borough: "", company: "", bbl: "", bin: "", organizationId: "" });
+  const [orgs, setOrgs] = useState<Org[]>([]);
 
   async function load() {
     try {
-      const [a, w] = await Promise.all([
+      const [a, w, o] = await Promise.all([
         customFetch<Alert[]>("/api/v1/platform/alerts", { responseType: "json" } as never),
         customFetch<Watch[]>("/api/v1/platform/watch", { responseType: "json" } as never),
+        customFetch<Org[]>("/api/v1/platform/organizations", { responseType: "json" } as never).catch(() => [] as Org[]),
       ]);
-      setAlerts(a); setWatch(w);
+      setAlerts(a); setWatch(w); setOrgs(o.filter((x) => x.id !== "default"));
     } catch (err: any) { toast({ variant: "destructive", title: "Could not load alerts", description: err?.data?.error || err?.message }); }
     finally { setLoading(false); }
   }
@@ -50,9 +53,16 @@ export default function OwnerAlerts() {
   async function addWatch() {
     try {
       await customFetch("/api/v1/platform/watch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(add), responseType: "json" } as never);
-      setAdd({ address: "", borough: "", company: "", bbl: "", bin: "" }); toast({ title: "Watching", description: `${add.address} — checking the last two weeks now.` }); setTimeout(() => void load(), 4000); await load();
+      setAdd({ address: "", borough: "", company: "", bbl: "", bin: "", organizationId: "" }); toast({ title: "Watching", description: `${add.address} — checking the last two weeks now.` }); setTimeout(() => void load(), 4000); await load();
     } catch (err: any) { toast({ variant: "destructive", title: "Could not add", description: err?.data?.error || err?.message }); }
   }
+  async function assign(w: Watch, organizationId: string) {
+    const org = orgs.find((o) => o.id === organizationId);
+    setWatch((rows) => rows.map((r) => (r.id === w.id ? { ...r, organizationId, company: org ? org.name : r.company } : r)));
+    try { await customFetch(`/api/v1/platform/watch/${encodeURIComponent(w.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId, company: org ? org.name : w.company }), responseType: "json" } as never); }
+    catch (err: any) { toast({ variant: "destructive", title: "Could not assign", description: err?.data?.error || err?.message }); await load(); }
+  }
+  const alertsOn = (o: Org | undefined) => !!o && o.features?.modules?.["violation-alerts"] === true;
   async function removeWatch(w: Watch) {
     if (!window.confirm(`Stop watching ${w.address}? Its alerts are removed too.`)) return;
     try { await customFetch(`/api/v1/platform/watch/${encodeURIComponent(w.id)}`, { method: "DELETE", responseType: "json" } as never); await load(); } catch (err: any) { toast({ variant: "destructive", title: "Could not remove", description: err?.data?.error || err?.message }); }
@@ -107,13 +117,13 @@ export default function OwnerAlerts() {
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">Watched buildings ({watch.length})</h2>
-        <p className="text-xs text-slate-500">Client buildings FIAREP is responsible for. Add one here or with "Watch this building" on Building lookup; accepted job requests can be added the same way.</p>
+        <p className="text-xs text-slate-500">Client buildings FIAREP is responsible for. Add one here or with "Watch this building" on Building lookup. Assign each building to its client organization; the client sees those alerts on their own website only when Violation Alerts is switched on for them under Modules.</p>
         <div className="mt-3 grid gap-2 sm:grid-cols-6">
           <input value={add.address} onChange={(e) => setAdd({ ...add, address: e.target.value })} placeholder="Address" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm sm:col-span-2" />
           <input value={add.borough} onChange={(e) => setAdd({ ...add, borough: e.target.value })} placeholder="Borough" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
           <input value={add.bbl} onChange={(e) => setAdd({ ...add, bbl: e.target.value })} placeholder="BBL (10 digits)" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
           <input value={add.bin} onChange={(e) => setAdd({ ...add, bin: e.target.value })} placeholder="BIN" className="rounded-md border border-slate-300 px-2 py-1.5 text-sm" />
-          <div className="flex gap-2"><input value={add.company} onChange={(e) => setAdd({ ...add, company: e.target.value })} placeholder="Client" className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm" /><Button size="sm" onClick={() => void addWatch()} disabled={!add.address.trim() || !/^\d{10}$/.test(add.bbl.trim())}>Watch</Button></div>
+          <div className="flex gap-2"><select value={add.organizationId} onChange={(e) => { const o = orgs.find((x) => x.id === e.target.value); setAdd({ ...add, organizationId: e.target.value, company: o ? o.name : add.company }); }} className="min-w-0 flex-1 rounded-md border border-slate-300 px-2 py-1.5 text-sm"><option value="">Client organization…</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select><Button size="sm" onClick={() => void addWatch()} disabled={!add.address.trim() || !/^\d{10}$/.test(add.bbl.trim())}>Watch</Button></div>
         </div>
         {watch.length > 0 && (
           <table className="mt-3 w-full text-sm">
@@ -122,7 +132,10 @@ export default function OwnerAlerts() {
               {watch.map((w) => (
                 <tr key={w.id} className="border-t border-slate-100">
                   <td className="py-1.5 pr-3"><button type="button" onClick={() => open(w)} className="font-medium text-slate-900 hover:underline">{w.address}, {w.borough}</button></td>
-                  <td className="py-1.5 pr-3 text-slate-700">{w.company || "—"}</td>
+                  <td className="py-1.5 pr-3 text-slate-700">
+                    <select value={w.organizationId} onChange={(e) => void assign(w, e.target.value)} className="rounded-md border border-slate-300 px-2 py-1 text-sm"><option value="">— FIAREP only —</option>{orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}</select>
+                    {w.organizationId && <span className={`block text-xs ${alertsOn(orgs.find((o) => o.id === w.organizationId)) ? "text-emerald-700" : "text-amber-700"}`}>{alertsOn(orgs.find((o) => o.id === w.organizationId)) ? "Client sees alerts (switch is ON)" : "Client cannot see yet — switch Violation Alerts ON under Modules"}</span>}
+                  </td>
                   <td className="py-1.5 pr-3 text-xs text-slate-500">{w.bbl} · {w.bin || "—"}</td>
                   <td className="py-1.5 pr-3 text-xs text-slate-500">{when(w.lastCheckedAt)}{w.lastError ? <span className="block text-rose-600">{w.lastError}</span> : null}</td>
                   <td className="py-1.5 text-right"><Button size="sm" variant="outline" className="text-rose-700" onClick={() => void removeWatch(w)}>Stop watching</Button></td>

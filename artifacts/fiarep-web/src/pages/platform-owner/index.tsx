@@ -11,6 +11,7 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
+import { PlatformAlertsStrip } from "@/components/violation-alerts-strip";
 
 import {
   Table,
@@ -226,6 +227,7 @@ export default function OwnerDashboard() {
 
   return (
     <div className="space-y-8 font-sans">
+      <PlatformAlertsStrip />
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Organizations Registry</h1>

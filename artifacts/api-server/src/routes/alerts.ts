@@ -11,8 +11,8 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { db, entityRecords } from "@workspace/db";
-import { requirePlatformOwner } from "../middlewares/auth";
+import { db, entityRecords, organizations } from "@workspace/db";
+import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
 
 const HPD_COMPLAINTS = "ygpa-z7cr";
@@ -40,11 +40,11 @@ async function fetchJson(url: string): Promise<Record<string, unknown>[]> {
 const ymd = (v: string) => (/^\d{8}$/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6)}` : v.slice(0, 10));
 const yyyymmdd = (d: Date) => d.toISOString().slice(0, 10).replaceAll("-", "");
 
-export type WatchBuilding = { id: string; address: string; borough: string; company: string; bbl: string; bin: string; addedBy: string; addedAt: string; lastCheckedAt: string | null; lastError: string | null };
+export type WatchBuilding = { id: string; address: string; borough: string; company: string; organizationId: string; bbl: string; bin: string; addedBy: string; addedAt: string; lastCheckedAt: string | null; lastError: string | null };
 export type Alert = { id: string; watchId: string; kind: "HPD complaint" | "HPD violation" | "DOB violation" | "OATH / ECB summons" | "311 call"; key: string; date: string; address: string; borough: string; company: string; bbl: string; bin: string; title: string; detail: string; seen: boolean; foundAt: string };
 
 const watchView = (r: { id: string; state: Record<string, unknown>; createdAt: Date }): WatchBuilding => ({
-  id: r.id, address: text(r.state["address"]), borough: text(r.state["borough"]), company: text(r.state["company"]), bbl: text(r.state["bbl"]), bin: text(r.state["bin"]),
+  id: r.id, address: text(r.state["address"]), borough: text(r.state["borough"]), company: text(r.state["company"]), organizationId: text(r.state["organizationId"]), bbl: text(r.state["bbl"]), bin: text(r.state["bin"]),
   addedBy: text(r.state["addedBy"]), addedAt: r.createdAt.toISOString(), lastCheckedAt: text(r.state["lastCheckedAt"]) || null, lastError: text(r.state["lastError"]) || null,
 });
 const alertView = (r: { id: string; state: Record<string, unknown> }): Alert => ({ id: r.id, ...(r.state as Omit<Alert, "id">) });
@@ -67,7 +67,7 @@ async function checkBuilding(row: { id: string; state: Record<string, unknown> }
       detail: [text(c["unit_type"]) === "APARTMENT" && text(c["apartment"]) ? `Apt ${text(c["apartment"])}` : text(c["unit_type"]), text(c["space_type"]), `Complaint ${text(c["complaint_id"])} · ${text(c["complaint_status"])}`].filter(Boolean).join(" · ") });
     const violations = await fetchJson(soql(HPD_VIOLATIONS, { $where: `bbl='${w.bbl}' AND inspectiondate > '${since}'`, $order: "inspectiondate DESC", $limit: "500" }));
     for (const v of violations) found.push({ ...base, kind: "HPD violation", key: `v:${text(v["violationid"])}`, date: text(v["inspectiondate"]).slice(0, 10),
-      title: `Class ${text(v["class"])} · ${[text(v["apartment"]) ? `Apt ${text(v["apartment"])}` : "", text(v["story"]) ? `Story ${text(v["story"])}` : ""].filter(Boolean).join(", ") || "building"}`,
+      title: `Class ${text(v["class"])} · ${[text(v["apartment"]) ? `Apt ${text(v["apartment"])}` : "", text(v["story"]) && text(v["story"]) !== "0" ? `Floor ${text(v["story"])}` : ""].filter(Boolean).join(", ") || "building"}`,
       detail: `#${text(v["violationid"])} · ${text(v["novdescription"]).replace(/\s+/g, " ")}` });
     const calls = await fetchJson(soql(SR311, { $select: "unique_key,created_date,agency,complaint_type,descriptor,status", $where: `bbl='${w.bbl}' AND created_date > '${since}' AND agency in('DOB','DEP','FDNY','DSNY','DOHMH','DOT')`, $order: "created_date DESC", $limit: "500" }));
     for (const s of calls) found.push({ ...base, kind: "311 call", key: `s:${text(s["unique_key"])}`, date: text(s["created_date"]).slice(0, 16).replace("T", " "),
@@ -147,13 +147,45 @@ router.post("/v1/platform/watch", async (req, res) => {
   const dup = (await listWatch()).find((r) => text(r.state["bbl"]) === bbl);
   if (dup) { res.json(watchView(dup as never)); return; }
   const now = new Date(); const id = randomUUID();
-  const state = { address, borough: text(b["borough"]).slice(0, 40), company: text(b["company"]).slice(0, 120), bbl, bin, addedBy: owner.name, lastCheckedAt: null, lastError: "" };
+  const state = { address, borough: text(b["borough"]).slice(0, 40), company: text(b["company"]).slice(0, 120), organizationId: text(b["organizationId"]).slice(0, 80), bbl, bin, addedBy: owner.name, lastCheckedAt: null, lastError: "" };
   await db.insert(entityRecords).values({ id, tenantId: "default", entity: WATCH, development: state.company || null, state, createdBy: owner.name, createdAt: now, updatedAt: now });
   await platformAudit(owner.name, "watch.added", id, null, state);
   // First check right away so the owner sees the last two weeks.
   void checkBuilding({ id, state }).catch(() => undefined);
   res.json(watchView({ id, state, createdAt: now }));
 });
+// Assign (or clear) the client organization a watched building belongs to.
+router.patch("/v1/platform/watch/:id", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, String(req.params["id"])), eq(entityRecords.entity, WATCH))).limit(1);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  const state = { ...row.state, organizationId: text(b["organizationId"]).slice(0, 80), company: b["company"] != null ? text(b["company"]).slice(0, 120) : text(row.state["company"]) };
+  await db.update(entityRecords).set({ state, updatedAt: new Date() }).where(eq(entityRecords.id, row.id));
+  await platformAudit(owner.name, "watch.assigned", row.id, row.state, state);
+  res.json(watchView({ id: row.id, state, createdAt: row.createdAt }));
+});
+
+// Client side: a signed-in organization's own alerts, only when the platform
+// owner switched Violation Alerts on for that organization (Platform -> Modules).
+async function alertsEnabled(tenantId: string): Promise<boolean> {
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  const modules = org?.features && typeof org.features === "object" ? (org.features as Record<string, unknown>)["modules"] : null;
+  const m = modules && typeof modules === "object" ? (modules as Record<string, unknown>) : {};
+  // Either switch opens the organization's alerts: the menu page, or the strip on
+  // the Upper Management Complaint Command.
+  return m["violation-alerts"] === true || m["violation-alerts-command"] === true;
+}
+router.get("/v1/violation-alerts", requireAuth, async (_req, res) => {
+  const actor = res.locals["actor"] as { tenantId: string };
+  if (!(await alertsEnabled(actor.tenantId))) { res.status(403).json({ error: "Violation alerts are not switched on for this organization" }); return; }
+  const mine = (await listWatch()).filter((r) => text(r.state["organizationId"]) === actor.tenantId);
+  const ids = new Set(mine.map((r) => r.id));
+  const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, ALERT), eq(entityRecords.deleted, false))).orderBy(desc(entityRecords.createdAt)).limit(2000);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ buildings: mine.map((r) => watchView(r as never)), alerts: rows.map((r) => alertView(r as never)).filter((a) => ids.has(a.watchId)) });
+});
+
 router.delete("/v1/platform/watch/:id", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
   const id = String(req.params["id"]);

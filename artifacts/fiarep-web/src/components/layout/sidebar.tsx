@@ -41,6 +41,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Community Coordinators", href: "/community", icon: UsersRound, module: "community" as const },
     { name: "Translator", href: "/translator", icon: Languages, module: "translator" as const },
     { name: "HPD / DOB Lookup", href: "/property-lookup", icon: Building2, module: "property-lookup" as const },
+    { name: "Violation Alerts", href: "/violation-alerts", icon: BellRing, module: "violation-alerts" as const },
     { name: "Company Forms", href: "/company-forms", icon: Lock, module: "company-forms" as const },
     { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },
     { name: "HUD Inspections", href: "/hud-inspections", icon: ClipboardCheck, module: "hud-inspections" as const },
