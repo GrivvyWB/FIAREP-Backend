@@ -1,7 +1,7 @@
 import { ReactNode } from "react";
 import { useOwnerAuth } from "@/hooks/use-owner-auth";
 import { Button } from "@/components/ui/button";
-import { Building2, ClipboardList, DollarSign, Landmark, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer } from "lucide-react";
+import { Building2, ClipboardList, DollarSign, FileText, Landmark, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function OwnerShell({ children }: { children: ReactNode }) {
@@ -129,6 +129,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           >
             <DollarSign className="h-4 w-4" />
             Pricing ladder
+          </Link>
+          <Link
+            href="/platform-owner/forms"
+            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/forms"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <FileText className="h-4 w-4" />
+            Forms
           </Link>
         </div>
       </nav>

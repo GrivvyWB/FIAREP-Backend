@@ -4,10 +4,12 @@
 // the building list is cached for six hours.
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
+import { ReplitConnectors } from "@replit/connectors-sdk";
 import { and, desc, eq } from "drizzle-orm";
 import { db, entityRecords } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
+import { hpdViolationPlace, hpdViolationType } from "../lib/dofCharges";
 
 const AEP = "hcir-3275";       // HPD Alternative Enforcement Program buildings
 const REGISTRATIONS = "tesw-yqqr"; // HPD multiple dwelling registrations
@@ -15,6 +17,16 @@ const CONTACTS = "feu5-w2e2";  // HPD registration contacts
 const HPD_VIOLATIONS = "wvxf-dwi5";
 const HPD_OMO_CHARGES = "mdbu-nrqn";
 const PROPERTY_VALUATION = "8y4t-faws";
+const connectors = new ReplitConnectors();
+async function sendMail(to: string, subject: string, html: string): Promise<boolean> {
+  try {
+    const response = await connectors.proxy("outlook", "/v1.0/me/sendMail", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ message: { subject, body: { contentType: "HTML", content: html }, toRecipients: [{ emailAddress: { address: to } }] }, saveToSentItems: true }),
+    });
+    return response.ok;
+  } catch { return false; }
+}
 const text = (v: unknown): string => (v == null ? "" : String(v).trim());
 
 function soql(dataset: string, params: Record<string, string>): string {
@@ -221,6 +233,16 @@ router.get("/v1/platform/aep/portfolio/:registrationId", async (req, res) => {
 // Violation log: every open HPD violation on the lot, as HPD wrote it, and
 // every active DOB violation on the building. For reading, not counting.
 const DOB_VIOLATIONS = "3h2n-5cm9";
+const PLUTO = "64uk-42ks"; // floors and units per lot, for the wrong-location check
+const ORD = /\b(\d{1,2})(?:ST|ND|RD|TH)\s+(?:STORY|FLOOR|FL)\b/;
+const WORD_STORY: Record<string, number> = { FIRST: 1, SECOND: 2, THIRD: 3, FOURTH: 4, FIFTH: 5, SIXTH: 6, SEVENTH: 7, EIGHTH: 8, NINTH: 9, TENTH: 10 };
+function storyInText(d: string): number | null {
+  const m = d.match(ORD); if (m) return Number(m[1]);
+  const w = d.match(/\b(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH)\s+(?:STORY|FLOOR)\b/); if (w) return WORD_STORY[w[1]!] ?? null;
+  return null;
+}
+const storyField = (s: string): number | null => { const t = s.toUpperCase().replace(/[^A-Z0-9]/g, ""); if (/^\d{1,2}$/.test(t)) return Number(t); return WORD_STORY[t] ?? null; };
+const aptNorm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 const ymd = (v: string) => (/^\d{8}$/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6)}` : v.slice(0, 10));
 router.get("/v1/platform/aep/violations/:bbl", async (req, res) => {
   const bbl = String(req.params["bbl"]).replace(/\D/g, "");
@@ -231,12 +253,42 @@ router.get("/v1/platform/aep/violations/:bbl", async (req, res) => {
       $select: "violationid,class,apartment,story,inspectiondate,novissueddate,novdescription,currentstatus,currentstatusdate,originalcorrectbydate,newcorrectbydate,ordernumber",
       $where: `bbl='${bbl}' AND violationstatus='Open'`, $order: "class DESC,novissueddate DESC", $limit: "5000",
     }));
-    const hpd = hpdRows.map((r) => ({
-      id: text(r["violationid"]), class: text(r["class"]), apartment: text(r["apartment"]), story: text(r["story"]),
-      inspected: text(r["inspectiondate"]).slice(0, 10), issued: text(r["novissueddate"]).slice(0, 10),
-      description: text(r["novdescription"]).replace(/\s+/g, " "), status: text(r["currentstatus"]), statusDate: text(r["currentstatusdate"]).slice(0, 10),
-      correctBy: (text(r["newcorrectbydate"]) || text(r["originalcorrectbydate"])).slice(0, 10), order: text(r["ordernumber"]),
-    }));
+    // Floors and units on the lot, so a story the building does not have can be flagged.
+    let floors = 0; let units = 0;
+    try { const [lot] = await fetchJson(soql(PLUTO, { $select: "numfloors,unitsres,unitstotal", $where: `bbl=${Number(bbl)}`, $limit: "1" })); floors = Math.round(Number(lot?.["numfloors"]) || 0); units = Number(lot?.["unitsres"]) || Number(lot?.["unitstotal"]) || 0; } catch { /* leave 0 */ }
+    const hpd = hpdRows.map((r) => {
+      const description = text(r["novdescription"]).replace(/\s+/g, " ");
+      const apartment = text(r["apartment"]); const story = text(r["story"]);
+      const d = description.toUpperCase();
+      const type = hpdViolationType(description); const place = hpdViolationPlace(description, apartment, story);
+      // Wrong-location checks: what the inspector typed in the fields vs what the NOV text says vs the building.
+      const flags: string[] = [];
+      const tStory = storyInText(d); const fStory = storyField(story);
+      if (tStory != null && fStory != null && tStory !== fStory) flags.push(`Text says ${tStory}${["st", "nd", "rd"][tStory - 1] || "th"} story, story field says ${story}`);
+      const tApt = d.match(/\bAPT\.?\s*#?\s*([A-Z0-9-]{1,6})\b/)?.[1]; const fApt = aptNorm(apartment);
+      if (tApt && fApt && !/^(\d{1,2})(ST|ND|RD|TH)?(FL|FLOOR|FLR)?$/.test(fApt) && aptNorm(tApt) !== fApt) flags.push(`Text says apt ${tApt}, apartment field says ${apartment}`);
+      if (floors > 0) { const hi = Math.max(tStory ?? 0, fStory ?? 0); if (hi > floors + 1) flags.push(`Cites story ${hi}; building has ${floors} floors`); }
+      if (!fApt && !story && tStory == null && !tApt && place === "BUILDING") flags.push("No apartment, story or location given");
+      return {
+        id: text(r["violationid"]), class: text(r["class"]), apartment, story,
+        inspected: text(r["inspectiondate"]).slice(0, 10), issued: text(r["novissueddate"]).slice(0, 10),
+        description, status: text(r["currentstatus"]), statusDate: text(r["currentstatusdate"]).slice(0, 10),
+        correctBy: (text(r["newcorrectbydate"]) || text(r["originalcorrectbydate"])).slice(0, 10), order: text(r["ordernumber"]),
+        type, place, flags,
+      };
+    });
+    // Duplicates: the same kind of violation in the same place, cited more than once.
+    // One repair clears the whole group. Exact = identical NOV text within the group.
+    const groups = new Map<string, { key: string; type: string; place: string; ids: string[]; a: number; b: number; c: number; texts: Map<string, number> }>();
+    for (const v of hpd) {
+      const key = `${v.type}|${v.place}`;
+      const g = groups.get(key) || { key, type: v.type, place: v.place, ids: [], a: 0, b: 0, c: 0, texts: new Map() };
+      g.ids.push(v.id); if (v.class === "A") g.a++; else if (v.class === "B") g.b++; else if (v.class === "C") g.c++;
+      const t = v.description.toUpperCase().replace(/\d{1,2}\/\d{1,2}\/\d{2,4}/g, "").trim(); g.texts.set(t, (g.texts.get(t) || 0) + 1);
+      groups.set(key, g);
+    }
+    const duplicates = [...groups.values()].filter((g) => g.ids.length > 1).map((g) => ({ key: g.key, type: g.type, place: g.place, count: g.ids.length, a: g.a, b: g.b, c: g.c, exact: Math.max(...g.texts.values()), ids: g.ids }))
+      .sort((x, y) => y.count - x.count || y.c - x.c);
     const dobRows = bin ? await fetchJson(soql(DOB_VIOLATIONS, {
       $select: "number,violation_number,violation_type,violation_type_code,issue_date,description,disposition_date,disposition_comments,violation_category",
       $where: `bin='${bin}' AND violation_category like '%ACTIVE%'`, $order: "issue_date DESC", $limit: "2000",
@@ -246,8 +298,24 @@ router.get("/v1/platform/aep/violations/:bbl", async (req, res) => {
       issued: ymd(text(r["issue_date"])), description: text(r["description"]).replace(/\s+/g, " ").trim(), category: text(r["violation_category"]),
       dispositionDate: ymd(text(r["disposition_date"])), dispositionComments: text(r["disposition_comments"]).replace(/\s+/g, " ").trim(),
     }));
-    res.json({ hpd, dob, retrievedAt: new Date().toISOString() });
+    res.json({ hpd, dob, duplicates, jobs: groups.size, flagged: hpd.filter((v) => v.flags.length > 0).length, building: { floors, units }, retrievedAt: new Date().toISOString() });
   } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
+});
+
+// Dismissal request packet (cover letter + DR-1 field sheet) emailed from the
+// FIAREP Outlook account and kept on record.
+router.post("/v1/platform/aep/dismissal/email", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const to = text(b["to"]); const html = String(b["html"] ?? ""); const subject = text(b["subject"]).slice(0, 200) || "HPD dismissal request";
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) { res.status(400).json({ error: "A valid email address is required." }); return; }
+  if (!html.includes("Dismissal Request") || html.length > 400_000) { res.status(400).json({ error: "Packet body missing or too large." }); return; }
+  const emailed = await sendMail(to, subject, html);
+  const now = new Date(); const id = randomUUID();
+  const state = { to, emailed, sentAt: now.toISOString(), sentBy: owner.name, address: text(b["address"]).slice(0, 300), bbl: text(b["bbl"]).slice(0, 12), violationIds: (Array.isArray(b["violationIds"]) ? b["violationIds"] : []).map((v) => text(v)).slice(0, 500) };
+  await db.insert(entityRecords).values({ id, tenantId: "default", entity: "dismissal-requests", development: state.address || null, state, createdBy: owner.name, createdAt: now, updatedAt: now });
+  await platformAudit(owner.name, "dismissal-request.emailed", id, null, state);
+  res.json({ ok: true, emailed });
 });
 
 // Saved searches: a named snapshot of a list as it was on screen — the rows and
