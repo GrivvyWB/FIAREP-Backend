@@ -91,7 +91,7 @@ export function hpdViolationPlace(description: string, apartment: string, story:
   const fromText = d.match(/\bAPT\.?\s*#?\s*([A-Z0-9-]+)/);
   if (fromText) return `APT ${fromText[1].replace(/[^A-Z0-9]/g, "")}`;
   for (const place of ["PUBLIC HALL", "BASEMENT", "CELLAR", "ROOF", "BULKHEAD", "YARD", "FIRE ESCAPE", "ENTRANCE", "LOBBY", "STAIR", "BOILER ROOM", "COMPACTOR", "ENTIRE BUILDING"]) if (d.includes(place)) return place;
-  return story ? `PUBLIC STORY ${story}` : "BUILDING";
+  return story && story !== "0" ? `FLOOR ${story} (PUBLIC)` : "BUILDING";
 }
 
 export type DofLookup = {

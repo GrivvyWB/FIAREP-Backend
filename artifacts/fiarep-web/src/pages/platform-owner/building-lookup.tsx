@@ -39,6 +39,16 @@ export default function OwnerBuildingLookup() {
   }, [query]);
   const [bbl, setBbl] = useState("");
   const [bin, setBin] = useState("");
+  const [watching, setWatching] = useState(false);
+  async function watchBuilding() {
+    const addr = (aep ? initialAddress : lookupAddress).split(",").map((x) => x.trim());
+    setWatching(true);
+    try {
+      await customFetch("/api/v1/platform/watch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ address: addr[0] || initialAddress, borough: (addr[1] || "").replace(/\s*\d{5}$/, ""), bbl, bin, company: "" }), responseType: "json" } as never);
+      toast({ title: "Watching this building", description: "New complaints, violations and summonses will show on the Alerts tab. Checking the last two weeks now." });
+    } catch (err: any) { toast({ variant: "destructive", title: "Could not watch", description: err?.data?.error || err?.message }); }
+    finally { setWatching(false); }
+  }
   // Violation log — every open HPD violation as HPD wrote it, every active DOB violation
   const [log, setLog] = useState<ViolationLog | null>(null);
   const [logLoading, setLogLoading] = useState(false);
@@ -152,7 +162,10 @@ export default function OwnerBuildingLookup() {
       </div>
       {bbl && (
         <section className="rounded-xl border border-amber-300 bg-amber-50 p-5 shadow-sm">
-          <h2 className="text-lg font-semibold text-slate-950">HPD registration — owners, officers and agents</h2>
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h2 className="text-lg font-semibold text-slate-950">HPD registration — owners, officers and agents</h2>
+            <Button size="sm" className="bg-rose-600 text-white hover:bg-rose-500" onClick={() => void watchBuilding()} disabled={watching}>{watching ? "Adding…" : "Watch this building — alert me on new violations"}</Button>
+          </div>
           {aep && aep.bbl === bbl && (
             <>
               <p className="text-sm text-slate-600">{aep.units} units · BBL {aep.bbl} · BIN {aep.bin || "—"} · HPD building ID {aep.buildingId}</p>
@@ -229,7 +242,7 @@ export default function OwnerBuildingLookup() {
               {(dupGroup || onlyFlagged) && <button type="button" onClick={() => { setDupKey(""); setOnlyFlagged(false); }} className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm text-slate-700">Show all</button>}
               {log.flagged > 0 && <Button size="sm" className="h-9 bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={openDismissal}>Prepare dismissal request ({log.flagged})</Button>}
               <p className="basis-full text-xs text-slate-600">
-                {dupGroup ? `One repair in ${dupGroup.place} clears all ${dupGroup.count} of these ${dupGroup.type.toLowerCase()} violations.` : onlyFlagged ? `Violations whose NOV text, apartment / story fields and the building (${log.building.floors || "?"} floors, ${log.building.units || "?"} units per PLUTO) do not agree — candidates to challenge or have re-inspected before paying to cure.` : "Jobs = one kind of violation in one place (FIAREP's grouping). Pick a duplicate group to see every violation one repair would clear; the wrong-location button shows the ones worth challenging."}
+                {dupGroup ? `One repair in ${dupGroup.place} clears all ${dupGroup.count} of these ${dupGroup.type.toLowerCase()} violations.` : onlyFlagged ? `Violations whose NOV text, apartment / floor fields and the building (${log.building.floors || "?"} floors, ${log.building.units || "?"} units per PLUTO) do not agree — candidates to challenge or have re-inspected before paying to cure.` : "Jobs = one kind of violation in one place (FIAREP's grouping). Pick a duplicate group to see every violation one repair would clear; the wrong-location button shows the ones worth challenging."}
               </p>
             </div>
           )}
@@ -249,7 +262,7 @@ export default function OwnerBuildingLookup() {
                     {flaggedRows.map((v) => (
                       <tr key={v.id} className="border-t border-slate-100 align-top">
                         <td className="px-2 py-1.5"><input type="checkbox" checked={!!dismissPick[v.id]} onChange={(e) => setDismissPick((m) => ({ ...m, [v.id]: e.target.checked }))} /></td>
-                        <td className="px-2 py-1.5 whitespace-nowrap text-slate-800">#{v.id} · Class {v.class}<span className="block text-xs text-slate-500">{[v.apartment ? `Apt ${v.apartment}` : "", v.story ? `Story ${v.story}` : ""].filter(Boolean).join(", ") || "no location"} · {v.issued}</span></td>
+                        <td className="px-2 py-1.5 whitespace-nowrap text-slate-800">#{v.id} · Class {v.class}<span className="block text-xs text-slate-500">{[v.apartment ? `Apt ${v.apartment}` : "", v.story ? `Floor ${v.story}` : ""].filter(Boolean).join(", ") || "no location"} · {v.issued}</span></td>
                         <td className="px-2 py-1.5 text-xs text-slate-700">{v.description}</td>
                         <td className="px-2 py-1.5"><textarea value={dismissReason[v.id] || ""} onChange={(e) => setDismissReason((m) => ({ ...m, [v.id]: e.target.value }))} rows={2} className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-900" /></td>
                       </tr>
@@ -299,7 +312,7 @@ export default function OwnerBuildingLookup() {
                     {hpdShown.map((v) => (
                       <tr key={v.id} className="border-t border-slate-100 align-top">
                         <td className="px-3 py-2"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${v.class === "C" ? "bg-rose-100 text-rose-700" : v.class === "B" ? "bg-amber-100 text-amber-800" : "bg-slate-100 text-slate-700"}`}>{v.class}</span></td>
-                        <td className="px-3 py-2 whitespace-nowrap text-slate-800">{v.apartment || "—"}{v.story ? <span className="block text-xs text-slate-500">{v.story}</span> : null}</td>
+                        <td className="px-3 py-2 whitespace-nowrap text-slate-800">{v.apartment || "—"}{v.story && v.story !== "0" ? <span className="block text-xs text-slate-500">Floor {v.story}</span> : null}</td>
                         <td className="px-3 py-2 whitespace-nowrap text-slate-700">{v.issued || "—"}<span className="block text-xs text-slate-500">#{v.id}</span></td>
                         <td className="px-3 py-2 text-slate-800">{v.description}{v.flags.length > 0 && <span className="mt-1 block text-xs font-semibold text-rose-700">⚠ {v.flags.join(" · ")}</span>}</td>
                         <td className="px-3 py-2 text-xs text-slate-700">{v.type}<span className="block text-slate-500">{v.place}</span></td>

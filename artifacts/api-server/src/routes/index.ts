@@ -20,6 +20,7 @@ import companyFormsRouter from "./companyForms";
 import joinRouter from "./join";
 import workRequestsRouter from "./workRequests";
 import aepRouter from "./aep";
+import alertsRouter from "./alerts";
 
 const router: IRouter = Router();
 
@@ -30,6 +31,7 @@ router.use(publicAccessRouter);
 router.use(joinRouter);
 router.use(workRequestsRouter);
 router.use(aepRouter);
+router.use(alertsRouter);
 // Before the staff routers: its public DOF lookup must not hit their requireAuth.
 router.use(propertyRouter);
 router.use(companyFormsRouter);

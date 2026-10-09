@@ -241,7 +241,8 @@ function storyInText(d: string): number | null {
   const w = d.match(/\b(FIRST|SECOND|THIRD|FOURTH|FIFTH|SIXTH|SEVENTH|EIGHTH|NINTH|TENTH)\s+(?:STORY|FLOOR)\b/); if (w) return WORD_STORY[w[1]!] ?? null;
   return null;
 }
-const storyField = (s: string): number | null => { const t = s.toUpperCase().replace(/[^A-Z0-9]/g, ""); if (/^\d{1,2}$/.test(t)) return Number(t); return WORD_STORY[t] ?? null; };
+// HPD's story field: "0" or blank means not recorded (public areas, building-wide), not the ground floor.
+const storyField = (s: string): number | null => { const t = s.toUpperCase().replace(/[^A-Z0-9]/g, ""); if (/^\d{1,2}$/.test(t)) return Number(t) > 0 ? Number(t) : null; return WORD_STORY[t] ?? null; };
 const aptNorm = (s: string) => s.toUpperCase().replace(/[^A-Z0-9]/g, "");
 const ymd = (v: string) => (/^\d{8}$/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6)}` : v.slice(0, 10));
 router.get("/v1/platform/aep/violations/:bbl", async (req, res) => {
@@ -264,11 +265,11 @@ router.get("/v1/platform/aep/violations/:bbl", async (req, res) => {
       // Wrong-location checks: what the inspector typed in the fields vs what the NOV text says vs the building.
       const flags: string[] = [];
       const tStory = storyInText(d); const fStory = storyField(story);
-      if (tStory != null && fStory != null && tStory !== fStory) flags.push(`Text says ${tStory}${["st", "nd", "rd"][tStory - 1] || "th"} story, story field says ${story}`);
+      if (tStory != null && fStory != null && tStory !== fStory) flags.push(`Notice says ${tStory}${["st", "nd", "rd"][tStory - 1] || "th"} floor, HPD's floor field says ${fStory}`);
       const tApt = d.match(/\bAPT\.?\s*#?\s*([A-Z0-9-]{1,6})\b/)?.[1]; const fApt = aptNorm(apartment);
-      if (tApt && fApt && !/^(\d{1,2})(ST|ND|RD|TH)?(FL|FLOOR|FLR)?$/.test(fApt) && aptNorm(tApt) !== fApt) flags.push(`Text says apt ${tApt}, apartment field says ${apartment}`);
-      if (floors > 0) { const hi = Math.max(tStory ?? 0, fStory ?? 0); if (hi > floors + 1) flags.push(`Cites story ${hi}; building has ${floors} floors`); }
-      if (!fApt && !story && tStory == null && !tApt && place === "BUILDING") flags.push("No apartment, story or location given");
+      if (tApt && fApt && !/^(\d{1,2})(ST|ND|RD|TH)?(FL|FLOOR|FLR)?$/.test(fApt) && aptNorm(tApt) !== fApt) flags.push(`Notice says apt ${tApt}, HPD's apartment field says ${apartment}`);
+      if (floors > 0) { const hi = Math.max(tStory ?? 0, fStory ?? 0); if (hi > floors + 1) flags.push(`Cites floor ${hi}; building has ${floors} floors`); }
+      if (!fApt && fStory == null && tStory == null && !tApt && place === "BUILDING") flags.push("No apartment, floor or location given");
       return {
         id: text(r["violationid"]), class: text(r["class"]), apartment, story,
         inspected: text(r["inspectiondate"]).slice(0, 10), issued: text(r["novissueddate"]).slice(0, 10),

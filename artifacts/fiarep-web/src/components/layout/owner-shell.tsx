@@ -1,10 +1,19 @@
-import { ReactNode } from "react";
+import { ReactNode, useEffect, useState } from "react";
+import { customFetch } from "@workspace/api-client-react";
 import { useOwnerAuth } from "@/hooks/use-owner-auth";
 import { Button } from "@/components/ui/button";
-import { Building2, ClipboardList, DollarSign, FileText, Landmark, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer } from "lucide-react";
+import { BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function OwnerShell({ children }: { children: ReactNode }) {
+  // Unseen violation alerts: red blinking badge on the Alerts tab, refreshed every minute.
+  const [unseen, setUnseen] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    const poll = async () => { try { const r = await customFetch<{ unseen: number }>("/api/v1/platform/alerts/summary", { responseType: "json" } as never); if (alive) setUnseen(r.unseen); } catch { /* badge stays */ } };
+    void poll(); const t = setInterval(() => void poll(), 60_000);
+    return () => { alive = false; clearInterval(t); };
+  }, []);
   const { ownerName, logout } = useOwnerAuth();
   const [location, setLocation] = useLocation();
 
@@ -140,6 +149,18 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           >
             <FileText className="h-4 w-4" />
             Forms
+          </Link>
+          <Link
+            href="/platform-owner/alerts"
+            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/alerts"
+                ? "border-[#185FA5] text-slate-950"
+                : unseen > 0 ? "border-transparent text-rose-700" : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <BellRing className={`h-4 w-4 ${unseen > 0 ? "animate-pulse text-rose-600" : ""}`} />
+            Alerts
+            {unseen > 0 && <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white animate-pulse" style={{ animationDuration: "1s" }}>{unseen}</span>}
           </Link>
         </div>
       </nav>
