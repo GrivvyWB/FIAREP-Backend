@@ -218,6 +218,38 @@ router.get("/v1/platform/aep/portfolio/:registrationId", async (req, res) => {
   } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
 });
 
+// Violation log: every open HPD violation on the lot, as HPD wrote it, and
+// every active DOB violation on the building. For reading, not counting.
+const DOB_VIOLATIONS = "3h2n-5cm9";
+const ymd = (v: string) => (/^\d{8}$/.test(v) ? `${v.slice(0, 4)}-${v.slice(4, 6)}-${v.slice(6)}` : v.slice(0, 10));
+router.get("/v1/platform/aep/violations/:bbl", async (req, res) => {
+  const bbl = String(req.params["bbl"]).replace(/\D/g, "");
+  const bin = String(req.query["bin"] || "").replace(/\D/g, "");
+  if (!/^\d{10}$/.test(bbl)) { res.status(400).json({ error: "10-digit BBL required" }); return; }
+  try {
+    const hpdRows = await fetchJson(soql(HPD_VIOLATIONS, {
+      $select: "violationid,class,apartment,story,inspectiondate,novissueddate,novdescription,currentstatus,currentstatusdate,originalcorrectbydate,newcorrectbydate,ordernumber",
+      $where: `bbl='${bbl}' AND violationstatus='Open'`, $order: "class DESC,novissueddate DESC", $limit: "5000",
+    }));
+    const hpd = hpdRows.map((r) => ({
+      id: text(r["violationid"]), class: text(r["class"]), apartment: text(r["apartment"]), story: text(r["story"]),
+      inspected: text(r["inspectiondate"]).slice(0, 10), issued: text(r["novissueddate"]).slice(0, 10),
+      description: text(r["novdescription"]).replace(/\s+/g, " "), status: text(r["currentstatus"]), statusDate: text(r["currentstatusdate"]).slice(0, 10),
+      correctBy: (text(r["newcorrectbydate"]) || text(r["originalcorrectbydate"])).slice(0, 10), order: text(r["ordernumber"]),
+    }));
+    const dobRows = bin ? await fetchJson(soql(DOB_VIOLATIONS, {
+      $select: "number,violation_number,violation_type,violation_type_code,issue_date,description,disposition_date,disposition_comments,violation_category",
+      $where: `bin='${bin}' AND violation_category like '%ACTIVE%'`, $order: "issue_date DESC", $limit: "2000",
+    })) : [];
+    const dob = dobRows.map((r) => ({
+      id: text(r["number"]) || text(r["violation_number"]), number: text(r["violation_number"]), type: text(r["violation_type"]).replace(/\s+/g, " ").trim(), code: text(r["violation_type_code"]),
+      issued: ymd(text(r["issue_date"])), description: text(r["description"]).replace(/\s+/g, " ").trim(), category: text(r["violation_category"]),
+      dispositionDate: ymd(text(r["disposition_date"])), dispositionComments: text(r["disposition_comments"]).replace(/\s+/g, " ").trim(),
+    }));
+    res.json({ hpd, dob, retrievedAt: new Date().toISOString() });
+  } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
+});
+
 // Saved searches: a named snapshot of a list as it was on screen — the rows and
 // any contacts already opened — so it reopens without touching NYC Open Data.
 const SAVED = "aep-saved-searches";
