@@ -30,6 +30,9 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const bands = pricing.bands;
   const small = bands[0]!;
   const planBands = bands.filter((b) => b.planRate != null);
+  // A worked example per band — units × rate, or the band's minimum when that is higher — so nobody reads a floor as the price.
+  const sample = (b: { from: number; to: number }) => (b.from <= 50 && b.to >= 50 ? 50 : b.from <= 137 && b.to >= 137 ? 137 : b.from <= 2500 && b.to >= 2500 ? 2500 : b.from <= 20000 && b.to >= 20000 ? 20000 : Math.min(Math.max(b.from * 2, b.from), b.to));
+  const example = (b: { from: number; to: number }, rate: number, min: number) => { const u = sample(b); const fee = Math.max(u * rate, min); return `${u.toLocaleString("en-US")} units = ${money(fee)}${u * rate < min ? " (minimum)" : ""}`; };
   const [dob, setDob] = useState(8);
   // HPD violations by class: counts only — the City's money comes from the DOF lookup, not from these.
   const [hpdA, setHpdA] = useState(40);
@@ -100,14 +103,14 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">The FIAREP plan — best value</p>
             <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>{money(small.planRate!)} per unit per month</h3>
-            <p className={`text-sm text-slate-300 ${hide}`}>Minimum {money(small.planMin!)} / month. The rate steps down as the portfolio grows:</p>
+            <p className={`text-sm text-slate-300 ${hide}`}>{money(small.planMin!)} minimum. Units × the rate for your size:</p>
           </div>
           <Button className="bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Start the 60-day pilot</Button>
         </div>
         <table className={`mt-3 w-full text-sm ${hide}`}>
-          <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Minimum / month</th></tr></thead>
+          <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Example</th></tr></thead>
           <tbody>
-            {planBands.map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate!)}</td><td className="py-1 text-right text-slate-300">{money(b.planMin!)}</td></tr>)}
+            {planBands.map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate!)}</td><td className="py-1 text-right text-slate-300">{example(b, b.planRate!, b.planMin!)}</td></tr>)}
             {bands.filter((b) => b.planRate == null).map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td colSpan={2} className="py-1 text-right text-slate-300">platform per unit · work by task order, per building</td></tr>)}
           </tbody>
         </table>
@@ -119,10 +122,10 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
         <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Platform only — software, no FIAREP labor</p>
           <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>{money(small.platformRate)} per unit per month</h3>
-          <p className={`text-sm text-slate-300 ${hide}`}>Minimum {money(small.platformMin)} / month. Setup and staff training $1,500 one time per organization.</p>
+          <p className={`text-sm text-slate-300 ${hide}`}>{money(small.platformMin)} minimum. Units × the rate for your size. Setup and staff training $1,500 one time per organization.</p>
           <table className={`mt-3 w-full text-sm ${hide}`}>
-            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Minimum / month</th></tr></thead>
-            <tbody>{bands.map((b) => <tr key={b.label} className="border-t border-slate-800"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.platformRate)}</td><td className="py-1 text-right text-slate-300">{money(b.platformMin)}</td></tr>)}</tbody>
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Example</th></tr></thead>
+            <tbody>{bands.map((b) => <tr key={b.label} className="border-t border-slate-800"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.platformRate)}</td><td className="py-1 text-right text-slate-300">{example(b, b.platformRate, b.platformMin)}</td></tr>)}</tbody>
           </table>
           <ul className="mt-4 grid gap-2">
             {PLATFORM_INCLUDES.map((line) => <li key={line} className="flex gap-2 text-sm text-slate-200"><span className="text-slate-400">✓</span>{line}</li>)}

@@ -50,9 +50,7 @@ export default function OwnerPricing() {
           <div><p className="text-xs uppercase tracking-wide text-slate-500">Band</p><p className="text-lg font-semibold text-slate-950">{f.band.label}</p></div>
           <div><p className="text-xs uppercase tracking-wide text-slate-500">Platform</p><p className="text-lg font-semibold text-slate-950">{money(f.platform)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.platform * 12)}/yr</span></p></div>
           <div><p className="text-xs uppercase tracking-wide text-slate-500">FIAREP plan</p><p className="text-lg font-semibold text-slate-950">{f.plan == null ? "per-building task orders" : <>{money(f.plan)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.plan * 12)}/yr</span></>}</p></div>
-          <div><p className="text-xs uppercase tracking-wide text-slate-500">AEP fee exposure</p><p className="text-lg font-semibold text-rose-700">{money(f.aepExposure)}</p></div>
         </div>
-        <p className="mt-2 text-xs text-slate-600">AEP exposure = units × $1,000, HPD's cap ($500 per unit every six months once a building is not discharged within four months). That is what a client avoids by curing fast — the full-service pitch.</p>
       </section>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -77,7 +75,7 @@ export default function OwnerPricing() {
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <p className="px-3 pt-3 text-sm font-semibold text-slate-900">Examples</p>
         <table className="w-full min-w-[840px] text-sm">
-          <thead><tr className="bg-slate-50"><th className={th}>Client</th><th className={`${th} text-right`}>Units</th><th className={th}>Band</th><th className={`${th} text-right`}>Platform /mo</th><th className={`${th} text-right`}>FIAREP plan /mo</th><th className={`${th} text-right`}>AEP exposure</th><th className={th}>Note</th></tr></thead>
+          <thead><tr className="bg-slate-50"><th className={th}>Client</th><th className={`${th} text-right`}>Units</th><th className={th}>Band</th><th className={`${th} text-right`}>Platform /mo</th><th className={`${th} text-right`}>FIAREP plan /mo</th><th className={th}>Note</th></tr></thead>
           <tbody>
             {EXAMPLES.map((e) => { const x = ladderFees(e.units, bands); return (
               <tr key={e.name} className="border-t border-slate-100">
@@ -86,7 +84,6 @@ export default function OwnerPricing() {
                 <td className={td}>{x.band.label}</td>
                 <td className={`${td} text-right`}>{money(x.platform)}</td>
                 <td className={`${td} text-right`}>{x.plan == null ? "task orders" : money(x.plan)}</td>
-                <td className={`${td} text-right text-rose-700`}>{money(x.aepExposure)}</td>
                 <td className={`${td} text-slate-600`}>{e.note}</td>
               </tr>
             ); })}
@@ -100,7 +97,7 @@ export default function OwnerPricing() {
         <ul className="mt-2 space-y-1">
           {SOURCES.map((s) => <li key={s.what + s.url} className="text-slate-700"><span className="font-medium">{s.what}:</span> {s.figure} — <a href={s.url} target="_blank" rel="noreferrer" className="text-[#185FA5] underline">{new URL(s.url).hostname}</a></li>)}
         </ul>
-        <p className="mt-2 text-xs text-slate-500">Software-only buyers pay $1–$5 per unit, so the platform must sit inside that range. The full-service plan is a retainer priced against AEP and violation exposure, not against software.</p>
+        <p className="mt-2 text-xs text-slate-500">Software-only buyers pay $1–$5 per unit, so the platform must sit inside that range. The full-service plan is a retainer priced against the violation work, not against software.</p>
       </div>
     </div>
   );
