@@ -30,6 +30,7 @@ import Emergency from '@/pages/emergency';
 import ChangeOrders from '@/pages/change-orders';
 import Elevators from '@/pages/elevators';
 import Leave from '@/pages/leave';
+import TimeClock from '@/pages/time-clock';
 import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
 import SharedData from '@/pages/shared-data';
@@ -253,6 +254,7 @@ function AppRouter() {
           <Route path="/deleted-items" component={DeletedItemsRoute} />
           <Route path="/elevators" component={ElevatorsRoute} />
           <Route path="/leave" component={LeaveRoute} />
+          <Route path="/time-clock" component={TimeClock} />
           <Route path="/notifications" component={NotificationsRoute} />
           <Route path="/settings" component={SettingsRoute} />
           <Route path="/shared-data" component={SharedDataRoute} />

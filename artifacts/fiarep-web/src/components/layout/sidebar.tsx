@@ -26,7 +26,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info, Ruler, Trash2, Languages, Building2, Lock } from "lucide-react";
+  Info, Ruler, Trash2, Languages, Building2, Lock, Clock } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -80,6 +80,8 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Settings", href: "/settings", icon: Settings, module: "settings" as const },
     { name: "What is FIAREP?", href: "/platform", icon: Info, module: "dashboard" as const },
   ].filter((item) => hasModuleAccess(staff, item.module, organizationModules));
+  // Time clock: every staff member who can punch (not vendors, residents or the procurement desk). The page says if the clock is off.
+  if (staff && !isProcurementDesk(staff) && !["vendor", "resident"].includes(String(staff.role))) navItems.splice(1, 0, { name: "Time clock", href: "/time-clock", icon: Clock, module: "dashboard" as const });
 
   return (
     <>
