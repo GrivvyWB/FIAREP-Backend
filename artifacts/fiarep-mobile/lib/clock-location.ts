@@ -94,6 +94,16 @@ TaskManager.defineTask(CLOCK_LOCATION_TASK, async ({ data, error }: { data?: { l
   await handleFixes(data.locations.map((l) => ({ latitude: l.coords.latitude, longitude: l.coords.longitude, accuracyM: l.coords.accuracy ?? null })));
 });
 
+/** Workers must allow location (foreground and background) before they can use the app. */
+export async function requireWorkerLocation(): Promise<boolean> {
+  try {
+    const fg = await Location.requestForegroundPermissionsAsync();
+    if (!fg.granted) return false;
+    const bg = await Location.requestBackgroundPermissionsAsync();
+    return bg.granted;
+  } catch { return false; }
+}
+
 /** Start watching after a punch in. Returns false if the person did not allow background location. */
 export async function startClockTracking(first: Fix | null): Promise<boolean> {
   try {

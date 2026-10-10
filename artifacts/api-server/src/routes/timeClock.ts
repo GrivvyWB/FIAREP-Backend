@@ -88,6 +88,8 @@ router.post("/v1/time-clock/punch", async (req, res) => {
     return;
   }
   const loc = locationOf(req.body);
+  // A workers' clock: no location, no punch in. (Out is always allowed so nobody is stuck on the clock.)
+  if (direction === "in" && !loc) { res.status(400).json({ error: "Turn on location for FIAREP to clock in. Where you work is part of the time record.", needsLocation: true }); return; }
   const address = loc ? await reverseGeocodeNyc(loc.latitude, loc.longitude) : null;
   const result = await db.transaction(async (tx) => {
     const [organization] = await tx.select({ features: organizations.features })

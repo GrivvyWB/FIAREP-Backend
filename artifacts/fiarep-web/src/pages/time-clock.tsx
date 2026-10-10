@@ -90,6 +90,7 @@ export default function TimeClock() {
     setBusy(true); setError("");
     try {
       const location = await wherever();
+      if (status.nextDirection === "in" && !location) { setError("Turn on location for this site to punch in — where you work is part of the time record. Allow location in your browser and tap again."); setBusy(false); return; }
       await customFetch("/api/v1/time-clock/punch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ direction: status.nextDirection, idempotencyKey: `web-${Date.now()}-${Math.random().toString(36).slice(2)}`, location }), responseType: "json" } as never);
       await load();
     } catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not record the punch."); }

@@ -79,8 +79,12 @@ export async function punchAttendance(direction: 'in' | 'out', idempotencyKey: s
   // stops (30+ minutes somewhere after real movement); on the way out, stop.
   const { currentFix, startClockTracking, stopClockTracking } = await import('./clock-location');
   const fix = await currentFix();
+  if (direction === 'in') {
+    if (!fix) throw new Error('Turn on Location for FIAREP (Settings → FIAREP → Location → Always) to clock in. Where you work is part of the time record.');
+    if (!(await startClockTracking(fix))) throw new Error('FIAREP needs Location set to "Always" to clock in, so the places you work are recorded while you are on the clock.');
+  }
   const row = await createTimeClockPunch({ direction, idempotencyKey, ...(fix ? { location: fix } : {}) } as never);
-  if (direction === 'in') await startClockTracking(fix); else await stopClockTracking();
+  if (direction === 'out') await stopClockTracking();
   return row;
 }
 async function rotateActorCache(staff: Staff) {
