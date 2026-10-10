@@ -19,7 +19,7 @@ type HpdViolation = { id: string; class: string; apartment: string; story: strin
 type DupGroup = { key: string; type: string; place: string; count: number; a: number; b: number; c: number; exact: number; ids: string[] };
 type DobViolation = { id: string; number: string; type: string; code: string; issued: string; description: string; category: string; dispositionDate: string; dispositionComments: string };
 type ViolationLog = { hpd: HpdViolation[]; dob: DobViolation[]; duplicates: DupGroup[]; jobs: number; flagged: number; building: { floors: number; units: number }; retrievedAt: string };
-type PortfolioRow = { registrationId: string; buildingId: string; address: string; borough: string; zip: string; bbl: string; bin: string; hpdA: number; hpdB: number; hpdC: number; via: string[]; aep: AepLines | null };
+type PortfolioRow = { registrationId: string; buildingId: string; address: string; borough: string; zip: string; bbl: string; bin: string; units?: number; hpdA: number; hpdB: number; hpdC: number; via: string[]; aep: AepLines | null };
 
 /** Platform Control → Building lookup: the same Department of Finance / OATH /
  * HPD / DOB lookup clients use on the join page, for FIAREP's own use, plus the
@@ -122,14 +122,14 @@ export default function OwnerBuildingLookup() {
   const [info, setInfo] = useState<ContactInfo | null>(null);
   const [loading, setLoading] = useState(false);
   // Other buildings whose HPD registration names the same owner / manager
-  const [portfolio, setPortfolio] = useState<{ names: string[]; rows: PortfolioRow[] } | null>(null);
+  const [portfolio, setPortfolio] = useState<{ names: string[]; rows: PortfolioRow[]; totalUnits?: number; lots?: number } | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   useEffect(() => {
     setPortfolio(null);
     if (!info?.registrationId) return;
     let alive = true;
     setPortfolioLoading(true);
-    customFetch<{ names: string[]; rows: PortfolioRow[] }>(`/api/v1/platform/aep/portfolio/${encodeURIComponent(info.registrationId)}`, { responseType: "json" } as never)
+    customFetch<{ names: string[]; rows: PortfolioRow[]; totalUnits?: number; lots?: number }>(`/api/v1/platform/aep/portfolio/${encodeURIComponent(info.registrationId)}`, { responseType: "json" } as never)
       .then((r) => { if (alive) setPortfolio(r); })
       .catch(() => { if (alive) setPortfolio({ names: [], rows: [] }); })
       .finally(() => { if (alive) setPortfolioLoading(false); });
@@ -199,11 +199,11 @@ export default function OwnerBuildingLookup() {
               {portfolio && portfolio.rows.length === 0 && !portfolioLoading && <p className="text-xs text-slate-500">No other registrations name these people or corporations.</p>}
               {portfolio && portfolio.rows.length > 0 && (
                 <>
-                  <p className="text-xs text-slate-500">{portfolio.rows.length} building{portfolio.rows.length === 1 ? "" : "s"} registered to {portfolio.names.join(", ")}. Pick one to open it here.</p>
+                  <p className="text-xs text-slate-500">{portfolio.rows.length} building{portfolio.rows.length === 1 ? "" : "s"}{portfolio.totalUnits ? <> · <b className="text-slate-900">{portfolio.totalUnits.toLocaleString()} residential units</b> (PLUTO, counted once per lot{portfolio.lots && portfolio.lots !== portfolio.rows.length ? `, ${portfolio.lots} lots` : ""})</> : null} registered to {portfolio.names.join(", ")}. Pick one to open it here.</p>
                   <select defaultValue="" onChange={(e) => { const r = portfolio.rows[Number(e.target.value)]; if (r) openPortfolio(r); }} className="mt-2 h-10 w-full max-w-3xl rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900">
                     <option value="">Choose a building…</option>
                     {portfolio.rows.map((r, i) => (
-                      <option key={r.registrationId} value={i}>{r.address}, {r.borough} {r.zip} · {r.hpdA + r.hpdB + r.hpdC} open HPD ({r.hpdB} B · {r.hpdC} C){r.aep?.status === "AEP Active" ? " · IN AEP" : ""} · {r.via[0] || ""}</option>
+                      <option key={r.registrationId} value={i}>{r.address}, {r.borough} {r.zip}{r.units ? ` · ${r.units} units` : ""} · {r.hpdA + r.hpdB + r.hpdC} open HPD ({r.hpdB} B · {r.hpdC} C){r.aep?.status === "AEP Active" ? " · IN AEP" : ""} · {r.via[0] || ""}</option>
                     ))}
                   </select>
                 </>

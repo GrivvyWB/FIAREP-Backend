@@ -217,16 +217,29 @@ router.get("/v1/platform/aep/portfolio/:registrationId", async (req, res) => {
       const rows = await fetchJson(soql(HPD_VIOLATIONS, { $select: "bbl,class,count(*) as n", $where: `violationstatus='Open' AND bbl in (${batch})`, $group: "bbl,class", $limit: "5000" }));
       for (const r of rows) { const k = text(r["bbl"]); const cur = open.get(k) || { a: 0, b: 0, c: 0 }; const cls = text(r["class"]).toLowerCase() as "a" | "b" | "c"; if (cls in cur) cur[cls] += Number(r["n"]) || 0; open.set(k, cur); }
     }
+    // Residential units per lot from PLUTO (64uk-42ks), batched by BBL, so the portfolio total is a City figure.
+    const unitsByBbl = new Map<string, number>();
+    const uniqueBbls = [...new Set(bbls.filter((b) => /^\d{10}$/.test(b)))];
+    for (let i = 0; i < uniqueBbls.length; i += 100) {
+      const batch = uniqueBbls.slice(i, i + 100).map((b) => Number(b)).join(",");
+      try {
+        const rows = await fetchJson(soql(PLUTO, { $select: "bbl,unitsres,unitstotal", $where: `bbl in (${batch})`, $limit: "1000" }));
+        for (const r of rows) { const k = String(Math.round(Number(r["bbl"]) || 0)); unitsByBbl.set(k, Number(r["unitsres"]) || Number(r["unitstotal"]) || 0); }
+      } catch { /* units stay 0 for this batch */ }
+    }
     const aepById = new Map((await loadBuildings()).map((b) => [b.buildingId, b]));
     const rows = regs.map((r, i) => {
       const bbl = bbls[i]!; const v = open.get(bbl) || { a: 0, b: 0, c: 0 }; const aep = aepById.get(text(r["buildingid"]));
+      const units = unitsByBbl.get(bbl) || 0;
       return {
         registrationId: text(r["registrationid"]), buildingId: text(r["buildingid"]), address: `${text(r["housenumber"])} ${text(r["streetname"])}`.trim(), borough: BOROUGH_NAMES[text(r["boroid"])] || text(r["boro"]), zip: text(r["zip"]), bbl, bin: text(r["bin"]),
-        hpdA: v.a, hpdB: v.b, hpdC: v.c, via: [...byReg.get(text(r["registrationid"])) || []].slice(0, 4),
+        units, hpdA: v.a, hpdB: v.b, hpdC: v.c, via: [...byReg.get(text(r["registrationid"])) || []].slice(0, 4),
         aep: aep ? { units: aep.units, buildingId: aep.buildingId, aepStart: aep.aepStart, round: aep.round, violationsAtStart: aep.violationsAtStart, status: aep.status, dischargeDate: aep.dischargeDate } : null,
       };
     }).sort((x, y) => (y.hpdB + y.hpdC) - (x.hpdB + x.hpdC));
-    res.json({ names: [...corps, ...[...people].map((p) => p.split("|").join(" "))], rows });
+    const seenLots = new Set<string>(); let totalUnits = 0;
+    for (const row of rows) { if (row.units > 0 && !seenLots.has(row.bbl)) { seenLots.add(row.bbl); totalUnits += row.units; } }
+    res.json({ names: [...corps, ...[...people].map((p) => p.split("|").join(" "))], rows, totalUnits, lots: seenLots.size });
   } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "NYC Open Data unavailable" }); }
 });
 
