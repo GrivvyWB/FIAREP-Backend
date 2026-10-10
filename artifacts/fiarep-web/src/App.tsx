@@ -65,6 +65,7 @@ import OwnerBuildingLookup from '@/pages/platform-owner/building-lookup';
 import OwnerPricing from '@/pages/platform-owner/pricing';
 import OwnerForms from '@/pages/platform-owner/forms';
 import OwnerAlerts from '@/pages/platform-owner/alerts';
+import OwnerCrew from '@/pages/platform-owner/crew';
 import { getStoredPersona, setStoredPersona, evaluateAccess, Persona, hasModuleAccess, isProcurementDesk, type StaffModule } from '@/lib/access-policy';
 import { useState } from 'react';
 import HRWorkspace from '@/pages/hr';
@@ -382,6 +383,7 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/pricing" component={OwnerPricing} />
           <Route path="/platform-owner/forms" component={OwnerForms} />
           <Route path="/platform-owner/alerts" component={OwnerAlerts} />
+          <Route path="/platform-owner/crew" component={OwnerCrew} />
           <Route path="/platform-owner" component={OwnerDashboard} />
           <Route component={NotFound} />
         </Switch>

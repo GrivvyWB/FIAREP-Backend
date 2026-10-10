@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { useOwnerAuth } from "@/hooks/use-owner-auth";
 import { Button } from "@/components/ui/button";
-import { BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer } from "lucide-react";
+import { BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer, HardHat } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function OwnerShell({ children }: { children: ReactNode }) {
@@ -149,6 +149,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           >
             <FileText className="h-4 w-4" />
             Forms
+          </Link>
+          <Link
+            href="/platform-owner/crew"
+            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/crew"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <HardHat className="h-4 w-4" />
+            Crew
           </Link>
           <Link
             href="/platform-owner/alerts"

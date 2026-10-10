@@ -22,6 +22,7 @@ import workRequestsRouter from "./workRequests";
 import aepRouter from "./aep";
 import alertsRouter from "./alerts";
 import pricingRouter from "./pricing";
+import crewRouter from "./crew";
 
 const router: IRouter = Router();
 
@@ -34,6 +35,7 @@ router.use(workRequestsRouter);
 router.use(aepRouter);
 router.use(alertsRouter);
 router.use(pricingRouter);
+router.use(crewRouter);
 // Before the staff routers: its public DOF lookup must not hit their requireAuth.
 router.use(propertyRouter);
 router.use(companyFormsRouter);
