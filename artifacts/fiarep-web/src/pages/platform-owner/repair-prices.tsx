@@ -282,13 +282,13 @@ export default function OwnerRepairPrices() {
             </label>
           </div>
           <table className="mt-3 w-full text-sm">
-            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Line</th><th className="py-1 pr-3 text-right">Qty</th><th className="py-1 pr-3 text-right">Book price</th><th className="py-1 pr-3 text-right">Your cost</th><th className="py-1 pr-3 text-right">Margin</th><th className="py-1 text-right">On plan (−{Math.round(PLAN_DISCOUNT * 100)}%)</th></tr></thead>
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Line</th><th className="py-1 pr-3 text-right">Qty</th><th className="py-1 pr-3 text-right">Book price (edit)</th><th className="py-1 pr-3 text-right">Your cost</th><th className="py-1 pr-3 text-right">Margin</th><th className="py-1 text-right">On plan (−{Math.round(PLAN_DISCOUNT * 100)}%)</th></tr></thead>
             <tbody>
               {profit.rows.map((r) => (
                 <tr key={r.key} className={`border-t border-emerald-200 ${r.below ? "bg-rose-50" : ""}`}>
                   <td className="py-1.5 pr-3 text-slate-900">{r.label}<span className="block text-xs text-slate-500">{r.unit}</span></td>
                   <td className="py-1.5 pr-3 text-right">{r.qty.toLocaleString()}</td>
-                  <td className="py-1.5 pr-3 text-right">{money(r.price)}</td>
+                  <td className="py-1.5 pr-3 text-right"><input type="number" inputMode="decimal" min={0} value={r.price} onChange={(e) => editPrice(r.key as PriceKey, e.target.value)} className={`w-24 rounded-md border px-2 py-1 text-right font-semibold text-slate-900 ${r.price !== defaultPrice(r.key) ? "border-amber-400 bg-amber-50" : "border-slate-300 bg-white"}`} aria-label={`Book price for ${r.label}`} /></td>
                   <td className="py-1.5 pr-3 text-right"><input type="number" min={0} value={costs[r.key] ?? Math.round(r.price * 0.7)} onChange={(e) => setCosts((m) => ({ ...m, [r.key]: Math.max(0, Math.round(Number(e.target.value) || 0)) }))} className="w-24 rounded-md border border-slate-300 bg-white px-2 py-1 text-right" aria-label={`Your cost for ${r.label}`} /></td>
                   <td className={`py-1.5 pr-3 text-right font-semibold ${r.margin < target / 100 ? "text-rose-700" : "text-emerald-700"}`}>{pct(r.margin)}</td>
                   <td className={`py-1.5 text-right font-semibold ${r.below ? "text-rose-700" : "text-emerald-700"}`}>{pct(r.marginPlan)}</td>
