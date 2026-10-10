@@ -166,7 +166,9 @@ export default function OwnerRepairPrices() {
           <ChevronDown className="h-4 w-4 text-slate-400 transition-transform group-open:rotate-180" />
         </summary>
         <div className="border-t border-slate-100 p-4">
-          <DofLookupPanel onResult={() => undefined} onCounts={(c) => setLookup(c)} persistKey="fiarep_owner_pricebook_lookup" />
+          <div className="rounded-2xl bg-slate-950 p-4 text-slate-100">
+            <DofLookupPanel onResult={() => undefined} onCounts={(c) => setLookup(c)} canSubmit={false} persistKey="fiarep_owner_pricebook_lookup" />
+          </div>
           {lookup && (lookup.hpdTypes?.length || lookup.dobTypes?.length) ? (
             <div className="mt-4 rounded-xl border border-slate-900 bg-slate-900 p-4 text-sm text-white">
               <div className="flex flex-wrap items-baseline justify-between gap-3">
