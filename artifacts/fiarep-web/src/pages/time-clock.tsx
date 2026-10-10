@@ -30,6 +30,12 @@ function worked(punches: Punch[], from: number, to: number, now: number): { ms: 
 
 const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join("");
 
+// Defined once, outside the page: the clock re-renders every second, and a
+// component created inside the render would be a new type each time — React
+// would remount it, which closes the phone's date picker the moment it opens.
+const Pill = ({ dir }: { dir: "in" | "out" }) => <span className={`inline-flex w-16 items-center justify-center rounded-full px-2 py-1 text-xs font-extrabold tracking-wide text-white ${dir === "in" ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]" : "bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]"}`}>{dir === "in" ? "IN" : "OUT"} →</span>;
+const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => <div className={`rounded-2xl border border-sky-500/30 bg-[#0d1b3a]/80 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.08),0_0_24px_rgba(37,99,235,0.15)] ${className}`}>{children}</div>;
+
 /** Time clock for staff — the look of a punch terminal: who you are, the live
  * clock, today and this shift, one big Punch in / Punch out, this week's
  * punches, and tabs for the week's schedule, reports by week, and the profile.
@@ -75,7 +81,7 @@ export default function TimeClock() {
       try { const from = new Date(); from.setDate(from.getDate() - 7); setStops(await customFetch<Stop[]>(`/api/v1/time-clock/locations?from=${encodeURIComponent(from.toISOString())}`, { responseType: "json" } as never)); } catch { /* optional */ }
     } catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not load the time clock."); }
   }
-  useEffect(() => { void load(); void loadLeave(); const t = setInterval(() => setNow(Date.now()), 1000); const r = setInterval(() => void load(), 60_000); return () => { clearInterval(t); clearInterval(r); }; }, []);
+  useEffect(() => { void load(); void loadLeave(); const t = setInterval(() => setNow(Date.now()), tab === "clock" ? 1000 : 60_000); const r = setInterval(() => void load(), 60_000); return () => { clearInterval(t); clearInterval(r); }; }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The browser's position, if the person allows it — sent with the punch so the record shows where it was made. */
   function wherever(): Promise<{ latitude: number; longitude: number; accuracyM: number } | null> {
@@ -116,8 +122,6 @@ export default function TimeClock() {
   const ampm = clockText.replace(/^[\d:]+\s?/, ""); const hhmm = clockText.replace(/\s?[AP]M$/i, "");
   const enabled = status?.config.mobileClockEnabled;
 
-  const Pill = ({ dir }: { dir: "in" | "out" }) => <span className={`inline-flex w-16 items-center justify-center rounded-full px-2 py-1 text-xs font-extrabold tracking-wide text-white ${dir === "in" ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]" : "bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]"}`}>{dir === "in" ? "IN" : "OUT"} →</span>;
-  const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => <div className={`rounded-2xl border border-sky-500/30 bg-[#0d1b3a]/80 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.08),0_0_24px_rgba(37,99,235,0.15)] ${className}`}>{children}</div>;
 
   return (
     <div className="min-h-[100dvh] bg-[#060b1c] text-white" style={{ backgroundImage: "radial-gradient(60% 40% at 80% 0%, rgba(239,68,68,0.18), transparent 60%), radial-gradient(50% 35% at 0% 20%, rgba(37,99,235,0.22), transparent 60%)" }}>
