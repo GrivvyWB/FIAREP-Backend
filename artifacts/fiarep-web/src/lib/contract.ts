@@ -2,7 +2,7 @@
 // book and the client's details, then printed to PDF or emailed. All clause
 // text lives here so it can be edited in one place.
 import { EXPEDITER, FEES, PLAN, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "./fiarep-plans";
-import { bandFor, includedHoursPerUnit, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING } from "@/lib/pricing-ladder";
+import { bandFor, includedHoursPerUnit, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING, PLAN_MIN_UNITS } from "@/lib/pricing-ladder";
 import { bands } from "@/lib/pricing-overrides";
 
 export type ContractKind = "work" | "fiarep" | "platform" | "agency-major" | "agency-small";
@@ -45,7 +45,13 @@ export function monthlyFee(c: ContractInput): { monthly: number; basis: string; 
   if (c.kind === "work") return { monthly: 0, basis: "no monthly fee — this Agreement covers the work in Section 4 only", setup: 0 };
   // Per-unit plans price off the ladder band the client's unit count falls in (owner-set in Platform Control → Pricing ladder).
   const b = bandFor(c.units, bands());
-  if (c.kind === "fiarep") { const rate = b.planRate ?? PLAN.fiarep.perUnit, min = b.planMin ?? PLAN.fiarep.minimum; return { monthly: Math.max(c.units * rate, min), basis: `${c.units.toLocaleString()} units × $${rate} (${b.label} units band; minimum ${money(min)})`, setup: 0 }; }
+  if (c.kind === "fiarep") {
+    // The plan is sold at PLAN_MIN_UNITS and up; a smaller client is priced at the first plan band's minimum and the basis says so.
+    const first = bands().find((x) => x.planRate != null) ?? b;
+    const band = b.planRate != null ? b : first;
+    const rate = band.planRate ?? PLAN.fiarep.perUnit, min = band.planMin ?? PLAN.fiarep.minimum;
+    return { monthly: Math.max(c.units * rate, min), basis: b.planRate != null ? `${c.units.toLocaleString()} units × $${rate} (${b.label} units band; minimum ${money(min)})` : `${c.units.toLocaleString()} units — below the ${PLAN_MIN_UNITS}-unit plan threshold; billed at the ${band.label} band minimum of ${money(min)}`, setup: 0 };
+  }
   if (c.kind === "platform") return { monthly: Math.max(c.units * b.platformRate, b.platformMin), basis: `${c.units.toLocaleString()} units × $${b.platformRate} (${b.label} units band; minimum ${money(b.platformMin)})`, setup: PLAN.platform.setup };
   const tier = c.kind === "agency-small" ? PLAN.agencySmall : PLAN.agencyMajor;
   return { monthly: c.flatFee, basis: `flat fee for ${c.units.toLocaleString()} units across ${c.buildings.length} development${c.buildings.length === 1 ? "" : "s"}; $${tier.perUnit} per unit, minimum ${money(tier.minimum)}`, setup: 0 };
@@ -131,7 +137,7 @@ ${c.kind === "work" ? `<p class="muted">No platform, app or monthly service is i
 <p>${planClause}</p>
 <p>City penalties, DOB re-inspection fees, HPD dismissal-request fees, DOB filing fees and any permit or agency charge pass through to Client at cost. ${c.kind === "work" ? "Invoices are due within 15 days." : "Fees are invoiced monthly in advance and due within 15 days of the invoice."}</p>
 ${c.kind === "fiarep" || c.kind === "agency-major" || c.kind === "agency-small" ? `<h2>3A. Work and appliances on the plan</h2>
-<p>From the start date, FIAREP performs all repairs, violation cures and appliance replacements the developments in Section 1 need. <b>Labor</b> up to the included pool of <b>${includedHoursPerUnit(bandFor(c.units, bands()).planRate ?? PLAN.fiarep.perUnit)} hours per unit per year</b> (${Math.round((bandFor(c.units, bands()).planRate ?? PLAN.fiarep.perUnit) * 12 * LABOR_SHARE / LOADED_HOURLY * c.units).toLocaleString()} hours a year across ${c.units.toLocaleString()} units, pooled, not carried over) is covered by the monthly fee; labor beyond the pool is billed at the Section 5 rates and the price-book unit prices. <b>Appliances, parts, materials and delivery</b> are purchased by FIAREP on Client's written approval of each purchase and reimbursed at cost plus ${Math.round(MATERIALS_HANDLING * 100)}% handling, invoiced on delivery and due within 15 days; title passes to Client on reimbursement. Client keeps a <b>materials deposit equal to one month's fee</b> with FIAREP, drawn on for approved purchases and replenished with each invoice; for portfolios of 10,000 units or more, FIAREP orders on Client's own supplier accounts instead. Nothing is bought without the approval, and nothing bought is FIAREP's cost.</p>` : ""}
+<p>From the start date, FIAREP performs all repairs, violation cures and appliance replacements the developments in Section 1 need. <b>Labor</b> up to the included pool of <b>${includedHoursPerUnit(bandFor(c.units, bands()).planRate ?? bands().find((x) => x.planRate != null)?.planRate ?? PLAN.fiarep.perUnit)} hours per unit per year</b> (${Math.round((bandFor(c.units, bands()).planRate ?? bands().find((x) => x.planRate != null)?.planRate ?? PLAN.fiarep.perUnit) * 12 * LABOR_SHARE / LOADED_HOURLY * c.units).toLocaleString()} hours a year across ${c.units.toLocaleString()} units, pooled, not carried over) is covered by the monthly fee; labor beyond the pool is billed at the Section 5 rates and the price-book unit prices. <b>Appliances, parts, materials and delivery</b> are purchased by FIAREP on Client's written approval of each purchase and reimbursed at cost plus ${Math.round(MATERIALS_HANDLING * 100)}% handling, invoiced on delivery and due within 15 days; title passes to Client on reimbursement. Client keeps a <b>materials deposit equal to one month's fee</b> with FIAREP, drawn on for approved purchases and replenished with each invoice; for portfolios of 10,000 units or more, FIAREP orders on Client's own supplier accounts instead. Nothing is bought without the approval, and nothing bought is FIAREP's cost.</p>` : ""}
 
 ${ex ? `<h2>4. Violation work — ${esc(ex.address)}</h2>
 <table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>

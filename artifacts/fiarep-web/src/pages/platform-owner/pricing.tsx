@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BANDS, EXAMPLES, SETUP_FEE, SOURCES, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING, includedHoursPerUnit, ladderFees, type Band } from "@/lib/pricing-ladder";
+import { BANDS, EXAMPLES, SETUP_FEE, SOURCES, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING, PLAN_MIN_UNITS, includedHoursPerUnit, ladderFees, type Band } from "@/lib/pricing-ladder";
 import { usePricing, savePricing } from "@/lib/pricing-overrides";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -32,7 +32,7 @@ export default function OwnerPricing() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-950">Pricing ladder — 2 to 300,000 units</h1>
-        <p className="text-sm text-slate-500">Per unit means per dwelling unit per month; the monthly fee is the greater of units × rate and the band minimum. These are the live numbers: the plan cards on the Join page and plan contracts read them. Type a new rate or minimum in the table and save.</p>
+        <p className="text-sm text-slate-500">Per unit means per dwelling unit per month; the monthly fee is the greater of units × rate and the band minimum. These are the live numbers: the plan cards on the Join page and plan contracts read them. The FIAREP plan is sold at {PLAN_MIN_UNITS} units and up; below that a client gets the platform and the per-job rates. Type a new rate or minimum in the table and save.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {saving === "saved" && <span className="text-xs text-emerald-700">Saved</span>}
@@ -49,7 +49,7 @@ export default function OwnerPricing() {
           </label>
           <div><p className="text-xs uppercase tracking-wide text-slate-500">Band</p><p className="text-lg font-semibold text-slate-950">{f.band.label}</p></div>
           <div><p className="text-xs uppercase tracking-wide text-slate-500">Platform</p><p className="text-lg font-semibold text-slate-950">{money(f.platform)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.platform * 12)}/yr</span></p></div>
-          <div><p className="text-xs uppercase tracking-wide text-slate-500">FIAREP plan</p><p className="text-lg font-semibold text-slate-950">{f.plan == null ? "per-building task orders" : <>{money(f.plan)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.plan * 12)}/yr</span></>}</p></div>
+          <div><p className="text-xs uppercase tracking-wide text-slate-500">FIAREP plan</p><p className="text-lg font-semibold text-slate-950">{f.plan == null ? (units < PLAN_MIN_UNITS ? `platform + per-job rates (plan starts at ${PLAN_MIN_UNITS} units)` : "per-building task orders") : <>{money(f.plan)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.plan * 12)}/yr</span></>}</p></div>
         </div>
       </section>
 
