@@ -1,5 +1,6 @@
-// Recommended FIAREP pricing ladder, 2 to 300,000 units. Shown in Platform
-// Control; the live prices clients see still come from fiarep-plans.ts.
+// FIAREP pricing ladder, 2 to 300,000 units — the defaults. The owner edits
+// the live bands in Platform Control → Pricing ladder (pricing-overrides.ts);
+// the Join page plan cards and plan contracts read those.
 // Anchors: software-only market $1–$5 per unit per month (AppFolio Core $1.40 /
 // Plus $3 / Max $5, Yardi Breeze $1–$3, minimums $100–$400 — costbench.com);
 // HPD AEP fee $500 per dwelling unit every six months, max $1,000 per unit
@@ -16,11 +17,11 @@ export const BANDS: Band[] = [
 export const SETUP_FEE = 1500;          // one time, waived on any annual contract of 1,000+ units
 export const AEP_FEE_MAX_PER_UNIT = 1000; // HPD: $500 per unit every six months, capped at $1,000 per unit
 
-export function bandFor(units: number): Band {
-  return BANDS.find((b) => units >= b.from && units <= b.to) || (units < 2 ? BANDS[0]! : BANDS[BANDS.length - 1]!);
+export function bandFor(units: number, bands: Band[] = BANDS): Band {
+  return bands.find((b) => units >= b.from && units <= b.to) || (units < bands[0]!.from ? bands[0]! : bands[bands.length - 1]!);
 }
-export function ladderFees(units: number): { band: Band; platform: number; plan: number | null; aepExposure: number } {
-  const band = bandFor(units);
+export function ladderFees(units: number, bands: Band[] = BANDS): { band: Band; platform: number; plan: number | null; aepExposure: number } {
+  const band = bandFor(units, bands);
   return {
     band,
     platform: Math.max(units * band.platformRate, band.platformMin),

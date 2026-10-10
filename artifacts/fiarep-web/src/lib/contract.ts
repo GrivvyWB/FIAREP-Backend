@@ -2,6 +2,8 @@
 // book and the client's details, then printed to PDF or emailed. All clause
 // text lives here so it can be edited in one place.
 import { EXPEDITER, FEES, PLAN, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "./fiarep-plans";
+import { bandFor } from "@/lib/pricing-ladder";
+import { bands } from "@/lib/pricing-overrides";
 
 export type ContractKind = "work" | "fiarep" | "platform" | "agency-major" | "agency-small";
 export type Building = { name: string; address: string; units: number };
@@ -29,8 +31,8 @@ export type ContractInput = {
 export const BRAND = { name: "FIAREP", long: "Field Infrastructure, Asset, Reporting and Evaluation Performance", site: "fiarep.com", email: "fiarep@outlook.com" };
 export const KIND_LABEL: Record<ContractKind, string> = {
   work: "Work contract — violations and repairs on this building only, no plan, no platform",
-  fiarep: `${PLAN.fiarep.name} — $${PLAN.fiarep.perUnit} per unit per month`,
-  platform: `${PLAN.platform.name} — $${PLAN.platform.perUnit} per unit per month`,
+  fiarep: `${PLAN.fiarep.name} — per unit per month, by portfolio size`,
+  platform: `${PLAN.platform.name} — per unit per month, by portfolio size`,
   "agency-major": `Housing authority / agency — major portfolio (${PLAN.agencyMinUnits.toLocaleString()}+ units), flat monthly fee`,
   "agency-small": `Housing authority / agency — small portfolio (under ${PLAN.agencyMinUnits.toLocaleString()} units), flat monthly fee`,
 };
@@ -41,8 +43,10 @@ const longDate = (iso: string) => (iso ? new Date(iso + "T12:00:00").toLocaleDat
 
 export function monthlyFee(c: ContractInput): { monthly: number; basis: string; setup: number } {
   if (c.kind === "work") return { monthly: 0, basis: "no monthly fee — this Agreement covers the work in Section 4 only", setup: 0 };
-  if (c.kind === "fiarep") return { monthly: Math.max(c.units * PLAN.fiarep.perUnit, PLAN.fiarep.minimum), basis: `${c.units.toLocaleString()} units × $${PLAN.fiarep.perUnit} (minimum ${money(PLAN.fiarep.minimum)})`, setup: 0 };
-  if (c.kind === "platform") return { monthly: Math.max(c.units * PLAN.platform.perUnit, PLAN.platform.minimum), basis: `${c.units.toLocaleString()} units × $${PLAN.platform.perUnit} (minimum ${money(PLAN.platform.minimum)})`, setup: PLAN.platform.setup };
+  // Per-unit plans price off the ladder band the client's unit count falls in (owner-set in Platform Control → Pricing ladder).
+  const b = bandFor(c.units, bands());
+  if (c.kind === "fiarep") { const rate = b.planRate ?? PLAN.fiarep.perUnit, min = b.planMin ?? PLAN.fiarep.minimum; return { monthly: Math.max(c.units * rate, min), basis: `${c.units.toLocaleString()} units × $${rate} (${b.label} units band; minimum ${money(min)})`, setup: 0 }; }
+  if (c.kind === "platform") return { monthly: Math.max(c.units * b.platformRate, b.platformMin), basis: `${c.units.toLocaleString()} units × $${b.platformRate} (${b.label} units band; minimum ${money(b.platformMin)})`, setup: PLAN.platform.setup };
   const tier = c.kind === "agency-small" ? PLAN.agencySmall : PLAN.agencyMajor;
   return { monthly: c.flatFee, basis: `flat fee for ${c.units.toLocaleString()} units across ${c.buildings.length} development${c.buildings.length === 1 ? "" : "s"}; $${tier.perUnit} per unit, minimum ${money(tier.minimum)}`, setup: 0 };
 }

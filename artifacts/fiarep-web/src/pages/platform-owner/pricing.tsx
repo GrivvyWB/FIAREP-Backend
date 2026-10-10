@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { BANDS, CURRENT_VS_PROPOSED, EXAMPLES, SETUP_FEE, SOURCES, ladderFees } from "@/lib/pricing-ladder";
+import { Button } from "@/components/ui/button";
+import { BANDS, EXAMPLES, SETUP_FEE, SOURCES, ladderFees, type Band } from "@/lib/pricing-ladder";
+import { usePricing, savePricing } from "@/lib/pricing-overrides";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const th = "px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500";
@@ -8,16 +10,36 @@ const td = "px-3 py-2 align-top";
 
 /** Platform Control → Pricing ladder: the recommended per-unit bands from 2 to
  * 300,000 units, a calculator, worked examples, what is live today vs the
- * recommendation, and the sources. Display only — live prices stay in
- * fiarep-plans.ts until changed there. */
+ * and the sources. The bands are live and owner-editable. */
 export default function OwnerPricing() {
   const [units, setUnits] = useState(147);
-  const f = ladderFees(Math.max(0, Math.round(units || 0)));
+  // Live bands come from the server (owner-set); edits here are saved back and the Join page and plan contracts follow.
+  const pricing = usePricing();
+  const [draft, setDraft] = useState<Band[] | null>(null);
+  const [saving, setSaving] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const bands = draft ?? pricing.bands;
+  const f = ladderFees(Math.max(0, Math.round(units || 0)), bands);
+  const edit = (i: number, field: "platformRate" | "platformMin" | "planRate" | "planMin", v: string) => {
+    const n = v.trim() === "" ? null : Math.max(0, Math.round((Number(v) || 0) * 100) / 100);
+    setDraft(bands.map((b, j) => (j === i ? { ...b, [field]: field === "planRate" || field === "planMin" ? n : (n ?? 0) } : b)));
+    setSaving("idle");
+  };
+  const save = async () => { setSaving("saving"); try { await savePricing({ bands }); setDraft(null); setSaving("saved"); } catch { setSaving("error"); } };
+  const resetBook = async () => { setSaving("saving"); try { await savePricing({ bands: null }); setDraft(null); setSaving("saved"); } catch { setSaving("error"); } };
+  const isDefault = JSON.stringify(bands.map((b) => [b.platformRate, b.platformMin, b.planRate, b.planMin])) === JSON.stringify(BANDS.map((b) => [b.platformRate, b.platformMin, b.planRate, b.planMin]));
+  const cell = "w-24 rounded-md border px-2 py-1 text-right text-sm font-semibold text-slate-900 focus:border-amber-500 focus:outline-none";
   return (
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-950">Pricing ladder — 2 to 300,000 units</h1>
-        <p className="text-sm text-slate-500">Recommended bands. Per unit means per dwelling unit per month; the monthly fee is the greater of units × rate and the band minimum. The prices clients see on the site are still the ones in the plan file until you change them.</p>
+        <p className="text-sm text-slate-500">Per unit means per dwelling unit per month; the monthly fee is the greater of units × rate and the band minimum. These are the live numbers: the plan cards on the Join page and plan contracts read them. Type a new rate or minimum in the table and save.</p>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {saving === "saved" && <span className="text-xs text-emerald-700">Saved</span>}
+        {saving === "error" && <span className="text-xs text-red-700">Could not save</span>}
+        {draft && <Button size="sm" variant="ghost" className="text-slate-500" onClick={() => { setDraft(null); setSaving("idle"); }}>Undo</Button>}
+        {!isDefault && !draft && <Button size="sm" variant="outline" onClick={() => void resetBook()}>Back to the recommended bands</Button>}
+        <Button size="sm" className="bg-amber-500 text-slate-950 hover:bg-amber-400" disabled={!draft || saving === "saving"} onClick={() => void save()}>{saving === "saving" ? "Saving…" : "Save bands"}</Button>
       </div>
 
       <section className="rounded-xl border border-amber-300 bg-amber-50 p-4">
@@ -37,14 +59,14 @@ export default function OwnerPricing() {
         <table className="w-full min-w-[840px] text-sm">
           <thead><tr className="bg-slate-50"><th className={th}>Band</th><th className={`${th} text-right`}>Platform $/unit</th><th className={`${th} text-right`}>Platform min</th><th className={`${th} text-right`}>FIAREP plan $/unit</th><th className={`${th} text-right`}>Plan min</th><th className={th}>Notes</th></tr></thead>
           <tbody>
-            {BANDS.map((b) => (
+            {bands.map((b, i) => (
               <tr key={b.label} className={`border-t border-slate-100 ${b.label === f.band.label ? "bg-amber-50" : ""}`}>
                 <td className={`${td} font-semibold text-slate-900`}>{b.label}</td>
-                <td className={`${td} text-right`}>{money(b.platformRate)}</td>
-                <td className={`${td} text-right`}>{money(b.platformMin)}/mo</td>
-                <td className={`${td} text-right`}>{b.planRate == null ? "—" : money(b.planRate)}</td>
-                <td className={`${td} text-right`}>{b.planMin == null ? "—" : `${money(b.planMin)}/mo`}</td>
-                <td className={`${td} text-slate-600`}>{b.note}</td>
+                <td className={`${td} text-right`}><input type="number" inputMode="decimal" min={0} value={b.platformRate} onChange={(e) => edit(i, "platformRate", e.target.value)} className={`${cell} ${b.platformRate !== BANDS[i]?.platformRate ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Platform rate ${b.label}`} /></td>
+                <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.platformMin} onChange={(e) => edit(i, "platformMin", e.target.value)} className={`${cell} ${b.platformMin !== BANDS[i]?.platformMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Platform minimum ${b.label}`} /><span className="text-xs text-slate-500">/mo</span></td>
+                <td className={`${td} text-right`}><input type="number" inputMode="decimal" min={0} value={b.planRate ?? ""} placeholder="—" onChange={(e) => edit(i, "planRate", e.target.value)} className={`${cell} ${b.planRate !== BANDS[i]?.planRate ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Plan rate ${b.label}`} /></td>
+                <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.planMin ?? ""} placeholder="—" onChange={(e) => edit(i, "planMin", e.target.value)} className={`${cell} ${b.planMin !== BANDS[i]?.planMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Plan minimum ${b.label}`} />{b.planMin != null && <span className="text-xs text-slate-500">/mo</span>}</td>
+                <td className={`${td} text-slate-600`}>{BANDS[i]?.note ?? ""}</td>
               </tr>
             ))}
           </tbody>
@@ -57,7 +79,7 @@ export default function OwnerPricing() {
         <table className="w-full min-w-[840px] text-sm">
           <thead><tr className="bg-slate-50"><th className={th}>Client</th><th className={`${th} text-right`}>Units</th><th className={th}>Band</th><th className={`${th} text-right`}>Platform /mo</th><th className={`${th} text-right`}>FIAREP plan /mo</th><th className={`${th} text-right`}>AEP exposure</th><th className={th}>Note</th></tr></thead>
           <tbody>
-            {EXAMPLES.map((e) => { const x = ladderFees(e.units); return (
+            {EXAMPLES.map((e) => { const x = ladderFees(e.units, bands); return (
               <tr key={e.name} className="border-t border-slate-100">
                 <td className={`${td} font-medium text-slate-900`}>{e.name}</td>
                 <td className={`${td} text-right`}>{e.units.toLocaleString()}</td>
@@ -72,17 +94,6 @@ export default function OwnerPricing() {
         </table>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <p className="px-3 pt-3 text-sm font-semibold text-slate-900">In the code today vs. recommended</p>
-        <table className="w-full min-w-[840px] text-sm">
-          <thead><tr className="bg-slate-50"><th className={th}>Plan</th><th className={th}>Today</th><th className={th}>Recommended</th><th className={th}>Change</th></tr></thead>
-          <tbody>
-            {CURRENT_VS_PROPOSED.map((r) => (
-              <tr key={r.plan} className="border-t border-slate-100"><td className={`${td} font-medium text-slate-900`}>{r.plan}</td><td className={`${td} text-slate-700`}>{r.today}</td><td className={`${td} text-slate-700`}>{r.proposed}</td><td className={`${td} text-slate-600`}>{r.change}</td></tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
 
       <div className="rounded-xl border border-slate-200 bg-white p-4 text-sm shadow-sm">
         <p className="font-semibold text-slate-900">Where the numbers come from</p>

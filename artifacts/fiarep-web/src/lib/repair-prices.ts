@@ -130,3 +130,21 @@ export const ENGINEER = [
 ] as const;
 export const ENGINEER_PER_DOB = 750;  // engineer letter per DOB condition
 export type PriceKey = (typeof REPAIR_ITEMS)[number][0] | (typeof REPAIR_SQFT)[number][0];
+
+// Violation type (from the City's notices) → price book line, one job per
+// apartment cited. Square-foot lines start at one typical job size and are
+// re-measured on site: lead and mold 100 sq ft, a plaster patch 20 sq ft, a
+// floor 100 sq ft.
+export const TYPE_TO_ITEM: Record<string, PriceKey> = {
+  "Smoke detector": "smoke", "Carbon monoxide detector": "smoke", "Window guards": "guards",
+  "Roaches": "exterm", "Mice / rats": "exterm", "Bed bugs": "exterm",
+  "Lead paint": "leadsf", "Mold": "moldsf", "Heat / hot water": "heat",
+  "Peeling paint / plaster": "paintroom", "Ceiling / wall": "plasterpatch", "Leak / plumbing": "leak", "Electrical": "elec",
+  "Door / self-closing": "door", "Window": "window", "Floor": "hardwood",
+};
+export const TYPE_QTY: Partial<Record<PriceKey, number>> = { leadsf: 100, moldsf: 100, plasterpatch: 20, hardwood: 100 };
+/** Price of one repair job of a violation type at the given book prices (0 = quoted after a look). */
+export function repairPerJob(type: string, priceOf: (key: PriceKey) => number): number {
+  const key = TYPE_TO_ITEM[type];
+  return key ? priceOf(key) * (TYPE_QTY[key] ?? 1) : 0;
+}

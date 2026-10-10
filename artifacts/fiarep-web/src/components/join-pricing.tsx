@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DofLookupPanel } from "@/components/dof-lookup";
 import { FEES, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "@/lib/fiarep-plans";
+import { repairPerJob } from "@/lib/repair-prices";
+import { usePricing } from "@/lib/pricing-overrides";
 
 /** "What it costs" on the Join FIAREP page: expediter fee ranges, the full
  * cost picture for a typical 20-unit NYC building, how each agency works,
@@ -20,28 +22,16 @@ const AGENCIES = [
   { name: "OATH / ECB — hearings", lines: ["A missed summons defaults: Class 1 $12,500, up to $25,000 per summons, plus up to $1,000 per day uncorrected.", "We file motions to vacate default judgments and represent you at the hearing.", "$300 – $950 per hearing appearance."] },
 ];
 
-// Repair price per job (one apartment or location, whatever the number of
-// violations cited there) by what it is — the same figures as the FIAREP price
-// book: HPD's average per contractor order, HPD / HCR cost schedules. Types
-// with no sourced price stay 0 and are quoted after a look.
-// Typical cost of one repair job of each kind, from the FIAREP price book:
-// detectors, guards and doors per piece; extermination per apartment visit
-// ($300); a leak $563 and an electrical device $430 (Angi NYC averages); paint
-// $600 per room; plaster patch 20 sq ft × $48; mold 100 sq ft × $20 (Angi NYC
-// example $1,000–$2,500); lead 100 sq ft × $14 (Angi small room $1,500–$4,000);
-// boiler repair call $425; window $2,017 and floor 100 sq ft × $19 (HPD / HCR
-// schedules). Square-foot jobs are re-measured on site.
-const REPAIR_PER_JOB: Record<string, number> = {
-  "Smoke detector": 125, "Carbon monoxide detector": 125, "Window guards": 175,
-  "Roaches": 300, "Mice / rats": 300, "Bed bugs": 300,
-  "Lead paint": 1400, "Mold": 2000, "Heat / hot water": 425,
-  "Peeling paint / plaster": 600, "Leak / plumbing": 563, "Electrical": 430,
-  "Door / self-closing": 1100, "Window": 2017, "Floor": 1900, "Ceiling / wall": 960,
-};
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 
 export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean; pending: boolean; onUnlock: (code: string) => Promise<void> }) {
   const [code, setCode] = useState("");
+  // Repair prices per job come from FIAREP's price book as the owner has set it; the per-unit ladder the same way.
+  const pricing = usePricing();
+  const perJob = (type: string) => repairPerJob(type, pricing.priceOf);
+  const bands = pricing.bands;
+  const small = bands[0]!;
+  const planBands = bands.filter((b) => b.planRate != null);
   const [dob, setDob] = useState(8);
   // HPD violations by class: counts only — the City's money comes from the DOF lookup, not from these.
   const [hpdA, setHpdA] = useState(40);
@@ -113,11 +103,18 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-widest text-amber-400">The FIAREP plan — best value</p>
-            <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>$20 per unit per month</h3>
-            <p className={`text-sm text-slate-300 ${hide}`}>Minimum $1,000 / month. A 20-unit building is $1,000; 100 units is $2,000; 500 units is $10,000.</p>
+            <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>{money(small.planRate!)} per unit per month</h3>
+            <p className={`text-sm text-slate-300 ${hide}`}>Minimum {money(small.planMin!)} / month. The rate steps down as the portfolio grows:</p>
           </div>
           <Button className="bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Start the 60-day pilot</Button>
         </div>
+        <table className={`mt-3 w-full text-sm ${hide}`}>
+          <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Minimum / month</th></tr></thead>
+          <tbody>
+            {planBands.map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate!)}</td><td className="py-1 text-right text-slate-300">{money(b.planMin!)}</td></tr>)}
+            {bands.filter((b) => b.planRate == null).map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td colSpan={2} className="py-1 text-right text-slate-300">platform per unit · work by task order, per building</td></tr>)}
+          </tbody>
+        </table>
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
           {RETAINER_INCLUDES.map((line) => <li key={line} className={`flex gap-2 text-sm text-slate-200 ${line.includes("$") ? hide : ""}`}><span className="text-amber-400">✓</span>{line}</li>)}
         </ul>
@@ -125,8 +122,12 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
       </div>
         <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Platform only — software, no FIAREP labor</p>
-          <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>$4 per unit per month</h3>
-          <p className={`text-sm text-slate-300 ${hide}`}>Minimum $400 / month. Setup and staff training $1,500 one time per organization.</p>
+          <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>{money(small.platformRate)} per unit per month</h3>
+          <p className={`text-sm text-slate-300 ${hide}`}>Minimum {money(small.platformMin)} / month. Setup and staff training $1,500 one time per organization.</p>
+          <table className={`mt-3 w-full text-sm ${hide}`}>
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Minimum / month</th></tr></thead>
+            <tbody>{bands.map((b) => <tr key={b.label} className="border-t border-slate-800"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.platformRate)}</td><td className="py-1 text-right text-slate-300">{money(b.platformMin)}</td></tr>)}</tbody>
+          </table>
           <ul className="mt-4 grid gap-2">
             {PLATFORM_INCLUDES.map((line) => <li key={line} className="flex gap-2 text-sm text-slate-200"><span className="text-slate-400">✓</span>{line}</li>)}
           </ul>
@@ -137,7 +138,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
       <div className="mt-4 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-700 bg-slate-900/60 p-5">
         <div>
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Housing authorities, agencies & large portfolios</p>
-          <p className="mt-1 font-semibold text-white">2,500 units or more? The per-unit plan doesn't apply — you get a per-development quote.</p>
+          <p className="mt-1 font-semibold text-white">Above 50,000 units the plan is priced per development, not per unit — you get a written quote.</p>
           <p className="text-sm text-slate-400">Platform license tiered by volume, services on a fixed rate card your procurement office can attach to a contract, and a 2–3 development pilot to start.</p>
         </div>
         <Button variant="outline" className="border-amber-500/60 text-amber-200 hover:bg-amber-500/10" asChild><a href="mailto:fiarep@outlook.com?subject=FIAREP%20per-development%20quote">Request a per-development quote</a></Button>
@@ -209,7 +210,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
             <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
             <Slider label="Apartments / locations with HPD violations" value={hpdApts} min={0} max={500} onChange={setHpdApts} />
-            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); if (c.hpdTypes || c.dobTypes) { setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); setCustomRepair((c.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * (REPAIR_PER_JOB[t.type] || 0), 0)); } }} canSubmit={unlocked} quoted={{ expediter: est.expediter, repairs: est.repairs }} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); if (c.hpdTypes || c.dobTypes) { setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); setCustomRepair((c.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * perJob(t.type), 0)); } }} canSubmit={unlocked} quoted={{ expediter: est.expediter, repairs: est.repairs }} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
@@ -243,9 +244,9 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
                   <thead><tr className="text-slate-500"><th className="py-0.5 text-left font-normal">HPD</th><th className="py-0.5 text-right font-normal">A</th><th className="py-0.5 text-right font-normal">B</th><th className="py-0.5 text-right font-normal">C</th><th className="py-0.5 text-right font-normal">Total</th><th className="py-0.5 text-right font-normal">Apts</th><th className="py-0.5 text-right font-normal">Repair est.</th></tr></thead>
                   <tbody>
                     {violations.hpdTypes?.map((t) => (
-                      <tr key={t.type} className="border-t border-slate-800"><td className="py-0.5">{t.type}</td><td className="py-0.5 text-right text-slate-500">{t.a || ""}</td><td className="py-0.5 text-right text-slate-500">{t.b || ""}</td><td className="py-0.5 text-right text-slate-500">{t.c || ""}</td><td className="py-0.5 text-right font-semibold text-slate-100">{t.count}</td><td className="py-0.5 text-right text-slate-400">{t.jobs || t.count}</td><td className="py-0.5 text-right text-emerald-300">{REPAIR_PER_JOB[t.type] ? money((t.jobs || t.count) * REPAIR_PER_JOB[t.type]!) : <span className="text-slate-600">after we look</span>}</td></tr>
+                      <tr key={t.type} className="border-t border-slate-800"><td className="py-0.5">{t.type}</td><td className="py-0.5 text-right text-slate-500">{t.a || ""}</td><td className="py-0.5 text-right text-slate-500">{t.b || ""}</td><td className="py-0.5 text-right text-slate-500">{t.c || ""}</td><td className="py-0.5 text-right font-semibold text-slate-100">{t.count}</td><td className="py-0.5 text-right text-slate-400">{t.jobs || t.count}</td><td className="py-0.5 text-right text-emerald-300">{perJob(t.type) ? money((t.jobs || t.count) * perJob(t.type)) : <span className="text-slate-600">after we look</span>}</td></tr>
                     ))}
-                    <tr className="border-t border-slate-700"><td className="py-1 font-semibold text-slate-100">HPD open</td><td className="py-1 text-right text-slate-400">{hpdA}</td><td className="py-1 text-right text-slate-400">{hpdB}</td><td className="py-1 text-right text-slate-400">{hpdC}</td><td className="py-1 text-right font-semibold text-amber-300">{hpdA + hpdB + hpdC}</td><td className="py-1 text-right text-slate-400">{(violations.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count), 0)}</td><td className="py-1 text-right font-semibold text-emerald-300">{money((violations.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * (REPAIR_PER_JOB[t.type] || 0), 0))}</td></tr>
+                    <tr className="border-t border-slate-700"><td className="py-1 font-semibold text-slate-100">HPD open</td><td className="py-1 text-right text-slate-400">{hpdA}</td><td className="py-1 text-right text-slate-400">{hpdB}</td><td className="py-1 text-right text-slate-400">{hpdC}</td><td className="py-1 text-right font-semibold text-amber-300">{hpdA + hpdB + hpdC}</td><td className="py-1 text-right text-slate-400">{(violations.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count), 0)}</td><td className="py-1 text-right font-semibold text-emerald-300">{money((violations.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * perJob(t.type), 0))}</td></tr>
                   </tbody>
                 </table>
                 {violations.dobTypes && violations.dobTypes.length > 0 && (
