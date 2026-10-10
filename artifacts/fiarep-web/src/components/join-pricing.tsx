@@ -2,7 +2,6 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { DofLookupPanel } from "@/components/dof-lookup";
 import { FEES, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "@/lib/fiarep-plans";
-import { repairPerJob } from "@/lib/repair-prices";
 import { usePricing } from "@/lib/pricing-overrides";
 
 /** "What it costs" on the Join FIAREP page: expediter fee ranges, the full
@@ -26,9 +25,8 @@ const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency",
 
 export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean; pending: boolean; onUnlock: (code: string) => Promise<void> }) {
   const [code, setCode] = useState("");
-  // Repair prices per job come from FIAREP's price book as the owner has set it; the per-unit ladder the same way.
+  // The per-unit ladder as the owner has set it in Platform Control. The price book stays there — never on this page.
   const pricing = usePricing();
-  const perJob = (type: string) => repairPerJob(type, pricing.priceOf);
   const bands = pricing.bands;
   const small = bands[0]!;
   const planBands = bands.filter((b) => b.planRate != null);
@@ -42,8 +40,6 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const [hpdApts, setHpdApts] = useState(25);
   // What the building owes the City, from the Department of Finance lookup (or typed).
   const [dofOwed, setDofOwed] = useState(0);
-  // What the open violations are, by type — from the DOF / violation lookup.
-  const [violations, setViolations] = useState<{ address?: string; hpdTypes?: Array<{ type: string; count: number; a: number; b: number; c: number; jobs: number }>; dobTypes?: Array<{ type: string; count: number }> } | null>(null);
   // Engineering and repairs are typed in — the price book lives in Platform Control, FIAREP only.
   const [customRepair, setCustomRepair] = useState(0);
   const [customEng, setCustomEng] = useState(0);
@@ -210,7 +206,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
             <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
             <Slider label="Apartments / locations with HPD violations" value={hpdApts} min={0} max={500} onChange={setHpdApts} />
-            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); if (c.hpdTypes || c.dobTypes) { setViolations({ address: c.address, hpdTypes: c.hpdTypes, dobTypes: c.dobTypes }); setCustomRepair((c.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * perJob(t.type), 0)); } }} canSubmit={unlocked} quoted={{ expediter: est.expediter, repairs: est.repairs }} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); }} canSubmit={unlocked} quoted={{ expediter: est.expediter, repairs: est.repairs }} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
@@ -237,30 +233,6 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: ~{money(est.erp)}</p>
               <p className="text-xs text-rose-200/80">HPD bills 2–3× contractor cost plus a 15% administrative fee, 9% interest, and a lien on the building. Owners of the 250 buildings in the 2026 Alternative Enforcement Program already owe $4.5M for emergency repairs.</p>
             </div>
-            {violations && (violations.hpdTypes?.length || violations.dobTypes?.length) ? (
-              <div className="rounded-lg border border-slate-700 bg-slate-950/60 p-3 text-sm">
-                <p className="text-xs uppercase tracking-wide text-slate-500">What the open violations are — {violations.address}</p>
-                <table className="mt-1 w-full text-xs text-slate-300">
-                  <thead><tr className="text-slate-500"><th className="py-0.5 text-left font-normal">HPD</th><th className="py-0.5 text-right font-normal">A</th><th className="py-0.5 text-right font-normal">B</th><th className="py-0.5 text-right font-normal">C</th><th className="py-0.5 text-right font-normal">Total</th><th className="py-0.5 text-right font-normal">Apts</th><th className="py-0.5 text-right font-normal">Repair est.</th></tr></thead>
-                  <tbody>
-                    {violations.hpdTypes?.map((t) => (
-                      <tr key={t.type} className="border-t border-slate-800"><td className="py-0.5">{t.type}</td><td className="py-0.5 text-right text-slate-500">{t.a || ""}</td><td className="py-0.5 text-right text-slate-500">{t.b || ""}</td><td className="py-0.5 text-right text-slate-500">{t.c || ""}</td><td className="py-0.5 text-right font-semibold text-slate-100">{t.count}</td><td className="py-0.5 text-right text-slate-400">{t.jobs || t.count}</td><td className="py-0.5 text-right text-emerald-300">{perJob(t.type) ? money((t.jobs || t.count) * perJob(t.type)) : <span className="text-slate-600">after we look</span>}</td></tr>
-                    ))}
-                    <tr className="border-t border-slate-700"><td className="py-1 font-semibold text-slate-100">HPD open</td><td className="py-1 text-right text-slate-400">{hpdA}</td><td className="py-1 text-right text-slate-400">{hpdB}</td><td className="py-1 text-right text-slate-400">{hpdC}</td><td className="py-1 text-right font-semibold text-amber-300">{hpdA + hpdB + hpdC}</td><td className="py-1 text-right text-slate-400">{(violations.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count), 0)}</td><td className="py-1 text-right font-semibold text-emerald-300">{money((violations.hpdTypes || []).reduce((n, t) => n + (t.jobs || t.count) * perJob(t.type), 0))}</td></tr>
-                  </tbody>
-                </table>
-                {violations.dobTypes && violations.dobTypes.length > 0 && (
-                  <table className="mt-2 w-full text-xs text-slate-300">
-                    <thead><tr className="text-slate-500"><th className="py-0.5 text-left font-normal">DOB active</th><th className="py-0.5 text-right font-normal">Total</th></tr></thead>
-                    <tbody>
-                      {violations.dobTypes.map((t) => <tr key={t.type} className="border-t border-slate-800"><td className="py-0.5">{t.type}</td><td className="py-0.5 text-right font-semibold text-slate-100">{t.count}</td></tr>)}
-                      <tr className="border-t border-slate-700"><td className="py-1 font-semibold text-slate-100">DOB open</td><td className="py-1 text-right font-semibold text-amber-300">{dob}</td></tr>
-                    </tbody>
-                  </table>
-                )}
-                <p className="mt-1 text-[11px] text-slate-500">From the City's open HPD / DOB violation notices for this block & lot. Expediter clears and certifies every one. Repair est. is one job per apartment cited (Apts), at FIAREP's price book rates, and fills the Repairs box above — change it if you have your own quote; types marked "after we look" are priced on site.</p>
-              </div>
-            ) : null}
             <p className="pt-2 text-xs text-slate-500">Expediter: $600 per apartment with HPD violations — all of them certified together — plus the DOB rate per violation (on the FIAREP plan: $400 per apartment and 20% off DOB, {money(expediterFee(hpdApts, dob).plan)}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts show what's open; the apartment count is what's billed. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
           </div>
         </div>
