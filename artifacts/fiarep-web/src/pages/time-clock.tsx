@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 
@@ -36,6 +36,31 @@ const initials = (name: string) => name.split(/\s+/).filter(Boolean).slice(0, 2)
 const Pill = ({ dir }: { dir: "in" | "out" }) => <span className={`inline-flex w-16 items-center justify-center rounded-full px-2 py-1 text-xs font-extrabold tracking-wide text-white ${dir === "in" ? "bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.6)]" : "bg-rose-500 shadow-[0_0_12px_rgba(244,63,94,0.6)]"}`}>{dir === "in" ? "IN" : "OUT"} →</span>;
 const Card = ({ children, className = "" }: { children: React.ReactNode; className?: string }) => <div className={`rounded-2xl border border-sky-500/30 bg-[#0d1b3a]/80 shadow-[inset_0_0_0_1px_rgba(56,189,248,0.08),0_0_24px_rgba(37,99,235,0.15)] ${className}`}>{children}</div>;
 
+// The time-off form keeps its own state and is memoized, so the ticking clock
+// never re-renders it — a re-render while the phone's date picker is open closes the picker.
+const TimeOffForm = memo(function TimeOffForm({ staffName, onSend, busy, message }: { staffName: string; onSend: (d: { type: string; start: string; end: string; reason: string }) => Promise<boolean>; busy: boolean; message: string }) {
+  const [d, setD] = useState({ type: "Vacation", start: "", end: "", reason: "" });
+  const field = "mt-1 block h-11 w-full rounded-xl border border-sky-500/40 bg-[#0a1430] px-3 text-base text-white";
+  return (
+    <Card className="mt-4 p-4">
+      <p className="text-lg font-extrabold">Request time off</p>
+      <p className="text-xs text-sky-200/70">{staffName}</p>
+      <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
+        <label className="col-span-2 text-xs text-sky-200/80">Type
+          <select value={d.type} onChange={(e) => setD({ ...d, type: e.target.value })} className={field}>
+            {["Vacation", "Sick", "Personal", "Bereavement", "Jury duty", "Other"].map((t) => <option key={t}>{t}</option>)}
+          </select>
+        </label>
+        <label className="text-xs text-sky-200/80">First day<input type="date" value={d.start} onChange={(e) => setD({ ...d, start: e.target.value })} className={field} /></label>
+        <label className="text-xs text-sky-200/80">Last day<input type="date" value={d.end} min={d.start || undefined} onChange={(e) => setD({ ...d, end: e.target.value })} className={field} /></label>
+        <label className="col-span-2 text-xs text-sky-200/80">Reason (optional)<textarea value={d.reason} onChange={(e) => setD({ ...d, reason: e.target.value })} rows={2} className="mt-1 block w-full rounded-xl border border-sky-500/40 bg-[#0a1430] px-3 py-2 text-base text-white" /></label>
+      </div>
+      {message && <p className={`mt-2 text-sm ${message.startsWith("Request sent") ? "text-emerald-400" : "text-rose-300"}`}>{message}</p>}
+      <button type="button" onClick={() => void onSend(d).then((ok) => { if (ok) setD({ type: "Vacation", start: "", end: "", reason: "" }); })} disabled={busy || !d.start} className="mt-3 h-14 w-full rounded-full border-2 border-sky-300/70 bg-gradient-to-r from-sky-600 to-blue-500 text-lg font-extrabold uppercase tracking-wide text-white shadow-[0_0_24px_rgba(56,189,248,0.5)] disabled:opacity-50">{busy ? "Sending…" : "Send request →"}</button>
+    </Card>
+  );
+});
+
 /** Time clock for staff — the look of a punch terminal: who you are, the live
  * clock, today and this shift, one big Punch in / Punch out, this week's
  * punches, and tabs for the week's schedule, reports by week, and the profile.
@@ -51,23 +76,22 @@ export default function TimeClock() {
   const [now, setNow] = useState(() => Date.now());
   // Time off: the person's own leave requests (the same leave-requests records the Leave page and HR use).
   const [leave, setLeave] = useState<LeaveRow[]>([]);
-  const [leaveDraft, setLeaveDraft] = useState({ type: "Vacation", start: "", end: "", reason: "" });
   const [leaveBusy, setLeaveBusy] = useState(false);
   const [leaveMsg, setLeaveMsg] = useState("");
   async function loadLeave() {
     try { const rows = await customFetch<LeaveRow[]>("/api/v1/leave-requests", { responseType: "json" } as never); setLeave((rows || []).filter((r) => { const st = r.state || {}; return st["employeeStaffId"] === staff?.id || (!st["employeeStaffId"] && String(st["employee"] || "").trim().toLowerCase() === String(staff?.name || "").trim().toLowerCase()); })); } catch { /* leave module may be off */ }
   }
-  async function requestTimeOff() {
+  async function requestTimeOff(leaveDraft: { type: string; start: string; end: string; reason: string }): Promise<boolean> {
     const start = leaveDraft.start, end = leaveDraft.end || leaveDraft.start;
-    if (!start) { setLeaveMsg("Pick a start date."); return; }
-    if (end < start) { setLeaveMsg("The end date must be on or after the start."); return; }
+    if (!start) { setLeaveMsg("Pick a first day."); return false; }
+    if (end < start) { setLeaveMsg("The last day must be on or after the first."); return false; }
     const days = Math.floor((new Date(`${end}T00:00:00`).getTime() - new Date(`${start}T00:00:00`).getTime()) / 864e5) + 1;
     setLeaveBusy(true); setLeaveMsg("");
     try {
       const state = { employee: staff?.name || "", employeeStaffId: staff?.id, type: leaveDraft.type, startAt: `${start}T09:00`, endAt: `${end}T17:00`, returnAt: "", startDate: start, endDate: end, days, reason: leaveDraft.reason.trim(), reasonableAccommodation: "", coveredByStaffId: "", title: `${staff?.name || "Staff"} leave`, status: "Pending" };
       await customFetch("/api/v1/leave-requests", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id: crypto.randomUUID(), state, version: 1, development: staff?.developments?.[0] }), responseType: "json" } as never);
-      setLeaveDraft({ type: "Vacation", start: "", end: "", reason: "" }); setLeaveMsg("Request sent to your supervisor."); await loadLeave();
-    } catch (e) { setLeaveMsg((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not send the request."); }
+      setLeaveMsg("Request sent to your supervisor."); await loadLeave(); return true;
+    } catch (e) { setLeaveMsg((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not send the request."); return false; }
     finally { setLeaveBusy(false); }
   }
 
@@ -81,7 +105,7 @@ export default function TimeClock() {
       try { const from = new Date(); from.setDate(from.getDate() - 7); setStops(await customFetch<Stop[]>(`/api/v1/time-clock/locations?from=${encodeURIComponent(from.toISOString())}`, { responseType: "json" } as never)); } catch { /* optional */ }
     } catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not load the time clock."); }
   }
-  useEffect(() => { void load(); void loadLeave(); const t = setInterval(() => setNow(Date.now()), tab === "clock" ? 1000 : 60_000); const r = setInterval(() => void load(), 60_000); return () => { clearInterval(t); clearInterval(r); }; }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { void load(); void loadLeave(); const t = tab === "timeoff" ? null : setInterval(() => setNow(Date.now()), tab === "clock" ? 1000 : 60_000); const r = setInterval(() => void load(), 60_000); return () => { if (t) clearInterval(t); clearInterval(r); }; }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** The browser's position, if the person allows it — sent with the punch so the record shows where it was made. */
   function wherever(): Promise<{ latitude: number; longitude: number; accuracyM: number } | null> {
@@ -234,21 +258,7 @@ export default function TimeClock() {
 
         {tab === "timeoff" && (
           <>
-            <Card className="mt-4 p-4">
-              <p className="text-lg font-extrabold">Request time off</p>
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <label className="col-span-2 text-xs text-sky-200/80">Type
-                  <select value={leaveDraft.type} onChange={(e) => setLeaveDraft({ ...leaveDraft, type: e.target.value })} className="mt-1 block h-11 w-full rounded-xl border border-sky-500/40 bg-[#0a1430] px-3 text-base text-white">
-                    {["Vacation", "Sick", "Personal", "Bereavement", "Jury duty", "Other"].map((t) => <option key={t}>{t}</option>)}
-                  </select>
-                </label>
-                <label className="text-xs text-sky-200/80">First day<input type="date" value={leaveDraft.start} onChange={(e) => setLeaveDraft({ ...leaveDraft, start: e.target.value })} className="mt-1 block h-11 w-full rounded-xl border border-sky-500/40 bg-[#0a1430] px-3 text-base text-white" /></label>
-                <label className="text-xs text-sky-200/80">Last day<input type="date" value={leaveDraft.end} min={leaveDraft.start || undefined} onChange={(e) => setLeaveDraft({ ...leaveDraft, end: e.target.value })} className="mt-1 block h-11 w-full rounded-xl border border-sky-500/40 bg-[#0a1430] px-3 text-base text-white" /></label>
-                <label className="col-span-2 text-xs text-sky-200/80">Reason (optional)<textarea value={leaveDraft.reason} onChange={(e) => setLeaveDraft({ ...leaveDraft, reason: e.target.value })} rows={2} className="mt-1 block w-full rounded-xl border border-sky-500/40 bg-[#0a1430] px-3 py-2 text-base text-white" /></label>
-              </div>
-              {leaveMsg && <p className={`mt-2 text-sm ${leaveMsg.startsWith("Request sent") ? "text-emerald-400" : "text-rose-300"}`}>{leaveMsg}</p>}
-              <button type="button" onClick={() => void requestTimeOff()} disabled={leaveBusy || !leaveDraft.start} className="mt-3 h-14 w-full rounded-full border-2 border-sky-300/70 bg-gradient-to-r from-sky-600 to-blue-500 text-lg font-extrabold uppercase tracking-wide text-white shadow-[0_0_24px_rgba(56,189,248,0.5)] disabled:opacity-50">{leaveBusy ? "Sending…" : "Send request →"}</button>
-            </Card>
+            <TimeOffForm staffName={staff?.name || ""} onSend={requestTimeOff} busy={leaveBusy} message={leaveMsg} />
             <Card className="mt-4 p-4">
               <p className="text-lg font-extrabold">My requests</p>
               {leave.length === 0 ? <p className="mt-2 text-sm text-sky-200/70">No requests yet.</p> : (
