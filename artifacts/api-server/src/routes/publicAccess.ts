@@ -109,6 +109,19 @@ router.get("/v1/public/resident-code/:code", async (req, res) => {
   res.json({ code: String(req.params.code || "").replace(/\D/g, ""), organizationName: org.name });
 });
 
+// The buildings a company has enrolled, for the resident app's development and
+// address pickers. Only what Platform Control registered — a building that is
+// not here cannot be reported on under this company.
+router.get("/v1/public/resident-buildings", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const org = await organizationForResidentCode(String(req.query["code"] ?? ""));
+  if (!org) { res.status(404).json({ error: "That resident code isn't recognized." }); return; }
+  const rows = await db.select({ id: organizationProperties.id, development: organizationProperties.development, address: organizationProperties.displayAddress })
+    .from(organizationProperties)
+    .where(and(eq(organizationProperties.organizationId, org.id), eq(organizationProperties.active, true)));
+  res.json({ organizationName: org.name, buildings: rows.map((r) => ({ id: r.id, development: r.development || org.name, address: r.address })) });
+});
+
 router.post("/v1/public/resident-reports", async (req, res) => {
   const input = req.body && typeof req.body === "object" ? req.body : {};
   const rawState = input.state && typeof input.state === "object" ? input.state : {};
@@ -163,7 +176,11 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   // NYCHA catalog. This keeps the selected building tied to its development
   // instead of accepting arbitrary text that could route a report incorrectly.
   if (!property && !catalogAddress && !nychaAddress) {
-    res.status(400).json({ error: "Select a valid building address for this development" });
+    // Private buildings: only addresses Platform Control enrolled for the resident's company count.
+    const codeOrg = await organizationForResidentCode(String(rawState.companyCode ?? ""));
+    res.status(400).json({ error: codeOrg
+      ? `This building isn't enrolled with FIAREP under ${codeOrg.name}. Pick one of the buildings in the list, or ask your management office to enroll it.`
+      : "Select a valid building address for this development" });
     return;
   }
   const resolvedDevelopment = property?.development ?? catalogAddress?.development ?? nychaAddress?.development;

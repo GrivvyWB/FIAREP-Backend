@@ -117,18 +117,39 @@ export default function PublicResident() {
   const descriptionText = reportForm.watch('description') || '';
   const showWater = /(leak|water|flood|stoppage)/i.test(descriptionText);
   const selectedLocation = reportForm.watch('location');
-  const { data: developmentOptions = [] } = useListNychaDevelopments();
+  const { data: nychaDevelopments = [] } = useListNychaDevelopments();
+  // The buildings the resident's company enrolled (Platform Control). These come first; NYCHA's catalog stays for NYCHA residents.
+  const [enrolled, setEnrolled] = useState<Array<{ id: string; development: string; address: string }>>([]);
+  useEffect(() => {
+    const code = savedCode?.code;
+    if (!code) { setEnrolled([]); return; }
+    let live = true;
+    customFetch<{ buildings: Array<{ id: string; development: string; address: string }> }>(`/api/v1/public/resident-buildings?code=${encodeURIComponent(code)}`, { responseType: 'json' } as never)
+      .then((r) => { if (live) setEnrolled(r.buildings || []); })
+      .catch(() => { if (live) setEnrolled([]); });
+    return () => { live = false; };
+  }, [savedCode?.code]);
+  const enrolledDevelopments = [...new Set(enrolled.map((b) => b.development))];
+  const developmentOptions = [
+    ...enrolledDevelopments.map((name) => ({ id: `enrolled-${name}`, name })),
+    ...nychaDevelopments.filter((d) => !enrolledDevelopments.some((n) => n.toLowerCase() === d.name.toLowerCase())),
+  ];
   const addressParams = {
     development: selectedDevelopment.trim() || undefined,
     query: addressSearch.trim() || undefined,
     limit: 50,
   };
-  const { data: addressOptions = [] } = useSearchNychaAddresses(addressParams, {
+  const { data: nychaAddressOptions = [] } = useSearchNychaAddresses(addressParams, {
     query: {
       enabled: Boolean(selectedDevelopment.trim()),
       queryKey: getSearchNychaAddressesQueryKey(addressParams),
     },
   });
+  const enrolledAddressOptions = enrolled
+    .filter((b) => b.development.toLowerCase() === selectedDevelopment.trim().toLowerCase())
+    .filter((b) => !addressSearch.trim() || b.address.toLowerCase().includes(addressSearch.trim().toLowerCase()))
+    .map((b) => ({ id: b.id, address: b.address }));
+  const addressOptions = enrolledAddressOptions.length > 0 ? enrolledAddressOptions : nychaAddressOptions;
 
   const lookupForm = useForm<z.infer<typeof lookupSchema>>({
     resolver: zodResolver(lookupSchema),

@@ -42,6 +42,7 @@ const orgSchema = z.object({
   endsAt: z.string().optional().nullable(),
   staffLimit: z.number().nullable().optional(),
   propertyLimit: z.number().nullable().optional(),
+  licensedUnits: z.number().nullable().optional(),
   hrEmail: z.string().email("A valid HR email is required"),
   unrestricted: z.boolean().default(false),
   directorName: z.string().optional(),
@@ -111,6 +112,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       endsAt: "",
       staffLimit: null,
       propertyLimit: null,
+      licensedUnits: null,
       hrEmail: "fiarep@outlook.com",
       unrestricted: false,
       directorName: "",
@@ -130,6 +132,35 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       },
     },
   );
+  // Buildings: registered per development with the City's unit count; the sum may not pass the licensed units.
+  const [buildingAddress, setBuildingAddress] = useState<Record<string, string>>({});
+  const [buildingUnits, setBuildingUnits] = useState<Record<string, string>>({});
+  const [buildingError, setBuildingError] = useState<Record<string, string>>({});
+  const [buildingBusy, setBuildingBusy] = useState<string>("");
+  type PropertyRow = { id: string; displayAddress: string; development: string | null; active: boolean; units?: number | null };
+  const propertyRows = organizationProperties as unknown as PropertyRow[];
+  const registeredUnits = propertyRows.filter((p) => p.active).reduce((n, p) => n + (p.units || 0), 0);
+  const licensedUnitsValue = form.watch("licensedUnits");
+  const refreshProperties = () => queryClient.invalidateQueries({ queryKey: getListPlatformOrganizationPropertiesQueryKey(organization?.id ?? "") });
+  const addBuilding = async (development: string) => {
+    if (!organization) return;
+    const address = (buildingAddress[development] || "").trim();
+    if (!address) return;
+    setBuildingBusy(development); setBuildingError((m) => ({ ...m, [development]: "" }));
+    try {
+      const typed = Number(buildingUnits[development] || 0);
+      await customFetch(`/api/v1/platform/organizations/${encodeURIComponent(organization.id)}/properties`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayAddress: address, development, ...(typed > 0 ? { units: typed } : {}) }), responseType: "json" } as never);
+      setBuildingAddress((m) => ({ ...m, [development]: "" })); setBuildingUnits((m) => ({ ...m, [development]: "" }));
+      await refreshProperties();
+    } catch (error: unknown) {
+      const e = error as { data?: { error?: string; needsUnits?: boolean }; message?: string };
+      setBuildingError((m) => ({ ...m, [development]: e?.data?.error || e?.message || "Could not add the building." }));
+    } finally { setBuildingBusy(""); }
+  };
+  const removeBuilding = async (id: string) => {
+    if (!organization) return;
+    try { await customFetch(`/api/v1/platform/organizations/${encodeURIComponent(organization.id)}/properties/${encodeURIComponent(id)}`, { method: "DELETE" } as never); await refreshProperties(); } catch { /* shown on next list */ }
+  };
 
   useEffect(() => {
     if (organization && open) {
@@ -143,6 +174,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         endsAt: organization.endsAt ? localDateTimeValue(organization.endsAt) : "",
         staffLimit: organization.staffLimit,
         propertyLimit: organization.propertyLimit,
+        licensedUnits: (organization as unknown as { licensedUnits?: number | null }).licensedUnits ?? null,
         hrEmail: organization.hrEmail,
         unrestricted: organization.unrestricted,
         directorName: "",
@@ -175,6 +207,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         endsAt: "",
         staffLimit: null,
         propertyLimit: null,
+        licensedUnits: null,
         hrEmail: "fiarep@outlook.com",
         unrestricted: false,
         directorName: "",
@@ -201,6 +234,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         endsAt: "",
         staffLimit: null,
         propertyLimit: null,
+        licensedUnits: null,
         hrEmail: "fiarep@outlook.com",
         unrestricted: false,
         directorName: "",
@@ -244,6 +278,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         endsAt: values.endsAt ? new Date(values.endsAt).toISOString() : undefined,
         staffLimit: values.staffLimit ?? null,
         propertyLimit: values.propertyLimit ?? null,
+        licensedUnits: values.licensedUnits ?? null,
         hrEmail: values.hrEmail.trim(),
         unrestricted: values.unrestricted,
         directorName: values.directorName || undefined,
@@ -561,6 +596,26 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                     </FormItem>
                   )}
                 />
+                <FormField
+                  control={form.control}
+                  name="licensedUnits"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-slate-700">Licensed units</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          placeholder="No cap"
+                          {...field}
+                          value={field.value === null || field.value === undefined ? "" : field.value}
+                          onChange={(e) => field.onChange(e.target.value ? parseInt(e.target.value) : null)}
+                        />
+                      </FormControl>
+                      <FormDescription className="text-slate-500">Dwelling units the client pays for. Buildings registered below may not add up to more{isEditing ? ` · ${registeredUnits.toLocaleString()} registered${licensedUnitsValue ? ` of ${licensedUnitsValue.toLocaleString()}` : ""}` : ""}.</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
               </div>
 
               <FormField
@@ -681,13 +736,24 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                                 {development.staff} assigned staff · {development.projects} projects · {development.records} operational records
                               </div>}
                                <div className="mt-2 text-xs font-semibold text-slate-600">
-                                 Properties {properties.length}
+                                 Buildings {properties.length}{properties.length > 0 ? ` · ${(properties as unknown as PropertyRow[]).reduce((n, p) => n + (p.units || 0), 0).toLocaleString()} units` : ""}
                                </div>
-                               {properties.map((property) => (
-                                 <div key={property.id} className="mt-1 text-sm text-slate-700">
-                                   {property.displayAddress}
+                               {(properties as unknown as PropertyRow[]).map((property) => (
+                                 <div key={property.id} className="mt-1 flex items-center justify-between gap-2 text-sm text-slate-700">
+                                   <span>{property.displayAddress}<span className="ml-2 text-xs text-slate-500">{property.units ? `${property.units.toLocaleString()} units` : "same lot as another building"}</span></span>
+                                   {isEditing && <button type="button" className="text-xs text-slate-400 underline hover:text-red-700" onClick={() => void removeBuilding(property.id)} aria-label={`Remove ${property.displayAddress}`}>remove</button>}
                                  </div>
                                ))}
+                               {isEditing && (
+                                 <div className="mt-2 space-y-1">
+                                   <div className="flex flex-wrap gap-2">
+                                     <Input aria-label={`Building address for ${name}`} placeholder="Building address, e.g. 568 Flatbush Ave, Brooklyn" value={buildingAddress[name] || ""} onChange={(e) => setBuildingAddress((m) => ({ ...m, [name]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addBuilding(name); } }} className="h-8 flex-1 bg-white text-sm" />
+                                     {buildingError[name]?.includes("Type the number of dwelling units") && <Input aria-label="Units" type="number" placeholder="Units" value={buildingUnits[name] || ""} onChange={(e) => setBuildingUnits((m) => ({ ...m, [name]: e.target.value }))} className="h-8 w-24 bg-white text-sm" />}
+                                     <Button type="button" size="sm" variant="outline" className="h-8" disabled={buildingBusy === name || !(buildingAddress[name] || "").trim()} onClick={() => void addBuilding(name)}>{buildingBusy === name ? "Checking…" : "Add building"}</Button>
+                                   </div>
+                                   {buildingError[name] && <p className="text-xs text-red-700">{buildingError[name]}</p>}
+                                 </div>
+                               )}
                             </div>
                           </div>
                           <Button

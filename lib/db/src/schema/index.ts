@@ -63,6 +63,8 @@ export const organizations = pgTable(
     endsAt: timestamp("ends_at", { withTimezone: true }),
     staffLimit: integer("staff_limit"),
     propertyLimit: integer("property_limit"),
+    // Dwelling units the client is paying for; registered buildings may not add up to more.
+    licensedUnits: integer("licensed_units"),
     hrEmail: text("hr_email").notNull().default("fiarep@outlook.com"),
     features: jsonb("features").$type<Record<string, unknown>>().notNull().default({}),
     unrestricted: boolean("unrestricted").notNull().default(false),
@@ -122,6 +124,9 @@ export const organizationProperties = pgTable(
     displayAddress: text("display_address").notNull(),
     normalizedAddress: text("normalized_address").notNull(),
     development: text("development"),
+    // From the City's record for the address (DOF assessment roll / PLUTO) when the building was registered.
+    units: integer("units"),
+    bbl: text("bbl"),
     active: boolean("active").notNull().default(true),
     ...timestamps,
   },

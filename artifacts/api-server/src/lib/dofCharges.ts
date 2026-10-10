@@ -223,3 +223,27 @@ export async function lookupDofCharges(address: string): Promise<DofLookup | nul
     retrievedAt: new Date().toISOString(),
   };
 }
+
+// The City's unit count for an address: DOF assessment roll first, PLUTO
+// (residential units) if DOF has none. Used when a building is registered to
+// a client so the licensed-unit check is against a City figure, not a typed one.
+export async function lookupBuildingUnits(address: string): Promise<{ displayAddress: string; bbl: string | null; units: number; source: "DOF" | "PLUTO" | null } | null> {
+  const feature = await geocodeNycAddress(address);
+  if (!feature?.properties) return null;
+  const props = feature.properties;
+  const pad = props.addendum?.pad || {};
+  const bbl = text(pad["bbl"]).replace(/\D/g, "") || null;
+  const displayAddress = text(props["label"]) || address;
+  if (!bbl) return { displayAddress, bbl: null, units: 0, source: null };
+  try {
+    const rows = (await fetchJson(soql(PROPERTY_VALUATION, { $select: "units", $where: `parid='${bbl}'`, $order: "year DESC", $limit: "1" }))) as Record<string, unknown>[];
+    const u = num(rows[0]?.["units"]);
+    if (u > 0) return { displayAddress, bbl, units: u, source: "DOF" };
+  } catch { /* fall through to PLUTO */ }
+  try {
+    const rows = (await fetchJson(soql("64uk-42ks", { $select: "unitsres,unitstotal", $where: `bbl=${Number(bbl)}`, $limit: "1" }))) as Record<string, unknown>[];
+    const u = num(rows[0]?.["unitsres"]) || num(rows[0]?.["unitstotal"]);
+    if (u > 0) return { displayAddress, bbl, units: u, source: "PLUTO" };
+  } catch { /* no figure */ }
+  return { displayAddress, bbl, units: 0, source: null };
+}

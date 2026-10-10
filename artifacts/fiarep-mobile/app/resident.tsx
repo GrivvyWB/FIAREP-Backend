@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import PhraseHelper from '../components/PhraseHelper';
 import {
   View,
@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import PhotoViewer from '../components/PhotoViewer';
 import { useRouter } from 'expo-router';
-import { createResidentReport, getResidentCode, LOCATION_CATEGORIES, listDevelopmentNames } from '../lib/store';
+import { createResidentReport, getResidentCode, LOCATION_CATEGORIES, listDevelopmentNames, listEnrolledBuildings } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import AddressInput from '../components/AddressInput';
@@ -44,7 +44,18 @@ export default function ResidentScreen() {
   // the address list.
   const [devPickerOpen, setDevPickerOpen] = useState(false);
   const [devQuery, setDevQuery] = useState('');
-  const devNames = useMemo(() => listDevelopmentNames(), []);
+  // The company's enrolled buildings come first; the NYCHA catalog stays for NYCHA residents.
+  const [enrolled, setEnrolled] = useState<Array<{ id: string; development: string; address: string }>>([]);
+  useEffect(() => {
+    let live = true;
+    getResidentCode().then((c) => (c ? listEnrolledBuildings(c.code) : [])).then((rows) => { if (live) setEnrolled(rows); }).catch(() => {});
+    return () => { live = false; };
+  }, []);
+  const devNames = useMemo(() => {
+    const mine = [...new Set(enrolled.map((b) => b.development))];
+    return [...mine, ...listDevelopmentNames().filter((n) => !mine.some((m) => m.toLowerCase() === n.toLowerCase()))];
+  }, [enrolled]);
+  const enrolledAddresses = useMemo(() => enrolled.filter((b) => b.development.toLowerCase() === development.trim().toLowerCase()).map((b) => b.address), [enrolled, development]);
   const devFiltered = useMemo(() => {
     const q = devQuery.trim().toLowerCase();
     return q ? devNames.filter((n) => n.toLowerCase().includes(q)) : devNames;
@@ -163,6 +174,7 @@ export default function ResidentScreen() {
         value={address}
         onChangeText={setAddress}
         development={development}
+        priorityAddresses={enrolledAddresses}
         placeholder="Select your building address"
         style={styles.input}
       />

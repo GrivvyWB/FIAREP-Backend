@@ -19,6 +19,7 @@ import {
   getConfiguredDevelopmentNames,
 } from "../lib/organizationDevelopments";
 import { researchOrganization } from "../lib/organizationResearch";
+import { lookupBuildingUnits } from "../lib/dofCharges";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
@@ -109,14 +110,33 @@ router.get("/v1/platform/organizations/:organizationId/staff", async (req, res) 
 router.post("/v1/platform/organizations/:organizationId/properties", async (req, res) => {
   const organizationId = req.params.organizationId!;
   try {
-    const input = propertyInput(req.body as Record<string, unknown>);
+    const body = req.body as Record<string, unknown>;
+    const input = propertyInput(body);
+    // The building's unit count comes from the City's record for the address
+    // (DOF roll, else PLUTO). A typed "units" is accepted only when the City has
+    // no figure, so a client cannot register a 166-unit building as 20 units.
+    let cityUnits = 0; let bbl: string | null = null; let unitsSource: string | null = null;
+    try { const found = await lookupBuildingUnits(input.displayAddress); if (found) { cityUnits = found.units; bbl = found.bbl; unitsSource = found.source; if (found.displayAddress && !input.displayAddress.includes(",")) { input.displayAddress = found.displayAddress; input.normalizedAddress = found.displayAddress.toLowerCase().replace(/\s+/g, " "); } } } catch { /* City lookup unavailable: fall back to a typed figure */ }
+    const typedUnits = Number.isInteger(body["units"]) && (body["units"] as number) > 0 ? (body["units"] as number) : 0;
+    let units = cityUnits > 0 ? cityUnits : typedUnits;
+    // Several entrances on one tax lot (1351 / 1352 / 1353 Main St on one BBL): the City
+    // counts the lot once, so a second address on a BBL already registered goes in at 0.
+    const sameLot = bbl ? await db.select({ id: organizationProperties.id }).from(organizationProperties).where(and(eq(organizationProperties.organizationId, organizationId), eq(organizationProperties.bbl, bbl))).limit(1) : [];
+    if (sameLot.length > 0) units = 0;
+    else if (units <= 0) { res.status(400).json({ error: "The City has no unit count for this address. Type the number of dwelling units to register it.", needsUnits: true }); return; }
     const property = await db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`property-limit:${organizationId}`}))`);
       const [org] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
       if (!org) throw Object.assign(new Error("Organization not found"), { status: 404 });
       const [{ value }] = await tx.select({ value: count() }).from(organizationProperties).where(eq(organizationProperties.organizationId, organizationId));
       if (org.propertyLimit !== null && Number(value) >= org.propertyLimit) throw Object.assign(new Error("Organization property license limit reached"), { status: 403 });
-      const [created] = await tx.insert(organizationProperties).values({ id: randomUUID(), organizationId, ...input }).returning();
+      // Licensed units: every active building's City unit count, plus this one, must fit what the client pays for.
+      if (org.licensedUnits !== null && !org.unrestricted) {
+        const [{ registered }] = await tx.select({ registered: sql<number>`coalesce(sum(${organizationProperties.units}), 0)` }).from(organizationProperties).where(and(eq(organizationProperties.organizationId, organizationId), eq(organizationProperties.active, true)));
+        const have = Number(registered) || 0;
+        if (units > 0 && have + units > org.licensedUnits) throw Object.assign(new Error(`${org.licensedUnits.toLocaleString("en-US")} units licensed, ${have.toLocaleString("en-US")} registered — this building adds ${units.toLocaleString("en-US")} (${unitsSource || "typed"}). Raise the licensed units on the company to ${(have + units).toLocaleString("en-US")} to add it.`), { status: 403, licensedUnits: org.licensedUnits, registeredUnits: have, buildingUnits: units });
+      }
+      const [created] = await tx.insert(organizationProperties).values({ id: randomUUID(), organizationId, ...input, units, bbl }).returning();
       if (input.development) {
         await tx.update(organizations).set({
           features: addConfiguredDevelopmentName(org.features, input.development),
@@ -129,7 +149,7 @@ router.post("/v1/platform/organizations/:organizationId/properties", async (req,
     await platformAudit(owner.name, "property.created", organizationId, null, property);
     res.status(201).json(property);
   } catch (error: any) {
-    if (error?.status) { res.status(error.status).json({ error: error.message }); return; }
+    if (error?.status) { res.status(error.status).json({ error: error.message, licensedUnits: error.licensedUnits, registeredUnits: error.registeredUnits, buildingUnits: error.buildingUnits }); return; }
     if (error?.code === "23505") { res.status(409).json({ error: "That address is already registered" }); return; }
     throw error;
   }
@@ -375,6 +395,8 @@ router.post("/v1/platform/organizations", async (req, res) => {
   const endsAt = body["endsAt"] == null ? null : new Date(String(body["endsAt"]));
   const staffLimit = body["staffLimit"] == null ? null : body["staffLimit"];
   const propertyLimit = body["propertyLimit"] == null ? null : body["propertyLimit"];
+  const licensedUnits = body["licensedUnits"] == null ? null : body["licensedUnits"];
+  if (licensedUnits !== null && (!Number.isInteger(licensedUnits) || (licensedUnits as number) < 0)) { res.status(400).json({ error: "Invalid licensed units" }); return; }
   if ((startsAt && Number.isNaN(startsAt.getTime())) || (endsAt && Number.isNaN(endsAt.getTime())) || (startsAt && endsAt && startsAt >= endsAt) ||
       (staffLimit !== null && (!Number.isInteger(staffLimit) || (staffLimit as number) < 0)) ||
       (propertyLimit !== null && (!Number.isInteger(propertyLimit) || (propertyLimit as number) < 0))) {
@@ -393,7 +415,7 @@ router.post("/v1/platform/organizations", async (req, res) => {
   try {
     const result = await db.transaction(async (tx) => {
       const id = await allocateOrganizationCode(tx);
-      const [created] = await tx.insert(organizations).values({ id, name, status, startsAt, endsAt, staffLimit: staffLimit as number | null, propertyLimit: propertyLimit as number | null, hrEmail, features, unrestricted }).returning();
+      const [created] = await tx.insert(organizations).values({ id, name, status, startsAt, endsAt, staffLimit: staffLimit as number | null, propertyLimit: propertyLimit as number | null, licensedUnits: licensedUnits as number | null, hrEmail, features, unrestricted }).returning();
       const generatedDirectorCode = await allocateStaffCode(tx, id, directorName);
       const [director] = await tx.insert(staffAccounts).values({
         id: randomUUID(), tenantId: id, name: directorName, code: generatedDirectorCode,
@@ -472,7 +494,7 @@ router.patch("/v1/platform/organizations/:id", async (req, res) => {
   }
   const [before] = await db.select().from(organizations).where(eq(organizations.id, id)).limit(1);
   if (!before) { res.status(404).json({ error: "Organization not found" }); return; }
-  const allowed = ["name", "status", "startsAt", "endsAt", "staffLimit", "propertyLimit", "hrEmail", "features", "unrestricted"] as const;
+  const allowed = ["name", "status", "startsAt", "endsAt", "staffLimit", "propertyLimit", "licensedUnits", "hrEmail", "features", "unrestricted"] as const;
   if (Object.keys(body).some((key) => !allowed.includes(key as typeof allowed[number]))) { res.status(400).json({ error: "Unknown organization field" }); return; }
   const updates: Partial<typeof organizations.$inferInsert> = {};
   if ("name" in body) { if (typeof body["name"] !== "string" || !body["name"].trim()) { res.status(400).json({ error: "Organization name is required" }); return; } updates.name = body["name"].trim(); }
@@ -481,7 +503,7 @@ router.patch("/v1/platform/organizations/:id", async (req, res) => {
     res.status(400).json({ error: "Invalid organization status" }); return;
   }
   for (const key of ["startsAt", "endsAt"] as const) if (key in body) { const value = body[key] == null ? null : new Date(String(body[key])); if (value && Number.isNaN(value.getTime())) { res.status(400).json({ error: "Invalid date" }); return; } updates[key] = value; }
-  for (const key of ["staffLimit", "propertyLimit"] as const) if (key in body) { const value = body[key]; if (value !== null && (!Number.isInteger(value) || (value as number) < 0)) { res.status(400).json({ error: "Invalid limit" }); return; } updates[key] = value as number | null; }
+  for (const key of ["staffLimit", "propertyLimit", "licensedUnits"] as const) if (key in body) { const value = body[key]; if (value !== null && (!Number.isInteger(value) || (value as number) < 0)) { res.status(400).json({ error: "Invalid limit" }); return; } updates[key] = value as number | null; }
   if ("hrEmail" in body) {
     const hrEmail = normalizeHrEmail(body["hrEmail"]);
     if (!hrEmail) { res.status(400).json({ error: "A valid HR email is required" }); return; }

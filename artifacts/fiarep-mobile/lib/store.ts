@@ -1128,6 +1128,13 @@ export async function findResidentCompany(name: string): Promise<ResidentCode[]>
   const r = await customFetch<{ matches: ResidentCode[] }>('/api/v1/public/resident-company?name=' + encodeURIComponent(q), { responseType: 'json' } as never);
   return Array.isArray(r?.matches) ? r.matches : [];
 }
+/** The buildings the resident's company enrolled with FIAREP — the only private buildings a report can be filed on. */
+export async function listEnrolledBuildings(code: string): Promise<Array<{ id: string; development: string; address: string }>> {
+  const clean = code.replace(/\D/g, '');
+  if (clean.length !== 6) return [];
+  const r = await customFetch<{ buildings: Array<{ id: string; development: string; address: string }> }>('/api/v1/public/resident-buildings?code=' + clean, { responseType: 'json' } as never);
+  return Array.isArray(r?.buildings) ? r.buildings : [];
+}
 /** Ask the server which company a code belongs to. */
 export async function checkResidentCode(code: string): Promise<ResidentCode> {
   const clean = code.replace(/\D/g, '');
