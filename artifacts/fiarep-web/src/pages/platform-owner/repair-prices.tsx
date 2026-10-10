@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { EXPEDITER, expediterFee } from "@/lib/fiarep-plans";
-import { PLAN_DISCOUNT, COST_KEY, TARGET_KEY, readCosts, readTarget } from "@/lib/profit-check";
+import { COST_KEY, TARGET_KEY, readCosts, readTarget } from "@/lib/profit-check";
 import type { ContractKind } from "@/lib/contract";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -93,11 +93,10 @@ export default function OwnerRepairPrices() {
     const rows = lines.map(([key, label, price, unit]) => {
       const qty = counts[key] || 0; const c = costOf(key, price);
       sell += qty * price; cost += qty * c;
-      const m = price > 0 ? (price - c) / price : 0; const mPlan = price > 0 ? (price * (1 - PLAN_DISCOUNT) - c) / (price * (1 - PLAN_DISCOUNT)) : 0;
-      return { key, label, unit, qty, price, cost: c, margin: m, marginPlan: mPlan, below: mPlan < target / 100 };
+      const m = price > 0 ? (price - c) / price : 0;
+      return { key, label, unit, qty, price, cost: c, margin: m, below: m < target / 100 };
     });
-    const sellPlan = sell * (1 - PLAN_DISCOUNT);
-    return { rows, sell, cost, margin: sell > 0 ? (sell - cost) / sell : 0, sellPlan, marginPlan: sellPlan > 0 ? (sellPlan - cost) / sellPlan : 0 };
+    return { rows, sell, cost, margin: sell > 0 ? (sell - cost) / sell : 0 };
   })();
   const pct = (n: number) => `${Math.round(n * 100)}%`;
 
@@ -275,14 +274,14 @@ export default function OwnerRepairPrices() {
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-slate-950">Profit check — FIAREP only</h2>
-              <p className="text-xs text-slate-600">Book prices are what the client pays. Type what each line costs you (crew hours × loaded rate + materials, or the sub's invoice); it starts at 70% of price, the industry cost-of-sales average (NAHB, remodelers 2024: cost of sales 70%, gross margin 30%, net 6%). Red = under your target after the {Math.round(PLAN_DISCOUNT * 100)}% plan discount. Nothing here goes on the contract.</p>
+              <p className="text-xs text-slate-600">Book prices are what the client pays. Type what each line costs you (crew hours × loaded rate + materials, or the sub's invoice); it starts at 70% of price, the industry cost-of-sales average (NAHB, remodelers 2024: cost of sales 70%, gross margin 30%, net 6%). Red = under your target. Nothing here goes on the contract.</p>
             </div>
             <label className="text-sm font-medium text-slate-900">Target gross margin
               <input type="number" min={0} max={90} value={target} onChange={(e) => setTarget(Math.max(0, Math.min(90, Number(e.target.value) || 0)))} className="ml-2 w-20 rounded-md border border-slate-300 bg-white px-2 py-1 text-right" />%
             </label>
           </div>
           <table className="mt-3 w-full text-sm">
-            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Line</th><th className="py-1 pr-3 text-right">Qty</th><th className="py-1 pr-3 text-right">Book price (edit)</th><th className="py-1 pr-3 text-right">Your cost</th><th className="py-1 pr-3 text-right">Margin</th><th className="py-1 text-right">On plan (−{Math.round(PLAN_DISCOUNT * 100)}%)</th></tr></thead>
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Line</th><th className="py-1 pr-3 text-right">Qty</th><th className="py-1 pr-3 text-right">Book price (edit)</th><th className="py-1 pr-3 text-right">Your cost</th><th className="py-1 text-right">Margin</th></tr></thead>
             <tbody>
               {profit.rows.map((r) => (
                 <tr key={r.key} className={`border-t border-emerald-200 ${r.below ? "bg-rose-50" : ""}`}>
@@ -290,12 +289,11 @@ export default function OwnerRepairPrices() {
                   <td className="py-1.5 pr-3 text-right">{r.qty.toLocaleString()}</td>
                   <td className="py-1.5 pr-3 text-right"><input type="number" inputMode="decimal" min={0} value={r.price} onChange={(e) => editPrice(r.key as PriceKey, e.target.value)} className={`w-24 rounded-md border px-2 py-1 text-right font-semibold text-slate-900 ${r.price !== defaultPrice(r.key) ? "border-amber-400 bg-amber-50" : "border-slate-300 bg-white"}`} aria-label={`Book price for ${r.label}`} /></td>
                   <td className="py-1.5 pr-3 text-right"><input type="number" min={0} value={costs[r.key] ?? Math.round(r.price * 0.7)} onChange={(e) => setCosts((m) => ({ ...m, [r.key]: Math.max(0, Math.round(Number(e.target.value) || 0)) }))} className="w-24 rounded-md border border-slate-300 bg-white px-2 py-1 text-right" aria-label={`Your cost for ${r.label}`} /></td>
-                  <td className={`py-1.5 pr-3 text-right font-semibold ${r.margin < target / 100 ? "text-rose-700" : "text-emerald-700"}`}>{pct(r.margin)}</td>
-                  <td className={`py-1.5 text-right font-semibold ${r.below ? "text-rose-700" : "text-emerald-700"}`}>{pct(r.marginPlan)}</td>
+                  <td className={`py-1.5 text-right font-semibold ${r.below ? "text-rose-700" : "text-emerald-700"}`}>{pct(r.margin)}</td>
                 </tr>
               ))}
             </tbody>
-            <tfoot><tr className="border-t-2 border-emerald-300 font-semibold text-slate-950"><td className="py-2 pr-3">Repairs</td><td className="py-2 pr-3 text-right"></td><td className="py-2 pr-3 text-right">{money(profit.sell)}</td><td className="py-2 pr-3 text-right">{money(profit.cost)}</td><td className={`py-2 pr-3 text-right ${profit.margin < target / 100 ? "text-rose-700" : "text-emerald-700"}`}>{pct(profit.margin)} · {money(profit.sell - profit.cost)}</td><td className={`py-2 text-right ${profit.marginPlan < target / 100 ? "text-rose-700" : "text-emerald-700"}`}>{pct(profit.marginPlan)} · {money(profit.sellPlan - profit.cost)}</td></tr></tfoot>
+            <tfoot><tr className="border-t-2 border-emerald-300 font-semibold text-slate-950"><td className="py-2 pr-3">Repairs</td><td className="py-2 pr-3 text-right"></td><td className="py-2 pr-3 text-right">{money(profit.sell)}</td><td className="py-2 pr-3 text-right">{money(profit.cost)}</td><td className={`py-2 text-right ${profit.margin < target / 100 ? "text-rose-700" : "text-emerald-700"}`}>{pct(profit.margin)} · {money(profit.sell - profit.cost)}</td></tr></tfoot>
           </table>
           <p className="mt-2 text-xs text-slate-600">Rule of thumb: price = cost × 1.5 for a 33% margin, × 1.67 for 40%. If a job's cost × 1.5 comes out above the book price, charge cost × 1.5 and say why. Subbed work: the sub's invoice + 20%. The expediting fee ($600 / $400 per apartment) is on top of all of this and is not in these margins.</p>
         </section>

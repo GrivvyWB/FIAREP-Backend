@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BANDS, EXAMPLES, SETUP_FEE, SOURCES, ladderFees, type Band } from "@/lib/pricing-ladder";
+import { BANDS, EXAMPLES, SETUP_FEE, SOURCES, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING, includedHoursPerUnit, ladderFees, type Band } from "@/lib/pricing-ladder";
 import { usePricing, savePricing } from "@/lib/pricing-overrides";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -55,7 +55,7 @@ export default function OwnerPricing() {
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <table className="w-full min-w-[840px] text-sm">
-          <thead><tr className="bg-slate-50"><th className={th}>Band</th><th className={`${th} text-right`}>Platform $/unit</th><th className={`${th} text-right`}>Platform min</th><th className={`${th} text-right`}>FIAREP plan $/unit</th><th className={`${th} text-right`}>Plan min</th><th className={th}>Notes</th></tr></thead>
+          <thead><tr className="bg-slate-50"><th className={th}>Band</th><th className={`${th} text-right`}>Platform $/unit</th><th className={`${th} text-right`}>Platform min</th><th className={`${th} text-right`}>FIAREP plan $/unit</th><th className={`${th} text-right`}>Plan min</th><th className={`${th} text-right`}>Labor pool</th><th className={th}>Notes</th></tr></thead>
           <tbody>
             {bands.map((b, i) => (
               <tr key={b.label} className={`border-t border-slate-100 ${b.label === f.band.label ? "bg-amber-50" : ""}`}>
@@ -64,12 +64,13 @@ export default function OwnerPricing() {
                 <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.platformMin} onChange={(e) => edit(i, "platformMin", e.target.value)} className={`${cell} ${b.platformMin !== BANDS[i]?.platformMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Platform minimum ${b.label}`} /><span className="text-xs text-slate-500">/mo</span></td>
                 <td className={`${td} text-right`}><input type="number" inputMode="decimal" min={0} value={b.planRate ?? ""} placeholder="—" onChange={(e) => edit(i, "planRate", e.target.value)} className={`${cell} ${b.planRate !== BANDS[i]?.planRate ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Plan rate ${b.label}`} /></td>
                 <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.planMin ?? ""} placeholder="—" onChange={(e) => edit(i, "planMin", e.target.value)} className={`${cell} ${b.planMin !== BANDS[i]?.planMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Plan minimum ${b.label}`} />{b.planMin != null && <span className="text-xs text-slate-500">/mo</span>}</td>
+                <td className={`${td} text-right whitespace-nowrap`}>{b.planRate == null ? "—" : `${includedHoursPerUnit(b.planRate)} h/unit/yr`}</td>
                 <td className={`${td} text-slate-600`}>{BANDS[i]?.note ?? ""}</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p className="px-3 py-2 text-xs text-slate-500">One-time setup {money(SETUP_FEE)} on the platform, waived on any annual contract of 1,000+ units. HPD cure $600 per apartment ($400 on plan or platform); DOB $1,500 first two, $1,000 after, 20% off on plan — unchanged.</p>
+        <p className="px-3 py-2 text-xs text-slate-500">One-time setup {money(SETUP_FEE)} on the platform, waived on any annual contract of 1,000+ units. HPD cure $600 per apartment ($400 on plan or platform); DOB $1,500 first two, $1,000 after — no plan discount. Plan labor: {Math.round(LABOR_SHARE * 100)}% of the fee at {money(LOADED_HOURLY)}/hour loaded = the included hours per unit per year shown; appliances, parts, materials and delivery at cost + {Math.round(MATERIALS_HANDLING * 100)}%.</p>
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">

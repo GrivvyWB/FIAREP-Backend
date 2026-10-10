@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { DofLookupPanel } from "@/components/dof-lookup";
 import { FEES, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "@/lib/fiarep-plans";
 import { usePricing } from "@/lib/pricing-overrides";
+import { includedHoursPerUnit } from "@/lib/pricing-ladder";
 
 /** "What it costs" on the Join FIAREP page: expediter fee ranges, the full
  * cost picture for a typical 20-unit NYC building, how each agency works,
@@ -31,7 +32,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   const small = bands[0]!;
   const planBands = bands.filter((b) => b.planRate != null);
   // A worked example per band — units × rate, or the band's minimum when that is higher — so nobody reads a floor as the price.
-  const sample = (b: { from: number; to: number }) => (b.from <= 50 && b.to >= 50 ? 50 : b.from <= 137 && b.to >= 137 ? 137 : b.from <= 2500 && b.to >= 2500 ? 2500 : b.from <= 20000 && b.to >= 20000 ? 20000 : Math.min(Math.max(b.from * 2, b.from), b.to));
+  const sample = (b: { from: number; to: number }) => [50, 137, 500, 2500, 20000, 100000].find((u) => u >= b.from && u <= b.to) ?? b.from;
   const example = (b: { from: number; to: number }, rate: number, min: number) => { const u = sample(b); const fee = Math.max(u * rate, min); return `${u.toLocaleString("en-US")} units = ${money(fee)}${u * rate < min ? " (minimum)" : ""}`; };
   const [dob, setDob] = useState(8);
   // HPD violations by class: counts only — the City's money comes from the DOF lookup, not from these.
@@ -108,16 +109,16 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
           <Button className="bg-amber-500 text-slate-950 hover:bg-amber-400" onClick={() => document.getElementById("signup")?.scrollIntoView({ behavior: "smooth" })}>Start the 60-day pilot</Button>
         </div>
         <table className={`mt-3 w-full text-sm ${hide}`}>
-          <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Example</th></tr></thead>
+          <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Example</th><th className="py-1 text-right">Included labor</th></tr></thead>
           <tbody>
-            {planBands.map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate!)}</td><td className="py-1 text-right text-slate-300">{example(b, b.planRate!, b.planMin!)}</td></tr>)}
-            {bands.filter((b) => b.planRate == null).map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td colSpan={2} className="py-1 text-right text-slate-300">platform per unit · work by task order, per building</td></tr>)}
+            {planBands.map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate!)}</td><td className="py-1 text-right text-slate-300">{example(b, b.planRate!, b.planMin!)}</td><td className="py-1 text-right text-slate-300 whitespace-nowrap">{includedHoursPerUnit(b.planRate!)} h / unit / yr</td></tr>)}
+            {bands.filter((b) => b.planRate == null).map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td colSpan={3} className="py-1 text-right text-slate-300">platform per unit · work by task order, per building</td></tr>)}
           </tbody>
         </table>
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
           {RETAINER_INCLUDES.map((line) => <li key={line} className={`flex gap-2 text-sm text-slate-200 ${line.includes("$") ? hide : ""}`}><span className="text-amber-400">✓</span>{line}</li>)}
         </ul>
-        <p className="mt-3 text-xs text-slate-400">City penalties, DOB re-inspection fees and HPD dismissal requests pass through at cost on every plan.</p>
+        <p className="mt-3 text-xs text-slate-400">Included labor pools across your portfolio for the year; work past the pool is at the rates below. Appliances, parts, materials and delivery are bought on your approval and reimbursed at cost plus 10% handling. City penalties, DOB re-inspection fees and HPD dismissal requests pass through at cost on every plan.</p>
       </div>
         <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Platform only — software, no FIAREP labor</p>
@@ -156,7 +157,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               ))}
             </tbody>
           </table>
-          <p className="mt-3 text-xs text-slate-500">Flat per violation or task; hourly only for research-heavy work. Plan members pay 20% less.</p>
+          <p className="mt-3 text-xs text-slate-500">Flat per violation or task; hourly only for research-heavy work. On the FIAREP plan, HPD cures and OATH hearings are $400; every other rate is as listed.</p>
         </div>
 
         <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
@@ -236,7 +237,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: ~{money(est.erp)}</p>
               <p className="text-xs text-rose-200/80">HPD bills 2–3× contractor cost plus a 15% administrative fee, 9% interest, and a lien on the building. Owners of the 250 buildings in the 2026 Alternative Enforcement Program already owe $4.5M for emergency repairs.</p>
             </div>
-            <p className="pt-2 text-xs text-slate-500">Expediter: $600 per apartment with HPD violations — all of them certified together — plus the DOB rate per violation (on the FIAREP plan: $400 per apartment and 20% off DOB, {money(expediterFee(hpdApts, dob).plan)}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts show what's open; the apartment count is what's billed. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
+            <p className="pt-2 text-xs text-slate-500">Expediter: $600 per apartment with HPD violations — all of them certified together — plus the DOB rate per violation (on the FIAREP plan: $400 per apartment, {money(expediterFee(hpdApts, dob).plan)}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts show what's open; the apartment count is what's billed. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
           </div>
         </div>
         </div>

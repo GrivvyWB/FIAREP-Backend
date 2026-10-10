@@ -30,8 +30,9 @@ export const RETAINER_INCLUDES = [
   "The FIAREP platform — app and website — for all of your staff and residents",
   "24 / 7 complaint monitoring through the platform and app — every complaint tracked and the resident told at each step",
   "HPD / DOB monitoring of every address in the development",
-  "1 simple cure per 10 units each month (a 100-unit development: 10 cures a month)",
-  "HPD cures and OATH hearings at $400 instead of $600; everything else 20% off the rates below",
+  "Every repair, violation cure and appliance replacement the development needs, done by FIAREP — labor up to the included pool of hours for your size",
+  "Appliances, parts, materials and delivery bought by FIAREP on your approval and reimbursed at cost plus 10% handling",
+  "HPD cures and OATH hearings at $400 instead of $600; all other rates as listed below",
   "Pilot: first 60 days at half price, no contract",
 ];
 
@@ -39,8 +40,8 @@ export const RETAINER_INCLUDES = [
 // FIAREP expediter fee — violations only, no repairs. HPD: per apartment /
 // location cited, every violation in it certified together — $600 with no
 // plan, $400 on the FIAREP plan. DOB: $1,500 for the first two violations on a
-// building, $1,000 each after; plan members 20% off the DOB part.
-export const EXPEDITER = { perApartment: 600, perApartmentPlan: 400, dobFirstTwo: 1500, dobAfter: 1000, planDiscount: 0.2 } as const;
+// building, $1,000 each after, the same on every plan (no plan discount).
+export const EXPEDITER = { perApartment: 600, perApartmentPlan: 400, dobFirstTwo: 1500, dobAfter: 1000, planDiscount: 0 } as const;
 export function expediterFee(apartments: number, dob: number) {
   const apts = Math.max(0, apartments);
   const hpd = apts * EXPEDITER.perApartment;

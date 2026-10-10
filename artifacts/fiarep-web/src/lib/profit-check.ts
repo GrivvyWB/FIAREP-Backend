@@ -1,7 +1,7 @@
 // Profit check for the FIAREP price book (Platform Control only). The book
 // holds sell prices; FIAREP's own cost per line and the target margin live in
 // this browser so a client never sees them.
-export const PLAN_DISCOUNT = 0.2; // repairs are 20% off on the FIAREP plan (fiarep-plans RETAINER_INCLUDES)
+export const PLAN_DISCOUNT = 0; // no plan discount on repairs — plan labor comes out of the included hours pool instead
 export const COST_KEY = "fiarep_owner_costs";
 export const TARGET_KEY = "fiarep_owner_target_margin";
 export function readCosts(): Record<string, number> {

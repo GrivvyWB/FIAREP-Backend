@@ -2,7 +2,7 @@
 // book and the client's details, then printed to PDF or emailed. All clause
 // text lives here so it can be edited in one place.
 import { EXPEDITER, FEES, PLAN, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "./fiarep-plans";
-import { bandFor } from "@/lib/pricing-ladder";
+import { bandFor, includedHoursPerUnit, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING } from "@/lib/pricing-ladder";
 import { bands } from "@/lib/pricing-overrides";
 
 export type ContractKind = "work" | "fiarep" | "platform" | "agency-major" | "agency-small";
@@ -88,10 +88,10 @@ export function buildContractHtml(c: ContractInput): string {
   const planClause = c.kind === "work"
     ? `There is no monthly fee and no platform subscription under this Agreement. Client pays FIAREP for the work in Section 4 at the prices stated there — expediting at the Section 5 rates with no plan discount, repairs and professional work at the unit prices listed — totalling <b>${money(grandTotal(c))}</b>. Half is due on signing; the balance is invoiced as the work is completed and certified.`
     : c.kind === "fiarep"
-    ? `Client pays FIAREP a monthly service fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}). The fee covers the services in Section 2. Work beyond the included cures is billed at the Section 5 rates: HPD cures and OATH hearings at $400 instead of $600, and 20% off every other rate.${c.pilot ? ` <b>Pilot:</b> the first ${PLAN.fiarep.pilotDays} days are billed at half the monthly fee (${money(Math.round(fee.monthly / 2))}) and either party may end this Agreement during the pilot on written notice.` : ""}`
+    ? `Client pays FIAREP a monthly service fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}). The fee covers the services in Section 2 and the work and appliances in Section 3A. Work beyond the included labor pool is billed at the Section 5 rates: HPD cures and OATH hearings at $400 instead of $600; every other rate as listed.${c.pilot ? ` <b>Pilot:</b> the first ${PLAN.fiarep.pilotDays} days are billed at half the monthly fee (${money(Math.round(fee.monthly / 2))}) and either party may end this Agreement during the pilot on written notice.` : ""}`
     : c.kind === "platform"
       ? `Client pays FIAREP a monthly platform fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}) plus a one-time setup and staff-training fee of <b>${money(fee.setup)}</b>. Violation removal, expediting and hearings are available at the Section 5 rates: HPD cures at $400 per apartment, everything else as listed.`
-      : `Client pays FIAREP a flat monthly fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}), covering the services in Section 2 for every development listed in Section 1. Work beyond the included cures is billed at the Section 5 rates with the plan discount: HPD cures and OATH hearings at $400 instead of $600, and 20% off every other rate.`;
+      : `Client pays FIAREP a flat monthly fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}), covering the services in Section 2 for every development listed in Section 1. The fee covers the services in Section 2 and the work and appliances in Section 3A. Work beyond the included labor pool is billed at the Section 5 rates: HPD cures and OATH hearings at $400 instead of $600; every other rate as listed.`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(BRAND.name)} Service Agreement ${esc(c.number)}</title>
 <style>
   @page { size: Letter; margin: 0.75in; }
@@ -130,11 +130,13 @@ ${c.kind === "work" ? `<p class="muted">No platform, app or monthly service is i
 <h2>3. Fees</h2>
 <p>${planClause}</p>
 <p>City penalties, DOB re-inspection fees, HPD dismissal-request fees, DOB filing fees and any permit or agency charge pass through to Client at cost. ${c.kind === "work" ? "Invoices are due within 15 days." : "Fees are invoiced monthly in advance and due within 15 days of the invoice."}</p>
+${c.kind === "fiarep" || c.kind === "agency-major" || c.kind === "agency-small" ? `<h2>3A. Work and appliances on the plan</h2>
+<p>From the start date, FIAREP performs all repairs, violation cures and appliance replacements the developments in Section 1 need. <b>Labor</b> up to the included pool of <b>${includedHoursPerUnit(bandFor(c.units, bands()).planRate ?? PLAN.fiarep.perUnit)} hours per unit per year</b> (${Math.round((bandFor(c.units, bands()).planRate ?? PLAN.fiarep.perUnit) * 12 * LABOR_SHARE / LOADED_HOURLY * c.units).toLocaleString()} hours a year across ${c.units.toLocaleString()} units, pooled, not carried over) is covered by the monthly fee; labor beyond the pool is billed at the Section 5 rates and the price-book unit prices. <b>Appliances, parts, materials and delivery</b> are purchased by FIAREP on Client's written approval of each purchase and reimbursed at cost plus ${Math.round(MATERIALS_HANDLING * 100)}% handling, invoiced on delivery and due within 15 days; title passes to Client on reimbursement. Client keeps a <b>materials deposit equal to one month's fee</b> with FIAREP, drawn on for approved purchases and replenished with each invoice; for portfolios of 10,000 units or more, FIAREP orders on Client's own supplier accounts instead. Nothing is bought without the approval, and nothing bought is FIAREP's cost.</p>` : ""}
 
 ${ex ? `<h2>4. Violation work — ${esc(ex.address)}</h2>
 <table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>
 <tr><td>HPD violations certified and cleared — ${ex.hpdOpen.toLocaleString()} open violation${ex.hpdOpen === 1 ? "" : "s"}, every violation in an apartment certified together${ex.plan ? (c.kind === "platform" ? " (platform rate)" : " (FIAREP plan rate)") : ""}</td><td class="r">${ex.apartments}</td><td>per apartment</td><td class="r">${money(ex.rate)}</td><td class="r">${money(ex.hpd)}</td></tr>
-${ex.dob > 0 ? `<tr><td>DOB violations cleared — $1,500 each for the first two, $1,000 each after${ex.plan && c.kind !== "platform" ? ", 20% off on the FIAREP plan" : ""}</td><td class="r">${ex.dob}</td><td>per violation</td><td class="r">—</td><td class="r">${money(ex.dobFee)}</td></tr>` : ""}
+${ex.dob > 0 ? `<tr><td>DOB violations cleared — $1,500 each for the first two, $1,000 each after</td><td class="r">${ex.dob}</td><td>per violation</td><td class="r">—</td><td class="r">${money(ex.dobFee)}</td></tr>` : ""}
 <tr class="total"><td colspan="4">Expediting</td><td class="r">${money(ex.total)}</td></tr></tbody></table>
 <p class="muted">Records research, proof of correction, certification filings and dismissal requests with HPD and DOB for the violations above. City fees pass through at cost (Section 3).</p>
 <h2>4a. Repairs and professional work</h2>` : `<h2>4. Scope of repairs and professional work</h2>`}
@@ -143,7 +145,7 @@ ${c.scope.length || c.engineering ? `<table><thead><tr><th>Item</th><th class="r
 
 <h2>5. Per-job rates</h2>
 <table><thead><tr><th>Service</th><th class="r">Rate</th></tr></thead><tbody>${feeRows}</tbody></table>
-<p class="muted">${c.kind === "work" ? "The rates above apply with no discount." : c.kind === "platform" ? "Platform clients: HPD cures $400 per apartment; all other rates as listed." : "Plan clients: HPD cures $400 per apartment, OATH hearings $400; all other rates 20% off."}</p>
+<p class="muted">${c.kind === "work" ? "The rates above apply with no discount." : c.kind === "platform" ? "Platform clients: HPD cures $400 per apartment; all other rates as listed." : "Plan clients: HPD cures $400 per apartment, OATH hearings $400; all other rates as listed."}</p>
 
 <h2>6. Term</h2>
 ${c.kind === "work" ? `<p>This Agreement starts on ${esc(longDate(c.startDate))} and ends when the work in Section 4 is completed and certified, or ${c.termMonths} months after the start date, whichever comes first. Either party may end it on 30 days' written notice; Client pays for work completed to that date.</p>` : `<p>This Agreement starts on ${esc(longDate(c.startDate))} and runs for ${c.termMonths} months, then continues month to month. Either party may end it after the initial term on 30 days' written notice. Client may add or remove developments on written notice; the monthly fee adjusts from the next invoice.</p>`}
