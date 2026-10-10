@@ -3,7 +3,8 @@ import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 
 type Status = { config: { mobileClockEnabled: boolean; integrationEnabled: boolean; provider: string | null }; current: { direction: "in" | "out"; punchAt: string } | null; nextDirection: "in" | "out" };
-type Punch = { id: string; direction: "in" | "out"; punchAt: string; source: string };
+type Punch = { id: string; direction: "in" | "out"; punchAt: string; source: string; location?: { latitude: number; longitude: number; accuracyM: number | null; address: string | null } | null };
+type Stop = { id: string; latitude: number; longitude: number; address: string | null; arrivedAt: string; leftAt: string | null };
 type Tab = "clock" | "schedule" | "reports" | "timeoff" | "profile";
 type LeaveRow = { id: string; version: number; development?: string | null; state?: Record<string, unknown>; createdAt: string };
 
@@ -38,6 +39,7 @@ export default function TimeClock() {
   const [tab, setTab] = useState<Tab>("clock");
   const [status, setStatus] = useState<Status | null>(null);
   const [history, setHistory] = useState<Punch[]>([]);
+  const [stops, setStops] = useState<Stop[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => Date.now());
@@ -70,15 +72,25 @@ export default function TimeClock() {
         customFetch<Punch[]>("/api/v1/time-clock/history?limit=100", { responseType: "json" } as never),
       ]);
       setStatus(s); setHistory(h); setError("");
+      try { const from = new Date(); from.setDate(from.getDate() - 7); setStops(await customFetch<Stop[]>(`/api/v1/time-clock/locations?from=${encodeURIComponent(from.toISOString())}`, { responseType: "json" } as never)); } catch { /* optional */ }
     } catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not load the time clock."); }
   }
   useEffect(() => { void load(); void loadLeave(); const t = setInterval(() => setNow(Date.now()), 1000); const r = setInterval(() => void load(), 60_000); return () => { clearInterval(t); clearInterval(r); }; }, []);
 
+  /** The browser's position, if the person allows it — sent with the punch so the record shows where it was made. */
+  function wherever(): Promise<{ latitude: number; longitude: number; accuracyM: number } | null> {
+    return new Promise((resolve) => {
+      if (typeof navigator === "undefined" || !navigator.geolocation) { resolve(null); return; }
+      const done = (v: { latitude: number; longitude: number; accuracyM: number } | null) => resolve(v);
+      navigator.geolocation.getCurrentPosition((pos) => done({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracyM: pos.coords.accuracy }), () => done(null), { enableHighAccuracy: true, timeout: 8000, maximumAge: 30000 });
+    });
+  }
   async function punch() {
     if (!status || busy) return;
     setBusy(true); setError("");
     try {
-      await customFetch("/api/v1/time-clock/punch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ direction: status.nextDirection, idempotencyKey: `web-${Date.now()}-${Math.random().toString(36).slice(2)}` }), responseType: "json" } as never);
+      const location = await wherever();
+      await customFetch("/api/v1/time-clock/punch", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ direction: status.nextDirection, idempotencyKey: `web-${Date.now()}-${Math.random().toString(36).slice(2)}`, location }), responseType: "json" } as never);
       await load();
     } catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not record the punch."); }
     finally { setBusy(false); }
@@ -154,7 +166,7 @@ export default function TimeClock() {
                 <span className="border-l border-white/40 pl-4">{busy ? "…" : status.nextDirection === "in" ? "Punch in" : "Punch out"} →</span>
               </button>
             )}
-            <p className="mt-3 rounded-full border border-sky-500/30 bg-[#0d1b3a]/80 px-4 py-2 text-center text-xs text-sky-100/90">Each punch is time-stamped on the server the moment you tap.</p>
+            <p className="mt-3 rounded-full border border-sky-500/30 bg-[#0d1b3a]/80 px-4 py-2 text-center text-xs text-sky-100/90">Each punch is time-stamped on the server the moment you tap, with where you are.</p>
 
             <Card className="mt-4 p-4">
               <div className="flex items-center justify-between">
@@ -163,10 +175,27 @@ export default function TimeClock() {
               </div>
               {weekPunches.length === 0 ? <p className="mt-3 text-sm text-sky-200/70">No punches yet this week.</p> : (
                 <ul className="mt-2 divide-y divide-sky-500/20">
-                  {weekPunches.map((p) => <li key={p.id} className="flex items-center gap-4 py-2.5"><Pill dir={p.direction} /><span className="flex-1"><span className="block text-sm font-semibold">{dayLabel(p.punchAt)}</span><span className="block text-xs text-sky-200/70">{timeLabel(p.punchAt)}</span></span></li>)}
+                  {weekPunches.map((p) => <li key={p.id} className="flex items-center gap-4 py-2.5"><Pill dir={p.direction} /><span className="flex-1"><span className="block text-sm font-semibold">{dayLabel(p.punchAt)}</span><span className="block text-xs text-sky-200/70">{timeLabel(p.punchAt)}{p.location?.address ? ` · ${p.location.address}` : p.location ? ` · ${p.location.latitude.toFixed(4)}, ${p.location.longitude.toFixed(4)}` : ""}</span></span></li>)}
                 </ul>
               )}
             </Card>
+
+            {(clockedIn || stops.length > 0) && (
+              <Card className="mt-4 p-4">
+                <p className="text-lg font-extrabold">Where you've been</p>
+                <p className="text-xs text-sky-200/70">On the clock, the app notes each place you stay more than 30 minutes — arrival and departure.</p>
+                {stops.length === 0 ? <p className="mt-2 text-sm text-sky-200/70">Nothing recorded yet{clockedIn ? " this shift" : ""}.</p> : (
+                  <ul className="mt-2 divide-y divide-sky-500/20">
+                    {stops.slice(0, 12).map((st) => { const a = new Date(st.arrivedAt).getTime(); const l = st.leftAt ? new Date(st.leftAt).getTime() : now; return (
+                      <li key={st.id} className="py-2.5 text-sm">
+                        <span className="block font-semibold">{st.address || `${st.latitude.toFixed(4)}, ${st.longitude.toFixed(4)}`}</span>
+                        <span className="block text-xs text-sky-200/70">{dayLabel(st.arrivedAt)} · {timeLabel(st.arrivedAt)} – {st.leftAt ? timeLabel(st.leftAt) : "still here"} · {hm(l - a)}</span>
+                      </li>
+                    ); })}
+                  </ul>
+                )}
+              </Card>
+            )}
           </>
         )}
 

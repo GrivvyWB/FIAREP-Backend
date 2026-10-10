@@ -5,7 +5,8 @@ import { Switch } from "@/components/ui/switch";
 
 type Member = { id: string; name: string; position: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null };
 type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number };
-type Punch = { id: string; direction: string; at: string; source: string };
+type Punch = { id: string; direction: string; at: string; source: string; address?: string | null; latitude?: number | null; longitude?: number | null };
+type Stop = { id: string; address: string | null; latitude: number; longitude: number; arrivedAt: string; leftAt: string | null; minutes: number };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—");
@@ -25,6 +26,7 @@ export default function OwnerCrew() {
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string>("");
   const [punches, setPunches] = useState<Punch[]>([]);
+  const [stops, setStops] = useState<Stop[]>([]);
   const [copied, setCopied] = useState("");
 
   async function load(r = range) {
@@ -45,7 +47,7 @@ export default function OwnerCrew() {
   const saveRate = async (m: Member) => { const v = Number(edits[m.id]); if (!v || v === m.hourlyRate) { setEdits((x) => { const n = { ...x }; delete n[m.id]; return n; }); return; } try { await req(`/api/v1/platform/crew/${m.id}`, "PATCH", { hourlyRate: v }); setEdits((x) => { const n = { ...x }; delete n[m.id]; return n; }); await load(); } catch (e) { setError((e as Error)?.message || "Could not save."); } };
   const setStatus = async (m: Member, status: "approved" | "revoked") => { try { await req(`/api/v1/platform/crew/${m.id}`, "PATCH", { status }); await load(); } catch (e) { setError((e as Error)?.message || "Could not update."); } };
   const resetCode = async (m: Member) => { try { await req(`/api/v1/platform/crew/${m.id}/reset-code`, "POST"); await load(); } catch (e) { setError((e as Error)?.message || "Could not reset the code."); } };
-  const showPunches = async (m: Member) => { if (open === m.id) { setOpen(""); return; } setOpen(m.id); try { setPunches(await customFetch<Punch[]>(`/api/v1/platform/crew/${m.id}/punches?from=${range.from}&to=${range.to}`, { responseType: "json" } as never)); } catch { setPunches([]); } };
+  const showPunches = async (m: Member) => { if (open === m.id) { setOpen(""); return; } setOpen(m.id); try { const [p, st] = await Promise.all([customFetch<Punch[]>(`/api/v1/platform/crew/${m.id}/punches?from=${range.from}&to=${range.to}`, { responseType: "json" } as never), customFetch<Stop[]>(`/api/v1/platform/crew/${m.id}/locations?from=${range.from}&to=${range.to}`, { responseType: "json" } as never)]); setPunches(p); setStops(st); } catch { setPunches([]); setStops([]); } };
   const copy = async (m: Member) => { try { await navigator.clipboard.writeText(`${m.name} · code ${m.code}`); setCopied(m.id); setTimeout(() => setCopied(""), 1500); } catch { /* clipboard blocked */ } };
 
   const active = crew?.members.filter((m) => m.status === "approved") ?? [];
@@ -101,11 +103,12 @@ export default function OwnerCrew() {
                   <td className="px-2 py-2">{m.clockedInSince ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Clocked in · {when(m.clockedInSince)}</span> : <span className="text-xs text-slate-500">Out{m.lastPunch ? ` · last ${when(m.lastPunch.at)}` : ""}</span>}</td>
                   <td className="px-2 py-2 text-right font-semibold text-slate-900">{m.hours.toFixed(2)}<span className="block text-xs font-normal text-slate-500">{m.shifts} shift{m.shifts === 1 ? "" : "s"}</span></td>
                   <td className="px-2 py-2 text-right font-semibold text-slate-900">{m.pay == null ? "—" : money(m.pay)}</td>
-                  <td className="px-4 py-2 text-right whitespace-nowrap"><button type="button" className="text-xs text-slate-600 underline" onClick={() => void showPunches(m)}>{open === m.id ? "hide punches" : "punches"}</button><span className="mx-2 text-slate-300">·</span><button type="button" className="text-xs text-slate-400 underline hover:text-rose-700" onClick={() => void setStatus(m, "revoked")}>remove</button></td>
+                  <td className="px-4 py-2 text-right whitespace-nowrap"><button type="button" className="text-xs text-slate-600 underline" onClick={() => void showPunches(m)}>{open === m.id ? "hide" : "punches & locations"}</button><span className="mx-2 text-slate-300">·</span><button type="button" className="text-xs text-slate-400 underline hover:text-rose-700" onClick={() => void setStatus(m, "revoked")}>remove</button></td>
                 </tr>
                 {open === m.id && (
                   <tr key={`${m.id}-p`} className="bg-slate-50"><td colSpan={7} className="px-4 py-2 text-xs text-slate-700">
-                    {punches.length === 0 ? "No punches in this period." : <ul className="grid gap-x-6 gap-y-0.5 sm:grid-cols-3">{punches.map((p) => <li key={p.id}><span className={p.direction === "in" ? "text-emerald-700" : "text-slate-600"}>{p.direction === "in" ? "In" : "Out"}</span> · {new Date(p.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}</li>)}</ul>}
+                    {punches.length === 0 ? "No punches in this period." : <ul className="grid gap-x-6 gap-y-0.5 sm:grid-cols-2">{punches.map((p) => <li key={p.id}><span className={p.direction === "in" ? "text-emerald-700" : "text-slate-600"}>{p.direction === "in" ? "In" : "Out"}</span> · {new Date(p.at).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}{p.address ? <span className="text-slate-500"> · {p.address}</span> : p.latitude != null ? <a className="text-slate-500 underline" href={`https://www.google.com/maps?q=${p.latitude},${p.longitude}`} target="_blank" rel="noreferrer"> · map</a> : null}</li>)}</ul>}
+                    {stops.length > 0 && <div className="mt-2 border-t border-slate-200 pt-2"><p className="font-semibold text-slate-800">Where they were (stayed 30+ min)</p><ul className="mt-1 space-y-0.5">{stops.map((st) => <li key={st.id}><a className="font-medium text-slate-800 underline decoration-slate-300" href={`https://www.google.com/maps?q=${st.latitude},${st.longitude}`} target="_blank" rel="noreferrer">{st.address || `${st.latitude.toFixed(4)}, ${st.longitude.toFixed(4)}`}</a> · {new Date(st.arrivedAt).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} – {st.leftAt ? new Date(st.leftAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "still there"} · {Math.floor(st.minutes / 60)}h {String(st.minutes % 60).padStart(2, "0")}m</li>)}</ul></div>}
                   </td></tr>
                 )}
               </>

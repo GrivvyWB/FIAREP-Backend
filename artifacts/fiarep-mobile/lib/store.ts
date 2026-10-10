@@ -75,7 +75,13 @@ export async function getAttendanceHistory(limit = 50): Promise<TimeClockPunch[]
 }
 
 export async function punchAttendance(direction: 'in' | 'out', idempotencyKey: string): Promise<TimeClockPunch> {
-  return createTimeClockPunch({ direction, idempotencyKey });
+  // The punch carries where the phone is; on the way in, start watching for
+  // stops (30+ minutes somewhere after real movement); on the way out, stop.
+  const { currentFix, startClockTracking, stopClockTracking } = await import('./clock-location');
+  const fix = await currentFix();
+  const row = await createTimeClockPunch({ direction, idempotencyKey, ...(fix ? { location: fix } : {}) } as never);
+  if (direction === 'in') await startClockTracking(fix); else await stopClockTracking();
+  return row;
 }
 async function rotateActorCache(staff: Staff) {
   const d = await db();

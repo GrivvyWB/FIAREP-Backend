@@ -1,3 +1,5 @@
+// Registers the background location task for the time clock before any screen renders.
+import '../lib/clock-location';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';

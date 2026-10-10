@@ -58,11 +58,17 @@ export default function Attendance() {
         </Pressable>
       )}
       {!!message && <Text style={{ color: '#b91c1c', marginVertical: 10 }}>{message}</Text>}
+      {status.config.mobileClockEnabled && (
+        <Text style={[ui.label, { marginTop: 8 }]}>Each punch records where you are. On the clock, the app notes each place you stay more than 30 minutes — when you got there and when you left — and nothing while you stay put.</Text>
+      )}
       <Text style={{ fontSize: 18, fontWeight: '600', marginTop: 18, marginBottom: 8 }}>Punch history</Text>
       {history.map((punch) => (
         <View key={punch.id} style={{ borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingVertical: 10 }}>
           <Text style={{ fontWeight: '600' }}>{punch.direction === 'in' ? 'Clock in' : 'Clock out'}</Text>
           <Text style={ui.label}>{new Date(punch.punchAt).toLocaleString()} · {punch.source === 'external' ? 'External' : 'FIAREP mobile'}</Text>
+          {!!(punch as { location?: { address?: string | null; latitude?: number; longitude?: number } | null }).location && (
+            <Text style={ui.label}>{(punch as { location?: { address?: string | null; latitude?: number; longitude?: number } }).location?.address || `${(punch as { location?: { latitude?: number } }).location?.latitude?.toFixed(4)}, ${(punch as { location?: { longitude?: number } }).location?.longitude?.toFixed(4)}`}</Text>
+          )}
         </View>
       ))}
     </ScrollView>

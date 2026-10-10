@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import { db, organizations, staffAccounts, timeClockPunches } from "@workspace/db";
+import { db, organizations, staffAccounts, timeClockLocations, timeClockPunches } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
 import { allocateStaffCode } from "../lib/staffCodes";
@@ -159,7 +159,16 @@ router.get("/v1/platform/crew/:id/punches", async (req, res) => {
   const rows = await db.select().from(timeClockPunches)
     .where(and(eq(timeClockPunches.tenantId, TENANT), eq(timeClockPunches.staffId, req.params.id!), gte(timeClockPunches.punchAt, from), lte(timeClockPunches.punchAt, to)))
     .orderBy(desc(timeClockPunches.punchAt));
-  res.json(rows.map((r) => ({ id: r.id, direction: r.direction, at: r.punchAt.toISOString(), source: r.source })));
+  res.json(rows.map((r) => ({ id: r.id, direction: r.direction, at: r.punchAt.toISOString(), source: r.source, address: r.address, latitude: r.latitude, longitude: r.longitude })));
+});
+
+/** Where one person was while on the clock — the stops the phone reported (moved, then stayed 30+ minutes). */
+router.get("/v1/platform/crew/:id/locations", async (req, res) => {
+  const { from, to } = parseRange(req.query as Record<string, unknown>);
+  const rows = await db.select().from(timeClockLocations)
+    .where(and(eq(timeClockLocations.tenantId, TENANT), eq(timeClockLocations.staffId, req.params.id!), gte(timeClockLocations.arrivedAt, from), lte(timeClockLocations.arrivedAt, to)))
+    .orderBy(desc(timeClockLocations.arrivedAt));
+  res.json(rows.map((r) => ({ id: r.id, address: r.address, latitude: r.latitude, longitude: r.longitude, arrivedAt: r.arrivedAt.toISOString(), leftAt: r.leftAt ? r.leftAt.toISOString() : null, minutes: Math.round(((r.leftAt ?? new Date()).getTime() - r.arrivedAt.getTime()) / 6e4) })));
 });
 
 export default router;

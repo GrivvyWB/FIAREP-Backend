@@ -94,6 +94,11 @@ export const timeClockPunches = pgTable(
     provider: text("provider"),
     externalId: text("external_id"),
     idempotencyKey: text("idempotency_key").notNull(),
+    // Where the phone / browser was when the punch was made (optional).
+    latitude: doublePrecision("latitude"),
+    longitude: doublePrecision("longitude"),
+    accuracyM: doublePrecision("accuracy_m"),
+    address: text("address"),
     ...timestamps,
   },
   (table) => [
@@ -113,6 +118,31 @@ export const timeClockPunches = pgTable(
     ),
     index("time_clock_punch_staff_idx").on(table.tenantId, table.staffId, table.punchAt),
     index("time_clock_punch_tenant_idx").on(table.tenantId, table.punchAt),
+  ],
+);
+
+// Where a clocked-in person was: one row per place they stayed. The phone
+// reports a new row when it has really moved and then stayed put for
+// STOP_MINUTES (30); leftAt is filled when it moves on. Nothing is recorded
+// while clocked out.
+export const timeClockLocations = pgTable(
+  "time_clock_locations",
+  {
+    id: text("id").primaryKey(),
+    tenantId: text("tenant_id").notNull(),
+    staffId: text("staff_id").notNull(),
+    latitude: doublePrecision("latitude").notNull(),
+    longitude: doublePrecision("longitude").notNull(),
+    accuracyM: doublePrecision("accuracy_m"),
+    address: text("address"),
+    arrivedAt: timestamp("arrived_at", { withTimezone: true }).notNull(),
+    leftAt: timestamp("left_at", { withTimezone: true }),
+    idempotencyKey: text("idempotency_key").notNull(),
+    ...timestamps,
+  },
+  (table) => [
+    uniqueIndex("time_clock_location_idempotency_unique").on(table.tenantId, table.idempotencyKey),
+    index("time_clock_location_staff_idx").on(table.tenantId, table.staffId, table.arrivedAt),
   ],
 );
 

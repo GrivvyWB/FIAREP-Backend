@@ -250,3 +250,18 @@ export async function lookupNycPropertyData(address: string, limit: number) {
     retrievedAt: new Date().toISOString(),
   };
 }
+/** Nearest address for a point — NYC Planning Labs GeoSearch reverse lookup
+ * (NYC only). Outside the city, or if the service is down, null. */
+export async function reverseGeocodeNyc(latitude: number, longitude: number): Promise<string | null> {
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+  try {
+    const url = new URL(GEOSEARCH_URL.replace(/\/v2\/.*$/, "/v2/reverse"));
+    url.searchParams.set("point.lat", String(latitude));
+    url.searchParams.set("point.lon", String(longitude));
+    url.searchParams.set("size", "1");
+    const r = (await fetchJson(url.toString())) as { features?: Array<{ properties?: JsonRecord }> };
+    const p = r.features?.[0]?.properties;
+    const label = typeof p?.["label"] === "string" ? p["label"] : "";
+    return label ? label.replace(/, New York, NY, USA$/, ", NY") : null;
+  } catch { return null; }
+}
