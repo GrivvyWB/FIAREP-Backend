@@ -9,7 +9,7 @@ import type { MaterialKind } from './measurements';
 
 export type TradeKey =
   | 'inspector' | 'cpm' | 'carpenter' | 'painter' | 'plumber'
-  | 'electrician' | 'elevator' | 'mason' | 'roofer' | 'heating' | 'general';
+  | 'electrician' | 'elevator' | 'mason' | 'roofer' | 'heating' | 'general' | 'technician';
 
 export const MEASUREMENT_TRADES: { key: TradeKey; label: string }[] = [
   { key: 'inspector', label: 'Inspector' },
@@ -23,6 +23,7 @@ export const MEASUREMENT_TRADES: { key: TradeKey; label: string }[] = [
   { key: 'roofer', label: 'Roofer' },
   { key: 'heating', label: 'Heating' },
   { key: 'general', label: 'General Construction' },
+  { key: 'technician', label: 'Technician (FIAREP crew)' },
 ];
 
 export const MEASUREMENT_MATERIALS: { key: MaterialKind; label: string }[] = [
@@ -57,6 +58,7 @@ export function tradeKeyForPosition(position: string): TradeKey | null {
   if (p.includes('roof')) return 'roofer';
   if (p.includes('heat')) return 'heating';
   if (p.includes('general') || p.includes('construction')) return 'general';
+  if (p.includes('technician') || p === 'tech') return 'technician';
   return null;
 }
 

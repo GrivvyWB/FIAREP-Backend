@@ -52,6 +52,7 @@ function projectRoleForPosition(position: string): string | null {
   if (p.startsWith('superintendent')) return 'superintendent';
   if (p.includes('director')) return 'director';
   if (p.includes('maintenance')) return 'maintenance';
+  if (p.includes('technician') || p === 'tech') return 'technician';
   return null;
 }
 
@@ -69,6 +70,7 @@ const LOOKUP_TRADES: Array<{ key: string; label: string }> = [
   { key: 'heating', label: 'Heating / Boiler' },
   { key: 'elevator', label: 'Elevator Mechanic' },
   { key: 'exterminator', label: 'Exterminator' },
+  { key: 'technician', label: 'Technician (FIAREP crew)' },
   { key: 'worker', label: 'Other workers' },
   { key: 'emergency', label: 'Emergency Crew' },
   { key: 'inspector', label: 'Inspector' },
@@ -104,6 +106,7 @@ export function lookupTradeFor(position: string, role: string): string {
   if (p.includes('elevator')) return 'elevator';
   if (p.includes('exterm') || p.includes('pest')) return 'exterminator';
   if (p.includes('maintenance') || p.includes('caretaker')) return 'maintenance';
+  if (p.includes('technician') || p === 'tech') return 'technician';
   if (r === 'emergency') return 'emergency';
   if (r === 'administrator') return 'administrator';
   if (r === 'management') return 'supervisor';

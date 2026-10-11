@@ -104,6 +104,7 @@ const PROJECT_TOOLS: ProjectTool[] = [
 ];
 const projToolKey = (trade: string, toolId: string) => `projtool.${trade}.${toolId}`;
 const PROJECT_TRADES = [
+  { key: "technician", label: "Technician (FIAREP crew)" },
   { key: "maintenance", label: "Maintenance Worker" },
   { key: "superintendent", label: "Superintendent" },
   { key: "cpm", label: "CPM" },
@@ -128,6 +129,7 @@ const MEASUREMENT_TRADES = [
   { key: "roofer", label: "Roofer" },
   { key: "heating", label: "Heating" },
   { key: "general", label: "General Construction" },
+  { key: "technician", label: "Technician (FIAREP crew)" },
 ];
 const MEASUREMENT_MATERIALS = [
   { key: "concrete", label: "Concrete" },
