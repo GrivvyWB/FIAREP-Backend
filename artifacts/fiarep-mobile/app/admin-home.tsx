@@ -1,13 +1,13 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import FieldHome from '../components/FieldHome';
 import { useRouter, useNavigation } from 'expo-router';
 import { clearAppMode, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback, useLayoutEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
-import { ui, ACCENT } from '../lib/ui';
+import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
 import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
@@ -30,11 +30,13 @@ export default function AdminHome() {
       // Directors/management titles show their exact title in the header bar;
       // a true administrator keeps 'Administrator'.
       const titled = /director$|manager$|superintendent$/i.test(p);
-      navigation.setOptions({ title: titled ? p : 'Administrator' });
+      navigation.setOptions({ title: titled ? p : 'Administrator', headerShown: false });
+      setTitle(titled ? p : 'Administrator');
     })();
   }, [navigation]);
   const { refresh } = useAppMode();
   const [unread, setUnread] = useState(0);
+  const [title, setTitle] = useState('Administrator');
   // No Inbox tile here: nothing in the system is ever addressed to an
   // administrator or Borough Director on the app (alerts go to the people
   // who act: supervisors, CPMs, HR, Procurement). Dead button removed.
@@ -104,65 +106,22 @@ export default function AdminHome() {
     },
   ];
 
+  const keep = (t: Tile) => { if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; };
+  const homeSections = sections.map((sec) => ({ heading: sec.heading, tiles: sec.tiles.filter(keep).filter((t) => t.label !== 'Attendance').map((t) => ({ label: t.label, onPress: t.onPress })) }));
+  const hasAttendance = sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === 'Attendance'));
+  const has = (label: string) => sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === label));
+  const tabs = [
+    ...(has('Manage All Requests') ? [{ label: 'Requests', icon: 'file-tray-full-outline', onPress: () => router.push('/manage-requests') }] : []),
+    ...(has('Resident Reports') ? [{ label: 'Reports', icon: 'document-text-outline', onPress: () => router.push('/management') }] : []),
+    ...(has('Audit Log') ? [{ label: 'Audit', icon: 'list-outline', onPress: () => router.push('/audit-log') }] : []),
+  ];
   return (
-    <ScrollView contentContainerStyle={ui.wrap}>
-      <AlertBanner count={unread} />
-      {readOnly && <ReadOnlyBanner />}
-      <UpperManagementMuteToggle />
-      {sections.map((s, si) => (
-        <View key={si} style={{ marginBottom: 18 }}>
-          <Text
-            style={{
-              color: s.color,
-              fontWeight: '700',
-              fontSize: 12,
-              letterSpacing: 0.8,
-              textTransform: 'uppercase',
-              marginBottom: 8,
-            }}
-          >
-            {s.heading}
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {s.tiles.filter((t) => { if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => {
-              const solid = t.tone === 'solid';
-              const tint = t.tone === 'tint';
-              return (
-                <Pressable
-                  key={i}
-                  onPress={t.onPress}
-                  style={{
-                    width: '31.5%',
-                    marginRight: (i % 3) === 2 ? 0 : '2.75%',
-                    minHeight: 68,
-                    marginBottom: 10,
-                    borderRadius: 30,
-                    borderWidth: solid ? 0 : 1.5,
-                    borderColor: s.color,
-                    backgroundColor: solid ? s.color : tint ? s.color + '33' : '#fff',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingHorizontal: 8,
-                    paddingVertical: 10,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: solid ? '#fff' : s.color,
-                      fontWeight: '600',
-                      fontSize: 13,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {t.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      ))}
-      <Text style={ui.label}>Administrator has full access. Issues Management accounts; Management issues Staff Member and Inspection accounts.</Text>
-    </ScrollView>
+    <FieldHome
+      title={title}
+      banner={<>{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}<UpperManagementMuteToggle /></>}
+      clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
+      sections={homeSections}
+      tabs={tabs}
+    />
   );
 }

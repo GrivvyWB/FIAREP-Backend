@@ -1,14 +1,15 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle, supervisedTradeForPosition } from '../lib/titles';
-import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
+import { View } from 'react-native';
+import FieldHome, { type HomeSection, type HomeTab } from '../components/FieldHome';
 import { useRouter } from 'expo-router';
 import { clearAppMode, logout, getCurrentPosition } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { unreadCount, getCurrentActor, displayStaffPosition } from '../lib/store';
-import { ui, ACCENT } from '../lib/ui';
+import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
 import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
@@ -68,20 +69,46 @@ export default function ManagementHome() {
     { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' },
     { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' },
   ];
+
+  // Draw a set of tiles in the shared home look. Attendance is the clock
+  // card; Sign out and the lookup / translator tools go under System.
+  const renderHome = (title: string, secs: HomeSection[], extraSystem: { label: string; onPress: () => void }[] = []) => {
+    const strip = (tiles: { label: string; onPress: () => void }[]) => tiles.filter((t) => t.label !== 'Attendance');
+    const all = secs.map((sec) => ({ ...sec, tiles: strip(sec.tiles) }));
+    const hasAttendance = secs.some((sec) => sec.tiles.some((t) => t.label === 'Attendance'));
+    const system = all.find((sec) => sec.heading === 'System');
+    if (system) system.tiles = [...system.tiles.filter((t) => t.label !== 'Sign out'), ...extraSystem, ...system.tiles.filter((t) => t.label === 'Sign out')];
+    else all.push({ heading: 'System', tiles: [...extraSystem, { label: 'Sign out', onPress: onSignOut }] });
+    const tabs: HomeTab[] = [
+      ...(all.some((sec) => sec.tiles.some((t) => t.label.startsWith('Inbox'))) ? [{ label: 'Inbox', icon: 'mail-outline', onPress: () => router.push('/notifications') }] : []),
+      ...(all.some((sec) => sec.tiles.some((t) => t.label.startsWith('Manage All Requests'))) ? [{ label: 'Requests', icon: 'file-tray-full-outline', onPress: () => router.push('/manage-requests') }] : []),
+      ...(all.some((sec) => sec.tiles.some((t) => t.label === 'Review Reports')) ? [{ label: 'Reports', icon: 'document-text-outline', onPress: () => router.push('/management') }] : []),
+      ...(all.some((sec) => sec.tiles.some((t) => t.label === 'Request Time Off')) ? [{ label: 'Time Off', icon: 'time-outline', onPress: () => router.push('/leave-request') }] : []),
+    ].slice(0, 3);
+    return (
+      <FieldHome
+        title={title}
+        banner={<>{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}{!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor ? <UpperManagementMuteToggle /> : null}</>}
+        clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
+        sections={all}
+        tabs={tabs}
+      />
+    );
+  };
   if (supervisorInspector) {
-    return <ScrollView contentContainerStyle={ui.wrap}>
-      <AlertBanner count={unread} />{readOnly && <ReadOnlyBanner />}<Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>Supervisor Inspector</Text>
-      <Text style={{ color: '#1E7D4F', fontWeight: '700', fontSize: 12, textTransform: 'uppercase', marginBottom: 8 }}>Inspections & Compliance</Text>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{[
-        { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' as Tone },
-        { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone },
-        { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone },
-        ...personalTiles,
-       ].filter((t) => { if (!tileEnabled('management', t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; }).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: '#1E7D4F', backgroundColor: t.tone === 'solid' ? '#1E7D4F' : '#1E7D4F33', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : '#1E7D4F', fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
-      {modules['property-lookup'] && <Pressable onPress={() => router.push('/inspector-violations?lookup=1')} style={{ marginTop: 12, padding: 12, borderWidth: 1.5, borderColor: '#1E7D4F', borderRadius: 30, alignItems: 'center' }}><Text style={{ color: '#1E7D4F', fontWeight: '600' }}>🏢 Check HPD / DOB</Text></Pressable>}
-      {modules['translator'] && <Pressable onPress={() => router.push('/translator')} style={{ marginTop: 12, padding: 12, borderWidth: 1.5, borderColor: '#1E7D4F', borderRadius: 30, alignItems: 'center' }}><Text style={{ color: '#1E7D4F', fontWeight: '600' }}>🌐 Translator</Text></Pressable>}
-      <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
-    </ScrollView>;
+    const tiles = [
+      { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' as Tone },
+      { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone },
+      { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone },
+      ...personalTiles,
+    ].filter((t) => { if (!tileEnabled('management', t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; });
+    return renderHome('Supervisor Inspector', [
+      { heading: 'Inspections & Compliance', tiles: tiles.filter((t) => !t.label.startsWith('Inbox') && t.label !== 'Request Time Off' && t.label !== 'Attendance') },
+      { heading: 'System', tiles: tiles.filter((t) => t.label.startsWith('Inbox') || t.label === 'Request Time Off' || t.label === 'Attendance') },
+    ], [
+      ...(modules['property-lookup'] ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
+      ...(modules['translator'] ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
+    ]);
   }
   if (cpmSupervisor || tradeSupervisor) {
     const title = cpmSupervisor ? 'CPM Supervisor' : displayStaffPosition(position);
@@ -95,11 +122,10 @@ export default function ManagementHome() {
         { label: 'Assign a Job', onPress: () => router.push('/dispatch-job'), tone: 'solid' },
         ...(coverageEligible ? [{ label: 'Cover a Site', onPress: () => router.push('/cover-site'), tone: 'tint' as Tone }] : []),
       ];
-    return <ScrollView contentContainerStyle={ui.wrap}>
-      <AlertBanner count={unread} />{readOnly && <ReadOnlyBanner />}<Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{title}</Text>
-       <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>{enabledTiles([...workflow, ...personalTiles]).map((t, i) => <Pressable key={i} onPress={t.onPress} style={{ width: '31.5%', marginRight: (i % 3) === 2 ? 0 : '2.75%', minHeight: 68, marginBottom: 10, borderRadius: 30, borderWidth: t.tone === 'solid' ? 0 : 1.5, borderColor: ACCENT, backgroundColor: t.tone === 'solid' ? ACCENT : '#1E7D4F22', alignItems: 'center', justifyContent: 'center', padding: 8 }}><Text style={{ color: t.tone === 'solid' ? '#fff' : ACCENT, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>{t.label}</Text></Pressable>)}</View>
-      <Pressable onPress={onSignOut} style={{ marginTop: 12, padding: 12 }}><Text style={{ textAlign: 'center', color: '#4A5560', fontWeight: '600' }}>Sign out</Text></Pressable>
-    </ScrollView>;
+    return renderHome(title, [
+      { heading: 'Supervisor', tiles: enabledTiles(workflow) },
+      { heading: 'System', tiles: enabledTiles(personalTiles) },
+    ]);
   }
   const sections: Section[] = [
     {
@@ -162,67 +188,8 @@ export default function ManagementHome() {
   const isSupervisor = /supervisor/i.test((position || '').trim()) || /superintendent/i.test((position || '').trim());
   const heading = position === 'Borough Director' ? 'Borough Director' : isSupervisor ? displayStaffPosition(position) : 'Management';
 
-  const filteredSections = sections.map((section) => ({ ...section, tiles: enabledTiles(section.tiles) })).filter((section) => section.tiles.length > 0);
+  const filteredSections = sections.map((section) => ({ heading: section.heading, tiles: enabledTiles(section.tiles) })).filter((section) => section.tiles.length > 0);
   // Don't flash the full Management home before we know who this is.
-  if (!positionLoaded || readOnlyState === null) return <View style={{ flex: 1, backgroundColor: '#fff' }} />;
-  return (
-    <ScrollView contentContainerStyle={ui.wrap}>
-      <AlertBanner count={unread} />{readOnly && <ReadOnlyBanner />}
-      <UpperManagementMuteToggle />
-      <Text style={{ fontSize: 24, fontWeight: '700', marginBottom: 14 }}>{heading}</Text>
-      {filteredSections.map((sec, si) => (
-        <View key={si} style={{ marginBottom: 18 }}>
-          <Text
-            style={{
-              color: sec.color,
-              fontWeight: '700',
-              fontSize: 12,
-              letterSpacing: 0.8,
-              textTransform: 'uppercase',
-              marginBottom: 8,
-            }}
-          >
-            {sec.heading}
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {sec.tiles.map((t, i) => {
-              const solid = t.tone === 'solid';
-              const tint = t.tone === 'tint';
-              return (
-                <Pressable
-                  key={i}
-                  onPress={t.onPress}
-                  style={{
-                    width: '31.5%',
-                    marginRight: (i % 3) === 2 ? 0 : '2.75%',
-                    minHeight: 68,
-                    marginBottom: 10,
-                    borderRadius: 30,
-                    borderWidth: solid ? 0 : 1.5,
-                    borderColor: sec.color,
-                    backgroundColor: solid ? sec.color : tint ? sec.color + '33' : '#fff',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingHorizontal: 8,
-                    paddingVertical: 10,
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: solid ? '#fff' : sec.color,
-                      fontWeight: '600',
-                      fontSize: 13,
-                      textAlign: 'center',
-                    }}
-                  >
-                    {t.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      ))}
-    </ScrollView>
-  );
+  if (!positionLoaded || readOnlyState === null) return <View style={{ flex: 1, backgroundColor: '#070B16' }} />;
+  return renderHome(heading, filteredSections);
 }

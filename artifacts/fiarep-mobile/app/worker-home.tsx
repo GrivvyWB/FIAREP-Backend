@@ -1,4 +1,4 @@
-import { Text, Pressable, ScrollView } from 'react-native';
+import FieldHome from '../components/FieldHome';
 import { useRouter } from 'expo-router';
 import { clearAppMode, logout } from '../lib/store';
 import { useAppMode } from './_layout';
@@ -13,7 +13,6 @@ import {
   displayStaffPosition,
   listManpowerRequests,
 } from '../lib/store';
-import { ui } from '../lib/ui';
 import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
 import { hasAnyMeasurementAccess, tradeKeyForPosition } from '../lib/measurement-access';
 import { catalogForTrade } from '../lib/trade-catalogs';
@@ -85,66 +84,51 @@ export default function WorkerHome() {
     refresh();
   }
 
+  const title = position === 'Elevator Service' ? 'Elevator Mechanic' : displayStaffPosition(position);
+  const on = (label: string) => tileEnabled('worker', label, rawModules);
+  const measurementOk = hasAnyMeasurementAccess(position, rawModules) || (modules['measurement'] && !!catalogForTrade(tradeKeyForPosition(position)));
+  const sections = [
+    {
+      heading: 'Jobs',
+      tiles: [
+        ...(modules['proj-new'] && canStartProject(position) && on('+ New Project') ? [{ label: '+ New Project', onPress: () => router.push('/?new=1') }] : []),
+        ...(position === 'Elevator Service' && on('Elevator Jobs') ? [{ label: 'Elevator Jobs', onPress: () => router.push('/elevator-jobs') }] : []),
+        ...(isEmergencyMaintenance && on('Emergency Units') ? [{ label: 'Emergency Units', onPress: () => router.push('/emergency-units') }] : []),
+        ...(on('Change Work Order') ? [{ label: 'Change Work Order', onPress: () => router.push('/worker-change-order') }] : []),
+        ...(on('Request Time Off') ? [{ label: 'Request Time Off', onPress: () => router.push('/leave-request') }] : []),
+      ],
+    },
+    {
+      heading: 'Scope',
+      tiles: measurementOk ? [
+        ...(on('Measurement') ? [{ label: 'Measurement', onPress: () => router.push('/measurement') }] : []),
+        ...(on('Saved Measurements') ? [{ label: 'Saved Measurements', onPress: () => router.push('/saved-measurements') }] : []),
+      ] : [],
+    },
+    {
+      heading: 'System',
+      tiles: [
+        ...(on('Inbox') ? [{ label: 'Inbox', onPress: () => router.push('/notifications') }] : []),
+        ...(!isTradeWorker ? [{ label: 'Check Report Status', onPress: () => router.push('/resident-lookup') }] : []),
+        ...(modules['property-lookup'] ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
+        ...(modules['translator'] ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
+        { label: 'Sign out', onPress: onSignOut },
+      ],
+    },
+  ];
+  const tabs = [
+    ...(on('My Jobs') ? [{ label: 'My Work', icon: 'clipboard-outline', onPress: () => router.push('/my-jobs') }] : []),
+    ...(on('Inbox') ? [{ label: 'Inbox', icon: 'mail-outline', onPress: () => router.push('/notifications') }] : []),
+    ...(on('Request Time Off') ? [{ label: 'Time Off', icon: 'time-outline', onPress: () => router.push('/leave-request') }] : []),
+  ];
+
   return (
-    <ScrollView contentContainerStyle={[ui.wrap, { paddingTop: 40 }]}>
-      <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center', marginBottom: 6 }}>{position === 'Elevator Service' ? 'Elevator Mechanic' : displayStaffPosition(position || 'Worker')}</Text>
-      <Text style={[ui.label, { textAlign: 'center', marginBottom: 24 }]}>
-        View your assigned jobs and check report status.
-      </Text>
-
-      {tileEnabled('worker', 'My Jobs', rawModules) && (<Pressable style={ui.btn} onPress={() => router.push('/my-jobs')}>
-        <Text style={ui.btnText}>My Jobs{jobCount > 0 ? ' (' + jobCount + ')' : ''}</Text>
-      </Pressable>)}
-      {modules['proj-new'] && canStartProject(position) && tileEnabled('worker', '+ New Project', rawModules) && (
-        <Pressable style={ui.btn} onPress={() => router.push('/?new=1')}>
-          <Text style={ui.btnText}>+ New Project</Text>
-        </Pressable>
-      )}
-      {position === 'Elevator Service' && tileEnabled('worker', 'Elevator Jobs', rawModules) && (
-        <Pressable style={ui.btn} onPress={() => router.push('/elevator-jobs')}>
-          <Text style={ui.btnText}>Elevator Jobs</Text>
-        </Pressable>
-      )}
-      {(hasAnyMeasurementAccess(position, rawModules) || (modules['measurement'] && !!catalogForTrade(tradeKeyForPosition(position)))) && (
-        <>
-          {tileEnabled('worker', 'Measurement', rawModules) && (<Pressable style={ui.btn} onPress={() => router.push('/measurement')}>
-            <Text style={ui.btnText}>Measurement</Text>
-          </Pressable>)}
-          {tileEnabled('worker', 'Saved Measurements', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/saved-measurements')}>
-            <Text style={ui.btnOutlineText}>Saved Measurements</Text>
-          </Pressable>)}
-        </>
-      )}
-      {tileEnabled('worker', 'Inbox', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
-        <Text style={ui.btnOutlineText}>Inbox</Text>
-      </Pressable>)}
-      {isEmergencyMaintenance && tileEnabled('worker', 'Emergency Units', rawModules) && (
-        <Pressable style={ui.btnOutline} onPress={() => router.push('/emergency-units')}>
-          <Text style={ui.btnOutlineText}>Emergency Units</Text>
-        </Pressable>
-      )}
-      {tileEnabled('worker', 'Attendance', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/attendance')}>
-        <Text style={ui.btnOutlineText}>Attendance</Text>
-      </Pressable>)}
-      {tileEnabled('worker', 'Change Work Order', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/worker-change-order')}>
-        <Text style={ui.btnOutlineText}>Change Work Order</Text>
-      </Pressable>)}
-      {tileEnabled('worker', 'Request Time Off', rawModules) && (<Pressable style={ui.btnOutline} onPress={() => router.push('/leave-request')}>
-        <Text style={ui.btnOutlineText}>Request Time Off</Text>
-      </Pressable>)}
-      {!isTradeWorker && <Pressable style={ui.btnOutline} onPress={() => router.push('/resident-lookup')}>
-        <Text style={ui.btnOutlineText}>Check Report Status</Text>
-      </Pressable>}
-
-      {modules['property-lookup'] && <Pressable style={[ui.btnOutline]} onPress={() => router.push('/inspector-violations?lookup=1')}>
-        <Text style={ui.btnOutlineText}>🏢 Check HPD / DOB</Text>
-      </Pressable>}
-      {modules['translator'] && <Pressable style={ui.btnOutline} onPress={() => router.push('/translator')}>
-        <Text style={ui.btnOutlineText}>🌐 Translator</Text>
-      </Pressable>}
-      <Pressable style={[ui.btnOutline, { marginTop: 24 }]} onPress={onSignOut}>
-        <Text style={ui.btnOutlineText}>Sign out</Text>
-      </Pressable>
-    </ScrollView>
+    <FieldHome
+      title={title}
+      hero={on('My Jobs') ? { label: 'My Jobs', onPress: () => router.push('/my-jobs'), badge: jobCount } : undefined}
+      clock={on('Attendance') ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
+      sections={sections}
+      tabs={tabs}
+    />
   );
 }

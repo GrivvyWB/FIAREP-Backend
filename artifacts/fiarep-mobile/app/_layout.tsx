@@ -202,7 +202,7 @@ function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?:
 function AdministratorStack() {
   return (
     <Stack initialRouteName="admin-home">
-      <Stack.Screen name="admin-home" options={{ title: 'Administrator', headerBackVisible: false }} />
+      <Stack.Screen name="admin-home" options={{ title: 'Administrator', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
@@ -254,7 +254,7 @@ function AdministratorStack() {
 function InspectorStack() {
   return (
     <Stack initialRouteName="cpm-home">
-      <Stack.Screen name="cpm-home" options={{ title: 'CPM / Inspector', headerBackVisible: false }} />
+      <Stack.Screen name="cpm-home" options={{ title: 'CPM / Inspector', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="my-inspections" options={{ title: 'My Inspections' }} />
@@ -295,7 +295,7 @@ function InspectorStack() {
 function ManagementStack() {
   return (
     <Stack initialRouteName="management-home">
-      <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false }} />
+      <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
@@ -354,7 +354,7 @@ function WorkerStack() {
   return (
     <Stack initialRouteName="worker-home">
       <Stack.Screen name="elevator-jobs" options={{ title: 'My Elevator Jobs' }} />
-      <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false }} />
+      <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="index" options={{ title: 'Projects' }} />
@@ -389,7 +389,7 @@ function WorkerStack() {
 function EmergencyStack() {
   return (
     <Stack initialRouteName="worker-home">
-      <Stack.Screen name="worker-home" options={{ title: 'Emergency Maintenance', headerBackVisible: false }} />
+      <Stack.Screen name="worker-home" options={{ title: 'Emergency Maintenance', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />

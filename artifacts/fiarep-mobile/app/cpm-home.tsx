@@ -1,5 +1,4 @@
 import { isCpmSupervisorTitle } from '../lib/titles';
-import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { syncAllEntities } from '../lib/sync';
@@ -7,9 +6,8 @@ import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition,
 import { useAppMode } from './_layout';
 import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
 import { hasAnyMeasurementAccess } from '../lib/measurement-access';
-import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
-import TechnicianHome, { type TechSection } from '../components/TechnicianHome';
+import FieldHome from '../components/FieldHome';
 import { getAttendanceStatus } from '../lib/store';
 
 type Tone = 'solid' | 'outline' | 'tint';
@@ -79,10 +77,8 @@ export default function CpmHome() {
         const identity = await getSessionIdentity();
         const tech = (identity?.tenantId || 'default') === 'default';
         setIsTechnician(tech);
-        if (tech) {
-          navigation.setOptions({ title: 'Technician', headerShown: false });
-          getAttendanceStatus().then((st) => setClockedIn(st?.current?.direction === 'in')).catch(() => undefined);
-        }
+        navigation.setOptions({ headerShown: false });
+        getAttendanceStatus().then((st) => setClockedIn(st?.current?.direction === 'in')).catch(() => undefined);
       } catch (e) {
         // Data not ready / offline — keep the screen usable rather than blank.
       }
@@ -148,91 +144,28 @@ export default function CpmHome() {
 
   const roleTitle = isTechnician ? 'Technician' : normalizedPosition === 'cpm' ? 'CPM' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition === 'inspector' ? 'Inspector' : 'CPM / Inspector';
 
-  if (isTechnician) {
-    const techSections: TechSection[] = [
-      {
-        heading: 'Inspections', color: '#19C37D', glow: '#19C37D', viewAll: () => router.push('/?list=1'),
-        tiles: [
-          { key: 'projects', title: 'Projects', desc: 'View & manage inspection projects.', onPress: () => router.push('/?list=1') },
-          { key: 'new-project', title: '+ New Project', desc: 'Create a new inspection project.', onPress: () => router.push('/?new=1') },
-          { key: 'time-off', title: 'Request Time Off', desc: 'Submit or view time off requests.', onPress: () => router.push('/leave-request') },
-        ],
-      },
-      {
-        heading: 'Scope', color: '#F59E0B', glow: '#F59E0B', viewAll: () => router.push('/scope-submit'),
-        tiles: [
-          { key: 'scope', title: 'Submit Scope', desc: 'Create a new scope of work.', onPress: () => router.push('/scope-submit') },
-          { key: 'change-order', title: 'Change Work Order', desc: 'Modify existing work orders.', onPress: () => router.push('/cpm-change-order') },
-          ...(hasAnyMeasurementAccess(position, rawModules) ? [
-            { key: 'measure', title: 'Measurement', desc: 'Record and update measurements.', onPress: () => router.push('/measurement') },
-            { key: 'saved', title: 'Saved Measurements', desc: 'View your saved measurements.', onPress: () => router.push('/saved-measurements') },
-          ] : []),
-        ],
-      },
-      {
-        heading: 'System', color: '#7C5CFF', glow: '#7C5CFF', viewAll: () => router.push('/notifications'),
-        tiles: [
-          { key: 'inbox', title: 'Inbox', desc: 'View your messages and notifications.', onPress: () => router.push('/notifications'), badge: unread },
-          ...(modules['property-lookup'] ? [{ key: 'lookup', title: 'Check HPD / DOB', desc: 'Validate building records.', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
-          ...(modules['translator'] ? [{ key: 'translator', title: 'Translator', desc: 'Translate content and language.', onPress: () => router.push('/translator') }] : []),
-          { key: 'signout', title: 'Sign Out', desc: 'End your session securely.', onPress: onSignOut },
-        ],
-      },
-    ];
-    return (
-      <TechnicianHome
-        sections={techSections}
-        jobCount={jobCount}
-        clockedIn={clockedIn}
-        onMyJobs={() => router.push('/my-jobs')}
-        onTimeClock={() => router.push('/attendance')}
-        onSearch={() => router.push('/inspector-violations?lookup=1')}
-        onSettings={() => router.push('/settings')}
-      />
-    );
-  }
+  // Same gates as always; the look is FieldHome's. My Jobs is the hero card,
+  // Attendance / Time Clock is the clock card, the rest are tiles.
+  const enabled = (label: string) => (isTechnician && label === 'Time Clock') || tileEnabled('cpm', label, rawModules);
+  const homeSections = sections
+    .filter((sec) => sec.heading !== 'My Work')
+    .map((sec) => ({ heading: sec.heading, tiles: sec.tiles.filter((t) => enabled(t.label) && t.label !== 'Attendance').map((t) => ({ label: t.label, onPress: t.onPress })) }));
+  const showJobs = enabled('My Jobs');
+  const showClock = isTechnician || enabled('Attendance');
+  const tabs = [
+    ...(showJobs ? [{ label: 'My Work', icon: 'clipboard-outline', onPress: () => router.push('/my-jobs') }] : []),
+    ...(enabled('Inbox') ? [{ label: 'Inbox', icon: 'mail-outline', onPress: () => router.push('/notifications') }] : []),
+    { label: 'Settings', icon: 'settings-outline', onPress: () => router.push('/settings') },
+  ];
 
   return (
-    <ScrollView contentContainerStyle={ui.wrap}>
-      <AlertBanner count={unread} />
-      <Text style={{ fontSize: 22, fontWeight: '700', marginBottom: 14 }}>{roleTitle}</Text>
-      {sections.map((sec, si) => (
-        <View key={si} style={{ marginBottom: 18 }}>
-          <Text style={{ color: sec.color, fontWeight: '700', fontSize: 12, letterSpacing: 0.8, textTransform: 'uppercase', marginBottom: 8 }}>
-            {sec.heading}
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {sec.tiles.filter((t) => (isTechnician && t.label === 'Time Clock') || tileEnabled('cpm', t.label, rawModules)).map((t, i) => {
-              const solid = t.tone === 'solid';
-              const tint = t.tone === 'tint';
-              return (
-                <Pressable
-                  key={i}
-                  onPress={t.onPress}
-                  style={{
-                    width: '31.5%',
-                    marginRight: (i % 3) === 2 ? 0 : '2.75%',
-                    minHeight: 68,
-                    marginBottom: 10,
-                    borderRadius: 30,
-                    borderWidth: solid ? 0 : 1.5,
-                    borderColor: sec.color,
-                    backgroundColor: solid ? sec.color : tint ? sec.color + '33' : '#fff',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    paddingHorizontal: 8,
-                    paddingVertical: 10,
-                  }}
-                >
-                  <Text style={{ color: solid ? '#fff' : sec.color, fontWeight: '600', fontSize: 13, textAlign: 'center' }}>
-                    {t.label}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </View>
-        </View>
-      ))}
-    </ScrollView>
+    <FieldHome
+      title={roleTitle}
+      banner={unread > 0 ? <AlertBanner count={unread} /> : null}
+      hero={showJobs ? { label: 'My Jobs', onPress: () => router.push('/my-jobs'), badge: jobCount } : undefined}
+      clock={showClock ? { onPress: () => router.push('/attendance'), clockedIn, label: isTechnician ? 'Time Clock' : 'Attendance' } : undefined}
+      sections={homeSections}
+      tabs={tabs}
+    />
   );
 }
