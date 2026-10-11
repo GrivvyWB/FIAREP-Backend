@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { ChevronDown } from "lucide-react";
 
 type Member = { id: string; name: string; position: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null };
 type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number };
@@ -18,6 +19,26 @@ function thisWeek(): { from: string; to: string } { const d = new Date(); d.setH
  * clock on, add a person with an hourly rate, hand them the code — they log in
  * to the FIAREP app as a worker and clock in / out on the Attendance screen.
  * Hours and pay for any period come from the punches. FIAREP only. */
+
+/** A section that folds up. Click the header to open / close; it remembers per section. */
+function Fold({ id, title, summary, badge, defaultOpen = false, tone = "white", children }: { id: string; title: string; summary?: string; badge?: string; defaultOpen?: boolean; tone?: "white" | "grey"; children: React.ReactNode }) {
+  const key = `fiarep.crew.fold.${id}`;
+  const [open, setOpen] = useState<boolean>(() => { try { const v = localStorage.getItem(key); return v == null ? defaultOpen : v === "1"; } catch { return defaultOpen; } });
+  const toggle = () => setOpen((o) => { try { localStorage.setItem(key, o ? "0" : "1"); } catch { /* private mode */ } return !o; });
+  return (
+    <section className={`rounded-xl border border-slate-200 shadow-sm ${tone === "grey" ? "bg-slate-50" : "bg-white"}`}>
+      <button type="button" onClick={toggle} aria-expanded={open} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+        <span className="min-w-0">
+          <span className="flex items-center gap-2 text-sm font-semibold text-slate-900">{title}{badge ? <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{badge}</span> : null}</span>
+          {summary && !open ? <span className="mt-0.5 block truncate text-xs text-slate-500">{summary}</span> : null}
+        </span>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open ? <div className="border-t border-slate-100">{children}</div> : null}
+    </section>
+  );
+}
+
 export default function OwnerCrew() {
   const [crew, setCrew] = useState<Crew | null>(null);
   const [range, setRange] = useState(thisWeek);
@@ -83,9 +104,8 @@ export default function OwnerCrew() {
       </div>
       {error && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="border-b border-slate-100 px-4 py-3">
-          <p className="text-sm font-semibold text-slate-900">Jobs from client companies</p>
+      <Fold id="jobs" title="Jobs from client companies" badge={`${jobs.length} open`} defaultOpen summary="Send a resident complaint to one of your technicians.">
+        <div className="border-b border-slate-100 px-4 py-2">
           <p className="text-xs text-slate-500">Every open resident complaint on the platform. Pick a technician and send — it lands in his My Jobs and Inbox with a push; the company sees "FIAREP · name" and every step he takes.</p>
         </div>
         {jobs.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">No open complaints right now.</p> : (
@@ -104,22 +124,20 @@ export default function OwnerCrew() {
             })}</tbody>
           </table></div>
         )}
-      </section>
+      </Fold>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-        <p className="text-sm font-semibold text-slate-900">Add an employee</p>
-        <div className="mt-2 flex flex-wrap items-end gap-2">
+      <Fold id="add" title="Add an employee" summary="Name, rate, and the code is issued on the spot.">
+        <div className="flex flex-wrap items-end gap-2 px-4 pt-3">
           <label className="text-xs text-slate-600">Name<input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} placeholder="First and last name" className="mt-1 block h-9 w-56 rounded-md border border-slate-300 px-2 text-sm text-slate-900" /></label>
           <div className="text-xs text-slate-600">Role<div className="mt-1 flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700">Technician — FIAREP CPM / Inspector (all tools)</div></div>
           <label className="text-xs text-slate-600">Hourly rate<span className="mt-1 flex h-9 items-center rounded-md border border-slate-300 px-2 text-sm text-slate-900"><span className="text-slate-400">$</span><input type="number" min={1} step={0.5} value={add.hourlyRate} onChange={(e) => setAdd({ ...add, hourlyRate: e.target.value })} placeholder="38" className="w-20 bg-transparent px-1 text-right focus:outline-none" /><span className="text-slate-400">/hr</span></span></label>
           <Button size="sm" className="h-9 bg-amber-500 text-slate-950 hover:bg-amber-400" disabled={adding || !add.name.trim() || !Number(add.hourlyRate)} onClick={() => void addMember()}>{adding ? "Adding…" : "Add and issue a code"}</Button>
         </div>
-        <p className="mt-2 text-xs text-slate-500">The rate is what FIAREP pays the person; it never appears to clients. The sign-in code is issued the moment you add them.</p>
-      </section>
+        <p className="px-4 pb-3 pt-2 text-xs text-slate-500">The rate is what FIAREP pays the person; it never appears to clients. The sign-in code is issued the moment you add them.</p>
+      </Fold>
 
-      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3">
-          <p className="text-sm font-semibold text-slate-900">Hours and pay</p>
+      <Fold id="hours" title="Hours and pay" badge={crew ? `${active.length} on the crew · ${crew.totalHours} h · ${money(crew.totalPay)}` : undefined} defaultOpen summary="Who is on the clock, hours and pay for the period, sign-in codes.">
+        <div className="flex flex-wrap items-center justify-end gap-3 border-b border-slate-100 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <label>From <input type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} className="h-8 rounded-md border border-slate-300 px-2 text-sm text-slate-900" /></label>
             <label>To <input type="date" value={range.to} onChange={(e) => setRange({ ...range, to: e.target.value })} className="h-8 rounded-md border border-slate-300 px-2 text-sm text-slate-900" /></label>
@@ -153,23 +171,21 @@ export default function OwnerCrew() {
           {active.length > 0 && <tfoot><tr className="border-t-2 border-slate-200 font-semibold text-slate-950"><td className="px-4 py-2" colSpan={4}>{crew?.from} – {crew?.to}</td><td className="px-2 py-2 text-right">{crew?.totalHours.toFixed(2)}</td><td className="px-2 py-2 text-right">{money(crew?.totalPay ?? 0)}</td><td></td></tr></tfoot>}
         </table>
         <p className="px-4 py-2 text-xs text-slate-500">Hours pair each clock-in with the next clock-out; a shift still open counts up to now. Pay = hours × rate, before taxes and overtime.</p>
-      </section>
+      </Fold>
 
       {removed.length > 0 && (
-        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-          <p className="text-sm font-semibold text-slate-900">Removed</p>
-          <ul className="mt-1 space-y-1 text-sm text-slate-600">{removed.map((m) => <li key={m.id} className="flex items-center justify-between"><span>{m.name} · {m.position}</span><button type="button" className="text-xs underline" onClick={() => void setStatus(m, "approved")}>reinstate</button></li>)}</ul>
-        </section>
+        <Fold id="removed" title="Removed" badge={String(removed.length)}>
+          <ul className="space-y-1 px-4 py-3 text-sm text-slate-600">{removed.map((m) => <li key={m.id} className="flex items-center justify-between"><span>{m.name} · {m.position}</span><button type="button" className="text-xs underline" onClick={() => void setStatus(m, "approved")}>reinstate</button></li>)}</ul>
+        </Fold>
       )}
 
-      <section className="rounded-xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
-        <p className="font-semibold text-slate-900">What the employee does</p>
-        <ol className="mt-1 list-decimal space-y-0.5 pl-5">
+      <Fold id="howto" title="What the employee does" tone="grey" summary="Install the app, sign in with name + code, punch the Time Clock.">
+        <ol className="list-decimal space-y-0.5 px-4 py-3 pl-9 text-sm text-slate-700">
           <li>Installs the FIAREP app (App Store) or opens the site.</li>
           <li>Signs in with the name exactly as entered here and the 4-character code — the app opens the CPM / Inspector home with every field tool.</li>
-          <li>Opens <b>Attendance</b> and taps <b>Clock in</b> on arrival, <b>Clock out</b> when done. Each tap is time-stamped on the server.</li>
+          <li>Opens <b>Time Clock</b> and taps <b>Clock in</b> on arrival, <b>Clock out</b> when done. Each tap is time-stamped on the server.</li>
         </ol>
-      </section>
+      </Fold>
     </div>
   );
 }
