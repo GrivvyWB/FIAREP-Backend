@@ -747,7 +747,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                                {isEditing && (
                                  <div className="mt-2 space-y-1">
                                    <div className="flex flex-wrap gap-2">
-                                     <Input aria-label={`Building address for ${name}`} placeholder="Building address, e.g. 568 Flatbush Ave, Brooklyn" value={buildingAddress[name] || ""} onChange={(e) => setBuildingAddress((m) => ({ ...m, [name]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addBuilding(name); } }} className="h-8 flex-1 bg-white text-sm" />
+                                     <Input aria-label={`Building address for ${name}`} placeholder="Type a street address, then Add building" value={buildingAddress[name] || ""} onChange={(e) => setBuildingAddress((m) => ({ ...m, [name]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addBuilding(name); } }} className="h-8 flex-1 bg-white text-sm" />
                                      {buildingError[name]?.includes("Type the number of dwelling units") && <Input aria-label="Units" type="number" placeholder="Units" value={buildingUnits[name] || ""} onChange={(e) => setBuildingUnits((m) => ({ ...m, [name]: e.target.value }))} className="h-8 w-24 bg-white text-sm" />}
                                      <Button type="button" size="sm" variant="outline" className="h-8" disabled={buildingBusy === name || !(buildingAddress[name] || "").trim()} onClick={() => void addBuilding(name)}>{buildingBusy === name ? "Checking…" : "Add building"}</Button>
                                    </div>
