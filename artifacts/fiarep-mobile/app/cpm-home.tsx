@@ -1,9 +1,9 @@
 import { isCpmSupervisorTitle } from '../lib/titles';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 import { useState, useCallback } from 'react';
 import { syncAllEntities } from '../lib/sync';
-import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition, listResidentReports, listRoutedInspectionsFor, listManpowerRequests } from '../lib/store';
+import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition, getSessionIdentity, listResidentReports, listRoutedInspectionsFor, listManpowerRequests } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
 import { hasAnyMeasurementAccess } from '../lib/measurement-access';
@@ -22,6 +22,9 @@ export default function CpmHome() {
   const [unread, setUnread] = useState(0);
   const [jobCount, setJobCount] = useState(0);
   const [position, setPosition] = useState('');
+  // FIAREP's own crew (tenant "default") are technicians: same tools, named for what they do.
+  const [isTechnician, setIsTechnician] = useState(false);
+  const navigation = useNavigation();
   useFocusEffect(useCallback(() => {
     let active = true;
     // Work assigned to me that is still open: complaints, violations and
@@ -70,12 +73,16 @@ export default function CpmHome() {
           return;
         }
         setPosition(nextPosition);
+        const identity = await getSessionIdentity();
+        const tech = (identity?.tenantId || 'default') === 'default';
+        setIsTechnician(tech);
+        if (tech) navigation.setOptions({ title: 'Technician' });
       } catch (e) {
         // Data not ready / offline — keep the screen usable rather than blank.
       }
     })();
     return () => { active = false; clearInterval(timer); };
-  }, [mode, router]));
+  }, [mode, router, navigation]));
   const normalizedPosition = position.trim().toLowerCase();
   const isCpmSupervisor = isCpmSupervisorTitle(normalizedPosition);
 
@@ -131,7 +138,7 @@ export default function CpmHome() {
     },
   ];
 
-  const roleTitle = normalizedPosition === 'cpm' ? 'CPM' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition === 'inspector' ? 'Inspector' : 'CPM / Inspector';
+  const roleTitle = isTechnician ? 'Technician' : normalizedPosition === 'cpm' ? 'CPM' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition === 'inspector' ? 'Inspector' : 'CPM / Inspector';
 
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
