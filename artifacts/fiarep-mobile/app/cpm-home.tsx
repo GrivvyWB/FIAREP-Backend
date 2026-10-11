@@ -9,6 +9,8 @@ import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-acces
 import { hasAnyMeasurementAccess } from '../lib/measurement-access';
 import { ui, ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
+import TechnicianHome, { type TechSection } from '../components/TechnicianHome';
+import { getAttendanceStatus } from '../lib/store';
 
 type Tone = 'solid' | 'outline' | 'tint';
 type Tile = { label: string; onPress: () => void; tone: Tone };
@@ -24,6 +26,7 @@ export default function CpmHome() {
   const [position, setPosition] = useState('');
   // FIAREP's own crew (tenant "default") are technicians: same tools, named for what they do.
   const [isTechnician, setIsTechnician] = useState(false);
+  const [clockedIn, setClockedIn] = useState(false);
   const navigation = useNavigation();
   useFocusEffect(useCallback(() => {
     let active = true;
@@ -76,7 +79,10 @@ export default function CpmHome() {
         const identity = await getSessionIdentity();
         const tech = (identity?.tenantId || 'default') === 'default';
         setIsTechnician(tech);
-        if (tech) navigation.setOptions({ title: 'Technician' });
+        if (tech) {
+          navigation.setOptions({ title: 'Technician', headerShown: false });
+          getAttendanceStatus().then((st) => setClockedIn(st?.current?.direction === 'in')).catch(() => undefined);
+        }
       } catch (e) {
         // Data not ready / offline — keep the screen usable rather than blank.
       }
@@ -141,6 +147,50 @@ export default function CpmHome() {
   ];
 
   const roleTitle = isTechnician ? 'Technician' : normalizedPosition === 'cpm' ? 'CPM' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition === 'inspector' ? 'Inspector' : 'CPM / Inspector';
+
+  if (isTechnician) {
+    const techSections: TechSection[] = [
+      {
+        heading: 'Inspections', color: '#19C37D', glow: '#19C37D', viewAll: () => router.push('/?list=1'),
+        tiles: [
+          { key: 'projects', title: 'Projects', desc: 'View & manage inspection projects.', onPress: () => router.push('/?list=1') },
+          { key: 'new-project', title: '+ New Project', desc: 'Create a new inspection project.', onPress: () => router.push('/?new=1') },
+          { key: 'time-off', title: 'Request Time Off', desc: 'Submit or view time off requests.', onPress: () => router.push('/leave-request') },
+        ],
+      },
+      {
+        heading: 'Scope', color: '#F59E0B', glow: '#F59E0B', viewAll: () => router.push('/scope-submit'),
+        tiles: [
+          { key: 'scope', title: 'Submit Scope', desc: 'Create a new scope of work.', onPress: () => router.push('/scope-submit') },
+          { key: 'change-order', title: 'Change Work Order', desc: 'Modify existing work orders.', onPress: () => router.push('/cpm-change-order') },
+          ...(hasAnyMeasurementAccess(position, rawModules) ? [
+            { key: 'measure', title: 'Measurement', desc: 'Record and update measurements.', onPress: () => router.push('/measurement') },
+            { key: 'saved', title: 'Saved Measurements', desc: 'View your saved measurements.', onPress: () => router.push('/saved-measurements') },
+          ] : []),
+        ],
+      },
+      {
+        heading: 'System', color: '#7C5CFF', glow: '#7C5CFF', viewAll: () => router.push('/notifications'),
+        tiles: [
+          { key: 'inbox', title: 'Inbox', desc: 'View your messages and notifications.', onPress: () => router.push('/notifications'), badge: unread },
+          ...(modules['property-lookup'] ? [{ key: 'lookup', title: 'Check HPD / DOB', desc: 'Validate building records.', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
+          ...(modules['translator'] ? [{ key: 'translator', title: 'Translator', desc: 'Translate content and language.', onPress: () => router.push('/translator') }] : []),
+          { key: 'signout', title: 'Sign Out', desc: 'End your session securely.', onPress: onSignOut },
+        ],
+      },
+    ];
+    return (
+      <TechnicianHome
+        sections={techSections}
+        jobCount={jobCount}
+        clockedIn={clockedIn}
+        onMyJobs={() => router.push('/my-jobs')}
+        onTimeClock={() => router.push('/attendance')}
+        onSearch={() => router.push('/inspector-violations?lookup=1')}
+        onSettings={() => router.push('/settings')}
+      />
+    );
+  }
 
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
