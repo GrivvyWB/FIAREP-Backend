@@ -255,6 +255,7 @@ function InspectorStack() {
   return (
     <Stack initialRouteName="cpm-home">
       <Stack.Screen name="cpm-home" options={{ title: 'CPM / Inspector', headerBackVisible: false }} />
+      <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="my-inspections" options={{ title: 'My Inspections' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />

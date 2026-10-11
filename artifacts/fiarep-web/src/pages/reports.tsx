@@ -308,6 +308,7 @@ export default function Reports() {
   const [selectedStaffId, setSelectedStaffId] = useState("");
   const [releaseUpdate, setReleaseUpdate] = useState("");
   const [sendBackNote, setSendBackNote] = useState("");
+  const [sendingToFiarep, setSendingToFiarep] = useState(false);
   // Complaint handlers review any completed work; a CPM Supervisor reviews the
   // complaints they assigned (server: approve-work / reject-work).
   const canReview = (report: Report) => canActOn(report) ||
@@ -418,6 +419,18 @@ export default function Reports() {
     } catch (error) {
       toast({ variant: "destructive", title: "Could not send request", description: error instanceof Error ? error.message : "Please try again." });
     } finally { setNudging(false); }
+  };
+
+  const sendToFiarep = async (report: Report) => {
+    setSendingToFiarep(true);
+    try {
+      const updated = await customFetch<Report>(`/api/v1/resident-reports/${report.id}/send-to-fiarep`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", responseType: "json" });
+      await invalidateOperationalQueries(queryClient, "resident-reports", report.id);
+      setSelected(updated);
+      toast({ title: "Sent to FIAREP" });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not send to FIAREP", description: error instanceof Error ? error.message : "Please try again." });
+    } finally { setSendingToFiarep(false); }
   };
 
   const confirmDeleteReport = async () => {
@@ -763,6 +776,19 @@ export default function Reports() {
                       </div>
                       <Textarea value={nudgeNote} onChange={(event) => setNudgeNote(event.target.value)} placeholder="Please answer this — assign right away." className="bg-white" />
                       <Button variant="destructive" className="w-full" disabled={nudging || nudgeSent || !nudgeTargetId} onClick={() => requestAssignment(selected)}>{nudgeSent ? "Sent \u2713" : nudging ? "Sending\u2026" : nudgeTarget ? `Send urgent request to ${nudgeTarget.name}` : "Choose a supervisor first"}</Button>
+                    </div>
+                  )}
+                  {(actor?.role === "management" || actor?.role === "administrator") && actor?.tenantId !== "default" && !["done", "resolved", "approved", "cleared", "closed"].includes(currentStatus) && (
+                    <div className="border-t border-border pt-4 space-y-2">
+                      <p className="text-sm font-semibold">Send to FIAREP</p>
+                      {state.fiarepRecordId ? (
+                        <p className="text-sm font-semibold text-emerald-700">✓ Sent to FIAREP{state.fiarepSentAt ? ` · ${new Date(String(state.fiarepSentAt)).toLocaleString()}` : ""}{state.fiarepStatus ? ` · ${String(state.assignedTo || "FIAREP")} · ${String(state.fiarepStatus).replaceAll("_", " ")}` : " · waiting for FIAREP to assign a technician"}</p>
+                      ) : (
+                        <>
+                          <p className="text-xs text-muted-foreground">FIAREP's own crew does the work. FIAREP assigns a technician and you see every step here.</p>
+                          <Button variant="outline" className="w-full" onClick={() => sendToFiarep(selected)} disabled={sendingToFiarep || action.isPending}>{sendingToFiarep ? "Sending…" : "Send to FIAREP"}</Button>
+                        </>
+                      )}
                     </div>
                   )}
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canActOn(selected) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canReview(selected) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>

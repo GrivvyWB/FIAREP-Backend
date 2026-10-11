@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import { deliverPushNotification } from "../lib/push";
+import { sendComplaintToFiarep, mirrorFiarepProgress } from "../lib/fiarepDispatch";
 import {
   ENTITIES,
   isAcceptedStaffPosition,
@@ -1849,6 +1850,29 @@ router.post("/v1/:entity/:id/attach-measurement", async (req, res, next) => {
 });
 
 const FINISHED_SENT_ON = new Set(["work_approved", "approved", "completed", "done", "resolved", "closed", "in_house_completed", "denied", "cancelled"]);
+// A client company hands a complaint to FIAREP's own crew (the plan / per-job
+// work). FIAREP assigns a technician on its side; progress mirrors back here.
+router.post("/v1/resident-reports/:id/send-to-fiarep", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(actor.role === "administrator" || actor.role === "management")) {
+    res.status(403).json({ error: "Only management may send a complaint to FIAREP" });
+    return;
+  }
+  const [report] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, req.params["id"]!),
+    eq(entityRecords.entity, "resident-reports"),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!report || !(await canReadRecordForActor(actor, report))) {
+    res.status(404).json({ error: "Record not found" });
+    return;
+  }
+  const result = await sendComplaintToFiarep(actor, report);
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.json(outward(actor, result.record));
+});
+
 router.post("/v1/:entity/:id/request-assignment", async (req, res, next) => {
   const entity = req.params["entity"];
   if (!validEntity(entity) || !["resident-reports", "building-violations"].includes(entity)) { next(); return; }
@@ -3838,6 +3862,7 @@ router.post(
       await notify(actor, target, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
     }
   }
+  if (entity === "resident-reports") await mirrorFiarepProgress(actor, updated!).catch((err) => logger.warn({ err, recordId: current.id }, "Could not mirror progress to the client company"));
   res.json(outward(actor, updated!));
   },
 );
