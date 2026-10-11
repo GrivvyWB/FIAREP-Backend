@@ -137,6 +137,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
   const [buildingUnits, setBuildingUnits] = useState<Record<string, string>>({});
   const [buildingError, setBuildingError] = useState<Record<string, string>>({});
   const [buildingBusy, setBuildingBusy] = useState<string>("");
+  const [addingFor, setAddingFor] = useState<Record<string, boolean>>({});
   type PropertyRow = { id: string; displayAddress: string; development: string | null; active: boolean; units?: number | null };
   const propertyRows = organizationProperties as unknown as PropertyRow[];
   const registeredUnits = propertyRows.filter((p) => p.active).reduce((n, p) => n + (p.units || 0), 0);
@@ -150,7 +151,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
     try {
       const typed = Number(buildingUnits[development] || 0);
       await customFetch(`/api/v1/platform/organizations/${encodeURIComponent(organization.id)}/properties`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ displayAddress: address, development, ...(typed > 0 ? { units: typed } : {}) }), responseType: "json" } as never);
-      setBuildingAddress((m) => ({ ...m, [development]: "" })); setBuildingUnits((m) => ({ ...m, [development]: "" }));
+      setBuildingAddress((m) => ({ ...m, [development]: "" })); setBuildingUnits((m) => ({ ...m, [development]: "" })); setAddingFor((m) => ({ ...m, [development]: false }));
       await refreshProperties();
     } catch (error: unknown) {
       const e = error as { data?: { error?: string; needsUnits?: boolean }; message?: string };
@@ -744,7 +745,10 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                                    {isEditing && <button type="button" className="text-xs text-slate-400 underline hover:text-red-700" onClick={() => void removeBuilding(property.id)} aria-label={`Remove ${property.displayAddress}`}>remove</button>}
                                  </div>
                                ))}
-                               {isEditing && (
+                               {isEditing && properties.length > 0 && !addingFor[name] && (
+                                 <button type="button" className="mt-2 text-xs text-[#185FA5] underline" onClick={() => setAddingFor((m) => ({ ...m, [name]: true }))}>+ Add another building (several entrances / addresses in this development)</button>
+                               )}
+                               {isEditing && (properties.length === 0 || addingFor[name]) && (
                                  <div className="mt-2 space-y-1">
                                    <div className="flex flex-wrap gap-2">
                                      <Input aria-label={`Building address for ${name}`} placeholder="Type a street address, then Add building" value={buildingAddress[name] || ""} onChange={(e) => setBuildingAddress((m) => ({ ...m, [name]: e.target.value }))} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addBuilding(name); } }} className="h-8 flex-1 bg-white text-sm" />
