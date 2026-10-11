@@ -268,3 +268,15 @@ export function prefillFromHpd(formId: string, v: HpdPrefill, last?: Record<stri
       return common;
   }
 }
+
+/** What an HPD violation is about, for the affidavit buttons: lead, vermin and
+ *  mold get an affidavit; everything else goes the dismissal-request route. */
+export type ViolationKind = "lead" | "vermin" | "mold" | "other";
+export function violationKind(description: string): ViolationKind {
+  const d = description.toLowerCase();
+  if (/lead[- ]based|lead paint|\blead\b|27-2056|order (616|617|624)/.test(d)) return "lead";
+  if (/mold|mould/.test(d)) return "mold";
+  if (/mice|mouse|\brats?\b|roach|vermin|rodent|\bpest|infest/.test(d)) return "vermin";
+  return "other";
+}
+export const KIND_LABEL: Record<ViolationKind, string> = { lead: "Lead", vermin: "Vermin", mold: "Mold", other: "Dismissal" };

@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { BellRing, Building2, FileSignature } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
+import { violationKind } from "@/lib/compliance-forms";
 import { customFetch } from "@workspace/api-client-react";
 
 type Alert = { id: string; watchId: string; kind: string; date: string; address: string; borough: string; title: string; detail: string; foundAt: string };
@@ -61,7 +62,7 @@ export default function ViolationAlerts() {
                 </div>
                 <p className="mt-1 text-sm font-medium text-slate-900">{a.title}</p>
                 <p className="text-xs text-slate-600">{a.detail}</p>
-                {formsOn && a.kind === "HPD violation" && hpdId(a) && (
+                {formsOn && a.kind === "HPD violation" && hpdId(a) && ["vermin", "mold"].includes(violationKind(a.detail)) && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <span className="flex items-center gap-1 text-xs font-semibold text-slate-700"><FileSignature className="h-3.5 w-3.5" />Violation corrected?</span>
                     <a href={`/company-forms?hpd=${encodeURIComponent(hpdId(a))}`} className="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-800 hover:bg-slate-100">Fill affidavit</a>

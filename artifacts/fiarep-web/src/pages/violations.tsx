@@ -4,6 +4,7 @@ import { GenericEntityPage } from "@/components/layout/generic-entity-page";
 import { AlertTriangle, Search, Building2, FileWarning, AlertCircle, Send } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { violationKind } from "@/lib/compliance-forms";
 import { canApproveWork } from "@/lib/access-policy";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -351,7 +352,7 @@ export default function Violations() {
                               <TableCell className="max-w-xl">
                                 <p className="text-sm leading-relaxed" title={v.description}>{v.description}</p>
                                 {v.apartment && <div className="text-xs text-muted-foreground mt-1 font-medium">Apt: {v.apartment}</div>}
-                                {formsOn && v.id !== "unknown" && v.status.toLowerCase() === 'open' && (
+                                {formsOn && v.id !== "unknown" && v.status.toLowerCase() === 'open' && ["vermin", "mold"].includes(violationKind(v.description)) && (
                                   <a href={`/company-forms?hpd=${encodeURIComponent(v.id)}`} className="mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium hover:bg-muted">Fill affidavit</a>
                                 )}
                               </TableCell>
