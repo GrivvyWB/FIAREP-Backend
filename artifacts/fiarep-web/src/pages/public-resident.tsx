@@ -130,10 +130,15 @@ export default function PublicResident() {
     return () => { live = false; };
   }, [savedCode?.code]);
   const enrolledDevelopments = [...new Set(enrolled.map((b) => b.development))];
-  const developmentOptions = [
-    ...enrolledDevelopments.map((name) => ({ id: `enrolled-${name}`, name })),
-    ...nychaDevelopments.filter((d) => !enrolledDevelopments.some((n) => n.toLowerCase() === d.name.toLowerCase())),
-  ];
+  // A private company's residents see only that company's enrolled buildings.
+  // NYCHA's catalog shows only for NYCHA itself, or before a company is chosen.
+  const isNycha = /nycha|housing authority/i.test(savedCode?.organizationName || "");
+  const developmentOptions = enrolledDevelopments.length > 0 && !isNycha
+    ? enrolledDevelopments.map((name) => ({ id: `enrolled-${name}`, name }))
+    : [
+      ...enrolledDevelopments.map((name) => ({ id: `enrolled-${name}`, name })),
+      ...(isNycha || !savedCode ? nychaDevelopments.filter((d) => !enrolledDevelopments.some((n) => n.toLowerCase() === d.name.toLowerCase())) : []),
+    ];
   const addressParams = {
     development: selectedDevelopment.trim() || undefined,
     query: addressSearch.trim() || undefined,
@@ -149,7 +154,7 @@ export default function PublicResident() {
     .filter((b) => b.development.toLowerCase() === selectedDevelopment.trim().toLowerCase())
     .filter((b) => !addressSearch.trim() || b.address.toLowerCase().includes(addressSearch.trim().toLowerCase()))
     .map((b) => ({ id: b.id, address: b.address }));
-  const addressOptions = enrolledAddressOptions.length > 0 ? enrolledAddressOptions : nychaAddressOptions;
+  const addressOptions = enrolledAddressOptions.length > 0 ? enrolledAddressOptions : (enrolled.length > 0 && !isNycha ? [] : nychaAddressOptions);
 
   const lookupForm = useForm<z.infer<typeof lookupSchema>>({
     resolver: zodResolver(lookupSchema),

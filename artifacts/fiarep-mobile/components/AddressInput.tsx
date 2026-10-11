@@ -18,6 +18,8 @@ export default function AddressInput(props: {
   useCurrentLocation?: boolean;
   /** Addresses the resident's company enrolled — listed first, ahead of the catalog. */
   priorityAddresses?: string[];
+  /** Show only priorityAddresses (a private company's enrolled buildings), nothing from the catalog. */
+  onlyPriority?: boolean;
 }) {
   const [all, setAll] = useState<string[]>([]);
   const [official, setOfficial] = useState<NychaAddress[]>([]);
@@ -93,7 +95,7 @@ export default function AddressInput(props: {
   // otherwise require 2+ typed characters (general recent-address autocomplete).
   const officialAddresses = official.map((item) => item.address);
   const priority = props.priorityAddresses || [];
-  const candidates = [...priority, ...[...officialAddresses, ...all].filter((address) => !priority.some((p) => p.toLowerCase() === address.toLowerCase()))].filter((address, i, arr) => arr.findIndex((x) => x.toLowerCase() === address.toLowerCase()) === i);
+  const candidates = (props.onlyPriority ? [...priority] : [...priority, ...[...officialAddresses, ...all].filter((address) => !priority.some((p) => p.toLowerCase() === address.toLowerCase()))]).filter((address, i, arr) => arr.findIndex((x) => x.toLowerCase() === address.toLowerCase()) === i);
   const matches = focused && (hasDev || q.length >= 2)
     ? candidates.filter(a => (!q || a.toLowerCase().includes(q)) && a.toLowerCase() !== q).slice(0, 40)
     : [];

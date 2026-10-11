@@ -51,10 +51,15 @@ export default function ResidentScreen() {
     getResidentCode().then((c) => (c ? listEnrolledBuildings(c.code) : [])).then((rows) => { if (live) setEnrolled(rows); }).catch(() => {});
     return () => { live = false; };
   }, []);
+  // A private company's residents see only that company's enrolled buildings; NYCHA's catalog is for NYCHA.
+  const [companyName, setCompanyName] = useState('');
+  useEffect(() => { getResidentCode().then((c) => setCompanyName(c?.organizationName || '')).catch(() => {}); }, []);
+  const isNycha = /nycha|housing authority/i.test(companyName);
   const devNames = useMemo(() => {
     const mine = [...new Set(enrolled.map((b) => b.development))];
+    if (mine.length > 0 && !isNycha) return mine;
     return [...mine, ...listDevelopmentNames().filter((n) => !mine.some((m) => m.toLowerCase() === n.toLowerCase()))];
-  }, [enrolled]);
+  }, [enrolled, isNycha]);
   const enrolledAddresses = useMemo(() => enrolled.filter((b) => b.development.toLowerCase() === development.trim().toLowerCase()).map((b) => b.address), [enrolled, development]);
   const devFiltered = useMemo(() => {
     const q = devQuery.trim().toLowerCase();
@@ -175,6 +180,7 @@ export default function ResidentScreen() {
         onChangeText={setAddress}
         development={development}
         priorityAddresses={enrolledAddresses}
+        onlyPriority={enrolled.length > 0 && !isNycha}
         placeholder="Select your building address"
         style={styles.input}
       />
