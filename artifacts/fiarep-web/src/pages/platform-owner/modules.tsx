@@ -165,7 +165,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
     "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Inbox",
   ] },
-  { id: "worker", screen: "Worker home", tabs: [
+  { id: "worker", screen: "Worker / Technician home (FIAREP crew signs in here)", tabs: [
     "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off",
   ] },
 ];
