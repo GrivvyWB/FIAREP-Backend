@@ -43,6 +43,25 @@ export default function CompanyForms() {
   const [prefillNote, setPrefillNote] = useState("");
   const [hpd, setHpd] = useState<HpdPrefill | null>(null);
   const [alsoFill, setAlsoFill] = useState<FormDef[]>([]);
+  const [fillNo, setFillNo] = useState("");
+  const [filling, setFilling] = useState(false);
+  const AFFIDAVITS = new Set(["af6-vermin", "af7-mold", "af8-mold", "civ194-mold", "mold-assessment", "mold-remediation"]);
+  // Typed on the open form: pull that violation from HPD and fill this form with it.
+  async function fillFromNumber() {
+    if (!def) return;
+    const id = fillNo.replace(/\D/g, "");
+    if (!id) return;
+    setFilling(true);
+    try {
+      const v = await customFetch<HpdPrefill>(`/api/v1/company-forms/prefill/hpd/${encodeURIComponent(id)}`, { responseType: "json" } as never);
+      const plan = affidavitPlan(v);
+      setHpd(v); setAlsoFill(plan && plan.primary.id === def.id ? plan.attachments : []);
+      setPrefillNote(`Filled from violation #${v.violationId}${v.novId ? ` (NOV ${v.novId})` : ""} · ${v.address}${v.apartment ? ` Apt ${v.apartment}` : ""} · Class ${v.class || "?"}${v.units ? ` · ${v.units} units (${v.unitsSource})` : ""}${plan && plan.primary.id !== def.id ? ` · HPD's record points to ${plan.primary.title}` : ""}`);
+      await openFilled(def, v);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not fill from the violation", description: err?.data?.error || err?.message || "Check the number." });
+    } finally { setFilling(false); }
+  }
   async function openFilled(f: FormDef, v: HpdPrefill) {
     let last: Record<string, unknown> | undefined;
     try { const mine = await customFetch<Entry[]>(`/api/v1/company-forms/records?form=${encodeURIComponent(f.id)}`, { responseType: "json" } as never); last = mine[0]?.values; } catch { /* none yet */ }
@@ -146,6 +165,14 @@ export default function CompanyForms() {
           <div>
             <h1 className="text-2xl font-bold">{def.title}</h1>
             <p className="text-sm text-muted-foreground">{def.subtitle}</p>
+            {AFFIDAVITS.has(def.id) && (
+              <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void fillFromNumber(); }}>
+                <label className="text-xs font-semibold text-slate-700">Fill from violation #</label>
+                <Input value={fillNo} onChange={(e) => setFillNo(e.target.value)} placeholder="HPD violation number" className="h-8 w-48" inputMode="numeric" />
+                <Button type="submit" size="sm" className="h-8" disabled={filling || !fillNo.trim()}>{filling ? "Filling…" : "Fill"}</Button>
+                <span className="text-xs text-muted-foreground">or open it from the violation on Violation Alerts / Check HPD / DOB</span>
+              </form>
+            )}
             {prefillNote && <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-800">{prefillNote} — check every line before you sign.</p>}
             {hpd && alsoFill.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
