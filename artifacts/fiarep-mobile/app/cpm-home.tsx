@@ -98,6 +98,8 @@ export default function CpmHome() {
       color: '#185FA5',
       tiles: [
         { label: jobCount > 0 ? 'My Jobs (' + jobCount + ')' : 'My Jobs', onPress: () => router.push('/my-jobs'), tone: 'solid' as Tone },
+        // FIAREP's own technicians always get the punch clock here, whatever Module Management says.
+        ...(isTechnician ? [{ label: 'Time Clock', onPress: () => router.push('/attendance'), tone: 'solid' as Tone }] : []),
       ],
     },
     {
@@ -114,7 +116,7 @@ export default function CpmHome() {
         ...(normalizedPosition === 'inspector' ? [{ label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone }] : []),
         ...(normalizedPosition === 'inspector' && hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }, { label: 'Saved Measurements', onPress: () => router.push('/saved-measurements'), tone: 'outline' as Tone }] : []),
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },
-        { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone },
+        ...(isTechnician ? [] : [{ label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone }]),
       ],
     },
     ...(normalizedPosition === 'cpm' ? [{
@@ -150,7 +152,7 @@ export default function CpmHome() {
             {sec.heading}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            {sec.tiles.filter((t) => tileEnabled('cpm', t.label, rawModules)).map((t, i) => {
+            {sec.tiles.filter((t) => (isTechnician && t.label === 'Time Clock') || tileEnabled('cpm', t.label, rawModules)).map((t, i) => {
               const solid = t.tone === 'solid';
               const tint = t.tone === 'tint';
               return (
