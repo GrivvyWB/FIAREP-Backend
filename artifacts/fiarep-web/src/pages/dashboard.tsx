@@ -85,7 +85,9 @@ export default function Dashboard() {
     { label: "Emergencies", value: emergencies.filter((item) => !["completed", "closed", "resolved"].includes(statusOf(item))).length, total: emergencies.length, icon: AlertTriangle, query: emergenciesQuery, href: "/emergency" },
     { label: "Pending Leave", value: leave.filter((item) => String(item.state?.status || "Pending") === "Pending").length, total: leave.length, icon: Plane, query: leaveQuery, href: "/leave?view=team" },
     { label: "Unread Notifications", value: unread, total: notifications.length, icon: Bell, query: notificationsQuery, href: "/notifications" },
-  ].filter((metric) => hasModuleAccess(staff, metric.href === "/emergency" ? "emergency" : metric.href.startsWith("/leave") ? "leave" : metric.href.slice(1) as Parameters<typeof hasModuleAccess>[1]));
+  ].filter((metric) => hasModuleAccess(staff, metric.href === "/emergency" ? "emergency" : metric.href.startsWith("/leave") ? "leave" : metric.href.slice(1) as Parameters<typeof hasModuleAccess>[1]))
+    // A card the server refuses for this role (403) is not this person's business — drop it rather than show "Unavailable".
+    .filter((metric) => !(metric.query.isError && (metric.query.error as { status?: number } | null)?.status === 403));
   const activity = [
     ...inspections.map((item) => ({ item, label: "Inspection", href: `/inspections?id=${encodeURIComponent(item.id)}`, icon: ClipboardCheck })),
     ...reports.map((item) => ({ item, label: "Resident report", href: `/reports?id=${encodeURIComponent(item.id)}`, icon: FileSearch })),
