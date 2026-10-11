@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizations } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
+import { canFill, fillForm } from "../lib/formFill";
 
 export const COMPANY_FORMS: Array<{ file: string; title: string; group: string; description: string }> = [
   { file: "dob-certificate-of-correction-aeu2.pdf", title: "DOB Certificate of Correction (AEU2)", group: "Violations", description: "Affidavit required for every open DOB / OATH summons — who corrected it, when, cure or stipulation request." },
@@ -18,6 +19,12 @@ export const COMPANY_FORMS: Array<{ file: string; title: string; group: string; 
   { file: "lead-paint-disclosure-form.pdf", title: "Lead Paint Disclosure & Compliance", group: "Lead", description: "Known lead-based paint, hazard details, inspection, tenant acknowledgment." },
   { file: "lead-remediation-tracking-form.pdf", title: "Lead Remediation Tracking", group: "Lead", description: "Child under 6, XRF and dust-wipe results, remediation log, EPA RRP contractor, clearance exam and violation closure." },
   { file: "lead-hazard-work-log.pdf", title: "Lead Hazard Work Log", group: "Lead", description: "Daily lead hazard control / abatement record with containment and safety verification." },
+  { file: "hpd-af6-vermin-affidavit.pdf", title: "Affidavit of Compliance (AF-6)", group: "Vermin / Pest", description: "Mice, cockroaches, and rats infestation violations — work completed after January 19, 2019." },
+  { file: "mold-affidavit-of-compliance-af-7.pdf", title: "Affidavit of Compliance (AF-7)", group: "Mold", description: "Mold violations issued on or after January 19, 2019: fewer than 10 units (any class), Class A for 10 or more units, or upgraded Class B." },
+  { file: "mold-affidavit-of-compliance-af-8.pdf", title: "Affidavit of Compliance (AF-8)", group: "Mold", description: "Mold violations issued on or after January 19, 2019: 10 or more units, original Class B and C. Attach the assessor's and remediator's affidavits, licenses and DEP filing receipts." },
+  { file: "hpd-mold-certificate-of-correction.pdf", title: "Certification of Correction of Violation(s) — Mold (CIV 194)", group: "Mold", description: "10 or more units (Class B and C)." },
+  { file: "hpd-affidavit-mold-assessment.pdf", title: "Affidavit of Mold Assessment", group: "Mold", description: "Sworn statement from the mold assessor." },
+  { file: "hpd-affidavit-mold-remediation.pdf", title: "Affidavit of Mold Remediation", group: "Mold", description: "Sworn statement from the mold remediator." },
   { file: "tenant-notice-form.pdf", title: "Tenant Notice Form", group: "Tenant notices", description: "Notice of inspection, pest treatment, lead remediation, repairs or maintenance, with entry authorization." },
 ];
 
@@ -96,6 +103,27 @@ router.delete("/v1/company-forms/records/:id", requireAuth, async (req, res) => 
   res.json({ ok: true });
 });
 
+
+// The entry written onto the real form: the government PDF with the values in the blanks.
+router.post("/v1/company-forms/fill/:file", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  const form = COMPANY_FORMS.find((f) => f.file === String(req.params.file || ""));
+  if (!form || !canFill(form.file)) { res.status(404).json({ error: "This form cannot be filled automatically" }); return; }
+  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const values = b["values"] && typeof b["values"] === "object" && !Array.isArray(b["values"]) ? b["values"] as Record<string, unknown> : {};
+  try {
+    const blank = await readFile(new URL(form.file, await formsDir()));
+    const filled = await fillForm(form.file, new Uint8Array(blank), values);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="filled-${form.file}"`);
+    res.setHeader("Cache-Control", "private, no-store");
+    res.send(Buffer.from(filled));
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : "Could not fill the form" });
+  }
+});
+
 router.get("/v1/company-forms/:file", requireAuth, async (req, res) => {
   const actor = actorFrom(res);
   if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
@@ -109,6 +137,58 @@ router.get("/v1/company-forms/:file", requireAuth, async (req, res) => {
     res.send(bytes);
   } catch {
     res.status(404).json({ error: "Form file is missing on the server" });
+  }
+});
+
+// ── Fill an affidavit from the violation on file (HPD open data, by violation id) ──
+const HPD_VIOLATIONS = "wvxf-dwi5";
+const HPD_CONTACTS = "feu5-w2e2";
+const COUNTY: Record<string, string> = { BRONX: "Bronx", BROOKLYN: "Kings", MANHATTAN: "New York", QUEENS: "Queens", "STATEN ISLAND": "Richmond" };
+const txt = (v: unknown): string => (v == null ? "" : String(v).trim());
+function soql(dataset: string, params: Record<string, string>): string {
+  const u = new URL(`https://data.cityofnewyork.us/resource/${dataset}.json`);
+  for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
+  return u.toString();
+}
+async function fetchRows(url: string): Promise<Record<string, unknown>[]> {
+  const r = await fetch(url, { headers: { accept: "application/json", "user-agent": "FIAREP/1.0 forms" }, signal: AbortSignal.timeout(20_000) });
+  if (!r.ok) throw new Error(`NYC Open Data returned HTTP ${r.status}`);
+  const data = await r.json();
+  return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+}
+const boroName = (v: string) => { const b = v.toUpperCase(); return b === "STATEN ISLAND" ? "Staten Island" : b ? b.charAt(0) + b.slice(1).toLowerCase() : ""; };
+
+router.get("/v1/company-forms/prefill/hpd/:violationId", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  const id = String(req.params.violationId || "").replace(/\D/g, "");
+  if (!id) { res.status(400).json({ error: "A violation number is required" }); return; }
+  try {
+    const [v] = await fetchRows(soql(HPD_VIOLATIONS, { violationid: id, $limit: "1" }));
+    if (!v) { res.status(404).json({ error: `HPD has no violation #${id}` }); return; }
+    const registrationId = txt(v["registrationid"]);
+    // How many units the building has decides AF-7 (fewer than 10) vs AF-8 (10 or more): DOF valuation first, PLUTO second.
+    const bbl = txt(v["bbl"]).replace(/\D/g, "");
+    let units = 0; let unitsSource = "";
+    if (bbl) {
+      try { const r = await fetchRows(soql("8y4t-faws", { $select: "units", $where: `parid='${bbl}'`, $order: "year DESC", $limit: "1" })); const n = Number(r[0]?.["units"] ?? 0); if (n > 0) { units = n; unitsSource = "DOF"; } } catch { /* next */ }
+      if (!units) { try { const r = await fetchRows(soql("64uk-42ks", { $select: "unitsres,unitstotal", $where: `bbl=${Number(bbl)}`, $limit: "1" })); const n = Number(r[0]?.["unitsres"] ?? 0) || Number(r[0]?.["unitstotal"] ?? 0); if (n > 0) { units = n; unitsSource = "PLUTO"; } } catch { /* none */ } }
+    }
+    const contacts = registrationId ? await fetchRows(soql(HPD_CONTACTS, { registrationid: registrationId, $limit: "20" })).catch(() => []) : [];
+    const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+    const borough = boroName(txt(v["boro"]));
+    res.setHeader("Cache-Control", "no-store");
+    res.json({
+      violationId: txt(v["violationid"]), novId: txt(v["novid"]), registrationId,
+      class: txt(v["class"]), apartment: txt(v["apartment"]), story: txt(v["story"]),
+      address: `${txt(v["housenumber"])} ${txt(v["streetname"])}`.trim(), borough, zip: txt(v["zip"]), county: COUNTY[txt(v["boro"]).toUpperCase()] || borough,
+      bbl: txt(v["bbl"]), bin: txt(v["bin"]), units, unitsSource,
+      description: txt(v["novdescription"]).replace(/\s+/g, " "), inspectionDate: txt(v["inspectiondate"]).slice(0, 10), novIssuedDate: txt(v["novissueddate"]).slice(0, 10), status: txt(v["currentstatus"]),
+      signer: actor.name, company: org?.name || "",
+      contacts: contacts.map((c) => ({ type: txt(c["type"]), name: [txt(c["firstname"]), txt(c["lastname"])].filter(Boolean).join(" "), organization: txt(c["corporationname"]), title: txt(c["title"]) })),
+    });
+  } catch (err) {
+    res.status(502).json({ error: err instanceof Error ? err.message : "Could not reach HPD" });
   }
 });
 

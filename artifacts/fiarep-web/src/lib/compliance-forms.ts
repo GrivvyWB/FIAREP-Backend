@@ -125,6 +125,82 @@ export const COMPLIANCE_FORMS: FormDef[] = [
     ],
   },
   {
+    id: "af6-vermin", group: "Vermin / Pest", pdf: "hpd-af6-vermin-affidavit.pdf",
+    title: "Affidavit of Compliance (AF-6)", subtitle: "Mice, cockroaches, and rats infestation violations — work completed after January 19, 2019",
+    titleKeys: ["violationNumbers", "address"],
+    sections: [
+      { title: "Violation", fields: [t("violationNumbers", "Violation Number(s)", true), t("apartment", "Apt #"), t("county", "County of (State of New York)")] },
+      { title: "Affidavit", fields: [t("signerName", "I, (type or print name)", true), t("address", "Entire building address, including borough", true), t("registrationNumber", "Property Registration number")],
+        note: "1. That I am over twenty-one years of age and am the registered owner and/or managing agent of the subject premises. 2. That I have read HPD's \"Guide to Local Law 55 of 2018 Integrated Pest Management Practices\" and am aware of the work practices required to eliminate mice, cockroaches, and rat infestation safely and in accordance with all applicable laws and rules. 3. That the work undertaken to correct the above-referenced violation(s) was performed in accordance with the required integrated pest management and other work practices. 4. That I have examined the area(s) identified in the above-referenced violation number(s), to my knowledge such violation(s) whose number(s) I have listed were corrected in accordance with the integrated pest management and work practices in Administrative Code §27-2017.8 and 28 RCNY §54-04(a). 5. That if pesticides were used to abate the presence of mice, cockroaches, and rat infestations, a certified commercial pesticide applicator was used in accordance with New York State Environmental Conservation Law (ECL Article 33 §33-0905)." },
+      { title: "Sworn to me this", fields: [d("signedOn", "Day of"), t("printName", "Print Name"), t("phone", "Phone Number"), t("notaryPublic", "Notary Public")] },
+    ],
+  },
+  {
+    id: "af7-mold", group: "Mold", pdf: "mold-affidavit-of-compliance-af-7.pdf",
+    title: "Affidavit of Compliance (AF-7)", subtitle: "Mold violations issued on or after January 19, 2019 — fewer than 10 units (any class), Class A for 10 or more units, or upgraded Class B",
+    titleKeys: ["violationNumbers", "address"],
+    sections: [
+      { title: "Violation", fields: [t("violationNumbers", "Violation Number(s)", true), t("apartment", "Apt #")] },
+      { title: "Affidavit", fields: [t("signerName", "I, (type or print name)", true), t("address", "1. Full building address, including borough", true), { key: "capacity", label: "2. I am the", type: "select", options: ["", "Currently registered owner of the property", "Currently registered managing agent of the property", "Otherwise registered as responsible for the property", "Currently registered officer or director of the corporation that owns the property", "Owner or shareholder of record of a tenant-occupied condominium or cooperative unit"] },
+        { key: "workDoneBy", label: "4. The corrective work was performed by", type: "select", options: ["", "Myself, my employee, or my managing agent", "Licensed mold assessment and mold remediation firms (licenses attached)"] }],
+        note: "3. I have read HPD's guide to Local Law 55 of 2018 mold work practices and understand the safe work practices required. 4. The work undertaken to correct the above-referenced violation(s) was performed in accordance with those work practices." },
+      { title: "Signature", fields: [t("printName", "Print Name")] },
+      { title: "Notary", fields: [t("county", "County of (State of New York)"), d("signedOn", "Sworn to before me this (date)"), t("notaryName", "Notary Print Name")] },
+    ],
+  },
+  {
+    id: "af8-mold", group: "Mold", pdf: "mold-affidavit-of-compliance-af-8.pdf",
+    title: "Affidavit of Compliance (AF-8)", subtitle: "Mold violations issued on or after January 19, 2019 — 10 or more units, original Class B and Class C",
+    titleKeys: ["violationNumbers", "address"],
+    sections: [
+      { title: "Violation", fields: [t("violationNumbers", "Violation Number(s)", true), t("apartment", "Apt #")] },
+      { title: "Affidavit", fields: [t("signerName", "I, (type or print name)", true), t("address", "1. Full building address, including borough", true), { key: "capacity", label: "2. I am the", type: "select", options: ["", "Currently registered owner of the property", "Currently registered managing agent of the property", "Otherwise registered as responsible for the property", "Currently registered officer or director of the corporation that owns the property", "Owner or shareholder of record of a tenant-occupied condominium or cooperative unit"] }],
+        note: "3. I have read HPD's guide to Local Law 55 of 2018 mold work practices and understand the safe work practices required. 4. The work undertaken to correct the above-referenced violation(s) was performed in accordance with those work practices. 5. Pursuant to Administrative Code §27-2017.9 and 28 RCNY §54-04, I have attached the following:" },
+      { title: "5. Attached", checks: [cb("attRemediatorAffidavit", "Affidavit from the licensed mold remediation contractor — work followed the safe work practices and NYS Labor Law Article 32"), cb("attPlanAffidavit", "Affidavit from the licensed mold contractor — the remediation plan complied with Article 32"), cb("attAssessorAffidavit", "Affidavit from the licensed mold assessor — the post-remediation assessment report complied with Article 32"), cb("attAssessorLicense", "Copy of the mold assessor's license"), cb("attRemediatorLicense", "Copy of the mold remediator's or remediation supervisor's license"), cb("attDepRemediator", "DEP filing receipt — mold remediator"), cb("attDepAssessor", "DEP filing receipt — mold assessor")] },
+      { title: "Signature", fields: [t("printName", "Print Name")] },
+      { title: "Notary", fields: [t("county", "County of (State of New York)"), d("signedOn", "Sworn to before me this (date)"), t("notaryName", "Notary Print Name")] },
+    ],
+  },
+  {
+    id: "civ194-mold", group: "Mold", pdf: "hpd-mold-certificate-of-correction.pdf",
+    title: "Certification of Correction of Violation(s) — Mold (CIV 194)", subtitle: "10 or more units (Class B and C)",
+    titleKeys: ["violationNumbers", "novId"],
+    sections: [
+      { title: "Certification", fields: [t("county", "County of (State of New York)"), t("signerName", "I, (print name)", true),
+        { key: "capacity", label: "1. Registered with the Division of Code Enforcement in the capacity of", type: "select", options: ["", "Owner of the property", "Officer or Director of the Corporation that owns the property", "Managing Agent of the property", "Otherwise registered as responsible for the property"] }] },
+      { title: "2. Violation", fields: [t("novId", "Notice of Violation ID"), t("violationNumbers", "Violation number(s)", true), d("correctedOn", "Corrected on (date)")],
+        note: "Corrected, including the source of the mold condition, in accordance with the safe work practices outlined in Administrative Code §27-2017.9 and 28 RCNY §54-04(b), by firms licensed to perform mold assessment and mold remediation or abatement in accordance with New York State Labor Law Article 32." },
+      { title: "Attached", fields: [t("assessorFirm", "Mold Assessment Contractor license — Firm Name", true), t("remediatorFirm", "Mold Remediation Contractor (or Supervisor) license — Firm Name", true)],
+        checks: [cb("attAssessorLicense", "A copy of the Mold Assessment Contractor license"), cb("attRemediatorLicense", "A copy of the Mold Remediation Contractor (or Supervisor) license"), cb("attAssessmentAffidavit", "Affidavit of Mold Assessment"), cb("attRemediationAffidavit", "Affidavit of Mold Remediation"), cb("attDepRemediator", "Department of Environmental Protection's (DEP) Mold Remediator's filing receipt"), cb("attDepAssessor", "DEP's Mold Assessor's filing receipt")] },
+      { title: "Sworn to me this", fields: [d("signedOn", "Day of"), t("printName", "Print Name"), t("phone", "Phone Number"), t("notaryPublic", "Notary Public")],
+        note: "3. My signature indicates that I am submitting a separate and distinct certification for each violation listed above by Violation Number." },
+    ],
+  },
+  {
+    id: "mold-assessment", group: "Mold", pdf: "hpd-affidavit-mold-assessment.pdf",
+    title: "Affidavit of Mold Assessment", subtitle: "Sworn Statement from the Mold Assessor",
+    titleKeys: ["violationNumbers", "address"],
+    sections: [
+      { title: "Assessor", fields: [d("dated", "Dated"), t("assessorFirm", "Licensed Mold Assessor's Firm Name", true), t("assessorLicense", "Mold Assessor's Firm License #"), d("assessorLicenseExpires", "Expiration Date"), t("firmAddress", "Firm's Address", true), t("firmPhone", "Tel"), t("firmEmail", "Email")] },
+      { title: "Property", fields: [t("address", "Property Address", true), t("apartment", "Apt"), t("violationNumbers", "Violation Number(s)", true)] },
+      { title: "Statement", fields: [t("assessorName", "I, (the licensed mold assessor)", true), d("planPreparedOn", "Prepared the mold remediation plan on"), d("postAssessmentOn", "Completed the post-remediation assessment on")],
+        note: "…and determined that the licensed mold remediator corrected the mold hazard violation(s) using methods consistent with the mold remediation plan; the safe work practices outlined in Administrative Code §27-2017.9 and 28 RCNY §54-04; and the minimum work standards pursuant to Title 2 of Article 32 in the New York State Labor Law. I have provided the owner with a copy of the Post-Remediation Assessment Form. A copy of my mold assessment license in effect when the work was completed is attached, along with a filing receipt from the Department of Environmental Protection indicating submission of the Post-Remediation Assessment pursuant to Administrative Code §24-154.1." },
+      { title: "Sworn to me this", fields: [d("signedOn", "Day of"), t("printName", "Print Name"), t("phone", "Phone Number"), t("notaryPublic", "Notary Public")] },
+    ],
+  },
+  {
+    id: "mold-remediation", group: "Mold", pdf: "hpd-affidavit-mold-remediation.pdf",
+    title: "Affidavit of Mold Remediation", subtitle: "Sworn Statement from the Mold Remediator",
+    titleKeys: ["violationNumbers", "address"],
+    sections: [
+      { title: "Remediator", fields: [d("dated", "Dated"), t("remediatorFirm", "Licensed Mold Remediation Firm Name", true), t("remediatorLicense", "Mold Remediator's Firm License #"), d("remediatorLicenseExpires", "Expiration Date"), t("supervisorLicense", "Mold Remediation Supervisor License # (if applicable)"), d("supervisorLicenseExpires", "Expiration Date"), t("firmAddress", "Firm's Address", true), t("firmPhone", "Tel"), t("firmEmail", "Email")] },
+      { title: "Property", fields: [t("address", "Property Address", true), t("apartment", "Apt"), t("violationNumbers", "Violation Number(s)", true)] },
+      { title: "Statement", fields: [t("remediatorName", "I, (the licensed mold remediator)", true), d("workStartedOn", "During the period commencing"), d("workCompletedOn", "and completed")],
+        note: "…hereby swear that I performed the work to correct the above listed mold hazard violation(s) in accordance with the safe work practices outlined in Administrative Code §27-2017.9 and 28 RCNY §54-04; and the minimum work standards pursuant to Title 2 of Article 32 in the New York State Labor Law. I have provided the owner with a copy of the remediation work plan. A copy of my mold remediation license and mold supervisor license (if applicable) in effect when the work was completed is attached, along with a filing receipt from the Department of Environmental Protection indicating submission of the mold remediation work plan pursuant to Administrative Code §24-154.1." },
+      { title: "Sworn to me this", fields: [d("signedOn", "Day of"), t("printName", "Print Name"), t("phone", "Phone Number"), t("notaryPublic", "Notary Public")] },
+    ],
+  },
+  {
     id: "tenant-notice", group: "Tenant notices", pdf: "tenant-notice-form.pdf",
     title: "Tenant Notice Form", subtitle: "Notice of inspection, repair, treatment, or remediation",
     titleKeys: ["tenantName", "unit"],
@@ -147,4 +223,48 @@ export function formById(id: string): FormDef | undefined {
 export function entryLabel(def: FormDef, values: Record<string, unknown>): string {
   const parts = def.titleKeys.map((k) => String(values[k] ?? "").trim()).filter(Boolean);
   return parts.length ? parts.join(" · ") : "Untitled";
+}
+
+/** What HPD has on file for a violation (from the server's prefill lookup). */
+export type HpdPrefill = { violationId: string; novId: string; registrationId: string; class: string; apartment: string; story: string; address: string; borough: string; zip: string; county: string; bbl: string; units: number; unitsSource: string; description: string; inspectionDate: string; novIssuedDate: string; signer: string; company: string; contacts: { type: string; name: string; organization: string; title: string }[] };
+
+/** Which affidavit the violation calls for, and what has to go with it.
+ *  Mice / rats / roaches → AF-6. Mold: fewer than 10 units, Class A, or an upgraded
+ *  Class B → AF-7; 10 or more units, Class B or C → AF-8 with the assessor's and
+ *  remediator's affidavits (and the CIV 194 certification) attached. */
+export function affidavitPlan(v: HpdPrefill): { primary: FormDef; attachments: FormDef[]; why: string } | null {
+  const d = v.description.toLowerCase();
+  const f = (id: string) => formById(id)!;
+  if (/mold|mould/.test(d)) {
+    const cls = v.class.toUpperCase();
+    if (v.units > 0 && v.units < 10) return { primary: f("af7-mold"), attachments: [], why: `${v.units} units (fewer than 10) → AF-7` };
+    if (cls === "A") return { primary: f("af7-mold"), attachments: [], why: `Class A → AF-7` };
+    if (v.units >= 10) return { primary: f("af8-mold"), attachments: [f("mold-assessment"), f("mold-remediation"), f("civ194-mold")], why: `${v.units} units, Class ${cls || "B/C"} → AF-8 with the assessor's and remediator's affidavits and DEP receipts` };
+    return { primary: f("af7-mold"), attachments: [f("af8-mold"), f("mold-assessment"), f("mold-remediation"), f("civ194-mold")], why: "Unit count unknown — AF-7 opened; use AF-8 and the attachments if the building has 10 or more units" };
+  }
+  if (/mice|mouse|rat|roach|vermin|rodent|infest/.test(d)) return { primary: f("af6-vermin"), attachments: [], why: "Mice / cockroaches / rats → AF-6" };
+  return null;
+}
+
+/** Fill a form from the violation on file. `last` = the company's most recent entry of the same form (firm names, licenses, phone carry over). */
+export function prefillFromHpd(formId: string, v: HpdPrefill, last?: Record<string, unknown>): Record<string, unknown> {
+  const today = new Date().toISOString().slice(0, 10);
+  const carry = (keys: string[]) => Object.fromEntries(keys.filter((k) => last && last[k] != null && String(last[k]).trim()).map((k) => [k, last![k]]));
+  const fullAddress = [v.address, v.borough, "NY", v.zip].filter(Boolean).join(", ");
+  const common = { violationNumbers: v.violationId, apartment: v.apartment, address: fullAddress, county: v.county, signedOn: today };
+  switch (formId) {
+    case "af6-vermin":
+      return { ...common, registrationNumber: v.registrationId, signerName: v.signer, printName: v.signer, ...carry(["phone"]) };
+    case "af7-mold":
+    case "af8-mold":
+      return { ...common, signerName: v.signer, printName: v.signer, ...carry(["capacity", "workDoneBy"]) };
+    case "civ194-mold":
+      return { ...common, novId: v.novId, signerName: v.signer, printName: v.signer, ...carry(["phone", "assessorFirm", "remediatorFirm", "capacity"]) };
+    case "mold-assessment":
+      return { ...common, dated: today, ...carry(["assessorFirm", "assessorLicense", "assessorLicenseExpires", "firmAddress", "firmPhone", "firmEmail", "assessorName", "printName", "phone"]) };
+    case "mold-remediation":
+      return { ...common, dated: today, ...carry(["remediatorFirm", "remediatorLicense", "remediatorLicenseExpires", "supervisorLicense", "supervisorLicenseExpires", "firmAddress", "firmPhone", "firmEmail", "remediatorName", "printName", "phone"]) };
+    default:
+      return common;
+  }
 }

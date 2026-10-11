@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { BellRing, Building2 } from "lucide-react";
+import { BellRing, Building2, FileSignature } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
 import { customFetch } from "@workspace/api-client-react";
 
 type Alert = { id: string; watchId: string; kind: string; date: string; address: string; borough: string; title: string; detail: string; foundAt: string };
@@ -13,6 +14,9 @@ const recent = (iso: string) => Date.now() - new Date(iso).getTime() < 48 * 3600
  * summonses and other 311 calls, checked every 30 minutes. Read-only; FIAREP
  * handles the work. */
 export default function ViolationAlerts() {
+  const { organizationModules } = useAuth();
+  const formsOn = organizationModules["company-forms"] === true;
+  const hpdId = (a: { detail: string }) => (a.detail.match(/^#(\d+)/) || [])[1] || "";
   const [data, setData] = useState<{ buildings: Watch[]; alerts: Alert[] } | null>(null);
   const [error, setError] = useState("");
   const [building, setBuilding] = useState("");
@@ -57,6 +61,12 @@ export default function ViolationAlerts() {
                 </div>
                 <p className="mt-1 text-sm font-medium text-slate-900">{a.title}</p>
                 <p className="text-xs text-slate-600">{a.detail}</p>
+                {formsOn && a.kind === "HPD violation" && hpdId(a) && (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <span className="flex items-center gap-1 text-xs font-semibold text-slate-700"><FileSignature className="h-3.5 w-3.5" />Violation corrected?</span>
+                    <a href={`/company-forms?hpd=${encodeURIComponent(hpdId(a))}`} className="rounded-full border border-slate-300 bg-white px-2.5 py-0.5 text-xs font-medium text-slate-800 hover:bg-slate-100">Fill affidavit</a>
+                  </div>
+                )}
               </div>
             </div>
           ))}

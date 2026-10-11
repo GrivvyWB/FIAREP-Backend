@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { ArrowLeft, Download, FileText, Lock, Plus, Printer, Save, Trash2 } from "lucide-react";
-import { COMPLIANCE_FORMS, MILESTONES, entryLabel, type FormDef, type Field, type Section } from "@/lib/compliance-forms";
+import { COMPLIANCE_FORMS, MILESTONES, entryLabel, prefillFromHpd, affidavitPlan, type HpdPrefill, type FormDef, type Field, type Section } from "@/lib/compliance-forms";
 
 type Entry = { id: string; formId: string; values: Record<string, unknown>; label: string; createdBy: string; updatedBy: string; createdAt: string; updatedAt: string };
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
@@ -35,6 +35,39 @@ export default function CompanyForms() {
     } catch (err: any) { setLocked(err?.data?.error || err?.message || "Company forms are not available."); }
   }
   useEffect(() => { void reload(); }, []);
+
+  // Opened from a violation ("Fill affidavit"): /company-forms?hpd=<violation number>.
+  // HPD's record of that violation picks the right affidavit (AF-6 / AF-7 / AF-8)
+  // and fills it; the company's last entry of the same form supplies the firm
+  // names, licenses and phone. With AF-8 the attachments are offered too.
+  const [prefillNote, setPrefillNote] = useState("");
+  const [hpd, setHpd] = useState<HpdPrefill | null>(null);
+  const [alsoFill, setAlsoFill] = useState<FormDef[]>([]);
+  async function openFilled(f: FormDef, v: HpdPrefill) {
+    let last: Record<string, unknown> | undefined;
+    try { const mine = await customFetch<Entry[]>(`/api/v1/company-forms/records?form=${encodeURIComponent(f.id)}`, { responseType: "json" } as never); last = mine[0]?.values; } catch { /* none yet */ }
+    setFormId(f.id); setEditing({ id: "", values: prefillFromHpd(f.id, v, last) });
+  }
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const wanted = q.get("form") || ""; const id = q.get("hpd") || "";
+    if (!wanted && !id) return;
+    (async () => {
+      if (!id) { const f = COMPLIANCE_FORMS.find((x) => x.id === wanted); if (f) startNew(f); return; }
+      try {
+        const v = await customFetch<HpdPrefill>(`/api/v1/company-forms/prefill/hpd/${encodeURIComponent(id)}`, { responseType: "json" } as never);
+        const plan = affidavitPlan(v);
+        const f = COMPLIANCE_FORMS.find((x) => x.id === wanted) || plan?.primary;
+        if (!f) { toast({ variant: "destructive", title: "No affidavit for this violation", description: v.description }); return; }
+        setHpd(v); setAlsoFill(plan && plan.primary.id === f.id ? plan.attachments : []);
+        setPrefillNote(`Filled from violation #${v.violationId}${v.novId ? ` (NOV ${v.novId})` : ""} · ${v.address}${v.apartment ? ` Apt ${v.apartment}` : ""} · Class ${v.class || "?"}${v.units ? ` · ${v.units} units (${v.unitsSource})` : ""}${plan ? ` · ${plan.why}` : ""}`);
+        await openFilled(f, v);
+      } catch (err: any) {
+        toast({ variant: "destructive", title: "Could not fill from the violation", description: err?.data?.error || err?.message || "Fill it in by hand." });
+      }
+      window.history.replaceState(null, "", "/company-forms");
+    })();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function startNew(f: FormDef) {
     const values: Record<string, unknown> = {};
@@ -74,6 +107,16 @@ export default function CompanyForms() {
     } catch (err: any) { toast({ variant: "destructive", title: "Could not open", description: err?.data?.error || err?.message }); }
   }
 
+  // The real government form with the entry written into its blanks.
+  const FILLABLE = new Set(["hpd-af6-vermin-affidavit.pdf", "hpd-mold-certificate-of-correction.pdf", "hpd-affidavit-mold-assessment.pdf", "hpd-affidavit-mold-remediation.pdf"]);
+  async function filledPdf() {
+    if (!def || !editing) return;
+    try {
+      const blob = await customFetch<Blob>(`/api/v1/company-forms/fill/${encodeURIComponent(def.pdf)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values: editing.values }), responseType: "blob" } as never);
+      const url = URL.createObjectURL(blob); window.open(url, "_blank", "noopener"); setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    } catch (err: any) { toast({ variant: "destructive", title: "Could not fill the PDF", description: err?.data?.error || err?.message }); }
+  }
+
   function print() {
     if (!def || !editing) return;
     const w = window.open("", "_blank", "noopener,width=900,height=1100");
@@ -103,14 +146,23 @@ export default function CompanyForms() {
           <div>
             <h1 className="text-2xl font-bold">{def.title}</h1>
             <p className="text-sm text-muted-foreground">{def.subtitle}</p>
+            {prefillNote && <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-800">{prefillNote} — check every line before you sign.</p>}
+            {hpd && alsoFill.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
+                <span className="font-semibold text-slate-700">Goes with this one — also fill:</span>
+                {alsoFill.map((f) => <Button key={f.id} size="sm" variant="outline" className="h-7" onClick={() => void openFilled(f, hpd)}>{f.title}</Button>)}
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
+            {FILLABLE.has(def.pdf) && <Button onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button>}
             <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
             <Button onClick={() => void save()} disabled={busy}><Save className="mr-1 h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
           </div>
         </div>
         {def.sections.map((s) => <SectionEditor key={s.title} section={s} values={editing.values} set={set} />)}
         <div className="flex justify-end gap-2 pb-8">
+          {FILLABLE.has(def.pdf) && <Button onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button>}
           <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
           <Button onClick={() => void save()} disabled={busy}><Save className="mr-1 h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
         </div>
