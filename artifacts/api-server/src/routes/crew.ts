@@ -14,7 +14,8 @@ import { platformAudit } from "../lib/audit";
 import { allocateStaffCode } from "../lib/staffCodes";
 import { getTimeClockConfig, mergeTimeClockConfig } from "../lib/timeClockConfig";
 import { deliverPushNotification } from "../lib/push";
-import { FIAREP_TENANT, mirrorFiarepProgress, sendComplaintToFiarep } from "../lib/fiarepDispatch";
+import { FIAREP_TENANT, crewPhotoPaths, mirrorFiarepProgress, sendComplaintToFiarep } from "../lib/fiarepDispatch";
+import { fileStorage, isSafeTenantObjectPath } from "../lib/fileStorage";
 import type { Actor } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -191,14 +192,25 @@ const jobView = (r: typeof entityRecords.$inferSelect, company: string, copy?: t
     address: String(st["address"] || ""), unit: String(st["unit"] || st["apartment"] || ""), category: String(st["category"] || st["issueType"] || st["location"] || ""),
     description: String(st["description"] || st["issue"] || ""), status: String(st["status"] || ""), createdAt: r.createdAt?.toISOString?.() ?? null,
     sentAt: typeof st["fiarepSentAt"] === "string" ? st["fiarepSentAt"] : null,
-    fiarep: cs ? { recordId: copy!.id, status: String(cs["status"] || ""), assignedStaffId: String(cs["assignedStaffId"] || ""), assignedTo: String(cs["assignedTo"] || ""), completedAt: cs["completedAt"] ?? null } : null,
+    clientStatus: String(st["status"] || ""),
+    fiarep: cs ? {
+      recordId: copy!.id, status: String(cs["status"] || ""), assignedStaffId: String(cs["assignedStaffId"] || ""), assignedTo: String(cs["assignedTo"] || ""),
+      startedAt: cs["startedAt"] ?? null, completedAt: cs["completedAt"] ?? null, completionNote: String(cs["completionNote"] || ""),
+      photos: crewPhotoPaths(cs),
+      approvedAt: cs["approvedAt"] ?? null, approvedBy: String(cs["approvedBy"] || ""),
+      sentBackNote: String(cs["reworkNote"] || ""), sentBackAt: cs["reworkAt"] ?? null,
+      clientApprovedAt: cs["clientApprovedAt"] ?? null, clientApprovedBy: String(cs["clientApprovedBy"] || ""),
+      updates: Array.isArray(cs["updates"]) ? (cs["updates"] as unknown[]).slice(-12) : [],
+    } : null,
   };
 };
 
 router.get("/v1/platform/crew/jobs", async (_req, res) => {
   const orgs = await db.select({ id: organizations.id, name: organizations.name }).from(organizations);
   const names = new Map(orgs.map((o) => [o.id, o.name]));
-  const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false), sql`${entityRecords.tenantId} <> ${FIAREP_TENANT}`, inArray(sql`coalesce(${entityRecords.state}->>'status','')`, OPEN))).orderBy(desc(entityRecords.updatedAt));
+  // Every open complaint on the platform, plus everything ever sent to FIAREP (so finished work stays on record).
+  const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false), sql`${entityRecords.tenantId} <> ${FIAREP_TENANT}`,
+    sql`(coalesce(${entityRecords.state}->>'status','') = any(${sql.raw("ARRAY['" + OPEN.join("','") + "']")}) or ${entityRecords.state} ? 'fiarepRecordId')`)).orderBy(desc(entityRecords.updatedAt));
   const copyIds = rows.map((r) => r.state["fiarepRecordId"]).filter((v): v is string => typeof v === "string" && v.length > 0);
   const copies = copyIds.length ? await db.select().from(entityRecords).where(and(eq(entityRecords.tenantId, FIAREP_TENANT), inArray(entityRecords.id, copyIds))) : [];
   const byId = new Map(copies.map((c) => [c.id, c]));
@@ -235,6 +247,58 @@ router.post("/v1/platform/crew/jobs/:tenantId/:id/send", async (req, res) => {
   if (alert) void deliverPushNotification(alert).catch(() => undefined);
   await platformAudit(owner.name, "crew.job-sent", source.tenantId, null, { complaint: source.id, copy: copy.id, technician: tech.name });
   res.json(jobView(source, org?.name || source.tenantId, assigned));
+});
+
+/** FIAREP signs off on its technician's finished work (its own record; the client still approves theirs). */
+router.post("/v1/platform/crew/jobs/:tenantId/:id/approve", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const [source] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, req.params.id!), eq(entityRecords.tenantId, req.params.tenantId!), eq(entityRecords.deleted, false))).limit(1);
+  const copyId = typeof source?.state["fiarepRecordId"] === "string" ? String(source.state["fiarepRecordId"]) : "";
+  const [copy] = copyId ? await db.select().from(entityRecords).where(and(eq(entityRecords.id, copyId), eq(entityRecords.tenantId, FIAREP_TENANT))).limit(1) : [];
+  if (!source || !copy) { res.status(404).json({ error: "Job not found" }); return; }
+  if (copy.state["status"] !== "done") { res.status(409).json({ error: "The technician has not marked this done yet." }); return; }
+  const now = new Date();
+  const [after] = await db.update(entityRecords).set({ state: { ...copy.state, status: "approved", approvedAt: now.toISOString(), approvedBy: `FIAREP (${owner.name})` }, version: (copy.version ?? 1) + 1, updatedAt: now }).where(eq(entityRecords.id, copy.id)).returning();
+  const asFiarep: Actor = { id: "platform-owner", tenantId: FIAREP_TENANT, name: `FIAREP (${owner.name})`, role: "administrator", position: "Platform Owner", developments: [], sessionVersion: 0 };
+  await mirrorFiarepProgress(asFiarep, after!);
+  const tech = String(copy.state["assignedStaffId"] || "");
+  if (tech) { const [alert] = await db.insert(notifications).values({ id: randomUUID(), tenantId: FIAREP_TENANT, target: tech, message: "Work approved", detail: String(copy.state["complaintNo"] || ""), reportId: copy.id }).returning(); if (alert) void deliverPushNotification(alert).catch(() => undefined); }
+  await platformAudit(owner.name, "crew.job-approved", source.tenantId, null, { complaint: source.id, copy: copy.id });
+  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, source.tenantId)).limit(1);
+  const [src2] = await db.select().from(entityRecords).where(eq(entityRecords.id, source.id)).limit(1);
+  res.json(jobView(src2 ?? source, org?.name || source.tenantId, after));
+});
+
+/** Send the technician back to fix it. */
+router.post("/v1/platform/crew/jobs/:tenantId/:id/send-back", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const note = text((req.body as Record<string, unknown>)?.["note"]).slice(0, 1000);
+  if (note.length < 3) { res.status(400).json({ error: "Say what needs fixing." }); return; }
+  const [source] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, req.params.id!), eq(entityRecords.tenantId, req.params.tenantId!), eq(entityRecords.deleted, false))).limit(1);
+  const copyId = typeof source?.state["fiarepRecordId"] === "string" ? String(source.state["fiarepRecordId"]) : "";
+  const [copy] = copyId ? await db.select().from(entityRecords).where(and(eq(entityRecords.id, copyId), eq(entityRecords.tenantId, FIAREP_TENANT))).limit(1) : [];
+  if (!source || !copy) { res.status(404).json({ error: "Job not found" }); return; }
+  const now = new Date();
+  const updates = Array.isArray(copy.state["updates"]) ? (copy.state["updates"] as unknown[]) : [];
+  const [after] = await db.update(entityRecords).set({
+    state: { ...copy.state, status: "in_progress", reworkNote: note, reworkByStaffName: `FIAREP (${owner.name})`, reworkAt: now.toISOString(), updates: [...updates, { status: "in_progress", note: `Sent back: ${note}`, by: `FIAREP (${owner.name})`, at: now.toISOString(), action: "reject-work" }] },
+    version: (copy.version ?? 1) + 1, updatedAt: now,
+  }).where(eq(entityRecords.id, copy.id)).returning();
+  const asFiarep: Actor = { id: "platform-owner", tenantId: FIAREP_TENANT, name: `FIAREP (${owner.name})`, role: "administrator", position: "Platform Owner", developments: [], sessionVersion: 0 };
+  await mirrorFiarepProgress(asFiarep, after!);
+  const tech = String(copy.state["assignedStaffId"] || "");
+  if (tech) { const [alert] = await db.insert(notifications).values({ id: randomUUID(), tenantId: FIAREP_TENANT, target: tech, message: `Sent back: ${note}`.slice(0, 200), detail: String(copy.state["complaintNo"] || ""), reportId: copy.id }).returning(); if (alert) void deliverPushNotification(alert).catch(() => undefined); }
+  await platformAudit(owner.name, "crew.job-sent-back", source.tenantId, null, { complaint: source.id, copy: copy.id, note });
+  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, source.tenantId)).limit(1);
+  const [src2] = await db.select().from(entityRecords).where(eq(entityRecords.id, source.id)).limit(1);
+  res.json(jobView(src2 ?? source, org?.name || source.tenantId, after));
+});
+
+/** A signed link to one of the crew's job photos. */
+router.post("/v1/platform/crew/photo-url", async (req, res) => {
+  const objectPath = text((req.body as Record<string, unknown>)?.["objectPath"]);
+  if (!objectPath || objectPath.includes("..") || !isSafeTenantObjectPath(FIAREP_TENANT, objectPath)) { res.status(404).json({ error: "File not found" }); return; }
+  try { res.json(await fileStorage.createDownload(FIAREP_TENANT, objectPath)); } catch { res.status(404).json({ error: "File not found" }); }
 });
 
 export default router;

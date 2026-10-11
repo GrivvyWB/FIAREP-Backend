@@ -10,7 +10,7 @@ import {
   fileOwnership,
   residentReportPhotos,
 } from "@workspace/db";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { audit } from "../lib/audit";
 import {
   ENTITIES,
@@ -27,6 +27,7 @@ import {
   type FileOwnershipRecord,
 } from "../lib/fileStorage";
 import { actorFrom, requireAuth } from "../middlewares/auth";
+import { FIAREP_TENANT, crewPhotoPaths } from "../lib/fiarepDispatch";
 
 const router: IRouter = Router();
 router.use("/v1/files", requireAuth);
@@ -165,6 +166,25 @@ router.post("/v1/files/download-url", async (req, res) => {
     return;
   }
   if (!isSafeTenantObjectPath(actor.tenantId, objectPath)) {
+    // A photo FIAREP's technician took on a complaint this company sent to
+    // FIAREP: the company may open it from its own copy of the complaint.
+    if (actor.tenantId !== FIAREP_TENANT && isSafeTenantObjectPath(FIAREP_TENANT, objectPath)) {
+      const mine = await db.select({ id: entityRecords.id, copyId: sql<string>`${entityRecords.state}->>'fiarepRecordId'` }).from(entityRecords)
+        .where(and(eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false), sql`${entityRecords.state} ? 'fiarepRecordId'`));
+      const copyIds = mine.map((m) => m.copyId).filter((v): v is string => typeof v === "string" && v.length > 0);
+      const copies = copyIds.length ? await db.select({ state: entityRecords.state }).from(entityRecords).where(and(eq(entityRecords.tenantId, FIAREP_TENANT), inArray(entityRecords.id, copyIds))) : [];
+      if (copies.some((c) => crewPhotoPaths(c.state).includes(objectPath))) {
+        try {
+          const result = await fileStorage.createDownload(FIAREP_TENANT, objectPath);
+          await audit(actor, "file.download-requested", "Requested a FIAREP crew photo", objectPath);
+          res.json(result);
+        } catch (error) {
+          req.log.warn({ err: error }, "Rejected FIAREP crew photo download");
+          res.status(404).json({ error: "File not found" });
+        }
+        return;
+      }
+    }
     res.status(404).json({ error: "File not found" });
     return;
   }

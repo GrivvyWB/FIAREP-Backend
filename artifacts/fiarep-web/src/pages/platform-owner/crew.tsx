@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
@@ -7,7 +7,7 @@ import { ChevronDown } from "lucide-react";
 type Member = { id: string; name: string; position: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null };
 type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number };
 type Punch = { id: string; direction: string; at: string; source: string; address?: string | null; latitude?: number | null; longitude?: number | null };
-type Job = { id: string; tenantId: string; company: string; complaintNo: string; development: string; address: string; unit: string; category: string; description: string; status: string; createdAt: string | null; sentAt: string | null; fiarep: { recordId: string; status: string; assignedStaffId: string; assignedTo: string; completedAt: unknown } | null };
+type Job = { id: string; tenantId: string; company: string; complaintNo: string; development: string; address: string; unit: string; category: string; description: string; status: string; createdAt: string | null; sentAt: string | null; clientStatus: string; fiarep: { recordId: string; status: string; assignedStaffId: string; assignedTo: string; startedAt: string | null; completedAt: string | null; completionNote: string; photos: string[]; approvedAt: string | null; approvedBy: string; sentBackNote: string; sentBackAt: string | null; clientApprovedAt: string | null; clientApprovedBy: string; updates: { status?: string; note?: string; by?: string; at?: string }[] } | null };
 type Stop = { id: string; address: string | null; latitude: number; longitude: number; arrivedAt: string; leftAt: string | null; minutes: number };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -53,6 +53,9 @@ export default function OwnerCrew() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [pick, setPick] = useState<Record<string, string>>({});
   const [sending, setSending] = useState("");
+  const [openJob, setOpenJob] = useState("");
+  const [backNote, setBackNote] = useState<Record<string, string>>({});
+  const [photoUrls, setPhotoUrls] = useState<Record<string, string>>({});
 
   async function load(r = range) {
     try { setCrew(await customFetch<Crew>(`/api/v1/platform/crew?from=${r.from}&to=${r.to}`, { responseType: "json" } as never)); setJobs(await customFetch<Job[]>("/api/v1/platform/crew/jobs", { responseType: "json" } as never)); setError(""); }
@@ -84,6 +87,54 @@ export default function OwnerCrew() {
     finally { setSending(""); }
   };
 
+  const approveJob = async (j: Job) => {
+    setSending(j.id); setError("");
+    try { await req(`/api/v1/platform/crew/jobs/${encodeURIComponent(j.tenantId)}/${encodeURIComponent(j.id)}/approve`, "POST"); await load(); }
+    catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not approve."); }
+    finally { setSending(""); }
+  };
+  const sendBack = async (j: Job) => {
+    const note = (backNote[j.id] || "").trim();
+    if (note.length < 3) return;
+    setSending(j.id); setError("");
+    try { await req(`/api/v1/platform/crew/jobs/${encodeURIComponent(j.tenantId)}/${encodeURIComponent(j.id)}/send-back`, "POST", { note }); setBackNote((x) => ({ ...x, [j.id]: "" })); await load(); }
+    catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not send back."); }
+    finally { setSending(""); }
+  };
+  const photoUrl = async (objectPath: string) => {
+    if (photoUrls[objectPath]) return;
+    try { const r = await customFetch<{ downloadUrl: string }>("/api/v1/platform/crew/photo-url", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ objectPath }), responseType: "json" } as never); setPhotoUrls((x) => ({ ...x, [objectPath]: r.downloadUrl })); } catch { /* no link */ }
+  };
+  const toggleJob = (j: Job) => { const next = openJob === j.id ? "" : j.id; setOpenJob(next); if (next && j.fiarep) j.fiarep.photos.forEach((p) => void photoUrl(p)); };
+  const finished = (j: Job) => !!j.fiarep && ["done", "approved", "resolved", "cleared"].includes(j.fiarep.status);
+  const openJobs = jobs.filter((j) => !finished(j));
+  const doneJobs = jobs.filter(finished);
+  const stamp = (v: unknown) => (typeof v === "string" && v ? when(v) : "—");
+
+  // What the technician did on a job: times, note, photos, send-backs, approvals.
+  // A plain function, not a component: a component defined inside would remount on every keystroke and lose the note box focus.
+  const renderWork = (j: Job) => j.fiarep ? (
+    <div className="grid gap-3 border-t border-slate-100 bg-slate-50 px-4 py-3 text-sm md:grid-cols-[1fr_auto]">
+      <div className="space-y-1 text-slate-700">
+        <p><span className="text-slate-500">Technician:</span> {j.fiarep.assignedTo || "—"}</p>
+        <p><span className="text-slate-500">Started:</span> {stamp(j.fiarep.startedAt)} · <span className="text-slate-500">Done:</span> {stamp(j.fiarep.completedAt)}</p>
+        {j.fiarep.completionNote ? <p><span className="text-slate-500">Note:</span> {j.fiarep.completionNote}</p> : null}
+        {j.fiarep.sentBackNote ? <p className="text-amber-700">Sent back {stamp(j.fiarep.sentBackAt)}: {j.fiarep.sentBackNote}</p> : null}
+        {j.fiarep.approvedAt ? <p className="text-emerald-700">Approved by {j.fiarep.approvedBy} · {stamp(j.fiarep.approvedAt)}</p> : null}
+        {j.fiarep.clientApprovedAt ? <p className="text-emerald-700">{j.company} approved · {j.fiarep.clientApprovedBy} · {stamp(j.fiarep.clientApprovedAt)}</p> : <p className="text-slate-500">{j.company}: {j.clientStatus.replaceAll("_", " ")}</p>}
+        {j.fiarep.updates.length > 0 ? <ul className="mt-1 space-y-0.5 text-xs text-slate-500">{j.fiarep.updates.map((u, i) => <li key={i}>{u.at ? when(u.at) : ""} · {u.by || ""} · {u.note || u.status || ""}</li>)}</ul> : null}
+        {j.fiarep.photos.length > 0 ? <div className="mt-2 flex flex-wrap gap-2">{j.fiarep.photos.map((p) => photoUrls[p] ? <a key={p} href={photoUrls[p]} target="_blank" rel="noreferrer"><img src={photoUrls[p]} alt="Job photo" className="h-24 w-24 rounded-md border border-slate-200 object-cover" /></a> : <span key={p} className="flex h-24 w-24 items-center justify-center rounded-md border border-slate-200 bg-white text-xs text-slate-400">photo…</span>)}</div> : <p className="text-xs text-slate-400">No photo yet.</p>}
+      </div>
+      {j.fiarep.status === "done" && (
+        <div className="w-full space-y-2 md:w-72">
+          <Button size="sm" className="w-full bg-emerald-600 text-white hover:bg-emerald-500" disabled={sending === j.id} onClick={() => void approveJob(j)}>{sending === j.id ? "…" : "Approve work"}</Button>
+          <textarea value={backNote[j.id] || ""} onChange={(e) => setBackNote((x) => ({ ...x, [j.id]: e.target.value }))} placeholder="What needs fixing? (goes to the technician)" className="h-16 w-full rounded-md border border-slate-300 px-2 py-1 text-sm" />
+          <Button size="sm" variant="outline" className="w-full" disabled={sending === j.id || (backNote[j.id] || "").trim().length < 3} onClick={() => void sendBack(j)}>Send back</Button>
+        </div>
+      )}
+    </div>
+  ) : null;
+
   const active = crew?.members.filter((m) => m.status === "approved") ?? [];
   const removed = crew?.members.filter((m) => m.status !== "approved") ?? [];
 
@@ -104,25 +155,41 @@ export default function OwnerCrew() {
       </div>
       {error && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
-      <Fold id="jobs" title="Jobs from client companies" badge={`${jobs.length} open`} defaultOpen summary="Send a resident complaint to one of your technicians.">
+      <Fold id="jobs" title="Jobs from client companies" badge={`${openJobs.length} open`} defaultOpen summary="Send a resident complaint to one of your technicians.">
         <div className="border-b border-slate-100 px-4 py-2">
           <p className="text-xs text-slate-500">Every open resident complaint on the platform. Pick a technician and send — it lands in his My Jobs and Inbox with a push; the company sees "FIAREP · name" and every step he takes.</p>
         </div>
-        {jobs.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">No open complaints right now.</p> : (
+        {openJobs.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">No open complaints right now.</p> : (
           <div className="overflow-x-auto"><table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2">Company</th><th className="px-4 py-2">Complaint</th><th className="px-4 py-2">Where</th><th className="px-4 py-2">Status</th><th className="px-4 py-2">Technician</th><th className="px-4 py-2"></th></tr></thead>
-            <tbody>{jobs.map((j) => {
+            <tbody>{openJobs.map((j) => {
               const chosen = pick[j.id] ?? j.fiarep?.assignedStaffId ?? "";
-              return <tr key={j.id} className="border-t border-slate-100 align-top">
+              return <React.Fragment key={j.id}><tr className="border-t border-slate-100 align-top">
                 <td className="px-4 py-2 font-medium text-slate-900">{j.company}</td>
                 <td className="px-4 py-2"><div className="font-medium text-slate-900">{j.complaintNo || "—"}{j.category ? <span className="font-normal text-slate-500"> · {j.category}</span> : null}</div><div className="max-w-md text-slate-600">{j.description}</div><div className="text-xs text-slate-400">{when(j.createdAt)}</div></td>
                 <td className="px-4 py-2 text-slate-700">{j.address}{j.unit ? ` · Apt ${j.unit}` : ""}{j.development ? <div className="text-xs text-slate-500">{j.development}</div> : null}</td>
                 <td className="px-4 py-2">{j.fiarep ? <span className="text-emerald-700">FIAREP · {j.fiarep.status.replaceAll("_", " ")}</span> : <span className="text-slate-600">{j.status.replaceAll("_", " ")}</span>}{j.sentAt ? <div className="text-xs text-slate-400">sent {when(j.sentAt)}</div> : null}</td>
                 <td className="px-4 py-2"><select value={chosen} onChange={(e) => setPick((x) => ({ ...x, [j.id]: e.target.value }))} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"><option value="">Choose…</option>{active.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></td>
-                <td className="px-4 py-2"><Button size="sm" disabled={!chosen || sending === j.id || (!!j.fiarep && chosen === j.fiarep.assignedStaffId)} onClick={() => void sendJob(j)}>{sending === j.id ? "Sending…" : j.fiarep ? (chosen === j.fiarep.assignedStaffId ? "Sent" : "Reassign") : "Send to technician"}</Button></td>
-              </tr>;
+                <td className="px-4 py-2"><Button size="sm" disabled={!chosen || sending === j.id || (!!j.fiarep && chosen === j.fiarep.assignedStaffId)} onClick={() => void sendJob(j)}>{sending === j.id ? "Sending…" : j.fiarep ? (chosen === j.fiarep.assignedStaffId ? "Sent" : "Reassign") : "Send to technician"}</Button>{j.fiarep ? <button type="button" onClick={() => toggleJob(j)} className="mt-1 block text-xs text-slate-500 underline">{openJob === j.id ? "hide" : "what was done"}</button> : null}</td>
+              </tr>{openJob === j.id ? <tr><td colSpan={6} className="p-0">{renderWork(j)}</td></tr> : null}</React.Fragment>;
             })}</tbody>
           </table></div>
+        )}
+      </Fold>
+
+      <Fold id="done" title="Completed by the crew" badge={String(doneJobs.length)} summary="Every job the crew finished — who, when, the note and the photos. Stays here for the record.">
+        {doneJobs.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">Nothing finished yet.</p> : (
+          <ul className="divide-y divide-slate-100">{doneJobs.map((j) => (
+            <li key={j.id}>
+              <button type="button" onClick={() => toggleJob(j)} className="flex w-full flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 text-left text-sm hover:bg-slate-50">
+                <span className="font-medium text-slate-900">{j.company}</span>
+                <span className="text-slate-700">{j.complaintNo || "—"} · {j.address}{j.unit ? ` · Apt ${j.unit}` : ""}</span>
+                <span className="text-slate-500">{j.description}</span>
+                <span className="ml-auto text-xs text-slate-500">{j.fiarep?.assignedTo} · done {stamp(j.fiarep?.completedAt)} · {j.fiarep?.status === "done" ? <span className="text-amber-700">needs your approval</span> : <span className="text-emerald-700">{j.fiarep?.status}</span>}</span>
+              </button>
+              {openJob === j.id ? renderWork(j) : null}
+            </li>
+          ))}</ul>
         )}
       </Fold>
 

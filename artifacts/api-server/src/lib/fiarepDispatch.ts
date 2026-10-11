@@ -17,7 +17,7 @@ type Row = typeof entityRecords.$inferSelect;
 // Who had the work in the client's company is cleared on the copy; FIAREP assigns its own person.
 const ASSIGNMENT_KEYS = ["assignedStaffId", "assignedTo", "assignedAt", "assignAt", "assignedByStaffId", "assignedByName", "handoffTargetId", "startedAt", "completedAt", "completedBy", "completedByName", "completionNote", "photoEvidence", "completionPhoto", "approvedAt", "approvedBy", "rejectedAt", "rejectNote"];
 // What the technician does that the client should see.
-const MIRROR_KEYS = ["status", "startedAt", "completedAt", "completedByName", "completionNote", "photoEvidence", "completionPhoto", "completionPhotoUrl", "completionPhotoPath", "releaseUpdate", "workLocation", "startLocation", "completeLocation"];
+const MIRROR_KEYS = ["status", "startedAt", "completedAt", "completedByName", "completionNote", "photoEvidence", "remoteFiles", "completionPhoto", "completionPhotoUrl", "completionPhotoPath", "releaseUpdate", "workLocation", "startLocation", "completeLocation", "updates", "etaAt", "etaLabel", "etaNote", "etaWho"];
 
 async function alertStaff(tenantId: string, targets: string[], message: string, detail: string, reportId: string): Promise<void> {
   const ids = [...new Set(targets.filter(Boolean))];
@@ -73,8 +73,11 @@ export async function mirrorFiarepProgress(actor: Actor, copy: Row): Promise<voi
   patch["assignedTo"] = tech ? `FIAREP · ${tech}` : "FIAREP";
   patch["fiarepStatus"] = copy.state["status"];
   patch["fiarepUpdatedAt"] = new Date().toISOString();
-  const nextStatus = String(copy.state["status"] || "");
   const prevStatus = String(source.state["status"] || "");
+  // FIAREP's own approval of its technician's work does not approve the
+  // client's record for them: their supervisor still signs off on "done".
+  if (patch["status"] === "approved" && ["done", "approved", "resolved", "cleared"].includes(prevStatus)) patch["status"] = prevStatus;
+  const nextStatus = String(patch["status"] || "");
   await db.update(entityRecords).set({ state: { ...source.state, ...patch }, version: (source.version ?? 1) + 1, updatedAt: new Date() }).where(and(eq(entityRecords.id, source.id), eq(entityRecords.tenantId, source.tenantId)));
   if (nextStatus && nextStatus !== prevStatus) {
     const dev = String(source.development || source.state["development"] || "");
@@ -83,4 +86,32 @@ export async function mirrorFiarepProgress(actor: Actor, copy: Row): Promise<voi
     const ref = [String(source.state["complaintNo"] || ""), String(source.state["address"] || "")].filter(Boolean).join(" · ");
     await alertStaff(source.tenantId, [...routed, sentBy], `FIAREP: ${nextStatus.replaceAll("_", " ")}${tech ? ` · ${tech}` : ""}`, ref, source.id);
   }
+}
+
+/** Every photo object path on FIAREP's copy — what the client is allowed to open. */
+export function crewPhotoPaths(state: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  for (const key of ["photoEvidence", "remoteFiles"]) {
+    const list = state[key];
+    if (!Array.isArray(list)) continue;
+    for (const f of list) if (f && typeof f === "object" && typeof (f as Record<string, unknown>)["objectPath"] === "string") out.push(String((f as Record<string, unknown>)["objectPath"]));
+  }
+  return out;
+}
+
+/** The client's supervisor approved or sent back FIAREP's work: tell the copy and the technician. */
+export async function mirrorClientDecision(actor: Actor, clientRecord: Row, action: "approve-work" | "reject-work", note: string): Promise<void> {
+  const copyId = typeof clientRecord.state["fiarepRecordId"] === "string" ? clientRecord.state["fiarepRecordId"] : "";
+  if (!copyId) return;
+  const [copy] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, copyId), eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false))).limit(1);
+  if (!copy) return;
+  const now = new Date();
+  const patch: Record<string, unknown> = action === "approve-work"
+    ? { clientApprovedAt: now.toISOString(), clientApprovedBy: actor.name, status: copy.state["status"] === "done" ? "approved" : copy.state["status"] }
+    : { status: "in_progress", reworkNote: note, reworkByStaffName: `${actor.name} (client)`, reworkAt: now.toISOString(), clientSentBackAt: now.toISOString() };
+  await db.update(entityRecords).set({ state: { ...copy.state, ...patch }, version: (copy.version ?? 1) + 1, updatedAt: now }).where(eq(entityRecords.id, copy.id));
+  const tech = String(copy.state["assignedStaffId"] || "");
+  const ref = [String(copy.state["complaintNo"] || ""), String(copy.state["address"] || "")].filter(Boolean).join(" \u00b7 ");
+  const office = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"), inArray(staffAccounts.role, ["administrator", "management"])));
+  await alertStaff(FIAREP_TENANT, [tech, ...office.map((o) => o.id)], action === "approve-work" ? "Client approved your work" : `Client sent the work back: ${note}`.slice(0, 200), ref, copy.id);
 }

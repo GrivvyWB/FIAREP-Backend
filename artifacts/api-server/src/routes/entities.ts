@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import { deliverPushNotification } from "../lib/push";
-import { sendComplaintToFiarep, mirrorFiarepProgress } from "../lib/fiarepDispatch";
+import { sendComplaintToFiarep, mirrorFiarepProgress, mirrorClientDecision } from "../lib/fiarepDispatch";
 import {
   ENTITIES,
   isAcceptedStaffPosition,
@@ -3863,6 +3863,9 @@ router.post(
     }
   }
   if (entity === "resident-reports") await mirrorFiarepProgress(actor, updated!).catch((err) => logger.warn({ err, recordId: current.id }, "Could not mirror progress to the client company"));
+  if (entity === "resident-reports" && (action === "approve-work" || action === "reject-work") && typeof current.state["fiarepRecordId"] === "string") {
+    await mirrorClientDecision(actor, updated!, action, String((req.body as Record<string, unknown> | undefined)?.["note"] || "")).catch((err) => logger.warn({ err, recordId: current.id }, "Could not tell FIAREP about the decision"));
+  }
   res.json(outward(actor, updated!));
   },
 );
