@@ -110,7 +110,7 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[18px] mb-[22px]">
         {metrics.map(({ label, value, total, icon: Icon, query, href }) => (
           <Link key={label} href={href} className="bg-card rounded-[14px] shadow-sm border border-border p-5 flex justify-between items-start hover:border-primary/50 transition-colors">
-            <div><div className="text-[13px] text-muted-foreground font-medium">{label}</div><div className="text-[30px] font-extrabold my-2 tracking-[-.5px] leading-none">{query.isLoading ? "-" : query.isError ? "—" : value}</div><div className="text-xs text-muted-foreground">{query.isError ? "Unavailable" : `${total} total`}</div></div>
+            <div><div className="text-[13px] text-muted-foreground font-medium">{label}</div><div className="text-[30px] font-extrabold my-2 tracking-[-.5px] leading-none">{query.isLoading ? "-" : query.isError ? "—" : value}</div><div className="text-xs text-muted-foreground">{query.isError ? `Unavailable — ${String((query.error as { data?: { error?: string }; message?: string } | null)?.data?.error || (query.error as Error | null)?.message || "server error")}` : `${total} total`}</div></div>
             <div className="w-[46px] h-[46px] rounded-xl bg-primary text-sidebar grid place-items-center shrink-0"><Icon className="w-[22px] h-[22px]" /></div>
           </Link>
         ))}
