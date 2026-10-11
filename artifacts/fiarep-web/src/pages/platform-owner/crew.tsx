@@ -6,6 +6,7 @@ import { Switch } from "@/components/ui/switch";
 type Member = { id: string; name: string; position: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null };
 type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number };
 type Punch = { id: string; direction: string; at: string; source: string; address?: string | null; latitude?: number | null; longitude?: number | null };
+type Job = { id: string; tenantId: string; company: string; complaintNo: string; development: string; address: string; unit: string; category: string; description: string; status: string; createdAt: string | null; sentAt: string | null; fiarep: { recordId: string; status: string; assignedStaffId: string; assignedTo: string; completedAt: unknown } | null };
 type Stop = { id: string; address: string | null; latitude: number; longitude: number; arrivedAt: string; leftAt: string | null; minutes: number };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -28,9 +29,12 @@ export default function OwnerCrew() {
   const [punches, setPunches] = useState<Punch[]>([]);
   const [stops, setStops] = useState<Stop[]>([]);
   const [copied, setCopied] = useState("");
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [pick, setPick] = useState<Record<string, string>>({});
+  const [sending, setSending] = useState("");
 
   async function load(r = range) {
-    try { setCrew(await customFetch<Crew>(`/api/v1/platform/crew?from=${r.from}&to=${r.to}`, { responseType: "json" } as never)); setError(""); }
+    try { setCrew(await customFetch<Crew>(`/api/v1/platform/crew?from=${r.from}&to=${r.to}`, { responseType: "json" } as never)); setJobs(await customFetch<Job[]>("/api/v1/platform/crew/jobs", { responseType: "json" } as never)); setError(""); }
     catch (e) { setError((e as Error)?.message || "Could not load the crew."); }
   }
   useEffect(() => { void load(range); const t = setInterval(() => void load(range), 60_000); return () => clearInterval(t); }, [range.from, range.to]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -49,6 +53,15 @@ export default function OwnerCrew() {
   const resetCode = async (m: Member) => { try { await req(`/api/v1/platform/crew/${m.id}/reset-code`, "POST"); await load(); } catch (e) { setError((e as Error)?.message || "Could not reset the code."); } };
   const showPunches = async (m: Member) => { if (open === m.id) { setOpen(""); return; } setOpen(m.id); try { const [p, st] = await Promise.all([customFetch<Punch[]>(`/api/v1/platform/crew/${m.id}/punches?from=${range.from}&to=${range.to}`, { responseType: "json" } as never), customFetch<Stop[]>(`/api/v1/platform/crew/${m.id}/locations?from=${range.from}&to=${range.to}`, { responseType: "json" } as never)]); setPunches(p); setStops(st); } catch { setPunches([]); setStops([]); } };
   const copy = async (m: Member) => { try { await navigator.clipboard.writeText(`${m.name} · code ${m.code}`); setCopied(m.id); setTimeout(() => setCopied(""), 1500); } catch { /* clipboard blocked */ } };
+
+  const sendJob = async (j: Job) => {
+    const staffId = pick[j.id] || j.fiarep?.assignedStaffId || "";
+    if (!staffId) return;
+    setSending(j.id); setError("");
+    try { await req(`/api/v1/platform/crew/jobs/${encodeURIComponent(j.tenantId)}/${encodeURIComponent(j.id)}/send`, "POST", { staffId }); await load(); }
+    catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not send the job."); }
+    finally { setSending(""); }
+  };
 
   const active = crew?.members.filter((m) => m.status === "approved") ?? [];
   const removed = crew?.members.filter((m) => m.status !== "approved") ?? [];
@@ -69,6 +82,29 @@ export default function OwnerCrew() {
         </div>
       </div>
       {error && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
+
+      <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
+        <div className="border-b border-slate-100 px-4 py-3">
+          <p className="text-sm font-semibold text-slate-900">Jobs from client companies</p>
+          <p className="text-xs text-slate-500">Every open resident complaint on the platform. Pick a technician and send — it lands in his My Jobs and Inbox with a push; the company sees "FIAREP · name" and every step he takes.</p>
+        </div>
+        {jobs.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">No open complaints right now.</p> : (
+          <div className="overflow-x-auto"><table className="w-full text-sm">
+            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500"><tr><th className="px-4 py-2">Company</th><th className="px-4 py-2">Complaint</th><th className="px-4 py-2">Where</th><th className="px-4 py-2">Status</th><th className="px-4 py-2">Technician</th><th className="px-4 py-2"></th></tr></thead>
+            <tbody>{jobs.map((j) => {
+              const chosen = pick[j.id] ?? j.fiarep?.assignedStaffId ?? "";
+              return <tr key={j.id} className="border-t border-slate-100 align-top">
+                <td className="px-4 py-2 font-medium text-slate-900">{j.company}</td>
+                <td className="px-4 py-2"><div className="font-medium text-slate-900">{j.complaintNo || "—"}{j.category ? <span className="font-normal text-slate-500"> · {j.category}</span> : null}</div><div className="max-w-md text-slate-600">{j.description}</div><div className="text-xs text-slate-400">{when(j.createdAt)}</div></td>
+                <td className="px-4 py-2 text-slate-700">{j.address}{j.unit ? ` · Apt ${j.unit}` : ""}{j.development ? <div className="text-xs text-slate-500">{j.development}</div> : null}</td>
+                <td className="px-4 py-2">{j.fiarep ? <span className="text-emerald-700">FIAREP · {j.fiarep.status.replaceAll("_", " ")}</span> : <span className="text-slate-600">{j.status.replaceAll("_", " ")}</span>}{j.sentAt ? <div className="text-xs text-slate-400">sent {when(j.sentAt)}</div> : null}</td>
+                <td className="px-4 py-2"><select value={chosen} onChange={(e) => setPick((x) => ({ ...x, [j.id]: e.target.value }))} className="rounded-md border border-slate-300 bg-white px-2 py-1 text-sm"><option value="">Choose…</option>{active.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}</select></td>
+                <td className="px-4 py-2"><Button size="sm" disabled={!chosen || sending === j.id || (!!j.fiarep && chosen === j.fiarep.assignedStaffId)} onClick={() => void sendJob(j)}>{sending === j.id ? "Sending…" : j.fiarep ? (chosen === j.fiarep.assignedStaffId ? "Sent" : "Reassign") : "Send to technician"}</Button></td>
+              </tr>;
+            })}</tbody>
+          </table></div>
+        )}
+      </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <p className="text-sm font-semibold text-slate-900">Add an employee</p>

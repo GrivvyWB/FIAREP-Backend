@@ -8,11 +8,14 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import { db, organizations, staffAccounts, timeClockLocations, timeClockPunches } from "@workspace/db";
+import { db, entityRecords, notifications, organizations, staffAccounts, timeClockLocations, timeClockPunches } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
 import { allocateStaffCode } from "../lib/staffCodes";
 import { getTimeClockConfig, mergeTimeClockConfig } from "../lib/timeClockConfig";
+import { deliverPushNotification } from "../lib/push";
+import { FIAREP_TENANT, mirrorFiarepProgress, sendComplaintToFiarep } from "../lib/fiarepDispatch";
+import type { Actor } from "../lib/auth";
 
 const router: IRouter = Router();
 router.use("/v1/platform/crew", requirePlatformOwner);
@@ -175,6 +178,63 @@ router.get("/v1/platform/crew/:id/locations", async (req, res) => {
     .where(and(eq(timeClockLocations.tenantId, TENANT), eq(timeClockLocations.staffId, req.params.id!), gte(timeClockLocations.arrivedAt, from), lte(timeClockLocations.arrivedAt, to)))
     .orderBy(desc(timeClockLocations.arrivedAt));
   res.json(rows.map((r) => ({ id: r.id, address: r.address, latitude: r.latitude, longitude: r.longitude, arrivedAt: r.arrivedAt.toISOString(), leftAt: r.leftAt ? r.leftAt.toISOString() : null, minutes: Math.round(((r.leftAt ?? new Date()).getTime() - r.arrivedAt.getTime()) / 6e4) })));
+});
+
+// ---- Jobs: every client company's open complaint, and sending one to a technician ----
+const OPEN = ["submitted", "assigned", "in_progress", "done"];
+const jobView = (r: typeof entityRecords.$inferSelect, company: string, copy?: typeof entityRecords.$inferSelect | null) => {
+  const st = r.state;
+  const cs = copy?.state ?? null;
+  return {
+    id: r.id, tenantId: r.tenantId, company,
+    complaintNo: String(st["complaintNo"] || ""), development: r.development || String(st["development"] || ""),
+    address: String(st["address"] || ""), unit: String(st["unit"] || st["apartment"] || ""), category: String(st["category"] || st["issueType"] || st["location"] || ""),
+    description: String(st["description"] || st["issue"] || ""), status: String(st["status"] || ""), createdAt: r.createdAt?.toISOString?.() ?? null,
+    sentAt: typeof st["fiarepSentAt"] === "string" ? st["fiarepSentAt"] : null,
+    fiarep: cs ? { recordId: copy!.id, status: String(cs["status"] || ""), assignedStaffId: String(cs["assignedStaffId"] || ""), assignedTo: String(cs["assignedTo"] || ""), completedAt: cs["completedAt"] ?? null } : null,
+  };
+};
+
+router.get("/v1/platform/crew/jobs", async (_req, res) => {
+  const orgs = await db.select({ id: organizations.id, name: organizations.name }).from(organizations);
+  const names = new Map(orgs.map((o) => [o.id, o.name]));
+  const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false), sql`${entityRecords.tenantId} <> ${FIAREP_TENANT}`, inArray(sql`coalesce(${entityRecords.state}->>'status','')`, OPEN))).orderBy(desc(entityRecords.updatedAt));
+  const copyIds = rows.map((r) => r.state["fiarepRecordId"]).filter((v): v is string => typeof v === "string" && v.length > 0);
+  const copies = copyIds.length ? await db.select().from(entityRecords).where(and(eq(entityRecords.tenantId, FIAREP_TENANT), inArray(entityRecords.id, copyIds))) : [];
+  const byId = new Map(copies.map((c) => [c.id, c]));
+  res.json(rows.map((r) => jobView(r, names.get(r.tenantId) || r.tenantId, byId.get(String(r.state["fiarepRecordId"] || "")))));
+});
+
+/** Send a client's complaint to one FIAREP technician: copy it to FIAREP (if not already) and assign. */
+router.post("/v1/platform/crew/jobs/:tenantId/:id/send", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const staffId = text((req.body as Record<string, unknown>)?.["staffId"]);
+  const [tech] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, staffId), eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"))).limit(1);
+  if (!tech) { res.status(400).json({ error: "Pick a technician." }); return; }
+  const [source] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, req.params.id!), eq(entityRecords.tenantId, req.params.tenantId!), eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false))).limit(1);
+  if (!source) { res.status(404).json({ error: "Complaint not found" }); return; }
+  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, source.tenantId)).limit(1);
+  const asClient: Actor = { id: "platform-owner", tenantId: source.tenantId, name: `FIAREP (${owner.name})`, role: "administrator", position: "Platform Owner", developments: [], sessionVersion: 0 };
+  let copyId = typeof source.state["fiarepRecordId"] === "string" ? source.state["fiarepRecordId"] : "";
+  if (!copyId) {
+    const sent = await sendComplaintToFiarep(asClient, source);
+    if (!sent.ok) { res.status(sent.status).json({ error: sent.error }); return; }
+    copyId = String(sent.record.state["fiarepRecordId"] || "");
+  }
+  const [copy] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, copyId), eq(entityRecords.tenantId, FIAREP_TENANT))).limit(1);
+  if (!copy) { res.status(500).json({ error: "FIAREP's copy of the complaint is missing" }); return; }
+  const now = new Date();
+  const [assigned] = await db.update(entityRecords).set({
+    state: { ...copy.state, status: "assigned", assignedStaffId: tech.id, assignedTo: tech.name, assignedAt: now.toISOString(), assignedByStaffId: "platform-owner", assignedByName: `FIAREP (${owner.name})` },
+    version: (copy.version ?? 1) + 1, updatedAt: now,
+  }).where(eq(entityRecords.id, copy.id)).returning();
+  const asFiarep: Actor = { ...asClient, tenantId: FIAREP_TENANT };
+  await mirrorFiarepProgress(asFiarep, assigned!);
+  const ref = [String(source.state["complaintNo"] || ""), String(source.state["address"] || ""), source.state["unit"] ? `Apt ${String(source.state["unit"])}` : ""].filter(Boolean).join(" \u00b7 ");
+  const [alert] = await db.insert(notifications).values({ id: randomUUID(), tenantId: FIAREP_TENANT, target: tech.id, message: `Job from ${org?.name || source.tenantId}`, detail: ref, reportId: copy.id }).returning();
+  if (alert) void deliverPushNotification(alert).catch(() => undefined);
+  await platformAudit(owner.name, "crew.job-sent", source.tenantId, null, { complaint: source.id, copy: copy.id, technician: tech.name });
+  res.json(jobView(source, org?.name || source.tenantId, assigned));
 });
 
 export default router;
