@@ -70,7 +70,6 @@ const LOOKUP_TRADES: Array<{ key: string; label: string }> = [
   { key: 'heating', label: 'Heating / Boiler' },
   { key: 'elevator', label: 'Elevator Mechanic' },
   { key: 'exterminator', label: 'Exterminator' },
-  { key: 'technician', label: 'Technician (FIAREP crew)' },
   { key: 'worker', label: 'Other workers' },
   { key: 'emergency', label: 'Emergency Crew' },
   { key: 'inspector', label: 'Inspector' },

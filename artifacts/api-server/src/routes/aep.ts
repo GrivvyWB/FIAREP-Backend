@@ -296,7 +296,7 @@ router.get("/v1/platform/aep/violations/:bbl", async (req, res) => {
     const groups = new Map<string, { key: string; type: string; place: string; ids: string[]; a: number; b: number; c: number; texts: Map<string, number> }>();
     for (const v of hpd) {
       const key = `${v.type}|${v.place}`;
-      const g = groups.get(key) || { key, type: v.type, place: v.place, ids: [], a: 0, b: 0, c: 0, texts: new Map() };
+      const g = groups.get(key) || { key, type: v.type, place: v.place, ids: [] as string[], a: 0, b: 0, c: 0, texts: new Map<string, number>() };
       g.ids.push(v.id); if (v.class === "A") g.a++; else if (v.class === "B") g.b++; else if (v.class === "C") g.c++;
       const t = v.description.toUpperCase().replace(/\d{1,2}\/\d{1,2}\/\d{2,4}/g, "").trim(); g.texts.set(t, (g.texts.get(t) || 0) + 1);
       groups.set(key, g);

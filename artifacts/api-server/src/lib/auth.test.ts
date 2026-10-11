@@ -11,6 +11,7 @@ function organization(overrides: Partial<Organization> = {}): Organization {
     status: "active",
     startsAt: null,
     endsAt: null,
+    licensedUnits: null,
     staffLimit: null,
     propertyLimit: null,
     hrEmail: "fiarep@outlook.com",

@@ -73,7 +73,7 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
         }
         const modeRole = actualRole as AppMode;
         // Workers' app: location is part of the job. No permission, no sign-in.
-        if (modeRole === 'worker') {
+        if (modeRole === 'worker' || (actor?.tenantId === 'default' && modeRole === 'inspector')) {
           const { requireWorkerLocation } = await import('../lib/clock-location');
           const ok = await requireWorkerLocation();
           if (!ok) { setMsg('FIAREP needs your location to sign in as a worker — set Location to "Always" for FIAREP in your phone settings, then try again.'); return; }

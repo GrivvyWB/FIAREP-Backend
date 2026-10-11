@@ -23,7 +23,6 @@ export const MEASUREMENT_TRADES: { key: TradeKey; label: string }[] = [
   { key: 'roofer', label: 'Roofer' },
   { key: 'heating', label: 'Heating' },
   { key: 'general', label: 'General Construction' },
-  { key: 'technician', label: 'Technician (FIAREP crew)' },
 ];
 
 export const MEASUREMENT_MATERIALS: { key: MaterialKind; label: string }[] = [

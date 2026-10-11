@@ -21,7 +21,7 @@ export default function OwnerCrew() {
   const [crew, setCrew] = useState<Crew | null>(null);
   const [range, setRange] = useState(thisWeek);
   const [error, setError] = useState("");
-  const [add, setAdd] = useState({ name: "", position: "Technician", hourlyRate: "" });
+  const [add, setAdd] = useState({ name: "", position: "CPM", hourlyRate: "" });
   const [adding, setAdding] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string>("");
@@ -40,7 +40,7 @@ export default function OwnerCrew() {
   const addMember = async () => {
     if (!add.name.trim() || !Number(add.hourlyRate)) return;
     setAdding(true); setError("");
-    try { await req("/api/v1/platform/crew", "POST", { name: add.name.trim(), position: add.position.trim() || "Technician", hourlyRate: Number(add.hourlyRate) }); setAdd({ name: "", position: "Technician", hourlyRate: "" }); await load(); }
+    try { await req("/api/v1/platform/crew", "POST", { name: add.name.trim(), position: add.position.trim() || "Technician", hourlyRate: Number(add.hourlyRate) }); setAdd({ name: "", position: "CPM", hourlyRate: "" }); await load(); }
     catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not add."); }
     finally { setAdding(false); }
   };
@@ -58,7 +58,7 @@ export default function OwnerCrew() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-950">FIAREP crew</h1>
-          <p className="text-sm text-slate-500">FIAREP's own technicians. Add a person, hand them their code — they log in to the FIAREP app as a worker and clock in and out on the Attendance screen. Hours here are what the plan's labor pool is measured against.</p>
+          <p className="text-sm text-slate-500">FIAREP's own technicians — issued as CPM / Inspector accounts so they have every field tool in the app (projects, HUD inspections, violations, measurement, scopes, change orders). Add a person, hand them their code; they clock in and out on the Attendance screen. Hours here are what the plan's labor pool is measured against.</p>
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <div>
@@ -74,7 +74,7 @@ export default function OwnerCrew() {
         <p className="text-sm font-semibold text-slate-900">Add an employee</p>
         <div className="mt-2 flex flex-wrap items-end gap-2">
           <label className="text-xs text-slate-600">Name<input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} placeholder="First and last name" className="mt-1 block h-9 w-56 rounded-md border border-slate-300 px-2 text-sm text-slate-900" /></label>
-          <label className="text-xs text-slate-600">Position<input value={add.position} onChange={(e) => setAdd({ ...add, position: e.target.value })} className="mt-1 block h-9 w-40 rounded-md border border-slate-300 px-2 text-sm text-slate-900" /></label>
+          <div className="text-xs text-slate-600">Role<div className="mt-1 flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700">Technician — FIAREP CPM / Inspector (all tools)</div></div>
           <label className="text-xs text-slate-600">Hourly rate<span className="mt-1 flex h-9 items-center rounded-md border border-slate-300 px-2 text-sm text-slate-900"><span className="text-slate-400">$</span><input type="number" min={1} step={0.5} value={add.hourlyRate} onChange={(e) => setAdd({ ...add, hourlyRate: e.target.value })} placeholder="38" className="w-20 bg-transparent px-1 text-right focus:outline-none" /><span className="text-slate-400">/hr</span></span></label>
           <Button size="sm" className="h-9 bg-amber-500 text-slate-950 hover:bg-amber-400" disabled={adding || !add.name.trim() || !Number(add.hourlyRate)} onClick={() => void addMember()}>{adding ? "Adding…" : "Add and issue a code"}</Button>
         </div>
@@ -97,7 +97,7 @@ export default function OwnerCrew() {
             {active.map((m) => (
               <>
                 <tr key={m.id} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-2"><span className="font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">{m.position}</span></td>
+                  <td className="px-4 py-2"><span className="font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">Technician · {m.position} / Inspector</span></td>
                   <td className="px-2 py-2"><span className="font-mono text-base font-semibold tracking-wider text-slate-900">{m.code}</span><button type="button" className="ml-2 text-xs text-slate-500 underline" onClick={() => void copy(m)}>{copied === m.id ? "copied" : "copy"}</button><button type="button" className="ml-2 text-xs text-slate-500 underline" onClick={() => void resetCode(m)}>new code</button></td>
                   <td className="px-2 py-2 text-right"><span className="inline-flex items-center gap-1"><span className="text-slate-400">$</span><input type="number" min={1} step={0.5} value={edits[m.id] ?? m.hourlyRate ?? ""} onChange={(e) => setEdits((x) => ({ ...x, [m.id]: e.target.value }))} onBlur={() => void saveRate(m)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} className={`h-8 w-20 rounded-md border px-2 text-right text-sm text-slate-900 ${edits[m.id] != null ? "border-amber-400 bg-amber-50" : "border-slate-300"}`} aria-label={`Hourly rate for ${m.name}`} /><span className="text-xs text-slate-400">/hr</span></span></td>
                   <td className="px-2 py-2">{m.clockedInSince ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Clocked in · {when(m.clockedInSince)}</span> : <span className="text-xs text-slate-500">Out{m.lastPunch ? ` · last ${when(m.lastPunch.at)}` : ""}</span>}</td>
@@ -130,7 +130,7 @@ export default function OwnerCrew() {
         <p className="font-semibold text-slate-900">What the employee does</p>
         <ol className="mt-1 list-decimal space-y-0.5 pl-5">
           <li>Installs the FIAREP app (App Store) or opens the site.</li>
-          <li>Signs in as a worker with the name exactly as entered here and the 4-character code.</li>
+          <li>Signs in with the name exactly as entered here and the 4-character code — the app opens the CPM / Inspector home with every field tool.</li>
           <li>Opens <b>Attendance</b> and taps <b>Clock in</b> on arrival, <b>Clock out</b> when done. Each tap is time-stamped on the server.</li>
         </ol>
       </section>

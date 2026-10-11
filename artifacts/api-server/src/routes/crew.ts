@@ -1,8 +1,10 @@
 // FIAREP's own crew — the technicians FIAREP sends out under the plan. They are
-// staff accounts on FIAREP's own organization ("default"), role "worker", with
-// an hourly rate; they log in to the FIAREP mobile app with their name and
-// code like any worker and clock in / out on the Attendance screen. Platform
-// Control turns the clock on, adds people, sets rates and reads the hours.
+// staff accounts on FIAREP's own organization ("default") issued by FIAREP,
+// role "inspector" with the CPM title so they get the full CPM / Inspector
+// tool set in the app (projects, HUD inspections, violations, measurement,
+// scopes, change orders), with an hourly rate; they log in with their name and
+// code and clock in / out on the Attendance screen. Platform Control turns the
+// clock on, adds people, sets rates and reads the hours.
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
@@ -16,6 +18,9 @@ const router: IRouter = Router();
 router.use("/v1/platform/crew", requirePlatformOwner);
 
 const TENANT = "default";
+const CREW_ROLE = "inspector";
+const CREW_POSITION = "CPM"; // the title the app keys every CPM / Inspector tool on
+const ISSUER = "FIAREP";
 const text = (v: unknown): string => (v == null ? "" : String(v).trim());
 const cents = (v: unknown): number | null => { const n = typeof v === "string" ? Number(v) : v; return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null; };
 
@@ -75,7 +80,9 @@ const view = (s: typeof staffAccounts.$inferSelect, h?: { hours: number; open: D
 router.get("/v1/platform/crew", async (req, res) => {
   const org = await crewOrg();
   const { from, to } = parseRange(req.query as Record<string, unknown>);
-  const members = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.role, "worker"), inArray(staffAccounts.status, ["approved", "revoked"]))).orderBy(asc(staffAccounts.name));
+  // Crew added before the switch to CPM / Inspector come along: same person, full tools.
+  await db.update(staffAccounts).set({ role: CREW_ROLE, position: CREW_POSITION, updatedAt: new Date() }).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER), eq(staffAccounts.role, "worker")));
+  const members = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER), eq(staffAccounts.role, CREW_ROLE), inArray(staffAccounts.status, ["approved", "revoked"]))).orderBy(asc(staffAccounts.name));
   const ids = members.map((m) => m.id);
   const punches = ids.length ? await db.select({ staffId: timeClockPunches.staffId, direction: timeClockPunches.direction, punchAt: timeClockPunches.punchAt }).from(timeClockPunches)
     .where(and(eq(timeClockPunches.tenantId, TENANT), inArray(timeClockPunches.staffId, ids), gte(timeClockPunches.punchAt, new Date(from.getTime() - 24 * 36e5)), lte(timeClockPunches.punchAt, to))) : [];
@@ -108,7 +115,7 @@ router.post("/v1/platform/crew", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
   const b = (req.body ?? {}) as Record<string, unknown>;
   const name = text(b["name"]).slice(0, 80);
-  const position = text(b["position"]).slice(0, 60) || "Technician";
+  const position = CREW_POSITION;
   const rate = cents(b["hourlyRate"]);
   if (name.length < 2) { res.status(400).json({ error: "A name is required." }); return; }
   if (rate == null || rate <= 0) { res.status(400).json({ error: "An hourly rate is required." }); return; }
@@ -116,8 +123,8 @@ router.post("/v1/platform/crew", async (req, res) => {
     const code = await allocateStaffCode(tx, TENANT, name);
     const now = new Date();
     const [row] = await tx.insert(staffAccounts).values({
-      id: randomUUID(), tenantId: TENANT, name, position, role: "worker", code, status: "approved", developments: [],
-      createdBy: owner.name, issuerName: "FIAREP", hourlyRateCents: rate, createdAt: now, updatedAt: now,
+      id: randomUUID(), tenantId: TENANT, name, position, role: CREW_ROLE, code, status: "approved", developments: [],
+      createdBy: owner.name, issuerName: ISSUER, hourlyRateCents: rate, createdAt: now, updatedAt: now,
     } as typeof staffAccounts.$inferInsert).returning();
     return row!;
   });
@@ -128,11 +135,10 @@ router.post("/v1/platform/crew", async (req, res) => {
 router.patch("/v1/platform/crew/:id", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
   const b = (req.body ?? {}) as Record<string, unknown>;
-  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, req.params.id!), eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.role, "worker"))).limit(1);
+  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, req.params.id!), eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER))).limit(1);
   if (!before) { res.status(404).json({ error: "Crew member not found" }); return; }
   const updates: Partial<typeof staffAccounts.$inferInsert> = { updatedAt: new Date() };
   if ("hourlyRate" in b) { const r = cents(b["hourlyRate"]); if (r == null || r <= 0) { res.status(400).json({ error: "Invalid hourly rate" }); return; } updates.hourlyRateCents = r; }
-  if ("position" in b) updates.position = text(b["position"]).slice(0, 60) || before.position;
   if ("name" in b) { const n = text(b["name"]).slice(0, 80); if (n.length >= 2) updates.name = n; }
   if (b["status"] === "approved" || b["status"] === "revoked") { updates.status = b["status"]; if (b["status"] === "revoked") updates.sessionVersion = sql`${staffAccounts.sessionVersion} + 1` as never; }
   const [after] = await db.update(staffAccounts).set(updates).where(eq(staffAccounts.id, before.id)).returning();
@@ -142,7 +148,7 @@ router.patch("/v1/platform/crew/:id", async (req, res) => {
 
 router.post("/v1/platform/crew/:id/reset-code", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
-  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, req.params.id!), eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.role, "worker"))).limit(1);
+  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, req.params.id!), eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER))).limit(1);
   if (!before) { res.status(404).json({ error: "Crew member not found" }); return; }
   const after = await db.transaction(async (tx) => {
     const code = await allocateStaffCode(tx, TENANT, before.name);

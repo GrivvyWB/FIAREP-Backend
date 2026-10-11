@@ -104,10 +104,9 @@ const PROJECT_TOOLS: ProjectTool[] = [
 ];
 const projToolKey = (trade: string, toolId: string) => `projtool.${trade}.${toolId}`;
 const PROJECT_TRADES = [
-  { key: "technician", label: "Technician (FIAREP crew)" },
   { key: "maintenance", label: "Maintenance Worker" },
   { key: "superintendent", label: "Superintendent" },
-  { key: "cpm", label: "CPM" },
+  { key: "cpm", label: "CPM · Technician (FIAREP CPM/Inspector)" },
   { key: "cpm-supervisor", label: "CPM Supervisor" },
   { key: "property-manager", label: "Property Manager" },
   { key: "inspector", label: "Inspector" },
@@ -119,7 +118,7 @@ const PROJECT_TRADES = [
 // flat opt-in keys meas.<trade>.<material> inside features.modules.
 const MEASUREMENT_TRADES = [
   { key: "inspector", label: "Inspector" },
-  { key: "cpm", label: "CPM / Scope" },
+  { key: "cpm", label: "CPM / Scope · Technician (FIAREP crew)" },
   { key: "carpenter", label: "Carpenter" },
   { key: "painter", label: "Painter" },
   { key: "plumber", label: "Plumber" },
@@ -129,7 +128,6 @@ const MEASUREMENT_TRADES = [
   { key: "roofer", label: "Roofer" },
   { key: "heating", label: "Heating" },
   { key: "general", label: "General Construction" },
-  { key: "technician", label: "Technician (FIAREP crew)" },
 ];
 const MEASUREMENT_MATERIALS = [
   { key: "concrete", label: "Concrete" },
@@ -163,11 +161,11 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "HUD Inspections", "Change Orders", "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score",
     "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
   ] },
-  { id: "cpm", screen: "CPM / Inspector home", tabs: [
+  { id: "cpm", screen: "CPM / Inspector home (FIAREP technicians sign in here)", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
     "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Inbox",
   ] },
-  { id: "worker", screen: "Worker / Technician home (FIAREP crew signs in here)", tabs: [
+  { id: "worker", screen: "Worker home", tabs: [
     "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off",
   ] },
 ];
