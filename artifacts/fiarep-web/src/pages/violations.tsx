@@ -19,7 +19,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 
 export default function Violations() {
-  const { staff } = useAuth();
+  const { staff, organizationModules } = useAuth();
+  const formsOn = organizationModules["company-forms"] === true;
   const { toast } = useToast();
   const [searchInput, setSearchInput] = useState("");
   const [addressToSearch, setAddressToSearch] = useState("");
@@ -350,6 +351,9 @@ export default function Violations() {
                               <TableCell className="max-w-xl">
                                 <p className="text-sm leading-relaxed" title={v.description}>{v.description}</p>
                                 {v.apartment && <div className="text-xs text-muted-foreground mt-1 font-medium">Apt: {v.apartment}</div>}
+                                {formsOn && v.id !== "unknown" && v.status.toLowerCase() === 'open' && (
+                                  <a href={`/company-forms?hpd=${encodeURIComponent(v.id)}`} className="mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium hover:bg-muted">Fill affidavit</a>
+                                )}
                               </TableCell>
                               <TableCell className="text-right text-muted-foreground text-xs whitespace-nowrap">
                                 {v.inspectionDate ? new Date(v.inspectionDate).toLocaleDateString() : '-'}
