@@ -5,11 +5,11 @@ import {
   LookupNycPropertyQueryParams,
   LookupNycPropertyResponse,
 } from "@workspace/api-zod";
-import { requireAuth, actorFrom } from "../middlewares/auth";
+import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { lookupNycPropertyData } from "../lib/nycProperty";
 import { lookupDofCharges, lookupBuildingUnits } from "../lib/dofCharges";
 import { rateLimit } from "../lib/rateLimit";
-import { audit } from "../lib/audit";
+import { platformAudit } from "../lib/audit";
 import { db, organizationProperties, organizations } from "@workspace/db";
 
 const router: IRouter = Router();
@@ -51,13 +51,23 @@ router.get("/v1/property/nyc-lookup", requireAuth, async (req, res): Promise<voi
 });
 
 // ═══════════════════════════════════════════════════════════════════
-// Client-facing property management
+// Platform Control: the owner registers each client's buildings.
+// Clients never manage their own properties. FIAREP decides which
+// buildings an organization is responsible for and which of them are on
+// the plan — "on the plan" drives licensed-unit billing, resident
+// complaint routing (residentRouting) and public resident access
+// (publicAccess), so it stays with the owner.
 // ═══════════════════════════════════════════════════════════════════
+
+router.use("/v1/platform/properties", requirePlatformOwner);
+
+const ownerName = (res: import("express").Response) =>
+  (res.locals["platformOwner"] as { name: string } | undefined)?.name ?? "platform";
 
 // ── Address autocomplete (NYC Planning Labs) ──
 const GEOSEARCH_AUTOCOMPLETE = "https://geosearch.planninglabs.nyc/v2/autocomplete";
 
-router.get("/v1/properties/address-suggest", requireAuth, rateLimit("address-suggest", 60), async (req, res): Promise<void> => {
+router.get("/v1/platform/properties/address-suggest", rateLimit("address-suggest", 60), async (req, res): Promise<void> => {
   const q = String(req.query["q"] ?? "").trim();
   if (q.length < 3) { res.json([]); return; }
   try {
@@ -86,27 +96,35 @@ router.get("/v1/properties/address-suggest", requireAuth, rateLimit("address-sug
   }
 });
 
-// ── Client's own property list ──
-router.get("/v1/properties", requireAuth, async (req, res): Promise<void> => {
-  const actor = actorFrom(res);
+// ── One organization's buildings, with its unit budget ──
+router.get("/v1/platform/properties", async (req, res): Promise<void> => {
+  const organizationId = String(req.query["organizationId"] ?? "").trim();
+  if (!organizationId) { res.status(400).json({ error: "Pick an organization." }); return; }
+  const [org] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+  if (!org) { res.status(404).json({ error: "Organization not found." }); return; }
   const rows = await db.select().from(organizationProperties)
-    .where(eq(organizationProperties.organizationId, actor.tenantId))
+    .where(eq(organizationProperties.organizationId, organizationId))
     .orderBy(organizationProperties.displayAddress);
-  res.json(rows);
+  res.json({
+    properties: rows,
+    organizationName: org.name,
+    licensedUnits: org.licensedUnits ?? null,
+    unrestricted: org.unrestricted === true,
+  });
 });
 
-// ── Client adds a property (administrator / management only) ──
-router.post("/v1/properties", requireAuth, async (req, res): Promise<void> => {
-  const actor = actorFrom(res);
-  if (actor.role !== "administrator" && actor.role !== "management") {
-    res.status(403).json({ error: "Only administrators can add properties." }); return;
-  }
+// ── Register a building for a client ──
+router.post("/v1/platform/properties", async (req, res): Promise<void> => {
   const body = req.body as Record<string, unknown>;
+  const organizationId = String(body["organizationId"] ?? "").trim();
   const displayAddress = String(body["displayAddress"] ?? "").trim();
   const development = typeof body["development"] === "string" ? body["development"].trim() || null : null;
+  if (!organizationId) { res.status(400).json({ error: "Pick an organization." }); return; }
   if (!displayAddress || displayAddress.length < 4) {
     res.status(400).json({ error: "Enter a building address." }); return;
   }
+  const [org] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+  if (!org) { res.status(404).json({ error: "Organization not found." }); return; }
   const normalizedAddress = displayAddress.toLowerCase().replace(/\s+/g, " ");
   try {
     // City unit lookup
@@ -120,14 +138,14 @@ router.post("/v1/properties", requireAuth, async (req, res): Promise<void> => {
     // Same-lot check: second address on a BBL already registered gets 0 units
     if (bbl) {
       const sameLot = await db.select({ id: organizationProperties.id }).from(organizationProperties)
-        .where(and(eq(organizationProperties.organizationId, actor.tenantId), eq(organizationProperties.bbl, bbl))).limit(1);
+        .where(and(eq(organizationProperties.organizationId, organizationId), eq(organizationProperties.bbl, bbl))).limit(1);
       if (sameLot.length > 0) units = 0;
     }
-    // Not on the plan by default
+    // Not on the plan by default — the owner switches it on separately.
     const active = body["active"] === true;
     const [created] = await db.insert(organizationProperties).values({
       id: randomUUID(),
-      organizationId: actor.tenantId,
+      organizationId,
       displayAddress,
       normalizedAddress,
       development,
@@ -135,60 +153,58 @@ router.post("/v1/properties", requireAuth, async (req, res): Promise<void> => {
       bbl,
       active,
     }).returning();
-    await audit(actor, "property.added", `Added ${displayAddress}`, created!.id);
+    await platformAudit(ownerName(res), "property.added", organizationId, null, { address: displayAddress, units, active });
     res.status(201).json(created);
   } catch (error: any) {
-    if (error?.code === "23505") { res.status(409).json({ error: "That address is already registered." }); return; }
+    if (error?.code === "23505") { res.status(409).json({ error: "That address is already registered for this organization." }); return; }
     throw error;
   }
 });
 
-// ── Toggle on/off the plan ──
-router.patch("/v1/properties/:id", requireAuth, async (req, res): Promise<void> => {
-  const actor = actorFrom(res);
-  if (actor.role !== "administrator" && actor.role !== "management") {
-    res.status(403).json({ error: "Only administrators can change properties." }); return;
-  }
+// ── Switch a building on / off the plan, or rename its development ──
+router.patch("/v1/platform/properties/:id", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(organizationProperties)
-    .where(and(eq(organizationProperties.id, String(req.params.id)), eq(organizationProperties.organizationId, actor.tenantId))).limit(1);
+    .where(eq(organizationProperties.id, String(req.params.id))).limit(1);
   if (!existing) { res.status(404).json({ error: "Property not found." }); return; }
   const body = req.body as Record<string, unknown>;
   const patch: Record<string, unknown> = {};
   if (typeof body["active"] === "boolean") patch["active"] = body["active"];
   if (typeof body["development"] === "string") patch["development"] = body["development"].trim() || null;
   if (Object.keys(patch).length === 0) { res.json(existing); return; }
-  // If toggling ON, check licensed units
+  // Switching ON is held to the organization's licensed units. Raise the
+  // organization's plan first if a building would push it over.
   if (patch["active"] === true && !existing.active) {
-    const [org] = await db.select().from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, existing.organizationId)).limit(1);
     if (org?.licensedUnits && !org.unrestricted && existing.units) {
       const rows = await db.select({ units: organizationProperties.units }).from(organizationProperties)
-        .where(and(eq(organizationProperties.organizationId, actor.tenantId), eq(organizationProperties.active, true)));
+        .where(and(eq(organizationProperties.organizationId, existing.organizationId), eq(organizationProperties.active, true)));
       const registered = rows.reduce((n, r) => n + (r.units || 0), 0);
       if (registered + existing.units > org.licensedUnits) {
-        res.status(403).json({ error: `Adding this building (${existing.units} units) would exceed your licensed ${org.licensedUnits} units. Contact FIAREP to increase your plan.` }); return;
+        res.status(403).json({ error: `This building (${existing.units} units) would put ${org.name} over its licensed ${org.licensedUnits} units. Raise the organization's plan first.` }); return;
       }
     }
   }
   const [updated] = await db.update(organizationProperties)
     .set({ ...patch, updatedAt: new Date() } as any)
-    .where(and(eq(organizationProperties.id, existing.id), eq(organizationProperties.organizationId, actor.tenantId)))
+    .where(eq(organizationProperties.id, existing.id))
     .returning();
-  await audit(actor, patch["active"] === true ? "property.activated" : patch["active"] === false ? "property.deactivated" : "property.updated", existing.displayAddress, existing.id);
+  await platformAudit(
+    ownerName(res),
+    patch["active"] === true ? "property.activated" : patch["active"] === false ? "property.deactivated" : "property.updated",
+    existing.organizationId,
+    { address: existing.displayAddress, active: existing.active, development: existing.development },
+    { address: existing.displayAddress, active: updated?.active, development: updated?.development },
+  );
   res.json(updated);
 });
 
-// ── Remove from the list ──
-router.delete("/v1/properties/:id", requireAuth, async (req, res): Promise<void> => {
-  const actor = actorFrom(res);
-  if (actor.role !== "administrator" && actor.role !== "management") {
-    res.status(403).json({ error: "Only administrators can remove properties." }); return;
-  }
+// ── Remove a building from a client's list ──
+router.delete("/v1/platform/properties/:id", async (req, res): Promise<void> => {
   const [existing] = await db.select().from(organizationProperties)
-    .where(and(eq(organizationProperties.id, String(req.params.id)), eq(organizationProperties.organizationId, actor.tenantId))).limit(1);
+    .where(eq(organizationProperties.id, String(req.params.id))).limit(1);
   if (!existing) { res.status(404).json({ error: "Property not found." }); return; }
-  await db.delete(organizationProperties)
-    .where(and(eq(organizationProperties.id, existing.id), eq(organizationProperties.organizationId, actor.tenantId)));
-  await audit(actor, "property.removed", existing.displayAddress, existing.id);
+  await db.delete(organizationProperties).where(eq(organizationProperties.id, existing.id));
+  await platformAudit(ownerName(res), "property.removed", existing.organizationId, { address: existing.displayAddress, active: existing.active }, null);
   res.status(204).send();
 });
 

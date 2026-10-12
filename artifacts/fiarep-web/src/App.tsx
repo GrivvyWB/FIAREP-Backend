@@ -49,7 +49,6 @@ import Translator from '@/pages/translator';
 import PropertyLookup from '@/pages/property-lookup';
 import ViolationAlerts from '@/pages/violation-alerts';
 import CompanyForms from '@/pages/company-forms';
-import Properties from '@/pages/properties';
 
 // Owner Pages
 import Access from '@/pages/access';
@@ -68,6 +67,7 @@ import OwnerPricing from '@/pages/platform-owner/pricing';
 import OwnerForms from '@/pages/platform-owner/forms';
 import OwnerAlerts from '@/pages/platform-owner/alerts';
 import OwnerCrew from '@/pages/platform-owner/crew';
+import OwnerProperties from '@/pages/platform-owner/properties';
 import { getStoredPersona, setStoredPersona, evaluateAccess, Persona, hasModuleAccess, isProcurementDesk, type StaffModule } from '@/lib/access-policy';
 import { useState } from 'react';
 import HRWorkspace from '@/pages/hr';
@@ -265,7 +265,6 @@ function AppRouter() {
           <Route path="/property-lookup" component={PropertyLookupRoute} />
           <Route path="/violation-alerts" component={ViolationAlertsRoute} />
           <Route path="/company-forms" component={CompanyFormsRoute} />
-          <Route path="/properties" component={PropertiesRoute} />
           <Route path="/platform" component={Platform} />
           <Route component={NotFound} />
         </Switch>
@@ -290,7 +289,6 @@ const TranslatorRoute = () => <ModuleRoute module="translator"><Translator /></M
 const PropertyLookupRoute = () => <ModuleRoute module="property-lookup"><PropertyLookup /></ModuleRoute>;
 const ViolationAlertsRoute = () => <ModuleRoute module="violation-alerts"><ViolationAlerts /></ModuleRoute>;
 const CompanyFormsRoute = () => <ModuleRoute module="company-forms"><CompanyForms /></ModuleRoute>;
-const PropertiesRoute = () => <ModuleRoute module="properties"><Properties /></ModuleRoute>;
 const InspectionsRoute = () => <ModuleRoute module="inspections"><Inspections /></ModuleRoute>;
 const HudInspectionsRoute = () => <ModuleRoute module="hud-inspections"><HudInspections /></ModuleRoute>;
 const InspectionApprovalsRoute = () => <ModuleRoute module="inspection-approvals"><InspectionApprovals /></ModuleRoute>;
@@ -389,6 +387,7 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/forms" component={OwnerForms} />
           <Route path="/platform-owner/alerts" component={OwnerAlerts} />
           <Route path="/platform-owner/crew" component={OwnerCrew} />
+          <Route path="/platform-owner/properties" component={OwnerProperties} />
           <Route path="/platform-owner" component={OwnerDashboard} />
           <Route component={NotFound} />
         </Switch>

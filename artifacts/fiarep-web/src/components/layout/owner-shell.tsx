@@ -63,6 +63,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
             Organizations
           </Link>
           <Link
+            href="/platform-owner/properties"
+            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/properties"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <Building2 className="h-4 w-4" />
+            Properties
+          </Link>
+          <Link
             href="/platform-owner/modules"
             className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
               location === "/platform-owner/modules"
