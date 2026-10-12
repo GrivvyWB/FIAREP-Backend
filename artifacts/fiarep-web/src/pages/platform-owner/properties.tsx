@@ -152,6 +152,8 @@ export default function OwnerProperties() {
   }
 
   const [addingBbl, setAddingBbl] = useState("");
+  const [bulk, setBulk] = useState<{ total: number; done: number; current: string } | null>(null);
+  const [skipped, setSkipped] = useState<{ address: string; reason: string }[]>([]);
   async function addFromPortfolio(row: PortfolioRow) {
     setAddingBbl(row.bbl);
     try {
@@ -166,6 +168,48 @@ export default function OwnerProperties() {
       toast({ variant: "destructive", title: "Could not add building", description: errText(err, "Try again.") });
     } finally {
       setAddingBbl("");
+    }
+  }
+
+  /** Register every building still left in the portfolio, one at a time.
+   *  The route takes a per-organization advisory lock, so these would queue
+   *  anyway; going in order also means the property limit is honoured instead
+   *  of being raced past. A building that cannot be added is skipped and
+   *  listed, but hitting the licence ceiling stops the run, because every
+   *  building after it would fail the same way. */
+  async function addAll() {
+    const queue = [...portfolioOpen];
+    if (queue.length === 0) return;
+    setSkipped([]);
+    setBulk({ total: queue.length, done: 0, current: "" });
+    const failures: { address: string; reason: string }[] = [];
+    let added = 0;
+    let stopped = "";
+    for (let i = 0; i < queue.length; i++) {
+      const row = queue[i]!;
+      setBulk({ total: queue.length, done: i, current: row.address });
+      try {
+        await register({
+          displayAddress: `${row.address}, ${row.borough} ${row.zip}`.trim(),
+          development: row.address,
+          ...(row.units && row.units > 0 ? { units: row.units } : {}),
+        });
+        added += 1;
+      } catch (err: any) {
+        const reason = errText(err, "Could not add it.");
+        if (/limit reached|licensed/i.test(reason)) { stopped = reason; break; }
+        failures.push({ address: row.address, reason });
+      }
+    }
+    setBulk(null);
+    setSkipped(failures);
+    await reload();
+    if (stopped) {
+      toast({ variant: "destructive", title: `Added ${added}, then stopped`, description: stopped });
+    } else if (failures.length > 0) {
+      toast({ title: `Added ${added} of ${queue.length}`, description: `${failures.length} skipped — listed below.` });
+    } else {
+      toast({ title: `Added all ${added} buildings`, description: "All off the plan — switch on the ones the client pays for." });
     }
   }
 
@@ -382,14 +426,27 @@ export default function OwnerProperties() {
                 </p>
                 <select
                   value=""
-                  disabled={!!addingBbl}
-                  onChange={(e) => { const r = portfolioOpen[Number(e.target.value)]; if (r) void addFromPortfolio(r); }}
+                  disabled={!!addingBbl || !!bulk}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "__all__") { void addAll(); return; }
+                    const r = portfolioOpen[Number(v)];
+                    if (r) void addFromPortfolio(r);
+                  }}
                   className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:opacity-60"
                   aria-label="Add a building from the portfolio"
                 >
                   <option value="">
-                    {addingBbl ? "Adding…" : `Choose a building to add… (${portfolioOpen.length} not yet added)`}
+                    {addingBbl || bulk ? "Adding…" : `Choose a building to add… (${portfolioOpen.length} not yet added)`}
                   </option>
+                  {portfolioOpen.length > 1 && (
+                    <option value="__all__">
+                      Add all {portfolioOpen.length} buildings
+                      {portfolioOpen.reduce((n, r) => n + (r.units || 0), 0) > 0
+                        ? ` · ${portfolioOpen.reduce((n, r) => n + (r.units || 0), 0).toLocaleString()} units`
+                        : ""}
+                    </option>
+                  )}
                   {portfolioOpen.map((r, i) => (
                     <option key={r.bbl + r.registrationId} value={i}>
                       {r.address}, {r.borough} {r.zip}
@@ -400,6 +457,26 @@ export default function OwnerProperties() {
                     </option>
                   ))}
                 </select>
+                {bulk && (
+                  <div className="space-y-1">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+                      <div className="h-full bg-[#185FA5] transition-[width]" style={{ width: `${Math.round((bulk.done / bulk.total) * 100)}%` }} />
+                    </div>
+                    <p className="text-xs text-slate-500">Adding {bulk.done + 1} of {bulk.total}{bulk.current ? ` · ${bulk.current}` : ""}</p>
+                  </div>
+                )}
+                {skipped.length > 0 && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                    <p className="text-xs font-semibold text-amber-900">{skipped.length} skipped — add these by address below</p>
+                    <ul className="mt-1 space-y-0.5">
+                      {skipped.map((s) => (
+                        <li key={s.address} className="text-xs text-amber-900">
+                          <span className="font-medium">{s.address}</span> — {s.reason}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
                 {portfolioOpen.length === 0 && (
                   <p className="text-xs text-emerald-700">Every building in this portfolio is registered to this client.</p>
                 )}
