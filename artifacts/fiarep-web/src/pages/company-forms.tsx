@@ -40,7 +40,6 @@ export default function CompanyForms() {
   // HPD's record of that violation picks the right affidavit (AF-6 / AF-7 / AF-8)
   // and fills it; the company's last entry of the same form supplies the firm
   // names, licenses and phone. With AF-8 the attachments are offered too.
-  const [prefillNote, setPrefillNote] = useState("");
   const [hpd, setHpd] = useState<HpdPrefill | null>(null);
   const [alsoFill, setAlsoFill] = useState<FormDef[]>([]);
   const [fillNo, setFillNo] = useState("");
@@ -56,7 +55,6 @@ export default function CompanyForms() {
       const v = await customFetch<HpdPrefill>(`/api/v1/company-forms/prefill/hpd/${encodeURIComponent(id)}`, { responseType: "json" } as never);
       const plan = affidavitPlan(v);
       setHpd(v); setAlsoFill(plan && plan.primary.id === def.id ? plan.attachments : []);
-      setPrefillNote(`Filled from violation #${v.violationId}${v.novId ? ` (NOV ${v.novId})` : ""} · ${v.address}${v.apartment ? ` Apt ${v.apartment}` : ""} · Class ${v.class || "?"}${v.units ? ` · ${v.units} units (${v.unitsSource})` : ""}${plan && plan.primary.id !== def.id ? ` · HPD's record points to ${plan.primary.title}` : ""}`);
       await openFilled(def, v);
     } catch (err: any) {
       toast({ variant: "destructive", title: "Could not fill from the violation", description: err?.data?.error || err?.message || "Check the number." });
@@ -81,9 +79,6 @@ export default function CompanyForms() {
         if (!f) { toast({ variant: "destructive", title: "No affidavit for this violation", description: v.description }); return; }
         if (ids.length > 1) v.violationId = ids.join(", ");
         setHpd(v); setAlsoFill(plan && plan.primary.id === f.id ? plan.attachments : []);
-        setPrefillNote(ids.length > 1
-          ? `Filling ${ids.length} violations · ${v.address}${v.apartment ? ` Apt ${v.apartment}` : ""}${plan ? ` · ${plan.why}` : ""} — one document`
-          : `Filled from violation #${v.violationId}${v.novId ? ` (NOV ${v.novId})` : ""} · ${v.address}${v.apartment ? ` Apt ${v.apartment}` : ""} · Class ${v.class || "?"}${v.units ? ` · ${v.units} units (${v.unitsSource})` : ""}${plan ? ` · ${plan.why}` : ""}`);
         await openFilled(f, v);
       } catch (err: any) {
         toast({ variant: "destructive", title: "Could not fill from the violation", description: err?.data?.error || err?.message || "Fill it in by hand." });
@@ -177,7 +172,6 @@ export default function CompanyForms() {
                 <span className="text-xs text-muted-foreground">or open it from the violation on Violation Alerts / Check HPD / DOB</span>
               </form>
             )}
-            {prefillNote && <p className="mt-1 rounded-md bg-emerald-50 px-2 py-1 text-xs text-emerald-800">{prefillNote} — check every line before you sign.</p>}
             {hpd && alsoFill.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
                 <span className="font-semibold text-slate-700">Goes with this one — also fill:</span>
