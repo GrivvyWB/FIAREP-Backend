@@ -15,6 +15,7 @@ import {
   ShieldCheck,
   Trash2,
   Users,
+  UsersRound,
   Wrench,
   type LucideIcon,
 } from "lucide-react";
@@ -257,6 +258,7 @@ export default function OwnerModules() {
   const [lookupAccess, setLookupAccess] = useState<Record<string, boolean>>({});
   const [deletionEnabled, setDeletionEnabled] = useState(false);
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
+  const [communityReviewEnabled, setCommunityReviewEnabled] = useState(true);
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -287,6 +289,12 @@ export default function OwnerModules() {
     setResidentPhotoAiEnabled(
       Boolean(configured && typeof configured === "object" &&
         (configured as Record<string, unknown>).residentPhotoAiViolationReader === true),
+    );
+    // Absent means on: an organization that was never configured keeps the
+    // supervisor review it has today.
+    setCommunityReviewEnabled(
+      !(configured && typeof configured === "object" &&
+        (configured as Record<string, unknown>).communitySupervisorReview === false),
     );
     setDirty(false);
   }, [organization]);
@@ -327,6 +335,11 @@ export default function OwnerModules() {
 
   const toggleResidentPhotoAi = (enabled: boolean) => {
     setResidentPhotoAiEnabled(enabled);
+    setDirty(true);
+  };
+
+  const toggleCommunityReview = (enabled: boolean) => {
+    setCommunityReviewEnabled(enabled);
     setDirty(true);
   };
 
@@ -376,7 +389,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled },
             deletionEnabled,
           },
         },
@@ -650,6 +663,29 @@ export default function OwnerModules() {
                     checked={residentPhotoAiEnabled}
                     onCheckedChange={toggleResidentPhotoAi}
                     aria-label={`${residentPhotoAiEnabled ? "Disable" : "Enable"} Residential photo AI scan`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  communityReviewEnabled ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    communityReviewEnabled ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <UsersRound className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Community Coordinator Supervisor review</p>
+                    <p className="truncate text-xs text-slate-500">A coordinator's visit waits for the Community Coordinator Supervisor to read and approve it. Off: the visit stands on its own and nothing waits to be approved</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    communityReviewEnabled ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {communityReviewEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={communityReviewEnabled}
+                    onCheckedChange={toggleCommunityReview}
+                    aria-label={`${communityReviewEnabled ? "Disable" : "Enable"} Community Coordinator Supervisor review`}
                   />
                 </div>
                 <div

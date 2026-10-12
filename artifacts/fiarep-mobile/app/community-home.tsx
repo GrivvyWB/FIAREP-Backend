@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, RefreshControl, Alert } f
 import { useFocusEffect, useRouter } from 'expo-router';
 import { clearAppMode, getCurrentActor, getSessionIdentity, logout } from '../lib/store';
 import { useAppMode } from './_layout';
-import { useModuleAccess } from '../lib/module-access';
+import { useModuleAccess, useRawModules } from '../lib/module-access';
 import { ui } from '../lib/ui';
 import {
   approveCommunity, isCommunitySupervisor, listCommunity, removeCommunity, shareResidentPdf, shareResidentText, str, today, type CommunityRecord,
@@ -16,6 +16,9 @@ export default function CommunityHome() {
   const router = useRouter();
   const { refresh } = useAppMode();
   const modules = useModuleAccess();
+  // Supervisor review is on unless the platform owner switched it off for this
+  // organization (Platform Control -> Module Management).
+  const reviewOn = useRawModules()['communitySupervisorReview'] !== false;
   const [tab, setTab] = useState<'residents' | 'buildings'>('residents');
   const [search, setSearch] = useState('');
   const [criticalOnly, setCriticalOnly] = useState(false);
@@ -108,10 +111,12 @@ export default function CommunityHome() {
         <View style={[ui.card, { flex: 1, padding: 12 }]}><Text style={ui.label}>Buildings</Text><Text style={{ fontSize: 22, fontWeight: '700' }}>{buildings.length}</Text></View>
         <View style={[ui.card, { flex: 1, padding: 12, borderColor: residents.some((r) => r.state.critical === true) ? ACCENT : '#e0e0e0' }]}><Text style={ui.label}>Critical</Text><Text style={{ fontSize: 22, fontWeight: '700' }}>{residents.filter((r) => r.state.critical === true).length}</Text></View>
       </View>
-      <View style={[ui.card, { padding: 12, borderColor: pendingCount > 0 ? ACCENT : '#e0e0e0' }]}>
-        <Text style={ui.label}>{supervisor ? 'Waiting for your review' : 'Waiting for supervisor'}</Text>
-        <Text style={{ fontSize: 22, fontWeight: '700' }}>{pendingCount}</Text>
-      </View>
+      {reviewOn && (
+        <View style={[ui.card, { padding: 12, borderColor: pendingCount > 0 ? ACCENT : '#e0e0e0' }]}>
+          <Text style={ui.label}>{supervisor ? 'Waiting for your review' : 'Waiting for supervisor'}</Text>
+          <Text style={{ fontSize: 22, fontWeight: '700' }}>{pendingCount}</Text>
+        </View>
+      )}
 
       {!supervisor && (
         <>
@@ -177,7 +182,7 @@ export default function CommunityHome() {
                 {!!str(st.notes) && <Text style={{ marginTop: 6 }}>{str(st.notes)}</Text>}
               </>
             )}
-            {(str(st.reviewStatus) || 'submitted') === 'approved' ? (
+            {!reviewOn ? null : (str(st.reviewStatus) || 'submitted') === 'approved' ? (
               <Text style={{ fontSize: 12, color: '#047857', fontWeight: '600', marginTop: 6 }}>Approved — received by {str(st.reviewedByName) || 'supervisor'}{st.reviewedAt ? ` · ${new Date(String(st.reviewedAt)).toLocaleString()}` : ''}</Text>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 }}>

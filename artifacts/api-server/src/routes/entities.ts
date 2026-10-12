@@ -198,6 +198,22 @@ router.get("/v1/reference-lookup", async (req, res) => {
   });
 });
 
+/** Community Coordinator supervisor review. On unless the platform owner
+ *  switched it off for the organization (Platform Control -> Module
+ *  Management), so an organization that has never been configured keeps the
+ *  review it has today. Off means a coordinator's visit stands on its own and
+ *  nothing waits to be approved. */
+async function communityReviewRequired(tenantId: string): Promise<boolean> {
+  const [organization] = await db
+    .select({ features: organizations.features })
+    .from(organizations)
+    .where(eq(organizations.id, tenantId))
+    .limit(1);
+  const modules = organization?.features?.["modules"];
+  if (!modules || typeof modules !== "object" || Array.isArray(modules)) return true;
+  return (modules as Record<string, unknown>)["communitySupervisorReview"] !== false;
+}
+
 router.get("/v1/deletion-policy", async (_req, res) => {
   const actor = actorFrom(res);
   const [organization] = await db
@@ -1565,7 +1581,13 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     // server stamps who and when. A coordinator's edit sends it back for
     // review. Approval fields never come from the client.
     delete patch["reviewedById"]; delete patch["reviewedByName"]; delete patch["reviewedAt"];
-    if (isCommunityCoordinatorSupervisor(actor)) {
+    const reviewRequired = await communityReviewRequired(actor.tenantId);
+    if (!reviewRequired) {
+      // Review is switched off for this organization: a visit is not held for
+      // anyone. Nothing is stamped as approved either, because nobody approved
+      // it — the clients simply stop showing a review state.
+      delete patch["reviewStatus"];
+    } else if (isCommunityCoordinatorSupervisor(actor)) {
       // The supervisor reads and approves — they never change what the
       // coordinator wrote.
       if (patch["reviewStatus"] !== "approved" || Object.keys(patch).some((key) => key !== "reviewStatus")) {

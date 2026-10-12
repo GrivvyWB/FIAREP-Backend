@@ -68,7 +68,10 @@ function emailReport(r: Rec, orgName: string) {
 }
 
 export default function CommunityCoordinators() {
-  const { staff, organizationName } = useAuth();
+  const { staff, organizationName, organizationModules } = useAuth();
+  // Supervisor review is on unless the platform owner switched it off for this
+  // organization (Platform Control -> Module Management).
+  const reviewOn = organizationModules["communitySupervisorReview"] !== false;
   const orgName = organizationName || "FIAREP";
   const supervisor = isCommunityCoordinatorSupervisor(staff);
   const [tab, setTab] = useState<"residents" | "buildings">("residents");
@@ -163,7 +166,7 @@ export default function CommunityCoordinators() {
         <Stat label="Residents on file" value={residents.length} />
         <Stat label="Buildings on file" value={buildings.length} />
         <Stat label="Critical" value={residents.filter((r) => r.state.critical === true).length} tone="warn" />
-        <Stat label={supervisor ? "Waiting for your review" : "Waiting for supervisor"} value={pendingCount} tone="warn" />
+        {reviewOn && <Stat label={supervisor ? "Waiting for your review" : "Waiting for supervisor"} value={pendingCount} tone="warn" />}
         <Stat label="Apartment units covered" value={buildings.reduce((sum, b) => sum + (Number(b.state.units) || 0), 0)} />
       </div>
 
@@ -227,7 +230,7 @@ export default function CommunityCoordinators() {
                     )}
                     {s(st.notes) && <p className="whitespace-pre-wrap">{s(st.notes)}</p>}
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
-                    <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-residents", r)} busy={update.isPending} />
+                    {reviewOn && <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-residents", r)} busy={update.isPending} />}
                     <div className="mt-1 flex flex-wrap gap-1">
                       <Button size="sm" variant="outline" onClick={() => printReport(r, orgName)}><Printer className="mr-1 h-3.5 w-3.5" />Print / PDF</Button>
                       <Button size="sm" variant="outline" onClick={() => copyReport(r, orgName).then(() => toast({ title: "Report copied" })).catch(() => toast({ variant: "destructive", title: "Could not copy" }))}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>
@@ -265,7 +268,7 @@ export default function CommunityCoordinators() {
                     <p className="text-muted-foreground">{residentsAt(s(st.address))} resident{residentsAt(s(st.address)) === 1 ? "" : "s"} on file here</p>
                     {s(st.notes) && <p className="whitespace-pre-wrap">{s(st.notes)}</p>}
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
-                    <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-buildings", b)} busy={update.isPending} />
+                    {reviewOn && <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-buildings", b)} busy={update.isPending} />}
                   </div>
                 </div>
               );
