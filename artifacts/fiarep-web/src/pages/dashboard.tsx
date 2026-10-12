@@ -112,7 +112,7 @@ export default function Dashboard() {
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-[18px] mb-[22px]">
         {metrics.map(({ label, value, total, icon: Icon, query, href }) => (
           <Link key={label} href={href} className="bg-card rounded-[14px] shadow-sm border border-border p-5 flex justify-between items-start hover:border-primary/50 transition-colors">
-            <div><div className="text-[13px] text-muted-foreground font-medium">{label}</div><div className="text-[30px] font-extrabold my-2 tracking-[-.5px] leading-none">{query.isLoading ? "-" : query.isError ? "—" : value}</div><div className="text-xs text-muted-foreground">{query.isError ? `Unavailable — ${String((query.error as { data?: { error?: string }; message?: string } | null)?.data?.error || (query.error as Error | null)?.message || "server error")}` : `${total} total`}</div></div>
+            <div><div className="text-[13px] text-muted-foreground font-medium">{label}</div><div className="text-[30px] font-extrabold my-2 tracking-[-.5px] leading-none">{query.isLoading && query.data === undefined ? "-" : query.isError ? "—" : value}</div><div className="text-xs text-muted-foreground">{query.isError ? `Unavailable — ${String((query.error as { data?: { error?: string }; message?: string } | null)?.data?.error || (query.error as Error | null)?.message || "server error")}` : `${total} total`}</div></div>
             <div className="w-[46px] h-[46px] rounded-xl bg-primary text-sidebar grid place-items-center shrink-0"><Icon className="w-[22px] h-[22px]" /></div>
           </Link>
         ))}
@@ -122,7 +122,10 @@ export default function Dashboard() {
         <div className="bg-card rounded-[14px] shadow-sm border border-border">
           <div className="flex items-center justify-between p-[18px_22px] border-b border-border"><h3 className="text-base font-bold">Recent operational activity</h3><span className="text-xs text-muted-foreground">Live overview</span></div>
           <div className="p-[8px_10px]">
-            {activityLoading ? <div className="p-8 text-center text-sm text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />Loading activity...</div> :
+            {/* Only before there is anything to show. These queries refresh on a
+                30-second timer, and swapping a populated list for the small
+                spinner box collapses the panel and jumps the page. */}
+            {activityLoading && activity.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />Loading activity...</div> :
               activity.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground"><Layers className="w-8 h-8 opacity-20 mx-auto mb-2" />No recent activity found.</div> :
                 activity.map(({ item, label, href, icon: Icon }) => <Link key={`${label}-${item.id}`} href={href} className="flex items-center gap-3.5 p-[12px] rounded-[10px] hover:bg-muted/50 transition-colors">
                   <div className="w-10 h-10 rounded-[9px] shrink-0 bg-gradient-to-br from-[#cdd8e4] to-[#9fb2c6] grid place-items-center text-[#5a6b7d]"><Icon className="w-5 h-5" /></div>
@@ -135,7 +138,7 @@ export default function Dashboard() {
         <div className="bg-card rounded-[14px] shadow-sm border border-border">
           <div className="flex items-center justify-between p-[18px_22px] border-b border-border"><h3 className="text-base font-bold">Operational watchlist</h3><Link href="/notifications" className="text-accent text-[13px] font-semibold hover:underline">View alerts</Link></div>
           <div className="p-[12px_20px_18px] space-y-2">
-            {notificationsQuery.isLoading ? <div className="p-8 text-center text-sm text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />Loading notifications...</div> :
+            {notificationsQuery.isLoading && watchlistNotifications.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground"><Loader2 className="w-5 h-5 animate-spin mx-auto mb-2" />Loading notifications...</div> :
               notificationsQuery.isError ? <div className="p-8 text-center text-sm text-muted-foreground"><Bell className="w-8 h-8 opacity-20 mx-auto mb-2" />Notifications are unavailable.</div> :
                 watchlistNotifications.length === 0 ? <div className="p-8 text-center text-sm text-muted-foreground"><ShieldCheck className="w-8 h-8 opacity-20 mx-auto mb-2" />No notifications requiring attention.</div> :
                   watchlistNotifications.slice().sort((a, b) => Number(b.read) - Number(a.read) || new Date(b.at).getTime() - new Date(a.at).getTime()).slice(0, 5).map((notification) => {
