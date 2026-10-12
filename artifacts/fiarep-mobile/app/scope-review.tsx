@@ -1,6 +1,7 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle } from '../lib/titles';
+import { useAppMode, HOME_FOR_MODE } from './_layout';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, ScrollView, Pressable, Alert, Modal } from 'react-native';
 import * as Sharing from 'expo-sharing';
@@ -35,6 +36,8 @@ export default function ScopeReview() {
   const readOnlyBanner = useAppReadOnly() === true;
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { mode } = useAppMode();
+  const home = mode ? HOME_FOR_MODE[mode] : '/management-home';
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [req, setReq] = useState<ProcurementRequest | null>(null);
   const [est, setEst] = useState<any>(null);
@@ -62,10 +65,13 @@ export default function ScopeReview() {
     }).catch(() => {
       if (!mounted) return;
       setAuthorized(false);
-      router.replace('/');
+      // "/" is the Projects screen and the first route in every stack, so
+      // replacing with it strands the user there with no back button and no
+      // tabs. Send them to their own home instead.
+      router.replace(home as never);
     });
     return () => { mounted = false; };
-  }, [router]);
+  }, [router, home]);
 
   const load = useCallback(async () => {
      if (!authorized) return;

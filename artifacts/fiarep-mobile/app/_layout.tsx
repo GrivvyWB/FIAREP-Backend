@@ -24,7 +24,7 @@ export function useAppMode() { return useContext(ModeContext); }
 const CODE_LEN = 16;
 const normCode = (s: string) => s.toUpperCase().replace(/[^A-Z0-9-]/g, '').slice(0, CODE_LEN);
 
-const HOME_FOR_MODE: Record<AppMode, string> = {
+export const HOME_FOR_MODE: Record<AppMode, string> = {
   management: '/management-home',
   administrator: '/admin-home',
   worker: '/worker-home',
@@ -199,6 +199,15 @@ function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?:
   );
 }
 
+function ProjectsHome({ to }: { to: string }) {
+  const router = useRouter();
+  return (
+    <Pressable onPress={() => router.replace(to as never)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Home">
+      <Text style={{ color: ACCENT, fontWeight: '700', fontSize: 16 }}>Home</Text>
+    </Pressable>
+  );
+}
+
 function AdministratorStack() {
   return (
     <Stack initialRouteName="admin-home">
@@ -227,7 +236,7 @@ function AdministratorStack() {
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
       <Stack.Screen name="resident" options={{ title: 'Report an Issue' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
-      <Stack.Screen name="index" options={{ title: 'Projects' }} />
+      <Stack.Screen name="index" options={{ title: 'Projects', headerRight: () => <ProjectsHome to="/admin-home" /> }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
       <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
       <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
@@ -270,7 +279,7 @@ function InspectorStack() {
       <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="inspector-routes" options={{ title: 'My Routes' }} />
       <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
-      <Stack.Screen name="index" options={{ title: 'Projects' }} />
+      <Stack.Screen name="index" options={{ title: 'Projects', headerRight: () => <ProjectsHome to="/cpm-home" /> }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
       <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
       <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
@@ -305,7 +314,7 @@ function ManagementStack() {
       <Stack.Screen name="cpm-home" options={{ title: 'CPM Supervisor', headerBackVisible: false }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
-      <Stack.Screen name="index" options={{ title: 'Projects' }} />
+      <Stack.Screen name="index" options={{ title: 'Projects', headerRight: () => <ProjectsHome to="/management-home" /> }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
       <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
       <Stack.Screen name="project/inspection" options={{ title: 'Inspection' }} />
@@ -357,7 +366,7 @@ function WorkerStack() {
       <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
-      <Stack.Screen name="index" options={{ title: 'Projects' }} />
+      <Stack.Screen name="index" options={{ title: 'Projects', headerRight: () => <ProjectsHome to="/worker-home" /> }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
       <Stack.Screen name="project/rates" options={{ title: 'Project rates', presentation: 'modal' }} />
