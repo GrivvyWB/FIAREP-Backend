@@ -73,11 +73,34 @@ export default function CompanyForms() {
       if (!id) { const f = COMPLIANCE_FORMS.find((x) => x.id === wanted); if (f) startNew(f); return; }
       try {
         const ids = id.split(",").map(s => s.trim()).filter(Boolean);
-        const v = await customFetch<HpdPrefill>(`/api/v1/company-forms/prefill/hpd/${encodeURIComponent(ids[0])}`, { responseType: "json" } as never);
+        // Read every violation, not just the first. Each one carries its own
+        // apartment and its own class, and both change what belongs on the
+        // document: the apartments all have to be listed, and the class
+        // decides AF-7 against AF-8, so violations that resolve to different
+        // affidavits cannot share one.
+        const all = await Promise.all(ids.map((one) =>
+          customFetch<HpdPrefill>(`/api/v1/company-forms/prefill/hpd/${encodeURIComponent(one)}`, { responseType: "json" } as never)));
+        const v = all[0]!;
         const plan = affidavitPlan(v);
         const f = COMPLIANCE_FORMS.find((x) => x.id === wanted) || plan?.primary;
         if (!f) { toast({ variant: "destructive", title: "No affidavit for this violation", description: v.description }); return; }
-        if (ids.length > 1) v.violationId = ids.join(", ");
+        if (all.length > 1) {
+          const mine = all.filter((x) => (affidavitPlan(x)?.primary.id ?? "") === f.id);
+          const batch = mine.length > 0 ? mine : all;
+          const elsewhere = all.filter((x) => !batch.includes(x));
+          v.violationId = batch.map((x) => x.violationId).join(", ");
+          // Every apartment the violations name. A building-wide violation has
+          // none, so it adds nothing rather than a blank entry.
+          v.apartment = [...new Set(batch.map((x) => x.apartment.trim()).filter(Boolean))].join(", ");
+          if (elsewhere.length > 0) {
+            const needs = [...new Set(elsewhere.map((x) => affidavitPlan(x)?.primary.title).filter(Boolean))].join(", ");
+            toast({
+              variant: "destructive",
+              title: `${elsewhere.length} violation${elsewhere.length === 1 ? "" : "s"} left off this affidavit`,
+              description: `${elsewhere.map((x) => `#${x.violationId}${x.apartment ? ` (Apt ${x.apartment})` : ""} Class ${x.class || "?"}`).join(", ")} — ${needs || "a different form"}. Fill those separately.`,
+            });
+          }
+        }
         setHpd(v); setAlsoFill(plan && plan.primary.id === f.id ? plan.attachments : []);
         await openFilled(f, v);
       } catch (err: any) {
