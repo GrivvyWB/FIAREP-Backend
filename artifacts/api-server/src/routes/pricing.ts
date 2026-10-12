@@ -52,7 +52,10 @@ function cleanBands(v: unknown): Band[] | null {
 }
 
 // Public: the web app reads this on load so every price it shows is the owner's current number.
+// Never cached. A price the owner just changed must not come back from a
+// browser or edge cache on the public Join page.
 router.get("/v1/pricing", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
   res.json(await load());
 });
 

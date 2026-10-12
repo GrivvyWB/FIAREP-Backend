@@ -28,6 +28,23 @@ export function loadPricing(): Promise<Overrides> {
   return loading;
 }
 
+let refreshing: Promise<Overrides> | null = null;
+
+/** Pull the owner's current numbers, past the cache. Every page that shows a
+ *  price calls this as it mounts, so a rate changed in Platform Control reaches
+ *  a tab that is already open instead of waiting for a reload. Concurrent
+ *  callers share the one request. */
+export function refreshPricing(): Promise<Overrides> {
+  if (!refreshing) {
+    refreshing = customFetch<Overrides>("/api/v1/pricing", { responseType: "json" } as never)
+      .then((o) => { const v = { ...EMPTY, ...o, items: o?.items || {} }; publish(v); return v; })
+      // Offline or a failed call keeps whatever is already on screen.
+      .catch(() => cache ?? EMPTY)
+      .finally(() => { refreshing = null; });
+  }
+  return refreshing;
+}
+
 /** Save the owner's numbers (Platform Control only). Pass only what changed. */
 export async function savePricing(patch: { items?: Record<string, number>; bands?: Band[] | null }): Promise<Overrides> {
   const o = await customFetch<Overrides>("/api/v1/platform/pricing", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch), responseType: "json" } as never);
@@ -59,7 +76,9 @@ export function usePricing(): Overrides & { loaded: boolean; priceOf: (key: Pric
   useEffect(() => {
     const l = (v: Overrides) => setO(v);
     listeners.add(l);
+    // Cached copy first so nothing flickers, then the live numbers.
     void loadPricing();
+    void refreshPricing();
     return () => { listeners.delete(l); };
   }, []);
   const cur = o ?? EMPTY;
