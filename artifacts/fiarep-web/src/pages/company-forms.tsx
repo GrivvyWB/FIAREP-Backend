@@ -45,7 +45,7 @@ export default function CompanyForms() {
   const [alsoFill, setAlsoFill] = useState<FormDef[]>([]);
   const [fillNo, setFillNo] = useState("");
   const [filling, setFilling] = useState(false);
-  const AFFIDAVITS = new Set(["af6-vermin", "af7-mold", "af8-mold", "civ194-mold", "mold-assessment", "mold-remediation"]);
+  const AFFIDAVITS = new Set(["af6-vermin", "af7-mold", "af8-mold", "civ194-mold", "mold-assessment", "mold-remediation", "lead-remediation", "lead-disclosure", "violation-timeline"]);
   // Typed on the open form: pull that violation from HPD and fill this form with it.
   async function fillFromNumber() {
     if (!def) return;
@@ -74,12 +74,16 @@ export default function CompanyForms() {
     (async () => {
       if (!id) { const f = COMPLIANCE_FORMS.find((x) => x.id === wanted); if (f) startNew(f); return; }
       try {
-        const v = await customFetch<HpdPrefill>(`/api/v1/company-forms/prefill/hpd/${encodeURIComponent(id)}`, { responseType: "json" } as never);
+        const ids = id.split(",").map(s => s.trim()).filter(Boolean);
+        const v = await customFetch<HpdPrefill>(`/api/v1/company-forms/prefill/hpd/${encodeURIComponent(ids[0])}`, { responseType: "json" } as never);
         const plan = affidavitPlan(v);
         const f = COMPLIANCE_FORMS.find((x) => x.id === wanted) || plan?.primary;
         if (!f) { toast({ variant: "destructive", title: "No affidavit for this violation", description: v.description }); return; }
+        if (ids.length > 1) v.violationId = ids.join(", ");
         setHpd(v); setAlsoFill(plan && plan.primary.id === f.id ? plan.attachments : []);
-        setPrefillNote(`Filled from violation #${v.violationId}${v.novId ? ` (NOV ${v.novId})` : ""} · ${v.address}${v.apartment ? ` Apt ${v.apartment}` : ""} · Class ${v.class || "?"}${v.units ? ` · ${v.units} units (${v.unitsSource})` : ""}${plan ? ` · ${plan.why}` : ""}`);
+        setPrefillNote(ids.length > 1
+          ? `Filling ${ids.length} violations · ${v.address}${v.apartment ? ` Apt ${v.apartment}` : ""}${plan ? ` · ${plan.why}` : ""} — one document`
+          : `Filled from violation #${v.violationId}${v.novId ? ` (NOV ${v.novId})` : ""} · ${v.address}${v.apartment ? ` Apt ${v.apartment}` : ""} · Class ${v.class || "?"}${v.units ? ` · ${v.units} units (${v.unitsSource})` : ""}${plan ? ` · ${plan.why}` : ""}`);
         await openFilled(f, v);
       } catch (err: any) {
         toast({ variant: "destructive", title: "Could not fill from the violation", description: err?.data?.error || err?.message || "Fill it in by hand." });

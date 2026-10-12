@@ -243,7 +243,8 @@ export function affidavitPlan(v: HpdPrefill): { primary: FormDef; attachments: F
     return { primary: f("af7-mold"), attachments: [f("af8-mold"), f("mold-assessment"), f("mold-remediation"), f("civ194-mold")], why: "Unit count unknown — AF-7 opened; use AF-8 and the attachments if the building has 10 or more units" };
   }
   if (/mice|mouse|rat|roach|vermin|rodent|infest/.test(d)) return { primary: f("af6-vermin"), attachments: [], why: "Mice / cockroaches / rats → AF-6" };
-  return null;
+  if (/lead[- ]based|lead paint|\blead\b|27-2056|order (616|617|624)/.test(d)) return { primary: f("lead-remediation"), attachments: [f("lead-disclosure")], why: "Lead violation → Lead Remediation Tracking with Disclosure" };
+  return { primary: f("violation-timeline"), attachments: [], why: "General violation → Violation Correction Timeline" };
 }
 
 /** Fill a form from the violation on file. `last` = the company's most recent entry of the same form (firm names, licenses, phone carry over). */
@@ -264,6 +265,12 @@ export function prefillFromHpd(formId: string, v: HpdPrefill, last?: Record<stri
       return { ...common, dated: today, ...carry(["assessorFirm", "assessorLicense", "assessorLicenseExpires", "firmAddress", "firmPhone", "firmEmail", "assessorName", "printName", "phone"]) };
     case "mold-remediation":
       return { ...common, dated: today, ...carry(["remediatorFirm", "remediatorLicense", "remediatorLicenseExpires", "supervisorLicense", "supervisorLicenseExpires", "firmAddress", "firmPhone", "firmEmail", "remediatorName", "printName", "phone"]) };
+    case "lead-remediation":
+      return { ...common, hpdViolation: v.violationId, unit: v.apartment, ...carry(["rrpContractor", "rrpCertification", "rrpPhone"]) };
+    case "lead-disclosure":
+      return { ...common, unit: v.apartment, owner: v.signer, ...carry(["owner"]) };
+    case "violation-timeline":
+      return { property: fullAddress, unit: v.apartment, violationNumber: v.violationId };
     default:
       return common;
   }

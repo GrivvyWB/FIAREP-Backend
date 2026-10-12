@@ -1,7 +1,7 @@
 import { isInspectionSupervisorTitle } from "@/lib/titles";
 import { useState } from "react";
 import { GenericEntityPage } from "@/components/layout/generic-entity-page";
-import { AlertTriangle, Search, Building2, FileWarning, AlertCircle, Send } from "lucide-react";
+import { AlertTriangle, Search, Building2, FileWarning, AlertCircle, Send, FileSignature } from "lucide-react";
 import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { violationKind } from "@/lib/compliance-forms";
@@ -324,6 +324,12 @@ export default function Violations() {
                       No HPD violations found for this property.
                     </div>
                   ) : (
+                    <>
+                    {formsOn && (() => { const open = data.hpdViolations.filter(v => v.id !== "unknown" && v.status.toLowerCase() === "open"); return open.length > 1 ? (
+                      <div className="flex items-center justify-end px-2 py-2">
+                        <a href={`/company-forms?hpd=${open.map(v => encodeURIComponent(v.id)).join(",")}`} className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium hover:bg-muted"><FileSignature className="h-3.5 w-3.5" />Fill all ({open.length} open)</a>
+                      </div>
+                    ) : null; })()}
                     <ScrollArea className="h-[400px]">
                       <Table>
                         <TableHeader className="bg-muted/30 sticky top-0 backdrop-blur z-10">
@@ -352,7 +358,7 @@ export default function Violations() {
                               <TableCell className="max-w-xl">
                                 <p className="text-sm leading-relaxed" title={v.description}>{v.description}</p>
                                 {v.apartment && <div className="text-xs text-muted-foreground mt-1 font-medium">Apt: {v.apartment}</div>}
-                                {formsOn && v.id !== "unknown" && v.status.toLowerCase() === 'open' && ["vermin", "mold"].includes(violationKind(v.description)) && (
+                                {formsOn && v.id !== "unknown" && v.status.toLowerCase() === 'open' && (
                                   <a href={`/company-forms?hpd=${encodeURIComponent(v.id)}`} className="mt-2 inline-block rounded-full border px-2.5 py-0.5 text-xs font-medium hover:bg-muted">Fill affidavit</a>
                                 )}
                               </TableCell>
@@ -364,6 +370,7 @@ export default function Violations() {
                         </TableBody>
                       </Table>
                     </ScrollArea>
+                    </>
                   )}
                 </TabsContent>
 
