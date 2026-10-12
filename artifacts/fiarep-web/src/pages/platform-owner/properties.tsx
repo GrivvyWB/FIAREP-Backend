@@ -322,20 +322,19 @@ export default function OwnerProperties() {
     }
   }
 
-  // ── Filter / group ──
+  // Which registered building is open. The register is a dropdown rather than
+  // a column of cards: a portfolio client runs to 30+ buildings and the page
+  // was scrolling for ever.
+  const [openId, setOpenId] = useState("");
+  useEffect(() => { setOpenId(""); }, [organizationId]);
+
+  // ── Filter ──
   const [filter, setFilter] = useState("");
   const filtered = properties.filter((p) => {
     if (!filter.trim()) return true;
     const q = filter.toLowerCase();
     return p.displayAddress.toLowerCase().includes(q) || (p.development || "").toLowerCase().includes(q);
   });
-  const grouped = new Map<string, Property[]>();
-  for (const p of filtered) {
-    const key = p.development || "(No development)";
-    const arr = grouped.get(key) || [];
-    arr.push(p);
-    grouped.set(key, arr);
-  }
 
   const unitsOnPlan = properties.reduce((n, p) => n + (p.active && p.units ? p.units : 0), 0);
   const onPlanCount = properties.filter((p) => p.active).length;
@@ -569,50 +568,75 @@ export default function OwnerProperties() {
             </div>
           )}
 
-          {filtered.length === 0 && (
+          {properties.length === 0 ? (
             <p className="rounded-xl border border-slate-200 bg-white py-12 text-center text-sm text-slate-500">
-              {properties.length === 0
-                ? `No buildings registered for ${organization?.name ?? "this organization"} yet.`
-                : "No buildings match your filter."}
+              No buildings registered for {organization?.name ?? "this organization"} yet.
             </p>
+          ) : (
+            <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold text-slate-900">Registered buildings</h2>
+                <span className="text-xs text-slate-500">
+                  {filtered.length === properties.length
+                    ? `${properties.length} registered · ${onPlanCount} on the plan`
+                    : `${filtered.length} of ${properties.length}`}
+                </span>
+              </div>
+              <select
+                value={openId}
+                onChange={(e) => setOpenId(e.target.value)}
+                className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+                aria-label="Registered building"
+              >
+                <option value="">Choose a building… ({filtered.length})</option>
+                {filtered.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.displayAddress}
+                    {p.units ? ` · ${p.units} units` : " · same lot as another building"}
+                    {` · ${p.active ? "On the plan" : "Blocked"}`}
+                  </option>
+                ))}
+              </select>
+              {filtered.length === 0 && <p className="text-xs text-slate-500">No buildings match your filter.</p>}
+              {(() => {
+                const p = filtered.find((x) => x.id === openId);
+                if (!p) {
+                  return <p className="text-xs text-slate-500">Pick a building to switch it on or off the plan, or to remove it.</p>;
+                }
+                return (
+                  <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium text-slate-900">{p.displayAddress}</p>
+                      <p className="text-xs text-slate-500">
+                        {p.units ? `${p.units} units` : "same lot as another building"}
+                        {p.bbl ? ` · BBL ${p.bbl}` : ""}
+                        {p.development && p.development !== p.displayAddress ? ` · ${p.development}` : ""}
+                        {p.active
+                          ? <span className="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">On the plan</span>
+                          : <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Blocked</span>}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-slate-600">
+                        <Switch checked={p.active} onCheckedChange={() => toggleActive(p)} />
+                        <span className="hidden sm:inline">{p.active ? "On plan" : "Off plan"}</span>
+                      </label>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-rose-600"
+                        onClick={() => { void removeProperty(p); setOpenId(""); }}
+                        disabled={removing === p.id}
+                      >
+                        {removing === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })()}
+            </section>
           )}
 
-          {Array.from(grouped.entries()).map(([dev, props]) => (
-            <div key={dev} className="space-y-2">
-              {grouped.size > 1 && (
-                <h3 className="mt-4 text-xs font-semibold uppercase tracking-wide text-slate-500">{dev}</h3>
-              )}
-              {props.map((p) => (
-                <div key={p.id} className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-slate-900">{p.displayAddress}</p>
-                    <p className="text-xs text-slate-500">
-                      {p.units ? `${p.units} units` : "same lot as another building"}
-                      {p.bbl ? ` · BBL ${p.bbl}` : ""}
-                      {p.active
-                        ? <span className="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">On the plan</span>
-                        : <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Blocked</span>}
-                    </p>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-3">
-                    <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-slate-600">
-                      <Switch checked={p.active} onCheckedChange={() => toggleActive(p)} />
-                      <span className="hidden sm:inline">{p.active ? "On plan" : "Off plan"}</span>
-                    </label>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-slate-400 hover:text-rose-600"
-                      onClick={() => removeProperty(p)}
-                      disabled={removing === p.id}
-                    >
-                      {removing === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          ))}
         </>
       )}
     </div>
