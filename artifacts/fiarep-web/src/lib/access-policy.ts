@@ -15,7 +15,7 @@ export type OrganizationModules = Record<string, boolean>;
 
 const MANAGEMENT_ROLES = new Set(["management", "administrator"]);
 const UPPER_MANAGEMENT_POSITIONS = new Set(["Director", "Borough Director", "Regional Director", "Assistant Regional Director"]);
-const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "shared-data"]);
+const ADMIN_ONLY_MODULES = new Set<StaffModule>(["clients", "shared-data", "properties"]);
 const isElevatorTitle = (position: string | null | undefined) =>
   sameTitle(position, "Elevator Service") || supervisedTradeForPosition(position) === "Elevator Service";
 // Modules that are OFF until the platform owner enables them (none today;
