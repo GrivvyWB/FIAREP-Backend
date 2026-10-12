@@ -63,6 +63,32 @@ export default function PropertyLookup() {
                   const n = k === "all" ? d.hpdViolations.length : d.hpdViolations.filter((v) => violationKind(v.description) === k).length;
                   return <button key={k} type="button" onClick={() => setKind(k)} className={`rounded-full border px-3 py-1 text-xs font-medium ${kind === k ? "border-primary bg-primary/10" : "hover:bg-muted"}`}>{k === "all" ? "All" : KIND_LABEL[k]} <span className="text-muted-foreground">{n}</span></button>;
                 })}
+                {/* Fill every open violation of one kind onto a single affidavit.
+                    Grouped by kind on purpose: company-forms picks the form from
+                    the first violation, so vermin and mold cannot share one
+                    document (AF-6 vs AF-7 / AF-8). Lead certifies on paper and
+                    "other" goes with the dismissal request, so neither is here. */}
+                {formsOn && (() => {
+                  const shown = d.hpdViolations.filter((v) => kind === "all" || violationKind(v.description) === kind);
+                  const groups = (["vermin", "mold"] as const)
+                    .map((k) => ({ k, ids: shown.filter((v) => v.id !== "unknown" && isOpen(v.status) && violationKind(v.description) === k).map((v) => v.id) }))
+                    .filter((g) => g.ids.length > 1);
+                  if (groups.length === 0) return null;
+                  return (
+                    <span className="ml-auto flex flex-wrap items-center gap-2">
+                      {groups.map((g) => (
+                        <a
+                          key={g.k}
+                          href={`/company-forms?hpd=${g.ids.map((x) => encodeURIComponent(x)).join(",")}`}
+                          className="inline-flex items-center gap-1.5 rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium text-slate-800 hover:bg-slate-100"
+                        >
+                          <FileSignature className="h-3.5 w-3.5" />
+                          Fill all {g.ids.length} {KIND_LABEL[g.k].toLowerCase()}
+                        </a>
+                      ))}
+                    </span>
+                  );
+                })()}
               </div>
             )}
             {tab === "hpd" && (d.hpdViolations.length === 0 ? <p className="text-sm text-muted-foreground">No HPD violations found for this property.</p> : sortUnitFirst(d.hpdViolations).filter((v) => kind === "all" || violationKind(v.description) === kind).map((v) => (
