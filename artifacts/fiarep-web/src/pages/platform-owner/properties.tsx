@@ -18,6 +18,12 @@ import { Building2, Loader2, Plus, Search, Trash2, X } from "lucide-react";
  * is responsible for and switches each one on or off the plan. Clients never
  * manage their own properties: "on the plan" drives licensed-unit billing,
  * resident complaint routing and public resident access, so it stays here.
+ *
+ * Portfolio: HPD's registration file names the corporations and people behind
+ * a building. Pulling from any building already on the client's list finds
+ * every other building registered to those same names — the client's whole
+ * portfolio. The client only gets what is added here; anything left in the
+ * dropdown is not theirs to use.
  */
 
 type Property = {
@@ -37,14 +43,20 @@ type Payload = {
   licensedUnits: number | null;
   unrestricted: boolean;
 };
+type PortfolioRow = {
+  registrationId: string; buildingId: string; address: string; borough: string; zip: string;
+  bbl: string; bin: string; units?: number; hpdA: number; hpdB: number; hpdC: number;
+  via: string[]; aep: { status: string } | null;
+};
+type Portfolio = { names: string[]; rows: PortfolioRow[]; totalUnits?: number; lots?: number };
 
 const json = { "Content-Type": "application/json" };
 
-function Metric({ label, value }: { label: string; value: string }) {
+function Metric({ label, value, tone }: { label: string; value: string; tone?: "blocked" }) {
   return (
     <div className="flex-1 border-r border-slate-200 px-5 py-4 last:border-r-0">
       <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</p>
-      <p className="mt-1 text-xl font-bold text-slate-950">{value}</p>
+      <p className={`mt-1 text-xl font-bold ${tone === "blocked" ? "text-rose-700" : "text-slate-950"}`}>{value}</p>
     </div>
   );
 }
@@ -81,7 +93,75 @@ export default function OwnerProperties() {
 
   const properties = useMemo(() => data?.properties ?? [], [data]);
 
-  // ── Address autocomplete ──
+  // ── Portfolio: every building registered to the same names ──
+  const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+  const [portfolioNote, setPortfolioNote] = useState("");
+  const [seedBbl, setSeedBbl] = useState("");
+
+  // Buildings on the client's list that carry a BBL can seed the pull.
+  const seeds = useMemo(() => properties.filter((p) => p.bbl), [properties]);
+  useEffect(() => { setPortfolio(null); setPortfolioNote(""); setSeedBbl(seeds[0]?.bbl || ""); }, [organizationId, seeds]);
+
+  async function pullPortfolio() {
+    if (!seedBbl) return;
+    setPortfolioLoading(true);
+    setPortfolio(null);
+    setPortfolioNote("");
+    try {
+      const info = await customFetch<{ registrationId: string | null }>(
+        `/api/v1/platform/aep/contacts-by-bbl/${encodeURIComponent(seedBbl)}`,
+        { responseType: "json" } as never,
+      );
+      if (!info.registrationId) {
+        setPortfolioNote("That building has no HPD registration on file, so there are no names to search.");
+        return;
+      }
+      const result = await customFetch<Portfolio>(
+        `/api/v1/platform/aep/portfolio/${encodeURIComponent(info.registrationId)}`,
+        { responseType: "json" } as never,
+      );
+      setPortfolio(result);
+      if (result.rows.length === 0) setPortfolioNote("No other registrations name these people or corporations.");
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not pull the portfolio", description: err?.data?.error || err?.message || "NYC Open Data may be unavailable." });
+    } finally {
+      setPortfolioLoading(false);
+    }
+  }
+
+  // Which portfolio buildings are already on this client's list.
+  const addedBbls = useMemo(() => new Set(properties.map((p) => p.bbl).filter(Boolean) as string[]), [properties]);
+  const portfolioOpen = useMemo(
+    () => (portfolio?.rows ?? []).filter((r) => !addedBbls.has(r.bbl)),
+    [portfolio, addedBbls],
+  );
+
+  const [addingBbl, setAddingBbl] = useState("");
+  async function addFromPortfolio(row: PortfolioRow) {
+    setAddingBbl(row.bbl);
+    try {
+      await customFetch<Property>("/api/v1/platform/properties", {
+        method: "POST",
+        headers: json,
+        body: JSON.stringify({
+          organizationId,
+          displayAddress: `${row.address}, ${row.borough} ${row.zip}`.trim(),
+          development: null,
+          units: row.units && row.units > 0 ? row.units : undefined,
+        }),
+        responseType: "json",
+      } as never);
+      toast({ title: `Added ${row.address}`, description: "Off the plan — switch it on when the client is paying for it." });
+      await reload();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not add building", description: err?.data?.error || err?.message || "Try again." });
+    } finally {
+      setAddingBbl("");
+    }
+  }
+
+  // ── Address autocomplete (add one by hand) ──
   const [addressInput, setAddressInput] = useState("");
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
@@ -119,7 +199,6 @@ export default function OwnerProperties() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  // ── Add ──
   const [adding, setAdding] = useState(false);
   async function addProperty() {
     const displayAddress = addressInput.trim();
@@ -145,7 +224,6 @@ export default function OwnerProperties() {
     }
   }
 
-  // ── On / off the plan ──
   async function toggleActive(prop: Property) {
     try {
       await customFetch<Property>(`/api/v1/platform/properties/${encodeURIComponent(prop.id)}`, {
@@ -160,7 +238,6 @@ export default function OwnerProperties() {
     }
   }
 
-  // ── Remove ──
   const [removing, setRemoving] = useState<string | null>(null);
   async function removeProperty(prop: Property) {
     setRemoving(prop.id);
@@ -227,10 +304,12 @@ export default function OwnerProperties() {
       </div>
 
       <div className="flex flex-wrap rounded-xl border border-slate-200 bg-white shadow-sm">
-        <Metric label="Properties" value={String(properties.length)} />
+        <Metric label="Registered" value={String(properties.length)} />
         <Metric label="On the plan" value={String(onPlanCount)} />
         <Metric label="Units on plan" value={unitsOnPlan.toLocaleString()} />
         <Metric label="Licensed units" value={licensed} />
+        {portfolio && <Metric label="In portfolio" value={String(portfolio.rows.length + properties.length)} />}
+        {portfolio && <Metric label="Blocked" value={String(portfolioOpen.length)} tone="blocked" />}
       </div>
 
       {loading ? (
@@ -239,8 +318,82 @@ export default function OwnerProperties() {
         </div>
       ) : (
         <>
+          {/* ── Portfolio pull ── */}
           <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="text-sm font-semibold text-slate-900">Add a building</h2>
+            <div>
+              <h2 className="text-sm font-semibold text-slate-900">This client's portfolio</h2>
+              <p className="mt-0.5 text-xs text-slate-500">
+                HPD's registration file names the corporations and people behind a building. Pull from one
+                building already on their list to find every other building registered to those same names.
+                Only what you add here is theirs — the rest stay blocked.
+              </p>
+            </div>
+            {seeds.length === 0 ? (
+              <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                Add one of this client's buildings below first. Its HPD registration is what finds the rest.
+              </p>
+            ) : (
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <select
+                  value={seedBbl}
+                  onChange={(e) => setSeedBbl(e.target.value)}
+                  className="h-10 flex-1 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900"
+                  aria-label="Pull from"
+                >
+                  {seeds.map((p) => (
+                    <option key={p.id} value={p.bbl!}>Pull from {p.displayAddress}</option>
+                  ))}
+                </select>
+                <Button
+                  onClick={pullPortfolio}
+                  disabled={portfolioLoading || !seedBbl}
+                  className="h-10 bg-slate-900 px-5 text-white hover:bg-slate-800"
+                >
+                  {portfolioLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                  <span className="ml-1.5">{portfolioLoading ? "Searching HPD" : "Pull portfolio"}</span>
+                </Button>
+              </div>
+            )}
+
+            {portfolioNote && <p className="text-xs text-slate-500">{portfolioNote}</p>}
+
+            {portfolio && portfolio.rows.length > 0 && (
+              <div className="space-y-2 border-t border-slate-100 pt-3">
+                <p className="text-xs text-slate-500">
+                  {portfolio.rows.length} other building{portfolio.rows.length === 1 ? "" : "s"}
+                  {portfolio.totalUnits ? <> · <b className="text-slate-900">{portfolio.totalUnits.toLocaleString()} residential units</b> (PLUTO, counted once per lot{portfolio.lots && portfolio.lots !== portfolio.rows.length ? `, ${portfolio.lots} lots` : ""})</> : null}
+                  {" "}registered to {portfolio.names.join(", ")}.
+                </p>
+                <select
+                  value=""
+                  disabled={!!addingBbl}
+                  onChange={(e) => { const r = portfolioOpen[Number(e.target.value)]; if (r) void addFromPortfolio(r); }}
+                  className="h-10 w-full rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900 disabled:opacity-60"
+                  aria-label="Add a building from the portfolio"
+                >
+                  <option value="">
+                    {addingBbl ? "Adding…" : `Choose a building to add… (${portfolioOpen.length} not yet added)`}
+                  </option>
+                  {portfolioOpen.map((r, i) => (
+                    <option key={r.bbl + r.registrationId} value={i}>
+                      {r.address}, {r.borough} {r.zip}
+                      {r.units ? ` · ${r.units} units` : ""}
+                      {` · ${r.hpdA + r.hpdB + r.hpdC} open HPD (${r.hpdB} B · ${r.hpdC} C)`}
+                      {r.aep?.status === "AEP Active" ? " · IN AEP" : ""}
+                      {r.via[0] ? ` · ${r.via[0]}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {portfolioOpen.length === 0 && (
+                  <p className="text-xs text-emerald-700">Every building in this portfolio is registered to this client.</p>
+                )}
+              </div>
+            )}
+          </section>
+
+          {/* ── Add one by hand ── */}
+          <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+            <h2 className="text-sm font-semibold text-slate-900">Add a building by address</h2>
             <div className="flex flex-col gap-2 sm:flex-row">
               <div className="relative flex-1" ref={wrapRef}>
                 <Input
