@@ -19,11 +19,16 @@ import { Building2, Loader2, Plus, Search, Trash2, X } from "lucide-react";
  * manage their own properties: "on the plan" drives licensed-unit billing,
  * resident complaint routing and public resident access, so it stays here.
  *
- * Portfolio: HPD's registration file names the corporations and people behind
- * a building. Pulling from any building already on the client's list finds
- * every other building registered to those same names — the client's whole
- * portfolio. The client only gets what is added here; anything left in the
- * dropdown is not theirs to use.
+ * Portfolio: NYCHA and L+M get their whole catalog of development names from a
+ * built-in list (Organizations -> the NYCHA / L+M buttons). A private landlord
+ * has no built-in list, so theirs comes from HPD's registration file: pulling
+ * from one building already registered finds every other building registered
+ * to the same corporations and people. All the names come into the system; the
+ * owner keeps as many as the client pays for and the rest stay blocked.
+ *
+ * Registering goes through /v1/platform/organizations/:id/properties, the same
+ * route the Organizations dialog uses, so the property limit, the licensed-unit
+ * check and the configuredDevelopments bookkeeping all stay in one place.
  */
 
 type Property = {
@@ -33,16 +38,8 @@ type Property = {
   units: number | null;
   bbl: string | null;
   active: boolean;
-  createdAt: string;
-  updatedAt: string;
 };
 type Suggestion = { address: string; borough: string; label: string };
-type Payload = {
-  properties: Property[];
-  organizationName: string;
-  licensedUnits: number | null;
-  unrestricted: boolean;
-};
 type PortfolioRow = {
   registrationId: string; buildingId: string; address: string; borough: string; zip: string;
   bbl: string; bin: string; units?: number; hpdA: number; hpdB: number; hpdC: number;
@@ -51,6 +48,7 @@ type PortfolioRow = {
 type Portfolio = { names: string[]; rows: PortfolioRow[]; totalUnits?: number; lots?: number };
 
 const json = { "Content-Type": "application/json" };
+const errText = (e: any, fallback: string) => e?.data?.error || e?.message || fallback;
 
 function Metric({ label, value, tone }: { label: string; value: string; tone?: "blocked" }) {
   return (
@@ -70,20 +68,28 @@ export default function OwnerProperties() {
     if (!organizationId && organizations[0]) setOrganizationId(organizations[0].id);
   }, [organizationId, organizations]);
 
-  const [data, setData] = useState<Payload | null>(null);
+  const organization = organizations.find((o) => o.id === organizationId) ?? null;
+  const licensedUnits = (organization as unknown as { licensedUnits?: number | null } | null)?.licensedUnits ?? null;
+  const unrestricted = organization?.unrestricted === true;
+
+  const base = organizationId
+    ? `/api/v1/platform/organizations/${encodeURIComponent(organizationId)}/properties`
+    : "";
+
+  const [properties, setProperties] = useState<Property[]>([]);
   const [loading, setLoading] = useState(true);
 
   const reload = useCallback(async () => {
     if (!organizationId) return;
     setLoading(true);
     try {
-      const payload = await customFetch<Payload>(
-        `/api/v1/platform/properties?organizationId=${encodeURIComponent(organizationId)}`,
+      const rows = await customFetch<Property[]>(
+        `/api/v1/platform/organizations/${encodeURIComponent(organizationId)}/properties`,
         { responseType: "json" } as never,
       );
-      setData(payload);
+      setProperties([...rows].sort((a, b) => a.displayAddress.localeCompare(b.displayAddress)));
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not load properties", description: err?.data?.error || err?.message || "Try again." });
+      toast({ variant: "destructive", title: "Could not load properties", description: errText(err, "Try again.") });
     } finally {
       setLoading(false);
     }
@@ -91,17 +97,15 @@ export default function OwnerProperties() {
 
   useEffect(() => { void reload(); }, [reload]);
 
-  const properties = useMemo(() => data?.properties ?? [], [data]);
-
   // ── Portfolio: every building registered to the same names ──
   const [portfolio, setPortfolio] = useState<Portfolio | null>(null);
   const [portfolioLoading, setPortfolioLoading] = useState(false);
   const [portfolioNote, setPortfolioNote] = useState("");
   const [seedBbl, setSeedBbl] = useState("");
 
-  // Buildings on the client's list that carry a BBL can seed the pull.
   const seeds = useMemo(() => properties.filter((p) => p.bbl), [properties]);
-  useEffect(() => { setPortfolio(null); setPortfolioNote(""); setSeedBbl(seeds[0]?.bbl || ""); }, [organizationId, seeds]);
+  useEffect(() => { setPortfolio(null); setPortfolioNote(""); }, [organizationId]);
+  useEffect(() => { if (!seedBbl && seeds[0]?.bbl) setSeedBbl(seeds[0].bbl); }, [seeds, seedBbl]);
 
   async function pullPortfolio() {
     if (!seedBbl) return;
@@ -124,38 +128,42 @@ export default function OwnerProperties() {
       setPortfolio(result);
       if (result.rows.length === 0) setPortfolioNote("No other registrations name these people or corporations.");
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not pull the portfolio", description: err?.data?.error || err?.message || "NYC Open Data may be unavailable." });
+      toast({ variant: "destructive", title: "Could not pull the portfolio", description: errText(err, "NYC Open Data may be unavailable.") });
     } finally {
       setPortfolioLoading(false);
     }
   }
 
-  // Which portfolio buildings are already on this client's list.
   const addedBbls = useMemo(() => new Set(properties.map((p) => p.bbl).filter(Boolean) as string[]), [properties]);
   const portfolioOpen = useMemo(
     () => (portfolio?.rows ?? []).filter((r) => !addedBbls.has(r.bbl)),
     [portfolio, addedBbls],
   );
 
+  /** Register a building. Added OFF the plan — switching it on is the moment
+   *  it counts against the client's licensed units. */
+  async function register(body: Record<string, unknown>) {
+    return customFetch<Property>(base, {
+      method: "POST",
+      headers: json,
+      body: JSON.stringify({ active: false, ...body }),
+      responseType: "json",
+    } as never);
+  }
+
   const [addingBbl, setAddingBbl] = useState("");
   async function addFromPortfolio(row: PortfolioRow) {
     setAddingBbl(row.bbl);
     try {
-      await customFetch<Property>("/api/v1/platform/properties", {
-        method: "POST",
-        headers: json,
-        body: JSON.stringify({
-          organizationId,
-          displayAddress: `${row.address}, ${row.borough} ${row.zip}`.trim(),
-          development: null,
-          units: row.units && row.units > 0 ? row.units : undefined,
-        }),
-        responseType: "json",
-      } as never);
+      await register({
+        displayAddress: `${row.address}, ${row.borough} ${row.zip}`.trim(),
+        development: row.address,
+        ...(row.units && row.units > 0 ? { units: row.units } : {}),
+      });
       toast({ title: `Added ${row.address}`, description: "Off the plan — switch it on when the client is paying for it." });
       await reload();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not add building", description: err?.data?.error || err?.message || "Try again." });
+      toast({ variant: "destructive", title: "Could not add building", description: errText(err, "Try again.") });
     } finally {
       setAddingBbl("");
     }
@@ -169,9 +177,14 @@ export default function OwnerProperties() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
   const [devName, setDevName] = useState("");
+  const [unitsInput, setUnitsInput] = useState("");
+  const [needsUnits, setNeedsUnits] = useState(false);
+  const [addError, setAddError] = useState("");
 
   function onAddressChange(value: string) {
     setAddressInput(value);
+    setNeedsUnits(false);
+    setAddError("");
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (value.trim().length < 3) { setSuggestions([]); setSuggestOpen(false); return; }
     debounceRef.current = setTimeout(async () => {
@@ -206,19 +219,21 @@ export default function OwnerProperties() {
       toast({ variant: "destructive", title: "Enter a building address" }); return;
     }
     setAdding(true);
+    setAddError("");
     try {
-      await customFetch<Property>("/api/v1/platform/properties", {
-        method: "POST",
-        headers: json,
-        body: JSON.stringify({ organizationId, displayAddress, development: devName.trim() || null }),
-        responseType: "json",
-      } as never);
-      setAddressInput("");
-      setDevName("");
-      toast({ title: `Added to ${data?.organizationName ?? "the organization"}` });
+      const typed = Number(unitsInput);
+      await register({
+        displayAddress,
+        development: devName.trim() || null,
+        ...(Number.isFinite(typed) && typed > 0 ? { units: typed } : {}),
+      });
+      setAddressInput(""); setDevName(""); setUnitsInput(""); setNeedsUnits(false);
+      toast({ title: `Added to ${organization?.name ?? "the organization"}` });
       await reload();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not add property", description: err?.data?.error || err?.message || "Try again." });
+      // The City has no unit count for this address: the route asks for one.
+      if (err?.data?.needsUnits) { setNeedsUnits(true); setAddError(errText(err, "Type the number of dwelling units.")); }
+      else setAddError(errText(err, "Could not add the building."));
     } finally {
       setAdding(false);
     }
@@ -226,7 +241,7 @@ export default function OwnerProperties() {
 
   async function toggleActive(prop: Property) {
     try {
-      await customFetch<Property>(`/api/v1/platform/properties/${encodeURIComponent(prop.id)}`, {
+      await customFetch<Property>(`${base}/${encodeURIComponent(prop.id)}`, {
         method: "PATCH",
         headers: json,
         body: JSON.stringify({ active: !prop.active }),
@@ -234,7 +249,7 @@ export default function OwnerProperties() {
       } as never);
       await reload();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not update property", description: err?.data?.error || err?.message || "Try again." });
+      toast({ variant: "destructive", title: prop.active ? "Could not take it off the plan" : "Could not put it on the plan", description: errText(err, "Try again.") });
     }
   }
 
@@ -242,7 +257,7 @@ export default function OwnerProperties() {
   async function removeProperty(prop: Property) {
     setRemoving(prop.id);
     try {
-      await customFetch(`/api/v1/platform/properties/${encodeURIComponent(prop.id)}`, {
+      await customFetch(`${base}/${encodeURIComponent(prop.id)}`, {
         method: "DELETE",
         headers: json,
         responseType: "json",
@@ -250,7 +265,7 @@ export default function OwnerProperties() {
       toast({ title: `Removed ${prop.displayAddress}` });
       await reload();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Could not remove property", description: err?.data?.error || err?.message || "Try again." });
+      toast({ variant: "destructive", title: "Could not remove property", description: errText(err, "Try again.") });
     } finally {
       setRemoving(null);
     }
@@ -273,7 +288,7 @@ export default function OwnerProperties() {
 
   const unitsOnPlan = properties.reduce((n, p) => n + (p.active && p.units ? p.units : 0), 0);
   const onPlanCount = properties.filter((p) => p.active).length;
-  const licensed = data?.unrestricted ? "Unlimited" : data?.licensedUnits ? data.licensedUnits.toLocaleString() : "—";
+  const licensed = unrestricted ? "Unlimited" : licensedUnits ? licensedUnits.toLocaleString() : "—";
 
   return (
     <div className="space-y-6">
@@ -289,7 +304,7 @@ export default function OwnerProperties() {
             Clients cannot change this themselves.
           </p>
         </div>
-        <Select value={organizationId} onValueChange={(v) => { setOrganizationId(v); setFilter(""); }}>
+        <Select value={organizationId} onValueChange={(v) => { setOrganizationId(v); setFilter(""); setSeedBbl(""); }}>
           <SelectTrigger className="h-11 w-full bg-white sm:w-[320px]" aria-label="Organization">
             <SelectValue placeholder={orgsLoading ? "Loading..." : "Pick an organization"} />
           </SelectTrigger>
@@ -323,14 +338,15 @@ export default function OwnerProperties() {
             <div>
               <h2 className="text-sm font-semibold text-slate-900">This client's portfolio</h2>
               <p className="mt-0.5 text-xs text-slate-500">
-                HPD's registration file names the corporations and people behind a building. Pull from one
-                building already on their list to find every other building registered to those same names.
-                Only what you add here is theirs — the rest stay blocked.
+                NYCHA and L+M get their whole list of names from a built-in catalog on the Organizations tab.
+                A private landlord has no built-in list, so theirs comes from HPD's registration file: pull from
+                one building already registered and every other building under the same corporations and people
+                comes over. Keep as many as the client pays for — the rest stay blocked.
               </p>
             </div>
             {seeds.length === 0 ? (
               <p className="rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-500">
-                Add one of this client's buildings below first. Its HPD registration is what finds the rest.
+                Register one of this client's buildings below first. Its HPD registration is what finds the rest.
               </p>
             ) : (
               <div className="flex flex-col gap-2 sm:flex-row">
@@ -426,6 +442,16 @@ export default function OwnerProperties() {
                 value={devName}
                 onChange={(e) => setDevName(e.target.value)}
               />
+              {needsUnits && (
+                <Input
+                  className="sm:w-28"
+                  type="number"
+                  placeholder="Units"
+                  value={unitsInput}
+                  onChange={(e) => setUnitsInput(e.target.value)}
+                  aria-label="Dwelling units"
+                />
+              )}
               <Button
                 onClick={addProperty}
                 disabled={adding || !addressInput.trim() || !organizationId}
@@ -435,9 +461,11 @@ export default function OwnerProperties() {
                 <span className="ml-1.5">Add</span>
               </Button>
             </div>
-            <p className="text-xs text-slate-500">
-              Units come from the City record. A building is added off the plan — switch it on when the client is ready.
-            </p>
+            {addError
+              ? <p className="text-xs text-rose-700">{addError}</p>
+              : <p className="text-xs text-slate-500">
+                  Units come from the City record. A building is added off the plan — switch it on when the client is paying for it.
+                </p>}
           </section>
 
           {properties.length > 4 && (
@@ -460,7 +488,7 @@ export default function OwnerProperties() {
           {filtered.length === 0 && (
             <p className="rounded-xl border border-slate-200 bg-white py-12 text-center text-sm text-slate-500">
               {properties.length === 0
-                ? `No buildings registered for ${data?.organizationName ?? "this organization"} yet.`
+                ? `No buildings registered for ${organization?.name ?? "this organization"} yet.`
                 : "No buildings match your filter."}
             </p>
           )}
@@ -475,12 +503,11 @@ export default function OwnerProperties() {
                   <div className="min-w-0 flex-1">
                     <p className="truncate font-medium text-slate-900">{p.displayAddress}</p>
                     <p className="text-xs text-slate-500">
-                      {p.units ? `${p.units} units` : "Units unknown"}
+                      {p.units ? `${p.units} units` : "same lot as another building"}
                       {p.bbl ? ` · BBL ${p.bbl}` : ""}
-                      {p.development && grouped.size <= 1 ? ` · ${p.development}` : ""}
                       {p.active
                         ? <span className="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">On the plan</span>
-                        : <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Not on plan</span>}
+                        : <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Blocked</span>}
                     </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-3">

@@ -162,6 +162,26 @@ router.patch("/v1/platform/organizations/:organizationId/properties/:propertyId"
   try {
     const body = req.body as Record<string, unknown>;
     const input = "displayAddress" in body || "development" in body || "active" in body ? propertyInput({ ...before, ...body }) : {};
+    // Switching a building ON the plan is held to the licensed units, the same
+    // way adding one is. Without this a building could be registered off the
+    // plan and then switched on past what the client pays for.
+    if (body["active"] === true && !before.active && (before.units || 0) > 0) {
+      const [org] = await db.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+      if (org?.licensedUnits !== null && org?.licensedUnits !== undefined && !org.unrestricted) {
+        const [{ registered }] = await db.select({ registered: sql<number>`coalesce(sum(${organizationProperties.units}), 0)` })
+          .from(organizationProperties)
+          .where(and(eq(organizationProperties.organizationId, organizationId), eq(organizationProperties.active, true)));
+        const have = Number(registered) || 0;
+        const adds = before.units || 0;
+        if (have + adds > org.licensedUnits) {
+          res.status(403).json({
+            error: `${org.licensedUnits.toLocaleString("en-US")} units licensed, ${have.toLocaleString("en-US")} on the plan — this building adds ${adds.toLocaleString("en-US")}. Raise the licensed units on the company to ${(have + adds).toLocaleString("en-US")} to switch it on.`,
+            licensedUnits: org.licensedUnits, registeredUnits: have, buildingUnits: adds,
+          });
+          return;
+        }
+      }
+    }
     const [updated] = await db.update(organizationProperties).set({ ...input, updatedAt: new Date() }).where(and(eq(organizationProperties.id, before.id), eq(organizationProperties.organizationId, organizationId))).returning();
     if (updated?.development) {
       const [organization] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
