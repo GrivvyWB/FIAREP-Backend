@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { customFetch, useListOrganizations } from "@workspace/api-client-react";
+import { customFetch, useListOrganizations, getListOrganizationsQueryKey } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
@@ -61,6 +62,7 @@ function Metric({ label, value, tone }: { label: string; value: string; tone?: "
 
 export default function OwnerProperties() {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const { data: organizations = [], isLoading: orgsLoading } = useListOrganizations();
 
   const [organizationId, setOrganizationId] = useState("");
@@ -88,12 +90,17 @@ export default function OwnerProperties() {
         { responseType: "json" } as never,
       );
       setProperties([...rows].sort((a, b) => a.displayAddress.localeCompare(b.displayAddress)));
+      // Adding, toggling or removing a building rewrites organizations.features
+      // server-side (the route records the development name). The cached org
+      // list has to follow, or a later Save in Organizations / Module
+      // Management writes the stale features back and drops those names.
+      await queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Could not load properties", description: errText(err, "Try again.") });
     } finally {
       setLoading(false);
     }
-  }, [organizationId, toast]);
+  }, [organizationId, toast, queryClient]);
 
   useEffect(() => { void reload(); }, [reload]);
 
