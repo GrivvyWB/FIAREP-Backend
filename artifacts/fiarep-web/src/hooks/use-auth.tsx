@@ -29,6 +29,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [organizationName, setOrganizationName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
+  const sameModules = (a: Record<string, boolean>, b: Record<string, boolean>) => {
+    const keys = Object.keys(a);
+    if (keys.length !== Object.keys(b).length) return false;
+    return keys.every((k) => a[k] === b[k]);
+  };
+
   const loadOrganizationConfig = async (accessToken?: string) => {
     const token = accessToken || localStorage.getItem("fiarep_access_token");
     if (!token) {
@@ -45,16 +51,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       name?: string;
       features?: { modules?: Record<string, unknown> };
     };
-    setOrganizationName(typeof config.name === "string" ? config.name.trim() : "");
     const saved = config.features?.modules;
-    setOrganizationModules(
+    const nextModules: Record<string, boolean> =
       saved && typeof saved === "object" && !Array.isArray(saved)
         ? Object.fromEntries(
             Object.entries(saved).filter((entry): entry is [string, boolean] => typeof entry[1] === "boolean"),
           )
-        : {},
-    );
-    setPropertyLimit(config.propertyLimit ?? null);
+        : {};
+    // This runs every 30 seconds to pick up a switch flipped in Platform
+    // Control. Keep the existing object when nothing actually changed:
+    // returning the same reference makes React bail out, so the provider does
+    // not re-render and the whole app does not re-render with it.
+    const nextName = typeof config.name === "string" ? config.name.trim() : "";
+    const nextLimit = config.propertyLimit ?? null;
+    setOrganizationName((current) => (current === nextName ? current : nextName));
+    setOrganizationModules((current) => (sameModules(current, nextModules) ? current : nextModules));
+    setPropertyLimit((current) => (current === nextLimit ? current : nextLimit));
   };
 
   const refreshMutation = useRefreshSession();
