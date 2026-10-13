@@ -115,3 +115,28 @@ export async function mirrorClientDecision(actor: Actor, clientRecord: Row, acti
   const office = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"), inArray(staffAccounts.role, ["administrator", "management"])));
   await alertStaff(FIAREP_TENANT, [tech, ...office.map((o) => o.id)], action === "approve-work" ? "Client approved your work" : `Client sent the work back: ${note}`.slice(0, 200), ref, copy.id);
 }
+
+/** Whether this client pays for FIAREP to take their residents' complaints.
+ *  Off unless the platform owner switched it on (Platform Control -> Module
+ *  Management), so a client who does not pay for the service never reaches
+ *  FIAREP's crew. */
+export async function fiarepRoutingEnabled(tenantId: string): Promise<boolean> {
+  if (tenantId === FIAREP_TENANT) return false;
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  const modules = org?.features?.["modules"];
+  if (!modules || typeof modules !== "object" || Array.isArray(modules)) return false;
+  return (modules as Record<string, unknown>)["fiarepComplaintRouting"] === true;
+}
+
+/** A resident filed a complaint on a building that is on the plan, and the
+ *  client pays for FIAREP to handle it: copy it to FIAREP with no one having
+ *  to press anything. Nobody is acting, so the record is stamped to the plan
+ *  rather than to a person. Never throws - a complaint is logged for the
+ *  client whether or not the copy succeeds. */
+export async function autoSendComplaintToFiarep(tenantId: string, source: Row): Promise<void> {
+  try {
+    if (!(await fiarepRoutingEnabled(tenantId))) return;
+    const actor: Actor = { id: "", tenantId, name: "FIAREP plan", role: "management", position: "", developments: [], sessionVersion: 0 };
+    await sendComplaintToFiarep(actor, source);
+  } catch { /* the client's own complaint still stands */ }
+}

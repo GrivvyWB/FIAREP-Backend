@@ -259,6 +259,7 @@ export default function OwnerModules() {
   const [deletionEnabled, setDeletionEnabled] = useState(false);
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
   const [communityReviewEnabled, setCommunityReviewEnabled] = useState(true);
+  const [fiarepRoutingEnabled, setFiarepRoutingEnabled] = useState(false);
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -295,6 +296,11 @@ export default function OwnerModules() {
     setCommunityReviewEnabled(
       !(configured && typeof configured === "object" &&
         (configured as Record<string, unknown>).communitySupervisorReview === false),
+    );
+    // Off unless the client pays for it: a service, not a default.
+    setFiarepRoutingEnabled(
+      Boolean(configured && typeof configured === "object" &&
+        (configured as Record<string, unknown>).fiarepComplaintRouting === true),
     );
     setDirty(false);
   }, [organization]);
@@ -340,6 +346,11 @@ export default function OwnerModules() {
 
   const toggleCommunityReview = (enabled: boolean) => {
     setCommunityReviewEnabled(enabled);
+    setDirty(true);
+  };
+
+  const toggleFiarepRouting = (enabled: boolean) => {
+    setFiarepRoutingEnabled(enabled);
     setDirty(true);
   };
 
@@ -389,7 +400,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled },
             deletionEnabled,
           },
         },
@@ -686,6 +697,29 @@ export default function OwnerModules() {
                     checked={communityReviewEnabled}
                     onCheckedChange={toggleCommunityReview}
                     aria-label={`${communityReviewEnabled ? "Disable" : "Enable"} Community Coordinator Supervisor review`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  fiarepRoutingEnabled ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    fiarepRoutingEnabled ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <HardHat className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Resident complaints come to FIAREP</p>
+                    <p className="truncate text-xs text-slate-500">The client pays FIAREP to take care of their buildings: a resident complaint on a building that is on the plan reaches FIAREP's crew the moment it is filed, with nobody forwarding it. OFF for every client until they pay for it</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    fiarepRoutingEnabled ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {fiarepRoutingEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={fiarepRoutingEnabled}
+                    onCheckedChange={toggleFiarepRouting}
+                    aria-label={`${fiarepRoutingEnabled ? "Disable" : "Enable"} resident complaints coming to FIAREP`}
                   />
                 </div>
                 <div

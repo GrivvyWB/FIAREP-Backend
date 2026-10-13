@@ -1,3 +1,4 @@
+import { autoSendComplaintToFiarep } from "../lib/fiarepDispatch";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, desc, eq, sql, gt, isNull } from "drizzle-orm";
@@ -272,6 +273,10 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     void deliverPushNotification(notification).catch(() => undefined);
   }
   await recordNotifiedStaff(tenantId, id, created.createdNotifications.map((n) => n.target)).catch(() => undefined);
+  // The building is on the plan - the property lookup above only matches active
+  // ones - so if this client pays for FIAREP to handle their residents, the
+  // complaint reaches FIAREP's crew now, without anyone forwarding it.
+  await autoSendComplaintToFiarep(tenantId, created.row!);
   res.status(201).json({ ...record(created.row!), statusToken: residentToken });
 });
 

@@ -4,7 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import { deliverPushNotification } from "../lib/push";
-import { sendComplaintToFiarep, mirrorFiarepProgress, mirrorClientDecision } from "../lib/fiarepDispatch";
+import { sendComplaintToFiarep, mirrorFiarepProgress, mirrorClientDecision, fiarepRoutingEnabled } from "../lib/fiarepDispatch";
 import {
   ENTITIES,
   isAcceptedStaffPosition,
@@ -1878,6 +1878,13 @@ router.post("/v1/resident-reports/:id/send-to-fiarep", async (req, res) => {
   const actor = actorFrom(res);
   if (!(actor.role === "administrator" || actor.role === "management")) {
     res.status(403).json({ error: "Only management may send a complaint to FIAREP" });
+    return;
+  }
+  // The same switch that routes a resident's complaint automatically. Checked
+  // here too, so a client who does not pay for the service cannot reach
+  // FIAREP's crew by calling the endpoint directly.
+  if (!(await fiarepRoutingEnabled(actor.tenantId))) {
+    res.status(403).json({ error: "This company's plan does not include FIAREP handling resident complaints." });
     return;
   }
   const [report] = await db.select().from(entityRecords).where(and(
