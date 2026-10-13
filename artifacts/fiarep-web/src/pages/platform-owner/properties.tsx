@@ -38,9 +38,16 @@ type Property = {
   development: string | null;
   units: number | null;
   bbl: string | null;
+  city: string | null;
+  state: string | null;
   active: boolean;
 };
-type Suggestion = { address: string; borough: string; label: string };
+// Nothing recorded means New York City: that is where every building
+// registered before the platform went multi-state is.
+const placeOf = (p: { city: string | null; state: string | null }) =>
+  [p.city, p.state].filter(Boolean).join(", ") || "New York, NY";
+const isNyc = (p: { state: string | null }) => !p.state || p.state.toUpperCase() === "NY";
+type Suggestion = { address: string; borough: string; city?: string; state?: string; postalCode?: string; label: string };
 type PortfolioRow = {
   registrationId: string; buildingId: string; address: string; borough: string; zip: string;
   bbl: string; bin: string; units?: number; hpdA: number; hpdB: number; hpdC: number;
@@ -229,6 +236,11 @@ export default function OwnerProperties() {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [devName, setDevName] = useState("");
   const [unitsInput, setUnitsInput] = useState("");
+  // Where the building is. Empty means New York City, which is where every
+  // building registered before the platform went multi-state is.
+  const [cityInput, setCityInput] = useState("");
+  const [stateInput, setStateInput] = useState("");
+  const [postalInput, setPostalInput] = useState("");
   const [needsUnits, setNeedsUnits] = useState(false);
   const [addError, setAddError] = useState("");
 
@@ -276,9 +288,13 @@ export default function OwnerProperties() {
       await register({
         displayAddress,
         development: devName.trim() || null,
+        city: cityInput.trim() || null,
+        state: stateInput.trim() || null,
+        postalCode: postalInput.trim() || null,
         ...(Number.isFinite(typed) && typed > 0 ? { units: typed } : {}),
       });
       setAddressInput(""); setDevName(""); setUnitsInput(""); setNeedsUnits(false);
+      setCityInput(""); setStateInput(""); setPostalInput("");
       toast({ title: `Added to ${organization?.name ?? "the organization"}` });
       await reload();
     } catch (err: any) {
@@ -510,15 +526,30 @@ export default function OwnerProperties() {
                       <li
                         key={i}
                         className="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        onMouseDown={() => { setAddressInput(s.label); setSuggestions([]); setSuggestOpen(false); }}
+                        onMouseDown={() => { setAddressInput(s.label); setCityInput(s.city || s.borough || ""); setStateInput(s.state || ""); setPostalInput(s.postalCode || ""); setSuggestions([]); setSuggestOpen(false); }}
                       >
                         <span className="font-medium text-slate-900">{s.address}</span>
-                        {s.borough && <span className="ml-2 text-slate-500">{s.borough}</span>}
+                        <span className="ml-2 text-slate-500">{[s.city || s.borough, s.state].filter(Boolean).join(", ")}</span>
                       </li>
                     ))}
                   </ul>
                 )}
               </div>
+              <Input
+                className="sm:w-36"
+                placeholder="City"
+                value={cityInput}
+                onChange={(e) => setCityInput(e.target.value)}
+                aria-label="City"
+              />
+              <Input
+                className="sm:w-20"
+                placeholder="State"
+                value={stateInput}
+                onChange={(e) => setStateInput(e.target.value.toUpperCase().slice(0, 2))}
+                aria-label="State"
+                maxLength={2}
+              />
               <Input
                 className="sm:w-44"
                 placeholder="Development (optional)"
@@ -547,7 +578,7 @@ export default function OwnerProperties() {
             {addError
               ? <p className="text-xs text-rose-700">{addError}</p>
               : <p className="text-xs text-slate-500">
-                  Units come from the City record. A building is added off the plan — switch it on when the client is paying for it.
+                  Any state. In New York City the unit count comes from the City record; anywhere else type it in and we will ask. A building is added off the plan — switch it on when the client is paying for it.
                 </p>}
           </section>
 
@@ -592,6 +623,7 @@ export default function OwnerProperties() {
                 {filtered.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.displayAddress}
+                    {` · ${placeOf(p)}`}
                     {p.units ? ` · ${p.units} units` : " · same lot as another building"}
                     {` · ${p.active ? "On the plan" : "Blocked"}`}
                   </option>
@@ -608,13 +640,19 @@ export default function OwnerProperties() {
                     <div className="min-w-0 flex-1">
                       <p className="truncate font-medium text-slate-900">{p.displayAddress}</p>
                       <p className="text-xs text-slate-500">
-                        {p.units ? `${p.units} units` : "same lot as another building"}
+                        {placeOf(p)}
+                        {p.units ? ` · ${p.units} units` : " · same lot as another building"}
                         {p.bbl ? ` · BBL ${p.bbl}` : ""}
                         {p.development && p.development !== p.displayAddress ? ` · ${p.development}` : ""}
                         {p.active
                           ? <span className="ml-2 inline-flex items-center rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700">On the plan</span>
                           : <span className="ml-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">Blocked</span>}
                       </p>
+                      {!isNyc(p) && (
+                        <p className="mt-1 text-xs text-slate-500">
+                          Outside New York City: jobs, photographs, the time clock, quotes, forms and scores all work here. HPD / DOB lookup and the 30-minute watch are New York City only until {p.city || "this city"} is added.
+                        </p>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <label className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-slate-600">

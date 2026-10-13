@@ -20,6 +20,7 @@ import {
 } from "../lib/organizationDevelopments";
 import { researchOrganization } from "../lib/organizationResearch";
 import { lookupBuildingUnits } from "../lib/dofCharges";
+import { hasCityData, normalizeAddress, stateCode } from "../lib/jurisdiction";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
@@ -76,11 +77,20 @@ export async function allocateOrganizationCode(tx: any): Promise<string> {
 
 function propertyInput(body: Record<string, unknown>) {
   const displayAddress = typeof body.displayAddress === "string" ? body.displayAddress.trim() : "";
-  const normalizedAddress = displayAddress.toLowerCase().replace(/\s+/g, " ");
-  if (!displayAddress || normalizedAddress.length < 3) throw Object.assign(new Error("A valid displayAddress is required"), { status: 400 });
+  if (!displayAddress || displayAddress.trim().length < 3) throw Object.assign(new Error("A valid displayAddress is required"), { status: 400 });
+  // Where the building is. Nothing said means New York City, which is where
+  // every building registered before the platform went multi-state is.
+  const city = typeof body.city === "string" ? body.city.trim() || null : null;
+  const state = stateCode(body.state) || null;
+  const postalCode = typeof body.postalCode === "string" ? body.postalCode.trim() || null : null;
+  const normalizedAddress = normalizeAddress(displayAddress, city, state);
+  if (normalizedAddress.length < 3) throw Object.assign(new Error("A valid displayAddress is required"), { status: 400 });
   return {
     displayAddress,
     normalizedAddress,
+    city,
+    state,
+    postalCode,
     development: typeof body.development === "string" ? body.development.trim() || null : null,
     active: body.active !== false,
   };
@@ -116,14 +126,27 @@ router.post("/v1/platform/organizations/:organizationId/properties", async (req,
     // (DOF roll, else PLUTO). A typed "units" is accepted only when the City has
     // no figure, so a client cannot register a 166-unit building as 20 units.
     let cityUnits = 0; let bbl: string | null = null; let unitsSource: string | null = null;
-    try { const found = await lookupBuildingUnits(input.displayAddress); if (found) { cityUnits = found.units; bbl = found.bbl; unitsSource = found.source; if (found.displayAddress && !input.displayAddress.includes(",")) { input.displayAddress = found.displayAddress; input.normalizedAddress = found.displayAddress.toLowerCase().replace(/\s+/g, " "); } } } catch { /* City lookup unavailable: fall back to a typed figure */ }
+    // Only New York City has a tax roll we can read. Everywhere else the unit
+    // count is typed in, which the needsUnits answer below asks for.
+    if (hasCityData(input.city, input.state)) {
+      try { const found = await lookupBuildingUnits(input.displayAddress); if (found) { cityUnits = found.units; bbl = found.bbl; unitsSource = found.source; if (found.displayAddress && !input.displayAddress.includes(",")) { input.displayAddress = found.displayAddress; input.normalizedAddress = normalizeAddress(found.displayAddress, input.city, input.state); } } } catch { /* City lookup unavailable: fall back to a typed figure */ }
+    }
     const typedUnits = Number.isInteger(body["units"]) && (body["units"] as number) > 0 ? (body["units"] as number) : 0;
     let units = cityUnits > 0 ? cityUnits : typedUnits;
     // Several entrances on one tax lot (1351 / 1352 / 1353 Main St on one BBL): the City
     // counts the lot once, so a second address on a BBL already registered goes in at 0.
     const sameLot = bbl ? await db.select({ id: organizationProperties.id }).from(organizationProperties).where(and(eq(organizationProperties.organizationId, organizationId), eq(organizationProperties.bbl, bbl))).limit(1) : [];
     if (sameLot.length > 0) units = 0;
-    else if (units <= 0) { res.status(400).json({ error: "The City has no unit count for this address. Type the number of dwelling units to register it.", needsUnits: true }); return; }
+    else if (units <= 0) {
+      const outside = !hasCityData(input.city, input.state);
+      res.status(400).json({
+        error: outside
+          ? "Type the number of dwelling units to register this building — only New York City publishes a unit count we can read."
+          : "The City has no unit count for this address. Type the number of dwelling units to register it.",
+        needsUnits: true,
+      });
+      return;
+    }
     const property = await db.transaction(async (tx) => {
       await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`property-limit:${organizationId}`}))`);
       const [org] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);

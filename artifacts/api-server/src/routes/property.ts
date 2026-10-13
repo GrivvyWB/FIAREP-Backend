@@ -56,33 +56,80 @@ router.get("/v1/property/nyc-lookup", requireAuth, async (req, res): Promise<voi
 
 const GEOSEARCH_AUTOCOMPLETE = "https://geosearch.planninglabs.nyc/v2/autocomplete";
 
+// Anywhere in the United States. New York City first, because its geocoder
+// carries the tax lot that gives us the City's own unit count; anything the
+// City does not know goes to the Census Bureau's national geocoder, so a
+// client in Philadelphia or Chicago can register their buildings the same way.
+const CENSUS_ONELINE = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress";
+
+type Suggestion = { address: string; borough: string; city: string; state: string; postalCode: string; label: string };
+
+async function nycSuggestions(q: string): Promise<Suggestion[]> {
+  const url = new URL(GEOSEARCH_AUTOCOMPLETE);
+  url.searchParams.set("text", q);
+  const response = await fetch(url.toString(), {
+    headers: { accept: "application/json", "user-agent": "FIAREP/1.0" },
+    signal: AbortSignal.timeout(6_000),
+  });
+  if (!response.ok) return [];
+  const data = (await response.json()) as { features?: Array<{ properties?: Record<string, unknown> }> };
+  return (data.features || [])
+    .filter((f) => f.properties?.["housenumber"] && f.properties?.["street"])
+    .slice(0, 8)
+    .map((f) => {
+      const p = f.properties!;
+      const borough = String(p["borough"] ?? "");
+      return {
+        address: `${p["housenumber"]} ${p["street"]}`,
+        borough,
+        city: borough || "New York",
+        state: "NY",
+        postalCode: String(p["postalcode"] ?? ""),
+        label: String(p["label"] ?? `${p["housenumber"]} ${p["street"]}`),
+      };
+    });
+}
+
+async function nationalSuggestions(q: string): Promise<Suggestion[]> {
+  const url = new URL(CENSUS_ONELINE);
+  url.searchParams.set("address", q);
+  url.searchParams.set("benchmark", "Public_AR_Current");
+  url.searchParams.set("format", "json");
+  const response = await fetch(url.toString(), {
+    headers: { accept: "application/json", "user-agent": "FIAREP/1.0" },
+    signal: AbortSignal.timeout(8_000),
+  });
+  if (!response.ok) return [];
+  const data = (await response.json()) as {
+    result?: { addressMatches?: Array<{ matchedAddress?: string; addressComponents?: Record<string, unknown> }> };
+  };
+  return (data.result?.addressMatches || []).slice(0, 8).map((m) => {
+    const c = m.addressComponents || {};
+    const number = String(c["fromAddress"] ?? "").trim();
+    const street = [c["preDirection"], c["streetName"], c["suffixType"], c["postDirection"]]
+      .map((v) => String(v ?? "").trim()).filter(Boolean).join(" ");
+    const city = String(c["city"] ?? "").trim();
+    const state = String(c["state"] ?? "").trim().toUpperCase();
+    return {
+      address: [number, street].filter(Boolean).join(" ") || String(m.matchedAddress ?? "").split(",")[0]!.trim(),
+      borough: "",
+      city,
+      state,
+      postalCode: String(c["zip"] ?? "").trim(),
+      label: String(m.matchedAddress ?? [number, street, city, state].filter(Boolean).join(", ")),
+    };
+  });
+}
+
 router.get("/v1/platform/properties/address-suggest", requirePlatformOwner, rateLimit("address-suggest", 60), async (req, res): Promise<void> => {
   const q = String(req.query["q"] ?? "").trim();
   if (q.length < 3) { res.json([]); return; }
-  try {
-    const url = new URL(GEOSEARCH_AUTOCOMPLETE);
-    url.searchParams.set("text", q);
-    const response = await fetch(url.toString(), {
-      headers: { accept: "application/json", "user-agent": "FIAREP/1.0" },
-      signal: AbortSignal.timeout(6_000),
-    });
-    if (!response.ok) { res.json([]); return; }
-    const data = (await response.json()) as { features?: Array<{ properties?: Record<string, unknown> }> };
-    const suggestions = (data.features || [])
-      .filter((f) => f.properties?.housenumber && f.properties?.street)
-      .slice(0, 8)
-      .map((f) => {
-        const p = f.properties!;
-        return {
-          address: `${p.housenumber} ${p.street}`,
-          borough: String(p.borough ?? ""),
-          label: String(p.label ?? `${p.housenumber} ${p.street}`),
-        };
-      });
-    res.json(suggestions);
-  } catch {
-    res.json([]);
+  let out: Suggestion[] = [];
+  try { out = await nycSuggestions(q); } catch { /* the City's geocoder is not the only one */ }
+  if (out.length === 0) {
+    try { out = await nationalSuggestions(q); } catch { /* nothing found; the address can still be typed in full */ }
   }
+  res.json(out);
 });
 
 export default router;

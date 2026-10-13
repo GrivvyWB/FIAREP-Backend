@@ -153,6 +153,12 @@ export const organizationProperties = pgTable(
     organizationId: text("organization_id").notNull(),
     displayAddress: text("display_address").notNull(),
     normalizedAddress: text("normalized_address").notNull(),
+    // Where the building is. A client outside New York City registers and works
+    // their buildings the same way; only the City data tools are NYC-only.
+    // Empty state on a row written before this is New York by history.
+    city: text("city"),
+    state: text("state"),
+    postalCode: text("postal_code"),
     development: text("development"),
     // From the City's record for the address (DOF assessment roll / PLUTO) when the building was registered.
     units: integer("units"),
