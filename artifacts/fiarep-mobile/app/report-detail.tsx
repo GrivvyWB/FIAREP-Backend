@@ -11,6 +11,7 @@ import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import ComplaintReceipts from '../components/ComplaintReceipts';
+import QuotePanel, { quoteOf } from '../components/QuotePanel';
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
 import { requestFileDownloadUrl } from '@workspace/api-client-react';
@@ -238,6 +239,20 @@ export default function ReportDetail() {
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
       </View>
       <ComplaintReceipts entity="resident-reports" reportId={r.id} readOnly={readOnly} canSendEta={['management', 'administrator', 'worker', 'inspector', 'emergency'].includes(mode)} />
+      {/* The materials FIAREP wants to buy, and the client's answer - the same
+          panel they have on the website, so it can be approved from the phone. */}
+      {(() => {
+        const quote = quoteOf(r);
+        if (!quote) return null;
+        return (
+          <QuotePanel
+            reportId={r.id}
+            quote={quote}
+            canDecide={!readOnly && (mode === 'management' || mode === 'administrator')}
+            onChanged={async () => { const fresh = await getResidentReport(String(id)); if (fresh) setR(fresh); }}
+          />
+        );
+      })()}
       <View style={[ui.card, { gap: 8 }]}>
         {(mode === 'management' || mode === 'administrator' || mode === 'inspector') && (() => {
           const scans = (r as any).aiPhotoScans && typeof (r as any).aiPhotoScans === 'object' ? Object.values((r as any).aiPhotoScans) : [];
