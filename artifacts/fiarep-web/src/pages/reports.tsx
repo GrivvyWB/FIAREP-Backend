@@ -421,6 +421,31 @@ export default function Reports() {
     } finally { setNudging(false); }
   };
 
+  // What FIAREP's technician says the job needs bought. Priced by the server
+  // from the repair price book; the client approves before any work starts.
+  type QuoteLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note?: string };
+  type Quote = { lines: QuoteLine[]; total: number; status: "pending" | "approved" | "declined"; sentAt?: string; sentBy?: string; decidedAt?: string; decidedBy?: string; note?: string };
+  const quoteOf = (s: Record<string, unknown>): Quote | null => {
+    const q = s["quote"];
+    return q && typeof q === "object" && !Array.isArray(q) ? (q as Quote) : null;
+  };
+  const [decidingQuote, setDecidingQuote] = useState(false);
+  const [declineNote, setDeclineNote] = useState("");
+  const decideQuote = async (report: Report, decision: "approve" | "decline") => {
+    setDecidingQuote(true);
+    try {
+      await customFetch(`/api/v1/resident-reports/${encodeURIComponent(report.id)}/quote/decision`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ decision, note: declineNote }), responseType: "json",
+      } as never);
+      setDeclineNote("");
+      toast({ title: decision === "approve" ? "Approved — FIAREP can start" : "Declined" });
+      await invalidateOperationalQueries(queryClient, "resident-reports", report.id);
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not send your decision", description: (error as { data?: { error?: string } })?.data?.error || (error as Error)?.message || "Try again." });
+    } finally { setDecidingQuote(false); }
+  };
+
   const sendToFiarep = async (report: Report) => {
     setSendingToFiarep(true);
     try {
@@ -778,6 +803,64 @@ export default function Reports() {
                       <Button variant="destructive" className="w-full" disabled={nudging || nudgeSent || !nudgeTargetId} onClick={() => requestAssignment(selected)}>{nudgeSent ? "Sent \u2713" : nudging ? "Sending\u2026" : nudgeTarget ? `Send urgent request to ${nudgeTarget.name}` : "Choose a supervisor first"}</Button>
                     </div>
                   )}
+                  {/* What FIAREP's technician says this job needs bought. The
+                      client approves it before any work starts; the resident is
+                      never shown it. */}
+                  {(() => {
+                    const quote = quoteOf(state as Record<string, unknown>);
+                    if (!quote) return null;
+                    const mine = actor?.role === "management" || actor?.role === "administrator";
+                    const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
+                    return (
+                      <div className="space-y-2 border-t border-border pt-4">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold">What FIAREP needs to buy</p>
+                          <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            quote.status === "approved" ? "bg-emerald-100 text-emerald-800"
+                            : quote.status === "declined" ? "bg-rose-100 text-rose-800"
+                            : "bg-amber-100 text-amber-900"}`}>
+                            {quote.status === "approved" ? "Approved" : quote.status === "declined" ? "Declined" : "Waiting for you"}
+                          </span>
+                        </div>
+                        <div className="rounded-lg border bg-card">
+                          {quote.lines.map((line) => (
+                            <div key={line.id} className="flex items-start justify-between gap-3 border-b px-3 py-2 last:border-0">
+                              <div className="min-w-0">
+                                <p className="text-sm font-medium">{line.label}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {line.qty} × {money(line.unitPrice)} {line.unit}{line.note ? ` · ${line.note}` : ""}
+                                </p>
+                              </div>
+                              <span className="shrink-0 text-sm font-semibold">{money(line.amount)}</span>
+                            </div>
+                          ))}
+                          <div className="flex items-center justify-between px-3 py-2 text-sm font-bold">
+                            <span>Total</span><span>{money(quote.total)}</span>
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Priced by FIAREP{quote.sentBy ? ` · ${quote.sentBy}` : ""}{quote.sentAt ? ` · ${new Date(quote.sentAt).toLocaleString()}` : ""}.
+                          {quote.status === "pending" ? " Work does not start until you approve." : ""}
+                        </p>
+                        {quote.status === "pending" && mine && (
+                          <>
+                            <Textarea value={declineNote} onChange={(e) => setDeclineNote(e.target.value)} placeholder="If you are declining, say why (optional)" className="bg-white" />
+                            <div className="flex gap-2">
+                              <Button className="flex-1" disabled={decidingQuote} onClick={() => decideQuote(selected, "approve")}>
+                                {decidingQuote ? "Sending…" : `Approve ${money(quote.total)}`}
+                              </Button>
+                              <Button variant="outline" className="flex-1" disabled={decidingQuote} onClick={() => decideQuote(selected, "decline")}>Decline</Button>
+                            </div>
+                          </>
+                        )}
+                        {quote.status !== "pending" && (
+                          <p className="text-xs text-muted-foreground">
+                            {quote.status === "approved" ? "Approved" : "Declined"}{quote.decidedBy ? ` by ${quote.decidedBy}` : ""}{quote.decidedAt ? ` · ${new Date(quote.decidedAt).toLocaleString()}` : ""}{quote.note ? ` · ${quote.note}` : ""}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })()}
                   {(actor?.role === "management" || actor?.role === "administrator") && actor?.tenantId !== "default" && !["done", "resolved", "approved", "cleared", "closed"].includes(currentStatus) && (
                     <div className="border-t border-border pt-4 space-y-2">
                       <p className="text-sm font-semibold">Send to FIAREP</p>

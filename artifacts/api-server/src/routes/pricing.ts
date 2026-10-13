@@ -8,6 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { db, entityRecords } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
+import { repairCatalog } from "../lib/repairCatalog";
 
 const router: IRouter = Router();
 const ENTITY = "pricing-overrides";
@@ -56,7 +57,11 @@ function cleanBands(v: unknown): Band[] | null {
 // browser or edge cache on the public Join page.
 router.get("/v1/pricing", async (_req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  res.json(await load());
+  const current = await load();
+  // The catalogue rides along: the phone has no price book of its own, and a
+  // quote line must be priced by the server rather than by whatever the phone
+  // sends.
+  res.json({ ...current, catalog: repairCatalog(current.items) });
 });
 
 router.put("/v1/platform/pricing", requirePlatformOwner, async (req, res) => {

@@ -65,6 +65,7 @@ import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
 import { routedComplaintRecipientIds } from "../lib/complaintRouting";
 import { CREW_OPTIONS, ETA_OPTIONS, recordEta, recordNotifiedStaff, recordOpened, tracksReceipts } from "../lib/complaintReceipts";
 import { notifyResident, residentMessageForAction } from "../lib/residentNotify";
+import { sendQuote, decideQuote, quoteBlocksStart, quoteOf } from "../lib/fiarepQuote";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -1872,6 +1873,44 @@ router.post("/v1/:entity/:id/attach-measurement", async (req, res, next) => {
 });
 
 const FINISHED_SENT_ON = new Set(["work_approved", "approved", "completed", "done", "resolved", "closed", "in_house_completed", "denied", "cancelled"]);
+// What the job needs bought, priced from the repair price book and sent to the
+// client to approve. FIAREP's crew price it; the client decides; the resident
+// is never shown the money.
+router.post("/v1/resident-reports/:id/quote", async (req, res) => {
+  const actor = actorFrom(res);
+  const [copy] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, req.params["id"]!),
+    eq(entityRecords.entity, "resident-reports"),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!copy || !(await canReadRecordForActor(actor, copy))) { res.status(404).json({ error: "Record not found" }); return; }
+  const result = await sendQuote(actor, copy, (req.body as { lines?: unknown })?.lines as never[]);
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.status(201).json(result.quote);
+});
+
+router.post("/v1/resident-reports/:id/quote/decision", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(actor.role === "administrator" || actor.role === "management")) {
+    res.status(403).json({ error: "Only management may approve what FIAREP buys." });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const decision = body["decision"] === "decline" ? "decline" : body["decision"] === "approve" ? "approve" : null;
+  if (!decision) { res.status(400).json({ error: "Approve or decline." }); return; }
+  const [source] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, req.params["id"]!),
+    eq(entityRecords.entity, "resident-reports"),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!source || !(await canReadRecordForActor(actor, source))) { res.status(404).json({ error: "Record not found" }); return; }
+  const result = await decideQuote(actor, source, decision, String(body["note"] ?? ""));
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.json(result.quote);
+});
+
 // A client company hands a complaint to FIAREP's own crew (the plan / per-job
 // work). FIAREP assigns a technician on its side; progress mirrors back here.
 router.post("/v1/resident-reports/:id/send-to-fiarep", async (req, res) => {
@@ -2466,6 +2505,16 @@ router.post(
   if (entity === "procurement" && action === "submit" &&
       current.createdBy !== actor.id) {
     res.status(403).json({ error: "Only the record owner may submit a procurement draft" });
+    return;
+  }
+  // Nothing is bought, and no work begins, until the client has approved what
+  // the technician priced.
+  if (entity === "resident-reports" && action === "start" && quoteBlocksStart(current.state)) {
+    const q = quoteOf(current.state);
+    res.status(409).json({
+      error: `Waiting for the client to approve $${(q?.total ?? 0).toFixed(2)} of materials before this job can start.`,
+      quotePending: true,
+    });
     return;
   }
   if (!isValidEntityTransition(entity, action, current.state)) {

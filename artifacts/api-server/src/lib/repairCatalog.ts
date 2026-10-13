@@ -1,0 +1,130 @@
+// FIAREP repair price book, server side. Generated from
+// artifacts/fiarep-web/src/lib/repair-prices.ts - the same numbers and the same
+// sources. It lives here because the price on a quote line must not be decided
+// by whatever the phone sends: the technician picks an item, the server prices
+// it. The web app keeps its own copy for the price book screen; the mobile app
+// has none and reads the catalogue from /v1/pricing.
+//
+// [key, label, price, unit, source] and, for the square-foot work, a group.
+
+export const REPAIR_ITEMS = [
+  ["exterm", "Extermination treatment", 300, "per apartment, per visit", "Angi NYC: $257 avg ($163–$353); roaches $140–$900, rodents $270–$900"],
+  ["guards", "Window guard, installed", 175, "per window", "HPD order avg per guard"],
+  ["smoke", "Smoke / CO detector, installed", 125, "each", "combo unit + labor"],
+  ["door", "Apartment door repaired, self-closer fitted", 1100, "per door", "HPD order avg"],
+  ["firedoor", "Fire-rated door + jamb, replaced", 2450, "per door", "HPD order avg"],
+  ["leak", "Plumbing leak repaired", 563, "per leak", "Angi NYC: $563 avg ($282–$957); exposed pipe from $170, in a ceiling $790–$2,820"],
+  ["clog", "Drain clog cleared", 255, "per drain", "Angi NYC: $170–$340"],
+  ["elec", "Electrical device repaired / replaced", 430, "per outlet, switch or fixture", "Angi NYC: outlet $430–$640, switch $180–$430; $110–$210 per hour"],
+  ["roofpatch", "Roof leak patched", 13, "per sq ft of patch", "Angi NYC: $5.50–$20 per sq ft; a leak repair $600–$2,600"],
+  ["leadsf", "Lead paint abatement, full removal", 14, "per sq ft", "Angi: removal $10–$17, encapsulation $6–$10 per sq ft; small room $1,500–$4,000"],
+  ["heat", "Boiler service / repair call", 425, "per repair + parts", "Angi: $425 avg ($190–$660); circulator pump $300–$1,000; new boiler: see Plumbing & heat"],
+] as const;
+
+export const REPAIR_SQFT = [
+  ["footing", "Concrete footing", 16, "per linear ft", "national avg", "Foundation & structure"],
+  ["fwall", "Poured concrete foundation wall", 35, "per sq ft", "national avg", "Foundation & structure"],
+  ["slab", "Concrete slab, 4\" structural", 19, "per sq ft", "HPD: $1,499 per cu yd", "Foundation & structure"],
+  ["excav", "Excavation, haul-off", 17, "per cu yd", "national avg", "Foundation & structure"],
+  ["wproof", "Foundation waterproofing, exterior", 222, "per linear ft", "NYC", "Foundation & structure"],
+  ["cwash", "Cement wash / waterproofing", 5, "per sq ft", "", "Foundation & structure"],
+  ["beam", "Steel beam installed", 5400, "each", "NYC", "Foundation & structure"],
+  ["lintel", "Lintel replaced", 595, "each", "", "Foundation & structure"],
+  ["framing", "Wood framing", 12, "per sq ft", "national avg", "Foundation & structure"],
+  ["partition", "Partition wall, framed + sheetrock + outlets", 63, "per linear ft", "NYC", "Foundation & structure"],
+  ["joist", "Floor joist replaced, incl. subfloor", 422, "each", "", "Foundation & structure"],
+  ["rafter", "Roof rafter replaced", 422, "each", "priced at the joist rate", "Foundation & structure"],
+  ["stair", "Interior stair rebuilt", 2050, "per flight", "national avg", "Foundation & structure"],
+  ["stoop", "Entrance stoop / steps, concrete", 2441, "per riser", "", "Foundation & structure"],
+  ["facade", "Fa\u00e7ade restoration (Local Law 11 masonry)", 26, "per sq ft", "", "Fa\u00e7ade & exterior"],
+  ["pointing", "Masonry pointing", 22, "per sq ft", "", "Fa\u00e7ade & exterior"],
+  ["brick", "Brick replacement", 20, "per sq ft", "national avg", "Fa\u00e7ade & exterior"],
+  ["stitch", "Brick stitching (cracks)", 53, "per linear ft", "", "Fa\u00e7ade & exterior"],
+  ["parapet", "Parapet rebuilt, incl. coping", 640, "per linear ft", "", "Fa\u00e7ade & exterior"],
+  ["coping", "Coping only", 42, "per linear ft", "", "Fa\u00e7ade & exterior"],
+  ["railing", "Roof railing", 78, "per linear ft", "", "Fa\u00e7ade & exterior"],
+  ["limestone", "Limestone patching", 226, "per sq ft", "", "Fa\u00e7ade & exterior"],
+  ["stucco", "Stucco", 8, "per sq ft", "national avg", "Fa\u00e7ade & exterior"],
+  ["extpaint", "Exterior painting, masonry", 4, "per sq ft", "NY", "Fa\u00e7ade & exterior"],
+  ["shed", "Sidewalk shed installed", 150, "per linear ft", "NYC \u00b7 rent \u2248 5% / month after", "Fa\u00e7ade & exterior"],
+  ["sidewalk", "Sidewalk concrete (DOT flag)", 12, "per sq ft", "NYC", "Fa\u00e7ade & exterior"],
+  ["chimney", "Chimney rebuilt, masonry", 4929, "per floor", "", "Fa\u00e7ade & exterior"],
+  ["window", "Window replaced, double-glazed w/ screens", 2017, "each", "", "Fa\u00e7ade & exterior"],
+  ["aptdoor", "Apartment entry door, fire-rated hollow metal", 2406, "each", "", "Fa\u00e7ade & exterior"],
+  ["bldgdoor", "Building entry door + frame", 9551, "each", "", "Fa\u00e7ade & exterior"],
+  ["roofsys", "Flat roof, new surface + insulation", 30, "per sq ft", "", "Roof"],
+  ["roofdeck", "Flat roof with new roof deck + insulation", 45, "per sq ft", "", "Roof"],
+  ["roofmb", "Modified bitumen recover", 43, "per sq ft", "", "Roof"],
+  ["roofepdm", "EPDM rubber", 36, "per sq ft", "", "Roof"],
+  ["roofins", "Roof insulation board", 4, "per sq ft", "NYC", "Roof"],
+  ["sheathing", "Roof sheathing only", 4, "per sq ft", "national avg", "Roof"],
+  ["skylight", "Skylight replaced, incl. screens", 1783, "each", "", "Roof"],
+  ["bulkhead", "Bulkhead door, fire-rated", 2406, "each", "", "Roof"],
+  ["gutter", "Gutters, seamless aluminum", 7, "per linear ft", "national avg", "Roof"],
+  ["sheetrock", "Sheetrock / drywall replaced", 5, "per sq ft", "NYC \u00b7 removal + new board, taped", "Interior"],
+  ["ceiling", "Ceiling replaced, drywall", 3, "per sq ft", "national avg", "Interior"],
+  ["cellarceil", "Cellar ceiling, fireproof board", 4, "per sq ft", "", "Interior"],
+  ["plasterpatch", "Plaster patch", 48, "per sq ft of patch", "national avg", "Interior"],
+  ["paintroom", "Interior painting", 600, "per room", "NY \u00b7 $2,500 per 1-bedroom apt", "Interior"],
+  ["subfloor", "Subfloor replaced", 8, "per sq ft", "national avg", "Interior"],
+  ["hardwood", "Hardwood flooring", 19, "per sq ft", "", "Interior"],
+  ["tile", "Tile floor", 15, "per sq ft", "NY", "Interior"],
+  ["walltile", "Wall tile", 25, "per sq ft", "national avg", "Interior"],
+  ["intdoor", "Interior door, wood", 1621, "each", "", "Interior"],
+  ["cabinets", "Kitchen cabinets, base + counter", 218, "per linear ft", "", "Interior"],
+  ["bath", "Full bathroom renovation", 25000, "each", "NYC", "Interior"],
+  ["kitchen", "Full kitchen renovation", 32500, "each", "NYC \u00b7 mid-range", "Interior"],
+  ["insul", "Insulation, interior", 2, "per sq ft", "", "Interior"],
+  ["asbestos", "Asbestos abatement", 22, "per sq ft", "pipe: $21 per linear ft", "Interior"],
+  ["moldsf", "Mold remediation", 20, "per sq ft", "national avg", "Interior"],
+  ["toilet", "Toilet replaced", 926, "each", "NY", "Plumbing & heat"],
+  ["sink", "Sink + faucet", 1200, "each", "national avg", "Plumbing & heat"],
+  ["tub", "Bathtub / shower combo", 1675, "each", "national avg", "Plumbing & heat"],
+  ["wheater", "Water heater, apartment", 1670, "each", "NY", "Plumbing & heat"],
+  ["bwheater", "Water heater, building, up to 600 MBH", 4387, "each", "+ $58 per MBH", "Plumbing & heat"],
+  ["radiator", "Radiator / convector, new", 531, "each", "", "Plumbing & heat"],
+  ["trv", "Thermostatic radiator valve", 229, "each", "", "Plumbing & heat"],
+  ["pipeins", "Pipe insulation", 14, "per linear ft", "", "Plumbing & heat"],
+  ["water", "Water main, risers & branches", 5491, "per apartment", "", "Plumbing & heat"],
+  ["waste", "Waste & vent, complete", 2266, "per apartment", "", "Plumbing & heat"],
+  ["gasriser", "Gas risers & connections", 986, "per apartment", "", "Plumbing & heat"],
+  ["gas", "Gas piping, complete new", 36505, "per apartment", "", "Plumbing & heat"],
+  ["sewer", "Sewer, street connection", 174, "per linear ft", "", "Plumbing & heat"],
+  ["wservice", "Water service, street connection", 265, "per linear ft", "", "Plumbing & heat"],
+  ["boiler2k", "Boiler, new, up to 2,000 MBH", 52855, "each", "", "Plumbing & heat"],
+  ["boiler4k", "Boiler, new, up to 4,000 MBH", 79892, "each", "", "Plumbing & heat"],
+  ["burner", "Burner only, up to 2,000 MBH", 7882, "each", "", "Plumbing & heat"],
+  ["stack", "Boiler stack, metal", 2499, "per floor", "", "Plumbing & heat"],
+  ["sump", "Sump pump", 1400, "each", "national avg", "Plumbing & heat"],
+  ["panel", "Apartment electrical panel", 918, "per apartment", "", "Electrical & fire"],
+  ["service", "Electric service equipment", 4646, "per building entry", "+ $4,063 per apartment metered", "Electrical & fire"],
+  ["aptwiring", "Apartment wiring, all new", 3575, "per apartment", "", "Electrical & fire"],
+  ["wiring", "Rewiring, building-wide", 20854, "per apartment", "", "Electrical & fire"],
+  ["outlet", "Outlet on new circuit", 216, "each", "", "Electrical & fire"],
+  ["fixture", "Light fixture installed", 589, "each", "national avg", "Electrical & fire"],
+  ["smokehw", "Smoke / CO detector, hardwired", 296, "per apartment", "", "Electrical & fire"],
+  ["sprinkler", "Sprinkler head, incl. piping", 994, "each", "", "Electrical & fire"],
+  ["standpipe", "Standpipe", 3214, "per floor", "", "Electrical & fire"],
+  ["firealarm", "Fire alarm system, retrofit", 8, "per sq ft", "national avg", "Electrical & fire"],
+  ["intercom", "Video intercom", 1955, "per apartment", "", "Electrical & fire"],
+  ["dumpster", "Dumpster", 870, "each", "NYC", "Site & other"],
+  ["elevator", "Elevator replaced, gearless, 4 stops", 223231, "each", "+ $16,365 per extra stop", "Site & other"],
+  ["fence", "Fencing, chain link", 26, "per linear ft", "national avg", "Site & other"],
+] as const;
+
+export type CatalogLine = { key: string; label: string; price: number; unit: string; group: string };
+
+/** Every item, priced with the platform owner's number when they have set one. */
+export function repairCatalog(overrides: Record<string, number> = {}): CatalogLine[] {
+  const of = (key: string, fallback: number) =>
+    typeof overrides[key] === "number" && Number.isFinite(overrides[key]) ? overrides[key]! : fallback;
+  return [
+    ...REPAIR_ITEMS.map((i) => ({ key: i[0] as string, label: i[1] as string, price: of(i[0] as string, i[2] as number), unit: i[3] as string, group: "Common repairs" })),
+    ...REPAIR_SQFT.map((i) => ({ key: i[0] as string, label: i[1] as string, price: of(i[0] as string, i[2] as number), unit: i[3] as string, group: (i[5] as string) || "Other" })),
+  ];
+}
+
+/** The price for one item, the owner's number first. 0 when the key is unknown. */
+export function catalogPrice(key: string, overrides: Record<string, number> = {}): CatalogLine | null {
+  return repairCatalog(overrides).find((l) => l.key === key) ?? null;
+}
