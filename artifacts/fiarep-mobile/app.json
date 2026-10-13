@@ -16,12 +16,16 @@
       "supportsTablet": true,
       "deploymentTarget": "16.4",
       "bundleIdentifier": "com.fiarep.app",
-      "buildNumber": "17",
+      "buildNumber": "36",
       "infoPlist": {
         "NSCameraUsageDescription": "Take photos of rooms and areas for estimates.",
         "NSPhotoLibraryUsageDescription": "Attach existing photos to estimates.",
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "Tag inspections and photos with their location for accurate field records."
+        "NSLocationWhenInUseUsageDescription": "Tag inspections and photos with their location for accurate field records.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "While you are clocked in, FIAREP records the places you work so your hours and job sites match.",
+        "UIBackgroundModes": [
+          "location"
+        ]
       }
     },
     "android": {
@@ -34,7 +38,11 @@
       "permissions": [
         "android.permission.RECORD_AUDIO",
         "android.permission.ACCESS_COARSE_LOCATION",
-        "android.permission.ACCESS_FINE_LOCATION"
+        "android.permission.ACCESS_FINE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
       ],
       "package": "com.tmstni.constructionpm"
     },
@@ -58,6 +66,14 @@
             "deploymentTarget": "16.4"
           }
         }
+      ],
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true,
+          "locationAlwaysAndWhenInUsePermission": "While you are clocked in, FIAREP records the places you work so your hours and job sites match."
+        }
       ]
     ],
     "scheme": "constructionpm",
@@ -66,6 +82,15 @@
       "eas": {
         "projectId": "71885a4c-86b2-4365-97eb-1284b85a3218"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/71885a4c-86b2-4365-97eb-1284b85a3218",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
     }
   }
 }
