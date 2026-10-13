@@ -1,4 +1,4 @@
-// Community Coordinators: field outreach records (residents, buildings &
+// Field outreach records (residents, buildings &
 // owners). Online-only — these live on the server, inside the coordinator
 // unit, and are never copied into the phone's offline tables.
 import {
@@ -34,9 +34,31 @@ export const BOROUGHS = ['Manhattan', 'Brooklyn', 'Bronx', 'Queens', 'Staten Isl
 export const str = (v: unknown) => String(v ?? '').trim();
 export const today = () => new Date().toISOString().slice(0, 10);
 
+/**
+ * FIAREP calls its own outreach unit FIAREP Services; every other company
+ * that switches the module on keeps the trade name, Community Coordinator.
+ * Both namings are recognised, so an account saved under either keeps working.
+ */
+export const COMMUNITY_TITLES = {
+  fiarep: { unit: 'FIAREP Services', plural: 'FIAREP Services', supervisor: 'FIAREP Services Supervisor' },
+  other: { unit: 'Community Coordinator', plural: 'Community Coordinators', supervisor: 'Community Coordinator Supervisor' },
+} as const;
+
+/** What this company calls the unit. FIAREP is tenant "default". */
+export function communityTitles(tenantId: string | null | undefined) {
+  return (tenantId || 'default') === 'default' ? COMMUNITY_TITLES.fiarep : COMMUNITY_TITLES.other;
+}
+
+export async function communityUnitNames() {
+  const identity = await getSessionIdentity().catch(() => null);
+  return communityTitles((identity as { tenantId?: string } | null)?.tenantId);
+}
+
 export async function isCommunitySupervisor(): Promise<boolean> {
   const identity = await getSessionIdentity().catch(() => null);
-  return str(identity?.position).toLowerCase() === 'community coordinator supervisor';
+  const title = str(identity?.position).toLowerCase();
+  return title === COMMUNITY_TITLES.other.supervisor.toLowerCase() ||
+    title === COMMUNITY_TITLES.fiarep.supervisor.toLowerCase();
 }
 
 export async function listCommunity(entity: CommunityEntity): Promise<CommunityRecord[]> {
@@ -93,7 +115,7 @@ export async function shareResidentText(record: CommunityRecord): Promise<void> 
   await Share.share({ message: residentReportText(record.state, str(record.development), await orgName()) });
 }
 
-/** The Community Coordinator Supervisor confirms they read and received a visit. */
+/** The unit supervisor confirms they read and received a visit. */
 export async function approveCommunity(entity: CommunityEntity, record: CommunityRecord): Promise<CommunityRecord> {
   return (await updateEntityRecord(entity, record.id, {
     id: record.id, version: record.version, state: { reviewStatus: 'approved' },

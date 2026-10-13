@@ -1,4 +1,4 @@
-// Community Coordinator visit report: the same record rendered as a printable
+// Field outreach visit report: the same record rendered as a printable
 // page (PDF) and as plain text (copy / email). Shared by the website and the app.
 
 export const MOLD_EXTENT = ["Small spot", "Several areas", "Widespread"];
@@ -71,8 +71,8 @@ function residentRows(st: ResidentState, development: string): { title: string; 
   return blocks;
 }
 
-export function residentReportText(st: ResidentState, development: string, orgName = "FIAREP"): string {
-  const lines: string[] = [orgName, "Community Coordinator Visit Report (FIAREP)", ""];
+export function residentReportText(st: ResidentState, development: string, orgName = "FIAREP", unit = "Community Coordinator"): string {
+  const lines: string[] = [orgName, `${unit} Visit Report`, ""];
   for (const b of residentRows(st, development)) {
     lines.push(b.title.toUpperCase());
     for (const [k, v] of b.rows) if (v) lines.push(`${k}: ${v}`);
@@ -83,7 +83,7 @@ export function residentReportText(st: ResidentState, development: string, orgNa
   return lines.join("\n").trim();
 }
 
-export function residentReportHtml(st: ResidentState, development: string, orgName = "FIAREP"): string {
+export function residentReportHtml(st: ResidentState, development: string, orgName = "FIAREP", unit = "Community Coordinator"): string {
   const blocks = residentRows(st, development);
   const body = blocks.map((b) => `
     <section>
@@ -106,9 +106,9 @@ export function residentReportHtml(st: ResidentState, development: string, orgNa
     footer{margin-top:24px;color:#777;font-size:11px;border-top:1px solid #ddd;padding-top:8px}
     @media print{body{margin:18px}}
   </style></head><body>
-  <header><div><div class="brand">${esc(orgName)}</div><h1>Community Coordinator Visit Report</h1></div>
+  <header><div><div class="brand">${esc(orgName)}</div><h1>${esc(unit)} Visit Report</h1></div>
   <div class="meta">${esc(st.visitedOn)}${st.critical === true ? ' <span class="critical">CRITICAL</span>' : ""}</div></header>
   ${body}
-  <footer>${esc(s(st.loggedByName) ? `Logged by ${s(st.loggedByName)}${s(st.loggedByPosition) ? ` (${s(st.loggedByPosition)})` : ""}` : "")} · Confidential: for the Community Coordinator unit only. · Powered by FIAREP</footer>
+  <footer>${esc(s(st.loggedByName) ? `Logged by ${s(st.loggedByName)}${s(st.loggedByPosition) ? ` (${s(st.loggedByPosition)})` : ""}` : "")} · Confidential: for the ${esc(unit)} unit only. · Powered by FIAREP</footer>
   </body></html>`;
 }

@@ -35,12 +35,41 @@ export const COMMUNITY_ENTITIES = new Set(["community-residents", "community-bui
 export function isCommunityEntity(entity: string): boolean {
   return COMMUNITY_ENTITIES.has(entity);
 }
+/**
+ * FIAREP calls its own unit FIAREP Services. Any other company that switches
+ * the module on keeps the trade name, Community Coordinator. Both sets of
+ * titles are accepted everywhere, so an account saved under either one keeps
+ * working and nothing has to be renamed in step.
+ */
+export const COMMUNITY_TITLES = {
+  fiarep: { unit: "FIAREP Services", supervisor: "FIAREP Services Supervisor" },
+  other: { unit: "Community Coordinator", supervisor: "Community Coordinator Supervisor" },
+} as const;
+
+/** The pair of titles a company uses. FIAREP is tenant "default". */
+export function communityTitlesFor(tenantId: string | null | undefined) {
+  return (tenantId || "default") === "default" ? COMMUNITY_TITLES.fiarep : COMMUNITY_TITLES.other;
+}
+
+/** Any of the four titles - coordinator or supervisor, either naming. */
+export function isCommunityTitle(position: string | null | undefined): boolean {
+  return sameTitle(position, COMMUNITY_TITLES.fiarep.unit) ||
+    sameTitle(position, COMMUNITY_TITLES.fiarep.supervisor) ||
+    sameTitle(position, COMMUNITY_TITLES.other.unit) ||
+    sameTitle(position, COMMUNITY_TITLES.other.supervisor);
+}
+
+/** The supervisor of the unit, under either naming. */
+export function isCommunitySupervisorTitle(position: string | null | undefined): boolean {
+  return sameTitle(position, COMMUNITY_TITLES.fiarep.supervisor) ||
+    sameTitle(position, COMMUNITY_TITLES.other.supervisor);
+}
+
 export function isCommunityCoordinator(actor: Pick<Actor, "role">): boolean {
   return actor.role === "community_coordinator";
 }
 export function isCommunityCoordinatorSupervisor(actor: Pick<Actor, "role" | "position">): boolean {
-  return actor.role === "community_coordinator" &&
-    sameTitle(actor.position, "Community Coordinator Supervisor");
+  return actor.role === "community_coordinator" && isCommunitySupervisorTitle(actor.position);
 }
 export function canReadCommunityRecord(
   actor: Pick<Actor, "id" | "role" | "position">,
@@ -138,6 +167,8 @@ export const STAFF_POSITIONS = [
   "Heating Service Supervisor",
   "Community Coordinator",
   "Community Coordinator Supervisor",
+  "FIAREP Services",
+  "FIAREP Services Supervisor",
 ] as const;
 
 /**

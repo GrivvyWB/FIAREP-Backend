@@ -6,9 +6,9 @@ import { ChevronDown } from "lucide-react";
 
 const CREW_KINDS = [
   { kind: "technician", label: "Technician", blurb: "FIAREP CPM / Inspector — all field tools" },
-  { kind: "community-coordinator", label: "Community Coordinator", blurb: "Resident visits and building checks, on FIAREP's own team" },
+  { kind: "community-coordinator", label: "FIAREP Services", blurb: "Resident visits and building checks, on FIAREP's own team" },
 ] as const;
-const kindOfRole = (role: string) => (role === "community_coordinator" ? "Community Coordinator" : "Technician");
+const kindOfRole = (role: string) => (role === "community_coordinator" ? "FIAREP Services" : "Technician");
 
 type Member = { id: string; name: string; position: string; role: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null };
 type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number };

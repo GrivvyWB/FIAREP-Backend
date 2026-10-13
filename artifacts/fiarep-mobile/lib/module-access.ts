@@ -80,14 +80,14 @@ const LOOKUP_TRADES: Array<{ key: string; label: string }> = [
   { key: 'director', label: 'Director' },
   { key: 'supervisor', label: 'Other supervisors / management' },
   { key: 'administrator', label: 'Administrator' },
-  { key: 'community', label: 'Community Coordinator' },
+  { key: 'community', label: 'Community Coordinator' }, // FIAREP shows this as FIAREP Services
 ];
 
 /** Which lookup-access switch applies to a person, from their title (and role as a fallback). */
 export function lookupTradeFor(position: string, role: string): string {
   const p = (position || '').trim().toLowerCase();
   const r = (role || '').trim().toLowerCase();
-  if (r === 'community_coordinator' || p.includes('community coordinator')) return 'community';
+  if (r === 'community_coordinator' || p.includes('community coordinator') || p.includes('fiarep services')) return 'community';
   if (p.includes('cpm supervisor') || p.includes('cpm-supervisor')) return 'cpm-supervisor';
   if (p === 'cpm' || p.includes('cpm')) return 'cpm';
   if (p.includes('supervisor') && p.includes('inspect')) return 'supervisor-inspector';

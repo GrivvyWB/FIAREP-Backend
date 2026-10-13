@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 import { and, eq, gt, isNull } from "drizzle-orm";
 import { sameTitle } from "./titles";
+import { COMMUNITY_TITLES } from "./domain";
 import { db, refreshSessions, platformOwnerSessions, staffAccounts, organizations, type StaffAccount, type Organization } from "@workspace/db";
 
 const ACCESS_TTL_SECONDS = 15 * 60;
@@ -112,9 +113,11 @@ function fieldTitle(position: string): "CPM" | "Inspector" | null {
 // Community Coordinator titles are their own unit whatever role the account
 // was saved with (an HR intake that picked "Management", say): the title
 // decides, so the record never falls into the management / supervisor rules.
-function communityTitle(position: string): "Community Coordinator" | "Community Coordinator Supervisor" | null {
-  if (sameTitle(position, "Community Coordinator Supervisor")) return "Community Coordinator Supervisor";
-  if (sameTitle(position, "Community Coordinator")) return "Community Coordinator";
+function communityTitle(position: string): string | null {
+  for (const set of [COMMUNITY_TITLES.fiarep, COMMUNITY_TITLES.other]) {
+    if (sameTitle(position, set.supervisor)) return set.supervisor;
+    if (sameTitle(position, set.unit)) return set.unit;
+  }
   return null;
 }
 

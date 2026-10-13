@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { communityUnit } from "@/lib/access-policy";
 import { useForm } from "react-hook-form";
 import { format } from "date-fns";
 import {
@@ -942,7 +943,7 @@ export default function HRWorkspace() {
                       <option value="inspector">Inspector</option>
                       <option value="procurement">Procurement</option>
                       <option value="emergency">Emergency</option>
-                      <option value="community_coordinator">Community Coordinator</option>
+                      <option value="community_coordinator">{communityUnit(actor?.tenantId)}</option>
                     </select>
                   ) : sectionField.key === "position" ? (
                     <select

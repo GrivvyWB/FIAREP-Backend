@@ -1,3 +1,4 @@
+import { communityUnit } from "@/lib/access-policy";
 import {
   StaffPosition,
   StaffInputRole,
@@ -41,8 +42,12 @@ const allRoles = Object.values(StaffRole).filter((r) => r !== "resident");
 const roleLabels: Record<string, string> = {
   administrator: "Administrator", human_resources: "Human Resources", management: "Management", worker: "Worker",
   inspector: "Inspector", cpm: "CPM", procurement: "Procurement", vendor: "Vendor",
-  resident: "Resident", emergency: "Emergency", community_coordinator: "Community Coordinator",
+  resident: "Resident", emergency: "Emergency",
 };
+/** The outreach unit is named by the company: FIAREP Services at FIAREP,
+ *  Community Coordinator everywhere else. */
+const roleLabel = (role: string, tenantId?: string | null) =>
+  role === "community_coordinator" ? communityUnit(tenantId) : (roleLabels[role] || role);
 
 const HR_DISPLAY_MEMBER_IDS = new Set([
   "b6802ecf-d5ed-47c4-aa43-5507899b40f7",
@@ -369,7 +374,7 @@ export default function Team() {
       ["Name", "Role", "Position", "Access Code", "Result"],
       ...bulkResults.map((result) => [
         result.name,
-        roleLabels[selectedRoleOption] || selectedRoleOption,
+        roleLabel(selectedRoleOption, actor?.tenantId),
         position,
         result.code || "",
         result.error || "Created",
@@ -399,7 +404,7 @@ export default function Team() {
     setRole(nextRole);
     if (nextRole === "human_resources") setPosition("Human Resources");
     if (nextRole === "procurement") setPosition("Procurement");
-    if (nextRole === "community_coordinator") setPosition("Community Coordinator");
+    if (nextRole === "community_coordinator") setPosition(communityUnit(actor?.tenantId));
     if (nextRole === "administrator" && actor?.position === "Borough Director") {
       setPosition("Borough Director");
     }
@@ -625,7 +630,7 @@ export default function Team() {
           <div className="text-xs text-muted-foreground">{member.developments.join(", ") || "All assigned developments"}</div>
         )}
       </div>
-      <div className="text-right shrink-0"><div className={`text-[13px] font-semibold px-2.5 py-1 rounded-full inline-block ${isSupervisorOrManagement ? "bg-yellow-400 text-yellow-950" : "bg-secondary"}`}>{roleLabels[member.role] || member.role}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
+      <div className="text-right shrink-0"><div className={`text-[13px] font-semibold px-2.5 py-1 rounded-full inline-block ${isSupervisorOrManagement ? "bg-yellow-400 text-yellow-950" : "bg-secondary"}`}>{roleLabel(member.role, actor?.tenantId)}</div><div className="text-xs text-muted-foreground capitalize">{member.status}</div>
         {(member.canResetCode || member.canRevoke || member.canDelete) && <div className="flex flex-wrap gap-2 mt-2 justify-end">
           {member.canApprove && <Button size="sm" onClick={() => approveEmployee(member.id, member.name, member.role)} disabled={approve.isPending}>Approve employee</Button>}
           {member.canResetCode && member.status !== "revoked" && <Button size="sm" variant="outline" onClick={() => setResetTarget({ id: member.id, name: member.name, role: member.role })}><KeyRound className="mr-1 h-3 w-3" />Reset code</Button>}
@@ -805,7 +810,7 @@ export default function Team() {
       </div>
       <Dialog open={open} onOpenChange={(v) => !v && closeForm()}>
         <DialogContent><DialogHeader><DialogTitle>{issuedCode ? "One-time access code" : "Add Employee"}</DialogTitle><DialogDescription>{issuedCode ? `Replacement credentials for ${issuedEmployee}.` : "Issue a staff account. The access code is shown only once."}</DialogDescription></DialogHeader>
-          {issuedCode ? <div className="space-y-4"><div className="rounded-md bg-muted p-4 text-center"><p className="text-sm font-medium">{issuedRole && issuedRole !== "reset" ? `${roleLabels[issuedRole] || issuedRole} credentials` : "Replacement credentials"}</p><p className="text-3xl font-bold tracking-[0.4em] my-2">{issuedCode}</p><Button variant="outline" onClick={copyCode}><Copy className="mr-2 h-4 w-4" />Copy code</Button></div><p className="text-sm text-destructive">Give this code securely to {issuedEmployee || "the employee"}. It will not be displayed again. {issuedRole === "procurement" && "Procurement employees sign in at /procurement/login."}</p><DialogFooter><Button onClick={closeForm}>Done</Button></DialogFooter></div> :
+          {issuedCode ? <div className="space-y-4"><div className="rounded-md bg-muted p-4 text-center"><p className="text-sm font-medium">{issuedRole && issuedRole !== "reset" ? `${roleLabel(issuedRole, actor?.tenantId)} credentials` : "Replacement credentials"}</p><p className="text-3xl font-bold tracking-[0.4em] my-2">{issuedCode}</p><Button variant="outline" onClick={copyCode}><Copy className="mr-2 h-4 w-4" />Copy code</Button></div><p className="text-sm text-destructive">Give this code securely to {issuedEmployee || "the employee"}. It will not be displayed again. {issuedRole === "procurement" && "Procurement employees sign in at /procurement/login."}</p><DialogFooter><Button onClick={closeForm}>Done</Button></DialogFooter></div> :
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-2">
                 <Button type="button" variant={createMode === "single" ? "default" : "outline"} onClick={() => setCreateMode("single")}>One employee</Button>
@@ -814,7 +819,7 @@ export default function Team() {
               {createMode === "single" ? (
                 <form onSubmit={submit} className="space-y-4">
                   <div><Label htmlFor="employee-name">Name</Label><Input id="employee-name" required value={name} onChange={(e) => setName(e.target.value)} /></div>
-                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={selectedRoleOption} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-role">Role</Label><select id="employee-role" className="w-full border rounded-md p-2 bg-background" value={selectedRoleOption} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabel(r, actor?.tenantId)}</option>)}</select></div>
                   <div><Label htmlFor="employee-position">Position</Label><select id="employee-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
                   {role === "emergency" && position === "Maintenance Worker" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={emergencyTruckDriver} onCheckedChange={(checked) => setEmergencyTruckDriver(checked === true)} /><span>Emergency truck driver</span></label>}
                   {developmentSelector}
@@ -837,7 +842,7 @@ export default function Team() {
                 </div>
               ) : (
                 <form onSubmit={submitBulk} className="space-y-4">
-                  <div><Label htmlFor="employee-list-role">Role</Label><select id="employee-list-role" className="w-full border rounded-md p-2 bg-background" value={selectedRoleOption} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r] || r}</option>)}</select></div>
+                  <div><Label htmlFor="employee-list-role">Role</Label><select id="employee-list-role" className="w-full border rounded-md p-2 bg-background" value={selectedRoleOption} onChange={(e) => selectRole(e.target.value)}>{roleOptions.map((r) => <option key={r} value={r}>{roleLabel(r, actor?.tenantId)}</option>)}</select></div>
                   <div><Label htmlFor="employee-list-position">Position</Label><select id="employee-list-position" className="w-full border rounded-md p-2 bg-background" value={position} onChange={(e) => selectPosition(e.target.value)}>{positions.filter((p) => p !== "Borough Director" || actor?.position === "Borough Director").map((p) => <option key={p} value={p}>{p}</option>)}</select></div>
                   {developmentSelector}
                    {actor?.role === "human_resources" && <label className="flex items-center gap-2 text-sm"><Checkbox checked={waitingForDocuments} onCheckedChange={(checked) => setWaitingForDocuments(checked === true)} /><span>Waiting for documents</span></label>}

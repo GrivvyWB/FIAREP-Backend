@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { isCommunityCoordinatorSupervisor } from "@/lib/access-policy";
+import { communitySupervisorTitle, communityUnit, communityUnitPlural, isCommunityCoordinatorSupervisor } from "@/lib/access-policy";
 import { AlertTriangle, Building2, Copy, Edit2, Mail, Phone, Plus, Printer, Search, Trash2, UserRound, Users } from "lucide-react";
 import {
   LEAD_DOCUMENTS, LEAD_TESTED, MOLD_EXTENT, VERMIN_FREQUENCY, VERMIN_TYPES,
@@ -26,7 +26,7 @@ import {
 
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 
-/** The programs a Community Coordinator works under (HPD-style divisions). */
+/** The programs the unit works under (HPD-style divisions). */
 const PROGRAMS = [
   "General outreach",
   "Tenant & Owner Resources (rent subsidies, Section 8)",
@@ -50,20 +50,20 @@ async function removeRecord(entity: string, id: string, version: number) {
   } as never);
 }
 
-function printReport(r: Rec, orgName: string) {
+function printReport(r: Rec, orgName: string, unit: string) {
   const w = window.open("", "_blank", "width=900,height=1000");
   if (!w) return;
-  w.document.write(residentReportHtml(r.state, s(r.development), orgName));
+  w.document.write(residentReportHtml(r.state, s(r.development), orgName, unit));
   w.document.close();
   w.focus();
   setTimeout(() => w.print(), 300);
 }
-async function copyReport(r: Rec, orgName: string) {
-  await navigator.clipboard.writeText(residentReportText(r.state, s(r.development), orgName));
+async function copyReport(r: Rec, orgName: string, unit: string) {
+  await navigator.clipboard.writeText(residentReportText(r.state, s(r.development), orgName, unit));
 }
-function emailReport(r: Rec, orgName: string) {
+function emailReport(r: Rec, orgName: string, unit: string) {
   const subject = `${orgName} visit report — ${s(r.state.name)} · ${s(r.state.address)}${r.state.apartment ? ` Apt ${s(r.state.apartment)}` : ""}`;
-  const body = residentReportText(r.state, s(r.development), orgName);
+  const body = residentReportText(r.state, s(r.development), orgName, unit);
   window.location.href = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 }
 
@@ -74,6 +74,10 @@ export default function CommunityCoordinators() {
   const reviewOn = organizationModules["communitySupervisorReview"] !== false;
   const orgName = organizationName || "FIAREP";
   const supervisor = isCommunityCoordinatorSupervisor(staff);
+  // FIAREP calls the unit FIAREP Services; other companies keep the trade name.
+  const unitPlural = communityUnitPlural(staff?.tenantId);
+  const unitName = communityUnit(staff?.tenantId);
+  const supervisorTitle = communitySupervisorTitle(staff?.tenantId);
   const [tab, setTab] = useState<"residents" | "buildings">("residents");
   const [search, setSearch] = useState("");
   const [who, setWho] = useState("");
@@ -147,11 +151,11 @@ export default function CommunityCoordinators() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Users className="h-6 w-6" />Community Coordinators</h1>
+          <h1 className="text-2xl font-bold flex items-center gap-2"><Users className="h-6 w-6" />{unitPlural}</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Field outreach: residents, building owners and building details. {supervisor
               ? "You see everything your coordinators log."
-              : "Only you and your Community Coordinator Supervisor can see what you log here."}
+              : `Only you and your ${supervisorTitle} can see what you log here.`}
           </p>
         </div>
         {!supervisor && (
@@ -232,9 +236,9 @@ export default function CommunityCoordinators() {
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
                     {reviewOn && <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-residents", r)} busy={update.isPending} />}
                     <div className="mt-1 flex flex-wrap gap-1">
-                      <Button size="sm" variant="outline" onClick={() => printReport(r, orgName)}><Printer className="mr-1 h-3.5 w-3.5" />Print / PDF</Button>
-                      <Button size="sm" variant="outline" onClick={() => copyReport(r, orgName).then(() => toast({ title: "Report copied" })).catch(() => toast({ variant: "destructive", title: "Could not copy" }))}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>
-                      <Button size="sm" variant="outline" onClick={() => emailReport(r, orgName)}><Mail className="mr-1 h-3.5 w-3.5" />Email</Button>
+                      <Button size="sm" variant="outline" onClick={() => printReport(r, orgName, unitName)}><Printer className="mr-1 h-3.5 w-3.5" />Print / PDF</Button>
+                      <Button size="sm" variant="outline" onClick={() => copyReport(r, orgName, unitName).then(() => toast({ title: "Report copied" })).catch(() => toast({ variant: "destructive", title: "Could not copy" }))}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>
+                      <Button size="sm" variant="outline" onClick={() => emailReport(r, orgName, unitName)}><Mail className="mr-1 h-3.5 w-3.5" />Email</Button>
                     </div>
                   </div>
                 </div>

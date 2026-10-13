@@ -1,12 +1,12 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, RefreshControl, Alert } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { clearAppMode, getCurrentActor, getSessionIdentity, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useModuleAccess, useRawModules } from '../lib/module-access';
 import { ui } from '../lib/ui';
 import {
-  approveCommunity, isCommunitySupervisor, listCommunity, removeCommunity, shareResidentPdf, shareResidentText, str, today, type CommunityRecord,
+  approveCommunity, communityTitles, isCommunitySupervisor, listCommunity, removeCommunity, shareResidentPdf, shareResidentText, str, today, type CommunityRecord,
 } from '../lib/community';
 import { sectionsOnRecord } from '../lib/community-report';
 
@@ -14,6 +14,7 @@ const ACCENT = '#F2C14E';
 
 export default function CommunityHome() {
   const router = useRouter();
+  const navigation = useNavigation();
   const { refresh } = useAppMode();
   const modules = useModuleAccess();
   // Supervisor review is on unless the platform owner switched it off for this
@@ -27,6 +28,8 @@ export default function CommunityHome() {
   const [supervisor, setSupervisor] = useState(false);
   const [meId, setMeId] = useState('');
   const [name, setName] = useState('');
+  // FIAREP calls the unit FIAREP Services; other companies keep the trade name.
+  const [unit, setUnit] = useState(communityTitles('default'));
   const [residents, setResidents] = useState<CommunityRecord[]>([]);
   const [buildings, setBuildings] = useState<CommunityRecord[]>([]);
   const [loading, setLoading] = useState(false);
@@ -40,12 +43,15 @@ export default function CommunityHome() {
         listCommunity('community-residents'), listCommunity('community-buildings'),
       ]);
       setName(actor.name); setMeId(identity?.staffId || actor.id || ''); setSupervisor(sup);
+      setUnit(communityTitles((identity as { tenantId?: string } | null)?.tenantId));
       setResidents(r); setBuildings(b);
     } catch (e: any) {
       setError(e?.message || 'Could not load. Check your connection.');
     } finally { setLoading(false); }
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
+  // The stack header carries the company's own name for the unit.
+  useEffect(() => { navigation.setOptions({ title: unit.plural }); }, [navigation, unit]);
 
   async function onSignOut() {
     await logout();
@@ -101,7 +107,7 @@ export default function CommunityHome() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{supervisor ? 'Community Coordinator Supervisor' : 'Community Coordinator'}</Text>
+      <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{supervisor ? unit.supervisor : unit.unit}</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 8 }]}>
         {name ? `${name} · ` : ''}{supervisor ? 'Everything your coordinators log.' : 'Only you and your supervisor see what you log.'}
       </Text>

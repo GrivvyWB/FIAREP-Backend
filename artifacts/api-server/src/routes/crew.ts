@@ -28,7 +28,7 @@ const TENANT = "default";
 // in FIAREP's own organization.
 const CREW_KINDS = {
   technician: { role: "inspector", position: "CPM", label: "Technician" },
-  "community-coordinator": { role: "community_coordinator", position: "Community Coordinator", label: "Community Coordinator" },
+  "community-coordinator": { role: "community_coordinator", position: "FIAREP Services", label: "FIAREP Services" },
 } as const;
 type CrewKind = keyof typeof CREW_KINDS;
 const CREW_ROLES = [...new Set(Object.values(CREW_KINDS).map((k) => k.role))];

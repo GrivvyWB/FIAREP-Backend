@@ -14,6 +14,8 @@ import {
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import {
   isAcceptedStaffPosition,
+  isCommunityTitle,
+  communityTitlesFor,
   canIssueStaffAccountRole,
   canBrowseStaffDirectory,
   canDeleteStaffAccounts,
@@ -199,7 +201,7 @@ function canHrAssignPositionRole(position: string, role: string): boolean {
     "Housing Assistant",
     "Director",
   ]);
-  const communityPosition = position === "Community Coordinator" || position === "Community Coordinator Supervisor";
+  const communityPosition = isCommunityTitle(position);
   if (role === "community_coordinator") return communityPosition;
   if (communityPosition) return false;
   const managementPosition =
@@ -410,8 +412,9 @@ router.post("/v1/staff", async (req, res) => {
     res.status(400).json({ error: "Truck designation is limited to emergency maintenance workers" });
     return;
   }
-  if (position.startsWith("Community Coordinator") !== (role === "community_coordinator")) {
-    res.status(400).json({ error: "Community Coordinator titles go with the Community Coordinator role" });
+  if (isCommunityTitle(position) !== (role === "community_coordinator")) {
+    const unit = communityTitlesFor(actor.tenantId).unit;
+    res.status(400).json({ error: `${unit} titles go with the ${unit} role` });
     return;
   }
   const developmentRequiredPositions = new Set([

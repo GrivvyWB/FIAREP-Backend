@@ -418,7 +418,7 @@ function EmergencyStack() {
   );
 }
 
-// Community Coordinators: field outreach only. Their records never leave
+// Field outreach only (FIAREP Services at FIAREP). Their records never leave
 // the coordinator unit (the server enforces it), so this stack has no
 // complaints, projects or inspections.
 function CommunityStack() {

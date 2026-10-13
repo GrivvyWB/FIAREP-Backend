@@ -29,16 +29,39 @@ const CPM_ONLY_MODULES = new Set<StaffModule>([
   "change-orders",
 ]);
 
-/** Community Coordinators (field outreach) and their supervisor. Their
- * records stay inside that unit; they see nothing else on the website. */
+/**
+ * The field outreach unit. FIAREP calls its own FIAREP Services; every other
+ * company that switches the module on keeps the trade name, Community
+ * Coordinator. Both namings are recognised everywhere, so an account saved
+ * under either keeps working.
+ */
+export const COMMUNITY_TITLES = {
+  fiarep: { unit: "FIAREP Services", plural: "FIAREP Services", supervisor: "FIAREP Services Supervisor" },
+  other: { unit: "Community Coordinator", plural: "Community Coordinators", supervisor: "Community Coordinator Supervisor" },
+} as const;
+
+/** What this company calls the unit. FIAREP is tenant "default". */
+export function communityTitles(tenantId: string | null | undefined) {
+  return (tenantId || "default") === "default" ? COMMUNITY_TITLES.fiarep : COMMUNITY_TITLES.other;
+}
+export const communityUnit = (tenantId: string | null | undefined) => communityTitles(tenantId).unit;
+export const communityUnitPlural = (tenantId: string | null | undefined) => communityTitles(tenantId).plural;
+export const communitySupervisorTitle = (tenantId: string | null | undefined) => communityTitles(tenantId).supervisor;
+
+const COMMUNITY_TITLE_RE = /^(community coordinator|fiarep services)( supervisor)?$/i;
+
+/** Field outreach staff and their supervisor. Their records stay inside the
+ * unit; they see nothing else on the website. */
 export function isCommunityCoordinator(staff: Staff | null | undefined): boolean {
   if (!staff) return false;
   if (String(staff.role || "") === "community_coordinator") return true;
   // The title decides, whatever role the account was saved with.
-  return /^community coordinator( supervisor)?$/i.test(String(staff.position || "").trim());
+  return COMMUNITY_TITLE_RE.test(String(staff.position || "").trim());
 }
 export function isCommunityCoordinatorSupervisor(staff: Staff | null | undefined): boolean {
-  return isCommunityCoordinator(staff) && sameTitle(staff?.position, "Community Coordinator Supervisor");
+  return isCommunityCoordinator(staff) &&
+    (sameTitle(staff?.position, COMMUNITY_TITLES.other.supervisor) ||
+      sameTitle(staff?.position, COMMUNITY_TITLES.fiarep.supervisor));
 }
 
 export function isSupervisor(staff: Staff | null | undefined): boolean {
@@ -112,7 +135,7 @@ export const LOOKUP_TRADES: Array<{ key: string; label: string }> = [
 export function lookupTradeFor(position: string, role: string): string {
   const p = (position || "").trim().toLowerCase();
   const r = (role || "").trim().toLowerCase();
-  if (r === "community_coordinator" || p.includes("community coordinator")) return "community";
+  if (r === "community_coordinator" || p.includes("community coordinator") || p.includes("fiarep services")) return "community";
   if (p.includes("cpm supervisor") || p.includes("cpm-supervisor")) return "cpm-supervisor";
   if (p === "cpm" || p.includes("cpm")) return "cpm";
   if (p.includes("supervisor") && p.includes("inspect")) return "supervisor-inspector";
