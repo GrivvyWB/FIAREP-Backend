@@ -26,7 +26,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare } from "lucide-react";
+  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -76,6 +76,9 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
       { name: "Manage All Requests", href: "/notifications", icon: BellRing, module: "notifications" as const },
     ] : []),
     ...(isCommunityCoordinator(staff) ? [{ name: "Alerts", href: "/notifications", icon: BellRing, module: "notifications" as const }] : []),
+    // Quick quote: FIAREP's own crew pricing a walk on the spot.
+    ...((staff?.tenantId || "default") === "default"
+      ? [{ name: "Quick Quote", href: "/quick-quote", icon: Zap, module: "projects" as const }] : []),
     // Messages: FIAREP Services on FIAREP's own side, and a client company
     // whose plan includes writing to them.
     ...((isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") ||

@@ -56,6 +56,7 @@ import JoinFiarep from '@/pages/join';
 import PublicResident from '@/pages/public-resident';
 import PublicMessage from '@/pages/public-message';
 import Messages from '@/pages/messages';
+import QuickQuote from '@/pages/quick-quote';
 import PublicVendor from '@/pages/public-vendor';
 import OwnerLogin from '@/pages/platform-owner/login';
 import OwnerDashboard from '@/pages/platform-owner/index';
@@ -272,6 +273,7 @@ function AppRouter() {
           <Route path="/complaint-dashboard" component={ComplaintDashboardRoute} />
           <Route path="/community" component={CommunityRoute} />
           <Route path="/messages" component={Messages} />
+          <Route path="/quick-quote" component={QuickQuote} />
           <Route path="/translator" component={TranslatorRoute} />
           <Route path="/property-lookup" component={PropertyLookupRoute} />
           <Route path="/violation-alerts" component={ViolationAlertsRoute} />
