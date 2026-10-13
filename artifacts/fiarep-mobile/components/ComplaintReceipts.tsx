@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, Alert } from 'react-native';
 import { customFetch, getEntityRecord } from '@workspace/api-client-react';
 import { ui, ACCENT } from '../lib/ui';
 import { getCurrentActor } from '../lib/store';
-import { Chips } from '../lib/community-ui';
+import { PickOne } from '../lib/community-ui';
 
 type Receipt = { id: string; name: string; position: string; at: string };
 type Eta = { eta: string; crew: string; note: string; byName: string; byPosition: string; at: string };
@@ -102,9 +102,9 @@ export default function ComplaintReceipts({ entity, reportId, canSendEta, readOn
         <View style={{ gap: 8 }}>
           <Text style={ui.cardTitle}>Let them know you're coming</Text>
           <Text style={ui.label}>When</Text>
-          <Chips options={options.eta} value={pickEta} onChange={(v) => setPickEta(v === pickEta ? '' : v)} wrap />
+          <PickOne options={options.eta} value={pickEta} onChange={setPickEta} placeholder="Pick a time" title="When are you coming?" clearLabel="No time yet" />
           <Text style={ui.label}>Who's coming (optional)</Text>
-          <Chips options={options.crew} value={pickCrew} onChange={(v) => setPickCrew(v === pickCrew ? '' : v)} wrap />
+          <PickOne options={options.crew} value={pickCrew} onChange={setPickCrew} placeholder="Pick a trade" title="Who's coming?" clearLabel="Not saying" />
           <TextInput style={ui.input} value={note} onChangeText={setNote} placeholder="Note (optional)" />
           <Pressable style={[ui.btn, (busy || (!pickEta && !pickCrew)) && ui.btnMuted]} disabled={busy || (!pickEta && !pickCrew)} onPress={() => void sendEta()}>
             <Text style={ui.btnText}>{busy ? 'Sending…' : 'Send — on the way'}</Text>

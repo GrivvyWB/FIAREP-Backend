@@ -111,6 +111,10 @@ export default function CpmHome() {
         ...(normalizedPosition === 'inspector' ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
         ...(normalizedPosition === 'cpm' ? [{ label: 'Projects', onPress: () => router.push('/?list=1'), tone: 'outline' as Tone }] : []),
         ...(normalizedPosition === 'cpm' ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
+        // Standing in the apartment: what the job needs bought, priced off the
+        // book and sent to the client to approve. FIAREP's own crew only -
+        // nobody else has a client to send a price to.
+        ...(isTechnician ? [{ label: 'Price Quote', onPress: () => router.push('/price-quote'), tone: 'solid' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
         ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),

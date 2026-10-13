@@ -279,6 +279,7 @@ function InspectorStack() {
       <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="inspector-routes" options={{ title: 'My Routes' }} />
       <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
+      <Stack.Screen name="price-quote" options={{ title: 'Price Quote' }} />
       <Stack.Screen name="index" options={{ title: 'Projects', headerRight: () => <ProjectsHome to="/cpm-home" /> }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
       <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
