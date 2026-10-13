@@ -8,10 +8,23 @@ import {
   type TimeClockPunch,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
+import { customFetch } from '@workspace/api-client-react';
+
+/** A place the worker stayed 30+ minutes while on the clock. The server has
+ *  recorded these all along on /v1/time-clock/locations; this screen never
+ *  asked for them, so the places you worked were invisible to you. */
+type Stop = { id: string; address: string | null; latitude: number; longitude: number; arrivedAt: string; leftAt: string | null };
+
+const span = (from: string, to: string | null) => {
+  const mins = Math.max(0, Math.round(((to ? new Date(to).getTime() : Date.now()) - new Date(from).getTime()) / 60000));
+  const h = Math.floor(mins / 60);
+  return h > 0 ? `${h}h ${mins % 60}m` : `${mins}m`;
+};
 
 export default function Attendance() {
   const [status, setStatus] = useState<Awaited<ReturnType<typeof getAttendanceStatus>> | null>(null);
   const [history, setHistory] = useState<TimeClockPunch[]>([]);
+  const [stops, setStops] = useState<Stop[]>([]);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -21,6 +34,10 @@ export default function Attendance() {
       setStatus(nextStatus);
       setHistory(nextHistory);
       setMessage('');
+      // The places worked, not just the punches.
+      try {
+        setStops(await customFetch<Stop[]>('/api/v1/time-clock/locations', { responseType: 'json' } as never));
+      } catch { /* the punches still show */ }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Unable to load attendance.');
     }
@@ -61,6 +78,20 @@ export default function Attendance() {
       {status.config.mobileClockEnabled && (
         <Text style={[ui.label, { marginTop: 8 }]}>Each punch records where you are. On the clock, the app notes each place you stay more than 30 minutes — when you got there and when you left — and nothing while you stay put.</Text>
       )}
+      <Text style={{ fontSize: 18, fontWeight: '600', marginTop: 18, marginBottom: 8 }}>Places worked</Text>
+      {stops.length === 0 ? (
+        <Text style={ui.label}>No stops recorded yet. While you are on the clock, anywhere you stay more than 30 minutes is listed here.</Text>
+      ) : stops.map((stop) => (
+        <View key={stop.id} style={{ borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingVertical: 10 }}>
+          <Text style={{ fontWeight: '600' }}>{stop.address || `${stop.latitude.toFixed(5)}, ${stop.longitude.toFixed(5)}`}</Text>
+          <Text style={ui.label}>
+            Arrived {new Date(stop.arrivedAt).toLocaleString()}
+            {stop.leftAt ? ` · left ${new Date(stop.leftAt).toLocaleTimeString()}` : ' · still here'}
+            {` · ${span(stop.arrivedAt, stop.leftAt)}`}
+          </Text>
+        </View>
+      ))}
+
       <Text style={{ fontSize: 18, fontWeight: '600', marginTop: 18, marginBottom: 8 }}>Punch history</Text>
       {history.map((punch) => (
         <View key={punch.id} style={{ borderBottomWidth: 1, borderBottomColor: '#e5e7eb', paddingVertical: 10 }}>

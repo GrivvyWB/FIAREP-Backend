@@ -261,6 +261,13 @@ export async function reverseGeocodeNyc(latitude: number, longitude: number): Pr
     url.searchParams.set("size", "1");
     const r = (await fetchJson(url.toString())) as { features?: Array<{ properties?: JsonRecord }> };
     const p = r.features?.[0]?.properties;
+    // This is NYC's own geocoder. For a point outside the five boroughs it
+    // still answers, with the coarsest match it has - a punch in Connecticut
+    // came back as "United States". Only a real place is an address, so take
+    // the precise layers and otherwise say nothing and let the caller fall
+    // back to the device's own lookup.
+    const layer = typeof p?.["layer"] === "string" ? p["layer"] : "";
+    if (!["address", "venue", "street"].includes(layer)) return null;
     const label = typeof p?.["label"] === "string" ? p["label"] : "";
     return label ? label.replace(/, New York, NY, USA$/, ", NY") : null;
   } catch { return null; }

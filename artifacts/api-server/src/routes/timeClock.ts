@@ -37,6 +37,16 @@ async function tenantConfig(tenantId: string) {
   return getTimeClockConfig(organization?.features);
 }
 
+/** The place name for a fix. NYC's geocoder is exact inside the five boroughs;
+ *  anywhere else it has nothing useful, so the phone's own reverse lookup
+ *  (sent with the punch) is used instead. */
+async function placeName(lat: number, lng: number, fromDevice: unknown): Promise<string | null> {
+  const nyc = await reverseGeocodeNyc(lat, lng);
+  if (nyc) return nyc;
+  const given = typeof fromDevice === "string" ? fromDevice.trim().slice(0, 200) : "";
+  return given || null;
+}
+
 router.get("/v1/time-clock/status", async (_req, res) => {
   const actor = actorFrom(res);
   const [latest, config] = await Promise.all([
@@ -90,7 +100,7 @@ router.post("/v1/time-clock/punch", async (req, res) => {
   const loc = locationOf(req.body);
   // A workers' clock: no location, no punch in. (Out is always allowed so nobody is stuck on the clock.)
   if (direction === "in" && !loc) { res.status(400).json({ error: "Turn on location for FIAREP to clock in. Where you work is part of the time record.", needsLocation: true }); return; }
-  const address = loc ? await reverseGeocodeNyc(loc.latitude, loc.longitude) : null;
+  const address = loc ? await placeName(loc.latitude, loc.longitude, (req.body as Record<string, unknown>)?.["address"]) : null;
   const result = await db.transaction(async (tx) => {
     const [organization] = await tx.select({ features: organizations.features })
       .from(organizations)
@@ -185,7 +195,7 @@ router.post("/v1/time-clock/locations", async (req, res) => {
   const [existing] = await db.select().from(timeClockLocations).where(and(eq(timeClockLocations.tenantId, actor.tenantId), eq(timeClockLocations.idempotencyKey, idempotencyKey))).limit(1);
   if (existing) { res.json(serializeStop(existing)); return; }
   const now = new Date();
-  const address = await reverseGeocodeNyc(loc.latitude, loc.longitude);
+  const address = await placeName(loc.latitude, loc.longitude, (req.body as Record<string, unknown>)?.["address"]);
   // Arriving somewhere new means the previous stop is over.
   await db.update(timeClockLocations).set({ leftAt: arrivedAt, updatedAt: now }).where(and(eq(timeClockLocations.tenantId, actor.tenantId), eq(timeClockLocations.staffId, actor.id), isNull(timeClockLocations.leftAt)));
   const [row] = await db.insert(timeClockLocations).values({ id: randomUUID(), tenantId: actor.tenantId, staffId: actor.id, latitude: loc.latitude, longitude: loc.longitude, accuracyM: loc.accuracyM, address, arrivedAt, leftAt: null, idempotencyKey, createdAt: now, updatedAt: now } as typeof timeClockLocations.$inferInsert).returning();

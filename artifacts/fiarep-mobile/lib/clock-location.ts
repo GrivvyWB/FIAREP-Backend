@@ -19,6 +19,23 @@ type Anchor = { latitude: number; longitude: number; since: number; reported: bo
 export type Fix = { latitude: number; longitude: number; accuracyM: number | null };
 
 /** One position fix for a punch, or null if the person declined or it timed out. */
+/** The street address for a fix, from the phone's own geocoder. NYC's geocoder
+ *  covers the five boroughs only; this covers everywhere else, so a punch in
+ *  Connecticut reads as a street rather than "United States". */
+export async function placeFor(fix: Fix): Promise<string | null> {
+  try {
+    const hits = await Promise.race([
+      Location.reverseGeocodeAsync({ latitude: fix.latitude, longitude: fix.longitude }),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+    ]);
+    const a = hits && hits[0];
+    if (!a) return null;
+    const street = [a.streetNumber, a.street].filter(Boolean).join(' ');
+    const line = [street || a.name, a.city || a.subregion, a.region, a.postalCode].filter(Boolean).join(', ');
+    return line || null;
+  } catch { return null; }
+}
+
 export async function currentFix(): Promise<Fix | null> {
   try {
     const perm = await Location.requestForegroundPermissionsAsync();
@@ -55,7 +72,7 @@ async function reportArrival(a: Anchor, fix: Fix): Promise<string | null> {
   try {
     const r = await customFetch<{ id: string }>('/api/v1/time-clock/locations', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ location: fix, arrivedAt: new Date(a.since).toISOString(), idempotencyKey: a.key }),
+      body: JSON.stringify({ location: fix, address: await placeFor(fix), arrivedAt: new Date(a.since).toISOString(), idempotencyKey: a.key }),
       responseType: 'json',
     } as never);
     return r?.id ?? null;
