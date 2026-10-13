@@ -30,6 +30,9 @@ export default function ComplaintReceipts({ entity, reportId, canSendEta, readOn
   const [pickEta, setPickEta] = useState('');
   const [pickCrew, setPickCrew] = useState('');
   const [note, setNote] = useState('');
+  // "Scheduled - see note" promises a note: without one the resident is told
+  // to read something that is not there.
+  const needsNote = /see note/i.test(pickEta);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
@@ -105,8 +108,16 @@ export default function ComplaintReceipts({ entity, reportId, canSendEta, readOn
           <PickOne options={options.eta} value={pickEta} onChange={setPickEta} placeholder="Pick a time" title="When are you coming?" clearLabel="No time yet" />
           <Text style={ui.label}>Who's coming (optional)</Text>
           <PickOne options={options.crew} value={pickCrew} onChange={setPickCrew} placeholder="Pick a trade" title="Who's coming?" clearLabel="Not saying" />
-          <TextInput style={ui.input} value={note} onChangeText={setNote} placeholder="Note (optional)" />
-          <Pressable style={[ui.btn, (busy || (!pickEta && !pickCrew)) && ui.btnMuted]} disabled={busy || (!pickEta && !pickCrew)} onPress={() => void sendEta()}>
+          <TextInput
+            style={ui.input}
+            value={note}
+            onChangeText={setNote}
+            placeholder={needsNote ? 'Say the day and time \u2014 the resident reads this' : 'Note (optional)'}
+          />
+          {needsNote && !note.trim() && (
+            <Text style={ui.label}>Write when you are coming — that is the note they are told to look at.</Text>
+          )}
+          <Pressable style={[ui.btn, (busy || (!pickEta && !pickCrew) || (needsNote && !note.trim())) && ui.btnMuted]} disabled={busy || (!pickEta && !pickCrew) || (needsNote && !note.trim())} onPress={() => void sendEta()}>
             <Text style={ui.btnText}>{busy ? 'Sending…' : 'Send — on the way'}</Text>
           </Pressable>
         </View>

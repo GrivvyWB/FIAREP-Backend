@@ -33,6 +33,8 @@ export function ComplaintReceipts({ entity, reportId, state, canSendEta }: {
   const [pickEta, setPickEta] = useState("");
   const [pickCrew, setPickCrew] = useState("");
   const [note, setNote] = useState("");
+  // The one choice that sends the resident to the note for the detail.
+  const needsNote = /see note/i.test(pickEta);
   const [busy, setBusy] = useState(false);
   const notified = list(state.notifiedStaff);
   const isManagement = staff?.role === "management" || staff?.role === "administrator";
@@ -105,9 +107,18 @@ export function ComplaintReceipts({ entity, reportId, state, canSendEta }: {
             </select>
           </div>
           <div className="flex gap-2">
-            <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Note (optional)" />
-            <Button onClick={() => void sendEta()} disabled={busy || (!pickEta && !pickCrew)}>{busy ? "Sending…" : "Send"}</Button>
+            {/* "Scheduled - see note" promises a note: without one the resident
+                is told to read something that is not there. */}
+            <Input
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              placeholder={needsNote ? "Say the day and time — the resident reads this" : "Note (optional)"}
+            />
+            <Button onClick={() => void sendEta()} disabled={busy || (!pickEta && !pickCrew) || (needsNote && !note.trim())}>{busy ? "Sending…" : "Send"}</Button>
           </div>
+          {needsNote && !note.trim() && (
+            <p className="text-xs text-muted-foreground">Write when you are coming — that is the note they are told to look at.</p>
+          )}
         </div>
       )}
     </div>
