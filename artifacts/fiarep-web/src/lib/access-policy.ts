@@ -357,7 +357,11 @@ export function evaluateAccess(
   path: string,
   isAuthenticated: boolean
 ): AccessEvaluation {
-  if (path === "/platform" || path === "/join") return {};
+  // The front door is the front door. fiarep.com opens on the landing page
+  // every time, whoever this browser belongs to and whether or not they are
+  // signed in; they pick Resident / Vendor / Staff from there and signing in
+  // takes them back to their own side.
+  if (path === "/" || path === "/platform" || path === "/join") return {};
   const isProcurement = path === '/procurement' || path.startsWith('/procurement/');
 
   // Nobody is signed in yet: the landing page opens first, and the sign-in
@@ -396,7 +400,7 @@ export function evaluateAccess(
   }
 
   if (persona === 'staff') {
-    if (path === '/' || path === '/access' || path === '/resident' || path === '/vendor') {
+    if (path === '/access' || path === '/resident' || path === '/vendor') {
       return { redirect: isAuthenticated ? '/dashboard' : '/login' };
     }
     return {};

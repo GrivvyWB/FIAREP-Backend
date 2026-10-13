@@ -145,6 +145,11 @@ function AppRouter() {
     return <RoutedErrorBoundary><JoinFiarep /></RoutedErrorBoundary>;
   }
 
+  // Whoever this browser belongs to, fiarep.com itself is the landing page.
+  if (location === '/') {
+    return <RoutedErrorBoundary><Platform /></RoutedErrorBoundary>;
+  }
+
   const persona = getStoredPersona();
 
   if (persona === 'resident') {
