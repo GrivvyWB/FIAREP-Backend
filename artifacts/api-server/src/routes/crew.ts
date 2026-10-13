@@ -22,8 +22,20 @@ const router: IRouter = Router();
 router.use("/v1/platform/crew", requirePlatformOwner);
 
 const TENANT = "default";
-const CREW_ROLE = "inspector";
-const CREW_POSITION = "CPM"; // the title the app keys every CPM / Inspector tool on
+// FIAREP's own crew. A member is one of these kinds; the role and position are
+// what the app keys their screens and tools on. Everyone used to be forced to
+// inspector / CPM, which is why a technician could only be told apart by being
+// in FIAREP's own organization.
+const CREW_KINDS = {
+  technician: { role: "inspector", position: "CPM", label: "Technician" },
+  "community-coordinator": { role: "community_coordinator", position: "Community Coordinator", label: "Community Coordinator" },
+} as const;
+type CrewKind = keyof typeof CREW_KINDS;
+const CREW_ROLES = [...new Set(Object.values(CREW_KINDS).map((k) => k.role))];
+const crewKind = (v: unknown): CrewKind => (typeof v === "string" && v in CREW_KINDS ? v as CrewKind : "technician");
+
+const CREW_ROLE = CREW_KINDS.technician.role;
+const CREW_POSITION = CREW_KINDS.technician.position; // the title the app keys every CPM / Inspector tool on
 const ISSUER = "FIAREP";
 const text = (v: unknown): string => (v == null ? "" : String(v).trim());
 const cents = (v: unknown): number | null => { const n = typeof v === "string" ? Number(v) : v; return typeof n === "number" && Number.isFinite(n) && n >= 0 ? Math.round(n * 100) : null; };
@@ -72,7 +84,7 @@ function parseRange(q: Record<string, unknown>): { from: Date; to: Date } {
 }
 
 const view = (s: typeof staffAccounts.$inferSelect, h?: { hours: number; open: Date | null; shifts: number }, last?: { direction: string; punchAt: Date } | null) => ({
-  id: s.id, name: s.name, position: s.position, code: s.code, status: s.status,
+  id: s.id, name: s.name, position: s.position, role: s.role, code: s.code, status: s.status,
   hourlyRate: s.hourlyRateCents == null ? null : s.hourlyRateCents / 100,
   hours: h?.hours ?? 0, shifts: h?.shifts ?? 0,
   pay: s.hourlyRateCents == null ? null : Math.round((h?.hours ?? 0) * s.hourlyRateCents) / 100,
@@ -86,7 +98,7 @@ router.get("/v1/platform/crew", async (req, res) => {
   const { from, to } = parseRange(req.query as Record<string, unknown>);
   // Crew added before the switch to CPM / Inspector come along: same person, full tools.
   await db.update(staffAccounts).set({ role: CREW_ROLE, position: CREW_POSITION, updatedAt: new Date() }).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER), eq(staffAccounts.role, "worker")));
-  const members = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER), eq(staffAccounts.role, CREW_ROLE), inArray(staffAccounts.status, ["approved", "revoked"]))).orderBy(asc(staffAccounts.name));
+  const members = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER), inArray(staffAccounts.role, CREW_ROLES), inArray(staffAccounts.status, ["approved", "revoked"]))).orderBy(asc(staffAccounts.name));
   const ids = members.map((m) => m.id);
   const punches = ids.length ? await db.select({ staffId: timeClockPunches.staffId, direction: timeClockPunches.direction, punchAt: timeClockPunches.punchAt }).from(timeClockPunches)
     .where(and(eq(timeClockPunches.tenantId, TENANT), inArray(timeClockPunches.staffId, ids), gte(timeClockPunches.punchAt, new Date(from.getTime() - 24 * 36e5)), lte(timeClockPunches.punchAt, to))) : [];
@@ -119,7 +131,7 @@ router.post("/v1/platform/crew", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
   const b = (req.body ?? {}) as Record<string, unknown>;
   const name = text(b["name"]).slice(0, 80);
-  const position = CREW_POSITION;
+  const kind = CREW_KINDS[crewKind(b["kind"])];
   const rate = cents(b["hourlyRate"]);
   if (name.length < 2) { res.status(400).json({ error: "A name is required." }); return; }
   if (rate == null || rate <= 0) { res.status(400).json({ error: "An hourly rate is required." }); return; }
@@ -127,12 +139,12 @@ router.post("/v1/platform/crew", async (req, res) => {
     const code = await allocateStaffCode(tx, TENANT, name);
     const now = new Date();
     const [row] = await tx.insert(staffAccounts).values({
-      id: randomUUID(), tenantId: TENANT, name, position, role: CREW_ROLE, code, status: "approved", developments: [],
+      id: randomUUID(), tenantId: TENANT, name, position: kind.position, role: kind.role, code, status: "approved", developments: [],
       createdBy: owner.name, issuerName: ISSUER, hourlyRateCents: rate, createdAt: now, updatedAt: now,
     } as typeof staffAccounts.$inferInsert).returning();
     return row!;
   });
-  await platformAudit(owner.name, "crew.added", TENANT, null, { id: created.id, name, position, hourlyRate: rate / 100 });
+  await platformAudit(owner.name, "crew.added", TENANT, null, { id: created.id, name, position: kind.position, role: kind.role, hourlyRate: rate / 100 });
   res.status(201).json(view(created));
 });
 

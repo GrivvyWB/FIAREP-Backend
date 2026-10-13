@@ -4,7 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { ChevronDown } from "lucide-react";
 
-type Member = { id: string; name: string; position: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null };
+const CREW_KINDS = [
+  { kind: "technician", label: "Technician", blurb: "FIAREP CPM / Inspector — all field tools" },
+  { kind: "community-coordinator", label: "Community Coordinator", blurb: "Resident visits and building checks, on FIAREP's own team" },
+] as const;
+const kindOfRole = (role: string) => (role === "community_coordinator" ? "Community Coordinator" : "Technician");
+
+type Member = { id: string; name: string; position: string; role: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null };
 type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number };
 type Punch = { id: string; direction: string; at: string; source: string; address?: string | null; latitude?: number | null; longitude?: number | null };
 type Job = { id: string; tenantId: string; company: string; complaintNo: string; development: string; address: string; unit: string; category: string; description: string; status: string; createdAt: string | null; sentAt: string | null; clientStatus: string; fiarep: { recordId: string; status: string; assignedStaffId: string; assignedTo: string; startedAt: string | null; completedAt: string | null; completionNote: string; photos: string[]; approvedAt: string | null; approvedBy: string; sentBackNote: string; sentBackAt: string | null; clientApprovedAt: string | null; clientApprovedBy: string; updates: { status?: string; note?: string; by?: string; at?: string }[] } | null };
@@ -43,7 +49,7 @@ export default function OwnerCrew() {
   const [crew, setCrew] = useState<Crew | null>(null);
   const [range, setRange] = useState(thisWeek);
   const [error, setError] = useState("");
-  const [add, setAdd] = useState({ name: "", position: "CPM", hourlyRate: "" });
+  const [add, setAdd] = useState({ name: "", kind: "technician", hourlyRate: "" });
   const [adding, setAdding] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string>("");
@@ -68,7 +74,7 @@ export default function OwnerCrew() {
   const addMember = async () => {
     if (!add.name.trim() || !Number(add.hourlyRate)) return;
     setAdding(true); setError("");
-    try { await req("/api/v1/platform/crew", "POST", { name: add.name.trim(), position: add.position.trim() || "Technician", hourlyRate: Number(add.hourlyRate) }); setAdd({ name: "", position: "CPM", hourlyRate: "" }); await load(); }
+    try { await req("/api/v1/platform/crew", "POST", { name: add.name.trim(), kind: add.kind, hourlyRate: Number(add.hourlyRate) }); setAdd({ name: "", kind: "technician", hourlyRate: "" }); await load(); }
     catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not add."); }
     finally { setAdding(false); }
   };
@@ -196,7 +202,11 @@ export default function OwnerCrew() {
       <Fold id="add" title="Add an employee" summary="Name, rate, and the code is issued on the spot.">
         <div className="flex flex-wrap items-end gap-2 px-4 pt-3">
           <label className="text-xs text-slate-600">Name<input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} placeholder="First and last name" className="mt-1 block h-9 w-56 rounded-md border border-slate-300 px-2 text-sm text-slate-900" /></label>
-          <div className="text-xs text-slate-600">Role<div className="mt-1 flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-2 text-sm text-slate-700">Technician — FIAREP CPM / Inspector (all tools)</div></div>
+          <label className="text-xs text-slate-600">Role
+            <select value={add.kind} onChange={(e) => setAdd({ ...add, kind: e.target.value })} className="mt-1 block h-9 w-72 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900">
+              {CREW_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.label} — {k.blurb}</option>)}
+            </select>
+          </label>
           <label className="text-xs text-slate-600">Hourly rate<span className="mt-1 flex h-9 items-center rounded-md border border-slate-300 px-2 text-sm text-slate-900"><span className="text-slate-400">$</span><input type="number" min={1} step={0.5} value={add.hourlyRate} onChange={(e) => setAdd({ ...add, hourlyRate: e.target.value })} placeholder="38" className="w-20 bg-transparent px-1 text-right focus:outline-none" /><span className="text-slate-400">/hr</span></span></label>
           <Button size="sm" className="h-9 bg-amber-500 text-slate-950 hover:bg-amber-400" disabled={adding || !add.name.trim() || !Number(add.hourlyRate)} onClick={() => void addMember()}>{adding ? "Adding…" : "Add and issue a code"}</Button>
         </div>
@@ -218,7 +228,7 @@ export default function OwnerCrew() {
             {active.map((m) => (
               <>
                 <tr key={m.id} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-2"><span className="font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">Technician · {m.position} / Inspector</span></td>
+                  <td className="px-4 py-2"><span className="font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">{kindOfRole(m.role)}{m.position && m.position !== kindOfRole(m.role) ? ` · ${m.position}` : ""}</span></td>
                   <td className="px-2 py-2"><span className="font-mono text-base font-semibold tracking-wider text-slate-900">{m.code}</span><button type="button" className="ml-2 text-xs text-slate-500 underline" onClick={() => void copy(m)}>{copied === m.id ? "copied" : "copy"}</button><button type="button" className="ml-2 text-xs text-slate-500 underline" onClick={() => void resetCode(m)}>new code</button></td>
                   <td className="px-2 py-2 text-right"><span className="inline-flex items-center gap-1"><span className="text-slate-400">$</span><input type="number" min={1} step={0.5} value={edits[m.id] ?? m.hourlyRate ?? ""} onChange={(e) => setEdits((x) => ({ ...x, [m.id]: e.target.value }))} onBlur={() => void saveRate(m)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} className={`h-8 w-20 rounded-md border px-2 text-right text-sm text-slate-900 ${edits[m.id] != null ? "border-amber-400 bg-amber-50" : "border-slate-300"}`} aria-label={`Hourly rate for ${m.name}`} /><span className="text-xs text-slate-400">/hr</span></span></td>
                   <td className="px-2 py-2">{m.clockedInSince ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Clocked in · {when(m.clockedInSince)}</span> : <span className="text-xs text-slate-500">Out{m.lastPunch ? ` · last ${when(m.lastPunch.at)}` : ""}</span>}</td>
