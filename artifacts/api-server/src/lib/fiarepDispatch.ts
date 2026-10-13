@@ -10,6 +10,7 @@ import type { Actor } from "./auth";
 import { audit } from "./audit";
 import { deliverPushNotification } from "./push";
 import { routedComplaintRecipientIds } from "./complaintRouting";
+import { notifyResident } from "./residentNotify";
 
 export const FIAREP_TENANT = "default";
 type Row = typeof entityRecords.$inferSelect;
@@ -57,6 +58,16 @@ export async function sendComplaintToFiarep(actor: Actor, source: Row): Promise<
   const routed = await routedComplaintRecipientIds(FIAREP_TENANT, companyName, copyState).catch(() => [] as string[]);
   const ref = [String(source.state["complaintNo"] || ""), String(source.state["address"] || ""), source.state["unit"] ? `Apt ${String(source.state["unit"])}` : ""].filter(Boolean).join(" · ");
   await alertStaff(FIAREP_TENANT, [...office.map((o) => o.id), ...routed], `Complaint from ${companyName}`, ref, copyId);
+
+  // The client and their resident both hear that FIAREP has it. This writes the
+  // record straight to the database rather than going through the action
+  // handler, so neither the client's own alerting nor the resident notice
+  // fires by itself - and on the automatic route nobody at the client pressed
+  // anything, so without this they would never know it had been handed over.
+  const clientDev = String(source.development || source.state["development"] || "");
+  const clientRouted = await routedComplaintRecipientIds(actor.tenantId, clientDev, record.state).catch(() => [] as string[]);
+  await alertStaff(actor.tenantId, [...clientRouted, actor.id], "FIAREP is handling this complaint", ref, source.id);
+  void notifyResident(record, "Passed to FIAREP", "Your complaint was passed to FIAREP, who carry out the work for your building. You will see each step as it happens.");
   return { ok: true, record };
 }
 
