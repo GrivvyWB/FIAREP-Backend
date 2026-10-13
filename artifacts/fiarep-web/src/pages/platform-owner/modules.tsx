@@ -273,6 +273,15 @@ export default function OwnerModules() {
   const organization = selectableOrganizations.find((item) => item.id === organizationId) ?? null;
   // FIAREP calls the outreach unit FIAREP Services; other companies keep the
   // trade name, Community Coordinator.
+  // A few modules are described by what they mean to a CLIENT. On FIAREP's own
+  // page they are described by what they mean to FIAREP.
+  const FIAREP_COPY: Record<string, string> = {
+    "company-forms": "FIAREP's own compliance forms — DOB certificate of correction, vermin, lead, tenant notices. This is the organization they belong to",
+    "violation-alerts": "New 311 complaints, HPD / DOB violations and OATH summonses on the buildings FIAREP watches, checked every 30 minutes, as a page in the menu. Assign the buildings on Platform -> Alerts",
+    "violation-alerts-command": "The same alerts as a red strip at the top of the Complaint Command, with its own on / off switch. Separate from the menu page",
+  };
+  // FIAREP's own organization is not a client: it gets its own page.
+  const isFiarep = (organization?.id || "") === "default";
   const unitName = communityUnit(organization?.id);
   const unitSupervisor = communitySupervisorTitle(organization?.id);
   const enabledModules = MODULES.filter((module) => modules[module.id]);
@@ -449,8 +458,13 @@ export default function OwnerModules() {
     <div className="space-y-6">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-[#185FA5]">Company configuration</p>
-          <h1 className="text-3xl font-bold tracking-tight text-slate-950">Module Management</h1>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.16em] text-[#185FA5]">{isFiarep ? "FIAREP" : "Company configuration"}</p>
+          <h1 className="text-3xl font-bold tracking-tight text-slate-950">{isFiarep ? "FIAREP setup" : "Module Management"}</h1>
+          {isFiarep && (
+            <p className="mt-1 max-w-xl text-sm text-slate-500">
+              FIAREP's own organization. Everything is here — switch off what the crew does not need. The services a client pays for are set on that client's own page, not here.
+            </p>
+          )}
         </div>
         <div className="flex w-full flex-col gap-3 sm:flex-row lg:w-auto">
           <Select value={organizationId} onValueChange={selectOrganization}>
@@ -494,7 +508,7 @@ export default function OwnerModules() {
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
                 <h2 className="font-semibold text-slate-950">App tabs</h2>
-                <p className="text-xs text-slate-500">Switch off any tab on the app's home screens for this client. Off here means nobody in the organization sees it in the app.</p>
+                <p className="text-xs text-slate-500">{isFiarep ? "Switch off any tab on the app's home screens for FIAREP's own crew. Off here means nobody at FIAREP sees it in the app." : "Switch off any tab on the app's home screens for this client. Off here means nobody in the organization sees it in the app."}</p>
               </div>
               <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{Object.values(appTabs).filter((v) => v === false).length} off</span>
             </div>
@@ -597,7 +611,7 @@ export default function OwnerModules() {
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="border-b border-slate-200 px-5 py-4">
                 <h2 className="font-semibold text-slate-950">Project tool access by trade</h2>
-                <p className="text-xs text-slate-500">Assign each construction-PM tool to the trades that should have it. A worker sees a tool only when it is both enabled for the client (above) and checked here for their trade.</p>
+                <p className="text-xs text-slate-500">{`Assign each construction-PM tool to the trades that should have it. A worker sees a tool only when it is both enabled for ${isFiarep ? "FIAREP" : "the client"} (above) and checked here for their trade.`}</p>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
@@ -630,11 +644,21 @@ export default function OwnerModules() {
           )}
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.75fr)]">
             <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-                <h2 className="font-semibold text-slate-950">Enabled Modules</h2>
-                <span className="rounded bg-blue-50 px-2 py-1 text-[10px] font-bold tracking-wider text-[#185FA5]">
-                  {enabledModules.length} ENABLED
-                </span>
+              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+                <div>
+                  <h2 className="font-semibold text-slate-950">Enabled Modules</h2>
+                  {isFiarep && (
+                    <p className="text-xs text-slate-500">FIAREP runs the whole job — manager, general contractor, inspector, CPM. Everything is here; switch off what the crew does not need.</p>
+                  )}
+                </div>
+                <div className="flex shrink-0 items-center gap-2">
+                  {isFiarep && (
+                    <Button variant="outline" size="sm" onClick={() => { setModules(Object.fromEntries(MODULES.map((m) => [m.id, true]))); setDirty(true); }}>All on</Button>
+                  )}
+                  <span className="rounded bg-blue-50 px-2 py-1 text-[10px] font-bold tracking-wider text-[#185FA5]">
+                    {enabledModules.length} ENABLED
+                  </span>
+                </div>
               </div>
               <div>
                 {MODULES.map((module) => {
@@ -654,7 +678,7 @@ export default function OwnerModules() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-sm font-semibold text-slate-900">{module.name}</p>
-                        <p className="truncate text-xs text-slate-500">{module.description}</p>
+                        <p className="truncate text-xs text-slate-500">{(isFiarep && FIAREP_COPY[module.id]) || module.description}</p>
                       </div>
                       <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
                         enabled ? "text-emerald-700" : "text-slate-400"
@@ -715,6 +739,7 @@ export default function OwnerModules() {
                     aria-label={`${communityReviewEnabled ? "Disable" : "Enable"} ${unitSupervisor} review`}
                   />
                 </div>
+                {!isFiarep && (
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
                   fiarepRoutingEnabled ? "" : "opacity-60"
                 }`}>
@@ -738,6 +763,8 @@ export default function OwnerModules() {
                     aria-label={`${fiarepRoutingEnabled ? "Disable" : "Enable"} resident complaints coming to FIAREP`}
                   />
                 </div>
+                )}
+                {!isFiarep && (
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
                   fiarepMessagingEnabled ? "" : "opacity-60"
                 }`}>
@@ -761,6 +788,7 @@ export default function OwnerModules() {
                     aria-label={`${fiarepMessagingEnabled ? "Disable" : "Enable"} messaging FIAREP Services`}
                   />
                 </div>
+                )}
                 <div
                   role="button"
                   tabIndex={0}
@@ -835,7 +863,7 @@ export default function OwnerModules() {
               <div>
                 <h2 className="font-semibold text-slate-950">Project Tools</h2>
                 <p className="mt-0.5 text-xs text-slate-500">
-                  Turn on exactly the construction-PM tools this client gets. Each is independent and off until you enable it. Requires the Projects module.
+                  {`Turn on exactly the construction-PM tools ${isFiarep ? "FIAREP's own crew gets" : "this client gets"}. Each is independent and off until you enable it. Requires the Projects module.`}
                 </p>
               </div>
               <span className="rounded bg-blue-50 px-2 py-1 text-[10px] font-bold tracking-wider text-[#185FA5]">
