@@ -7,7 +7,7 @@
 // the server prices it, so a price is never typed on site.
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
-import { and, asc, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, count, eq, inArray, ne, sql } from "drizzle-orm";
 import { db, entityRecords, notifications, organizationProperties, organizations, staffAccounts } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { audit } from "../lib/audit";
@@ -184,6 +184,39 @@ router.post("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res)
     }
   }
   res.status(201).json(quote);
+});
+
+/** Throw a quote away. The project it opened goes too when quick quote made
+ *  it and nothing else was ever put in it, so a test leaves nothing behind.
+ *  An alert already sent to a client cannot be unsent; the quote they were
+ *  told about simply stops existing. */
+router.delete("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT) { res.status(403).json({ error: "FIAREP only." }); return; }
+  const [project] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, String(req.params["id"] || "")), eq(entityRecords.entity, "projects"),
+    eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!project) { res.status(404).json({ error: "No such project." }); return; }
+  const quote = project.state["quickQuote"] as QuickQuote | undefined;
+  if (!quote) { res.status(404).json({ error: "There is no quote on this one." }); return; }
+
+  const now = new Date();
+  const rest: Record<string, unknown> = { ...project.state };
+  delete rest["quickQuote"];
+
+  // Was this project only ever a holder for the quote? Then it goes as well.
+  const [{ value: children }] = await db.select({ value: count() }).from(entityRecords).where(and(
+    eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+    sql`${entityRecords.state}->>'projectId' = ${project.id}`,
+  ));
+  const bare = project.state["createdByQuickQuote"] === true && Number(children) === 0;
+
+  await db.update(entityRecords)
+    .set({ state: rest, deleted: bare, version: (project.version ?? 1) + 1, updatedAt: now })
+    .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
+  await audit(actor, "projects.quick-quote-deleted", `$${(quote.total ?? 0).toFixed(2)}${bare ? " · project removed too" : ""}`, project.id);
+  res.json({ ok: true, projectRemoved: bare });
 });
 
 export default router;

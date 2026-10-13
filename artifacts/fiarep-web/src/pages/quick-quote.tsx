@@ -5,7 +5,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Camera, Check, Loader2, Send, Trash2, Zap } from "lucide-react";
+import { quoteReceiptHtml, type Receipt } from "@/lib/quote-receipt";
+import { Camera, Check, Loader2, Printer, Send, Trash2, Zap } from "lucide-react";
 
 // Quick quote. FIAREP walks a building, sees a fixture that has to go, prices
 // it off the repair book and either sends it to the owner or approves it on
@@ -18,10 +19,11 @@ type CatalogLine = { key: string; label: string; price: number; unit: string; gr
 type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string; photoName: string };
 type Client = { id: string; name: string };
 type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
-type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note?: string };
+type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note: string };
 type QuickQuote = {
   lines: QuickLine[]; total: number; status: "approved" | "pending" | "declined";
-  approvedBySelf: boolean; clientCompany: string; building: string; sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
+  approvedBySelf: boolean; clientCompany: string; building: string; note: string;
+  sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
 };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -106,6 +108,29 @@ export default function QuickQuote() {
       toast({ variant: "destructive", title: "Photo did not upload", description: "The line still goes; add the photo again later." });
     }
   }
+
+  /** The owner's piece of paper, whoever approved it. */
+  function receipt() {
+    if (!sent) return;
+    const w = window.open("", "_blank", "width=900,height=1000");
+    if (!w) { toast({ variant: "destructive", title: "Allow pop-ups to print the receipt" }); return; }
+    w.document.write(quoteReceiptHtml({ ...sent, building: sent.building || place } as Receipt));
+    w.document.close(); w.focus();
+    setTimeout(() => w.print(), 300);
+  }
+
+  const remove = useCallback(async () => {
+    if (!projectId) return;
+    if (!window.confirm("Delete this quote? It goes for good, and if this building was only opened for the quote it goes too.")) return;
+    setBusy("self");
+    try {
+      await customFetch(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, { method: "DELETE", responseType: "json" } as never);
+      setLastQuote(null); setDrafts([]); setProjectId(""); setBuildingId(""); setTypedAddress("");
+      toast({ title: "Deleted" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not delete it", description: err?.data?.error || "Try again." });
+    } finally { setBusy(""); }
+  }, [projectId, toast]);
 
   const send = useCallback(async (mode: "self" | "client") => {
     if (!projectId) { toast({ variant: "destructive", title: "Pick the building first" }); return; }
@@ -192,6 +217,14 @@ export default function QuickQuote() {
           </p>
           {sent.lines.map((l) => <p key={l.id} className="text-xs text-muted-foreground">{l.qty} × {l.label} — {money(l.amount)}</p>)}
           <p className="text-xs text-muted-foreground">{sent.sentBy}{sent.sentAt ? ` · ${when(sent.sentAt)}` : ""}{sent.decidedBy ? ` · ${sent.decidedBy}` : ""}</p>
+          <div className="flex flex-wrap gap-2 pt-1">
+            <Button variant="outline" size="sm" onClick={receipt}>
+              <Printer className="mr-1 h-4 w-4" />Receipt
+            </Button>
+            <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={busy !== ""} onClick={() => void remove()}>
+              <Trash2 className="mr-1 h-4 w-4" />Delete this quote
+            </Button>
+          </div>
         </div>
       )}
 

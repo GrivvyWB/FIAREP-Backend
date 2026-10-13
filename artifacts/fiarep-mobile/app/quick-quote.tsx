@@ -2,7 +2,10 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, RefreshControl } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { takePhoto, pickPhoto, photoUri, uploadPhoto } from '../lib/photos';
+import { quoteReceiptHtml, type Receipt } from '../lib/quote-receipt';
 import { PickOne } from '../lib/community-ui';
 import { ui, ACCENT, money } from '../lib/ui';
 
@@ -20,8 +23,11 @@ type CatalogLine = { key: string; label: string; price: number; unit: string; gr
 type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
 type Client = { id: string; name: string };
 type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string };
-type QuickLine = { id: string; label: string; qty: number; amount: number };
-type QuickQuote = { lines: QuickLine[]; total: number; status: string; approvedBySelf: boolean; clientCompany: string };
+type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note: string };
+type QuickQuote = {
+  lines: QuickLine[]; total: number; status: string; approvedBySelf: boolean; clientCompany: string;
+  building: string; note: string; sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
+};
 
 const get = <T,>(url: string) => customFetch<T>(url, { responseType: 'json' } as never);
 const post = <T,>(url: string, body: unknown) => customFetch<T>(url, {
@@ -87,6 +93,41 @@ export default function QuickQuoteScreen() {
       const stored = from === 'camera' ? await takePhoto() : await pickPhoto();
       if (stored) set(i, { photo: stored });
     } catch (e: any) { Alert.alert('Photo', String(e?.message || e)); }
+  }
+
+  async function remove() {
+    if (!projectId) return;
+    Alert.alert('Delete this quote?', 'It goes for good. If this building was only opened for the quote, it goes too.', [
+      { text: 'Keep it', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void (async () => {
+        setBusy('delete');
+        try {
+          await customFetch(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, { method: 'DELETE', responseType: 'json' } as never);
+          setSent(null); setDrafts([]); setProjectId(''); setPlace(''); setTyped('');
+          await load();
+        } catch (e: any) {
+          Alert.alert('Could not delete it', e?.data?.error || e?.message || 'Try again.');
+        } finally { setBusy(''); }
+      })() },
+    ]);
+  }
+
+  // The owner gets a piece of paper either way — including when FIAREP
+  // approved it themselves, so there is a record to hand over.
+  async function receipt() {
+    if (!sent) return;
+    setBusy('receipt');
+    try {
+      const html = quoteReceiptHtml({ ...sent, building: sent.building || place } as Receipt);
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Quote receipt', UTI: 'com.adobe.pdf' });
+      } else {
+        await Print.printAsync({ html });
+      }
+    } catch (e: any) {
+      Alert.alert('Could not make the receipt', String(e?.message || e));
+    } finally { setBusy(''); }
   }
 
   async function send(mode: 'self' | 'client') {
@@ -157,6 +198,12 @@ export default function QuickQuoteScreen() {
             Sent — {money(sent.total)} · {sent.status === 'approved' ? (sent.approvedBySelf ? 'approved by FIAREP' : 'approved') : `waiting for ${sent.clientCompany || 'the owner'}`}
           </Text>
           {sent.lines.map((l) => <Text key={l.id} style={ui.listSub}>{l.qty} × {l.label} — {money(l.amount)}</Text>)}
+          <Pressable onPress={() => void receipt()} disabled={busy !== ''} style={[ui.btnOutline, { marginTop: 8 }]}>
+            <Text style={ui.btnOutlineText}>{busy === 'receipt' ? 'Making it…' : 'Receipt'}</Text>
+          </Pressable>
+          <Pressable onPress={() => void remove()} disabled={busy !== ''} style={{ paddingVertical: 8 }}>
+            <Text style={{ color: '#991b1b', fontWeight: '700' }}>{busy === 'delete' ? 'Deleting…' : 'Delete this quote'}</Text>
+          </Pressable>
         </View>
       )}
 
