@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
-import { db, entityRecords, notifications, organizations, staffAccounts, timeClockLocations, timeClockPunches } from "@workspace/db";
+import { db, entityRecords, notifications, organizationProperties, organizations, staffAccounts, timeClockLocations, timeClockPunches } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
 import { allocateStaffCode } from "../lib/staffCodes";
@@ -175,13 +175,57 @@ router.post("/v1/platform/crew/:id/reset-code", async (req, res) => {
   res.json(view(after));
 });
 
+/**
+ * Whose building was the crew standing at? The phone reports a street address;
+ * the registry holds one row per address across every client company, so an
+ * address resolves to one company. Matching is on the address only - the
+ * registry keeps no coordinates - so a stop on a building nobody registered
+ * comes back with no company, which is the honest answer.
+ */
+const canon = (v: unknown): string =>
+  String(v ?? "").toLowerCase().split(",")[0]!.replace(/[.#]/g, "").replace(/\s+/g, " ").trim();
+
+async function buildingIndex(): Promise<Map<string, { company: string; development: string; address: string }>> {
+  const [props, orgs] = await Promise.all([
+    db.select({
+      norm: organizationProperties.normalizedAddress,
+      display: organizationProperties.displayAddress,
+      org: organizationProperties.organizationId,
+      development: organizationProperties.development,
+    }).from(organizationProperties),
+    db.select({ id: organizations.id, name: organizations.name }).from(organizations),
+  ]);
+  const named = new Map(orgs.map((o) => [o.id, o.name]));
+  const index = new Map<string, { company: string; development: string; address: string }>();
+  for (const row of props) {
+    const key = canon(row.norm);
+    if (key) index.set(key, { company: named.get(row.org) || row.org, development: row.development || "", address: row.display });
+  }
+  return index;
+}
+
+/** The registry address can be shorter than what the phone reported
+ *  ("1555 Grand Concourse" against "1555 Grand Concourse, Bronx"). */
+function buildingAt(index: Map<string, { company: string; development: string; address: string }>, address: unknown) {
+  const key = canon(address);
+  if (!key) return null;
+  const exact = index.get(key);
+  if (exact) return exact;
+  for (const [candidate, value] of index) if (key.startsWith(candidate)) return value;
+  return null;
+}
+
 /** One person's punches for the period — the timesheet behind the hours. */
 router.get("/v1/platform/crew/:id/punches", async (req, res) => {
   const { from, to } = parseRange(req.query as Record<string, unknown>);
   const rows = await db.select().from(timeClockPunches)
     .where(and(eq(timeClockPunches.tenantId, TENANT), eq(timeClockPunches.staffId, req.params.id!), gte(timeClockPunches.punchAt, from), lte(timeClockPunches.punchAt, to)))
     .orderBy(desc(timeClockPunches.punchAt));
-  res.json(rows.map((r) => ({ id: r.id, direction: r.direction, at: r.punchAt.toISOString(), source: r.source, address: r.address, latitude: r.latitude, longitude: r.longitude })));
+  const index = await buildingIndex();
+  res.json(rows.map((r) => {
+    const at = buildingAt(index, r.address);
+    return { id: r.id, direction: r.direction, at: r.punchAt.toISOString(), source: r.source, address: r.address, latitude: r.latitude, longitude: r.longitude, company: at?.company ?? "", development: at?.development ?? "" };
+  }));
 });
 
 /** Where one person was while on the clock — the stops the phone reported (moved, then stayed 30+ minutes). */
@@ -190,7 +234,11 @@ router.get("/v1/platform/crew/:id/locations", async (req, res) => {
   const rows = await db.select().from(timeClockLocations)
     .where(and(eq(timeClockLocations.tenantId, TENANT), eq(timeClockLocations.staffId, req.params.id!), gte(timeClockLocations.arrivedAt, from), lte(timeClockLocations.arrivedAt, to)))
     .orderBy(desc(timeClockLocations.arrivedAt));
-  res.json(rows.map((r) => ({ id: r.id, address: r.address, latitude: r.latitude, longitude: r.longitude, arrivedAt: r.arrivedAt.toISOString(), leftAt: r.leftAt ? r.leftAt.toISOString() : null, minutes: Math.round(((r.leftAt ?? new Date()).getTime() - r.arrivedAt.getTime()) / 6e4) })));
+  const index = await buildingIndex();
+  res.json(rows.map((r) => {
+    const at = buildingAt(index, r.address);
+    return { id: r.id, address: r.address, latitude: r.latitude, longitude: r.longitude, arrivedAt: r.arrivedAt.toISOString(), leftAt: r.leftAt ? r.leftAt.toISOString() : null, minutes: Math.round(((r.leftAt ?? new Date()).getTime() - r.arrivedAt.getTime()) / 6e4), company: at?.company ?? "", development: at?.development ?? "" };
+  }));
 });
 
 // ---- Jobs: every client company's open complaint, and sending one to a technician ----
