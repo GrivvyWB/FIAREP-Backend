@@ -7,6 +7,7 @@ import {
   FileBarChart,
   Gavel,
   HardHat,
+  MessageSquare,
   Home,
   Package,
   Save,
@@ -38,7 +39,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
-import { LOOKUP_TRADES } from "@/lib/access-policy";
+import { LOOKUP_TRADES, communitySupervisorTitle, communityUnit } from "@/lib/access-policy";
 import type { StaffModule } from "@/lib/access-policy";
 
 type ModuleDefinition = {
@@ -260,6 +261,7 @@ export default function OwnerModules() {
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
   const [communityReviewEnabled, setCommunityReviewEnabled] = useState(true);
   const [fiarepRoutingEnabled, setFiarepRoutingEnabled] = useState(false);
+  const [fiarepMessagingEnabled, setFiarepMessagingEnabled] = useState(false);
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -269,6 +271,10 @@ export default function OwnerModules() {
     [organizations],
   );
   const organization = selectableOrganizations.find((item) => item.id === organizationId) ?? null;
+  // FIAREP calls the outreach unit FIAREP Services; other companies keep the
+  // trade name, Community Coordinator.
+  const unitName = communityUnit(organization?.id);
+  const unitSupervisor = communitySupervisorTitle(organization?.id);
   const enabledModules = MODULES.filter((module) => modules[module.id]);
 
   useEffect(() => {
@@ -301,6 +307,11 @@ export default function OwnerModules() {
     setFiarepRoutingEnabled(
       Boolean(configured && typeof configured === "object" &&
         (configured as Record<string, unknown>).fiarepComplaintRouting === true),
+    );
+    // Same: only a client whose plan includes it writes to FIAREP Services.
+    setFiarepMessagingEnabled(
+      Boolean(configured && typeof configured === "object" &&
+        (configured as Record<string, unknown>).fiarepMessaging === true),
     );
     setDirty(false);
   }, [organization]);
@@ -354,6 +365,11 @@ export default function OwnerModules() {
     setDirty(true);
   };
 
+  const toggleFiarepMessaging = (enabled: boolean) => {
+    setFiarepMessagingEnabled(enabled);
+    setDirty(true);
+  };
+
   const toggleDeletion = async (enabled: boolean) => {
     if (!organization || deletionSaving) return;
     const previous = deletionEnabled;
@@ -400,7 +416,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled },
             deletionEnabled,
           },
         },
@@ -570,7 +586,7 @@ export default function OwnerModules() {
                   return (
                     <label key={t.key} className="flex items-center gap-2 text-sm text-slate-800">
                       <input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={lookupAccess[key] !== false} onChange={(e) => toggleLookup(key, e.target.checked)} />
-                      {t.label}
+                      {t.key === "community" ? unitName : t.label}
                     </label>
                   );
                 })}
@@ -685,8 +701,8 @@ export default function OwnerModules() {
                     <UsersRound className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900">Community Coordinator Supervisor review</p>
-                    <p className="truncate text-xs text-slate-500">A coordinator's visit waits for the Community Coordinator Supervisor to read and approve it. Off: the visit stands on its own and nothing waits to be approved</p>
+                    <p className="text-sm font-semibold text-slate-900">{unitSupervisor} review</p>
+                    <p className="truncate text-xs text-slate-500">{`A visit waits for the ${unitSupervisor} to read and approve it. Off: the visit stands on its own and nothing waits to be approved`}</p>
                   </div>
                   <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
                     communityReviewEnabled ? "text-emerald-700" : "text-slate-400"
@@ -696,7 +712,7 @@ export default function OwnerModules() {
                   <Switch
                     checked={communityReviewEnabled}
                     onCheckedChange={toggleCommunityReview}
-                    aria-label={`${communityReviewEnabled ? "Disable" : "Enable"} Community Coordinator Supervisor review`}
+                    aria-label={`${communityReviewEnabled ? "Disable" : "Enable"} ${unitSupervisor} review`}
                   />
                 </div>
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
@@ -720,6 +736,29 @@ export default function OwnerModules() {
                     checked={fiarepRoutingEnabled}
                     onCheckedChange={toggleFiarepRouting}
                     aria-label={`${fiarepRoutingEnabled ? "Disable" : "Enable"} resident complaints coming to FIAREP`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  fiarepMessagingEnabled ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    fiarepMessagingEnabled ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <MessageSquare className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Message FIAREP Services</p>
+                    <p className="truncate text-xs text-slate-500">The client's management can write to FIAREP Services from inside their own account and get an answer back. OFF for every client until their plan includes it; on the regular plan a company deals with its own residents and its own team</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    fiarepMessagingEnabled ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {fiarepMessagingEnabled ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={fiarepMessagingEnabled}
+                    onCheckedChange={toggleFiarepMessaging}
+                    aria-label={`${fiarepMessagingEnabled ? "Disable" : "Enable"} messaging FIAREP Services`}
                   />
                 </div>
                 <div

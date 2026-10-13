@@ -1,7 +1,7 @@
 import { isCpmSupervisorTitle } from "@/lib/titles";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { hasModuleAccess, isCommunityCoordinator, isProcurementDesk } from "@/lib/access-policy";
+import { communityUnitPlural, hasModuleAccess, isCommunityCoordinator, isProcurementDesk } from "@/lib/access-policy";
 import { 
   LayoutDashboard, 
   ClipboardCheck, 
@@ -26,7 +26,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info, Ruler, Trash2, Languages, Building2, Lock, Clock } from "lucide-react";
+  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -38,7 +38,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" as const },
     { name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const },
-    { name: "Community Coordinators", href: "/community", icon: UsersRound, module: "community" as const },
+    { name: communityUnitPlural(staff?.tenantId), href: "/community", icon: UsersRound, module: "community" as const },
     { name: "Translator", href: "/translator", icon: Languages, module: "translator" as const },
     { name: "HPD / DOB Lookup", href: "/property-lookup", icon: Building2, module: "property-lookup" as const },
     { name: "Violation Alerts", href: "/violation-alerts", icon: BellRing, module: "violation-alerts" as const },
@@ -76,6 +76,11 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
       { name: "Manage All Requests", href: "/notifications", icon: BellRing, module: "notifications" as const },
     ] : []),
     ...(isCommunityCoordinator(staff) ? [{ name: "Alerts", href: "/notifications", icon: BellRing, module: "notifications" as const }] : []),
+    // Messages: FIAREP Services on FIAREP's own side, and a client company
+    // whose plan includes writing to them.
+    ...((isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") ||
+      ((staff?.role === "administrator" || staff?.role === "management") && organizationModules["fiarepMessaging"] === true)
+      ? [{ name: "Messages", href: "/messages", icon: MessageSquare, module: "notifications" as const }] : []),
     { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },
     { name: "Settings", href: "/settings", icon: Settings, module: "settings" as const },
     { name: "What is FIAREP?", href: "/platform", icon: Info, module: "dashboard" as const },

@@ -54,6 +54,8 @@ import CompanyForms from '@/pages/company-forms';
 import Access from '@/pages/access';
 import JoinFiarep from '@/pages/join';
 import PublicResident from '@/pages/public-resident';
+import PublicMessage from '@/pages/public-message';
+import Messages from '@/pages/messages';
 import PublicVendor from '@/pages/public-vendor';
 import OwnerLogin from '@/pages/platform-owner/login';
 import OwnerDashboard from '@/pages/platform-owner/index';
@@ -150,6 +152,7 @@ function AppRouter() {
       <RoutedErrorBoundary>
         <Switch>
           <Route path="/resident" component={PublicResident} />
+          <Route path="/message" component={PublicMessage} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
@@ -161,6 +164,7 @@ function AppRouter() {
       <RoutedErrorBoundary>
         <Switch>
           <Route path="/vendor" component={PublicVendor} />
+          <Route path="/message" component={PublicMessage} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
@@ -181,6 +185,7 @@ function AppRouter() {
           <Route path="/procurement/login" component={ProcurementLogin} />
           <Route path="/resident" component={PublicResident} />
           <Route path="/vendor" component={PublicVendor} />
+          <Route path="/message" component={PublicMessage} />
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
@@ -261,6 +266,7 @@ function AppRouter() {
           <Route path="/shared-data" component={SharedDataRoute} />
           <Route path="/complaint-dashboard" component={ComplaintDashboardRoute} />
           <Route path="/community" component={CommunityRoute} />
+          <Route path="/messages" component={Messages} />
           <Route path="/translator" component={TranslatorRoute} />
           <Route path="/property-lookup" component={PropertyLookupRoute} />
           <Route path="/violation-alerts" component={ViolationAlertsRoute} />
