@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { customFetch, useListEntityRecords, getListEntityRecordsQueryKey } from "@workspace/api-client-react";
+import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,6 +17,7 @@ import { Camera, Check, Loader2, Send, Trash2, Zap } from "lucide-react";
 type CatalogLine = { key: string; label: string; price: number; unit: string; group: string };
 type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string; photoName: string };
 type Client = { id: string; name: string };
+type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
 type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note?: string };
 type QuickQuote = {
   lines: QuickLine[]; total: number; status: "approved" | "pending" | "declined";
@@ -32,12 +33,16 @@ export default function QuickQuote() {
   const { toast } = useToast();
   const mine = (staff?.tenantId || "default") === "default";
 
-  const projectsQuery = useListEntityRecords("projects", undefined, {
-    query: { queryKey: getListEntityRecordsQueryKey("projects"), refetchOnMount: "always" },
-  } as never) as { data?: Array<{ id: string; state: Record<string, any> }>; isLoading: boolean };
-  const projects = projectsQuery.data ?? [];
-
+  // The walk is priced against a BUILDING, not a project: a project made on a
+  // phone may not have reached the server, and waiting for one is why this
+  // page was empty. The server hangs the quote on a project behind the scenes
+  // so the photographs have somewhere to live.
+  const [buildings, setBuildings] = useState<Building[]>([]);
+  const [buildingId, setBuildingId] = useState("");
+  const [typedAddress, setTypedAddress] = useState("");
   const [projectId, setProjectId] = useState("");
+  const [starting, setStarting] = useState(false);
+  const [lastQuote, setLastQuote] = useState<QuickQuote | null>(null);
   const [catalog, setCatalog] = useState<CatalogLine[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState("");
@@ -52,11 +57,16 @@ export default function QuickQuote() {
       try { const p = await get<{ catalog: CatalogLine[] }>("/api/v1/pricing"); setCatalog(p.catalog || []); }
       catch { toast({ variant: "destructive", title: "Could not load the price book" }); }
       try { setClients(await get<Client[]>("/api/v1/fiarep/clients")); } catch { /* sending needs it; approving does not */ }
+      try { setBuildings(await get<Building[]>("/api/v1/fiarep/buildings")); } catch { /* an address can still be typed */ }
     })();
   }, [mine, toast]);
 
-  const project = projects.find((p) => p.id === projectId) || null;
-  const sent: QuickQuote | null = project?.state?.quickQuote ?? null;
+  const building = buildings.find((b) => b.id === buildingId) || null;
+  const place = building
+    ? [building.address, [building.city, building.state].filter(Boolean).join(", ")].filter(Boolean).join(" · ")
+    : typedAddress.trim();
+  const ready = Boolean(projectId);
+  const sent = lastQuote;
   const total = drafts.reduce((n, d) => n + d.price * (Number(d.qty) || 0), 0);
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -64,14 +74,30 @@ export default function QuickQuote() {
     return catalog.filter((c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 10);
   }, [catalog, search]);
 
+  /** Open a project for this building so photographs have somewhere to live. */
+  const startOn = useCallback(async (address: string, company: string, org: string) => {
+    if (!address.trim()) return;
+    setStarting(true);
+    try {
+      const r = await customFetch<{ projectId: string }>("/api/v1/fiarep/quick-quote/start", {
+        method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
+        body: JSON.stringify({ address: address.trim(), company }),
+      } as never);
+      setProjectId(r.projectId);
+      if (org) setClientId(org);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not open the building", description: err?.data?.error || "Try again." });
+    } finally { setStarting(false); }
+  }, [toast]);
+
   const set = (i: number, patch: Partial<Draft>) => setDrafts((d) => d.map((x, n) => (n === i ? { ...x, ...patch } : x)));
 
   async function attach(i: number, file: File | undefined) {
-    if (!file || !project) return;
+    if (!file || !projectId) return;
     try {
       const uploaded = await customFetch<{ uploadUrl: string; file: { objectPath: string } }>("/api/v1/files/upload-url", {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
-        body: JSON.stringify({ kind: "room-photo", name: file.name || "fixture.jpg", size: file.size, contentType: file.type || "image/jpeg", entity: "projects", recordId: project.id }),
+        body: JSON.stringify({ kind: "room-photo", name: file.name || "fixture.jpg", size: file.size, contentType: file.type || "image/jpeg", entity: "projects", recordId: projectId }),
       } as never);
       const put = await fetch(uploaded.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
       if (!put.ok) throw new Error("upload failed");
@@ -82,7 +108,7 @@ export default function QuickQuote() {
   }
 
   const send = useCallback(async (mode: "self" | "client") => {
-    if (!project) { toast({ variant: "destructive", title: "Pick the project first" }); return; }
+    if (!projectId) { toast({ variant: "destructive", title: "Pick the building first" }); return; }
     if (drafts.length === 0) { toast({ variant: "destructive", title: "Add at least one item" }); return; }
     for (const d of drafts) {
       const n = Number(d.qty);
@@ -91,26 +117,21 @@ export default function QuickQuote() {
     if (mode === "client" && !clientId) { toast({ variant: "destructive", title: "Pick the company that approves it" }); return; }
     setBusy(mode);
     try {
-      await customFetch(`/api/v1/fiarep/projects/${encodeURIComponent(project.id)}/quick-quote`, {
+      const saved = await customFetch<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
         body: JSON.stringify({
           mode, clientTenantId: mode === "client" ? clientId : "", note: note.trim(),
-          building: String(project.state?.name || ""),
+          building: place,
           lines: drafts.map((d) => ({ key: d.key, qty: Number(d.qty), note: d.note.trim(), photo: d.photo })),
         }),
       } as never);
       setDrafts([]); setNote("");
-      await projectsQuery_refetch();
+      setLastQuote(saved);
       toast({ title: mode === "self" ? "Approved — go ahead" : "Sent to the client", description: mode === "self" ? "Recorded against the project in your name." : "Their management have been told." });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Not sent", description: err?.data?.error || "Try again." });
     } finally { setBusy(""); }
-  }, [project, drafts, clientId, note, toast]);
-
-  // The list query owns the record; ask it again so the sent quote shows.
-  async function projectsQuery_refetch() {
-    try { await (projectsQuery as any).refetch?.(); } catch { /* the toast already said it went */ }
-  }
+  }, [projectId, place, drafts, clientId, note, toast]);
 
   if (!mine) {
     return <div className="mx-auto max-w-lg p-10 text-center text-sm text-muted-foreground">Quick quotes are FIAREP's own.</div>;
@@ -126,24 +147,45 @@ export default function QuickQuote() {
       </div>
 
       <div className="space-y-2 rounded-lg border bg-card p-4">
-        <label className="text-xs font-medium text-muted-foreground" htmlFor="qq-project">Project</label>
+        <label className="text-xs font-medium text-muted-foreground" htmlFor="qq-building">Building</label>
         <select
-          id="qq-project"
+          id="qq-building"
           className="h-11 w-full rounded-md border border-input bg-background px-2 text-sm"
-          value={projectId}
-          onChange={(e) => { setProjectId(e.target.value); setDrafts([]); }}
+          value={buildingId}
+          onChange={(e) => {
+            const id = e.target.value;
+            setBuildingId(id); setDrafts([]); setProjectId(""); setLastQuote(null);
+            const b = buildings.find((x) => x.id === id);
+            if (b) void startOn([b.address, [b.city, b.state].filter(Boolean).join(", ")].filter(Boolean).join(" · "), b.company || "", b.organizationId);
+          }}
         >
-          <option value="">{projectsQuery.isLoading ? "Loading…" : `Pick the project… (${projects.length})`}</option>
-          {projects.map((p) => (
-            <option key={p.id} value={p.id}>{String(p.state?.name || p.id.slice(0, 8))}{p.state?.client ? ` · ${p.state.client}` : ""}</option>
+          <option value="">{buildings.length ? `Pick a registered building… (${buildings.length})` : "No registered buildings"}</option>
+          {buildings.map((b) => (
+            <option key={b.id} value={b.id}>
+              {b.address}{b.city || b.state ? ` · ${[b.city, b.state].filter(Boolean).join(", ")}` : ""}{b.company ? ` · ${b.company}` : ""}
+            </option>
           ))}
         </select>
+        <p className="text-xs text-muted-foreground">Not registered? Type the address instead.</p>
+        <div className="flex gap-2">
+          <Input
+            className="h-11"
+            value={typedAddress}
+            onChange={(e) => { setTypedAddress(e.target.value); setBuildingId(""); setProjectId(""); }}
+            placeholder="1555 Grand Concourse"
+            aria-label="Building address"
+          />
+          <Button variant="outline" className="h-11 shrink-0" disabled={starting || typedAddress.trim().length < 3} onClick={() => void startOn(typedAddress, "", "")}>
+            {starting ? "Opening…" : "Use this"}
+          </Button>
+        </div>
+        {ready && <p className="text-xs text-emerald-700">Pricing {place}.</p>}
       </div>
 
       {sent && (
         <div className="space-y-1 rounded-lg border bg-card p-4">
           <p className="text-sm font-semibold">
-            Last quote on this project — {money(sent.total)} ·{" "}
+            Sent — {money(sent.total)} ·{" "}
             <span className={sent.status === "approved" ? "text-emerald-700" : sent.status === "declined" ? "text-rose-700" : "text-amber-700"}>
               {sent.status === "approved" ? (sent.approvedBySelf ? "approved by FIAREP" : "approved") : sent.status === "declined" ? "declined" : `waiting for ${sent.clientCompany || "the client"}`}
             </span>
@@ -153,7 +195,7 @@ export default function QuickQuote() {
         </div>
       )}
 
-      {project && (
+      {ready && (
         <>
           <div className="space-y-2 rounded-lg border bg-card p-4">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="qq-search">Add what it needs</label>
@@ -222,7 +264,7 @@ export default function QuickQuote() {
           )}
         </>
       )}
-      {projectsQuery.isLoading && <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />}
+      {starting && <Loader2 className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />}
     </div>
   );
 }

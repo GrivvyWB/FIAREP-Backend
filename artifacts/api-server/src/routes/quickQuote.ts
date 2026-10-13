@@ -8,7 +8,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, asc, eq, inArray, ne } from "drizzle-orm";
-import { db, entityRecords, notifications, organizations, staffAccounts } from "@workspace/db";
+import { db, entityRecords, notifications, organizationProperties, organizations, staffAccounts } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { audit } from "../lib/audit";
 import { deliverPushNotification } from "../lib/push";
@@ -54,6 +54,53 @@ router.get("/v1/fiarep/clients", requireAuth, async (_req, res) => {
     .from(organizations).where(ne(organizations.id, FIAREP_TENANT)).orderBy(asc(organizations.name));
   res.setHeader("Cache-Control", "no-store");
   res.json(rows);
+});
+
+/** Every building registered to a client, so a walk can be priced against one
+ *  without anything having to sync up from a phone first. */
+router.get("/v1/fiarep/buildings", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT) { res.status(403).json({ error: "FIAREP only." }); return; }
+  const rows = await db.select({
+    id: organizationProperties.id,
+    address: organizationProperties.displayAddress,
+    city: organizationProperties.city,
+    state: organizationProperties.state,
+    organizationId: organizationProperties.organizationId,
+    company: organizations.name,
+  }).from(organizationProperties)
+    .leftJoin(organizations, eq(organizations.id, organizationProperties.organizationId))
+    .orderBy(asc(organizationProperties.displayAddress))
+    .limit(2000);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(rows.filter((r) => r.organizationId !== FIAREP_TENANT));
+});
+
+/** The walk needs somewhere to hang: the project for this address, or a new
+ *  one. Projects made on a phone may not have reached the server yet, so this
+ *  never waits for one. */
+router.post("/v1/fiarep/quick-quote/start", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT) { res.status(403).json({ error: "FIAREP only." }); return; }
+  const address = text((req.body ?? {})["address"], 200);
+  const company = text((req.body ?? {})["company"], 200);
+  if (address.length < 3) { res.status(400).json({ error: "Which building?" }); return; }
+
+  const existing = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.entity, "projects"), eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+  )).limit(500);
+  const match = existing.find((r) => text(r.state["name"], 200).toLowerCase() === address.toLowerCase());
+  if (match) { res.json({ projectId: match.id, created: false }); return; }
+
+  const id = randomUUID();
+  const now = new Date();
+  await db.insert(entityRecords).values({
+    id, tenantId: FIAREP_TENANT, entity: "projects", version: 1,
+    state: { name: address, client: company, createdAt: now.toISOString(), createdByQuickQuote: true },
+    createdBy: actor.id, createdAt: now, updatedAt: now,
+  });
+  await audit(actor, "projects.created-for-quick-quote", address, id);
+  res.status(201).json({ projectId: id, created: true });
 });
 
 /** Price what the walk found, and either send it or approve it. */
