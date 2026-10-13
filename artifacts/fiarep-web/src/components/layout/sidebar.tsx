@@ -37,6 +37,9 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
 
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" as const },
+    // Quick quote: FIAREP's own crew pricing a walk where they stand.
+    ...((staff?.tenantId || "default") === "default"
+      ? [{ name: "Quick Quote", href: "/quick-quote", icon: Zap, module: "dashboard" as const }] : []),
     { name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const },
     { name: communityUnitPlural(staff?.tenantId), href: "/community", icon: UsersRound, module: "community" as const },
     { name: "Translator", href: "/translator", icon: Languages, module: "translator" as const },
@@ -76,9 +79,6 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
       { name: "Manage All Requests", href: "/notifications", icon: BellRing, module: "notifications" as const },
     ] : []),
     ...(isCommunityCoordinator(staff) ? [{ name: "Alerts", href: "/notifications", icon: BellRing, module: "notifications" as const }] : []),
-    // Quick quote: FIAREP's own crew pricing a walk on the spot.
-    ...((staff?.tenantId || "default") === "default"
-      ? [{ name: "Quick Quote", href: "/quick-quote", icon: Zap, module: "projects" as const }] : []),
     // Messages: FIAREP Services on FIAREP's own side, and a client company
     // whose plan includes writing to them.
     ...((isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") ||
