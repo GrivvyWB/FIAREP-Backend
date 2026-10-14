@@ -7,6 +7,8 @@
 //
 // [key, label, price, unit, source] and, for the square-foot work, a group.
 
+import { repairMaterials } from "./repairMaterials";
+
 export const REPAIR_ITEMS = [
   ["exterm", "Extermination treatment", 300, "per apartment, per visit", "Angi NYC: $257 avg ($163–$353); roaches $140–$900, rodents $270–$900"],
   ["guards", "Window guard, installed", 175, "per window", "HPD order avg per guard"],
@@ -124,7 +126,12 @@ export function repairCatalog(overrides: Record<string, number> = {}): CatalogLi
   ];
 }
 
-/** The price for one item, the owner's number first. 0 when the key is unknown. */
+/** The price for one item, the owner's number first. null when the key is unknown.
+ *  Falls through to the materials book, so a quote line can be a part bought
+ *  off the shelf as well as a priced repair. */
 export function catalogPrice(key: string, overrides: Record<string, number> = {}): CatalogLine | null {
-  return repairCatalog(overrides).find((l) => l.key === key) ?? null;
+  const line = repairCatalog(overrides).find((l) => l.key === key);
+  if (line) return line;
+  const mat = repairMaterials(overrides).find((m) => m.key === key);
+  return mat ? { key: mat.key, label: mat.label, price: mat.price, unit: mat.unit, group: mat.group } : null;
 }

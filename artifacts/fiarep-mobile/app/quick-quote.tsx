@@ -19,7 +19,7 @@ import { ui, ACCENT, money } from '../lib/ui';
 // The phone sends the item and how many. The server prices it, so a price can
 // never be typed in on site.
 
-type CatalogLine = { key: string; label: string; price: number; unit: string; group: string };
+type CatalogLine = { key: string; label: string; price: number; unit: string; group: string; source?: string };
 type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
 type Client = { id: string; name: string };
 type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string };
@@ -56,7 +56,11 @@ export default function QuickQuoteScreen() {
     setLoading(true); setError('');
     try {
       const p = await get<{ catalog: CatalogLine[] }>('/api/v1/pricing');
-      setCatalog(Array.isArray(p?.catalog) ? p.catalog : []);
+      // The materials book comes separately: it is FIAREP's cost basis and is
+      // never on the public pricing payload.
+      let mats: CatalogLine[] = [];
+      try { mats = (await get<{ materials: CatalogLine[] }>('/api/v1/fiarep/materials')).materials || []; } catch { /* repairs still price */ }
+      setCatalog([...(Array.isArray(p?.catalog) ? p.catalog : []), ...mats]);
     } catch { setError('Could not load the price book. Connect to the internet and pull down.'); }
     try { setBuildings(await get<Building[]>('/api/v1/fiarep/buildings')); } catch { /* an address can still be typed */ }
     try { setClients(await get<Client[]>('/api/v1/fiarep/clients')); } catch { /* sending needs it; approving does not */ }
@@ -69,7 +73,7 @@ export default function QuickQuoteScreen() {
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [] as CatalogLine[];
-    return catalog.filter((c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 10);
+    return catalog.filter((c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 12);
   }, [catalog, search]);
 
   /** Open a project for this building so the photographs have a home. */
@@ -210,7 +214,7 @@ export default function QuickQuoteScreen() {
       {!!projectId && (
         <>
           <Text style={[ui.label, { marginTop: 14 }]}>Add what it needs</Text>
-          <TextInput style={ui.input} value={search} onChangeText={setSearch} placeholder="Window, sink, leak, fixture…" autoCorrect={false} />
+          <TextInput style={ui.input} value={search} onChangeText={setSearch} placeholder="Flapper, GFCI, hinge, filter, wax ring…" autoCorrect={false} />
           {matches.map((m) => (
             <Pressable
               key={m.key}
@@ -219,6 +223,7 @@ export default function QuickQuoteScreen() {
             >
               <Text style={{ fontWeight: '600' }}>{m.label}</Text>
               <Text style={ui.listSub}>{money(m.price)} {m.unit} · {m.group}</Text>
+              {!!m.source && <Text style={[ui.listSub, { fontSize: 11, opacity: 0.7 }]}>{m.source}</Text>}
             </Pressable>
           ))}
 

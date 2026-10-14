@@ -15,7 +15,7 @@ import { Camera, Check, Loader2, Printer, Send, Trash2, Zap } from "lucide-react
 // The page sends the item and how many; the server prices it from the book and
 // the owner's overrides, so a price is never typed in here.
 
-type CatalogLine = { key: string; label: string; price: number; unit: string; group: string };
+type CatalogLine = { key: string; label: string; price: number; unit: string; group: string; source?: string };
 type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string; photoName: string };
 type Client = { id: string; name: string };
 type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
@@ -56,7 +56,14 @@ export default function QuickQuote() {
   useEffect(() => {
     if (!mine) return;
     void (async () => {
-      try { const p = await get<{ catalog: CatalogLine[] }>("/api/v1/pricing"); setCatalog(p.catalog || []); }
+      try {
+        const p = await get<{ catalog: CatalogLine[] }>("/api/v1/pricing");
+        // The materials book rides separately: it is FIAREP's cost basis and is
+        // never on the public pricing payload.
+        let mats: CatalogLine[] = [];
+        try { mats = (await get<{ materials: CatalogLine[] }>("/api/v1/fiarep/materials")).materials || []; } catch { /* repairs still price */ }
+        setCatalog([...(p.catalog || []), ...mats]);
+      }
       catch { toast({ variant: "destructive", title: "Could not load the price book" }); }
       try { setClients(await get<Client[]>("/api/v1/fiarep/clients")); } catch { /* sending needs it; approving does not */ }
       try { setBuildings(await get<Building[]>("/api/v1/fiarep/buildings")); } catch { /* an address can still be typed */ }
@@ -73,7 +80,7 @@ export default function QuickQuote() {
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [] as CatalogLine[];
-    return catalog.filter((c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 10);
+    return catalog.filter((c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 12);
   }, [catalog, search]);
 
   /** Open a project for this building so photographs have somewhere to live. */
@@ -232,7 +239,7 @@ export default function QuickQuote() {
         <>
           <div className="space-y-2 rounded-lg border bg-card p-4">
             <label className="text-xs font-medium text-muted-foreground" htmlFor="qq-search">Add what it needs</label>
-            <Input id="qq-search" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Window, sink, leak, fixture…" autoCorrect="off" />
+            <Input id="qq-search" className="h-11" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Flapper, GFCI, hinge, filter, wax ring…" autoCorrect="off" />
             {matches.map((m) => (
               <button
                 key={m.key}
@@ -241,7 +248,7 @@ export default function QuickQuote() {
                 onClick={() => { setDrafts((d) => [...d, { key: m.key, label: m.label, unit: m.unit, price: m.price, qty: "1", note: "", photo: "", photoName: "" }]); setSearch(""); }}
               >
                 <span className="block text-sm font-medium">{m.label}</span>
-                <span className="block text-xs text-muted-foreground">{money(m.price)} {m.unit} · {m.group}</span>
+                <span className="block text-xs text-muted-foreground">{money(m.price)} {m.unit} · {m.group}{m.source ? ` · ${m.source}` : ""}</span>
               </button>
             ))}
           </div>

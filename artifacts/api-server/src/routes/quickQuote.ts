@@ -13,6 +13,7 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 import { audit } from "../lib/audit";
 import { deliverPushNotification } from "../lib/push";
 import { catalogPrice } from "../lib/repairCatalog";
+import { repairMaterials } from "../lib/repairMaterials";
 import { FIAREP_TENANT } from "../lib/fiarepDispatch";
 
 const router: IRouter = Router();
@@ -45,6 +46,15 @@ async function overrides(): Promise<Record<string, number>> {
   const items = (row?.state as Record<string, unknown> | undefined)?.["items"];
   return items && typeof items === "object" && !Array.isArray(items) ? (items as Record<string, number>) : {};
 }
+
+/** The materials book: what a part costs to buy. FIAREP only — this is the
+ *  cost basis, so it never rides along on the public pricing payload. */
+router.get("/v1/fiarep/materials", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT) { res.status(403).json({ error: "FIAREP only." }); return; }
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ materials: repairMaterials(await overrides()) });
+});
 
 /** The companies a quote can be sent to: every client on the platform. */
 router.get("/v1/fiarep/clients", requireAuth, async (_req, res) => {
