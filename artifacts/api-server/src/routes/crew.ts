@@ -135,6 +135,17 @@ router.put("/v1/platform/crew/clock", async (req, res) => {
 
 /** Who uses messaging: a switch per FIAREP Services member, kept on FIAREP's
  *  own organization as modules["msg.<staffId>"]. On unless switched off. */
+// Take an administrator account off FIAREP: revoked (can't sign in, signed out now), not deleted.
+router.put("/v1/platform/crew/administrators/:id/remove", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const id = String(req.params["id"] || "");
+  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, id), eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.role, "administrator"))).limit(1);
+  if (!before) { res.status(404).json({ error: "No such administrator." }); return; }
+  await db.update(staffAccounts).set({ status: "revoked", sessionVersion: sql`${staffAccounts.sessionVersion} + 1` as never, updatedAt: new Date() }).where(eq(staffAccounts.id, id));
+  await platformAudit(owner.name, "administrator.removed", TENANT, { id, name: before.name, status: before.status }, { id, name: before.name, status: "revoked" });
+  res.json({ id, status: "revoked" });
+});
+
 router.put("/v1/platform/crew/:id/messaging", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
   const id = String(req.params["id"] || "");

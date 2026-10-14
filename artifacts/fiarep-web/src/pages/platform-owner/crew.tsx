@@ -80,6 +80,7 @@ export default function OwnerCrew() {
   };
   const saveRate = async (m: Member) => { const v = Number(edits[m.id]); if (!v || v === m.hourlyRate) { setEdits((x) => { const n = { ...x }; delete n[m.id]; return n; }); return; } try { await req(`/api/v1/platform/crew/${m.id}`, "PATCH", { hourlyRate: v }); setEdits((x) => { const n = { ...x }; delete n[m.id]; return n; }); await load(); } catch (e) { setError((e as Error)?.message || "Could not save."); } };
   const setStatus = async (m: Member, status: "approved" | "revoked") => { try { await req(`/api/v1/platform/crew/${m.id}`, "PATCH", { status }); await load(); } catch (e) { setError((e as Error)?.message || "Could not update."); } };
+  const removeAdmin = async (a: { id: string; name: string }) => { if (!window.confirm(`Remove ${a.name} from FIAREP? They will be signed out and can't sign in.`)) return; try { await req(`/api/v1/platform/crew/administrators/${a.id}/remove`, "PUT", {}); await load(); } catch (e) { setError((e as Error)?.message || "Could not remove."); } };
   // Who uses messaging: the administrator's switch per FIAREP Services member.
   const setMessaging = async (m: { id: string }, enabled: boolean) => { try { await req(`/api/v1/platform/crew/${m.id}/messaging`, "PUT", { enabled }); await load(); } catch (e) { setError((e as Error)?.message || "Could not change messaging."); } };
   const resetCode = async (m: Member) => { try { await req(`/api/v1/platform/crew/${m.id}/reset-code`, "POST"); await load(); } catch (e) { setError((e as Error)?.message || "Could not reset the code."); } };
@@ -275,6 +276,7 @@ export default function OwnerCrew() {
                   </button>
                   Messaging {a.messaging ? "on" : "off"}
                 </label>
+                <button type="button" className="text-xs text-slate-500 underline hover:text-red-700" onClick={() => void removeAdmin(a)}>remove</button>
               </li>
             ))}
           </ul>
