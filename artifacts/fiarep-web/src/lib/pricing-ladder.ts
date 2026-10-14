@@ -4,7 +4,9 @@
 // Anchors: software-only market $1–$5 per unit per month (AppFolio Core $1.40 /
 // Plus $3 / Max $5, Yardi Breeze $1–$3, minimums $100–$400 — costbench.com);
 // (nyc.gov/hpd, Alternative Enforcement Program).
-export type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null; note: string };
+export type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null; note: string; hoursPerUnit?: number | null; v?: number };
+// hoursPerUnit: the owner's labor pool for the band; blank = worked out from the plan rate.
+// v: 2 marks a band the owner saved whole (range, note and all) in Platform Control.
 
 // No prices ship here. The owner types every rate and minimum himself in
 // Platform Control → Pricing ladder; a blank stays blank everywhere it is read.
@@ -23,6 +25,9 @@ export const PLAN_MIN_UNITS = 2; // the FIAREP plan is sold at every size again
 export const LABOR_SHARE = 0.6;
 export const LOADED_HOURLY = 80;
 export function includedHoursPerUnit(planRate: number): number { return Math.round((planRate * 12 * LABOR_SHARE / LOADED_HOURLY) * 10) / 10; }
+/** The band's labor pool: the owner's number if typed, otherwise worked out from the plan rate; null when neither is set. */
+export function bandHours(b: Band): number | null { return b.hoursPerUnit != null ? b.hoursPerUnit : b.planRate != null ? includedHoursPerUnit(b.planRate) : null; }
+export const bandLabel = (from: number, to: number) => `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")}`;
 // Appliances, parts, materials and delivery: bought on the client's approval, reimbursed at cost plus this handling charge.
 export const MATERIALS_HANDLING = 0.1;
 export const SETUP_FEE = 1500;          // one time, waived on any annual contract of 1,000+ units

@@ -6,7 +6,7 @@
 import { useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { REPAIR_ITEMS, REPAIR_SQFT, type PriceKey } from "@/lib/repair-prices";
-import { BANDS, type Band } from "@/lib/pricing-ladder";
+import { BANDS, bandLabel, type Band } from "@/lib/pricing-ladder";
 
 export type Overrides = { items: Record<string, number>; bands: Band[] | null; updatedAt: string | null; updatedBy: string | null };
 
@@ -68,6 +68,8 @@ export function defaultPrice(key: PriceKey | string): number { return BOOK[key] 
 export function bands(o: Overrides | null = cache): Band[] {
   const saved = o?.bands;
   if (!saved || !Array.isArray(saved)) return BANDS;
+  // Saved whole by the owner (range, note, labor pool and all): his bands are the ladder.
+  if (saved.length && saved.every((x) => x && x.v === 2)) return saved.map((s) => ({ ...s, label: bandLabel(s.from, s.to), note: s.note ?? "", hoursPerUnit: s.hoursPerUnit ?? null }));
   return BANDS.map((b) => {
     const s = saved.find((x) => x && x.from === b.from && x.to === b.to);
     return s ? { ...b, platformRate: s.platformRate, platformMin: s.platformMin, planRate: s.planRate, planMin: s.planMin } : b;

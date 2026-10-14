@@ -14,7 +14,7 @@ const router: IRouter = Router();
 const ENTITY = "pricing-overrides";
 const ID = "pricing-overrides";
 
-type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null };
+type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null; note?: string; hoursPerUnit?: number | null; v?: number };
 type Overrides = { items: Record<string, number>; bands: Band[] | null; updatedAt: string | null; updatedBy: string | null };
 
 const EMPTY: Overrides = { items: {}, bands: null, updatedAt: null, updatedBy: null };
@@ -50,7 +50,9 @@ function cleanBands(v: unknown): Band[] | null {
     const pm = b["platformMin"] == null ? null : num(b["platformMin"]);
     const planRate = b["planRate"] == null ? null : num(b["planRate"]);
     const planMin = b["planMin"] == null ? null : num(b["planMin"]);
-    out.push({ label: String(b["label"] ?? `${from}–${to}`).slice(0, 40), from, to, platformRate: pr, platformMin: pm, planRate, planMin });
+    const hoursPerUnit = b["hoursPerUnit"] == null ? null : num(b["hoursPerUnit"]);
+    const note = typeof b["note"] === "string" ? (b["note"] as string).slice(0, 500) : undefined;
+    out.push({ label: String(b["label"] ?? `${from}–${to}`).slice(0, 40), from, to, platformRate: pr, platformMin: pm, planRate, planMin, hoursPerUnit, ...(note !== undefined ? { note } : {}), ...(b["v"] === 2 ? { v: 2 } : {}) });
   }
   return out;
 }
@@ -73,6 +75,8 @@ router.put("/v1/platform/pricing", requirePlatformOwner, async (req, res) => {
   const current = await load();
   const items = "items" in b ? cleanItems(b["items"]) : current.items;
   const bands = "bands" in b ? cleanBands(b["bands"]) : current.bands;
+  // A bad band is refused, never saved as "no bands" (that would wipe the owner's ladder).
+  if ("bands" in b && b["bands"] != null && bands == null) { res.status(400).json({ error: "A band is not valid — check each band's start and end." }); return; }
   const now = new Date();
   const state = { items, bands };
   const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, ID), eq(entityRecords.entity, ENTITY))).limit(1);

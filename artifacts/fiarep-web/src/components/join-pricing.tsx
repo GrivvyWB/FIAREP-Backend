@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { DofLookupPanel } from "@/components/dof-lookup";
 import { FEES, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "@/lib/fiarep-plans";
 import { usePricing } from "@/lib/pricing-overrides";
-import { includedHoursPerUnit } from "@/lib/pricing-ladder";
+import { bandHours } from "@/lib/pricing-ladder";
 
 /** "What it costs" on the Join FIAREP page: expediter fee ranges, the full
  * cost picture for a typical 20-unit NYC building, how each agency works,
@@ -114,7 +114,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
         <table className={`mt-3 w-full text-sm ${hide}`}>
           <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Example</th><th className="py-1 text-right">Included labor</th></tr></thead>
           <tbody>
-            {planBands.map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate!)}</td><td className="py-1 text-right text-slate-300">{example(b, b.planRate!, b.planMin ?? 0)}</td><td className="py-1 text-right text-slate-300 whitespace-nowrap">{includedHoursPerUnit(b.planRate!)} h / unit / yr</td></tr>)}
+            {planBands.map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate!)}</td><td className="py-1 text-right text-slate-300">{example(b, b.planRate!, b.planMin ?? 0)}</td><td className="py-1 text-right text-slate-300 whitespace-nowrap">{bandHours(b) ?? "—"} h / unit / yr</td></tr>)}
             {bands.filter((b) => b.planRate == null).map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td colSpan={3} className="py-1 text-right text-slate-300">{b.from >= 50000 ? "platform per unit · work by task order, per building" : "FIAREP plan — rate on request"}</td></tr>)}
           </tbody>
         </table>
