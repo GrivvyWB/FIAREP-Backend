@@ -30,9 +30,9 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   // The per-unit ladder as the owner has set it in Platform Control. The price book stays there — never on this page.
   const pricing = usePricing();
   const bands = pricing.bands;
-  const planBands = bands.filter((b) => b.planRate != null);
-  // Nothing is priced until the owner types it in Platform Control; a blank band reads "rate on request".
-  const firstPlan = planBands[0] ?? null;
+  // The plan starts at the smallest band (from 2 units). Nothing is priced until the owner types it in
+  // Platform Control; a blank band reads "rate on request".
+  const firstPlan = bands[0]?.planRate != null ? bands[0] : null;
   const platformBands = bands.filter((b) => b.platformRate != null);
   const firstPlatform = platformBands[0] ?? null;
   // A worked example per band — units × rate, or the band's minimum when that is higher — so nobody reads a floor as the price.
@@ -123,8 +123,9 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
         <table className={`mt-3 w-full text-sm ${hide}`}>
           <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Example</th><th className="py-1 text-right">Included labor</th></tr></thead>
           <tbody>
-            {planBands.map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate!)}</td><td className="py-1 text-right text-slate-300">{example(b, b.planRate!, b.planMin ?? 0)}</td><td className="py-1 text-right text-slate-300 whitespace-nowrap">{bandHours(b) ?? "—"} h / unit / yr</td></tr>)}
-            {bands.filter((b) => b.planRate == null).map((b) => <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td colSpan={3} className="py-1 text-right text-slate-300">{b.from >= 50000 ? "platform per unit · work by task order, per building" : "FIAREP plan — rate on request"}</td></tr>)}
+            {bands.map((b) => b.planRate != null
+              ? <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td className="py-1 text-right font-semibold text-white">{money(b.planRate)}</td><td className="py-1 text-right text-slate-300">{example(b, b.planRate, b.planMin ?? 0)}</td><td className="py-1 text-right text-slate-300 whitespace-nowrap">{bandHours(b) ?? "—"} h / unit / yr</td></tr>
+              : <tr key={b.label} className="border-t border-amber-500/20"><td className="py-1 text-slate-200">{b.label}</td><td colSpan={3} className="py-1 text-right text-slate-300">{b.from >= 50000 ? "platform per unit · work by task order, per building" : "FIAREP plan — rate on request"}</td></tr>)}
           </tbody>
         </table>
         <ul className="mt-4 grid gap-2 sm:grid-cols-2">
