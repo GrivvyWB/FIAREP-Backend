@@ -4,6 +4,7 @@ import { DofLookupPanel } from "@/components/dof-lookup";
 import { FEES, PLATFORM_INCLUDES, RETAINER_INCLUDES, expediterFee } from "@/lib/fiarep-plans";
 import { usePricing } from "@/lib/pricing-overrides";
 import { bandHours } from "@/lib/pricing-ladder";
+import { repairPerJob } from "@/lib/repair-prices";
 
 /** "What it costs" on the Join FIAREP page: expediter fee ranges, the full
  * cost picture for a typical 20-unit NYC building, how each agency works,
@@ -50,6 +51,8 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
   // Engineering and repairs are typed in — the price book lives in Platform Control, FIAREP only.
   const [customRepair, setCustomRepair] = useState(0);
   const [customEng, setCustomEng] = useState(0);
+  // The City's violation types for the looked-up building — priced from the owner's book for the ERP comparison (the total only; the book stays private).
+  const [hpdTypes, setHpdTypes] = useState<Array<{ type: string; count: number; jobs: number }>>([]);
   const est = useMemo(() => {
     // FIAREP per-job rates (no plan): DOB $1,500 for the first two, $1,000 each after; HPD cure $600 per apartment cited.
     const expediter = expediterFee(hpdApts, dob).total;
@@ -57,11 +60,17 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
     // DOF: what the building owes the City right now — from the lookup, never estimated from counts.
     const penalties = dofOwed;
     const repairs = customRepair;
-    // If HPD's Emergency Repair Program does the work instead: 2–3× contractor cost + 15% admin fee, 9% interest.
-    const erp = Math.round(repairs * 2.5 * 1.15);
     // FIAREP total: what we quote. DOF penalties are the City's, shown for reference only.
-    return { expediter, engineering, penalties, repairs, erp, total: expediter + engineering + repairs };
+    return { expediter, engineering, penalties, repairs, total: expediter + engineering + repairs };
   }, [dob, hpdApts, dofOwed, customRepair, customEng]);
+  // If HPD's Emergency Repair Program does the work instead: 2–3× contractor cost + 15% admin fee, 9% interest.
+  // ERP: the repairs priced from the owner's price book for the building's violation types (a typed repair quote wins), then HPD's ERP multiple.
+  const bookRepairs = hpdTypes.reduce((n, t) => n + (t.jobs || t.count) * repairPerJob(t.type, pricing.priceOf), 0);
+  const erpBase = customRepair > 0 ? customRepair : bookRepairs;
+  const erpCost = Math.round(erpBase * 2.5 * 1.15);
+  // HPD civil penalties if not corrected in time — HPD schedule for violations issued on or after Dec 8, 2023
+  // (nyc.gov/hpd penalties and fees). Class C at the rate for buildings with more than 5 units.
+  const pen = { min: hpdA * 50 + hpdB * 75 + hpdC * 150, max: hpdA * 150 + hpdB * 500 + hpdC * 1200, dayMin: hpdA * 25 + hpdB * 25 + hpdC * 150, dayMax: hpdA * 25 + hpdB * 125 + hpdC * 1200 };
   const max = Math.max(est.expediter, est.engineering, est.penalties, est.repairs, 1);
   const bars: Array<[string, number, string]> = [["Expediter", est.expediter, "bg-amber-400"], ["Engineering", est.engineering, "bg-sky-400"], ["DOF owed", est.penalties, "bg-slate-500"], ["Repairs", est.repairs, "bg-emerald-400"]];
 
@@ -215,7 +224,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
             <Slider label="HPD Class B violations (hazardous)" value={hpdB} min={0} max={1000} onChange={setHpdB} />
             <Slider label="HPD Class C violations (immediately hazardous)" value={hpdC} min={0} max={1000} onChange={setHpdC} />
             <Slider label="Apartments / locations with HPD violations" value={hpdApts} min={0} max={500} onChange={setHpdApts} />
-            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); }} canSubmit={unlocked} quoted={{ expediter: est.expediter, repairs: est.repairs }} />
+            <DofLookupPanel onResult={(total) => setDofOwed(total)} onCounts={(c) => { setHpdA(c.hpdA); setHpdB(c.hpdB); setHpdC(c.hpdC); setDob(c.dob); if (c.apartments) setHpdApts(c.apartments); setHpdTypes(c.hpdTypes || []); }} canSubmit={unlocked} quoted={{ expediter: est.expediter, repairs: est.repairs }} />
           </div>
           <div className="space-y-3">
             {bars.map(([label, amount, color]) => (
@@ -239,8 +248,10 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
               </div>
             ))}
             <div className="rounded-lg border border-rose-500/40 bg-rose-950/30 p-3 text-sm">
-              <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: ~{money(est.erp)}</p>
+              <p className="font-semibold text-rose-200">If HPD's Emergency Repair Program does this work instead: {erpBase > 0 ? `~${money(erpCost)}` : "look up the building above to price it"}</p>
               <p className="text-xs text-rose-200/80">HPD bills 2–3× contractor cost plus a 15% administrative fee, 9% interest, and a lien on the building. Owners of the 250 buildings in the 2026 Alternative Enforcement Program already owe $4.5M for emergency repairs.</p>
+              <p className="mt-2 font-semibold text-rose-200">HPD civil penalties if not corrected in time: {money(pen.min)} – {money(pen.max)}, plus {money(pen.dayMin)} – {money(pen.dayMax)} per day until corrected</p>
+              <p className="text-xs text-rose-200/80">{hpdA} Class A × $50 – $150 (+$25 / day) · {hpdB} Class B × $75 – $500 (+$25 – $125 / day) · {hpdC} Class C × $150 – $1,200 (+$150 – $1,200 / day, buildings over 5 units). HPD schedule for violations issued on or after December 8, 2023 — nyc.gov/hpd, Penalties and Fees.</p>
             </div>
             <p className="pt-2 text-xs text-slate-500">Expediter: $600 per apartment with HPD violations — all of them certified together — plus the DOB rate per violation (on the FIAREP plan: $400 per apartment, {money(expediterFee(hpdApts, dob).plan)}). DOF owed is what the building owes the City right now, from the Department of Finance lookup — grayed, not part of the FIAREP total; HPD Class A / B / C counts show what's open; the apartment count is what's billed. Engineering and repairs: type the quotes you have — we price the actual violations after we look at them.</p>
           </div>
