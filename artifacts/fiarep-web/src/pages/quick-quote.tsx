@@ -45,6 +45,8 @@ export default function QuickQuote() {
   const [projectId, setProjectId] = useState("");
   const [starting, setStarting] = useState(false);
   const [lastQuote, setLastQuote] = useState<QuickQuote | null>(null);
+  const [past, setPast] = useState<Array<{ projectId: string; quote: QuickQuote }>>([]);
+  const [showPast, setShowPast] = useState(false);
   const [catalog, setCatalog] = useState<CatalogLine[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
   const [clientId, setClientId] = useState("");
@@ -67,6 +69,7 @@ export default function QuickQuote() {
       catch { toast({ variant: "destructive", title: "Could not load the price book" }); }
       try { setClients(await get<Client[]>("/api/v1/fiarep/clients")); } catch { /* sending needs it; approving does not */ }
       try { setBuildings(await get<Building[]>("/api/v1/fiarep/buildings")); } catch { /* an address can still be typed */ }
+      try { setPast(await get<Array<{ projectId: string; quote: QuickQuote }>>("/api/v1/fiarep/quotes")); } catch { /* history is a convenience */ }
     })();
   }, [mine, toast]);
 
@@ -88,11 +91,13 @@ export default function QuickQuote() {
     if (!address.trim()) return;
     setStarting(true);
     try {
-      const r = await customFetch<{ projectId: string }>("/api/v1/fiarep/quick-quote/start", {
+      const r = await customFetch<{ projectId: string; quote?: QuickQuote | null }>("/api/v1/fiarep/quick-quote/start", {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
         body: JSON.stringify({ address: address.trim(), company }),
       } as never);
       setProjectId(r.projectId);
+      // A building already priced shows its quote again rather than looking blank.
+      setLastQuote(r.quote || null);
       if (org) setClientId(org);
     } catch (err: any) {
       toast({ variant: "destructive", title: "Could not open the building", description: err?.data?.error || "Try again." });
@@ -195,6 +200,40 @@ export default function QuickQuote() {
           What this building needs replacing or fixing, priced off FIAREP's book. Send it to the owner to approve, or approve it yourself when it is small enough to just do.
         </p>
       </div>
+
+      {past.length > 0 && (
+        <div className="rounded-lg border bg-card p-4">
+          <Button variant="outline" className="w-full" onClick={() => setShowPast((v) => !v)}>
+            {showPast ? "Hide past quotes" : `Past quotes (${past.length})`}
+          </Button>
+          {showPast && (
+            <div className="mt-2 divide-y rounded-md border">
+              {past.map((row) => (
+                <button
+                  key={row.projectId}
+                  type="button"
+                  className="block w-full px-3 py-2 text-left hover:bg-muted"
+                  onClick={() => {
+                    setProjectId(row.projectId);
+                    setBuildingId(""); setTypedAddress(row.quote.building || "");
+                    setLastQuote(row.quote);
+                    setDrafts([]);
+                    setShowPast(false);
+                  }}
+                >
+                  <span className="block text-sm font-medium">{row.quote.building || "Quote"}</span>
+                  <span className="block text-xs text-muted-foreground">
+                    {money(row.quote.total)} · {row.quote.status === "approved"
+                      ? (row.quote.approvedBySelf ? "approved by FIAREP" : "approved")
+                      : row.quote.status === "declined" ? "declined" : `waiting for ${row.quote.clientCompany || "the owner"}`}
+                    {row.quote.sentAt ? ` · ${new Date(row.quote.sentAt).toLocaleString()}` : ""}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="space-y-2 rounded-lg border bg-card p-4">
         <label className="text-xs font-medium text-muted-foreground" htmlFor="qq-building">Building</label>

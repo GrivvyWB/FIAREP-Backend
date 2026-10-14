@@ -89,6 +89,26 @@ router.get("/v1/fiarep/buildings", requireAuth, async (_req, res) => {
 /** The walk needs somewhere to hang: the project for this address, or a new
  *  one. Projects made on a phone may not have reached the server yet, so this
  *  never waits for one. */
+/** Every quote already written, newest first, so one can be pulled up again
+ *  and reprinted without rebuilding it. Carries the whole quote because the
+ *  receipt is printed from it on the device. */
+router.get("/v1/fiarep/quotes", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT) { res.status(403).json({ error: "FIAREP only." }); return; }
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.entity, "projects"),
+    eq(entityRecords.tenantId, FIAREP_TENANT),
+    eq(entityRecords.deleted, false),
+  )).limit(1000);
+  const out = rows
+    .map((r) => ({ projectId: r.id, quote: r.state["quickQuote"] as QuickQuote | undefined }))
+    .filter((r): r is { projectId: string; quote: QuickQuote } => !!r.quote && Array.isArray(r.quote.lines))
+    .sort((a, b) => String(b.quote.sentAt || "").localeCompare(String(a.quote.sentAt || "")))
+    .slice(0, 200);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(out);
+});
+
 router.post("/v1/fiarep/quick-quote/start", requireAuth, async (req, res) => {
   const actor = actorFrom(res);
   if (actor.tenantId !== FIAREP_TENANT) { res.status(403).json({ error: "FIAREP only." }); return; }
@@ -100,7 +120,13 @@ router.post("/v1/fiarep/quick-quote/start", requireAuth, async (req, res) => {
     eq(entityRecords.entity, "projects"), eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
   )).limit(500);
   const match = existing.find((r) => text(r.state["name"], 200).toLowerCase() === address.toLowerCase());
-  if (match) { res.json({ projectId: match.id, created: false }); return; }
+  // Hand back the quote already on this building so it reappears instead of
+  // looking like nothing was ever priced here.
+  if (match) {
+    const prior = match.state["quickQuote"] as QuickQuote | undefined;
+    res.json({ projectId: match.id, created: false, quote: prior && Array.isArray(prior.lines) ? prior : null });
+    return;
+  }
 
   const id = randomUUID();
   const now = new Date();

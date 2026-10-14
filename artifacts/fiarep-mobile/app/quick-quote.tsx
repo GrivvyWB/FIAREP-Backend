@@ -50,6 +50,8 @@ export default function QuickQuoteScreen() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState('');
   const [sent, setSent] = useState<QuickQuote | null>(null);
+  const [past, setPast] = useState<Array<{ projectId: string; quote: QuickQuote }>>([]);
+  const [showPast, setShowPast] = useState(false);
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
@@ -64,6 +66,7 @@ export default function QuickQuoteScreen() {
     } catch { setError('Could not load the price book. Connect to the internet and pull down.'); }
     try { setBuildings(await get<Building[]>('/api/v1/fiarep/buildings')); } catch { /* an address can still be typed */ }
     try { setClients(await get<Client[]>('/api/v1/fiarep/clients')); } catch { /* sending needs it; approving does not */ }
+    try { setPast(await get<Array<{ projectId: string; quote: QuickQuote }>>('/api/v1/fiarep/quotes')); } catch { /* history is a convenience */ }
     setLoading(false);
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -81,8 +84,10 @@ export default function QuickQuoteScreen() {
     if (address.trim().length < 3) return;
     setBusy('start');
     try {
-      const r = await post<{ projectId: string }>('/api/v1/fiarep/quick-quote/start', { address: address.trim(), company: forCompany });
-      setProjectId(r.projectId); setPlace(address.trim()); setCompany(forCompany); setSent(null);
+      const r = await post<{ projectId: string; quote?: QuickQuote | null }>('/api/v1/fiarep/quick-quote/start', { address: address.trim(), company: forCompany });
+      setProjectId(r.projectId); setPlace(address.trim()); setCompany(forCompany);
+      // A building already priced shows its quote again rather than looking blank.
+      setSent(r.quote || null);
       if (org) setClientId(org);
     } catch (e: any) {
       Alert.alert('Could not open the building', e?.data?.error || e?.message || 'Try again.');
@@ -152,6 +157,16 @@ export default function QuickQuoteScreen() {
     } finally { setBusy(''); }
   }
 
+  /** Pull a past quote back up: its building, its lines, its receipt. */
+  function openPast(row: { projectId: string; quote: QuickQuote }) {
+    setProjectId(row.projectId);
+    setPlace(row.quote.building || '');
+    setCompany(row.quote.clientCompany || '');
+    setSent(row.quote);
+    setDrafts([]);
+    setShowPast(false);
+  }
+
   async function send(mode: 'self' | 'client') {
     if (!projectId) { Alert.alert('Pick the building first'); return; }
     if (drafts.length === 0) { Alert.alert('Add at least one item'); return; }
@@ -192,6 +207,27 @@ export default function QuickQuoteScreen() {
         What this building needs replacing or fixing, priced off FIAREP's book. Send it to the owner, or approve it yourself when it is small enough to just do.
       </Text>
       {!!error && <Text style={{ color: '#991b1b' }}>{error}</Text>}
+
+      {past.length > 0 && (
+        <View style={{ marginTop: 12 }}>
+          <Pressable onPress={() => setShowPast((v) => !v)} style={ui.btnOutline}>
+            <Text style={ui.btnOutlineText}>{showPast ? 'Hide past quotes' : `Past quotes (${past.length})`}</Text>
+          </Pressable>
+          {showPast && past.map((row) => (
+            <Pressable key={row.projectId} onPress={() => openPast(row)} style={[ui.card, { marginTop: 8, gap: 2 }]}>
+              <Text style={{ fontWeight: '700' }}>{row.quote.building || 'Quote'}</Text>
+              <Text style={ui.listSub}>
+                {money(row.quote.total)} · {row.quote.status === 'approved'
+                  ? (row.quote.approvedBySelf ? 'approved by FIAREP' : 'approved')
+                  : row.quote.status === 'declined' ? 'declined' : `waiting for ${row.quote.clientCompany || 'the owner'}`}
+              </Text>
+              <Text style={ui.listSub}>
+                {row.quote.sentAt ? new Date(row.quote.sentAt).toLocaleString() : ''}{row.quote.sentBy ? ` · ${row.quote.sentBy}` : ''}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
 
       <Text style={[ui.label, { marginTop: 12 }]}>Building</Text>
       <PickOne
