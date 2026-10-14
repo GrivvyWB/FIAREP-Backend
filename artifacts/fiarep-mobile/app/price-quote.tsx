@@ -4,10 +4,9 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
 import { getCurrentActor, listResidentReports, type ResidentReport } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri, uploadPhoto } from '../lib/photos';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import { PickOne } from '../lib/community-ui';
-import { quoteReceiptHtml, type Receipt } from '../lib/quote-receipt';
+import { type Receipt } from '../lib/quote-receipt';
+import ReceiptSheet from '../components/ReceiptSheet';
 import { ui, ACCENT, money } from '../lib/ui';
 
 // What the job needs bought, priced on the spot and sent to the CLIENT for
@@ -34,6 +33,7 @@ export default function PriceQuote() {
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [showReceipt, setShowReceipt] = useState<Receipt | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -115,7 +115,7 @@ export default function PriceQuote() {
 
   // The same receipt the quick quote prints, so a client gets one piece of
   // paper whichever way the job was priced.
-  async function receipt(which: 'sent' | 'draft' = 'sent') {
+  function receipt(which: 'sent' | 'draft' = 'sent') {
     const q = which === 'sent'
       ? sent
       : drafts.length
@@ -131,32 +131,22 @@ export default function PriceQuote() {
           }
         : null;
     if (!q) return;
-    setBusy(true);
-    try {
-      const client = (job as unknown as { fiarepClient?: { company?: string } } | null)?.fiarepClient;
-      const html = quoteReceiptHtml({
-        lines: q.lines,
-        total: q.total,
-        status: q.status,
-        // On a price quote the client approves, never FIAREP.
-        approvedBySelf: false,
-        clientCompany: client?.company || '',
-        building: [job?.address, job?.unit ? `Apt ${job.unit}` : ''].filter(Boolean).join(' \u00b7 '),
-        note: q.note || '',
-        sentBy: q.sentBy || '',
-        sentAt: q.sentAt || '',
-        decidedBy: q.decidedBy || '',
-        decidedAt: q.decidedAt || '',
-      } as Receipt);
-      const { uri } = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Quote receipt', UTI: 'com.adobe.pdf' });
-      } else {
-        await Print.printAsync({ html });
-      }
-    } catch (e: any) {
-      Alert.alert('Could not make the receipt', String(e?.message || e));
-    } finally { setBusy(false); }
+    const client = (job as unknown as { fiarepClient?: { company?: string } } | null)?.fiarepClient;
+    // Shown on the screen first; sharing or printing is a button on the sheet.
+    setShowReceipt({
+      lines: q.lines,
+      total: q.total,
+      status: q.status,
+      // On a price quote the client approves, never FIAREP.
+      approvedBySelf: false,
+      clientCompany: client?.company || '',
+      building: [job?.address, job?.unit ? `Apt ${job.unit}` : ''].filter(Boolean).join(' \u00b7 '),
+      note: q.note || '',
+      sentBy: q.sentBy || '',
+      sentAt: q.sentAt || '',
+      decidedBy: q.decidedBy || '',
+      decidedAt: q.decidedAt || '',
+    } as Receipt);
   }
 
   return (
@@ -267,6 +257,7 @@ export default function PriceQuote() {
       <Pressable onPress={() => router.back()} style={{ padding: 14, marginTop: 8 }}>
         <Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Back</Text>
       </Pressable>
+      <ReceiptSheet receipt={showReceipt} onClose={() => setShowReceipt(null)} />
     </ScrollView>
   );
 }

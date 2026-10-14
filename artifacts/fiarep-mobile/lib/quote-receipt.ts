@@ -31,15 +31,25 @@ export function receiptNumber(r: Receipt): string {
   return `QQ-${stamp}-${String(tail).padStart(4, "0")}`;
 }
 
-export function quoteReceiptHtml(r: Receipt): string {
+/** The status line and its colour — shared by the printed sheet and the on-screen one. */
+export function receiptStatus(r: Receipt): { tone: "ok" | "no" | "wait"; text: string } {
   const tone = r.status === "approved" ? "ok" : r.status === "declined" ? "no" : "wait";
   // A sheet printed before it is sent must not claim anyone is waiting on it.
-  const draft = r.status === "draft";
-  const decided = draft ? "Not sent yet" : r.approvedBySelf
-    ? `Approved by FIAREP${r.decidedBy ? ` · ${esc(r.decidedBy)}` : ""}`
-    : r.status === "approved" ? `Approved by ${esc(r.clientCompany || "the owner")}${r.decidedBy ? ` · ${esc(r.decidedBy)}` : ""}`
-    : r.status === "declined" ? `Declined by ${esc(r.clientCompany || "the owner")}`
-    : `Waiting on ${esc(r.clientCompany || "the owner")}`;
+  const text = r.status === "draft" ? "Not sent yet" : r.approvedBySelf
+    ? `Approved by FIAREP${r.decidedBy ? ` · ${r.decidedBy}` : ""}`
+    : r.status === "approved" ? `Approved by ${r.clientCompany || "the owner"}${r.decidedBy ? ` · ${r.decidedBy}` : ""}`
+    : r.status === "declined" ? `Declined by ${r.clientCompany || "the owner"}`
+    : `Waiting on ${r.clientCompany || "the owner"}`;
+  return { tone, text };
+}
+
+export const RECEIPT_TAGLINE = "Field Infrastructure, Asset Reporting & Evaluation Performance";
+export const RECEIPT_FOOTER = "Every line is priced from FIAREP's repair price book. This covers the materials and the labour listed above; it does not include permits, engineers, lab testing or City fees, which are billed as incurred.";
+export { money as receiptMoney, day as receiptDay };
+
+export function quoteReceiptHtml(r: Receipt): string {
+  const { tone, text } = receiptStatus(r);
+  const decided = esc(text);
   const rows = r.lines.map((l) => `
       <tr>
         <td>${esc(l.label)}${l.note ? `<div class="note">${esc(l.note)}</div>` : ""}</td>
@@ -71,7 +81,7 @@ export function quoteReceiptHtml(r: Receipt): string {
   @media print{body{margin:14mm}}
 </style></head><body>
 <header>
-  <div><div class="brand">FIA<span>REP</span></div><div class="ref">Field Infrastructure, Asset Reporting &amp; Evaluation Performance</div></div>
+  <div><div class="brand">FIA<span>REP</span></div><div class="ref">${esc(RECEIPT_TAGLINE)}</div></div>
   <div class="ref"><div><b>${esc(receiptNumber(r))}</b></div><div>${esc(day(r.sentAt))}</div></div>
 </header>
 <h1>${esc(r.building || "Receipt")}</h1>
@@ -84,7 +94,7 @@ export function quoteReceiptHtml(r: Receipt): string {
 <div class="total"><span>Total</span><span>${money(r.total)}</span></div>
 ${r.note ? `<p>${esc(r.note)}</p>` : ""}
 <footer>
-  Every line is priced from FIAREP's repair price book. This covers the materials and the labour listed above; it does not include permits, engineers, lab testing or City fees, which are billed as incurred.
+  ${esc(RECEIPT_FOOTER)}
   <div style="margin-top:6px">fiarep@outlook.com · fiarep.com</div>
 </footer>
 </body></html>`;

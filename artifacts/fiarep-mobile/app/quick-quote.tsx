@@ -2,10 +2,9 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, RefreshControl } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
 import { takePhoto, pickPhoto, photoUri, uploadPhoto } from '../lib/photos';
-import { quoteReceiptHtml, type Receipt } from '../lib/quote-receipt';
+import { type Receipt } from '../lib/quote-receipt';
+import ReceiptSheet from '../components/ReceiptSheet';
 import { PickOne } from '../lib/community-ui';
 import { useRawModules, tileEnabled } from '../lib/module-access';
 import { ui, ACCENT, money } from '../lib/ui';
@@ -57,6 +56,7 @@ export default function QuickQuoteScreen() {
   const params = useLocalSearchParams<{ past?: string }>();
   const [showPast, setShowPast] = useState(params.past === '1');
   const [error, setError] = useState('');
+  const [showReceipt, setShowReceipt] = useState<Receipt | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
@@ -127,7 +127,7 @@ export default function QuickQuoteScreen() {
 
   // The owner gets a piece of paper either way — including when FIAREP
   // approved it themselves, so there is a record to hand over.
-  async function receipt(which: 'sent' | 'draft' = 'sent') {
+  function receipt(which: 'sent' | 'draft' = 'sent') {
     const q: Receipt | null = which === 'sent'
       ? (sent ? ({ ...sent, building: sent.building || place } as Receipt) : null)
       : drafts.length
@@ -147,18 +147,8 @@ export default function QuickQuoteScreen() {
           } as Receipt)
         : null;
     if (!q) return;
-    setBusy('receipt');
-    try {
-      const html = quoteReceiptHtml(q);
-      const { uri } = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Quote receipt', UTI: 'com.adobe.pdf' });
-      } else {
-        await Print.printAsync({ html });
-      }
-    } catch (e: any) {
-      Alert.alert('Could not make the receipt', String(e?.message || e));
-    } finally { setBusy(''); }
+    // Shown on the screen first; sharing or printing is a button on the sheet.
+    setShowReceipt(q);
   }
 
   /** Pull a past quote back up: its building, its lines, its receipt. */
@@ -346,6 +336,7 @@ export default function QuickQuoteScreen() {
       <Pressable onPress={() => router.back()} style={{ padding: 14, marginTop: 8 }}>
         <Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Back</Text>
       </Pressable>
+      <ReceiptSheet receipt={showReceipt} onClose={() => setShowReceipt(null)} />
     </ScrollView>
   );
 }
