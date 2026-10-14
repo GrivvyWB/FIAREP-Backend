@@ -76,7 +76,7 @@ export function tileArt(label: string): TileArt {
 export function sectionColor(heading: string): string {
   const h = heading.toLowerCase();
   if (h.includes('work') || h === 'jobs') return '#3B9BFF';
-  if (h.includes('inspection')) return '#19C37D';
+  if (h.includes('inspection')) return '#1F5C45';
   if (h.includes('scope') || h.includes('purchas')) return '#F59E0B';
   if (h.includes('request')) return '#F43F5E';
   if (h.includes('supervis')) return '#06B6D4';
