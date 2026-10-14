@@ -1456,12 +1456,28 @@ async function persistServerSession(
     'auth_developments',
     JSON.stringify(session.staff.developments),
   );
+  await rememberSignedInStaff(d, session.staff as Staff, issuedCode);
+}
+
+/** Who is signed in, written where the home screens read it: the session
+ *  identity (job title, tenant) and this person's own staff record. A full
+ *  sign-in writes them; so must a launch that finds a saved token. Deleting
+ *  the app wipes this database but iOS keeps the token in the keychain, so a
+ *  reinstall came up signed in with neither — no job title, so Measurement
+ *  and Check HPD / DOB went missing until a sign-out and sign-in. */
+async function rememberSignedInStaff(d: SQLite.SQLiteDatabase, staff: Staff, issuedCode = ''): Promise<void> {
   await d.runAsync(
     'INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value',
     'session_identity',
-    JSON.stringify({ staffId: session.staff.id, tenantId: (session.staff as any).tenantId || 'default', role: session.staff.role, position: session.staff.position, developments: [...(session.staff.developments || [])].sort() }),
+    JSON.stringify({ staffId: staff.id, tenantId: (staff as any).tenantId || 'default', role: staff.role, position: staff.position, developments: [...(staff.developments || [])].sort() }),
   );
-  const staff = session.staff as Staff;
+  await ensureStaffTable(d);
+  // Keep a code already on this phone; a restored session does not carry one.
+  let code = issuedCode;
+  if (!code) {
+    const prior = await d.getFirstAsync<{ state: string }>('SELECT state FROM staff_accounts WHERE id=?', staff.id);
+    try { code = prior?.state ? (JSON.parse(prior.state) as StaffAccount).code || '' : ''; } catch { code = ''; }
+  }
   const localAccount: StaffAccount = {
     id: staff.id,
     name: staff.name,
@@ -1469,7 +1485,7 @@ async function persistServerSession(
     lastName: staff.lastName || undefined,
     position: (staff.position || 'Other') as StaffPosition,
     developments: staff.developments,
-    code: issuedCode,
+    code,
     role: staff.role as StaffRole,
     status: staff.status as StaffStatus,
     createdAt: new Date().toISOString(),
@@ -1998,6 +2014,7 @@ export async function restoreServerSession(): Promise<Staff | null> {
     let evidence: any;
     try { evidence = priorIdentity?.value ? JSON.parse(priorIdentity.value) : undefined; } catch {}
     await recoverLegacyQueue(localDb, staff, evidence);
+    await rememberSignedInStaff(localDb, staff);
     await hydrateRemotePhotosFromDb(localDb);
     await setCurrentActor(staff.role, staff.name);
     await registerPushToken().catch(() => undefined);
