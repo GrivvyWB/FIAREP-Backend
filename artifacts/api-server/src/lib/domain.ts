@@ -73,9 +73,11 @@ export function isCommunityCoordinatorSupervisor(actor: Pick<Actor, "role" | "po
   return actor.role === "community_coordinator" && isCommunitySupervisorTitle(actor.position);
 }
 export function canReadCommunityRecord(
-  actor: Pick<Actor, "id" | "role" | "position">,
+  actor: Pick<Actor, "id" | "role" | "position"> & { tenantId?: string; name?: string },
   row: { createdBy: string | null; deleted: boolean },
 ): boolean {
+  // Inside FIAREP the administrators approve FIAREP Services visits, so they read them all.
+  if (!row.deleted && isFiarepFieldAdmin({ role: actor.role, tenantId: actor.tenantId, name: actor.name })) return true;
   if (!isCommunityCoordinator(actor) || row.deleted) return false;
   return isCommunityCoordinatorSupervisor(actor) || row.createdBy === actor.id;
 }
@@ -442,7 +444,8 @@ export function canBrowseStaffDirectory(actor: Actor): boolean {
 export function canReadEntity(actor: Actor, entity: string): boolean {
   // Community outreach records: the coordinator unit only — not even an
   // administrator. Coordinators, in turn, see nothing else.
-  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
+  // Inside FIAREP the administrators approve FIAREP Services visits.
+  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor) || isFiarepFieldAdmin(actor);
   if (isCommunityCoordinator(actor)) return false;
   if (actor.role === "administrator") return true;
   const isEmergencyMaintenance =
@@ -594,7 +597,7 @@ export function entityDevelopmentAllowed(
     return false;
   }
   // Outreach happens at any building, NYCHA or private.
-  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
+  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor) || isFiarepFieldAdmin(actor);
   return developmentAllowed(actor, development);
 }
 
@@ -934,9 +937,9 @@ export function canMutateEntity(actor: Actor, entity: string): boolean {
 
 function canMutateEntityByRole(actor: Actor, entity: string): boolean {
   // A coordinator edits their own entries (the record read rule scopes it);
-  // the Community Coordinator Supervisor only approves (the route limits
-  // their patch to the review status).
-  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor);
+  // the Community Coordinator Supervisor — inside FIAREP, the administrator —
+  // only approves (the route limits their patch to the review status).
+  if (isCommunityEntity(entity)) return isCommunityCoordinator(actor) || isFiarepFieldAdmin(actor);
   if (isCommunityCoordinator(actor)) return false;
   // The vendor email list belongs to Procurement.
   if (entity === "vendor-contacts") return actor.role === "procurement" || actor.role === "administrator";

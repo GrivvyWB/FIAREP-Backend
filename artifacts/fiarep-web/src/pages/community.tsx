@@ -16,7 +16,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { communitySupervisorTitle, communityUnit, communityUnitPlural, isCommunityCoordinatorSupervisor } from "@/lib/access-policy";
+import { communitySupervisorTitle, communityUnit, communityUnitPlural, isCommunityCoordinatorSupervisor, isFiarepAdministrator } from "@/lib/access-policy";
 import { AlertTriangle, Building2, Copy, Edit2, Mail, Phone, Plus, Printer, Search, Trash2, UserRound, Users } from "lucide-react";
 import {
   LEAD_DOCUMENTS, LEAD_TESTED, MOLD_EXTENT, VERMIN_FREQUENCY, VERMIN_TYPES,
@@ -73,7 +73,14 @@ export default function CommunityCoordinators() {
   // organization (Platform Control -> Module Management).
   const reviewOn = organizationModules["communitySupervisorReview"] !== false;
   const orgName = organizationName || "FIAREP";
-  const supervisor = isCommunityCoordinatorSupervisor(staff);
+  // Inside FIAREP the administrators (Timothy Winn, Emily Winn) approve
+  // FIAREP Services visits; the FIAREP Services Supervisor does not.
+  const isSup = isCommunityCoordinatorSupervisor(staff);
+  const admin = isFiarepAdministrator(staff);
+  const fiarep = (staff?.tenantId || "default") === "default";
+  const supervisor = isSup || admin;
+  const reviewer = fiarep ? admin : isSup;
+  const approverWord = fiarep ? "the administrator" : "supervisor";
   // FIAREP calls the unit FIAREP Services; other companies keep the trade name.
   const unitPlural = communityUnitPlural(staff?.tenantId);
   const unitName = communityUnit(staff?.tenantId);
@@ -155,7 +162,7 @@ export default function CommunityCoordinators() {
           <p className="text-sm text-muted-foreground mt-1">
             Field outreach: residents, building owners and building details. {supervisor
               ? "You see everything your coordinators log."
-              : `Only you and your ${supervisorTitle} can see what you log here.`}
+              : `Only you and ${fiarep ? "the administrator" : `your ${supervisorTitle}`} can see what you log here.`}
           </p>
         </div>
         {!supervisor && (
@@ -170,7 +177,7 @@ export default function CommunityCoordinators() {
         <Stat label="Residents on file" value={residents.length} />
         <Stat label="Buildings on file" value={buildings.length} />
         <Stat label="Critical" value={residents.filter((r) => r.state.critical === true).length} tone="warn" />
-        {reviewOn && <Stat label={supervisor ? "Waiting for your review" : "Waiting for supervisor"} value={pendingCount} tone="warn" />}
+        {reviewOn && <Stat label={reviewer ? "Waiting for your review" : `Waiting for ${approverWord}`} value={pendingCount} tone="warn" />}
         <Stat label="Apartment units covered" value={buildings.reduce((sum, b) => sum + (Number(b.state.units) || 0), 0)} />
       </div>
 
@@ -198,7 +205,7 @@ export default function CommunityCoordinators() {
         <select className={`${selectClass} w-auto`} value={review} onChange={(e) => setReview(e.target.value as typeof review)}>
           <option value="all">All</option>
           <option value="today">Done today</option>
-          <option value="pending">{supervisor ? "Needs my review" : "Waiting for supervisor"}</option>
+          <option value="pending">{reviewer ? "Needs my review" : `Waiting for ${approverWord}`}</option>
           <option value="approved">Approved</option>
         </select>
       </div>
@@ -220,7 +227,7 @@ export default function CommunityCoordinators() {
                     </div>
                     <div className="flex gap-1 shrink-0">
                       {canEdit(r) && <Button size="sm" variant="ghost" onClick={() => setEditResident(r)}><Edit2 className="h-4 w-4" /></Button>}
-                      {supervisor && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting({ entity: "community-residents", rec: r, label: `${s(st.name)} · ${s(st.address)}` })}><Trash2 className="h-4 w-4" /></Button>}
+                      {isSup && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting({ entity: "community-residents", rec: r, label: `${s(st.name)} · ${s(st.address)}` })}><Trash2 className="h-4 w-4" /></Button>}
                     </div>
                   </div>
                   <div className="mt-2 grid gap-1 text-sm">
@@ -234,7 +241,7 @@ export default function CommunityCoordinators() {
                     )}
                     {s(st.notes) && <p className="whitespace-pre-wrap">{s(st.notes)}</p>}
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
-                    {reviewOn && <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-residents", r)} busy={update.isPending} />}
+                    {reviewOn && <ReviewLine st={st} supervisor={reviewer} approver={approverWord} onApprove={() => void approve("community-residents", r)} busy={update.isPending} />}
                     <div className="mt-1 flex flex-wrap gap-1">
                       <Button size="sm" variant="outline" onClick={() => printReport(r, orgName, unitName)}><Printer className="mr-1 h-3.5 w-3.5" />Print / PDF</Button>
                       <Button size="sm" variant="outline" onClick={() => copyReport(r, orgName, unitName).then(() => toast({ title: "Report copied" })).catch(() => toast({ variant: "destructive", title: "Could not copy" }))}><Copy className="mr-1 h-3.5 w-3.5" />Copy</Button>
@@ -261,7 +268,7 @@ export default function CommunityCoordinators() {
                     </div>
                     <div className="flex gap-1 shrink-0">
                       {canEdit(b) && <Button size="sm" variant="ghost" onClick={() => setEditBuilding(b)}><Edit2 className="h-4 w-4" /></Button>}
-                      {supervisor && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting({ entity: "community-buildings", rec: b, label: s(st.address) })}><Trash2 className="h-4 w-4" /></Button>}
+                      {isSup && <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setDeleting({ entity: "community-buildings", rec: b, label: s(st.address) })}><Trash2 className="h-4 w-4" /></Button>}
                     </div>
                   </div>
                   <div className="mt-2 grid gap-1 text-sm">
@@ -272,7 +279,7 @@ export default function CommunityCoordinators() {
                     <p className="text-muted-foreground">{residentsAt(s(st.address))} resident{residentsAt(s(st.address)) === 1 ? "" : "s"} on file here</p>
                     {s(st.notes) && <p className="whitespace-pre-wrap">{s(st.notes)}</p>}
                     <p className="text-xs text-muted-foreground">Visited {fmt(s(st.visitedOn))}{supervisor && s(st.loggedByName) ? ` · Logged by ${s(st.loggedByName)}` : ""}</p>
-                    {reviewOn && <ReviewLine st={st} supervisor={supervisor} onApprove={() => void approve("community-buildings", b)} busy={update.isPending} />}
+                    {reviewOn && <ReviewLine st={st} supervisor={reviewer} approver={approverWord} onApprove={() => void approve("community-buildings", b)} busy={update.isPending} />}
                   </div>
                 </div>
               );
@@ -301,14 +308,14 @@ export default function CommunityCoordinators() {
 }
 
 /** Supervisor acknowledges a visit; the coordinator sees who received it and when. */
-function ReviewLine({ st, supervisor, onApprove, busy }: { st: Record<string, any>; supervisor: boolean; onApprove: () => void; busy: boolean }) {
+function ReviewLine({ st, supervisor, approver, onApprove, busy }: { st: Record<string, any>; supervisor: boolean; approver: string; onApprove: () => void; busy: boolean }) {
   const status = s(st.reviewStatus) || "submitted";
   if (status === "approved") {
-    return <p className="text-xs text-emerald-700 font-medium">Approved — received by {s(st.reviewedByName) || "supervisor"} {st.reviewedAt ? new Date(String(st.reviewedAt)).toLocaleString() : ""}</p>;
+    return <p className="text-xs text-emerald-700 font-medium">Approved — received by {s(st.reviewedByName) || approver} {st.reviewedAt ? new Date(String(st.reviewedAt)).toLocaleString() : ""}</p>;
   }
   return (
     <div className="flex items-center gap-2">
-      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">{status === "updated" ? "Updated — needs review again" : "Waiting for supervisor"}</span>
+      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-900">{status === "updated" ? "Updated — needs review again" : `Waiting for ${approver}`}</span>
       {supervisor && <Button size="sm" onClick={onApprove} disabled={busy}>Approve — received</Button>}
     </div>
   );

@@ -164,7 +164,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
     // FIAREP's administrators (Timothy Winn, Emily Winn) also get the technician's tools.
     "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
-    "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "Change Work Order",
+    "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order",
     "Request Time Off", "Inbox",
   ] },
   { id: "cpm", screen: "CPM / Inspector home", tabs: [
@@ -737,8 +737,10 @@ export default function OwnerModules() {
                     <UsersRound className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900">{unitSupervisor} review</p>
-                    <p className="truncate text-xs text-slate-500">{`A visit waits for the ${unitSupervisor} to read and approve it. Off: the visit stands on its own and nothing waits to be approved`}</p>
+                    <p className="text-sm font-semibold text-slate-900">{isFiarep ? "Administrator approval of FIAREP Services visits" : `${unitSupervisor} review`}</p>
+                    <p className="truncate text-xs text-slate-500">{isFiarep
+                      ? "A visit waits for Timothy Winn or Emily Winn to read and approve it. Off: the visit stands on its own and nothing waits to be approved"
+                      : `A visit waits for the ${unitSupervisor} to read and approve it. Off: the visit stands on its own and nothing waits to be approved`}</p>
                   </div>
                   <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
                     communityReviewEnabled ? "text-emerald-700" : "text-slate-400"
@@ -748,7 +750,7 @@ export default function OwnerModules() {
                   <Switch
                     checked={communityReviewEnabled}
                     onCheckedChange={toggleCommunityReview}
-                    aria-label={`${communityReviewEnabled ? "Disable" : "Enable"} ${unitSupervisor} review`}
+                    aria-label={`${communityReviewEnabled ? "Disable" : "Enable"} ${isFiarep ? "administrator approval of FIAREP Services visits" : `${unitSupervisor} review`}`}
                   />
                 </div>
                 {!isFiarep && (

@@ -52,6 +52,14 @@ const COMMUNITY_TITLE_RE = /^(community coordinator|fiarep services)( supervisor
 
 /** Field outreach staff and their supervisor. Their records stay inside the
  * unit; they see nothing else on the website. */
+/** FIAREP's administrators, by name: Timothy Winn and Emily Winn on FIAREP's
+ *  own organization. Inside FIAREP they approve FIAREP Services visits. */
+export function isFiarepAdministrator(staff: Staff | null | undefined): boolean {
+  if (!staff || String(staff.role || "") !== "administrator" || (staff.tenantId || "default") !== "default") return false;
+  const name = String(staff.name || "").trim().replace(/\s+/g, " ").toLowerCase();
+  return name === "timothy winn" || name === "emily winn";
+}
+
 export function isCommunityCoordinator(staff: Staff | null | undefined): boolean {
   if (!staff) return false;
   if (String(staff.role || "") === "community_coordinator") return true;
@@ -173,7 +181,7 @@ export function hasModuleAccess(
   if (OPT_IN_MODULES.has(module) && organizationModules?.[module] !== true) return false;
   // Community Coordinators: their own section, alerts and settings — nothing else,
   // and nobody else gets their section.
-  if (module === "community") return isCommunityCoordinator(staff);
+  if (module === "community") return isCommunityCoordinator(staff) || isFiarepAdministrator(staff);
   // Company Forms: FIAREP's locked folder. Only an organization the platform
   // owner unlocked (opt-in above), and only its staff — never residents or vendors.
   if (module === "company-forms") return !["vendor", "resident", "procurement"].includes(String(staff.role));

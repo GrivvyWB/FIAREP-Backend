@@ -81,6 +81,7 @@ export default function AdminHome() {
       ] : []),
       { label: 'Submit Scope', onPress: () => router.push('/scope-submit'), tone: 'solid' },
       { label: 'CPM Supervisor Scope Review', onPress: () => router.push('/scope-review'), tone: 'outline' },
+      { label: 'FIAREP Services', onPress: () => router.push('/community-home'), tone: 'outline' },
       { label: 'Change Work Order', onPress: () => router.push('/cpm-change-order'), tone: 'outline' },
       { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' },
       { label: 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },

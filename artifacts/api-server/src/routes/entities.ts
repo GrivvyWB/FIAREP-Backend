@@ -1059,7 +1059,8 @@ router.post("/v1/:entity", async (req, res, next) => {
     // Every visit waits for the Community Coordinator Supervisor to read it
     // and confirm they received it. The supervisor's own entries need no one.
     delete rawState["reviewedById"]; delete rawState["reviewedByName"]; delete rawState["reviewedAt"];
-    if (isCommunityCoordinatorSupervisor(actor)) {
+    // Inside FIAREP only the administrators approve, the supervisor's own visits included.
+    if (isCommunityCoordinatorSupervisor(actor) && actor.tenantId !== "default") {
       rawState["reviewStatus"] = "approved";
       rawState["reviewedById"] = actor.id; rawState["reviewedByName"] = actor.name; rawState["reviewedAt"] = new Date().toISOString();
     } else {
@@ -1344,14 +1345,22 @@ router.post("/v1/:entity", async (req, res, next) => {
     return;
   }
   await audit(actor, `${entity}.created`, `Created ${entity} record`, id);
-  if (isCommunityEntity(entity) && !isCommunityCoordinatorSupervisor(actor)) {
+  if (isCommunityEntity(entity) && (actor.tenantId === "default" || !isCommunityCoordinatorSupervisor(actor))) {
     // The coordinator's supervisor hears about every visit — nobody else.
-    const supervisors = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
-      eq(staffAccounts.tenantId, actor.tenantId),
-      eq(staffAccounts.status, "approved"),
-      eq(staffAccounts.role, "community_coordinator"),
-      sql`lower(${staffAccounts.position}) = 'community coordinator supervisor'`,
-    ));
+    // Inside FIAREP it is the administrators (Timothy Winn, Emily Winn) who
+    // approve, so they hear instead.
+    const supervisors = actor.tenantId === "default"
+      ? (await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+          eq(staffAccounts.role, "administrator"),
+        ))).filter((a) => a.id !== actor.id)
+      : await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+          eq(staffAccounts.tenantId, actor.tenantId),
+          eq(staffAccounts.status, "approved"),
+          eq(staffAccounts.role, "community_coordinator"),
+          sql`lower(${staffAccounts.position}) = 'community coordinator supervisor'`,
+        ));
     if (supervisors.length) {
       const st = persistedCreatedState;
       const what = entity === "community-residents"
@@ -1634,14 +1643,19 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
       // anyone. Nothing is stamped as approved either, because nobody approved
       // it — the clients simply stop showing a review state.
       delete patch["reviewStatus"];
-    } else if (isCommunityCoordinatorSupervisor(actor)) {
-      // The supervisor reads and approves — they never change what the
-      // coordinator wrote.
+    } else if (actor.tenantId === "default" ? isFiarepFieldAdmin(actor) : isCommunityCoordinatorSupervisor(actor)) {
+      // The supervisor — inside FIAREP, the administrator — reads and
+      // approves; they never change what the coordinator wrote.
       if (patch["reviewStatus"] !== "approved" || Object.keys(patch).some((key) => key !== "reviewStatus")) {
-        res.status(403).json({ error: "The Community Coordinator Supervisor reads and approves; only the coordinator who logged it can change it" });
+        res.status(403).json({ error: actor.tenantId === "default"
+          ? "The administrator reads and approves; only the coordinator who logged it can change it"
+          : "The Community Coordinator Supervisor reads and approves; only the coordinator who logged it can change it" });
         return;
       }
       patch["reviewedById"] = actor.id; patch["reviewedByName"] = actor.name; patch["reviewedAt"] = new Date().toISOString();
+    } else if (actor.tenantId === "default" && patch["reviewStatus"] === "approved") {
+      res.status(403).json({ error: "Inside FIAREP only the administrator approves a FIAREP Services visit." });
+      return;
     } else {
       patch["reviewStatus"] = current.state["reviewStatus"] === "approved" ? "updated" : "submitted";
     }

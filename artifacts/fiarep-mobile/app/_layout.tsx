@@ -269,6 +269,9 @@ function AdministratorStack() {
       <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
       <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
+      <Stack.Screen name="community-home" options={{ title: 'FIAREP Services' }} />
+      <Stack.Screen name="community-resident" options={{ title: 'Resident' }} />
+      <Stack.Screen name="community-building" options={{ title: 'Building & owner' }} />
     </Stack>
   );
 }

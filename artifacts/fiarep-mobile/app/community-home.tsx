@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
-import { clearAppMode, getCurrentActor, getSessionIdentity, logout } from '../lib/store';
+import { clearAppMode, getCurrentActor, getSessionIdentity, isFiarepAdministrator, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useModuleAccess, useRawModules } from '../lib/module-access';
 import { ui } from '../lib/ui';
@@ -26,6 +26,11 @@ export default function CommunityHome() {
   const [review, setReview] = useState<'all' | 'today' | 'pending' | 'approved'>('all');
   const [who, setWho] = useState('');
   const [supervisor, setSupervisor] = useState(false);
+  // Inside FIAREP the administrators (Timothy Winn, Emily Winn) approve
+  // FIAREP Services visits; the FIAREP Services Supervisor does not.
+  const [isSup, setIsSup] = useState(false);
+  const [admin, setAdmin] = useState(false);
+  const [fiarep, setFiarep] = useState(false);
   const [meId, setMeId] = useState('');
   const [name, setName] = useState('');
   // FIAREP calls the unit FIAREP Services; other companies keep the trade name.
@@ -38,11 +43,12 @@ export default function CommunityHome() {
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const [actor, identity, sup, r, b] = await Promise.all([
-        getCurrentActor(), getSessionIdentity().catch(() => null), isCommunitySupervisor(),
+      const [actor, identity, sup, adm, r, b] = await Promise.all([
+        getCurrentActor(), getSessionIdentity().catch(() => null), isCommunitySupervisor(), isFiarepAdministrator().catch(() => false),
         listCommunity('community-residents'), listCommunity('community-buildings'),
       ]);
-      setName(actor.name); setMeId(identity?.staffId || actor.id || ''); setSupervisor(sup);
+      setName(actor.name); setMeId(identity?.staffId || actor.id || ''); setSupervisor(sup || adm);
+      setIsSup(sup); setAdmin(adm); setFiarep(((identity as { tenantId?: string } | null)?.tenantId || 'default') === 'default');
       setUnit(communityTitles((identity as { tenantId?: string } | null)?.tenantId));
       setResidents(r); setBuildings(b);
     } catch (e: any) {
@@ -78,6 +84,9 @@ export default function CommunityHome() {
   const rows = (tab === 'residents' ? residents : buildings).filter(matches);
   // The coordinator who logged it edits it; the supervisor reads and approves.
   const canEdit = (r: CommunityRecord) => !supervisor && str(r.state.loggedById) === meId;
+  // Who approves: inside FIAREP the administrator, elsewhere the supervisor.
+  const reviewer = fiarep ? admin : isSup;
+  const approverWord = fiarep ? 'the administrator' : 'supervisor';
   const pendingCount = [...residents, ...buildings].filter((r) => (str(r.state.reviewStatus) || 'submitted') !== 'approved').length;
   async function approve(r: CommunityRecord) {
     const entity = tab === 'residents' ? 'community-residents' : 'community-buildings';
@@ -107,9 +116,9 @@ export default function CommunityHome() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{supervisor ? unit.supervisor : unit.unit}</Text>
+      <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{admin ? unit.plural : supervisor ? unit.supervisor : unit.unit}</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 8 }]}>
-        {name ? `${name} · ` : ''}{supervisor ? 'Everything your coordinators log.' : 'Only you and your supervisor see what you log.'}
+        {name ? `${name} · ` : ''}{supervisor ? 'Everything your coordinators log.' : `Only you and ${fiarep ? 'the administrator' : 'your supervisor'} see what you log.`}
       </Text>
 
       <View style={{ flexDirection: 'row', gap: 8 }}>
@@ -119,7 +128,7 @@ export default function CommunityHome() {
       </View>
       {reviewOn && (
         <View style={[ui.card, { padding: 12, borderColor: pendingCount > 0 ? ACCENT : '#e0e0e0' }]}>
-          <Text style={ui.label}>{supervisor ? 'Waiting for your review' : 'Waiting for supervisor'}</Text>
+          <Text style={ui.label}>{reviewer ? 'Waiting for your review' : `Waiting for ${approverWord}`}</Text>
           <Text style={{ fontSize: 22, fontWeight: '700' }}>{pendingCount}</Text>
         </View>
       )}
@@ -143,7 +152,7 @@ export default function CommunityHome() {
       <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
         {chip('All', review === 'all', () => setReview('all'))}
         {chip('Done today', review === 'today', () => setReview('today'))}
-        {chip(supervisor ? 'Needs my review' : 'Waiting', review === 'pending', () => setReview('pending'))}
+        {chip(reviewer ? 'Needs my review' : 'Waiting', review === 'pending', () => setReview('pending'))}
         {chip('Approved', review === 'approved', () => setReview('approved'))}
       </View>
       <TextInput style={ui.input} value={search} onChangeText={setSearch} placeholder="Search name, address, phone, notes…" autoCapitalize="none" />
@@ -189,11 +198,11 @@ export default function CommunityHome() {
               </>
             )}
             {!reviewOn ? null : (str(st.reviewStatus) || 'submitted') === 'approved' ? (
-              <Text style={{ fontSize: 12, color: '#047857', fontWeight: '600', marginTop: 6 }}>Approved — received by {str(st.reviewedByName) || 'supervisor'}{st.reviewedAt ? ` · ${new Date(String(st.reviewedAt)).toLocaleString()}` : ''}</Text>
+              <Text style={{ fontSize: 12, color: '#047857', fontWeight: '600', marginTop: 6 }}>Approved — received by {str(st.reviewedByName) || approverWord}{st.reviewedAt ? ` · ${new Date(String(st.reviewedAt)).toLocaleString()}` : ''}</Text>
             ) : (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 }}>
-                <Text style={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: '700', fontSize: 12, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 }}>{str(st.reviewStatus) === 'updated' ? 'UPDATED — REVIEW AGAIN' : 'WAITING FOR SUPERVISOR'}</Text>
-                {supervisor && <Pressable onPress={() => void approve(r)} style={{ backgroundColor: ACCENT, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}><Text style={{ fontWeight: '700' }}>Approve — received</Text></Pressable>}
+                <Text style={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: '700', fontSize: 12, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 }}>{str(st.reviewStatus) === 'updated' ? 'UPDATED — REVIEW AGAIN' : `WAITING FOR ${approverWord.replace('the ', '').toUpperCase()}`}</Text>
+                {reviewer && <Pressable onPress={() => void approve(r)} style={{ backgroundColor: ACCENT, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}><Text style={{ fontWeight: '700' }}>Approve — received</Text></Pressable>}
               </View>
             )}
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
@@ -204,7 +213,7 @@ export default function CommunityHome() {
                 {tab === 'residents' && <Pressable onPress={() => shareResidentPdf(r).catch((e) => Alert.alert('Could not make the PDF', e?.message || 'Try again.'))}><Text style={{ color: '#111', fontWeight: '600' }}>PDF</Text></Pressable>}
                 {tab === 'residents' && <Pressable onPress={() => shareResidentText(r).catch(() => undefined)}><Text style={{ color: '#111', fontWeight: '600' }}>Share</Text></Pressable>}
                 {canEdit(r) && <Text style={{ color: '#2563eb', fontWeight: '600' }}>Edit</Text>}
-                {supervisor && <Pressable onPress={() => confirmDelete(r)}><Text style={{ color: '#b91c1c', fontWeight: '600' }}>Delete</Text></Pressable>}
+                {isSup && <Pressable onPress={() => confirmDelete(r)}><Text style={{ color: '#b91c1c', fontWeight: '600' }}>Delete</Text></Pressable>}
               </View>
             </View>
           </Pressable>
