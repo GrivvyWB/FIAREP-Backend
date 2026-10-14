@@ -53,7 +53,7 @@ export default function AdminHome() {
   const sections: Section[] = [
     {
       heading: 'Inspections & Compliance',
-      color: '#1E7D4F',
+      color: '#1F5C45',
       tiles: [
         { label: 'HUD Inspections', onPress: () => router.push('/hud-review'), tone: 'solid' },
         { label: 'Projects / Inspections', onPress: () => router.push('/'), tone: 'outline' },

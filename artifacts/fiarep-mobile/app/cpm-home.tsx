@@ -118,7 +118,7 @@ export default function CpmHome() {
     },
     {
       heading: 'Inspections',
-      color: '#1E7D4F',
+      color: '#1F5C45',
       tiles: [
         ...(isInspectorRole ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
         ...(isCpmRole ? [{ label: 'Projects', onPress: () => router.push('/?list=1'), tone: 'outline' as Tone }] : []),

@@ -130,7 +130,7 @@ export default function ManagementHome() {
   const sections: Section[] = [
     {
       heading: 'Inspections & Compliance',
-      color: '#1E7D4F',
+      color: '#1F5C45',
       tiles: [
         ...(!restricted ? [
           { label: 'HUD Inspections', onPress: () => router.push('/hud-review'), tone: 'outline' as Tone },
