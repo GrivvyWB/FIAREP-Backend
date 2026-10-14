@@ -202,7 +202,7 @@ export default function QuickQuoteScreen() {
       </Text>
       {!!error && <Text style={{ color: '#991b1b' }}>{error}</Text>}
 
-      {past.length > 0 && tileEnabled('cpm', 'Past quotes', rawModules) && (
+      {past.length > 0 && tileEnabled('tech', 'Past quotes', rawModules) && (
         <View style={{ marginTop: 12 }}>
           <Pressable onPress={() => setShowPast((v) => !v)} style={ui.btnOutline}>
             <Text style={ui.btnOutlineText}>{showPast ? 'Hide past quotes' : `Past quotes (${past.length})`}</Text>

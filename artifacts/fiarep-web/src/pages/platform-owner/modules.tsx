@@ -163,7 +163,12 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "HUD Inspections", "Change Orders", "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score",
     "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
   ] },
-  { id: "cpm", screen: "CPM / Inspector home (FIAREP technicians sign in here)", tabs: [
+  { id: "cpm", screen: "CPM / Inspector home", tabs: [
+    "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox",
+  ] },
+  // FIAREP's technicians have their own switches, separate from CPM / Inspector.
+  { id: "tech", screen: "Technician home (FIAREP technicians sign in here)", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
     "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox",
   ] },
@@ -180,7 +185,10 @@ function configuredAppTabs(organization: OrganizationWithUsage): Record<string, 
   const result: Record<string, boolean> = {};
   for (const group of APP_TABS) for (const tab of group.tabs) {
     const key = appTabKey(group.id, tab);
-    result[key] = saved[key] !== false;
+    // Until the Technician switches are first saved, they start from what the
+    // CPM / Inspector switch said, so nothing a technician sees changes by itself.
+    const value = group.id === "tech" && saved[key] === undefined ? saved[appTabKey("cpm", tab)] : saved[key];
+    result[key] = value !== false;
   }
   return result;
 }
