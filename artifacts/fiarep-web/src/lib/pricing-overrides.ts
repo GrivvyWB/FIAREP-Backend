@@ -62,13 +62,16 @@ export function bookPrice(key: PriceKey | string, o: Overrides | null = cache): 
 }
 export function defaultPrice(key: PriceKey | string): number { return BOOK[key] ?? 0; }
 
-// A saved set of bands counts only if it has the same band structure as the
-// shipped ladder; after the ladder's bands change, an old save is ignored.
+// Saved band values follow the shipped band they were saved for (same from and
+// to). When the ladder's bands change, a band that still exists keeps what the
+// owner saved; a new or reshaped band starts from the shipped numbers.
 export function bands(o: Overrides | null = cache): Band[] {
   const saved = o?.bands;
-  if (!saved || saved.length !== BANDS.length) return BANDS;
-  if (saved.some((b, i) => b.from !== BANDS[i]!.from || b.to !== BANDS[i]!.to)) return BANDS;
-  return saved;
+  if (!saved || !Array.isArray(saved)) return BANDS;
+  return BANDS.map((b) => {
+    const s = saved.find((x) => x && x.from === b.from && x.to === b.to);
+    return s ? { ...b, platformRate: s.platformRate, platformMin: s.platformMin, planRate: s.planRate, planMin: s.planMin } : b;
+  });
 }
 
 export function usePricing(): Overrides & { loaded: boolean; priceOf: (key: PriceKey | string) => number; bands: Band[] } {

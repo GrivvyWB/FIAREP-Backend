@@ -21,7 +21,7 @@ export default function OwnerPricing() {
   const f = ladderFees(Math.max(0, Math.round(units || 0)), bands);
   const edit = (i: number, field: "platformRate" | "platformMin" | "planRate" | "planMin", v: string) => {
     const n = v.trim() === "" ? null : Math.max(0, Math.round((Number(v) || 0) * 100) / 100);
-    setDraft(bands.map((b, j) => (j === i ? { ...b, [field]: field === "planRate" || field === "planMin" ? n : (n ?? 0) } : b)));
+    setDraft(bands.map((b, j) => (j === i ? { ...b, [field]: n } : b)));
     setSaving("idle");
   };
   const save = async () => { setSaving("saving"); try { await savePricing({ bands }); setDraft(null); setSaving("saved"); } catch { setSaving("error"); } };
@@ -32,7 +32,7 @@ export default function OwnerPricing() {
     <div className="space-y-5">
       <div>
         <h1 className="text-2xl font-bold text-slate-950">Pricing ladder — 2 to 300,000 units</h1>
-        <p className="text-sm text-slate-500">Per unit means per dwelling unit per month; the monthly fee is the greater of units × rate and the band minimum. These are the live numbers: the plan cards on the Join page and plan contracts read them. The FIAREP plan is sold at {PLAN_MIN_UNITS} units and up; below that a client gets the platform and the per-job rates. Type a new rate or minimum in the table and save.</p>
+        <p className="text-sm text-slate-500">Per unit means per dwelling unit per month; the monthly fee is the greater of units × rate and the band minimum. These are the live numbers: the plan cards on the Join page and plan contracts read them. The FIAREP plan is sold at every size from {PLAN_MIN_UNITS} units. No prices are filled in for you: a box left blank shows no price anywhere until you type one. Type the rates and minimums you want and save.</p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {saving === "saved" && <span className="text-xs text-emerald-700">Saved</span>}
@@ -48,8 +48,8 @@ export default function OwnerPricing() {
             <Input type="number" inputMode="numeric" min={1} max={300000} value={units} onChange={(e) => setUnits(Number(e.target.value))} className="mt-1 w-40 bg-white" />
           </label>
           <div><p className="text-xs uppercase tracking-wide text-slate-500">Band</p><p className="text-lg font-semibold text-slate-950">{f.band.label}</p></div>
-          <div><p className="text-xs uppercase tracking-wide text-slate-500">Platform</p><p className="text-lg font-semibold text-slate-950">{money(f.platform)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.platform * 12)}/yr</span></p></div>
-          <div><p className="text-xs uppercase tracking-wide text-slate-500">FIAREP plan</p><p className="text-lg font-semibold text-slate-950">{f.plan == null ? (units < PLAN_MIN_UNITS ? `platform + per-job rates (plan starts at ${PLAN_MIN_UNITS} units)` : "per-building task orders") : <>{money(f.plan)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.plan * 12)}/yr</span></>}</p></div>
+          <div><p className="text-xs uppercase tracking-wide text-slate-500">Platform</p><p className="text-lg font-semibold text-slate-950">{f.platform == null ? "no platform rate set for this band yet" : <>{money(f.platform)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.platform * 12)}/yr</span></>}</p></div>
+          <div><p className="text-xs uppercase tracking-wide text-slate-500">FIAREP plan</p><p className="text-lg font-semibold text-slate-950">{f.plan == null ? (f.band.planRate == null && f.band.to < 50000 ? "no plan rate set for this band yet" : "per-building task orders") : <>{money(f.plan)}<span className="text-sm font-normal text-slate-500">/mo · {money(f.plan * 12)}/yr</span></>}</p></div>
         </div>
       </section>
 
@@ -60,8 +60,8 @@ export default function OwnerPricing() {
             {bands.map((b, i) => (
               <tr key={b.label} className={`border-t border-slate-100 ${b.label === f.band.label ? "bg-amber-50" : ""}`}>
                 <td className={`${td} font-semibold text-slate-900`}>{b.label}</td>
-                <td className={`${td} text-right`}><input type="number" inputMode="decimal" min={0} value={b.platformRate} onChange={(e) => edit(i, "platformRate", e.target.value)} className={`${cell} ${b.platformRate !== BANDS[i]?.platformRate ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Platform rate ${b.label}`} /></td>
-                <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.platformMin} onChange={(e) => edit(i, "platformMin", e.target.value)} className={`${cell} ${b.platformMin !== BANDS[i]?.platformMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Platform minimum ${b.label}`} /><span className="text-xs text-slate-500">/mo</span></td>
+                <td className={`${td} text-right`}><input type="number" inputMode="decimal" min={0} value={b.platformRate ?? ""} placeholder="—" onChange={(e) => edit(i, "platformRate", e.target.value)} className={`${cell} ${b.platformRate !== BANDS[i]?.platformRate ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Platform rate ${b.label}`} /></td>
+                <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.platformMin ?? ""} placeholder="—" onChange={(e) => edit(i, "platformMin", e.target.value)} className={`${cell} ${b.platformMin !== BANDS[i]?.platformMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Platform minimum ${b.label}`} />{b.platformMin != null && <span className="text-xs text-slate-500">/mo</span>}</td>
                 <td className={`${td} text-right`}><input type="number" inputMode="decimal" min={0} value={b.planRate ?? ""} placeholder="—" onChange={(e) => edit(i, "planRate", e.target.value)} className={`${cell} ${b.planRate !== BANDS[i]?.planRate ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Plan rate ${b.label}`} /></td>
                 <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.planMin ?? ""} placeholder="—" onChange={(e) => edit(i, "planMin", e.target.value)} className={`${cell} ${b.planMin !== BANDS[i]?.planMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Plan minimum ${b.label}`} />{b.planMin != null && <span className="text-xs text-slate-500">/mo</span>}</td>
                 <td className={`${td} text-right whitespace-nowrap`}>{b.planRate == null ? "—" : `${includedHoursPerUnit(b.planRate)} h/unit/yr`}</td>
@@ -83,8 +83,8 @@ export default function OwnerPricing() {
                 <td className={`${td} font-medium text-slate-900`}>{e.name}</td>
                 <td className={`${td} text-right`}>{e.units.toLocaleString()}</td>
                 <td className={td}>{x.band.label}</td>
-                <td className={`${td} text-right`}>{money(x.platform)}</td>
-                <td className={`${td} text-right`}>{x.plan == null ? "task orders" : money(x.plan)}</td>
+                <td className={`${td} text-right`}>{x.platform == null ? "—" : money(x.platform)}</td>
+                <td className={`${td} text-right`}>{x.plan == null ? (x.band.from >= 50000 ? "task orders" : "—") : money(x.plan)}</td>
                 <td className={`${td} text-slate-600`}>{e.note}</td>
               </tr>
             ); })}

@@ -14,7 +14,7 @@ const router: IRouter = Router();
 const ENTITY = "pricing-overrides";
 const ID = "pricing-overrides";
 
-type Band = { label: string; from: number; to: number; platformRate: number; platformMin: number; planRate: number | null; planMin: number | null };
+type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null };
 type Overrides = { items: Record<string, number>; bands: Band[] | null; updatedAt: string | null; updatedBy: string | null };
 
 const EMPTY: Overrides = { items: {}, bands: null, updatedAt: null, updatedBy: null };
@@ -43,8 +43,11 @@ function cleanBands(v: unknown): Band[] | null {
   const out: Band[] = [];
   for (const b of v as Record<string, unknown>[]) {
     if (!b || typeof b !== "object") return null;
-    const from = num(b["from"]), to = num(b["to"]), pr = num(b["platformRate"]), pm = num(b["platformMin"]);
-    if (from == null || to == null || pr == null || pm == null || to < from) return null;
+    const from = num(b["from"]), to = num(b["to"]);
+    if (from == null || to == null || to < from) return null;
+    // Any price may be left blank: the owner types the ones he wants.
+    const pr = b["platformRate"] == null ? null : num(b["platformRate"]);
+    const pm = b["platformMin"] == null ? null : num(b["platformMin"]);
     const planRate = b["planRate"] == null ? null : num(b["planRate"]);
     const planMin = b["planMin"] == null ? null : num(b["planMin"]);
     out.push({ label: String(b["label"] ?? `${from}–${to}`).slice(0, 40), from, to, platformRate: pr, platformMin: pm, planRate, planMin });
