@@ -100,6 +100,16 @@ export default function CpmHome() {
   }, [mode, router, navigation]));
   const normalizedPosition = position.trim().toLowerCase();
   const isCpmSupervisor = isCpmSupervisorTitle(normalizedPosition);
+  // What this person does, decided the way the rest of the app decides it: by
+  // what the title CONTAINS. These gates used to demand the title be exactly
+  // "cpm" or "Inspector" (capital I, case-sensitive, in four places), so a
+  // Senior Inspector or a CPM Technician lost nearly every tile on the screen.
+  //
+  // FIAREP's own crew see all of it. Nothing on this screen is hidden by
+  // judgement: Module Management is the only off switch, and tileEnabled()
+  // below has the last word on every tile.
+  const isCpmRole = normalizedPosition.includes('cpm') || isTechnician;
+  const isInspectorRole = normalizedPosition.includes('inspector') || isTechnician;
 
   async function onSignOut() {
     await logout();
@@ -121,26 +131,26 @@ export default function CpmHome() {
       heading: 'Inspections',
       color: '#1E7D4F',
       tiles: [
-        ...(normalizedPosition === 'inspector' ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
-        ...(normalizedPosition === 'cpm' ? [{ label: 'Projects', onPress: () => router.push('/?list=1'), tone: 'outline' as Tone }] : []),
-        ...(normalizedPosition === 'cpm' ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
+        ...(isInspectorRole ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
+        ...(isCpmRole ? [{ label: 'Projects', onPress: () => router.push('/?list=1'), tone: 'outline' as Tone }] : []),
+        ...(isCpmRole ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         // Standing in the apartment: what the job needs bought, priced off the
         // book and sent to the client to approve. FIAREP's own crew only -
         // nobody else has a client to send a price to.
         ...(isTechnician ? [{ label: 'Price Quote', onPress: () => router.push('/price-quote'), tone: 'solid' as Tone }] : []),
         // Walk a building and price it on the spot, with no complaint behind it.
         ...(isTechnician ? [{ label: 'Quick Quote', onPress: () => router.push('/quick-quote'), tone: 'solid' as Tone }] : []),
-        ...(position === 'Inspector' ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
-        ...(position === 'Inspector' ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
-        ...(position === 'Inspector' ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
-        ...(position === 'Inspector' ? [{ label: 'My Inspections', onPress: () => router.push('/my-inspections'), tone: 'outline' as Tone }] : []),
-        ...(normalizedPosition === 'inspector' ? [{ label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone }] : []),
-        ...(normalizedPosition === 'inspector' && hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }, { label: 'Saved Measurements', onPress: () => router.push('/saved-measurements'), tone: 'outline' as Tone }] : []),
+        ...(isInspectorRole ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
+        ...(isInspectorRole ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
+        ...(isInspectorRole ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),
+        ...(isInspectorRole ? [{ label: 'My Inspections', onPress: () => router.push('/my-inspections'), tone: 'outline' as Tone }] : []),
+        ...(isInspectorRole ? [{ label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone }] : []),
+        ...(isInspectorRole && hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }, { label: 'Saved Measurements', onPress: () => router.push('/saved-measurements'), tone: 'outline' as Tone }] : []),
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },
         ...(isTechnician ? [] : [{ label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone }]),
       ],
     },
-    ...(normalizedPosition === 'cpm' ? [{
+    ...(isCpmRole ? [{
       heading: 'Scope',
       color: '#B4741A',
       tiles: [
@@ -154,14 +164,14 @@ export default function CpmHome() {
       color: '#4A5560',
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
-        ...(modules['property-lookup'] && position !== 'Inspector' ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
+        ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
         ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },
   ];
 
-  const roleTitle = isTechnician ? 'Technician' : normalizedPosition === 'cpm' ? 'CPM' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition === 'inspector' ? 'Inspector' : 'CPM / Inspector';
+  const roleTitle = isTechnician ? 'Technician' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition.includes('cpm') ? 'CPM' : normalizedPosition.includes('inspector') ? 'Inspector' : 'CPM / Inspector';
 
   // Same gates as always; the look is FieldHome's. My Jobs is the hero card,
   // Attendance / Time Clock is the clock card, the rest are tiles.

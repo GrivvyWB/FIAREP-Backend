@@ -84,16 +84,16 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
       }
       else setMsg('No approved account matches that name and code.');
     } catch (error) {
-      if (
-        typeof error === 'object' &&
-        error !== null &&
-        'status' in error &&
-        (error as { status?: unknown }).status === 403
-      ) {
-        setMsg('Organization license is not active.');
-      } else {
-        setMsg('Could not reach the FIAREP backend. Try again.');
-      }
+      // Only say the backend is unreachable when there was genuinely no reply.
+      // This used to report every failure that way — a 500, a timeout, a
+      // thrown error — which hid what had actually gone wrong.
+      const status = typeof error === 'object' && error !== null && 'status' in error
+        ? (error as { status?: unknown }).status
+        : undefined;
+      if (status === 403) setMsg('Organization license is not active.');
+      else if (status === 401) setMsg('No approved account matches that name and code.');
+      else if (typeof status === 'number') setMsg(`The server refused the sign-in (${status}). Try again.`);
+      else setMsg('Could not reach the FIAREP backend. Try again.');
     } finally { setBusy(false); }
   }
 

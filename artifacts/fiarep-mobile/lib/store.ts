@@ -115,8 +115,15 @@ async function rotateActorCache(staff: Staff) {
   await d.runAsync("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", 'cache_fingerprint', fingerprint);
 }
 
-const backendDomain = process.env.EXPO_PUBLIC_DOMAIN;
-setBaseUrl(backendDomain ? `https://${backendDomain}` : null);
+// Where the backend lives. EXPO_PUBLIC_DOMAIN is baked in at bundle time, and
+// eas.json only sets it under build.production — `eas update` does not read a
+// build profile, so an over-the-air bundle came out with it undefined, which
+// left the app with no base URL at all and turned every call into "Could not
+// reach the FIAREP backend". The fallback means a missing variable can never
+// take the backend away again; set the variable to point somewhere else.
+const BACKEND_FALLBACK = 'fiarep.com';
+const backendDomain = process.env.EXPO_PUBLIC_DOMAIN || BACKEND_FALLBACK;
+setBaseUrl(`https://${backendDomain}`);
 setAuthTokenGetter(() => getAccessToken());
 setAuthRefreshHandler(() => refreshAccessToken());
 
