@@ -11,7 +11,7 @@ const CREW_KINDS = [
 const kindOfRole = (role: string) => (role === "community_coordinator" ? "FIAREP Services" : "Technician");
 
 type Member = { id: string; name: string; position: string; role: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null; messaging?: boolean };
-type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number };
+type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number; administrators?: Array<{ id: string; name: string; messaging: boolean }> };
 type Punch = { id: string; direction: string; at: string; source: string; address?: string | null; latitude?: number | null; longitude?: number | null; company?: string; development?: string };
 type Job = { id: string; tenantId: string; company: string; complaintNo: string; development: string; address: string; unit: string; category: string; description: string; status: string; createdAt: string | null; sentAt: string | null; clientStatus: string; fiarep: { recordId: string; status: string; assignedStaffId: string; assignedTo: string; startedAt: string | null; completedAt: string | null; completionNote: string; photos: string[]; approvedAt: string | null; approvedBy: string; sentBackNote: string; sentBackAt: string | null; clientApprovedAt: string | null; clientApprovedBy: string; updates: { status?: string; note?: string; by?: string; at?: string }[] } | null };
 type Stop = { id: string; address: string | null; latitude: number; longitude: number; arrivedAt: string; leftAt: string | null; minutes: number; company?: string; development?: string };
@@ -81,7 +81,7 @@ export default function OwnerCrew() {
   const saveRate = async (m: Member) => { const v = Number(edits[m.id]); if (!v || v === m.hourlyRate) { setEdits((x) => { const n = { ...x }; delete n[m.id]; return n; }); return; } try { await req(`/api/v1/platform/crew/${m.id}`, "PATCH", { hourlyRate: v }); setEdits((x) => { const n = { ...x }; delete n[m.id]; return n; }); await load(); } catch (e) { setError((e as Error)?.message || "Could not save."); } };
   const setStatus = async (m: Member, status: "approved" | "revoked") => { try { await req(`/api/v1/platform/crew/${m.id}`, "PATCH", { status }); await load(); } catch (e) { setError((e as Error)?.message || "Could not update."); } };
   // Who uses messaging: the administrator's switch per FIAREP Services member.
-  const setMessaging = async (m: Member, enabled: boolean) => { try { await req(`/api/v1/platform/crew/${m.id}/messaging`, "PUT", { enabled }); await load(); } catch (e) { setError((e as Error)?.message || "Could not change messaging."); } };
+  const setMessaging = async (m: { id: string }, enabled: boolean) => { try { await req(`/api/v1/platform/crew/${m.id}/messaging`, "PUT", { enabled }); await load(); } catch (e) { setError((e as Error)?.message || "Could not change messaging."); } };
   const resetCode = async (m: Member) => { try { await req(`/api/v1/platform/crew/${m.id}/reset-code`, "POST"); await load(); } catch (e) { setError((e as Error)?.message || "Could not reset the code."); } };
   const showPunches = async (m: Member) => { if (open === m.id) { setOpen(""); return; } setOpen(m.id); try { const [p, st] = await Promise.all([customFetch<Punch[]>(`/api/v1/platform/crew/${m.id}/punches?from=${range.from}&to=${range.to}`, { responseType: "json" } as never), customFetch<Stop[]>(`/api/v1/platform/crew/${m.id}/locations?from=${range.from}&to=${range.to}`, { responseType: "json" } as never)]); setPunches(p); setStops(st); } catch { setPunches([]); setStops([]); } };
   const copy = async (m: Member) => { try { await navigator.clipboard.writeText(`${m.name} · code ${m.code}`); setCopied(m.id); setTimeout(() => setCopied(""), 1500); } catch { /* clipboard blocked */ } };
@@ -261,6 +261,25 @@ export default function OwnerCrew() {
         </table>
         <p className="px-4 py-2 text-xs text-slate-500">Hours pair each clock-in with the next clock-out; a shift still open counts up to now. Pay = hours × rate, before taxes and overtime.</p>
       </Fold>
+
+      {(crew?.administrators?.length ?? 0) > 0 && (
+        <Fold id="admins" title="Administrators" summary="Messaging on or off for each administrator" defaultOpen>
+          <ul className="divide-y divide-slate-100">
+            {crew!.administrators!.map((a) => (
+              <li key={a.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                <span><span className="font-medium text-slate-900">{a.name}</span><span className="block text-xs text-slate-500">Administrator</span></span>
+                <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                  <button type="button" role="switch" aria-checked={a.messaging} aria-label={`Messaging for ${a.name}`} onClick={() => void setMessaging(a, !a.messaging)}
+                    className={`relative h-5 w-9 shrink-0 rounded-full transition ${a.messaging ? "bg-[#E0A526]" : "bg-slate-300"}`}>
+                    <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${a.messaging ? "left-[18px]" : "left-0.5"}`} />
+                  </button>
+                  Messaging {a.messaging ? "on" : "off"}
+                </label>
+              </li>
+            ))}
+          </ul>
+        </Fold>
+      )}
 
       {removed.length > 0 && (
         <Fold id="removed" title="Removed" badge={String(removed.length)}>

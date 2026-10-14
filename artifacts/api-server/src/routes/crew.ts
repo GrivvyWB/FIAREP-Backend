@@ -111,6 +111,12 @@ router.get("/v1/platform/crew", async (req, res) => {
   res.json({
     clockEnabled: getTimeClockConfig(org?.features).mobileClockEnabled,
     from: from.toISOString().slice(0, 10), to: new Date(to.getTime() - 1).toISOString().slice(0, 10),
+    // FIAREP's administrators, each with their own messaging switch.
+    administrators: (await db.select({ id: staffAccounts.id, name: staffAccounts.name }).from(staffAccounts).where(and(
+      eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.role, "administrator"), eq(staffAccounts.status, "approved"),
+    )).orderBy(asc(staffAccounts.name))).map((a) => ({
+      ...a, messaging: (((org?.features as Record<string, unknown> | null)?.["modules"] ?? {}) as Record<string, unknown>)[`msg.${a.id}`] !== false,
+    })),
     members: members.map((m) => ({ ...view(m, hours.get(m.id), last.get(m.id) ?? null), messaging: (((org?.features as Record<string, unknown> | null)?.["modules"] ?? {}) as Record<string, unknown>)[`msg.${m.id}`] !== false })),
     totalHours, totalPay,
   });

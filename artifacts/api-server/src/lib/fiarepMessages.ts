@@ -125,16 +125,16 @@ async function fiarepModules(): Promise<Record<string, unknown>> {
   return modules && typeof modules === "object" && !Array.isArray(modules) ? modules as Record<string, unknown> : {};
 }
 
-/** The administrator decides which FIAREP Services members use messaging
- *  (Platform -> Crew, a switch per member, on unless switched off). The
- *  administrators themselves always can. */
+/** The administrator decides who uses messaging: a switch per FIAREP
+ *  Services member and per administrator (Platform -> Crew), on unless
+ *  switched off. */
 export async function memberMayMessage(staffId: string): Promise<boolean> {
   return (await fiarepModules())[`msg.${staffId}`] !== false;
 }
 
 export async function mayMessage(actor: Pick<Actor, "id" | "tenantId" | "role" | "name">): Promise<boolean> {
-  if (isFiarepFieldAdmin(actor)) return true;
-  return isFiarepServices(actor) && (await memberMayMessage(actor.id));
+  if (!isFiarepFieldAdmin(actor) && !isFiarepServices(actor)) return false;
+  return memberMayMessage(actor.id);
 }
 
 /** The master switch on FIAREP's own Module Management page. On unless it
@@ -333,7 +333,8 @@ export async function postMessage(
     if (next.kind === "code") {
       await alertFiarep([next.coordinatorId], `${who} sent you a message`, where, threadId);
     } else if (next.to === "admin") {
-      await alertFiarep(await fiarepAdministrators(), `${next.clientCompany} sent the administrator a message`, "", threadId);
+      const modules = await fiarepModules();
+      await alertFiarep((await fiarepAdministrators()).filter((id) => modules[`msg.${id}`] !== false), `${next.clientCompany} sent the administrator a message`, "", threadId);
     } else {
       const unit = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
         eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"),
