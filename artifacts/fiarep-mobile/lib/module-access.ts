@@ -1,5 +1,6 @@
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle } from './titles';
 import { useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 import { customFetch } from '@workspace/api-client-react';
 import { db, getSessionIdentity } from './store';
 
@@ -170,9 +171,27 @@ export async function refreshModuleConfig(): Promise<ModuleConfig | null> {
   }
 }
 
-export function useModuleAccess(): Record<string, boolean> {
+/** Re-read the control panel on mount AND every time the app is brought back
+ *  to the front. A switch flipped on fiarep.com used to need the app killed
+ *  and reopened before it took: the fetch ran once, when the hook mounted, and
+ *  the home screen mounts once for the life of the app. */
+function useLiveModuleConfig(): ModuleConfig | null {
   const [config, setConfig] = useState<ModuleConfig | null>(cached);
-  useEffect(() => { loadModuleConfig().then(setConfig).catch(() => undefined); refreshModuleConfig().then(setConfig).catch(() => undefined); }, []);
+  useEffect(() => {
+    let alive = true;
+    const pull = () => {
+      loadModuleConfig().then((c) => { if (alive) setConfig(c); }).catch(() => undefined);
+      refreshModuleConfig().then((c) => { if (alive) setConfig(c); }).catch(() => undefined);
+    };
+    pull();
+    const sub = AppState.addEventListener('change', (state) => { if (state === 'active') pull(); });
+    return () => { alive = false; sub.remove(); };
+  }, []);
+  return config;
+}
+
+export function useModuleAccess(): Record<string, boolean> {
+  const config = useLiveModuleConfig();
   return new Proxy({}, { get: (_target, key: string) => moduleEnabled(key as ModuleId, config) }) as Record<string, boolean>;
 }
 
@@ -180,11 +199,9 @@ export function useModuleAccess(): Record<string, boolean> {
 // as the per-trade measurement switches (meas.<trade>.<material>), which must be
 // read as `=== true` rather than through the default-on module proxy.
 export function useRawModules(): Record<string, boolean> {
-  const [cfg, setCfg] = useState<ModuleConfig | null>(cached);
-  // Show the cached copy at once, then pull the live control-panel settings so
-  // a switch flipped on fiarep.com applies the next time a home screen opens
-  // (not only at sign-in). Offline, refresh falls back to the cache.
-  useEffect(() => { loadModuleConfig().then(setCfg).catch(() => undefined); refreshModuleConfig().then(setCfg).catch(() => undefined); }, []);
+  // Cached copy first, live control-panel settings straight after, and again
+  // whenever the app comes back to the front.
+  const cfg = useLiveModuleConfig();
   return (cfg?.features?.modules || {}) as Record<string, boolean>;
 }
 
