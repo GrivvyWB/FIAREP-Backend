@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, getCurrentPosition, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, listManpowerRequests, performEntityAction, markReportSeen, type BuildingViolation, type ResidentReport, type ManpowerRequest } from '../lib/store';
+import { getCurrentActor, getCurrentPosition, isFiarepAdministrator, listRoutedInspectionsFor, completeRoutedViolation, releaseRoutedViolation, releaseResidentReport, listResidentReports, developmentsForStaff, deleteBuildingViolation, deleteResidentReport, listManpowerRequests, performEntityAction, markReportSeen, type BuildingViolation, type ResidentReport, type ManpowerRequest } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, uploadPhoto, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -33,8 +33,10 @@ export default function MyJobs() {
   const canDelete = useDeletionPolicy();
 
   useFocusEffect(useCallback(() => {
-    getCurrentActor().then((actor) => {
-      const allowed = actor.role === 'worker' || actor.role === 'inspector' || actor.role === 'emergency';
+    getCurrentActor().then(async (actor) => {
+      // FIAREP's administrators (Timothy Winn, Emily Winn) work jobs too.
+      const allowed = actor.role === 'worker' || actor.role === 'inspector' || actor.role === 'emergency' ||
+        await isFiarepAdministrator().catch(() => false);
       if (!allowed) { router.replace('/worker-home'); return; }
       setAuthorized(true);
     }).catch(() => router.replace('/worker-home'));

@@ -162,6 +162,10 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Manage All Requests", "Resident Reports", "Send Violation", "Assign a Job", "Staff Member Jobs", "Add Job for Mgmt", "Projects / Inspections",
     "HUD Inspections", "Change Orders", "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score",
     "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
+    // FIAREP's administrators (Timothy Winn, Emily Winn) also get the technician's tools.
+    "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
+    "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "Change Work Order",
+    "Request Time Off", "Inbox",
   ] },
   { id: "cpm", screen: "CPM / Inspector home", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",

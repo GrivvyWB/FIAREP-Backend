@@ -65,7 +65,8 @@ import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
 import { routedComplaintRecipientIds } from "../lib/complaintRouting";
 import { CREW_OPTIONS, ETA_OPTIONS, recordEta, recordNotifiedStaff, recordOpened, tracksReceipts } from "../lib/complaintReceipts";
 import { notifyResident, residentMessageForAction } from "../lib/residentNotify";
-import { sendQuote, decideQuote, quoteBlocksStart, quoteOf } from "../lib/fiarepQuote";
+import { reviewQuote, sendQuote, decideQuote, quoteBlocksStart, quoteOf } from "../lib/fiarepQuote";
+import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -397,6 +398,19 @@ function scopeSourceRef(sourceEntity: string, state: Record<string, unknown>) {
     },
   };
 }
+
+/** Inside FIAREP, every request goes to the administrators (Timothy Winn,
+ *  Emily Winn) — whoever else would be told as well. */
+async function alertFiarepAdmins(actor: Actor, message: string, detail: string | undefined, recordId: string): Promise<void> {
+  if (actor.tenantId !== "default") return;
+  const admins = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+    eq(staffAccounts.tenantId, "default"), eq(staffAccounts.status, "approved"), eq(staffAccounts.role, "administrator"),
+  ));
+  for (const admin of admins) if (admin.id !== actor.id) await notify(actor, admin.id, message, detail, recordId);
+}
+
+/** Change-order statuses that are a decision, not a draft. */
+const CHANGE_ORDER_DECISIONS = new Set(["mgmt_approved", "cost_approved", "declined"]);
 
 function validEntity(value: string | undefined): value is string {
   return typeof value === "string" && ENTITIES.has(value);
@@ -1159,6 +1173,19 @@ router.post("/v1/:entity", async (req, res, next) => {
       return;
     }
   }
+  // FIAREP's administrators need nobody's approval: their own time off and
+  // their own change work orders are approved as they go in.
+  if (actor.tenantId === "default" && isFiarepFieldAdmin(actor)) {
+    const decidedAt = new Date().toISOString();
+    const ownLeave = entity === "leave-requests" &&
+      (!createdState["employeeStaffId"] || createdState["employeeStaffId"] === actor.id);
+    if (ownLeave) {
+      createdState = { ...createdState, status: "Approved", decidedByStaffId: actor.id, decidedByName: actor.name, decidedByPosition: actor.position, decidedAt, approvedByAdministrator: true };
+    }
+    if (entity === "change-orders") {
+      createdState = { ...createdState, status: "cost_approved", respondedByName: actor.name, respondedAt: decidedAt, approvedByAdministrator: true };
+    }
+  }
   if (
     actor.role === "inspector" &&
     ["violations", "building-violations", "priority-violations", "route-assignments"]
@@ -1448,6 +1475,12 @@ router.post("/v1/:entity", async (req, res, next) => {
       String(persistedCreatedState["sourceRecordId"] || id),
     );
   }
+  // Anyone else's request inside FIAREP goes to the administrators.
+  if (actor.tenantId === "default" && !isFiarepFieldAdmin(actor)) {
+    const who = String(persistedCreatedState["employee"] || persistedCreatedState["createdByName"] || actor.name);
+    if (entity === "leave-requests") await alertFiarepAdmins(actor, "Time off to approve", who, id);
+    if (entity === "change-orders") await alertFiarepAdmins(actor, "Change work order to approve", [who, String(persistedCreatedState["reportRef"] || "")].filter(Boolean).join(" · "), id);
+  }
   res.status(201).json(outward(actor, created!));
 });
 
@@ -1521,6 +1554,19 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
       error: "Workflow-managed fields must be changed through an authorized action",
     });
     return;
+  }
+  // Inside FIAREP only the administrators approve or decline a change work order.
+  if (
+    actor.tenantId === "default" && entity === "change-orders" &&
+    CHANGE_ORDER_DECISIONS.has(String(patch["status"] ?? "")) && !isFiarepFieldAdmin(actor)
+  ) {
+    const [before] = await db.select({ state: entityRecords.state }).from(entityRecords).where(and(
+      eq(entityRecords.id, req.params["id"]!), eq(entityRecords.entity, entity), eq(entityRecords.tenantId, actor.tenantId),
+    )).limit(1);
+    if (String((before?.state as Record<string, unknown> | undefined)?.["status"] ?? "") !== String(patch["status"])) {
+      res.status(403).json({ error: "Only FIAREP's administrator approves or declines a change work order." });
+      return;
+    }
   }
   if (
     ["resident-reports", "building-violations", "manpower-requests"].includes(entity) &&
@@ -1888,6 +1934,24 @@ router.post("/v1/resident-reports/:id/quote", async (req, res) => {
   const result = await sendQuote(actor, copy, (req.body as { lines?: unknown })?.lines as never[]);
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   res.status(201).json(result.quote);
+});
+
+// FIAREP's administrator sends a technician's quote to the client, or turns it back.
+router.post("/v1/resident-reports/:id/quote/review", async (req, res) => {
+  const actor = actorFrom(res);
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const decision = body["decision"] === "send" ? "send" : body["decision"] === "decline" ? "decline" : null;
+  if (!decision) { res.status(400).json({ error: "Send it to the client or turn it back." }); return; }
+  const [copy] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, req.params["id"]!),
+    eq(entityRecords.entity, "resident-reports"),
+    eq(entityRecords.tenantId, actor.tenantId),
+    eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!copy || !(await canReadRecordForActor(actor, copy))) { res.status(404).json({ error: "Record not found" }); return; }
+  const result = await reviewQuote(actor, copy, decision, String(body["note"] ?? ""));
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.json(result.quote);
 });
 
 router.post("/v1/resident-reports/:id/quote/decision", async (req, res) => {
@@ -2295,6 +2359,10 @@ router.post(
     },
   };
   let nextStatus = transitions[entity]?.[action];
+  // A scope one of FIAREP's administrators submits needs nobody's approval.
+  if (entity === "procurement" && action === "submit" && actor.tenantId === "default" && isFiarepFieldAdmin(actor)) {
+    nextStatus = transitions["procurement"]!["approve"];
+  }
   if (!nextStatus) {
     res.status(400).json({ error: "Unsupported workflow action" });
     return;
@@ -2512,7 +2580,9 @@ router.post(
   if (entity === "resident-reports" && action === "start" && quoteBlocksStart(current.state)) {
     const q = quoteOf(current.state);
     res.status(409).json({
-      error: `Waiting for the client to approve $${(q?.total ?? 0).toFixed(2)} of materials before this job can start.`,
+      error: q?.status === "admin_review"
+        ? `Waiting for FIAREP's administrator to approve $${(q?.total ?? 0).toFixed(2)} of materials before this job can start.`
+        : `Waiting for the client to approve $${(q?.total ?? 0).toFixed(2)} of materials before this job can start.`,
       quotePending: true,
     });
     return;
@@ -3939,6 +4009,9 @@ router.post(
     } else {
       await notify(actor, target, `${entity.replaceAll("-", " ")} ${nextStatus}`, undefined, current.id);
     }
+  }
+  if (entity === "procurement" && action === "submit" && actor.tenantId === "default" && !isFiarepFieldAdmin(actor)) {
+    await alertFiarepAdmins(actor, "Scope to approve", [actor.name, String(current.state["sourceRef"] || ""), String(current.state["address"] || "")].filter(Boolean).join(" · "), current.id);
   }
   if (entity === "resident-reports") await mirrorFiarepProgress(actor, updated!).catch((err) => logger.warn({ err, recordId: current.id }, "Could not mirror progress to the client company"));
   if (entity === "resident-reports" && (action === "approve-work" || action === "reject-work") && typeof current.state["fiarepRecordId"] === "string") {

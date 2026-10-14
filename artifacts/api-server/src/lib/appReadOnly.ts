@@ -1,6 +1,7 @@
 import type { Request } from "express";
 import type { Actor } from "./auth";
 import { isSuperintendentE } from "./domain";
+import { isFiarepFieldAdmin } from "./fiarepAdminNames";
 
 /**
  * Supervisors, managers, directors and administrators act on fiarep.com; on
@@ -28,6 +29,8 @@ export function isMobileAppRequest(req: Request): boolean {
 }
 
 export function isAppReadOnlyActor(actor: Actor): boolean {
+  // FIAREP's own administrators work in the field and approve from the phone.
+  if (isFiarepFieldAdmin(actor)) return false;
   return (actor.role === "management" || actor.role === "administrator") &&
     !isSuperintendentE(actor);
 }

@@ -10,6 +10,7 @@ import {
   supervisedTradeForPosition as tradeFromTitle,
 } from "./titles";
 import { tradesForComplaint } from "./complaintTrades";
+import { isFiarepFieldAdmin } from "./fiarepAdminNames";
 
 export const STAFF_ROLES = new Set([
   "administrator",
@@ -841,7 +842,19 @@ export function canUploadToEntityRecord(
   return canReadEntityRecord(actor, row) && canMutateEntity(actor, row.entity);
 }
 
+/** FIAREP's named administrators work in the field too: they may do whatever
+ *  an Inspector with their title may do, as well as what an administrator may. */
+function asFieldInspector(actor: Actor): Actor | null {
+  return isFiarepFieldAdmin(actor) ? { ...actor, role: "inspector" } : null;
+}
+
 export function canCreateEntity(actor: Actor, entity: string): boolean {
+  if (canCreateEntityByRole(actor, entity)) return true;
+  const field = asFieldInspector(actor);
+  return !!field && canCreateEntityByRole(field, entity);
+}
+
+function canCreateEntityByRole(actor: Actor, entity: string): boolean {
   // Coordinators log the visits; their supervisor only reads and approves.
   if (isCommunityEntity(entity)) return isCommunityCoordinator(actor) && !isCommunityCoordinatorSupervisor(actor);
   if (isCommunityCoordinator(actor)) return false;
@@ -914,6 +927,12 @@ export function canCreateEntity(actor: Actor, entity: string): boolean {
 }
 
 export function canMutateEntity(actor: Actor, entity: string): boolean {
+  if (canMutateEntityByRole(actor, entity)) return true;
+  const field = asFieldInspector(actor);
+  return !!field && canMutateEntityByRole(field, entity);
+}
+
+function canMutateEntityByRole(actor: Actor, entity: string): boolean {
   // A coordinator edits their own entries (the record read rule scopes it);
   // the Community Coordinator Supervisor only approves (the route limits
   // their patch to the review status).
@@ -1372,6 +1391,31 @@ export function canPerformAssignedWorkflowAction(
 }
 
 export function canPerformEntityAction(
+  actor: Actor,
+  entity: string,
+  action: string,
+  state: Record<string, unknown>,
+): boolean {
+  // On FIAREP's own organization only the named administrators approve
+  // anything: no technician, CPM or supervisor there has approval rights.
+  if (actor.tenantId === "default" && isApprovalAction(action)) {
+    if (!isFiarepFieldAdmin(actor)) return false;
+    // …and they may approve anything there; the route still applies its own
+    // limits (nobody decides their own time off, etc.).
+    if (!isCommunityEntity(entity)) return true;
+  }
+  if (canPerformEntityActionByRole(actor, entity, action, state)) return true;
+  const field = asFieldInspector(actor);
+  return !!field && !isApprovalAction(action) && canPerformEntityActionByRole(field, entity, action, state);
+}
+
+/** Actions that approve, deny or sign off on something. */
+export function isApprovalAction(action: string): boolean {
+  return action === "approve" || action === "deny" || action === "reject" ||
+    action === "approve-work" || action === "reject-work" || action.startsWith("approve-");
+}
+
+function canPerformEntityActionByRole(
   actor: Actor,
   entity: string,
   action: string,

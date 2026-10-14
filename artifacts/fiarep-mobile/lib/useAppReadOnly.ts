@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { getCurrentActor, getCurrentPosition } from './store';
+import { getCurrentActor, getCurrentPosition, isFiarepAdministrator } from './store';
 
 // Supervisors, managers, directors and administrators take action on
 // fiarep.com; the app is view-only for them (the server enforces this too).
@@ -12,6 +12,8 @@ export async function isAppReadOnly(): Promise<boolean> {
     getCurrentPosition().catch(() => ''),
   ]);
   const role = String(actor?.role || '');
+  // FIAREP's own administrators work in the field and approve from the phone.
+  if (role === 'administrator' && await isFiarepAdministrator().catch(() => false)) return false;
   return (role === 'management' || role === 'administrator') && position.trim() !== 'Superintendent Ⓔ';
 }
 

@@ -10,6 +10,7 @@ import { and, eq, gt, isNull } from "drizzle-orm";
 import { sameTitle } from "./titles";
 import { COMMUNITY_TITLES } from "./domain";
 import { db, refreshSessions, platformOwnerSessions, staffAccounts, organizations, type StaffAccount, type Organization } from "@workspace/db";
+import { promoteIfFiarepAdmin } from "./fiarepAdmins";
 
 const ACCESS_TTL_SECONDS = 15 * 60;
 const REFRESH_TTL_DAYS = 30;
@@ -305,7 +306,9 @@ export async function loadCurrentActor(payload: AccessPayload) {
     return null;
   }
   if (!licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) return null;
-  return { staff, actor: actorFromStaff(staff) };
+  // Timothy Winn and Emily Winn are FIAREP's administrators, by name.
+  const current = await promoteIfFiarepAdmin(staff);
+  return { staff: current, actor: actorFromStaff(current) };
 }
 
 export function signPlatformOwnerToken(sessionId: string, name: string): string {

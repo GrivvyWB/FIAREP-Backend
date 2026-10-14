@@ -256,6 +256,19 @@ function AdministratorStack() {
       <Stack.Screen name="hud-view" options={{ title: 'Inspection' }} />
       <Stack.Screen name="violation-send" options={{ title: 'Send Violation' }} />
       <Stack.Screen name="assign-route" options={{ title: 'Assign a Route' }} />
+      {/* FIAREP's administrators also work in the field: their technician tools. */}
+      <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
+      <Stack.Screen name="quick-quote" options={{ title: 'Quick Quote' }} />
+      <Stack.Screen name="price-quote" options={{ title: 'Price Quote' }} />
+      <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision' }} />
+      <Stack.Screen name="inspector-routes" options={{ title: 'My Routes' }} />
+      <Stack.Screen name="my-inspections" options={{ title: 'My Inspections' }} />
+      <Stack.Screen name="create-report" options={{ title: 'Create Report' }} />
+      <Stack.Screen name="measurement" options={{ title: 'Measurement' }} />
+      <Stack.Screen name="saved-measurements" options={{ title: 'Saved Measurements' }} />
+      <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
+      <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
+      <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
     </Stack>
   );
 }

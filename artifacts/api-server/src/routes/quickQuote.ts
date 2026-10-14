@@ -26,7 +26,9 @@ export type QuickLine = {
 export type QuickQuote = {
   lines: QuickLine[];
   total: number;
-  status: "approved" | "pending" | "declined";
+  /** admin_review: a technician priced it; FIAREP's administrator approves
+   *  it, turns it back, or sends it to the owner. pending: with the owner. */
+  status: "admin_review" | "approved" | "pending" | "declined";
   /** "fiarep" when FIAREP approved it themselves, "client" when the owner must. */
   decidedBy: string;
   approvedBySelf: boolean;
@@ -36,8 +38,48 @@ export type QuickQuote = {
   note: string;
   sentAt: string;
   sentBy: string;
+  sentById?: string;
   decidedAt: string;
 };
+
+/** The owner's management hear about a quote: asked when it needs approving. */
+async function tellOwner(clientTenantId: string, quote: QuickQuote, projectId: string): Promise<void> {
+  const staff = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+    eq(staffAccounts.tenantId, clientTenantId), eq(staffAccounts.status, "approved"),
+    inArray(staffAccounts.role, ["administrator", "management"]),
+  ));
+  if (!staff.length) return;
+  const rows = await db.insert(notifications).values(staff.map((s) => ({
+    id: randomUUID(), tenantId: clientTenantId, target: s.id,
+    message: `FIAREP needs approval — $${quote.total.toFixed(2)}`,
+    detail: [quote.building, quote.lines.map((l) => `${l.qty} × ${l.label}`).join(", ")].filter(Boolean).join(" · ").slice(0, 400),
+    reportId: projectId,
+  }))).returning();
+  for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
+}
+
+/** Tell people on FIAREP's own side. */
+async function tellFiarep(targets: string[], message: string, detail: string, projectId: string): Promise<void> {
+  const ids = [...new Set(targets.filter(Boolean))];
+  if (!ids.length) return;
+  const rows = await db.insert(notifications).values(ids.map((target) => ({
+    id: randomUUID(), tenantId: FIAREP_TENANT, target, message, detail: detail.slice(0, 400), reportId: projectId,
+  }))).returning();
+  for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
+}
+
+async function fiarepAdministrators(): Promise<string[]> {
+  const rows = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+    eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"), eq(staffAccounts.role, "administrator"),
+  ));
+  return rows.map((r) => r.id);
+}
+
+async function companyName(id: string): Promise<string | null> {
+  if (!id || id === FIAREP_TENANT) return null;
+  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, id)).limit(1);
+  return org?.name ?? null;
+}
 
 async function overrides(): Promise<Record<string, number>> {
   const [row] = await db.select().from(entityRecords)
@@ -144,7 +186,14 @@ router.post("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res)
   const actor = actorFrom(res);
   if (actor.tenantId !== FIAREP_TENANT) { res.status(403).json({ error: "Only FIAREP price a job this way." }); return; }
   const body = (req.body ?? {}) as Record<string, unknown>;
-  const mode = text(body["mode"]) === "self" ? "self" : "client";
+  const asked = text(body["mode"]);
+  const mode: "self" | "client" | "admin" = asked === "self" ? "self" : asked === "client" ? "client" : "admin";
+  // Technicians have no approval rights and never send to the owner: every
+  // quote of theirs goes to FIAREP's administrator.
+  if (actor.role !== "administrator" && mode !== "admin") {
+    res.status(403).json({ error: "Send it to the administrator — only the administrator approves a quote or sends it to the owner." });
+    return;
+  }
   const input = Array.isArray(body["lines"]) ? (body["lines"] as Array<Record<string, unknown>>) : [];
   if (input.length === 0) { res.status(400).json({ error: "Add at least one item." }); return; }
 
@@ -176,16 +225,20 @@ router.post("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res)
   let clientCompany = "";
   if (mode === "client") {
     if (!clientTenantId || clientTenantId === FIAREP_TENANT) { res.status(400).json({ error: "Pick the company that has to approve it." }); return; }
-    const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, clientTenantId)).limit(1);
-    if (!org) { res.status(404).json({ error: "No such company." }); return; }
-    clientCompany = org.name;
+    const name = await companyName(clientTenantId);
+    if (!name) { res.status(404).json({ error: "No such company." }); return; }
+    clientCompany = name;
+  } else if (mode === "admin") {
+    // The technician may say whose building it is; the administrator decides.
+    const name = await companyName(clientTenantId);
+    if (name) clientCompany = name; else clientTenantId = "";
   } else {
     clientTenantId = "";
   }
 
   const quote: QuickQuote = {
     lines, total,
-    status: mode === "self" ? "approved" : "pending",
+    status: mode === "self" ? "approved" : mode === "admin" ? "admin_review" : "pending",
     decidedBy: mode === "self" ? actor.name : "",
     approvedBySelf: mode === "self",
     clientTenantId, clientCompany,
@@ -193,33 +246,72 @@ router.post("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res)
     note: text(body["note"], 500),
     sentAt: now.toISOString(),
     sentBy: actor.name,
+    sentById: actor.id,
     decidedAt: mode === "self" ? now.toISOString() : "",
   };
 
   await db.update(entityRecords)
     .set({ state: { ...project.state, quickQuote: quote }, version: (project.version ?? 1) + 1, updatedAt: now })
     .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
-  await audit(actor, mode === "self" ? "projects.quick-quote-approved" : "projects.quick-quote-sent",
+  await audit(actor, mode === "self" ? "projects.quick-quote-approved" : mode === "admin" ? "projects.quick-quote-to-admin" : "projects.quick-quote-sent",
     `${lines.length} item(s), $${total.toFixed(2)}${clientCompany ? ` · ${clientCompany}` : ""}`, project.id);
 
-  // The owner hears about it either way: asked when it needs approving, told
-  // when FIAREP approved it themselves.
-  if (clientTenantId) {
-    const staff = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
-      eq(staffAccounts.tenantId, clientTenantId), eq(staffAccounts.status, "approved"),
-      inArray(staffAccounts.role, ["administrator", "management"]),
-    ));
-    if (staff.length) {
-      const rows = await db.insert(notifications).values(staff.map((s) => ({
-        id: randomUUID(), tenantId: clientTenantId, target: s.id,
-        message: `FIAREP needs approval — $${total.toFixed(2)}`,
-        detail: [quote.building, lines.map((l) => `${l.qty} × ${l.label}`).join(", ")].filter(Boolean).join(" · ").slice(0, 400),
-        reportId: project.id,
-      }))).returning();
-      for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
-    }
+  if (mode === "admin") {
+    await tellFiarep(await fiarepAdministrators(), `Quote to approve — $${total.toFixed(2)} from ${actor.name}`,
+      [quote.building, lines.map((l) => `${l.qty} × ${l.label}`).join(", ")].filter(Boolean).join(" · "), project.id);
+  } else if (clientTenantId) {
+    await tellOwner(clientTenantId, quote, project.id);
   }
   res.status(201).json(quote);
+});
+
+/** FIAREP's administrator acts on a technician's quote: approves it, turns it
+ *  back, or sends it to the owner. Nobody else can. */
+router.post("/v1/fiarep/projects/:id/quick-quote/review", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT || actor.role !== "administrator") {
+    res.status(403).json({ error: "Only FIAREP's administrator approves a quote or sends it to the owner." });
+    return;
+  }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const decision = ["approve", "decline", "send"].includes(text(body["decision"])) ? text(body["decision"]) as "approve" | "decline" | "send" : null;
+  if (!decision) { res.status(400).json({ error: "Approve, turn back, or send to the owner." }); return; }
+  const [project] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, String(req.params["id"] || "")), eq(entityRecords.entity, "projects"),
+    eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!project) { res.status(404).json({ error: "No such project." }); return; }
+  const current = project.state["quickQuote"] as QuickQuote | undefined;
+  if (!current || !Array.isArray(current.lines)) { res.status(404).json({ error: "There is no quote on this one." }); return; }
+  if (current.status !== "admin_review") { res.status(409).json({ error: `This one was already ${current.status === "pending" ? "sent to the owner" : current.status}.` }); return; }
+
+  const now = new Date();
+  let quote: QuickQuote;
+  if (decision === "send") {
+    const clientTenantId = text(body["clientTenantId"], 64) || current.clientTenantId;
+    const name = await companyName(clientTenantId);
+    if (!name) { res.status(400).json({ error: "Pick the company that has to approve it." }); return; }
+    quote = { ...current, status: "pending", clientTenantId, clientCompany: name, sentAt: now.toISOString() };
+  } else {
+    quote = {
+      ...current,
+      status: decision === "approve" ? "approved" : "declined",
+      approvedBySelf: decision === "approve",
+      decidedBy: actor.name,
+      decidedAt: now.toISOString(),
+      ...(text(body["note"], 500) ? { note: text(body["note"], 500) } : {}),
+    };
+  }
+  await db.update(entityRecords)
+    .set({ state: { ...project.state, quickQuote: quote }, version: (project.version ?? 1) + 1, updatedAt: now })
+    .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
+  await audit(actor, `projects.quick-quote-${decision === "send" ? "sent" : decision === "approve" ? "approved" : "turned-back"}`,
+    `$${quote.total.toFixed(2)}${quote.clientCompany ? ` · ${quote.clientCompany}` : ""}`, project.id);
+
+  if (decision === "send") await tellOwner(quote.clientTenantId, quote, project.id);
+  const outcome = decision === "send" ? `sent your quote to ${quote.clientCompany}` : decision === "approve" ? "approved your quote — go ahead" : "turned your quote back";
+  await tellFiarep([current.sentById || ""], `${actor.name} ${outcome}`, quote.building, project.id);
+  res.json(quote);
 });
 
 /** Throw a quote away. The project it opened goes too when quick quote made

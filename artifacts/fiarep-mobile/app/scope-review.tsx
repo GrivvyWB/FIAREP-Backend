@@ -9,6 +9,7 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import {
   getCurrentActor,
   getCurrentPosition,
+  isFiarepAdministrator,
   getProcurementRequest,
   getCostEstimate,
   getProjectScopeForm,
@@ -53,10 +54,11 @@ export default function ScopeReview() {
 
   useEffect(() => {
     let mounted = true;
-    Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
+    Promise.all([getCurrentActor(), getCurrentPosition(), isFiarepAdministrator().catch(() => false)]).then(([actor, position, fiarepAdmin]) => {
       if (!mounted) return;
-       const allowed = actor?.role === 'management' &&
-          isCpmSupervisorTitle(position);
+       // FIAREP's administrators review every scope submitted inside FIAREP.
+       const allowed = fiarepAdmin || (actor?.role === 'management' &&
+          isCpmSupervisorTitle(position));
       setAuthorized(allowed);
       if (!allowed) {
           Alert.alert('Access denied', 'Scope review is available only to the CPM Supervisor.');

@@ -20,6 +20,7 @@ import {
 import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
 import { canUseGeneralStaffLogin } from "../lib/domain";
+import { promoteIfFiarepAdmin } from "../lib/fiarepAdmins";
 
 const router: IRouter = Router();
 
@@ -143,7 +144,8 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     res.status(401).json({ error: "Invalid staff name or code" });
     return;
   }
-  const staff = matches[0]!;
+  // Timothy Winn and Emily Winn sign in as FIAREP's administrators, by name.
+  const staff = await promoteIfFiarepAdmin(matches[0]!);
   if (!canUseGeneralStaffLogin(staff.role)) {
     res.status(401).json({ error: "Invalid staff name or code" });
     return;

@@ -6,7 +6,8 @@ import { clearAppMode, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback, useLayoutEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { unreadCount, getCurrentActor, getCurrentPosition } from '../lib/store';
+import { unreadCount, getCurrentActor, getCurrentPosition, isFiarepAdministrator } from '../lib/store';
+import { hasAnyMeasurementAccess } from '../lib/measurement-access';
 import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
@@ -42,7 +43,16 @@ export default function AdminHome() {
   // who act: supervisors, CPMs, HR, Procurement). Dead button removed.
   const modules = useModuleAccess();
   const rawModules = useRawModules();
-  useFocusEffect(useCallback(() => { (async () => { const a = await getCurrentActor(); let c = await unreadCount('administrator'); if (a.name) c += await unreadCount(a.name); setUnread(c); })(); }, []));
+  // FIAREP's own administrators (Timothy Winn, Emily Winn) also work in the
+  // field: they get every technician tool here, and every request inside
+  // FIAREP comes to them, so they get an Inbox too.
+  const [fiarepAdmin, setFiarepAdmin] = useState(false);
+  const [position, setPosition] = useState('');
+  useFocusEffect(useCallback(() => { (async () => {
+    const a = await getCurrentActor(); let c = await unreadCount('administrator'); if (a.name) c += await unreadCount(a.name); if (a.id) c += await unreadCount(a.id).catch(() => 0); setUnread(c);
+    setFiarepAdmin(await isFiarepAdministrator().catch(() => false));
+    setPosition((await getCurrentPosition().catch(() => '')) || '');
+  })(); }, []));
 
   async function onSignOut() {
     await logout();
@@ -50,7 +60,35 @@ export default function AdminHome() {
     refresh();
   }
 
+  const fieldSection: Section[] = fiarepAdmin ? [{
+    heading: 'My Work',
+    color: '#185FA5',
+    tiles: [
+      { label: 'My Jobs', onPress: () => router.push('/my-jobs'), tone: 'solid' },
+      { label: 'Quick Quote', onPress: () => router.push('/quick-quote'), tone: 'solid' },
+      { label: 'Past quotes', onPress: () => router.push('/quick-quote?past=1'), tone: 'outline' },
+      { label: 'Price Quote', onPress: () => router.push('/price-quote'), tone: 'solid' },
+      { label: 'Projects', onPress: () => router.push('/?list=1'), tone: 'outline' },
+      { label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' },
+      { label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' },
+      { label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' },
+      { label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' },
+      { label: 'My Inspections', onPress: () => router.push('/my-inspections'), tone: 'outline' },
+      { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' },
+      ...(hasAnyMeasurementAccess(position, rawModules) ? [
+        { label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone },
+        { label: 'Saved Measurements', onPress: () => router.push('/saved-measurements'), tone: 'outline' as Tone },
+      ] : []),
+      { label: 'Submit Scope', onPress: () => router.push('/scope-submit'), tone: 'solid' },
+      { label: 'CPM Supervisor Scope Review', onPress: () => router.push('/scope-review'), tone: 'outline' },
+      { label: 'Change Work Order', onPress: () => router.push('/cpm-change-order'), tone: 'outline' },
+      { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' },
+      { label: 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
+    ],
+  }] : [];
+
   const sections: Section[] = [
+    ...fieldSection,
     {
       heading: 'Inspections & Compliance',
       color: '#1F5C45',
@@ -106,7 +144,7 @@ export default function AdminHome() {
     },
   ];
 
-  const keep = (t: Tile) => { if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; };
+  const keep = (t: Tile) => { if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && !fiarepAdmin && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; };
   const homeSections = sections.map((sec) => ({ heading: sec.heading, tiles: sec.tiles.filter(keep).filter((t) => t.label !== 'Attendance').map((t) => ({ label: t.label, onPress: t.onPress })) }));
   const hasAttendance = sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === 'Attendance'));
   const has = (label: string) => sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === label));
@@ -118,7 +156,7 @@ export default function AdminHome() {
   return (
     <FieldHome
       title={title}
-      banner={<>{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}<UpperManagementMuteToggle /></>}
+      banner={<>{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly && !fiarepAdmin ? <ReadOnlyBanner /> : null}<UpperManagementMuteToggle /></>}
       clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
       sections={homeSections}
       tabs={tabs}

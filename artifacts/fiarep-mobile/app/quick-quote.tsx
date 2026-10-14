@@ -7,6 +7,7 @@ import { type Receipt } from '../lib/quote-receipt';
 import ReceiptSheet from '../components/ReceiptSheet';
 import { PickOne } from '../lib/community-ui';
 import { useRawModules, tileEnabled } from '../lib/module-access';
+import { getSessionIdentity } from '../lib/store';
 import { ui, ACCENT, money } from '../lib/ui';
 
 // Quick quote. Walk a building, see what has to be replaced, price it off the
@@ -18,6 +19,9 @@ import { ui, ACCENT, money } from '../lib/ui';
 //
 // The phone sends the item and how many. The server prices it, so a price can
 // never be typed in on site.
+//
+// Only FIAREP's administrator approves a quote or sends it to the owner. A
+// technician sends every quote to the administrator; the server enforces it.
 
 type CatalogLine = { key: string; label: string; price: number; unit: string; group: string; source?: string };
 type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
@@ -25,9 +29,16 @@ type Client = { id: string; name: string };
 type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string };
 type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note: string };
 type QuickQuote = {
-  lines: QuickLine[]; total: number; status: string; approvedBySelf: boolean; clientCompany: string;
+  lines: QuickLine[]; total: number; status: string; approvedBySelf: boolean; clientCompany: string; clientTenantId?: string;
   building: string; note: string; sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
 };
+
+/** Where a quote stands, in words. */
+const standing = (q: QuickQuote) => q.status === 'approved'
+  ? (q.approvedBySelf ? 'approved by FIAREP' : 'approved')
+  : q.status === 'declined' ? 'declined'
+  : q.status === 'admin_review' ? 'waiting for the administrator'
+  : `waiting for ${q.clientCompany || 'the owner'}`;
 
 const get = <T,>(url: string) => customFetch<T>(url, { responseType: 'json' } as never);
 const post = <T,>(url: string, body: unknown) => customFetch<T>(url, {
@@ -57,9 +68,11 @@ export default function QuickQuoteScreen() {
   const [showPast, setShowPast] = useState(params.past === '1');
   const [error, setError] = useState('');
   const [showReceipt, setShowReceipt] = useState<Receipt | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
+    getSessionIdentity().then((id) => setIsAdmin(id?.role === 'administrator')).catch(() => undefined);
     try {
       const p = await get<{ catalog: CatalogLine[] }>('/api/v1/pricing');
       // The materials book comes separately: it is FIAREP's cost basis and is
@@ -151,17 +164,34 @@ export default function QuickQuoteScreen() {
     setShowReceipt(q);
   }
 
+  /** The administrator acts on a technician's quote. */
+  async function review(decision: 'approve' | 'send' | 'decline') {
+    if (!projectId || !sent) return;
+    if (decision === 'send' && !clientId) { Alert.alert('Pick the company that approves it'); return; }
+    setBusy(decision);
+    try {
+      const saved = await post<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote/review`, {
+        decision, clientTenantId: decision === 'send' ? clientId : '',
+      });
+      setSent(saved);
+      await load();
+    } catch (e: any) {
+      Alert.alert('Not done', e?.data?.error || e?.message || 'Check your connection and try again.');
+    } finally { setBusy(''); }
+  }
+
   /** Pull a past quote back up: its building, its lines, its receipt. */
   function openPast(row: { projectId: string; quote: QuickQuote }) {
     setProjectId(row.projectId);
     setPlace(row.quote.building || '');
     setCompany(row.quote.clientCompany || '');
+    if (row.quote.clientTenantId) setClientId(row.quote.clientTenantId);
     setSent(row.quote);
     setDrafts([]);
     setShowPast(false);
   }
 
-  async function send(mode: 'self' | 'client') {
+  async function send(mode: 'self' | 'client' | 'admin') {
     if (!projectId) { Alert.alert('Pick the building first'); return; }
     if (drafts.length === 0) { Alert.alert('Add at least one item'); return; }
     for (const d of drafts) {
@@ -181,11 +211,11 @@ export default function QuickQuoteScreen() {
         lines.push({ key: d.key, qty: Number(d.qty), note: d.note.trim(), photo: objectPath });
       }
       const saved = await post<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, {
-        mode, clientTenantId: mode === 'client' ? clientId : '', note: note.trim(), building: place, lines,
+        mode, clientTenantId: mode === 'self' ? '' : clientId, note: note.trim(), building: place, lines,
       });
       setDrafts([]); setNote(''); setSent(saved);
-      Alert.alert(mode === 'self' ? 'Approved — go ahead' : 'Sent to the owner',
-        mode === 'self' ? 'Recorded against the building in your name.' : 'Their management have been told.');
+      Alert.alert(mode === 'self' ? 'Approved — go ahead' : mode === 'admin' ? 'Sent to the administrator' : 'Sent to the owner',
+        mode === 'self' ? 'Recorded against the building in your name.' : mode === 'admin' ? 'You will hear when it is approved, sent on or turned back.' : 'Their management have been told.');
     } catch (e: any) {
       Alert.alert('Not sent', e?.data?.error || e?.message || 'Check your connection and try again.');
     } finally { setBusy(''); }
@@ -211,9 +241,7 @@ export default function QuickQuoteScreen() {
             <Pressable key={row.projectId} onPress={() => openPast(row)} style={[ui.card, { marginTop: 8, gap: 2 }]}>
               <Text style={{ fontWeight: '700' }}>{row.quote.building || 'Quote'}</Text>
               <Text style={ui.listSub}>
-                {money(row.quote.total)} · {row.quote.status === 'approved'
-                  ? (row.quote.approvedBySelf ? 'approved by FIAREP' : 'approved')
-                  : row.quote.status === 'declined' ? 'declined' : `waiting for ${row.quote.clientCompany || 'the owner'}`}
+                {money(row.quote.total)} · {standing(row.quote)}
               </Text>
               <Text style={ui.listSub}>
                 {row.quote.sentAt ? new Date(row.quote.sentAt).toLocaleString() : ''}{row.quote.sentBy ? ` · ${row.quote.sentBy}` : ''}
@@ -247,9 +275,32 @@ export default function QuickQuoteScreen() {
       {sent && (
         <View style={[ui.card, { gap: 4, marginTop: 12 }]}>
           <Text style={{ fontWeight: '700' }}>
-            Sent — {money(sent.total)} · {sent.status === 'approved' ? (sent.approvedBySelf ? 'approved by FIAREP' : 'approved') : `waiting for ${sent.clientCompany || 'the owner'}`}
+            Sent — {money(sent.total)} · {standing(sent)}
           </Text>
+          {!!sent.sentBy && <Text style={ui.listSub}>From {sent.sentBy}</Text>}
           {sent.lines.map((l) => <Text key={l.id} style={ui.listSub}>{l.qty} × {l.label} — {money(l.amount)}</Text>)}
+          {isAdmin && sent.status === 'admin_review' && (
+            <View style={{ gap: 8, marginTop: 8 }}>
+              <Pressable style={[ui.btn, busy !== '' && ui.btnMuted]} disabled={busy !== ''} onPress={() => void review('approve')}>
+                <Text style={ui.btnText}>{busy === 'approve' ? 'Approving…' : `Approve ${money(sent.total)}`}</Text>
+              </Pressable>
+              <Text style={ui.label}>Company that approves it</Text>
+              <PickOne
+                options={clients.map((c) => c.name)}
+                value={clients.find((c) => c.id === clientId)?.name || ''}
+                onChange={(v) => setClientId(clients.find((c) => c.name === v)?.id || '')}
+                placeholder="Pick a company"
+                title="Who approves it?"
+                clearLabel="None"
+              />
+              <Pressable style={[ui.btnOutline, busy !== '' && { opacity: 0.5 }]} disabled={busy !== ''} onPress={() => void review('send')}>
+                <Text style={ui.btnOutlineText}>{busy === 'send' ? 'Sending…' : 'Send to the owner'}</Text>
+              </Pressable>
+              <Pressable style={{ paddingVertical: 6 }} disabled={busy !== ''} onPress={() => void review('decline')}>
+                <Text style={{ color: '#991b1b', fontWeight: '700' }}>{busy === 'decline' ? 'Turning it back…' : 'Turn it back'}</Text>
+              </Pressable>
+            </View>
+          )}
           <Pressable onPress={() => void receipt('sent')} disabled={busy !== ''} style={[ui.btnOutline, { marginTop: 8 }]}>
             <Text style={ui.btnOutlineText}>{busy === 'receipt' ? 'Making it…' : 'Receipt'}</Text>
           </Pressable>
@@ -316,17 +367,27 @@ export default function QuickQuoteScreen() {
                 title="Who approves it?"
                 clearLabel="None"
               />
-              <Pressable style={[ui.btn, { marginTop: 10 }, busy !== '' && ui.btnMuted]} disabled={busy !== ''} onPress={() => void send('client')}>
-                <Text style={ui.btnText}>{busy === 'client' ? 'Sending…' : `Send ${money(total)} to the owner`}</Text>
-              </Pressable>
-              <Pressable style={[ui.btnOutline, { marginTop: 8 }, busy !== '' && { opacity: 0.5 }]} disabled={busy !== ''} onPress={() => void send('self')}>
-                <Text style={ui.btnOutlineText}>{busy === 'self' ? 'Saving…' : `Approve ${money(total)} myself`}</Text>
-              </Pressable>
+              {isAdmin ? (
+                <>
+                  <Pressable style={[ui.btn, { marginTop: 10 }, busy !== '' && ui.btnMuted]} disabled={busy !== ''} onPress={() => void send('client')}>
+                    <Text style={ui.btnText}>{busy === 'client' ? 'Sending…' : `Send ${money(total)} to the owner`}</Text>
+                  </Pressable>
+                  <Pressable style={[ui.btnOutline, { marginTop: 8 }, busy !== '' && { opacity: 0.5 }]} disabled={busy !== ''} onPress={() => void send('self')}>
+                    <Text style={ui.btnOutlineText}>{busy === 'self' ? 'Saving…' : `Approve ${money(total)} myself`}</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <Pressable style={[ui.btn, { marginTop: 10 }, busy !== '' && ui.btnMuted]} disabled={busy !== ''} onPress={() => void send('admin')}>
+                  <Text style={ui.btnText}>{busy === 'admin' ? 'Sending…' : `Send ${money(total)} to the administrator`}</Text>
+                </Pressable>
+              )}
               <Pressable style={[ui.btnOutline, { marginTop: 8 }, busy !== '' && { opacity: 0.5 }]} disabled={busy !== ''} onPress={() => void receipt('draft')}>
                 <Text style={ui.btnOutlineText}>{busy === 'receipt' ? 'Making it\u2026' : 'Receipt'}</Text>
               </Pressable>
               <Text style={ui.listSub}>
-                Approving it yourself records it in your name and nobody is asked. Sending it tells their management and waits.
+                {isAdmin
+                  ? 'Approving it yourself records it in your name and nobody is asked. Sending it tells their management and waits.'
+                  : 'The administrator approves it, or sends it to the owner. Nothing is bought until then.'}
               </Text>
             </>
           )}

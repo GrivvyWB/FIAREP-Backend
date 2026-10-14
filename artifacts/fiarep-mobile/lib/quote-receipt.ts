@@ -38,7 +38,8 @@ export function receiptStatus(r: Receipt): { tone: "ok" | "no" | "wait"; text: s
   const text = r.status === "draft" ? "Not sent yet" : r.approvedBySelf
     ? `Approved by FIAREP${r.decidedBy ? ` · ${r.decidedBy}` : ""}`
     : r.status === "approved" ? `Approved by ${r.clientCompany || "the owner"}${r.decidedBy ? ` · ${r.decidedBy}` : ""}`
-    : r.status === "declined" ? `Declined by ${r.clientCompany || "the owner"}`
+    : r.status === "declined" ? `Declined by ${r.decidedBy && !r.clientCompany ? r.decidedBy : r.clientCompany || "the owner"}`
+    : r.status === "admin_review" ? "Waiting on FIAREP's administrator"
     : `Waiting on ${r.clientCompany || "the owner"}`;
   return { tone, text };
 }

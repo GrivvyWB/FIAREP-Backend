@@ -38,7 +38,8 @@ export function quoteReceiptHtml(r: Receipt): string {
   const decided = draft ? "Not sent yet" : r.approvedBySelf
     ? `Approved by FIAREP${r.decidedBy ? ` · ${esc(r.decidedBy)}` : ""}`
     : r.status === "approved" ? `Approved by ${esc(r.clientCompany || "the owner")}${r.decidedBy ? ` · ${esc(r.decidedBy)}` : ""}`
-    : r.status === "declined" ? `Declined by ${esc(r.clientCompany || "the owner")}`
+    : r.status === "declined" ? `Declined by ${esc(r.decidedBy && !r.clientCompany ? r.decidedBy : r.clientCompany || "the owner")}`
+    : r.status === "admin_review" ? "Waiting on FIAREP's administrator"
     : `Waiting on ${esc(r.clientCompany || "the owner")}`;
   const rows = r.lines.map((l) => `
       <tr>

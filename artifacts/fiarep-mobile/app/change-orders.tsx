@@ -3,7 +3,7 @@ import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, Image, TouchableOpacity } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { getCurrentActor, listChangeOrders, approveChangeOrderMgmt, declineChangeOrder, resubmitChangeOrder, findScopeForChangeOrder, type ChangeOrder } from '../lib/store';
+import { getCurrentActor, isFiarepAdministrator, listChangeOrders, approveChangeOrderMgmt, approveChangeOrderProcurement, declineChangeOrder, resubmitChangeOrder, findScopeForChangeOrder, type ChangeOrder } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
 import { takePhoto, pickPhoto, photoUri } from '../lib/photos';
@@ -26,6 +26,7 @@ export default function ChangeOrders() {
   const { mode } = useAppMode();
   const router = useRouter();
   const [items, setItems] = useState<ChangeOrder[]>([]);
+  const [fiarepAdmin, setFiarepAdmin] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({ action: true });
   const toggleSec = (k: string) => setOpen((m) => ({ ...m, [k]: !m[k] }));
   const [reasons, setReasons] = useState<Record<string, string>>({});
@@ -40,6 +41,7 @@ export default function ChangeOrders() {
     (async () => {
       const a = await getCurrentActor();
       setMe(a);
+      setFiarepAdmin(await isFiarepAdministrator().catch(() => false));
       const all = await listChangeOrders();
       setItems(all.sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || '')));
     })();
@@ -49,7 +51,13 @@ export default function ChangeOrders() {
   const isMgmt = mode === 'management' || mode === 'administrator';
 
   async function mgmtApprove(co: ChangeOrder) {
-    try { await approveChangeOrderMgmt(co.id); load(); Alert.alert('Approved', 'Sent to procurement for cost approval.'); }
+    try {
+      await approveChangeOrderMgmt(co.id);
+      // Inside FIAREP the administrator's approval is the whole approval: no
+      // separate cost sign-off by Procurement.
+      if (fiarepAdmin) { await approveChangeOrderProcurement(co.id); load(); Alert.alert('Approved', 'The change work order is approved.'); return; }
+      load(); Alert.alert('Approved', 'Sent to procurement for cost approval.');
+    }
     catch (e: any) { Alert.alert('Failed', e?.message ?? 'Error'); }
   }
   function openEdit(co: ChangeOrder) {
@@ -88,7 +96,7 @@ export default function ChangeOrders() {
       const renderCO = (co: ChangeOrder) => {
         const st = STATUS[co.status] || { label: co.status, color: '#666' };
         // Management on the app is view-only: approvals happen on fiarep.com.
-        const canMgmt = isMgmt && !readOnlyBanner && co.status === 'submitted';
+        const canMgmt = isMgmt && !readOnlyBanner && (co.status === 'submitted' || (fiarepAdmin && co.status === 'mgmt_approved'));
         return (
           <Pressable key={co.id} style={[ui.card, { gap: 6 }]} onPress={() => co.reportId && router.push('/report-detail?id=' + co.reportId)}>
             <View style={ui.line}><Text style={ui.lineK}>Job</Text><Text style={ui.lineV}>{co.reportRef}</Text></View>

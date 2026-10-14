@@ -21,13 +21,20 @@ type Client = { id: string; name: string };
 type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
 type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note: string };
 type QuickQuote = {
-  lines: QuickLine[]; total: number; status: "approved" | "pending" | "declined";
-  approvedBySelf: boolean; clientCompany: string; building: string; note: string;
+  lines: QuickLine[]; total: number; status: "admin_review" | "approved" | "pending" | "declined";
+  approvedBySelf: boolean; clientCompany: string; clientTenantId?: string; building: string; note: string;
   sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
 };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
+/** Where a quote stands, in words. */
+const standing = (q: QuickQuote) => q.status === "approved"
+  ? (q.approvedBySelf ? "approved by FIAREP" : "approved")
+  : q.status === "declined" ? "declined"
+  : q.status === "admin_review" ? "waiting for the administrator"
+  : `waiting for ${q.clientCompany || "the owner"}`;
+
 const get = <T,>(url: string) => customFetch<T>(url, { responseType: "json" } as never);
 
 export default function QuickQuote() {
@@ -36,6 +43,9 @@ export default function QuickQuote() {
   const pastEnabled = organizationModules?.["apptab.cpm.past-quotes"] !== false;
   const { toast } = useToast();
   const mine = (staff?.tenantId || "default") === "default";
+  // Only FIAREP's administrator approves a quote or sends it to the owner;
+  // everyone else sends theirs to the administrator. The server enforces it.
+  const isAdmin = staff?.role === "administrator";
 
   // The walk is priced against a BUILDING, not a project: a project made on a
   // phone may not have reached the server, and waiting for one is why this
@@ -55,7 +65,7 @@ export default function QuickQuote() {
   const [search, setSearch] = useState("");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"" | "self" | "client">("");
+  const [busy, setBusy] = useState<"" | "self" | "client" | "admin" | "approve" | "send" | "decline">("");
 
   useEffect(() => {
     if (!mine) return;
@@ -164,7 +174,7 @@ export default function QuickQuote() {
     } finally { setBusy(""); }
   }, [projectId, toast]);
 
-  const send = useCallback(async (mode: "self" | "client") => {
+  const send = useCallback(async (mode: "self" | "client" | "admin") => {
     if (!projectId) { toast({ variant: "destructive", title: "Pick the building first" }); return; }
     if (drafts.length === 0) { toast({ variant: "destructive", title: "Add at least one item" }); return; }
     for (const d of drafts) {
@@ -177,18 +187,39 @@ export default function QuickQuote() {
       const saved = await customFetch<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
         body: JSON.stringify({
-          mode, clientTenantId: mode === "client" ? clientId : "", note: note.trim(),
+          mode, clientTenantId: mode === "self" ? "" : clientId, note: note.trim(),
           building: place,
           lines: drafts.map((d) => ({ key: d.key, qty: Number(d.qty), note: d.note.trim(), photo: d.photo })),
         }),
       } as never);
       setDrafts([]); setNote("");
       setLastQuote(saved);
-      toast({ title: mode === "self" ? "Approved — go ahead" : "Sent to the client", description: mode === "self" ? "Recorded against the project in your name." : "Their management have been told." });
+      toast({
+        title: mode === "self" ? "Approved — go ahead" : mode === "admin" ? "Sent to the administrator" : "Sent to the client",
+        description: mode === "self" ? "Recorded against the project in your name." : mode === "admin" ? "You will hear when it is approved, sent on or turned back." : "Their management have been told.",
+      });
     } catch (err: any) {
       toast({ variant: "destructive", title: "Not sent", description: err?.data?.error || "Try again." });
     } finally { setBusy(""); }
   }, [projectId, place, drafts, clientId, note, toast]);
+
+  /** The administrator acts on a technician's quote. */
+  const review = useCallback(async (decision: "approve" | "send" | "decline") => {
+    if (!projectId) return;
+    if (decision === "send" && !clientId) { toast({ variant: "destructive", title: "Pick the company that approves it" }); return; }
+    setBusy(decision);
+    try {
+      const saved = await customFetch<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote/review`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
+        body: JSON.stringify({ decision, clientTenantId: decision === "send" ? clientId : "" }),
+      } as never);
+      setLastQuote(saved);
+      try { setPast(await get<Array<{ projectId: string; quote: QuickQuote }>>("/api/v1/fiarep/quotes")); } catch { /* history is a convenience */ }
+      toast({ title: decision === "approve" ? "Approved" : decision === "send" ? "Sent to the owner" : "Turned back" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Not done", description: err?.data?.error || "Try again." });
+    } finally { setBusy(""); }
+  }, [projectId, clientId, toast]);
 
   if (!mine) {
     return <div className="mx-auto max-w-lg p-10 text-center text-sm text-muted-foreground">Quick quotes are FIAREP's own.</div>;
@@ -219,15 +250,14 @@ export default function QuickQuote() {
                     setProjectId(row.projectId);
                     setBuildingId(""); setTypedAddress(row.quote.building || "");
                     setLastQuote(row.quote);
+                    if (row.quote.clientTenantId) setClientId(row.quote.clientTenantId);
                     setDrafts([]);
                     setShowPast(false);
                   }}
                 >
                   <span className="block text-sm font-medium">{row.quote.building || "Quote"}</span>
                   <span className="block text-xs text-muted-foreground">
-                    {money(row.quote.total)} · {row.quote.status === "approved"
-                      ? (row.quote.approvedBySelf ? "approved by FIAREP" : "approved")
-                      : row.quote.status === "declined" ? "declined" : `waiting for ${row.quote.clientCompany || "the owner"}`}
+                    {money(row.quote.total)} · {standing(row.quote)}
                     {row.quote.sentAt ? ` · ${new Date(row.quote.sentAt).toLocaleString()}` : ""}
                   </span>
                 </button>
@@ -278,11 +308,29 @@ export default function QuickQuote() {
           <p className="text-sm font-semibold">
             Sent — {money(sent.total)} ·{" "}
             <span className={sent.status === "approved" ? "text-emerald-700" : sent.status === "declined" ? "text-rose-700" : "text-amber-700"}>
-              {sent.status === "approved" ? (sent.approvedBySelf ? "approved by FIAREP" : "approved") : sent.status === "declined" ? "declined" : `waiting for ${sent.clientCompany || "the client"}`}
+              {standing(sent)}
             </span>
           </p>
           {sent.lines.map((l) => <p key={l.id} className="text-xs text-muted-foreground">{l.qty} × {l.label} — {money(l.amount)}</p>)}
           <p className="text-xs text-muted-foreground">{sent.sentBy}{sent.sentAt ? ` · ${when(sent.sentAt)}` : ""}{sent.decidedBy ? ` · ${sent.decidedBy}` : ""}</p>
+          {isAdmin && sent.status === "admin_review" && (
+            <div className="space-y-2 pt-2">
+              <Button className="h-11 w-full" disabled={busy !== ""} onClick={() => void review("approve")}>
+                <Check className="mr-2 h-4 w-4" />{busy === "approve" ? "Approving…" : `Approve ${money(sent.total)}`}
+              </Button>
+              <label className="text-xs font-medium text-muted-foreground" htmlFor="qq-review-client">Company that approves it</label>
+              <select id="qq-review-client" className="h-11 w-full rounded-md border border-input bg-background px-2 text-sm" value={clientId} onChange={(e) => setClientId(e.target.value)}>
+                <option value="">Pick a company…</option>
+                {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+              <Button variant="outline" className="h-11 w-full" disabled={busy !== ""} onClick={() => void review("send")}>
+                <Send className="mr-2 h-4 w-4" />{busy === "send" ? "Sending…" : "Send to the owner"}
+              </Button>
+              <Button variant="ghost" className="w-full text-destructive hover:text-destructive" disabled={busy !== ""} onClick={() => void review("decline")}>
+                {busy === "decline" ? "Turning it back…" : "Turn it back"}
+              </Button>
+            </div>
+          )}
           <div className="flex flex-wrap gap-2 pt-1">
             <Button variant="outline" size="sm" onClick={() => receipt("sent")}>
               <Printer className="mr-1 h-4 w-4" />Receipt
@@ -350,17 +398,27 @@ export default function QuickQuote() {
                   {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </select>
               </div>
-              <Button className="h-12 w-full" disabled={busy !== ""} onClick={() => void send("client")}>
-                <Send className="mr-2 h-4 w-4" />{busy === "client" ? "Sending…" : `Send ${money(total)} to the owner`}
-              </Button>
-              <Button variant="outline" className="h-12 w-full" disabled={busy !== ""} onClick={() => void send("self")}>
-                <Check className="mr-2 h-4 w-4" />{busy === "self" ? "Saving…" : `Approve ${money(total)} myself`}
-              </Button>
+              {isAdmin ? (
+                <>
+                  <Button className="h-12 w-full" disabled={busy !== ""} onClick={() => void send("client")}>
+                    <Send className="mr-2 h-4 w-4" />{busy === "client" ? "Sending…" : `Send ${money(total)} to the owner`}
+                  </Button>
+                  <Button variant="outline" className="h-12 w-full" disabled={busy !== ""} onClick={() => void send("self")}>
+                    <Check className="mr-2 h-4 w-4" />{busy === "self" ? "Saving…" : `Approve ${money(total)} myself`}
+                  </Button>
+                </>
+              ) : (
+                <Button className="h-12 w-full" disabled={busy !== ""} onClick={() => void send("admin")}>
+                  <Send className="mr-2 h-4 w-4" />{busy === "admin" ? "Sending…" : `Send ${money(total)} to the administrator`}
+                </Button>
+              )}
               <Button variant="outline" className="h-12 w-full" disabled={busy !== ""} onClick={() => receipt("draft")}>
                 <Printer className="mr-2 h-4 w-4" />Receipt
               </Button>
               <p className="text-xs text-muted-foreground">
-                Approving it yourself records it against the project in your name and nobody is asked. Sending it tells their management and waits.
+                {isAdmin
+                  ? "Approving it yourself records it against the project in your name and nobody is asked. Sending it tells their management and waits."
+                  : "The administrator approves it, or sends it to the owner. Nothing is bought until then."}
               </p>
             </div>
           )}

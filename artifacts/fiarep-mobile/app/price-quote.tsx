@@ -2,7 +2,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, RefreshControl } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
-import { getCurrentActor, listResidentReports, type ResidentReport } from '../lib/store';
+import { getCurrentActor, getSessionIdentity, listResidentReports, type ResidentReport } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri, uploadPhoto } from '../lib/photos';
 import { PickOne } from '../lib/community-ui';
 import { type Receipt } from '../lib/quote-receipt';
@@ -16,7 +16,7 @@ import { ui, ACCENT, money } from '../lib/ui';
 
 type CatalogLine = { key: string; label: string; price: number; unit: string; group: string };
 type QuoteLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note?: string };
-type Quote = { lines: QuoteLine[]; total: number; status: 'pending' | 'approved' | 'declined'; sentBy?: string; sentAt?: string; decidedBy?: string; decidedAt?: string; note?: string };
+type Quote = { lines: QuoteLine[]; total: number; status: 'admin_review' | 'pending' | 'approved' | 'declined'; sentBy?: string; sentAt?: string; decidedBy?: string; decidedAt?: string; note?: string };
 type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string };
 
 const when = (iso?: string) => (iso ? new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
@@ -34,15 +34,21 @@ export default function PriceQuote() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [showReceipt, setShowReceipt] = useState<Receipt | null>(null);
+  // Only FIAREP's administrator sends a quote to the client; a technician's goes to the administrator first.
+  const [isAdmin, setIsAdmin] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
       const me = await getCurrentActor();
+      const admin = (await getSessionIdentity().catch(() => null))?.role === 'administrator';
+      setIsAdmin(admin);
       const all = await listResidentReports();
       // Jobs of mine that came from a client company: those are the only ones
-      // there is anybody to send a price to.
-      const mine = all.filter((r) => r.assignedStaffId === me.id && (r as any).fiarepClient && r.status !== 'resolved');
+      // there is anybody to send a price to. The administrator also sees every
+      // technician's quote that is waiting on them.
+      const mine = all.filter((r) => (r as any).fiarepClient && r.status !== 'resolved' &&
+        (r.assignedStaffId === me.id || (admin && quoteOf(r)?.status === 'admin_review')));
       setJobs(mine);
       if (!jobId && mine.length === 1) setJobId(mine[0]!.id);
       try {
@@ -104,7 +110,8 @@ export default function PriceQuote() {
       } as never);
       setDrafts([]);
       await load();
-      Alert.alert('Sent to the client', 'They approve it before the work starts. You will get an alert either way.');
+      if (isAdmin) Alert.alert('Sent to the client', 'They approve it before the work starts. You will get an alert either way.');
+      else Alert.alert('Sent to the administrator', 'The administrator sends it to the client or turns it back. Do not start until it is approved.');
     } catch (e: any) {
       Alert.alert('Not sent', e?.data?.error || e?.message || 'Check your connection and try again.');
     } finally { setBusy(false); }
@@ -112,6 +119,20 @@ export default function PriceQuote() {
 
   const jobLabel = (r: ResidentReport) =>
     [r.complaintNo || r.id.slice(0, 6), r.address, r.unit ? `Apt ${r.unit}` : ''].filter(Boolean).join(' · ');
+
+  /** The administrator sends a technician's quote to the client, or turns it back. */
+  async function review(decision: 'send' | 'decline') {
+    if (!job) return;
+    setBusy(true);
+    try {
+      await customFetch(`/api/v1/resident-reports/${encodeURIComponent(job.id)}/quote/review`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ decision }), responseType: 'json',
+      } as never);
+      await load();
+    } catch (e: any) {
+      Alert.alert('Not done', e?.data?.error || e?.message || 'Check your connection and try again.');
+    } finally { setBusy(false); }
+  }
 
   // The same receipt the quick quote prints, so a client gets one piece of
   // paper whichever way the job was priced.
@@ -175,14 +196,25 @@ export default function PriceQuote() {
           <Text style={{ fontWeight: '700' }}>
             Already sent — {money(sent.total)} ·{' '}
             <Text style={{ color: sent.status === 'approved' ? '#065f46' : sent.status === 'declined' ? '#991b1b' : '#92400e' }}>
-              {sent.status === 'approved' ? 'approved' : sent.status === 'declined' ? 'declined' : 'waiting for the client'}
+              {sent.status === 'approved' ? 'approved' : sent.status === 'declined' ? 'declined' : sent.status === 'admin_review' ? 'waiting for the administrator' : 'waiting for the client'}
             </Text>
           </Text>
           {sent.lines.map((l) => (
             <Text key={l.id} style={ui.listSub}>{l.qty} × {l.label} — {money(l.amount)}</Text>
           ))}
           {!!sent.decidedBy && <Text style={ui.listSub}>{sent.decidedBy} · {when(sent.decidedAt)}{sent.note ? ` · ${sent.note}` : ''}</Text>}
-          {sent.status === 'pending' && <Text style={ui.listSub}>Do not start until they approve.</Text>}
+          {(sent.status === 'pending' || sent.status === 'admin_review') && <Text style={ui.listSub}>Do not start until it is approved.</Text>}
+          {!!sent.sentBy && <Text style={ui.listSub}>From {sent.sentBy}</Text>}
+          {isAdmin && sent.status === 'admin_review' && (
+            <View style={{ gap: 8, marginTop: 8 }}>
+              <Pressable style={[ui.btn, busy && ui.btnMuted]} disabled={busy} onPress={() => void review('send')}>
+                <Text style={ui.btnText}>{busy ? 'Sending…' : `Send ${money(sent.total)} to the client`}</Text>
+              </Pressable>
+              <Pressable style={{ paddingVertical: 6 }} disabled={busy} onPress={() => void review('decline')}>
+                <Text style={{ color: '#991b1b', fontWeight: '700' }}>Turn it back</Text>
+              </Pressable>
+            </View>
+          )}
           <Pressable onPress={() => void receipt('sent')} disabled={busy} style={[ui.btnOutline, { marginTop: 8 }]}>
             <Text style={ui.btnOutlineText}>{busy ? 'Making it\u2026' : 'Receipt'}</Text>
           </Pressable>
@@ -244,7 +276,7 @@ export default function PriceQuote() {
               </View>
               <Text style={ui.listSub}>FIAREP's price book. The server prices it again when it sends, so this is what the client sees.</Text>
               <Pressable style={[ui.btn, { marginTop: 10 }, busy && ui.btnMuted]} disabled={busy} onPress={() => void send()}>
-                <Text style={ui.btnText}>{busy ? 'Sending…' : 'Send to the client for approval'}</Text>
+                <Text style={ui.btnText}>{busy ? 'Sending…' : isAdmin ? 'Send to the client for approval' : 'Send to the administrator'}</Text>
               </Pressable>
               <Pressable style={[ui.btnOutline, { marginTop: 8 }]} disabled={busy} onPress={() => void receipt('draft')}>
                 <Text style={ui.btnOutlineText}>Receipt</Text>

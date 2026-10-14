@@ -3,6 +3,7 @@ import { logger } from "./lib/logger";
 import { ensureNychaCatalog } from "./lib/nycha-catalog";
 import { ensureNotificationReadsTable } from "./lib/notificationReads";
 import { ensureFiarepServiceTitles } from "./lib/fiarepServices";
+import { ensureFiarepAdministrators } from "./lib/fiarepAdmins";
 import { startPushReceiptWorker } from "./lib/push";
 
 const rawPort = process.env["PORT"];
@@ -22,6 +23,7 @@ if (Number.isNaN(port) || port <= 0) {
 await ensureNychaCatalog();
 await ensureNotificationReadsTable();
 await ensureFiarepServiceTitles();
+await ensureFiarepAdministrators();
 
 app.listen(port, (err) => {
   if (err) {

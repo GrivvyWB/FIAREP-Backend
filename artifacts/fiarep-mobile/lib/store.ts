@@ -1498,6 +1498,16 @@ async function rememberSignedInStaff(d: SQLite.SQLiteDatabase, staff: Staff, iss
   );
 }
 
+/** FIAREP's administrators — Timothy Winn and Emily Winn on FIAREP's own
+ *  organization. The server makes them administrators; the app gives them the
+ *  field tools as well and lets them act from the phone. */
+export async function isFiarepAdministrator(): Promise<boolean> {
+  const identity = await getSessionIdentity();
+  if (!identity || identity.role !== 'administrator' || (identity.tenantId || 'default') !== 'default') return false;
+  const name = ((await getCurrentActor()).name || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  return name === 'timothy winn' || name === 'emily winn';
+}
+
 export async function getSessionIdentity(): Promise<SessionIdentity | null> {
   const d = await db();
   const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'session_identity');

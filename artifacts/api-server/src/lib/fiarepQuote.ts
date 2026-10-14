@@ -33,9 +33,12 @@ export type QuoteLine = {
 export type Quote = {
   lines: QuoteLine[];
   total: number;
-  status: "pending" | "approved" | "declined";
+  /** admin_review: a technician priced it and FIAREP's administrator has not
+   *  yet sent it on. Only an administrator sends a quote to the client. */
+  status: "admin_review" | "pending" | "approved" | "declined";
   sentAt: string;
   sentBy: string;
+  sentById?: string;
   decidedAt?: string;
   decidedBy?: string;
   note?: string;      // why it was declined
@@ -46,9 +49,19 @@ export function quoteOf(state: Record<string, unknown>): Quote | null {
   return q && typeof q === "object" && !Array.isArray(q) ? (q as Quote) : null;
 }
 
-/** A quote waiting on the client holds the work. */
+/** A quote waiting on the administrator or the client holds the work. */
 export function quoteBlocksStart(state: Record<string, unknown>): boolean {
-  return quoteOf(state)?.status === "pending";
+  const status = quoteOf(state)?.status;
+  return status === "pending" || status === "admin_review";
+}
+
+/** FIAREP's administrators: everyone a technician's quote goes to first. */
+async function fiarepAdministrators(): Promise<string[]> {
+  const rows = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+    eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"),
+    eq(staffAccounts.role, "administrator"),
+  ));
+  return rows.map((r) => r.id);
 }
 
 async function overrides(): Promise<Record<string, number>> {
@@ -102,8 +115,32 @@ export async function sendQuote(
   }
   const total = Math.round(lines.reduce((n, l) => n + l.amount, 0) * 100) / 100;
   const now = new Date();
-  const quote: Quote = { lines, total, status: "pending", sentAt: now.toISOString(), sentBy: actor.name };
+  const quote: Quote = { lines, total, status: "pending", sentAt: now.toISOString(), sentBy: actor.name, sentById: actor.id };
 
+  // A technician has no approval rights: the quote goes to FIAREP's
+  // administrator, who sends it to the client or turns it back.
+  if (actor.role !== "administrator") {
+    const held: Quote = { ...quote, status: "admin_review" };
+    await db.update(entityRecords).set({ state: { ...copy.state, quote: held }, version: (copy.version ?? 1) + 1, updatedAt: now })
+      .where(and(eq(entityRecords.id, copy.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
+    await audit(actor, "resident-reports.quote-to-admin", `${lines.length} item(s), $${total.toFixed(2)}`, copy.id);
+    const ref = [String(copy.state["complaintNo"] || ""), String(copy.state["address"] || "")].filter(Boolean).join(" · ");
+    await alert(FIAREP_TENANT, await fiarepAdministrators(), `Quote to approve — $${total.toFixed(2)} from ${actor.name}`, ref, copy.id);
+    return { ok: true, quote: held };
+  }
+  return deliverToClient(actor, copy, quote);
+}
+
+/** Put the quote in front of the client's management. Administrator only. */
+async function deliverToClient(
+  actor: Actor,
+  copy: Row,
+  quote: Quote,
+): Promise<{ ok: true; quote: Quote } | { ok: false; status: number; error: string }> {
+  const client = copy.state["fiarepClient"] as { tenantId?: string; recordId?: string; company?: string } | undefined;
+  if (!client?.tenantId || !client.recordId) return { ok: false, status: 400, error: "This complaint did not come from a client company." };
+  const { lines, total } = quote;
+  const now = new Date();
   const [source] = await db.select().from(entityRecords).where(and(
     eq(entityRecords.id, client.recordId), eq(entityRecords.tenantId, client.tenantId), eq(entityRecords.deleted, false),
   )).limit(1);
@@ -125,6 +162,34 @@ export async function sendQuote(
   ));
   const ref = [String(source.state["complaintNo"] || ""), String(source.state["address"] || "")].filter(Boolean).join(" · ");
   await alert(client.tenantId, managers.map((m) => m.id), `FIAREP needs approval — $${total.toFixed(2)}`, ref, source.id);
+  return { ok: true, quote };
+}
+
+/** FIAREP's administrator acts on a technician's quote: sends it to the
+ *  client, or turns it back to the technician. */
+export async function reviewQuote(
+  actor: Actor,
+  copy: Row,
+  decision: "send" | "decline",
+  note: string,
+): Promise<{ ok: true; quote: Quote } | { ok: false; status: number; error: string }> {
+  if (actor.tenantId !== FIAREP_TENANT || actor.role !== "administrator") {
+    return { ok: false, status: 403, error: "Only FIAREP's administrator sends a quote on." };
+  }
+  const current = quoteOf(copy.state);
+  if (!current) return { ok: false, status: 404, error: "There is no quote on this job." };
+  if (current.status !== "admin_review") return { ok: false, status: 409, error: `This was already ${current.status === "pending" ? "sent to the client" : current.status}.` };
+  const now = new Date();
+  if (decision === "send") {
+    return deliverToClient(actor, copy, { ...current, status: "pending", sentAt: now.toISOString() });
+  }
+  const quote: Quote = { ...current, status: "declined", decidedAt: now.toISOString(), decidedBy: actor.name, note: note.trim().slice(0, 500) };
+  await db.update(entityRecords).set({ state: { ...copy.state, quote }, version: (copy.version ?? 1) + 1, updatedAt: now })
+    .where(and(eq(entityRecords.id, copy.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
+  await audit(actor, "resident-reports.quote-turned-back", `$${current.total.toFixed(2)}${note ? ` · ${note}` : ""}`, copy.id);
+  const ref = [String(copy.state["complaintNo"] || ""), String(copy.state["address"] || "")].filter(Boolean).join(" · ");
+  await alert(FIAREP_TENANT, [current.sentById || String(copy.state["assignedStaffId"] || "")],
+    `${actor.name} turned the quote back${note ? `: ${note}` : ""}`, ref, copy.id);
   return { ok: true, quote };
 }
 
