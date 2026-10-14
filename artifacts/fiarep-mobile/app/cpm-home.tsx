@@ -69,12 +69,25 @@ export default function CpmHome() {
           router.replace('/management-home');
           return;
         }
-        if (normalized !== 'cpm' && normalized !== 'inspector') {
+        const identity = await getSessionIdentity();
+        // Who belongs on this screen. The rest of the app decides this by what
+        // a title CONTAINS (module-access, measurement-access); this one check
+        // used to demand the title be exactly "cpm" or "inspector", so a
+        // Technician, a Senior Inspector or a CPM Technician was thrown to the
+        // Projects screen — and the Home button there sends them straight back
+        // here, which is the bounce. Matched to the rest of the app.
+        const belongsHere =
+          normalized.includes('cpm') ||
+          normalized.includes('inspector') ||
+          normalized.includes('technician') ||
+          normalized === 'tech' ||
+          // FIAREP's own crew are technicians whatever their title reads.
+          (identity?.tenantId || 'default') === 'default';
+        if (!belongsHere) {
           router.replace(mode === 'management' ? '/management-home' : '/');
           return;
         }
         setPosition(nextPosition);
-        const identity = await getSessionIdentity();
         const tech = (identity?.tenantId || 'default') === 'default';
         setIsTechnician(tech);
         navigation.setOptions({ headerShown: false });
