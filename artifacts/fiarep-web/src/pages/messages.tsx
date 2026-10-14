@@ -5,15 +5,17 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { communityUnit, isCommunityCoordinator } from "@/lib/access-policy";
+import { communityUnit, isCommunityCoordinator, isFiarepAdministrator } from "@/lib/access-policy";
 import { Copy, KeyRound, MessageSquare, Send, X } from "lucide-react";
 
 // Text messaging with FIAREP Services.
 //
-// A coordinator sees the people they handed a code to, and every plan client.
-// A plan client sees one conversation: theirs with the unit. Nobody else has
-// this page at all, and a code conversation belongs to the coordinator who
-// issued it - not to the supervisor, not to the office.
+// A coordinator sees the people they handed a code to, and every plan client
+// writing to FIAREP Services. FIAREP's administrators (Timothy Winn, Emily
+// Winn) see the clients writing to the administrator and the codes they
+// handed out themselves. A plan client has two conversations: one with
+// FIAREP Services, one with the administrator. Nobody reads a conversation
+// they are not part of - not a supervisor, not the administrators.
 
 type ThreadRow = {
   id: string; kind: "code" | "client"; who: string; address: string; apartment: string;
@@ -30,12 +32,13 @@ const post = <T,>(url: string, body: unknown) => customFetch<T>(url, {
 export default function Messages() {
   const { staff, organizationModules } = useAuth();
   const { toast } = useToast();
-  const mine = isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default";
+  const admin = isFiarepAdministrator(staff);
+  const mine = (isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") || admin;
   const unit = communityUnit("default");
   const clientSide = !mine && (staff?.role === "administrator" || staff?.role === "management") &&
     organizationModules["fiarepMessaging"] === true;
 
-  if (mine) return <CoordinatorMessages unit={unit} toast={toast} />;
+  if (mine) return <CoordinatorMessages unit={unit} admin={admin} toast={toast} />;
   if (clientSide) return <ClientMessages unit={unit} toast={toast} />;
   return (
     <div className="mx-auto max-w-lg p-10 text-center text-sm text-muted-foreground">
@@ -45,7 +48,7 @@ export default function Messages() {
 }
 
 /** FIAREP's side: hand out a code, read and answer. */
-function CoordinatorMessages({ unit, toast }: { unit: string; toast: ReturnType<typeof useToast>["toast"] }) {
+function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: boolean; toast: ReturnType<typeof useToast>["toast"] }) {
   const [rows, setRows] = useState<ThreadRow[]>([]);
   const [openId, setOpenId] = useState("");
   const [issued, setIssued] = useState<{ code: string; who: string } | null>(null);
@@ -86,7 +89,7 @@ function CoordinatorMessages({ unit, toast }: { unit: string; toast: ReturnType<
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><MessageSquare className="h-6 w-6" />Messages</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Give someone a code at the door and they can write to you — in the app or on the website — and to nobody else.
-          You are the only person at FIAREP who reads it.
+          You are the only person at FIAREP who reads it.{admin ? " Client companies on the plan can also write to the administrator here." : ""}
         </p>
       </div>
 
@@ -122,7 +125,7 @@ function CoordinatorMessages({ unit, toast }: { unit: string; toast: ReturnType<
                 <p className="truncate text-sm font-medium">
                   {r.who || "Unnamed"}
                   {r.kind === "client" && <span className="ml-2 rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-semibold text-blue-800">Client company</span>}
-                  {r.closed && <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Closed</span>}
+                  {r.closed && <span className="ml-2 rounded-full bg-muted px-2 py-0.5 text-[11px] font-semibold text-muted-foreground">Blocked</span>}
                 </p>
                 <p className="truncate text-xs text-muted-foreground">
                   {[r.address, r.apartment ? `Apt ${r.apartment}` : ""].filter(Boolean).join(" · ")}
@@ -142,28 +145,37 @@ function CoordinatorMessages({ unit, toast }: { unit: string; toast: ReturnType<
                 onSent={load}
                 toast={toast}
                 footer={r.kind === "code" && !r.closed ? (
-                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void close(r.id)}>Close this conversation</Button>
+                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => { if (window.confirm(`Block ${r.who || "this person"}? Their code stops working and they can no longer message you.`)) void close(r.id); }}>Block this person</Button>
                 ) : null}
               />
             )}
           </div>
         ))}
       </div>
-      <p className="text-xs text-muted-foreground">A client company on the plan writes to the whole {unit} unit — any coordinator can answer.</p>
+      {!admin && <p className="text-xs text-muted-foreground">A client company on the plan writes to the whole {unit} unit — any coordinator can answer.</p>}
     </div>
   );
 }
 
-/** A plan client's side: one conversation with the unit, no code needed. */
+/** A plan client's side, no code needed: one conversation with FIAREP
+ *  Services and a separate one with FIAREP's administrator. Never a
+ *  technician or a worker. */
 function ClientMessages({ unit, toast }: { unit: string; toast: ReturnType<typeof useToast>["toast"] }) {
+  const [to, setTo] = useState<"services" | "admin">("services");
+  const url = to === "admin" ? "/api/v1/client/messages?to=admin" : "/api/v1/client/messages";
+  const name = to === "admin" ? "FIAREP's administrator" : unit;
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 sm:p-6">
       <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><MessageSquare className="h-6 w-6" />{unit}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Write to {unit} and they answer here. Your residents never see this.</p>
+        <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><MessageSquare className="h-6 w-6" />Message FIAREP</h1>
+        <p className="mt-1 text-sm text-muted-foreground">Write to {name} and they answer here. Only the two of you see it; your residents never do.</p>
+      </div>
+      <div className="flex gap-2">
+        <Button variant={to === "services" ? "default" : "outline"} onClick={() => setTo("services")}>{unit}</Button>
+        <Button variant={to === "admin" ? "default" : "outline"} onClick={() => setTo("admin")}>Administrator</Button>
       </div>
       <div className="rounded-lg border bg-card">
-        <Thread id="client" readUrl="/api/v1/client/messages" sendUrl="/api/v1/client/messages" side="contact" closed={false} toast={toast} />
+        <Thread key={to} id={`client-${to}`} readUrl={url} sendUrl={url} side="contact" closed={false} toast={toast} />
       </div>
     </div>
   );
@@ -223,7 +235,7 @@ function Thread({ id, readUrl, sendUrl, side, closed, onSent, footer, toast }: {
         <div ref={end} />
       </div>
       {closed ? (
-        <p className="text-xs text-muted-foreground">This conversation is closed.</p>
+        <p className="text-xs text-muted-foreground">This conversation is blocked.</p>
       ) : (
         <div className="flex items-end gap-2">
           <Textarea className="min-h-10 flex-1" rows={2} placeholder="Write a message" value={body} onChange={(e) => setBody(e.target.value)} />

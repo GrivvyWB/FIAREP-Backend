@@ -111,7 +111,7 @@ router.get("/v1/platform/crew", async (req, res) => {
   res.json({
     clockEnabled: getTimeClockConfig(org?.features).mobileClockEnabled,
     from: from.toISOString().slice(0, 10), to: new Date(to.getTime() - 1).toISOString().slice(0, 10),
-    members: members.map((m) => view(m, hours.get(m.id), last.get(m.id) ?? null)),
+    members: members.map((m) => ({ ...view(m, hours.get(m.id), last.get(m.id) ?? null), messaging: (((org?.features as Record<string, unknown> | null)?.["modules"] ?? {}) as Record<string, unknown>)[`msg.${m.id}`] !== false })),
     totalHours, totalPay,
   });
 });
@@ -125,6 +125,24 @@ router.put("/v1/platform/crew/clock", async (req, res) => {
   await db.update(organizations).set({ features, updatedAt: new Date() }).where(eq(organizations.id, TENANT));
   await platformAudit(owner.name, "crew.clock", TENANT, { enabled: getTimeClockConfig(org.features).mobileClockEnabled }, { enabled });
   res.json({ clockEnabled: enabled });
+});
+
+/** Who uses messaging: a switch per FIAREP Services member, kept on FIAREP's
+ *  own organization as modules["msg.<staffId>"]. On unless switched off. */
+router.put("/v1/platform/crew/:id/messaging", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const id = String(req.params["id"] || "");
+  const enabled = (req.body as Record<string, unknown>)?.["enabled"] === true;
+  const org = await crewOrg();
+  if (!org) { res.status(404).json({ error: "FIAREP organization not found" }); return; }
+  const [member] = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(eq(staffAccounts.id, id), eq(staffAccounts.tenantId, TENANT))).limit(1);
+  if (!member) { res.status(404).json({ error: "No such crew member." }); return; }
+  const features = (org.features && typeof org.features === "object" ? org.features : {}) as Record<string, unknown>;
+  const modules = (features["modules"] && typeof features["modules"] === "object" && !Array.isArray(features["modules"]) ? features["modules"] : {}) as Record<string, unknown>;
+  const before = modules[`msg.${id}`] !== false;
+  await db.update(organizations).set({ features: { ...features, modules: { ...modules, [`msg.${id}`]: enabled } }, updatedAt: new Date() }).where(eq(organizations.id, TENANT));
+  await platformAudit(owner.name, "crew.messaging", TENANT, { id, enabled: before }, { id, enabled });
+  res.json({ id, messaging: enabled });
 });
 
 router.post("/v1/platform/crew", async (req, res) => {

@@ -5,6 +5,8 @@ import { clearAppMode, getCurrentActor, getSessionIdentity, isFiarepAdministrato
 import { useAppMode } from './_layout';
 import { useModuleAccess, useRawModules } from '../lib/module-access';
 import { ui } from '../lib/ui';
+import MessagesBar from '../components/MessagesBar';
+import { useMessagingOpen } from '../lib/fiarep-messaging';
 import {
   approveCommunity, communityTitles, isCommunitySupervisor, listCommunity, removeCommunity, shareResidentPdf, shareResidentText, str, today, type CommunityRecord,
 } from '../lib/community';
@@ -31,6 +33,7 @@ export default function CommunityHome() {
   const [isSup, setIsSup] = useState(false);
   const [admin, setAdmin] = useState(false);
   const [fiarep, setFiarep] = useState(false);
+  const messagingOpen = useMessagingOpen();
   const [meId, setMeId] = useState('');
   const [name, setName] = useState('');
   // FIAREP calls the unit FIAREP Services; other companies keep the trade name.
@@ -116,6 +119,9 @@ export default function CommunityHome() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
       keyboardShouldPersistTaps="handled"
     >
+      {fiarep && messagingOpen === true && !admin && (
+        <MessagesBar sub="People you gave a code to, and client companies" onPress={() => router.push('/fiarep-messages')} />
+      )}
       <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{admin ? unit.plural : supervisor ? unit.supervisor : unit.unit}</Text>
       <Text style={[ui.label, { textAlign: 'center', marginBottom: 8 }]}>
         {name ? `${name} · ` : ''}{supervisor ? 'Everything your coordinators log.' : `Only you and ${fiarep ? 'the administrator' : 'your supervisor'} see what you log.`}
@@ -200,7 +206,7 @@ export default function CommunityHome() {
             {!reviewOn ? null : (str(st.reviewStatus) || 'submitted') === 'approved' ? (
               <Text style={{ fontSize: 12, color: '#047857', fontWeight: '600', marginTop: 6 }}>Approved — received by {str(st.reviewedByName) || approverWord}{st.reviewedAt ? ` · ${new Date(String(st.reviewedAt)).toLocaleString()}` : ''}</Text>
             ) : (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 6 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 10, marginTop: 6 }}>
                 <Text style={{ backgroundColor: '#fef3c7', color: '#92400e', fontWeight: '700', fontSize: 12, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 999 }}>{str(st.reviewStatus) === 'updated' ? 'UPDATED — REVIEW AGAIN' : `WAITING FOR ${approverWord.replace('the ', '').toUpperCase()}`}</Text>
                 {reviewer && <Pressable onPress={() => void approve(r)} style={{ backgroundColor: ACCENT, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 8 }}><Text style={{ fontWeight: '700' }}>Approve — received</Text></Pressable>}
               </View>

@@ -155,13 +155,13 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Review Reports", "Send Violation", "Assign a Job", "In-house assignments", "Staff Member Jobs", "Cover a Site", "Create Report", "+ New Project",
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
     "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
-    "Default rates", "Request Time Off", "Leave Calendar", "Attendance",
+    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
     "Audit Log",
     "Manage All Requests", "Resident Reports", "Send Violation", "Assign a Job", "Staff Member Jobs", "Add Job for Mgmt", "Projects / Inspections",
     "HUD Inspections", "Change Orders", "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score",
-    "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
+    "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance", "Messages",
     // FIAREP's administrators (Timothy Winn, Emily Winn) also get the technician's tools.
     "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
     "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order",
@@ -274,6 +274,8 @@ export default function OwnerModules() {
   const [communityReviewEnabled, setCommunityReviewEnabled] = useState(true);
   const [fiarepRoutingEnabled, setFiarepRoutingEnabled] = useState(false);
   const [fiarepMessagingEnabled, setFiarepMessagingEnabled] = useState(false);
+  // FIAREP's own master switch for messaging (codes and client messages). On unless switched off.
+  const [messagingOpen, setMessagingOpen] = useState(true);
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -334,6 +336,10 @@ export default function OwnerModules() {
       Boolean(configured && typeof configured === "object" &&
         (configured as Record<string, unknown>).fiarepMessaging === true),
     );
+    setMessagingOpen(
+      !(configured && typeof configured === "object" &&
+        (configured as Record<string, unknown>).fiarepMessagingOpen === false),
+    );
     setDirty(false);
   }, [organization]);
 
@@ -391,6 +397,11 @@ export default function OwnerModules() {
     setDirty(true);
   };
 
+  const toggleMessagingOpen = (enabled: boolean) => {
+    setMessagingOpen(enabled);
+    setDirty(true);
+  };
+
   const toggleDeletion = async (enabled: boolean) => {
     if (!organization || deletionSaving) return;
     const previous = deletionEnabled;
@@ -437,7 +448,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
           },
         },
@@ -775,6 +786,31 @@ export default function OwnerModules() {
                     checked={fiarepRoutingEnabled}
                     onCheckedChange={toggleFiarepRouting}
                     aria-label={`${fiarepRoutingEnabled ? "Disable" : "Enable"} resident complaints coming to FIAREP`}
+                  />
+                </div>
+                )}
+                {isFiarep && (
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  messagingOpen ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    messagingOpen ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <MessageSquare className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Messaging FIAREP</p>
+                    <p className="text-xs text-slate-500">People with a code, and client companies on the plan, write to FIAREP Services or the administrator - never to a technician or worker. Each conversation is seen only by its two sides. Off: the Message buttons go away and no code works</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    messagingOpen ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {messagingOpen ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={messagingOpen}
+                    onCheckedChange={toggleMessagingOpen}
+                    aria-label={`${messagingOpen ? "Disable" : "Enable"} messaging FIAREP`}
                   />
                 </div>
                 )}

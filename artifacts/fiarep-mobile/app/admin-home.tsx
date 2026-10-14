@@ -6,7 +6,9 @@ import { clearAppMode, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useState, useCallback, useLayoutEffect } from 'react';
 import { useFocusEffect } from 'expo-router';
-import { unreadCount, getCurrentActor, getCurrentPosition, isFiarepAdministrator } from '../lib/store';
+import { unreadCount, getCurrentActor, getCurrentPosition, getSessionIdentity, isFiarepAdministrator } from '../lib/store';
+import MessagesBar from '../components/MessagesBar';
+import { useMessagingOpen } from '../lib/fiarep-messaging';
 import { hasAnyMeasurementAccess } from '../lib/measurement-access';
 import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
@@ -47,10 +49,18 @@ export default function AdminHome() {
   // field: they get every technician tool here, and every request inside
   // FIAREP comes to them, so they get an Inbox too.
   const [fiarepAdmin, setFiarepAdmin] = useState(false);
+  const [tenant, setTenant] = useState('default');
+  // Messaging FIAREP, at the top of the home screen: FIAREP's administrators
+  // read their own conversations; a client company on the plan writes to
+  // FIAREP Services or the administrator.
+  const messagingOpen = useMessagingOpen();
+  const clientPlan = tenant !== 'default' && rawModules['fiarepMessaging'] === true;
+  const showMessages = messagingOpen === true && (fiarepAdmin || clientPlan) && tileEnabled('admin', 'Messages', rawModules);
   const [position, setPosition] = useState('');
   useFocusEffect(useCallback(() => { (async () => {
     const a = await getCurrentActor(); let c = await unreadCount('administrator'); if (a.name) c += await unreadCount(a.name); if (a.id) c += await unreadCount(a.id).catch(() => 0); setUnread(c);
     setFiarepAdmin(await isFiarepAdministrator().catch(() => false));
+    setTenant(((await getSessionIdentity().catch(() => null))?.tenantId) || 'default');
     setPosition((await getCurrentPosition().catch(() => '')) || '');
   })(); }, []));
 
@@ -157,7 +167,7 @@ export default function AdminHome() {
   return (
     <FieldHome
       title={title}
-      banner={<>{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly && !fiarepAdmin ? <ReadOnlyBanner /> : null}<UpperManagementMuteToggle /></>}
+      banner={<>{showMessages ? <MessagesBar dark label={fiarepAdmin ? 'Messages' : 'Message FIAREP'} sub={fiarepAdmin ? 'Clients writing to you, and the codes you hand out' : 'FIAREP Services or the administrator'} onPress={() => router.push(fiarepAdmin ? '/fiarep-messages' : '/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly && !fiarepAdmin ? <ReadOnlyBanner /> : null}<UpperManagementMuteToggle /></>}
       clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
       sections={homeSections}
       tabs={tabs}

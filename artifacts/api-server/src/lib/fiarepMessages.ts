@@ -26,6 +26,7 @@ import { db, entityRecords, notifications, organizations, staffAccounts } from "
 import type { Actor } from "./auth";
 import { deliverPushNotification } from "./push";
 import { isCommunityCoordinator } from "./domain";
+import { isFiarepFieldAdmin } from "./fiarepAdminNames";
 import { FIAREP_TENANT } from "./fiarepDispatch";
 
 // Neither entity is in ENTITIES, so the generic record routes cannot read or
@@ -46,6 +47,9 @@ export type Message = {
 
 export type Thread = {
   kind: "code" | "client";
+  /** A client thread goes to FIAREP Services ("services") or to FIAREP's
+   *  administrator ("admin"); each is its own conversation. */
+  to?: "services" | "admin";
   coordinatorId: string;       // "" on a client thread: the unit answers
   coordinatorName: string;
   contactName: string;
@@ -58,7 +62,36 @@ export type Thread = {
   openForFiarep: number;       // unread on FIAREP's side
   openForContact: number;
   closedAt: string;            // set when the code is killed
+  /** The phone of the person holding the code, so a reply reaches it as a
+   *  push notification. They have no account; this is all we keep. */
+  contactPush?: string;
 };
+
+const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
+const validPushToken = (t: unknown): string => {
+  const token = String(t ?? "").trim();
+  return /^(ExponentPushToken|ExpoPushToken)\[.+\]$/.test(token) ? token : "";
+};
+
+/** Push a reply to the code holder's phone. Never throws. */
+async function pushToContact(token: string, title: string, body: string, threadId: string): Promise<void> {
+  if (!token) return;
+  try {
+    await fetch(EXPO_PUSH_URL, {
+      method: "POST",
+      signal: AbortSignal.timeout(10000),
+      headers: { Accept: "application/json", "Content-Type": "application/json" },
+      body: JSON.stringify([{ to: token, title, body: body.slice(0, 160), sound: "default", data: { fiarepMessage: threadId } }]),
+    });
+  } catch { /* a missed push never loses the message - it is in the conversation */ }
+}
+
+/** Keep the code holder's phone on the thread so replies reach it. */
+export async function rememberContactPhone(threadId: string, version: number, thread: Thread, token: unknown): Promise<void> {
+  const valid = validPushToken(token);
+  if (!valid || valid === thread.contactPush) return;
+  await saveThread(threadId, version, { ...thread, contactPush: valid });
+}
 
 const text = (v: unknown, max = 200): string => String(v ?? "").trim().slice(0, max);
 const hashCode = (code: string): string => createHash("sha256").update(code.trim().toUpperCase()).digest("hex");
@@ -74,6 +107,51 @@ function newCode(): string {
 
 export function isFiarepServices(actor: Pick<Actor, "tenantId" | "role">): boolean {
   return actor.tenantId === FIAREP_TENANT && isCommunityCoordinator(actor);
+}
+
+/** Who answers on FIAREP's side: FIAREP Services, and FIAREP's administrators
+ *  (Timothy Winn, Emily Winn). Never a technician or worker. Nobody reads a
+ *  conversation they are not part of — not the administrators, not a
+ *  supervisor: what is said is between the two sides having it. */
+export function answersForFiarep(actor: Pick<Actor, "tenantId" | "role" | "name">): boolean {
+  return isFiarepServices(actor) || isFiarepFieldAdmin(actor);
+}
+
+/** FIAREP's switches, from its own organization record. */
+async function fiarepModules(): Promise<Record<string, unknown>> {
+  const [org] = await db.select({ features: organizations.features }).from(organizations)
+    .where(eq(organizations.id, FIAREP_TENANT)).limit(1);
+  const modules = org?.features?.["modules"];
+  return modules && typeof modules === "object" && !Array.isArray(modules) ? modules as Record<string, unknown> : {};
+}
+
+/** The administrator decides which FIAREP Services members use messaging
+ *  (Platform -> Crew, a switch per member, on unless switched off). The
+ *  administrators themselves always can. */
+export async function memberMayMessage(staffId: string): Promise<boolean> {
+  return (await fiarepModules())[`msg.${staffId}`] !== false;
+}
+
+export async function mayMessage(actor: Pick<Actor, "id" | "tenantId" | "role" | "name">): Promise<boolean> {
+  if (isFiarepFieldAdmin(actor)) return true;
+  return isFiarepServices(actor) && (await memberMayMessage(actor.id));
+}
+
+/** The master switch on FIAREP's own Module Management page. On unless it
+ *  was switched off; off closes every door — codes, plan clients, all of it. */
+export async function messagingOpen(): Promise<boolean> {
+  const [org] = await db.select({ features: organizations.features }).from(organizations)
+    .where(eq(organizations.id, FIAREP_TENANT)).limit(1);
+  const modules = org?.features?.["modules"];
+  if (!modules || typeof modules !== "object" || Array.isArray(modules)) return true;
+  return (modules as Record<string, unknown>)["fiarepMessagingOpen"] !== false;
+}
+
+async function fiarepAdministrators(): Promise<string[]> {
+  const rows = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+    eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"), eq(staffAccounts.role, "administrator"),
+  ));
+  return rows.map((r) => r.id);
 }
 
 /** A client company whose plan includes messaging FIAREP Services. */
@@ -198,19 +276,24 @@ export async function threadForCode(code: string): Promise<{ id: string; version
   if (!thread) return null;
   const parsed = threadOf(thread.state);
   if (parsed.closedAt) return null;
+  // The member who gave the code was switched off messaging: the door is shut.
+  if (parsed.coordinatorId && !(await memberMayMessage(parsed.coordinatorId))) return null;
   return { id: thread.id, version: thread.version ?? 1, thread: parsed };
 }
 
-/** The one thread a client company on the plan has with FIAREP Services. */
-export async function clientThread(tenantId: string, company: string): Promise<{ id: string; version: number; thread: Thread }> {
-  const [existing] = await db.select().from(entityRecords).where(and(
+/** The thread a client company on the plan has with FIAREP Services, or —
+ *  a separate conversation — with FIAREP's administrator. */
+export async function clientThread(tenantId: string, company: string, to: "services" | "admin" = "services"): Promise<{ id: string; version: number; thread: Thread }> {
+  const rows = await db.select().from(entityRecords).where(and(
     eq(entityRecords.entity, THREAD_ENTITY), eq(entityRecords.tenantId, FIAREP_TENANT),
     eq(entityRecords.deleted, false), sql`${entityRecords.state}->>'clientTenantId' = ${tenantId}`,
-  )).limit(1);
+  )).limit(10);
+  // Threads from before there was a choice belong to FIAREP Services.
+  const existing = rows.find((r) => (threadOf(r.state).to || "services") === to);
   if (existing) return { id: existing.id, version: existing.version ?? 1, thread: threadOf(existing.state) };
   const now = new Date();
   const id = randomUUID();
-  const thread = emptyThread({ kind: "client", clientTenantId: tenantId, clientCompany: company, lastAt: now.toISOString() });
+  const thread = emptyThread({ kind: "client", to, clientTenantId: tenantId, clientCompany: company, lastAt: now.toISOString() });
   await db.insert(entityRecords).values({
     id, tenantId: FIAREP_TENANT, entity: THREAD_ENTITY, version: 1,
     state: thread as unknown as Record<string, unknown>, createdBy: "", createdAt: now, updatedAt: now,
@@ -249,15 +332,20 @@ export async function postMessage(
   if (from === "contact") {
     if (next.kind === "code") {
       await alertFiarep([next.coordinatorId], `${who} sent you a message`, where, threadId);
+    } else if (next.to === "admin") {
+      await alertFiarep(await fiarepAdministrators(), `${next.clientCompany} sent the administrator a message`, "", threadId);
     } else {
       const unit = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
         eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"),
         eq(staffAccounts.role, "community_coordinator"),
       ));
-      await alertFiarep(unit.map((u) => u.id), `${next.clientCompany} sent FIAREP Services a message`, "", threadId);
+      const modules = await fiarepModules();
+      await alertFiarep(unit.map((u) => u.id).filter((id) => modules[`msg.${id}`] !== false), `${next.clientCompany} sent FIAREP Services a message`, "", threadId);
     }
+  } else if (next.kind === "code" && next.contactPush) {
+    await pushToContact(next.contactPush, `${author.name || next.coordinatorName || "FIAREP Services"} replied`, trimmed, threadId);
   } else if (next.kind === "client" && next.clientTenantId) {
-    await alertClient(next.clientTenantId, "FIAREP Services replied", trimmed.slice(0, 120), threadId);
+    await alertClient(next.clientTenantId, next.to === "admin" ? "FIAREP's administrator replied" : "FIAREP Services replied", trimmed.slice(0, 120), threadId);
   }
   return { ok: true, message };
 }

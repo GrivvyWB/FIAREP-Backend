@@ -8,12 +8,21 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
 import { audit } from "../lib/audit";
 import { FIAREP_TENANT } from "../lib/fiarepDispatch";
+import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
 import {
-  THREAD_ENTITY, clientMessagingEnabled, clientThread, contactView, isFiarepServices,
-  issueCode, loadThread, markRead, postMessage, revokeCode, threadForCode, threadOf,
+  THREAD_ENTITY, mayMessage, clientMessagingEnabled, clientThread, contactView, isFiarepServices, messagingOpen,
+  issueCode, loadThread, markRead, postMessage, rememberContactPhone, revokeCode, threadForCode, threadOf,
 } from "../lib/fiarepMessages";
 
 const router: IRouter = Router();
+
+/** Is this person one side of the conversation? A code thread: only the
+ *  person who issued the code. A client thread: FIAREP Services, or the
+ *  administrators when the client wrote to the administrator. */
+function canSee(actor: Parameters<typeof isFiarepServices>[0] & { id: string; name: string }, thread: ReturnType<typeof threadOf>): boolean {
+  if (thread.kind === "code") return thread.coordinatorId === actor.id;
+  return (thread.to || "services") === "admin" ? isFiarepFieldAdmin(actor) : isFiarepServices(actor);
+}
 const text = (v: unknown, max = 200): string => String(v ?? "").trim().slice(0, max);
 
 // ── The coordinator's side ────────────────────────────────────────────────
@@ -23,18 +32,22 @@ router.use("/v1/fiarep/messages", requireAuth);
  *  plus the plan clients, which the whole unit answers. */
 router.get("/v1/fiarep/messages", async (_req, res) => {
   const actor = actorFrom(res);
-  if (!isFiarepServices(actor)) { res.status(403).json({ error: "FIAREP Services only." }); return; }
+  if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you. The administrator turns it on." }); return; }
   const rows = await db.select().from(entityRecords).where(and(
     eq(entityRecords.entity, THREAD_ENTITY), eq(entityRecords.tenantId, FIAREP_TENANT),
     eq(entityRecords.deleted, false),
   )).orderBy(desc(entityRecords.updatedAt)).limit(300);
   const mine = rows
     .map((row) => ({ id: row.id, thread: threadOf(row.state) }))
-    .filter(({ thread }) => thread.kind === "client" || thread.coordinatorId === actor.id)
+    // Only the conversations this person is part of: the codes they handed
+    // out, and the plan clients writing to their side (FIAREP Services, or
+    // the administrator). Nobody reads anyone else's conversation.
+    .filter(({ thread }) => canSee(actor, thread))
     .map(({ id, thread }) => ({
       id,
       kind: thread.kind,
       who: thread.kind === "client" ? thread.clientCompany : thread.contactName,
+      coordinator: thread.coordinatorName,
       address: thread.address,
       apartment: thread.apartment,
       last: thread.messages[thread.messages.length - 1]?.body ?? "",
@@ -49,7 +62,8 @@ router.get("/v1/fiarep/messages", async (_req, res) => {
 /** Hand someone a code at the door. Shown once; only its hash is kept. */
 router.post("/v1/fiarep/messages/codes", async (req, res) => {
   const actor = actorFrom(res);
-  if (!isFiarepServices(actor)) { res.status(403).json({ error: "FIAREP Services only." }); return; }
+  if (!(await messagingOpen())) { res.status(403).json({ error: "Messaging is switched off in Module Management." }); return; }
+  if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you. The administrator turns it on." }); return; }
   const body = (req.body ?? {}) as Record<string, unknown>;
   const issued = await issueCode(actor, body);
   await audit(actor, "fiarep-messages.code-issued", text(body["contactName"], 120), issued.threadId);
@@ -58,7 +72,7 @@ router.post("/v1/fiarep/messages/codes", async (req, res) => {
 
 router.post("/v1/fiarep/messages/:id/close", async (req, res) => {
   const actor = actorFrom(res);
-  if (!isFiarepServices(actor)) { res.status(403).json({ error: "FIAREP Services only." }); return; }
+  if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you. The administrator turns it on." }); return; }
   const id = String(req.params["id"] || "");
   if (!(await revokeCode(actor, id))) { res.status(404).json({ error: "That conversation is not yours." }); return; }
   await audit(actor, "fiarep-messages.code-closed", "", id);
@@ -67,13 +81,13 @@ router.post("/v1/fiarep/messages/:id/close", async (req, res) => {
 
 router.get("/v1/fiarep/messages/:id", async (req, res) => {
   const actor = actorFrom(res);
-  if (!isFiarepServices(actor)) { res.status(403).json({ error: "FIAREP Services only." }); return; }
+  if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you. The administrator turns it on." }); return; }
   const row = await loadThread(String(req.params["id"] || ""));
   if (!row) { res.status(404).json({ error: "No such conversation." }); return; }
   const thread = threadOf(row.state);
   // A code thread belongs to the coordinator who issued it and to nobody else
   // at FIAREP - supervisor included.
-  if (thread.kind === "code" && thread.coordinatorId !== actor.id) {
+  if (!canSee(actor, thread)) {
     res.status(403).json({ error: "That conversation is not yours." });
     return;
   }
@@ -89,11 +103,11 @@ router.get("/v1/fiarep/messages/:id", async (req, res) => {
 
 router.post("/v1/fiarep/messages/:id", async (req, res) => {
   const actor = actorFrom(res);
-  if (!isFiarepServices(actor)) { res.status(403).json({ error: "FIAREP Services only." }); return; }
+  if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you. The administrator turns it on." }); return; }
   const row = await loadThread(String(req.params["id"] || ""));
   if (!row) { res.status(404).json({ error: "No such conversation." }); return; }
   const thread = threadOf(row.state);
-  if (thread.kind === "code" && thread.coordinatorId !== actor.id) {
+  if (!canSee(actor, thread)) {
     res.status(403).json({ error: "That conversation is not yours." });
     return;
   }
@@ -107,6 +121,7 @@ router.use("/v1/client/messages", requireAuth);
 
 async function clientGate(res: Parameters<typeof actorFrom>[0]) {
   const actor = actorFrom(res);
+  if (!(await messagingOpen())) return null;
   if (!["administrator", "management"].includes(actor.role)) return null;
   if (!(await clientMessagingEnabled(actor.tenantId))) return null;
   const [org] = await db.select({ name: organizations.name }).from(organizations)
@@ -117,16 +132,19 @@ async function clientGate(res: Parameters<typeof actorFrom>[0]) {
 router.get("/v1/client/messages", async (_req, res) => {
   const gate = await clientGate(res);
   if (!gate) { res.status(403).json({ error: "Messaging FIAREP Services is not part of your plan." }); return; }
-  const { id, version, thread } = await clientThread(gate.actor.tenantId, gate.company);
+  const to = String((_req.query ?? {})["to"] ?? "") === "admin" ? "admin" as const : "services" as const;
+  const { id, version, thread } = await clientThread(gate.actor.tenantId, gate.company, to);
   await markRead(id, version, thread, "contact");
   res.setHeader("Cache-Control", "no-store");
   res.json({ id, messages: thread.messages.map((m) => ({ ...m, mine: m.from === "contact" })) });
 });
 
-router.post("/v1/client/messages", async (req, res) => {
+router.post("/v1/client/messages", async (_req, res) => {
+  const req = _req;
   const gate = await clientGate(res);
   if (!gate) { res.status(403).json({ error: "Messaging FIAREP Services is not part of your plan." }); return; }
-  const { id, version, thread } = await clientThread(gate.actor.tenantId, gate.company);
+  const to = String((_req.query ?? {})["to"] ?? "") === "admin" ? "admin" as const : "services" as const;
+  const { id, version, thread } = await clientThread(gate.actor.tenantId, gate.company, to);
   const result = await postMessage(id, version, thread, "contact", gate.actor, String((req.body ?? {})["body"] ?? ""));
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   res.status(201).json(result.message);
@@ -135,12 +153,27 @@ router.post("/v1/client/messages", async (req, res) => {
 // ── The code door: no account, no plan, nothing but the conversation ──────
 router.use("/v1/public/messages", rateLimit("public-messages", 60));
 
+/** Is messaging FIAREP open at all? The app shows or hides its Message button by this. */
+router.get("/v1/public/messages/status", async (_req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ open: await messagingOpen() });
+});
+
+router.use("/v1/public/messages", async (req, res, next) => {
+  if (req.path === "/status") { next(); return; }
+  if (!(await messagingOpen())) { res.status(403).json({ error: "Messaging FIAREP is switched off right now." }); return; }
+  next();
+});
+
 router.post("/v1/public/messages/open", async (req, res) => {
   const found = await threadForCode(String((req.body ?? {})["code"] ?? ""));
-  if (!found) { res.status(404).json({ error: "That code does not open anything. Check it with the coordinator who gave it to you." }); return; }
-  await markRead(found.id, found.version, found.thread, "contact");
+  if (!found) { res.status(404).json({ error: "That code does not open anything. It may have been blocked, or mistyped - check it with the person who gave it to you." }); return; }
+  // The phone that opened it gets the replies as notifications.
+  await rememberContactPhone(found.id, found.version, found.thread, (req.body ?? {})["pushToken"]);
+  const fresh = (await threadForCode(String((req.body ?? {})["code"] ?? ""))) ?? found;
+  await markRead(fresh.id, fresh.version, fresh.thread, "contact");
   res.setHeader("Cache-Control", "no-store");
-  res.json(contactView(found.thread));
+  res.json(contactView(fresh.thread));
 });
 
 router.post("/v1/public/messages/send", async (req, res) => {

@@ -10,7 +10,7 @@ const CREW_KINDS = [
 ] as const;
 const kindOfRole = (role: string) => (role === "community_coordinator" ? "FIAREP Services" : "Technician");
 
-type Member = { id: string; name: string; position: string; role: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null };
+type Member = { id: string; name: string; position: string; role: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null; messaging?: boolean };
 type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number };
 type Punch = { id: string; direction: string; at: string; source: string; address?: string | null; latitude?: number | null; longitude?: number | null; company?: string; development?: string };
 type Job = { id: string; tenantId: string; company: string; complaintNo: string; development: string; address: string; unit: string; category: string; description: string; status: string; createdAt: string | null; sentAt: string | null; clientStatus: string; fiarep: { recordId: string; status: string; assignedStaffId: string; assignedTo: string; startedAt: string | null; completedAt: string | null; completionNote: string; photos: string[]; approvedAt: string | null; approvedBy: string; sentBackNote: string; sentBackAt: string | null; clientApprovedAt: string | null; clientApprovedBy: string; updates: { status?: string; note?: string; by?: string; at?: string }[] } | null };
@@ -80,6 +80,8 @@ export default function OwnerCrew() {
   };
   const saveRate = async (m: Member) => { const v = Number(edits[m.id]); if (!v || v === m.hourlyRate) { setEdits((x) => { const n = { ...x }; delete n[m.id]; return n; }); return; } try { await req(`/api/v1/platform/crew/${m.id}`, "PATCH", { hourlyRate: v }); setEdits((x) => { const n = { ...x }; delete n[m.id]; return n; }); await load(); } catch (e) { setError((e as Error)?.message || "Could not save."); } };
   const setStatus = async (m: Member, status: "approved" | "revoked") => { try { await req(`/api/v1/platform/crew/${m.id}`, "PATCH", { status }); await load(); } catch (e) { setError((e as Error)?.message || "Could not update."); } };
+  // Who uses messaging: the administrator's switch per FIAREP Services member.
+  const setMessaging = async (m: Member, enabled: boolean) => { try { await req(`/api/v1/platform/crew/${m.id}/messaging`, "PUT", { enabled }); await load(); } catch (e) { setError((e as Error)?.message || "Could not change messaging."); } };
   const resetCode = async (m: Member) => { try { await req(`/api/v1/platform/crew/${m.id}/reset-code`, "POST"); await load(); } catch (e) { setError((e as Error)?.message || "Could not reset the code."); } };
   const showPunches = async (m: Member) => { if (open === m.id) { setOpen(""); return; } setOpen(m.id); try { const [p, st] = await Promise.all([customFetch<Punch[]>(`/api/v1/platform/crew/${m.id}/punches?from=${range.from}&to=${range.to}`, { responseType: "json" } as never), customFetch<Stop[]>(`/api/v1/platform/crew/${m.id}/locations?from=${range.from}&to=${range.to}`, { responseType: "json" } as never)]); setPunches(p); setStops(st); } catch { setPunches([]); setStops([]); } };
   const copy = async (m: Member) => { try { await navigator.clipboard.writeText(`${m.name} · code ${m.code}`); setCopied(m.id); setTimeout(() => setCopied(""), 1500); } catch { /* clipboard blocked */ } };
@@ -228,7 +230,17 @@ export default function OwnerCrew() {
             {active.map((m) => (
               <>
                 <tr key={m.id} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-2"><span className="font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">{kindOfRole(m.role)}{m.position && m.position !== kindOfRole(m.role) ? ` · ${m.position}` : ""}</span></td>
+                  <td className="px-4 py-2"><span className="font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">{kindOfRole(m.role)}{m.position && m.position !== kindOfRole(m.role) ? ` · ${m.position}` : ""}</span>
+                    {m.role === "community_coordinator" && (
+                      <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-slate-600">
+                        <button type="button" role="switch" aria-checked={m.messaging !== false} aria-label={`Messaging for ${m.name}`} onClick={() => void setMessaging(m, m.messaging === false)}
+                          className={`relative h-5 w-9 shrink-0 rounded-full transition ${m.messaging !== false ? "bg-[#E0A526]" : "bg-slate-300"}`}>
+                          <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${m.messaging !== false ? "left-[18px]" : "left-0.5"}`} />
+                        </button>
+                        Messaging {m.messaging !== false ? "on" : "off"}
+                      </label>
+                    )}
+                  </td>
                   <td className="px-2 py-2"><span className="font-mono text-base font-semibold tracking-wider text-slate-900">{m.code}</span><button type="button" className="ml-2 text-xs text-slate-500 underline" onClick={() => void copy(m)}>{copied === m.id ? "copied" : "copy"}</button><button type="button" className="ml-2 text-xs text-slate-500 underline" onClick={() => void resetCode(m)}>new code</button></td>
                   <td className="px-2 py-2 text-right"><span className="inline-flex items-center gap-1"><span className="text-slate-400">$</span><input type="number" min={1} step={0.5} value={edits[m.id] ?? m.hourlyRate ?? ""} onChange={(e) => setEdits((x) => ({ ...x, [m.id]: e.target.value }))} onBlur={() => void saveRate(m)} onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} className={`h-8 w-20 rounded-md border px-2 text-right text-sm text-slate-900 ${edits[m.id] != null ? "border-amber-400 bg-amber-50" : "border-slate-300"}`} aria-label={`Hourly rate for ${m.name}`} /><span className="text-xs text-slate-400">/hr</span></span></td>
                   <td className="px-2 py-2">{m.clockedInSince ? <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">Clocked in · {when(m.clockedInSince)}</span> : <span className="text-xs text-slate-500">Out{m.lastPunch ? ` · last ${when(m.lastPunch.at)}` : ""}</span>}</td>

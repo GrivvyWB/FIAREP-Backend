@@ -16,6 +16,10 @@ import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
 import { clearBadge } from '../lib/push';
 import { loadModuleConfig, refreshModuleConfig, moduleForRoute, moduleEnabled } from '../lib/module-access';
+import { customFetch } from '@workspace/api-client-react';
+import * as SecureStore from 'expo-secure-store';
+import CodeMessage from '../components/CodeMessage';
+import MessagesBar from '../components/MessagesBar';
 
 type ModeCtx = { mode: AppMode | null; loading: boolean; refresh: () => void };
 const ModeContext = createContext<ModeCtx>({ mode: null, loading: true, refresh: () => {} });
@@ -47,6 +51,8 @@ function Screen({ children }: { children: React.ReactNode }) {
   );
 }
 
+const LAST_LOGIN_KEY = 'fiarep.staff.lastLogin';
+
 function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel: () => void }) {
   const [name, setName] = useState('');
   const [code, setCode] = useState('');
@@ -54,15 +60,30 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
 
+  // The phone remembers the last name and code that signed in (in the
+  // keychain), so after a sign-out it is one tap to get back in.
   useEffect(() => {
-    setReady(true);
+    SecureStore.getItemAsync(LAST_LOGIN_KEY).then((raw) => {
+      try {
+        const last = raw ? JSON.parse(raw) as { name?: string; code?: string } : null;
+        if (last?.name) setName(last.name);
+        if (last?.code) setCode(normCode(last.code));
+      } catch { /* nothing remembered */ }
+    }).catch(() => undefined).finally(() => setReady(true));
   }, []);
+
+  async function forgetLogin() {
+    await SecureStore.deleteItemAsync(LAST_LOGIN_KEY).catch(() => undefined);
+    setName(''); setCode('');
+  }
 
   async function doLogin() {
     setMsg(''); setBusy(true);
     try {
       const ok = await verifyStaffLogin(name.trim(), normCode(code));
       if (ok) {
+        await SecureStore.setItemAsync(LAST_LOGIN_KEY, JSON.stringify({ name: name.trim(), code: normCode(code) }),
+          { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined);
         const actor = await restoreServerSession();
         await refreshModuleConfig().catch(() => undefined);
         const supportedRoles: AppMode[] = ['administrator', 'management', 'worker', 'inspector', 'emergency', 'community_coordinator'];
@@ -137,13 +158,29 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
       <Pressable style={ui.btnOutline} onPress={props.onCancel}>
         <Text style={ui.btnOutlineText}>Cancel</Text>
       </Pressable>
+      {!!(name || code) && (
+        <Pressable onPress={() => void forgetLogin()} style={{ padding: 8 }}>
+          <Text style={{ textAlign: 'center', color: '#666', fontSize: 13 }}>Not you? Clear the saved name and code</Text>
+        </Pressable>
+      )}
     </Screen>
   );
 }
 
 function PersonaPicker({ onPick }: { onPick: (persona: InstallationPersona) => void }) {
+  // A client handed a code by a FIAREP Services member (no plan, no account)
+  // writes to that member here, before choosing anything. Messaging is for
+  // staff and clients - never residents or vendors.
+  const [messaging, setMessaging] = useState(false);
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    customFetch<{ open: boolean }>('/api/v1/public/messages/status', { responseType: 'json' } as never)
+      .then((r) => setOpen(r.open !== false)).catch(() => setOpen(false));
+  }, []);
+  if (messaging) return <Screen><CodeMessage onBack={() => setMessaging(false)} /></Screen>;
   return (
     <Screen>
+      {open && <MessagesBar label="Message FIAREP" sub="Client with a code from FIAREP Services? Text them here." onPress={() => setMessaging(true)} />}
       <Image
         source={require('../assets/field-inspection-logo.png')}
         accessibilityLabel="FIAREP logo"
@@ -257,21 +294,23 @@ function AdministratorStack() {
       <Stack.Screen name="violation-send" options={{ title: 'Send Violation' }} />
       <Stack.Screen name="assign-route" options={{ title: 'Assign a Route' }} />
       {/* FIAREP's administrators also work in the field: their technician tools. */}
-      <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
-      <Stack.Screen name="quick-quote" options={{ title: 'Quick Quote' }} />
-      <Stack.Screen name="price-quote" options={{ title: 'Price Quote' }} />
-      <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision' }} />
-      <Stack.Screen name="inspector-routes" options={{ title: 'My Routes' }} />
-      <Stack.Screen name="my-inspections" options={{ title: 'My Inspections' }} />
-      <Stack.Screen name="create-report" options={{ title: 'Create Report' }} />
-      <Stack.Screen name="measurement" options={{ title: 'Measurement' }} />
-      <Stack.Screen name="saved-measurements" options={{ title: 'Saved Measurements' }} />
-      <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
-      <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
-      <Stack.Screen name="scope-review" options={{ title: 'Scope Review' }} />
-      <Stack.Screen name="community-home" options={{ title: 'FIAREP Services' }} />
-      <Stack.Screen name="community-resident" options={{ title: 'Resident' }} />
-      <Stack.Screen name="community-building" options={{ title: 'Building & owner' }} />
+      <Stack.Screen name="my-jobs" options={{ title: 'My Jobs', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="quick-quote" options={{ title: 'Quick Quote', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="price-quote" options={{ title: 'Price Quote', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="inspector-routes" options={{ title: 'My Routes', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="my-inspections" options={{ title: 'My Inspections', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="create-report" options={{ title: 'Create Report', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="measurement" options={{ title: 'Measurement', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="saved-measurements" options={{ title: 'Saved Measurements', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="scope-review" options={{ title: 'Scope Review', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="community-home" options={{ title: 'FIAREP Services', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="community-resident" options={{ title: 'Resident', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="community-building" options={{ title: 'Building & owner', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="client-messages" options={{ title: 'Message FIAREP', headerBackTitle: 'Back' }} />
     </Stack>
   );
 }
@@ -323,6 +362,7 @@ function ManagementStack() {
   return (
     <Stack initialRouteName="management-home">
       <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false, headerShown: false }} />
+      <Stack.Screen name="client-messages" options={{ title: 'Message FIAREP', headerBackTitle: 'Back' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
@@ -447,6 +487,7 @@ function CommunityStack() {
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="community-resident" options={{ title: 'Resident' }} />
       <Stack.Screen name="community-building" options={{ title: 'Building & owner' }} />
+      <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />

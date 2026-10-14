@@ -1,7 +1,7 @@
 import { isCpmSupervisorTitle } from "@/lib/titles";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
-import { communityUnitPlural, hasModuleAccess, isCommunityCoordinator, isProcurementDesk } from "@/lib/access-policy";
+import { communityUnitPlural, hasModuleAccess, isCommunityCoordinator, isFiarepAdministrator, isProcurementDesk } from "@/lib/access-policy";
 import { 
   LayoutDashboard, 
   ClipboardCheck, 
@@ -81,7 +81,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     ...(isCommunityCoordinator(staff) ? [{ name: "Alerts", href: "/notifications", icon: BellRing, module: "notifications" as const }] : []),
     // Messages: FIAREP Services on FIAREP's own side, and a client company
     // whose plan includes writing to them.
-    ...((isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") ||
+    ...((isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") || isFiarepAdministrator(staff) ||
       ((staff?.role === "administrator" || staff?.role === "management") && organizationModules["fiarepMessaging"] === true)
       ? [{ name: "Messages", href: "/messages", icon: MessageSquare, module: "notifications" as const }] : []),
     { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },

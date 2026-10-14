@@ -13,6 +13,9 @@ import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
 import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
+import MessagesBar from '../components/MessagesBar';
+import { useMessagingOpen } from '../lib/fiarep-messaging';
+import { getSessionIdentity as getIdentityForMessages } from '../lib/store';
 
 type Tone = 'solid' | 'outline' | 'tint';
 type Tile = { label: string; onPress: () => void; tone: Tone };
@@ -25,6 +28,12 @@ export default function ManagementHome() {
   const [position, setPosition] = useState('');
   const modules = useModuleAccess();
   const rawModules = useRawModules();
+  // Messaging FIAREP, at the top: a client company on the plan writes to
+  // FIAREP Services or FIAREP's administrator.
+  const messagingOpen = useMessagingOpen();
+  const [tenantId, setTenantId] = useState('default');
+  useFocusEffect(useCallback(() => { getIdentityForMessages().then((i) => setTenantId(i?.tenantId || 'default')).catch(() => undefined); }, []));
+  const showMessages = messagingOpen === true && tenantId !== 'default' && rawModules['fiarepMessaging'] === true && tileEnabled('management', 'Message FIAREP', rawModules);
   // View-only on the app: action tiles live on fiarep.com.
   const readOnlyState = useAppReadOnly();
   const readOnly = readOnlyState === true;
@@ -88,7 +97,7 @@ export default function ManagementHome() {
     return (
       <FieldHome
         title={title}
-        banner={<>{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}{!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor ? <UpperManagementMuteToggle /> : null}</>}
+        banner={<>{showMessages ? <MessagesBar dark label="Message FIAREP" sub="FIAREP Services or the administrator" onPress={() => router.push('/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}{!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor ? <UpperManagementMuteToggle /> : null}</>}
         clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
         sections={all}
         tabs={tabs}
