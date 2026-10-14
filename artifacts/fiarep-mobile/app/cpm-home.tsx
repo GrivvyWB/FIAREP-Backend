@@ -70,23 +70,12 @@ export default function CpmHome() {
           return;
         }
         const identity = await getSessionIdentity();
-        // Who belongs on this screen. The rest of the app decides this by what
-        // a title CONTAINS (module-access, measurement-access); this one check
-        // used to demand the title be exactly "cpm" or "inspector", so a
-        // Technician, a Senior Inspector or a CPM Technician was thrown to the
-        // Projects screen — and the Home button there sends them straight back
-        // here, which is the bounce. Matched to the rest of the app.
-        const belongsHere =
-          normalized.includes('cpm') ||
-          normalized.includes('inspector') ||
-          normalized.includes('technician') ||
-          normalized === 'tech' ||
-          // FIAREP's own crew are technicians whatever their title reads.
-          (identity?.tenantId || 'default') === 'default';
-        if (!belongsHere) {
-          router.replace(mode === 'management' ? '/management-home' : '/');
-          return;
-        }
+        // This screen does not decide whether you belong on it. The server
+        // already set the app mode; if the router sent you here, this is your
+        // home and it stays open. It used to re-derive that from the job title
+        // and throw anything it did not recognise to the Projects screen —
+        // whose Home button comes straight back here, which was the bounce.
+        // An empty home is a module question, never a reason to navigate away.
         setPosition(nextPosition);
         const tech = (identity?.tenantId || 'default') === 'default';
         setIsTechnician(tech);
