@@ -33,7 +33,9 @@ export function receiptNumber(r: Receipt): string {
 
 export function quoteReceiptHtml(r: Receipt): string {
   const tone = r.status === "approved" ? "ok" : r.status === "declined" ? "no" : "wait";
-  const decided = r.approvedBySelf
+  // A sheet printed before it is sent must not claim anyone is waiting on it.
+  const draft = r.status === "draft";
+  const decided = draft ? "Not sent yet" : r.approvedBySelf
     ? `Approved by FIAREP${r.decidedBy ? ` · ${esc(r.decidedBy)}` : ""}`
     : r.status === "approved" ? `Approved by ${esc(r.clientCompany || "the owner")}${r.decidedBy ? ` · ${esc(r.decidedBy)}` : ""}`
     : r.status === "declined" ? `Declined by ${esc(r.clientCompany || "the owner")}`
@@ -98,7 +100,7 @@ export function quoteReceiptText(r: Receipt): string {
     ...r.lines.map((l) => `${l.qty} × ${l.label} — ${money(l.amount)}${l.note ? ` (${l.note})` : ""}`),
     "",
     `Total: ${money(r.total)}`,
-    r.approvedBySelf ? `Approved by FIAREP${r.decidedBy ? ` · ${r.decidedBy}` : ""}` : `Status: ${r.status}`,
+    r.status === "draft" ? "Not sent yet" : r.approvedBySelf ? `Approved by FIAREP${r.decidedBy ? ` · ${r.decidedBy}` : ""}` : `Status: ${r.status}`,
     r.note,
     "fiarep@outlook.com",
   ];

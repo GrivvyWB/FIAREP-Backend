@@ -116,12 +116,30 @@ export default function QuickQuote() {
     }
   }
 
-  /** The owner's piece of paper, whoever approved it. */
-  function receipt() {
-    if (!sent) return;
+  /** The owner's piece of paper, whoever approved it — and before it is sent. */
+  function receipt(which: "sent" | "draft" = "sent") {
+    const q: Receipt | null = which === "sent"
+      ? (sent ? ({ ...sent, building: sent.building || place } as Receipt) : null)
+      : drafts.length
+        ? ({
+            lines: drafts.map((d, i) => ({
+              id: String(i), label: d.label, unit: d.unit,
+              qty: Number(d.qty) || 0, unitPrice: d.price,
+              amount: d.price * (Number(d.qty) || 0), note: d.note.trim(),
+            })),
+            total,
+            status: "draft",
+            approvedBySelf: false,
+            clientCompany: clients.find((c) => c.id === clientId)?.name || building?.company || "",
+            building: place,
+            note: note.trim(),
+            sentBy: "", sentAt: "", decidedBy: "", decidedAt: "",
+          } as Receipt)
+        : null;
+    if (!q) return;
     const w = window.open("", "_blank", "width=900,height=1000");
     if (!w) { toast({ variant: "destructive", title: "Allow pop-ups to print the receipt" }); return; }
-    w.document.write(quoteReceiptHtml({ ...sent, building: sent.building || place } as Receipt));
+    w.document.write(quoteReceiptHtml(q));
     w.document.close(); w.focus();
     setTimeout(() => w.print(), 300);
   }
@@ -225,7 +243,7 @@ export default function QuickQuote() {
           {sent.lines.map((l) => <p key={l.id} className="text-xs text-muted-foreground">{l.qty} × {l.label} — {money(l.amount)}</p>)}
           <p className="text-xs text-muted-foreground">{sent.sentBy}{sent.sentAt ? ` · ${when(sent.sentAt)}` : ""}{sent.decidedBy ? ` · ${sent.decidedBy}` : ""}</p>
           <div className="flex flex-wrap gap-2 pt-1">
-            <Button variant="outline" size="sm" onClick={receipt}>
+            <Button variant="outline" size="sm" onClick={() => receipt("sent")}>
               <Printer className="mr-1 h-4 w-4" />Receipt
             </Button>
             <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" disabled={busy !== ""} onClick={() => void remove()}>
@@ -296,6 +314,9 @@ export default function QuickQuote() {
               </Button>
               <Button variant="outline" className="h-12 w-full" disabled={busy !== ""} onClick={() => void send("self")}>
                 <Check className="mr-2 h-4 w-4" />{busy === "self" ? "Saving…" : `Approve ${money(total)} myself`}
+              </Button>
+              <Button variant="outline" className="h-12 w-full" disabled={busy !== ""} onClick={() => receipt("draft")}>
+                <Printer className="mr-2 h-4 w-4" />Receipt
               </Button>
               <p className="text-xs text-muted-foreground">
                 Approving it yourself records it against the project in your name and nobody is asked. Sending it tells their management and waits.

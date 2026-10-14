@@ -118,11 +118,29 @@ export default function QuickQuoteScreen() {
 
   // The owner gets a piece of paper either way — including when FIAREP
   // approved it themselves, so there is a record to hand over.
-  async function receipt() {
-    if (!sent) return;
+  async function receipt(which: 'sent' | 'draft' = 'sent') {
+    const q: Receipt | null = which === 'sent'
+      ? (sent ? ({ ...sent, building: sent.building || place } as Receipt) : null)
+      : drafts.length
+        ? ({
+            lines: drafts.map((d, i) => ({
+              id: String(i), label: d.label, unit: d.unit,
+              qty: Number(d.qty) || 0, unitPrice: d.price,
+              amount: d.price * (Number(d.qty) || 0), note: d.note.trim(),
+            })),
+            total,
+            status: 'draft',
+            approvedBySelf: false,
+            clientCompany: clients.find((c) => c.id === clientId)?.name || company,
+            building: place,
+            note: note.trim(),
+            sentBy: '', sentAt: '', decidedBy: '', decidedAt: '',
+          } as Receipt)
+        : null;
+    if (!q) return;
     setBusy('receipt');
     try {
-      const html = quoteReceiptHtml({ ...sent, building: sent.building || place } as Receipt);
+      const html = quoteReceiptHtml(q);
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Quote receipt', UTI: 'com.adobe.pdf' });
@@ -202,7 +220,7 @@ export default function QuickQuoteScreen() {
             Sent — {money(sent.total)} · {sent.status === 'approved' ? (sent.approvedBySelf ? 'approved by FIAREP' : 'approved') : `waiting for ${sent.clientCompany || 'the owner'}`}
           </Text>
           {sent.lines.map((l) => <Text key={l.id} style={ui.listSub}>{l.qty} × {l.label} — {money(l.amount)}</Text>)}
-          <Pressable onPress={() => void receipt()} disabled={busy !== ''} style={[ui.btnOutline, { marginTop: 8 }]}>
+          <Pressable onPress={() => void receipt('sent')} disabled={busy !== ''} style={[ui.btnOutline, { marginTop: 8 }]}>
             <Text style={ui.btnOutlineText}>{busy === 'receipt' ? 'Making it…' : 'Receipt'}</Text>
           </Pressable>
           <Pressable onPress={() => void remove()} disabled={busy !== ''} style={{ paddingVertical: 8 }}>
@@ -273,6 +291,9 @@ export default function QuickQuoteScreen() {
               </Pressable>
               <Pressable style={[ui.btnOutline, { marginTop: 8 }, busy !== '' && { opacity: 0.5 }]} disabled={busy !== ''} onPress={() => void send('self')}>
                 <Text style={ui.btnOutlineText}>{busy === 'self' ? 'Saving…' : `Approve ${money(total)} myself`}</Text>
+              </Pressable>
+              <Pressable style={[ui.btnOutline, { marginTop: 8 }, busy !== '' && { opacity: 0.5 }]} disabled={busy !== ''} onPress={() => void receipt('draft')}>
+                <Text style={ui.btnOutlineText}>{busy === 'receipt' ? 'Making it\u2026' : 'Receipt'}</Text>
               </Pressable>
               <Text style={ui.listSub}>
                 Approving it yourself records it in your name and nobody is asked. Sending it tells their management and waits.

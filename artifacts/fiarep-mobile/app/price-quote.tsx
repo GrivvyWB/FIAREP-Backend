@@ -115,24 +115,38 @@ export default function PriceQuote() {
 
   // The same receipt the quick quote prints, so a client gets one piece of
   // paper whichever way the job was priced.
-  async function receipt() {
-    if (!sent) return;
+  async function receipt(which: 'sent' | 'draft' = 'sent') {
+    const q = which === 'sent'
+      ? sent
+      : drafts.length
+        ? {
+            lines: drafts.map((d, i) => ({
+              id: String(i), label: d.label, unit: d.unit,
+              qty: Number(d.qty) || 0, unitPrice: d.price,
+              amount: d.price * (Number(d.qty) || 0), note: d.note.trim(),
+            })),
+            total,
+            status: 'draft' as const,
+            sentBy: '', sentAt: '', decidedBy: '', decidedAt: '', note: '',
+          }
+        : null;
+    if (!q) return;
     setBusy(true);
     try {
       const client = (job as unknown as { fiarepClient?: { company?: string } } | null)?.fiarepClient;
       const html = quoteReceiptHtml({
-        lines: sent.lines,
-        total: sent.total,
-        status: sent.status,
+        lines: q.lines,
+        total: q.total,
+        status: q.status,
         // On a price quote the client approves, never FIAREP.
         approvedBySelf: false,
         clientCompany: client?.company || '',
         building: [job?.address, job?.unit ? `Apt ${job.unit}` : ''].filter(Boolean).join(' \u00b7 '),
-        note: sent.note || '',
-        sentBy: sent.sentBy || '',
-        sentAt: sent.sentAt || '',
-        decidedBy: sent.decidedBy || '',
-        decidedAt: sent.decidedAt || '',
+        note: q.note || '',
+        sentBy: q.sentBy || '',
+        sentAt: q.sentAt || '',
+        decidedBy: q.decidedBy || '',
+        decidedAt: q.decidedAt || '',
       } as Receipt);
       const { uri } = await Print.printToFileAsync({ html });
       if (await Sharing.isAvailableAsync()) {
@@ -179,7 +193,7 @@ export default function PriceQuote() {
           ))}
           {!!sent.decidedBy && <Text style={ui.listSub}>{sent.decidedBy} · {when(sent.decidedAt)}{sent.note ? ` · ${sent.note}` : ''}</Text>}
           {sent.status === 'pending' && <Text style={ui.listSub}>Do not start until they approve.</Text>}
-          <Pressable onPress={() => void receipt()} disabled={busy} style={[ui.btnOutline, { marginTop: 8 }]}>
+          <Pressable onPress={() => void receipt('sent')} disabled={busy} style={[ui.btnOutline, { marginTop: 8 }]}>
             <Text style={ui.btnOutlineText}>{busy ? 'Making it\u2026' : 'Receipt'}</Text>
           </Pressable>
         </View>
@@ -241,6 +255,9 @@ export default function PriceQuote() {
               <Text style={ui.listSub}>FIAREP's price book. The server prices it again when it sends, so this is what the client sees.</Text>
               <Pressable style={[ui.btn, { marginTop: 10 }, busy && ui.btnMuted]} disabled={busy} onPress={() => void send()}>
                 <Text style={ui.btnText}>{busy ? 'Sending…' : 'Send to the client for approval'}</Text>
+              </Pressable>
+              <Pressable style={[ui.btnOutline, { marginTop: 8 }]} disabled={busy} onPress={() => void receipt('draft')}>
+                <Text style={ui.btnOutlineText}>Receipt</Text>
               </Pressable>
             </>
           )}
