@@ -14,6 +14,7 @@ const C: Record<string, TileArt> = {
   'Time Clock': { lib: 'ion', icon: 'stopwatch-outline', desc: 'Clock in when you arrive, out when you leave.' },
   'Price Quote': { lib: 'mci', icon: 'tag-outline', desc: 'Price what a job needs and send it to the client.' },
   'Quick Quote': { lib: 'mci', icon: 'lightning-bolt-outline', desc: 'Price a walk on the spot: send it, or approve it yourself.' },
+  'Past quotes': { lib: 'mci', icon: 'history', desc: 'Quick quotes already sent or approved. Tap one to reopen it.' },
   'Submit Scope': { lib: 'mci', icon: 'bullseye-arrow', desc: 'Create a new scope of work.' },
   'Change Work Order': { lib: 'mci', icon: 'file-document-edit-outline', desc: 'Modify existing work orders.' },
   'Change Orders': { lib: 'mci', icon: 'file-document-edit-outline', desc: 'Review and approve change orders.' },

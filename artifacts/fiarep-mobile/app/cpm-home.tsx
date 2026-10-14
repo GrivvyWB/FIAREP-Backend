@@ -129,6 +129,8 @@ export default function CpmHome() {
         ...(isTechnician ? [{ label: 'Price Quote', onPress: () => router.push('/price-quote'), tone: 'solid' as Tone }] : []),
         // Walk a building and price it on the spot, with no complaint behind it.
         ...(isTechnician ? [{ label: 'Quick Quote', onPress: () => router.push('/quick-quote'), tone: 'solid' as Tone }] : []),
+        // The quick quotes already sent or approved, one tap from home.
+        ...(isTechnician ? [{ label: 'Past quotes', onPress: () => router.push('/quick-quote?past=1'), tone: 'outline' as Tone }] : []),
         ...(isInspectorRole ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(isInspectorRole ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
         ...(isInspectorRole ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),

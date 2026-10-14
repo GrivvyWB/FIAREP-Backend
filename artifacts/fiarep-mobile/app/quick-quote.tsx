@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, RefreshControl } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
@@ -53,7 +53,9 @@ export default function QuickQuoteScreen() {
   const [busy, setBusy] = useState('');
   const [sent, setSent] = useState<QuickQuote | null>(null);
   const [past, setPast] = useState<Array<{ projectId: string; quote: QuickQuote }>>([]);
-  const [showPast, setShowPast] = useState(false);
+  // Opened from the Past quotes tile on home: the list starts open.
+  const params = useLocalSearchParams<{ past?: string }>();
+  const [showPast, setShowPast] = useState(params.past === '1');
   const [error, setError] = useState('');
 
   const load = useCallback(async () => {
