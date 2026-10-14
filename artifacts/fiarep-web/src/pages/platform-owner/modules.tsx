@@ -164,8 +164,8 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance",
   ] },
   { id: "cpm", screen: "CPM / Inspector home (FIAREP technicians sign in here)", tabs: [
-    "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Inbox",
+    "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Inbox",
   ] },
   { id: "worker", screen: "Worker home", tabs: [
     "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off",
