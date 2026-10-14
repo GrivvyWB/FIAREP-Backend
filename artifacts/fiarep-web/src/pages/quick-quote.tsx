@@ -31,7 +31,9 @@ const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "
 const get = <T,>(url: string) => customFetch<T>(url, { responseType: "json" } as never);
 
 export default function QuickQuote() {
-  const { staff } = useAuth();
+  const { staff, organizationModules } = useAuth();
+  // The same switch the app reads, so Past quotes is on or off in both places.
+  const pastEnabled = organizationModules?.["apptab.cpm.past-quotes"] !== false;
   const { toast } = useToast();
   const mine = (staff?.tenantId || "default") === "default";
 
@@ -201,7 +203,7 @@ export default function QuickQuote() {
         </p>
       </div>
 
-      {past.length > 0 && (
+      {past.length > 0 && pastEnabled && (
         <div className="rounded-lg border bg-card p-4">
           <Button variant="outline" className="w-full" onClick={() => setShowPast((v) => !v)}>
             {showPast ? "Hide past quotes" : `Past quotes (${past.length})`}

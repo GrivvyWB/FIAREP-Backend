@@ -7,6 +7,7 @@ import * as Sharing from 'expo-sharing';
 import { takePhoto, pickPhoto, photoUri, uploadPhoto } from '../lib/photos';
 import { quoteReceiptHtml, type Receipt } from '../lib/quote-receipt';
 import { PickOne } from '../lib/community-ui';
+import { useRawModules, tileEnabled } from '../lib/module-access';
 import { ui, ACCENT, money } from '../lib/ui';
 
 // Quick quote. Walk a building, see what has to be replaced, price it off the
@@ -36,6 +37,7 @@ const post = <T,>(url: string, body: unknown) => customFetch<T>(url, {
 
 export default function QuickQuoteScreen() {
   const router = useRouter();
+  const rawModules = useRawModules();
   const [catalog, setCatalog] = useState<CatalogLine[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -208,7 +210,7 @@ export default function QuickQuoteScreen() {
       </Text>
       {!!error && <Text style={{ color: '#991b1b' }}>{error}</Text>}
 
-      {past.length > 0 && (
+      {past.length > 0 && tileEnabled('cpm', 'Past quotes', rawModules) && (
         <View style={{ marginTop: 12 }}>
           <Pressable onPress={() => setShowPast((v) => !v)} style={ui.btnOutline}>
             <Text style={ui.btnOutlineText}>{showPast ? 'Hide past quotes' : `Past quotes (${past.length})`}</Text>
