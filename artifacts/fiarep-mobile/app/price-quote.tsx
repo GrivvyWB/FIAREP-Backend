@@ -4,7 +4,10 @@ import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
 import { getCurrentActor, listResidentReports, type ResidentReport } from '../lib/store';
 import { takePhoto, pickPhoto, photoUri, uploadPhoto } from '../lib/photos';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
 import { PickOne } from '../lib/community-ui';
+import { quoteReceiptHtml, type Receipt } from '../lib/quote-receipt';
 import { ui, ACCENT, money } from '../lib/ui';
 
 // What the job needs bought, priced on the spot and sent to the CLIENT for
@@ -110,6 +113,38 @@ export default function PriceQuote() {
   const jobLabel = (r: ResidentReport) =>
     [r.complaintNo || r.id.slice(0, 6), r.address, r.unit ? `Apt ${r.unit}` : ''].filter(Boolean).join(' · ');
 
+  // The same receipt the quick quote prints, so a client gets one piece of
+  // paper whichever way the job was priced.
+  async function receipt() {
+    if (!sent) return;
+    setBusy(true);
+    try {
+      const client = (job as unknown as { fiarepClient?: { company?: string } } | null)?.fiarepClient;
+      const html = quoteReceiptHtml({
+        lines: sent.lines,
+        total: sent.total,
+        status: sent.status,
+        // On a price quote the client approves, never FIAREP.
+        approvedBySelf: false,
+        clientCompany: client?.company || '',
+        building: [job?.address, job?.unit ? `Apt ${job.unit}` : ''].filter(Boolean).join(' \u00b7 '),
+        note: sent.note || '',
+        sentBy: sent.sentBy || '',
+        sentAt: sent.sentAt || '',
+        decidedBy: sent.decidedBy || '',
+        decidedAt: sent.decidedAt || '',
+      } as Receipt);
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Quote receipt', UTI: 'com.adobe.pdf' });
+      } else {
+        await Print.printAsync({ html });
+      }
+    } catch (e: any) {
+      Alert.alert('Could not make the receipt', String(e?.message || e));
+    } finally { setBusy(false); }
+  }
+
   return (
     <ScrollView
       contentContainerStyle={[ui.wrap, { paddingTop: 16, paddingBottom: 48 }]}
@@ -144,6 +179,9 @@ export default function PriceQuote() {
           ))}
           {!!sent.decidedBy && <Text style={ui.listSub}>{sent.decidedBy} · {when(sent.decidedAt)}{sent.note ? ` · ${sent.note}` : ''}</Text>}
           {sent.status === 'pending' && <Text style={ui.listSub}>Do not start until they approve.</Text>}
+          <Pressable onPress={() => void receipt()} disabled={busy} style={[ui.btnOutline, { marginTop: 8 }]}>
+            <Text style={ui.btnOutlineText}>{busy ? 'Making it\u2026' : 'Receipt'}</Text>
+          </Pressable>
         </View>
       )}
 

@@ -171,7 +171,7 @@ export default function CpmHome() {
     },
   ];
 
-  const roleTitle = isTechnician ? 'Technician' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition.includes('cpm') ? 'CPM' : normalizedPosition.includes('inspector') ? 'Inspector' : 'CPM / Inspector';
+  const roleTitle = isTechnician ? 'Technician' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition.includes('cpm') ? 'CPM' : normalizedPosition.includes('inspector') ? 'Inspector' : 'Tech';
 
   // Same gates as always; the look is FieldHome's. My Jobs is the hero card,
   // Attendance / Time Clock is the clock card, the rest are tiles.
