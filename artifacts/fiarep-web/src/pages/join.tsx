@@ -109,6 +109,10 @@ export default function JoinFiarep() {
           <ArrowLeft className="h-4 w-4" /> Back to FIAREP.com
         </button>
 
+        <div className="mb-6 rounded-xl border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-sm text-slate-100">
+          <span className="font-semibold text-amber-300">Included Benefit:</span> Every plan includes a complimentary four-month City Violation Discharge Program, designed to help resolve outstanding city violations and bring your properties closer to compliance.
+        </div>
+
         {/* ── Hero ── */}
         <div className="flex flex-col items-center gap-6 text-center sm:flex-row sm:text-left">
           <img src="/platform-media/fiarep-247-logo.png" alt="24/7 FIAREP Management Service / Expediting" className="h-40 w-auto rounded-xl bg-white p-2 shadow-lg sm:h-52" />

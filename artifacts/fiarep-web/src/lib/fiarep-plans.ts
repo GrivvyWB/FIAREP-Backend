@@ -33,7 +33,7 @@ export const RETAINER_INCLUDES = [
   "Every repair, violation cure and appliance replacement the development needs, done by FIAREP — labor up to the included pool of hours for your size",
   "Appliances, parts, materials and delivery bought by FIAREP on your approval and reimbursed at cost plus 10% handling",
   "HPD cures and OATH hearings at $400 instead of $600; all other rates as listed below",
-  "Pilot: first 60 days at half price, no contract",
+  "Pilot: first 90 days, No contract",
 ];
 
 
