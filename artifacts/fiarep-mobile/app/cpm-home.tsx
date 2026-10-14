@@ -164,12 +164,14 @@ export default function CpmHome() {
 
   // Same gates as always; the look is FieldHome's. My Jobs is the hero card,
   // Attendance / Time Clock is the clock card, the rest are tiles.
-  const enabled = (label: string) => (isTechnician && label === 'Time Clock') || tileEnabled('cpm', label, rawModules);
+  const enabled = (label: string) => tileEnabled('cpm', label, rawModules);
   const homeSections = sections
     .filter((sec) => sec.heading !== 'My Work')
     .map((sec) => ({ heading: sec.heading, tiles: sec.tiles.filter((t) => enabled(t.label) && t.label !== 'Attendance').map((t) => ({ label: t.label, onPress: t.onPress })) }));
   const showJobs = enabled('My Jobs');
-  const showClock = isTechnician || enabled('Attendance');
+  // The clock card honours its own switch: Time Clock for FIAREP's crew,
+  // Attendance for everyone else. Neither is forced on any more.
+  const showClock = enabled(isTechnician ? 'Time Clock' : 'Attendance');
   const tabs = [
     ...(showJobs ? [{ label: 'My Work', icon: 'clipboard-outline', onPress: () => router.push('/my-jobs') }] : []),
     ...(enabled('Inbox') ? [{ label: 'Inbox', icon: 'mail-outline', onPress: () => router.push('/notifications') }] : []),
