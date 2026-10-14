@@ -104,7 +104,7 @@ export default function AdminHome() {
       heading: 'Inspections & Compliance',
       color: '#1F5C45',
       tiles: [
-        { label: 'HUD Inspections', onPress: () => router.push('/hud-review'), tone: 'solid' },
+        { label: 'HUD Inspections', onPress: () => router.push(fiarepAdmin ? '/hud-inspections' : '/hud-review'), tone: 'solid' },
         { label: 'Projects / Inspections', onPress: () => router.push('/'), tone: 'outline' },
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' },
         { label: 'Assign Route', onPress: () => router.push('/assign-route'), tone: 'tint' },
