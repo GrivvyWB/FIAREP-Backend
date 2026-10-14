@@ -72,7 +72,7 @@ export function bands(o: Overrides | null = cache): Band[] {
   if (saved.length && saved.every((x) => x && x.v === 2)) return saved.map((s) => ({ ...s, label: bandLabel(s.from, s.to), note: s.note ?? "", hoursPerUnit: s.hoursPerUnit ?? null }));
   return BANDS.map((b) => {
     const s = saved.find((x) => x && x.from === b.from && x.to === b.to);
-    return s ? { ...b, platformRate: s.platformRate, platformMin: s.platformMin, planRate: s.planRate, planMin: s.planMin } : b;
+    return s ? { ...b, platformRate: s.platformRate, platformMin: s.platformMin, planRate: s.planRate, planMin: s.planMin, maintRate: s.maintRate ?? null, maintMin: s.maintMin ?? null } : b;
   });
 }
 

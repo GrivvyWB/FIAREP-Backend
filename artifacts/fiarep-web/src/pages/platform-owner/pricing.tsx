@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { BANDS, EXAMPLES, SETUP_FEE, SOURCES, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING, PLAN_MIN_UNITS, bandHours, bandLabel, ladderFees, type Band } from "@/lib/pricing-ladder";
 import { usePricing, savePricing } from "@/lib/pricing-overrides";
+import { DischargeChangeover } from "@/components/discharge-changeover";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const th = "px-3 py-2 text-left text-xs uppercase tracking-wide text-slate-500";
@@ -25,12 +26,12 @@ export default function OwnerPricing() {
     setSaving("idle");
   };
   const toNum = (v: string) => (v.trim() === "" ? null : Math.max(0, Math.round((Number(v) || 0) * 100) / 100));
-  const edit = (i: number, field: "platformRate" | "platformMin" | "planRate" | "planMin" | "hoursPerUnit", v: string) => patch(i, { [field]: toNum(v) } as Partial<Band>);
+  const edit = (i: number, field: "platformRate" | "platformMin" | "planRate" | "planMin" | "maintRate" | "maintMin" | "hoursPerUnit", v: string) => patch(i, { [field]: toNum(v) } as Partial<Band>);
   const editRange = (i: number, field: "from" | "to", v: string) => patch(i, { [field]: Math.max(0, Math.round(Number(v) || 0)) } as Partial<Band>);
   const badRange = bands.some((b) => b.to < b.from);
   const save = async () => { setSaving("saving"); try { await savePricing({ bands: bands.map((b) => ({ ...b, v: 2 })) }); setDraft(null); setSaving("saved"); } catch { setSaving("error"); } };
   const resetBook = async () => { setSaving("saving"); try { await savePricing({ bands: null }); setDraft(null); setSaving("saved"); } catch { setSaving("error"); } };
-  const shape = (bs: Band[]) => JSON.stringify(bs.map((b) => [b.from, b.to, b.platformRate, b.platformMin, b.planRate, b.planMin, b.hoursPerUnit ?? null, b.note]));
+  const shape = (bs: Band[]) => JSON.stringify(bs.map((b) => [b.from, b.to, b.platformRate, b.platformMin, b.planRate, b.planMin, b.maintRate ?? null, b.maintMin ?? null, b.hoursPerUnit ?? null, b.note]));
   const isDefault = shape(bands) === shape(BANDS);
   const cell = "w-24 rounded-md border px-2 py-1 text-right text-sm font-semibold text-slate-900 focus:border-amber-500 focus:outline-none";
   return (
@@ -60,8 +61,8 @@ export default function OwnerPricing() {
       </section>
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
-        <table className="w-full min-w-[1040px] text-sm">
-          <thead><tr className="bg-slate-50"><th className={th}>Band (units)</th><th className={`${th} text-right`}>Platform $/unit</th><th className={`${th} text-right`}>Platform min</th><th className={`${th} text-right`}>FIAREP plan $/unit</th><th className={`${th} text-right`}>Plan min</th><th className={`${th} text-right`}>Labor pool</th><th className={th}>Notes</th></tr></thead>
+        <table className="w-full min-w-[1240px] text-sm">
+          <thead><tr className="bg-slate-50"><th className={th}>Band (units)</th><th className={`${th} text-right`}>Platform $/unit</th><th className={`${th} text-right`}>Platform min</th><th className={`${th} text-right`}>FIAREP plan $/unit</th><th className={`${th} text-right`}>Plan min</th><th className={`${th} text-right`}>Maintenance $/unit</th><th className={`${th} text-right`}>Maintenance min</th><th className={`${th} text-right`}>Labor pool</th><th className={th}>Notes</th></tr></thead>
           <tbody>
             {bands.map((b, i) => (
               <tr key={i} className={`border-t border-slate-100 ${b === f.band ? "bg-amber-50" : ""}`}>
@@ -70,6 +71,8 @@ export default function OwnerPricing() {
                 <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.platformMin ?? ""} placeholder="—" onChange={(e) => edit(i, "platformMin", e.target.value)} className={`${cell} ${b.platformMin !== BANDS[i]?.platformMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Platform minimum ${b.label}`} />{b.platformMin != null && <span className="text-xs text-slate-500">/mo</span>}</td>
                 <td className={`${td} text-right`}><input type="number" inputMode="decimal" min={0} value={b.planRate ?? ""} placeholder="—" onChange={(e) => edit(i, "planRate", e.target.value)} className={`${cell} ${b.planRate !== BANDS[i]?.planRate ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Plan rate ${b.label}`} /></td>
                 <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.planMin ?? ""} placeholder="—" onChange={(e) => edit(i, "planMin", e.target.value)} className={`${cell} ${b.planMin !== BANDS[i]?.planMin ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Plan minimum ${b.label}`} />{b.planMin != null && <span className="text-xs text-slate-500">/mo</span>}</td>
+                <td className={`${td} text-right`}><input type="number" inputMode="decimal" min={0} value={b.maintRate ?? ""} placeholder="—" onChange={(e) => edit(i, "maintRate", e.target.value)} className={`${cell} ${b.maintRate != null ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Maintenance rate ${b.label}`} /></td>
+                <td className={`${td} text-right`}><input type="number" inputMode="numeric" min={0} value={b.maintMin ?? ""} placeholder="—" onChange={(e) => edit(i, "maintMin", e.target.value)} className={`${cell} ${b.maintMin != null ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Maintenance minimum ${b.label}`} />{b.maintMin != null && <span className="text-xs text-slate-500">/mo</span>}</td>
                 <td className={`${td} text-right whitespace-nowrap`}><input type="number" inputMode="decimal" min={0} value={b.hoursPerUnit ?? ""} placeholder={b.planRate != null ? String(bandHours({ ...b, hoursPerUnit: null })) : "—"} onChange={(e) => edit(i, "hoursPerUnit", e.target.value)} className={`w-20 ${cell.replace("w-24 ", "")} ${b.hoursPerUnit != null ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Labor pool ${b.label}`} /><span className="text-xs text-slate-500"> h/unit/yr</span></td>
                 <td className={td}><textarea rows={2} value={b.note} onChange={(e) => patch(i, { note: e.target.value })} className={`w-full min-w-[220px] rounded-md border px-2 py-1 text-sm text-slate-700 focus:border-amber-500 focus:outline-none ${b.note !== (BANDS[i]?.note ?? "") ? "border-amber-400 bg-amber-50" : "border-slate-200"}`} aria-label={`Note ${b.label}`} /></td>
               </tr>
@@ -78,6 +81,8 @@ export default function OwnerPricing() {
         </table>
         <p className="px-3 py-2 text-xs text-slate-500">One-time setup {money(SETUP_FEE)} on the platform, waived on any annual contract of 1,000+ units. HPD cure $600 per apartment ($400 on plan or platform); DOB $1,500 first two, $1,000 after — no plan discount. Plan labor: {Math.round(LABOR_SHARE * 100)}% of the fee at {money(LOADED_HOURLY)}/hour loaded = the included hours per unit per year shown; appliances, parts, materials and delivery at cost + {Math.round(MATERIALS_HANDLING * 100)}%.</p>
       </div>
+
+      <DischargeChangeover bands={bands} />
 
       <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
         <p className="px-3 pt-3 text-sm font-semibold text-slate-900">Examples</p>

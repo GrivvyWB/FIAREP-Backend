@@ -4,7 +4,8 @@
 // Anchors: software-only market $1–$5 per unit per month (AppFolio Core $1.40 /
 // Plus $3 / Max $5, Yardi Breeze $1–$3, minimums $100–$400 — costbench.com);
 // (nyc.gov/hpd, Alternative Enforcement Program).
-export type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null; note: string; hoursPerUnit?: number | null; v?: number };
+export type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null; note: string; hoursPerUnit?: number | null; maintRate?: number | null; maintMin?: number | null; v?: number };
+// maintRate / maintMin: the monthly maintenance price a client drops to after the City Violation Discharge Program.
 // hoursPerUnit: the owner's labor pool for the band; blank = worked out from the plan rate.
 // v: 2 marks a band the owner saved whole (range, note and all) in Platform Control.
 

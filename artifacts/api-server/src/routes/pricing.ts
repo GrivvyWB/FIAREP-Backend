@@ -14,7 +14,7 @@ const router: IRouter = Router();
 const ENTITY = "pricing-overrides";
 const ID = "pricing-overrides";
 
-type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null; note?: string; hoursPerUnit?: number | null; v?: number };
+type Band = { label: string; from: number; to: number; platformRate: number | null; platformMin: number | null; planRate: number | null; planMin: number | null; note?: string; hoursPerUnit?: number | null; maintRate?: number | null; maintMin?: number | null; v?: number };
 type Overrides = { items: Record<string, number>; bands: Band[] | null; updatedAt: string | null; updatedBy: string | null };
 
 const EMPTY: Overrides = { items: {}, bands: null, updatedAt: null, updatedBy: null };
@@ -51,8 +51,10 @@ function cleanBands(v: unknown): Band[] | null {
     const planRate = b["planRate"] == null ? null : num(b["planRate"]);
     const planMin = b["planMin"] == null ? null : num(b["planMin"]);
     const hoursPerUnit = b["hoursPerUnit"] == null ? null : num(b["hoursPerUnit"]);
+    const maintRate = b["maintRate"] == null ? null : num(b["maintRate"]);
+    const maintMin = b["maintMin"] == null ? null : num(b["maintMin"]);
     const note = typeof b["note"] === "string" ? (b["note"] as string).slice(0, 500) : undefined;
-    out.push({ label: String(b["label"] ?? `${from}–${to}`).slice(0, 40), from, to, platformRate: pr, platformMin: pm, planRate, planMin, hoursPerUnit, ...(note !== undefined ? { note } : {}), ...(b["v"] === 2 ? { v: 2 } : {}) });
+    out.push({ label: String(b["label"] ?? `${from}–${to}`).slice(0, 40), from, to, platformRate: pr, platformMin: pm, planRate, planMin, hoursPerUnit, maintRate, maintMin, ...(note !== undefined ? { note } : {}), ...(b["v"] === 2 ? { v: 2 } : {}) });
   }
   return out;
 }

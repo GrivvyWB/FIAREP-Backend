@@ -110,7 +110,7 @@ export default function JoinFiarep() {
         </button>
 
         <div className="mb-6 rounded-xl border border-amber-500/60 bg-amber-500/10 px-4 py-3 text-sm text-slate-100">
-          <span className="font-semibold text-amber-300">Included Benefit:</span> Every plan includes a complimentary four-month City Violation Discharge Program, designed to help resolve outstanding city violations and bring your properties closer to compliance.
+          <span className="font-semibold text-amber-300">Included Benefit:</span> Every plan includes a free four-month City Violation Discharge Program to help clear existing city violations and improve your property's compliance status. Once the four-month program is complete and the goals have been achieved, your account will automatically move to a lower-cost monthly maintenance plan. This allows you to continue using the platform for compliance tracking, monitoring, and support. Monthly pricing after the program varies based on the number of units in your portfolio.
         </div>
 
         {/* ── Hero ── */}
