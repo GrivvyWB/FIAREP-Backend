@@ -23,6 +23,7 @@ export default function Baseline() {
   const [ownerCompany, setOwnerCompany] = useState('');
   const [buildingType, setBuildingType] = useState('Residential');
   const [units, setUnits] = useState('');
+  const [buildingQuery, setBuildingQuery] = useState('');
   const [busy, setBusy] = useState(false);
 
   useFocusEffect(useCallback(() => {
@@ -69,11 +70,22 @@ export default function Baseline() {
             ))}
             {clients.length === 0 && <Text style={ui.listSub}>No client organizations yet — add the client in Platform Control first.</Text>}
           </View>
-          {!!client && client.buildings.length > 1 && (
-            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-              {client.buildings.map((b) => <Pressable key={b.address} onPress={() => { setAddress(b.address); if (b.units) setUnits(String(b.units)); }} style={{ borderRadius: 6, borderWidth: 1, borderColor: '#cbd5e1', paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ fontSize: 12 }}>{b.address}</Text></Pressable>)}
-            </View>
-          )}
+          {!!client && client.buildings.length > 1 && (() => {
+            // A client can have hundreds of buildings: search, then tap the one you are working on.
+            const t = buildingQuery.trim().toLowerCase();
+            const matches = (t ? client.buildings.filter((b) => b.address.toLowerCase().includes(t)) : client.buildings).slice(0, 40);
+            return (
+              <View style={{ gap: 6 }}>
+                <Text style={ui.label}>Building ({client.buildings.length.toLocaleString()})</Text>
+                {client.buildings.length > 12 && <TextInput style={ui.input} value={buildingQuery} onChangeText={setBuildingQuery} placeholder="Search this client's buildings" autoCapitalize="characters" />}
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                  {matches.map((b) => <Pressable key={b.address} onPress={() => { setAddress(b.address); if (b.units) setUnits(String(b.units)); }} style={{ borderRadius: 6, borderWidth: 1, borderColor: address === b.address ? BLUE : '#cbd5e1', backgroundColor: address === b.address ? '#e8f0fb' : '#fff', paddingHorizontal: 8, paddingVertical: 4 }}><Text style={{ fontSize: 12 }}>{b.address}</Text></Pressable>)}
+                </View>
+                {matches.length === 0 && <Text style={ui.listSub}>No building matches.</Text>}
+                {client.buildings.length > matches.length && matches.length > 0 && <Text style={ui.listSub}>Showing {matches.length} of {(t ? client.buildings.filter((b) => b.address.toLowerCase().includes(t)).length : client.buildings.length).toLocaleString()} — type to narrow it down.</Text>}
+              </View>
+            );
+          })()}
           <TextInput style={ui.input} value={address} onChangeText={setAddress} placeholder="Building address" />
           <TextInput style={ui.input} value={propertyName} onChangeText={setPropertyName} placeholder="Property name" />
           <TextInput style={ui.input} value={ownerCompany} onChangeText={setOwnerCompany} placeholder="Owner / management company" />

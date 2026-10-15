@@ -8,7 +8,7 @@ export type BFinding = {
 export type BAssessment = {
   id: string; reportId: string; clientName: string; propertyName: string; address: string; ownerCompany: string; buildingType: string; units: number | null;
   inspectionDate: string; inspector: string; areas: Record<string, boolean>; findings: BFinding[]; status: string;
-  signatures: { inspector: string; representative: string; date: string }; photoUrls: Record<string, string>; areaGroups: Record<string, string[]>;
+  signatures: { inspector: string; representative: string; date: string }; photoUrls: Record<string, string>; areaGroups: Record<string, string[]>; areaNotes?: Record<string, { note: string; photos: string[] }>;
   score: number; band: string; counts: Record<string, number>; roadmap: { immediate: number; shortTerm: number; longTerm: number };
 };
 
@@ -60,6 +60,15 @@ export function BaselineReport({ a }: { a: BAssessment }) {
           <div key={g}><p className="font-semibold">{g}</p>{list.map((ar) => <p key={ar}>{box(!!a.areas[ar])} {ar}</p>)}</div>
         ))}
       </div>
+      {Object.values(a.areaGroups).flat().filter((ar) => a.areaNotes?.[ar]?.note || a.areaNotes?.[ar]?.photos.length).map((ar) => (
+        <div key={ar} className="mt-4 break-inside-avoid rounded-md border border-slate-200 p-3">
+          <p className="font-semibold">{ar}</p>
+          {a.areaNotes![ar]!.note && <p className="mt-1 whitespace-pre-wrap text-sm">{a.areaNotes![ar]!.note}</p>}
+          <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {a.areaNotes![ar]!.photos.map((p) => a.photoUrls[p] ? <img key={p} src={a.photoUrls[p]} alt={ar} className="w-full rounded-md border border-slate-200" /> : null)}
+          </div>
+        </div>
+      ))}
 
       <h2 className={H}>Priority Violation Summary</h2>
       {LEVELS.map((lv) => {

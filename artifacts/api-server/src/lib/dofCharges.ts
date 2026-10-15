@@ -247,3 +247,48 @@ export async function lookupBuildingUnits(address: string): Promise<{ displayAdd
   } catch { /* no figure */ }
   return { displayAddress, bbl, units: 0, source: null };
 }
+
+export type DofOwnerBuilding = { bbl: string; displayAddress: string; owner: string; units: number; buildings: number; buildingClass: string };
+
+/**
+ * Every lot on the DOF assessment roll (8y4t-faws) whose owner name contains
+ * `owner`, on the latest roll year. One row per tax lot (BBL); lots with no
+ * building on them (vacant land) are left out. Units are the DOF figure.
+ */
+export async function dofBuildingsByOwner(owner: string): Promise<{ year: string; buildings: DofOwnerBuilding[] }> {
+  const name = owner.trim().toUpperCase().replace(/\s+/g, " ").replace(/'/g, "''");
+  if (name.length < 3) return { year: "", buildings: [] };
+  const long = async (url: string) => {
+    const response = await fetch(url, { headers: { accept: "application/json", "user-agent": "FIAREP/1.0 DOF owner lookup" }, signal: AbortSignal.timeout(90_000) });
+    if (!response.ok) throw new Error(`NYC Open Data returned HTTP ${response.status}`);
+    const data = await response.json();
+    return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+  };
+  const [latest] = await long(soql(PROPERTY_VALUATION, { $select: "year", $order: "year DESC", $limit: "1" }));
+  const year = text(latest?.["year"]);
+  const rows = await long(soql(PROPERTY_VALUATION, {
+    $select: "parid,boro,housenum_lo,street_name,zip_code,owner,bldg_class,max(units) as units,max(num_bldgs) as nb,max(year) as y",
+    $where: `upper(owner) like '%${name}%'`,
+    $group: "parid,boro,housenum_lo,street_name,zip_code,owner,bldg_class",
+    $limit: "50000",
+  }));
+  const byLot = new Map<string, DofOwnerBuilding>();
+  for (const r of rows) {
+    if (year && text(r["y"]) !== year) continue; // owned on an older roll only
+    if (num(r["nb"]) <= 0) continue; // vacant land
+    const bbl = text(r["parid"]).replace(/\D/g, "");
+    if (!bbl || byLot.has(bbl)) continue;
+    const street = [text(r["housenum_lo"]), text(r["street_name"])].filter(Boolean).join(" ");
+    if (!street) continue;
+    const place = [BOROUGH_NAMES[text(r["boro"])] || "", text(r["zip_code"])].filter(Boolean).join(" ");
+    byLot.set(bbl, {
+      bbl,
+      displayAddress: place ? `${street}, ${place}` : street,
+      owner: text(r["owner"]),
+      units: num(r["units"]),
+      buildings: num(r["nb"]),
+      buildingClass: text(r["bldg_class"]),
+    });
+  }
+  return { year, buildings: [...byLot.values()].sort((a, b) => a.displayAddress.localeCompare(b.displayAddress)) };
+}

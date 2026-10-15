@@ -112,6 +112,13 @@ router.put("/v1/baseline/:id", requireAuth, async (req, res) => {
     const valid = new Set(Object.values(AREAS).flat());
     next["areas"] = Object.fromEntries(Object.entries(b["areas"] as Record<string, unknown>).filter(([k]) => valid.has(k)).map(([k, v]) => [k, v === true]));
   }
+  if (b["areaNotes"] && typeof b["areaNotes"] === "object") {
+    const valid = new Set(Object.values(AREAS).flat());
+    next["areaNotes"] = Object.fromEntries(Object.entries(b["areaNotes"] as Record<string, unknown>).filter(([k, v]) => valid.has(k) && v && typeof v === "object").map(([k, v]) => {
+      const n = v as Record<string, unknown>;
+      return [k, { note: s(n["note"], 2000), photos: arr(n["photos"]).filter((p) => p.startsWith(`/objects/tenants/${FIAREP_TENANT}/`)).slice(0, 20) }];
+    }));
+  }
   if (Array.isArray(b["findings"])) next["findings"] = (b["findings"] as unknown[]).map(cleanFinding).filter(Boolean).slice(0, 500);
   if (b["signatures"] && typeof b["signatures"] === "object") {
     const g = b["signatures"] as Record<string, unknown>;

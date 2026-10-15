@@ -36,6 +36,9 @@ export default function BaselineAssess() {
   const [a, setA] = useState<Assessment | null>(null);
   const [fiarep, setFiarep] = useState(false);
   const [openArea, setOpenArea] = useState<string | null>(null);
+  // The area whose note box is open, and the note being written in it.
+  const [noteArea, setNoteArea] = useState<string | null>(null);
+  const [noteText, setNoteText] = useState('');
   const [draft, setDraft] = useState<Finding>(blank(''));
   const [photo, setPhoto] = useState<string | null>(null);
   const [heading, setHeading] = useState<number | null>(null);
@@ -92,6 +95,29 @@ export default function BaselineAssess() {
   const removeFinding = (f: Finding) => Alert.alert('Remove this finding?', f.issue, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => void save({ findings: a.findings.filter((x) => x.id !== f.id) }) }]);
   const toggleRepaired = (f: Finding) => void save({ findings: a.findings.map((x) => (x.id === f.id ? { ...x, status: x.status === 'repaired' ? 'open' : 'repaired' } : x)) });
 
+  // Each area has its own note box: what you see, written down, with photos.
+  const hasNote = (ar: string) => !!(a.areaNotes?.[ar]?.note || a.areaNotes?.[ar]?.photos.length);
+  const toggleNote = (ar: string) => {
+    if (noteArea === ar) { setNoteArea(null); return; }
+    setNoteArea(ar); setNoteText(a.areaNotes?.[ar]?.note || '');
+  };
+  const notesWith = (ar: string, note: string, photos: string[]) => ({ ...(a.areaNotes || {}), [ar]: { note, photos } });
+  async function saveNote(ar: string) {
+    await save({ areaNotes: notesWith(ar, noteText.trim(), a!.areaNotes?.[ar]?.photos || []), areas: { ...a!.areas, [ar]: true } }, 'Saving note…');
+  }
+  async function addAreaPhoto(ar: string, fn: () => Promise<string | null>) {
+    const u = await fn().catch(() => null);
+    if (!u) return;
+    setBusy('Saving photo…');
+    try {
+      const path = await uploadFindingPhoto(u);
+      // The note typed so far is kept with the photo.
+      setA(await updateBaseline(a!.id, { areaNotes: notesWith(ar, noteText.trim(), [...(a!.areaNotes?.[ar]?.photos || []), path]), areas: { ...a!.areas, [ar]: true } }));
+    } catch (e: any) { Alert.alert('Photo', String(e?.message || e)); }
+    finally { setBusy(''); }
+  }
+  const removeAreaPhoto = (ar: string, p: string) => Alert.alert('Remove this photo?', ar, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => void save({ areaNotes: notesWith(ar, a!.areaNotes?.[ar]?.note || '', (a!.areaNotes?.[ar]?.photos || []).filter((x) => x !== p)) }) }]);
+
   const reviewed = Object.values(a.areaGroups).flat().filter((x) => a.areas[x]).length;
   const totalAreas = Object.values(a.areaGroups).flat().length;
 
@@ -126,19 +152,44 @@ export default function BaselineAssess() {
         }}><Text style={ui.btnOutlineText}>Import open HPD / DOB violations (existing known)</Text></Pressable>
       )}
 
-      <Panel title={editable ? 'Inspection areas — tap to add findings' : 'Inspection areas reviewed'}>
+      <Panel title={editable ? 'Inspection areas — tap one to write what you see' : 'Inspection areas reviewed'}>
         {Object.entries(a.areaGroups).map(([group, areas]) => (
           <View key={group}>
             <Text style={{ fontWeight: '800', marginTop: 4 }}>{group}</Text>
             {areas.map((ar) => (
-              <View key={ar} style={{ flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#eef2f7', paddingVertical: 6, gap: 8 }}>
-                <Pressable style={{ flex: 1 }} disabled={!editable} onPress={() => { setOpenArea(ar); setDraft(blank(ar)); setPhoto(null); }}>
-                  <Text style={{ fontSize: 14 }}>{ar}</Text>
+              <View key={ar} style={{ borderTopWidth: 1, borderTopColor: '#eef2f7' }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 6, gap: 8 }}>
+                <Pressable style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }} disabled={!editable && !hasNote(ar)} onPress={() => toggleNote(ar)}>
+                  <Text style={{ fontSize: 14 }}>{noteArea === ar ? '▾' : '▸'} {ar}</Text>
+                  {hasNote(ar) && <Text style={{ fontSize: 11, color: '#475569' }}>📝{(a.areaNotes?.[ar]?.photos.length || 0) > 0 ? ' 📷' + a.areaNotes[ar].photos.length : ''}</Text>}
                 </Pressable>
                 {findingsIn(ar) > 0 && <Text style={{ backgroundColor: '#fee2e2', color: '#b91c1c', fontWeight: '800', fontSize: 11, borderRadius: 999, paddingHorizontal: 7 }}>{findingsIn(ar)}</Text>}
                 <Pressable disabled={!editable} onPress={() => void save({ areas: { ...a.areas, [ar]: !a.areas[ar] } })}>
                   <Text style={{ fontSize: 13, fontWeight: '700', color: a.areas[ar] ? '#166534' : '#94a3b8' }}>{a.areas[ar] ? '✓ reviewed' : editable ? 'mark reviewed' : 'not reviewed'}</Text>
                 </Pressable>
+              </View>
+              {noteArea === ar && (
+                <View style={{ backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#dbe3ee', padding: 10, gap: 8, marginBottom: 8 }}>
+                  <Text style={ui.label}>What you see — {ar}</Text>
+                  {editable
+                    ? <TextInput style={[ui.input, { minHeight: 80, textAlignVertical: 'top' }]} multiline value={noteText} onChangeText={setNoteText} placeholder="Write what you see here: the condition, where it is, what is wrong." />
+                    : <Text style={{ fontSize: 14 }}>{a.areaNotes?.[ar]?.note || 'No note.'}</Text>}
+                  {(a.areaNotes?.[ar]?.photos || []).map((p) => a.photoUrls[p]
+                    ? <Pressable key={p} disabled={!editable} onLongPress={() => removeAreaPhoto(ar, p)}><Image source={{ uri: a.photoUrls[p] }} style={{ width: '100%', height: 170, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" /></Pressable>
+                    : null)}
+                  {editable && (a.areaNotes?.[ar]?.photos.length || 0) > 0 && <Text style={ui.listSub}>Hold a photo to remove it.</Text>}
+                  {editable && (
+                    <>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => void addAreaPhoto(ar, takePhoto)}><Text style={ui.btnOutlineText}>📷 Take photo</Text></Pressable>
+                        <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => void addAreaPhoto(ar, pickPhoto)}><Text style={ui.btnOutlineText}>Choose photo</Text></Pressable>
+                      </View>
+                      <Pressable style={ui.btn} onPress={() => void saveNote(ar)}><Text style={ui.btnText}>Save note</Text></Pressable>
+                      <Pressable onPress={() => { setOpenArea(ar); setDraft(blank(ar)); setPhoto(null); }}><Text style={{ color: BLUE, fontWeight: '700', textAlign: 'center' }}>+ Add a finding (violation) for {ar}</Text></Pressable>
+                    </>
+                  )}
+                </View>
+              )}
               </View>
             ))}
           </View>

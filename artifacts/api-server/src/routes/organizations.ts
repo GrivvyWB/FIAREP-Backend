@@ -19,7 +19,7 @@ import {
   getConfiguredDevelopmentNames,
 } from "../lib/organizationDevelopments";
 import { researchOrganization } from "../lib/organizationResearch";
-import { lookupBuildingUnits } from "../lib/dofCharges";
+import { dofBuildingsByOwner, lookupBuildingUnits } from "../lib/dofCharges";
 import { hasCityData, normalizeAddress, stateCode } from "../lib/jurisdiction";
 
 const router: IRouter = Router();
@@ -174,6 +174,76 @@ router.post("/v1/platform/organizations/:organizationId/properties", async (req,
   } catch (error: any) {
     if (error?.status) { res.status(error.status).json({ error: error.message, licensedUnits: error.licensedUnits, registeredUnits: error.registeredUnits, buildingUnits: error.buildingUnits }); return; }
     if (error?.code === "23505") { res.status(409).json({ error: "That address is already registered" }); return; }
+    throw error;
+  }
+});
+
+// Every building on the DOF roll under an owner name, so a client's whole
+// portfolio can be added at once. Marks the ones this client already has and
+// the ones registered to another client.
+router.get("/v1/platform/organizations/:organizationId/dof-owner", async (req, res) => {
+  const organizationId = req.params.organizationId!;
+  const owner = typeof req.query["owner"] === "string" ? req.query["owner"].trim() : "";
+  if (owner.length < 3) { res.status(400).json({ error: "Type at least 3 letters of the owner name as it is on the DOF roll." }); return; }
+  try {
+    const { year, buildings } = await dofBuildingsByOwner(owner);
+    const existing = buildings.length ? await db.select({ organizationId: organizationProperties.organizationId, normalizedAddress: organizationProperties.normalizedAddress, bbl: organizationProperties.bbl }).from(organizationProperties) : [];
+    const mine = new Set(existing.filter((e) => e.organizationId === organizationId).flatMap((e) => [e.normalizedAddress, e.bbl || ""]));
+    const others = new Set(existing.filter((e) => e.organizationId !== organizationId).flatMap((e) => [e.normalizedAddress, e.bbl || ""]));
+    res.json({
+      year,
+      buildings: buildings.map((b) => {
+        const key = normalizeAddress(b.displayAddress, null, null);
+        return { ...b, added: mine.has(key) || mine.has(b.bbl), otherClient: !mine.has(key) && !mine.has(b.bbl) && (others.has(key) || others.has(b.bbl)) };
+      }),
+    });
+  } catch (error: any) {
+    res.status(502).json({ error: `DOF roll unavailable: ${error?.message || "try again"}` });
+  }
+});
+
+// Add many buildings in one go (from the DOF roll). Each goes in ON the plan
+// while it fits the licensed units; any that would go past them go in OFF,
+// so every building is still there to switch on once the units are raised.
+router.post("/v1/platform/organizations/:organizationId/properties/bulk", async (req, res) => {
+  const organizationId = req.params.organizationId!;
+  const list = Array.isArray(req.body?.buildings) ? (req.body.buildings as Record<string, unknown>[]) : [];
+  const wanted = list.slice(0, 20000).map((b) => ({
+    displayAddress: typeof b["displayAddress"] === "string" ? b["displayAddress"].trim() : "",
+    bbl: typeof b["bbl"] === "string" ? b["bbl"].replace(/\D/g, "") || null : null,
+    units: Number.isInteger(b["units"]) && (b["units"] as number) > 0 ? (b["units"] as number) : 0,
+  })).filter((b) => b.displayAddress.length >= 3);
+  if (wanted.length === 0) { res.status(400).json({ error: "No buildings to add." }); return; }
+  try {
+    const result = await db.transaction(async (tx) => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`property-limit:${organizationId}`}))`);
+      const [org] = await tx.select().from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+      if (!org) throw Object.assign(new Error("Organization not found"), { status: 404 });
+      const existing = await tx.select({ organizationId: organizationProperties.organizationId, normalizedAddress: organizationProperties.normalizedAddress, bbl: organizationProperties.bbl, units: organizationProperties.units, active: organizationProperties.active }).from(organizationProperties);
+      const taken = new Set(existing.map((e) => e.normalizedAddress));
+      const lotsHere = new Set(existing.filter((e) => e.organizationId === organizationId && e.bbl).map((e) => e.bbl!));
+      let count = existing.filter((e) => e.organizationId === organizationId).length;
+      let onPlan = existing.filter((e) => e.organizationId === organizationId && e.active).reduce((n, e) => n + (e.units || 0), 0);
+      const limited = org.licensedUnits !== null && !org.unrestricted;
+      const rows: (typeof organizationProperties.$inferInsert)[] = [];
+      let skipped = 0; let off = 0; let stopped = false;
+      for (const b of wanted) {
+        const normalizedAddress = normalizeAddress(b.displayAddress, null, null);
+        if (taken.has(normalizedAddress) || (b.bbl && lotsHere.has(b.bbl))) { skipped += 1; continue; }
+        if (org.propertyLimit !== null && count >= org.propertyLimit) { stopped = true; break; }
+        const active = !limited || b.units === 0 || onPlan + b.units <= (org.licensedUnits as number);
+        if (active) onPlan += b.units; else off += 1;
+        rows.push({ id: randomUUID(), organizationId, displayAddress: b.displayAddress, normalizedAddress, city: null, state: null, postalCode: null, development: null, units: b.units, bbl: b.bbl, active });
+        taken.add(normalizedAddress); if (b.bbl) lotsHere.add(b.bbl); count += 1;
+      }
+      for (let i = 0; i < rows.length; i += 500) await tx.insert(organizationProperties).values(rows.slice(i, i + 500)).onConflictDoNothing();
+      return { added: rows.length, on: rows.length - off, off, skipped, stoppedAtPropertyLimit: stopped, propertyLimit: org.propertyLimit, licensedUnits: org.licensedUnits };
+    });
+    const owner = res.locals["platformOwner"] as { name: string };
+    await platformAudit(owner.name, "property.bulk_created", organizationId, null, result);
+    res.status(201).json(result);
+  } catch (error: any) {
+    if (error?.status) { res.status(error.status).json({ error: error.message }); return; }
     throw error;
   }
 });

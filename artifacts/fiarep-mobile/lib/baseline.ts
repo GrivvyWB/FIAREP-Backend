@@ -11,9 +11,11 @@ export type Finding = {
   trade: string; priority: Priority; time: string; action: string; tools: string[]; materials: string[]; fixtures: string[];
   photos: string[]; existing: boolean; sourceRef: string; status: 'open' | 'repaired'; createdAt: string;
 };
+/** What the inspector saw in one area: a written note and photos. */
+export type AreaNote = { note: string; photos: string[] };
 export type Assessment = {
   id: string; reportId: string; clientOrgId: string; clientName: string; propertyName: string; address: string; ownerCompany: string;
-  buildingType: string; units: number | null; inspectionDate: string; inspector: string; areas: Record<string, boolean>;
+  buildingType: string; units: number | null; inspectionDate: string; inspector: string; areas: Record<string, boolean>; areaNotes: Record<string, AreaNote>;
   findings: Finding[]; status: 'in_progress' | 'complete'; signatures: { inspector: string; representative: string; date: string };
   completedAt: string | null; createdAt: string; photoUrls: Record<string, string>; areaGroups: Record<string, string[]>;
   score: number; band: string; counts: Record<Priority, number>; roadmap: { immediate: number; shortTerm: number; longTerm: number };
@@ -34,7 +36,7 @@ export const getBaseline = (id: string) => api<Assessment>('/v1/baseline/' + enc
 export const baselineClients = () => api<ClientOrg[]>('/v1/baseline/clients');
 export const baselineStatus = () => api<{ required: boolean; complete: boolean }>('/v1/baseline/status');
 export const createBaseline = (b: { clientOrgId: string; address: string; propertyName: string; ownerCompany: string; buildingType: string; units: number | null }) => api<Assessment>('/v1/baseline', 'POST', b);
-export const updateBaseline = (id: string, patch: Partial<Pick<Assessment, 'areas' | 'findings' | 'signatures' | 'status' | 'propertyName' | 'ownerCompany' | 'buildingType' | 'units'>>) => api<Assessment>('/v1/baseline/' + encodeURIComponent(id), 'PUT', patch);
+export const updateBaseline = (id: string, patch: Partial<Pick<Assessment, 'areas' | 'areaNotes' | 'findings' | 'signatures' | 'status' | 'propertyName' | 'ownerCompany' | 'buildingType' | 'units'>>) => api<Assessment>('/v1/baseline/' + encodeURIComponent(id), 'PUT', patch);
 export const importViolations = (id: string) => api<{ added: number; assessment: Assessment }>('/v1/baseline/' + encodeURIComponent(id) + '/import-violations', 'POST', {});
 
 /** Send a finding's photo to FIAREP's storage; returns its stored path. */

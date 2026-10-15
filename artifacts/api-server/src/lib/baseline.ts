@@ -16,10 +16,12 @@ export type Finding = {
   tools: string[]; materials: string[]; fixtures: string[]; photos: string[];
   existing: boolean; sourceRef: string; status: "open" | "repaired"; createdAt: string;
 };
+/** What the inspector saw in one area: a written note and photos. */
+export type AreaNote = { note: string; photos: string[] };
 export type Assessment = {
   id: string; reportId: string; clientOrgId: string; clientName: string; propertyName: string; address: string;
   ownerCompany: string; buildingType: string; units: number | null; inspectionDate: string; inspector: string;
-  areas: Record<string, boolean>; findings: Finding[]; status: "in_progress" | "complete";
+  areas: Record<string, boolean>; areaNotes: Record<string, AreaNote>; findings: Finding[]; status: "in_progress" | "complete";
   signatures: { inspector: string; representative: string; date: string }; completedAt: string | null; createdAt: string;
 };
 
@@ -53,6 +55,7 @@ export function fromRow(row: typeof entityRecords.$inferSelect): Assessment {
     propertyName: String(s.propertyName || ""), address: String(s.address || ""), ownerCompany: String(s.ownerCompany || ""),
     buildingType: String(s.buildingType || "Residential"), units: typeof s.units === "number" ? s.units : null,
     inspectionDate: String(s.inspectionDate || ""), inspector: String(s.inspector || ""), areas: (s.areas && typeof s.areas === "object" ? s.areas : {}) as Record<string, boolean>,
+    areaNotes: (s.areaNotes && typeof s.areaNotes === "object" ? s.areaNotes : {}) as Record<string, AreaNote>,
     findings: Array.isArray(s.findings) ? s.findings as Finding[] : [], status: s.status === "complete" ? "complete" : "in_progress",
     signatures: { inspector: String(s.signatures?.inspector || ""), representative: String(s.signatures?.representative || ""), date: String(s.signatures?.date || "") },
     completedAt: s.completedAt ? String(s.completedAt) : null, createdAt: String(s.createdAt || row.createdAt.toISOString()),
@@ -63,7 +66,8 @@ export function fromRow(row: typeof entityRecords.$inferSelect): Assessment {
 export async function forView(a: Assessment) {
   const findings = numbered(a.findings);
   const photoUrls: Record<string, string> = {};
-  for (const f of findings) for (const p of f.photos) {
+  const areaPhotos = Object.values(a.areaNotes || {}).flatMap((n) => (Array.isArray(n?.photos) ? n.photos : []));
+  for (const p of [...findings.flatMap((f) => f.photos), ...areaPhotos]) {
     if (photoUrls[p]) continue;
     try { photoUrls[p] = (await fileStorage.createDownload(FIAREP_TENANT, p)).downloadUrl; } catch { /* missing photo */ }
   }

@@ -30,6 +30,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { DofBulkAdd, BuildingSwitchList } from "@/components/platform-owner/dof-bulk-add";
 import { customFetch, LM_DEVELOPMENT_NAMES, NYCHA_DEVELOPMENT_NAMES, useCreateOrganization, useUpdateOrganization, OrganizationWithUsage, getListOrganizationsQueryKey, OrganizationInputStatus, useUpdatePlatformOrganizationTimeClock, useListPlatformOrganizationProperties, getListPlatformOrganizationPropertiesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useToast } from "@/hooks/use-toast";
@@ -776,6 +777,12 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                 )}
                   </CollapsibleContent>
                 </Collapsible>
+                {isEditing && organization && (
+                  <div className="mt-3 space-y-3">
+                    <DofBulkAdd organizationId={organization.id} defaultOwner={organization.name} onAdded={refreshProperties} />
+                    <BuildingSwitchList organizationId={organization.id} buildings={propertyRows.map((p) => ({ id: p.id, displayAddress: p.displayAddress, units: p.units ?? null, active: p.active }))} onChanged={refreshProperties} />
+                  </div>
+                )}
             </div>
 
             {!isEditing && (
