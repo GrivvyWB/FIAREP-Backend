@@ -147,6 +147,8 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
             autoCapitalize="characters"
             autoCorrect={false}
             maxLength={CODE_LEN}
+            // Hidden as it is typed and when filled in from the saved sign-in.
+            secureTextEntry
           />
       </>
 
