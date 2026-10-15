@@ -130,6 +130,17 @@ router.put("/v1/baseline/:id", requireAuth, async (req, res) => {
   res.json(await forView(fromRow(updated!)));
 });
 
+// Delete a baseline (a mistake, or one not wanted). FIAREP staff only. The
+// record is marked deleted, so the next report keeps its own number.
+router.delete("/v1/baseline/:id", requireAuth, async (req, res) => {
+  const a = fiarepStaff(res);
+  if (!a) { res.status(403).json({ error: "For FIAREP staff." }); return; }
+  const row = await load(String(req.params["id"]));
+  if (!row) { res.status(404).json({ error: "Not found." }); return; }
+  await db.update(entityRecords).set({ deleted: true, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() }).where(eq(entityRecords.id, row.id));
+  res.status(204).send();
+});
+
 // A finding's photo goes straight to FIAREP's storage.
 router.post("/v1/baseline/upload-url", requireAuth, async (req, res) => {
   const a = fiarepStaff(res);

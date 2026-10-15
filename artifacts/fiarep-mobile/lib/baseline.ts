@@ -37,6 +37,13 @@ export const baselineClients = () => api<ClientOrg[]>('/v1/baseline/clients');
 export const baselineStatus = () => api<{ required: boolean; complete: boolean }>('/v1/baseline/status');
 export const createBaseline = (b: { clientOrgId: string; address: string; propertyName: string; ownerCompany: string; buildingType: string; units: number | null }) => api<Assessment>('/v1/baseline', 'POST', b);
 export const updateBaseline = (id: string, patch: Partial<Pick<Assessment, 'areas' | 'areaNotes' | 'findings' | 'signatures' | 'status' | 'propertyName' | 'ownerCompany' | 'buildingType' | 'units'>>) => api<Assessment>('/v1/baseline/' + encodeURIComponent(id), 'PUT', patch);
+export async function deleteBaseline(id: string): Promise<void> {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const token = await getAccessToken();
+  if (!domain || !token) throw new Error('Sign in first.');
+  const res = await fetch(`https://${domain}/api/v1/baseline/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
+  if (!res.ok) { const t = await res.json().catch(() => null); throw new Error((t && t.error) || 'Delete failed (' + res.status + ')'); }
+}
 export const importViolations = (id: string) => api<{ added: number; assessment: Assessment }>('/v1/baseline/' + encodeURIComponent(id) + '/import-violations', 'POST', {});
 
 /** Send a finding's photo to FIAREP's storage; returns its stored path. */

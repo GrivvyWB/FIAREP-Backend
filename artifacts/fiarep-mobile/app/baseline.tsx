@@ -4,7 +4,7 @@ import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getSessionIdentity } from '../lib/store';
-import { listBaselines, baselineClients, createBaseline, BAND_ICON, type Assessment, type ClientOrg } from '../lib/baseline';
+import { listBaselines, baselineClients, createBaseline, deleteBaseline, BAND_ICON, type Assessment, type ClientOrg } from '../lib/baseline';
 import { ui } from '../lib/ui';
 
 const NAVY = '#0B2A4A';
@@ -35,6 +35,17 @@ export default function Baseline() {
       if (isFiarep) baselineClients().then(setClients).catch(() => undefined);
     })();
   }, []));
+
+  // Delete a baseline that was a mistake or is not wanted.
+  function remove(x: Assessment) {
+    Alert.alert('Delete this baseline?', `${x.reportId} · ${x.address}\nThis cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: () => void (async () => {
+        try { await deleteBaseline(x.id); setList((l) => (l || []).filter((y) => y.id !== x.id)); }
+        catch (e: any) { Alert.alert('Delete', String(e?.message || e)); }
+      })() },
+    ]);
+  }
 
   async function start() {
     if (!client) { Alert.alert('Client', 'Pick the client.'); return; }
@@ -113,6 +124,11 @@ export default function Baseline() {
           <Text style={ui.listSub}>{a.reportId} · {a.address}{fiarep ? ' · ' + a.clientName : ''}</Text>
           <Text style={{ fontSize: 13 }}>{BAND_ICON[a.band] || ''} Health score {a.score} — {a.band} · {a.findings.length} finding{a.findings.length === 1 ? '' : 's'}</Text>
           <Text style={{ fontSize: 12, fontWeight: '700', color: a.status === 'complete' ? '#166534' : '#b45309' }}>{a.status === 'complete' ? 'Complete' : 'Walk-through in progress'}</Text>
+          {fiarep && (
+            <Pressable onPress={() => remove(a)} hitSlop={8} style={{ alignSelf: 'flex-end', borderWidth: 1, borderColor: '#fecaca', borderRadius: 8, paddingHorizontal: 12, paddingVertical: 5, marginTop: 4 }}>
+              <Text style={{ color: '#b91c1c', fontWeight: '700', fontSize: 13 }}>Delete</Text>
+            </Pressable>
+          )}
         </Pressable>
       ))}
       <View style={{ height: 30 }} />

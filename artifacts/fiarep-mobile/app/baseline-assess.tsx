@@ -39,6 +39,7 @@ export default function BaselineAssess() {
   // The area whose note box is open, and the note being written in it.
   const [noteArea, setNoteArea] = useState<string | null>(null);
   const [noteText, setNoteText] = useState('');
+  const [noteSaved, setNoteSaved] = useState<string | null>(null);
   const [draft, setDraft] = useState<Finding>(blank(''));
   const [photo, setPhoto] = useState<string | null>(null);
   const [heading, setHeading] = useState<number | null>(null);
@@ -99,11 +100,13 @@ export default function BaselineAssess() {
   const hasNote = (ar: string) => !!(a.areaNotes?.[ar]?.note || a.areaNotes?.[ar]?.photos.length);
   const toggleNote = (ar: string) => {
     if (noteArea === ar) { setNoteArea(null); return; }
-    setNoteArea(ar); setNoteText(a.areaNotes?.[ar]?.note || '');
+    setNoteArea(ar); setNoteText(a.areaNotes?.[ar]?.note || ''); setNoteSaved(null);
   };
   const notesWith = (ar: string, note: string, photos: string[]) => ({ ...(a.areaNotes || {}), [ar]: { note, photos } });
   async function saveNote(ar: string) {
+    setNoteSaved(null);
     await save({ areaNotes: notesWith(ar, noteText.trim(), a!.areaNotes?.[ar]?.photos || []), areas: { ...a!.areas, [ar]: true } }, 'Saving note…');
+    setNoteSaved(ar);
   }
   async function addAreaPhoto(ar: string, fn: () => Promise<string | null>) {
     const u = await fn().catch(() => null);
@@ -118,6 +121,52 @@ export default function BaselineAssess() {
   }
   const removeAreaPhoto = (ar: string, p: string) => Alert.alert('Remove this photo?', ar, [{ text: 'Cancel', style: 'cancel' }, { text: 'Remove', style: 'destructive', onPress: () => void save({ areaNotes: notesWith(ar, a!.areaNotes?.[ar]?.note || '', (a!.areaNotes?.[ar]?.photos || []).filter((x) => x !== p)) }) }]);
 
+  // The finding form opens right inside the area you tapped, not at the bottom of the page.
+  const findingForm = editable && openArea ? (
+        <Panel title={'Add finding · ' + openArea} color="#334155">
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => shoot(takePhoto)}><Text style={ui.btnText}>Take photo</Text></Pressable>
+            <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => shoot(pickPhoto)}><Text style={ui.btnOutlineText}>Upload</Text></Pressable>
+          </View>
+          {!!photo && <RemotePhoto localUri={photo} style={{ width: '100%', height: 200, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" />}
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            <TextInput style={[ui.input, { flex: 1 }]} value={draft.floor} onChangeText={(v) => set('floor', v)} placeholder="Floor" />
+            <TextInput style={[ui.input, { flex: 1 }]} value={draft.unit} onChangeText={(v) => set('unit', v)} placeholder="Unit" />
+          </View>
+          <TextInput style={ui.input} value={draft.wall} onChangeText={(v) => set('wall', v)} placeholder="Wall / area (e.g. north wall, right-side handrail)" />
+          {!!photo && <Pressable style={[ui.btn, { backgroundColor: BLUE }]} onPress={analyze}><Text style={ui.btnText}>Analyze photo — fill in the finding</Text></Pressable>}
+          <TextInput style={ui.input} value={draft.issue} onChangeText={(v) => set('issue', v)} placeholder="Issue detected" />
+          <TextInput style={[ui.input, { minHeight: 60 }]} multiline value={draft.description} onChangeText={(v) => set('description', v)} placeholder="Description" />
+          <Text style={ui.label}>Recommended trade</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            {['Plumbing', 'Electrical', 'Carpentry', 'Roofing', 'Masonry', 'Painting', 'HVAC', 'General Maintenance'].map((t) => (
+              <Pressable key={t} onPress={() => set('trade', t)} style={{ borderRadius: 999, borderWidth: 1, borderColor: draft.trade === t ? BLUE : '#cbd5e1', backgroundColor: draft.trade === t ? BLUE : '#fff', paddingHorizontal: 10, paddingVertical: 4 }}>
+                <Text style={{ fontSize: 12, color: draft.trade === t ? '#fff' : '#0f172a' }}>{t}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <Text style={ui.label}>Priority rating</Text>
+          <View style={{ flexDirection: 'row', gap: 6 }}>
+            {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((p) => (
+              <Pressable key={p} onPress={() => set('priority', p)} style={{ flex: 1, borderRadius: 8, borderWidth: 1, borderColor: PRIORITY_COLOR[p], backgroundColor: draft.priority === p ? PRIORITY_COLOR[p] : '#fff', paddingVertical: 6 }}>
+                <Text style={{ textAlign: 'center', fontSize: 12, fontWeight: '700', color: draft.priority === p ? '#fff' : PRIORITY_COLOR[p] }}>{p}</Text>
+              </Pressable>
+            ))}
+          </View>
+          <TextInput style={ui.input} value={draft.time} onChangeText={(v) => set('time', v)} placeholder="Estimated repair time" />
+          <TextInput style={[ui.input, { minHeight: 50 }]} multiline value={draft.action} onChangeText={(v) => set('action', v)} placeholder="Recommended action" />
+          {[['tools', 'Tools suggested'], ['materials', 'Materials suggested'], ['fixtures', 'Fixtures suggested']].map(([k, label]) => (
+            <TextInput key={k} style={ui.input} value={(draft as any)[k].join(', ')} onChangeText={(v) => set(k as keyof Finding, v.split(',').map((x) => x.trim()).filter(Boolean))} placeholder={label + ' (comma separated)'} />
+          ))}
+          <Pressable onPress={() => set('existing', !draft.existing)}><Text style={{ fontSize: 14 }}>{draft.existing ? '☑' : '☐'} Existing known violation</Text></Pressable>
+          {draft.existing && <TextInput style={ui.input} value={draft.sourceRef} onChangeText={(v) => set('sourceRef', v)} placeholder="Violation # (e.g. HPD #1234567)" />}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => { setOpenArea(null); setPhoto(null); }}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
+            <Pressable style={[ui.btn, { flex: 1 }]} onPress={saveFinding}><Text style={ui.btnText}>Save finding</Text></Pressable>
+          </View>
+        </Panel>
+  ) : null;
+
   const reviewed = Object.values(a.areaGroups).flat().filter((x) => a.areas[x]).length;
   const totalAreas = Object.values(a.areaGroups).flat().length;
 
@@ -130,7 +179,7 @@ export default function BaselineAssess() {
       </View>
 
       <Panel title="Building information">
-        {[['Property Name', a.propertyName], ['Building Address', a.address], ['Owner/Management Company', a.ownerCompany], ['Building Type', a.buildingType], ['Number of Units', a.units != null ? String(a.units) : ''], ['Inspection Date', a.inspectionDate], ['Inspector', a.inspector], ['Report ID', a.reportId]].map(([k, v]) => (
+        {[['Property Name', a.propertyName], ['Building Address', a.address], ['Owner/Management Company', a.ownerCompany], ['Building Type', a.buildingType], ['Number of Units', a.units != null ? String(a.units) : ''], ['Inspection Date', a.inspectionDate], ['Inspected by', a.inspector], ['Report ID', a.reportId]].map(([k, v]) => (
           <Text key={k} style={{ fontSize: 14 }}><Text style={{ fontWeight: '700' }}>{k}: </Text>{v || '—'}</Text>
         ))}
       </Panel>
@@ -184,10 +233,13 @@ export default function BaselineAssess() {
                         <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => void addAreaPhoto(ar, takePhoto)}><Text style={ui.btnOutlineText}>📷 Take photo</Text></Pressable>
                         <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => void addAreaPhoto(ar, pickPhoto)}><Text style={ui.btnOutlineText}>Choose photo</Text></Pressable>
                       </View>
-                      <Pressable style={ui.btn} onPress={() => void saveNote(ar)}><Text style={ui.btnText}>Save note</Text></Pressable>
-                      <Pressable onPress={() => { setOpenArea(ar); setDraft(blank(ar)); setPhoto(null); }}><Text style={{ color: BLUE, fontWeight: '700', textAlign: 'center' }}>+ Add a finding (violation) for {ar}</Text></Pressable>
+                      <Pressable style={[ui.btn, !!busy && { opacity: 0.6 }]} disabled={!!busy} onPress={() => void saveNote(ar)}><Text style={ui.btnText}>Save note</Text></Pressable>
+                      {!!busy && <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator /><Text style={ui.listSub}>{busy}</Text></View>}
+                      {!busy && noteSaved === ar && <Text style={{ color: '#166534', fontWeight: '700', textAlign: 'center' }}>✓ Note saved</Text>}
+                      {openArea !== ar && <Pressable onPress={() => { setOpenArea(ar); setDraft(blank(ar)); setPhoto(null); }}><Text style={{ color: BLUE, fontWeight: '700', textAlign: 'center' }}>+ Add a finding (violation) for {ar}</Text></Pressable>}
                     </>
                   )}
+                  {openArea === ar && findingForm}
                 </View>
               )}
               </View>
@@ -195,51 +247,6 @@ export default function BaselineAssess() {
           </View>
         ))}
       </Panel>
-
-      {editable && openArea && (
-        <Panel title={'Add finding · ' + openArea} color="#334155">
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable style={[ui.btn, { flex: 1 }]} onPress={() => shoot(takePhoto)}><Text style={ui.btnText}>Take photo</Text></Pressable>
-            <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => shoot(pickPhoto)}><Text style={ui.btnOutlineText}>Upload</Text></Pressable>
-          </View>
-          {!!photo && <RemotePhoto localUri={photo} style={{ width: '100%', height: 200, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" />}
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            <TextInput style={[ui.input, { flex: 1 }]} value={draft.floor} onChangeText={(v) => set('floor', v)} placeholder="Floor" />
-            <TextInput style={[ui.input, { flex: 1 }]} value={draft.unit} onChangeText={(v) => set('unit', v)} placeholder="Unit" />
-          </View>
-          <TextInput style={ui.input} value={draft.wall} onChangeText={(v) => set('wall', v)} placeholder="Wall / area (e.g. north wall, right-side handrail)" />
-          {!!photo && <Pressable style={[ui.btn, { backgroundColor: BLUE }]} onPress={analyze}><Text style={ui.btnText}>Analyze photo — fill in the finding</Text></Pressable>}
-          <TextInput style={ui.input} value={draft.issue} onChangeText={(v) => set('issue', v)} placeholder="Issue detected" />
-          <TextInput style={[ui.input, { minHeight: 60 }]} multiline value={draft.description} onChangeText={(v) => set('description', v)} placeholder="Description" />
-          <Text style={ui.label}>Recommended trade</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {['Plumbing', 'Electrical', 'Carpentry', 'Roofing', 'Masonry', 'Painting', 'HVAC', 'General Maintenance'].map((t) => (
-              <Pressable key={t} onPress={() => set('trade', t)} style={{ borderRadius: 999, borderWidth: 1, borderColor: draft.trade === t ? BLUE : '#cbd5e1', backgroundColor: draft.trade === t ? BLUE : '#fff', paddingHorizontal: 10, paddingVertical: 4 }}>
-                <Text style={{ fontSize: 12, color: draft.trade === t ? '#fff' : '#0f172a' }}>{t}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <Text style={ui.label}>Priority rating</Text>
-          <View style={{ flexDirection: 'row', gap: 6 }}>
-            {(['Critical', 'High', 'Medium', 'Low'] as Priority[]).map((p) => (
-              <Pressable key={p} onPress={() => set('priority', p)} style={{ flex: 1, borderRadius: 8, borderWidth: 1, borderColor: PRIORITY_COLOR[p], backgroundColor: draft.priority === p ? PRIORITY_COLOR[p] : '#fff', paddingVertical: 6 }}>
-                <Text style={{ textAlign: 'center', fontSize: 12, fontWeight: '700', color: draft.priority === p ? '#fff' : PRIORITY_COLOR[p] }}>{p}</Text>
-              </Pressable>
-            ))}
-          </View>
-          <TextInput style={ui.input} value={draft.time} onChangeText={(v) => set('time', v)} placeholder="Estimated repair time" />
-          <TextInput style={[ui.input, { minHeight: 50 }]} multiline value={draft.action} onChangeText={(v) => set('action', v)} placeholder="Recommended action" />
-          {[['tools', 'Tools suggested'], ['materials', 'Materials suggested'], ['fixtures', 'Fixtures suggested']].map(([k, label]) => (
-            <TextInput key={k} style={ui.input} value={(draft as any)[k].join(', ')} onChangeText={(v) => set(k as keyof Finding, v.split(',').map((x) => x.trim()).filter(Boolean))} placeholder={label + ' (comma separated)'} />
-          ))}
-          <Pressable onPress={() => set('existing', !draft.existing)}><Text style={{ fontSize: 14 }}>{draft.existing ? '☑' : '☐'} Existing known violation</Text></Pressable>
-          {draft.existing && <TextInput style={ui.input} value={draft.sourceRef} onChangeText={(v) => set('sourceRef', v)} placeholder="Violation # (e.g. HPD #1234567)" />}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => { setOpenArea(null); setPhoto(null); }}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
-            <Pressable style={[ui.btn, { flex: 1 }]} onPress={saveFinding}><Text style={ui.btnText}>Save finding</Text></Pressable>
-          </View>
-        </Panel>
-      )}
 
       {!!busy && <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><ActivityIndicator /><Text style={ui.listSub}>{busy}</Text></View>}
 

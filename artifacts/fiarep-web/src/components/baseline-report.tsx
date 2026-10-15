@@ -34,7 +34,7 @@ export function BaselineReport({ a }: { a: BAssessment }) {
       <h1 className="text-2xl font-extrabold text-[#0B2A4A]">FIAREP Building Baseline Report</h1>
       <h2 className={H}>Building Information</h2>
       <table className="w-full"><tbody>
-        {[["Property Name", a.propertyName], ["Building Address", a.address], ["Owner/Management Company", a.ownerCompany], ["Number of Units", a.units != null ? String(a.units) : ""], ["Inspection Date", a.inspectionDate], ["Inspector", a.inspector], ["Report ID", a.reportId]].map(([k, v]) => (
+        {[["Property Name", a.propertyName], ["Building Address", a.address], ["Owner/Management Company", a.ownerCompany], ["Number of Units", a.units != null ? String(a.units) : ""], ["Inspection Date", a.inspectionDate], ["Inspected by", a.inspector], ["Report ID", a.reportId]].map(([k, v]) => (
           <tr key={k} className="border-t border-slate-100"><td className="w-64 py-1 font-semibold">{k}</td><td className="py-1">{v || "—"}</td></tr>
         ))}
         <tr className="border-t border-slate-100"><td className="py-1 font-semibold">Building Type</td><td className="py-1">{["Residential", "Mixed Use", "Commercial"].map((t) => `${box(a.buildingType === t)} ${t}`).join("   ")}</td></tr>
