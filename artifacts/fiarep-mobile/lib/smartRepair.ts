@@ -204,3 +204,19 @@ export async function deleteSavedRepair(id: string): Promise<void> {
   if (!item.jobId && !item.reportId) await drop(item.photo);
   if (!item.jobId) await drop(item.after);
 }
+
+/** A verified repair goes to management (and an emailed copy) per Platform Control. */
+export async function reportRepairComplete(input: { jobId: string | null; issue: string; address: string; summary: string }): Promise<{ notified: boolean; emailed: boolean }> {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const token = await getAccessToken();
+  if (!domain || !token) return { notified: false, emailed: false };
+  try {
+    const res = await fetch(`https://${domain}/api/ai/smart-repair/complete`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify(input),
+    });
+    if (!res.ok) return { notified: false, emailed: false };
+    const p = await res.json();
+    return { notified: p.notified === true, emailed: p.emailed === true };
+  } catch { return { notified: false, emailed: false }; }
+}

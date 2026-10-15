@@ -10,7 +10,7 @@ import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { takePhoto, pickPhoto, photoBase64, takePhotoWithGeo } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import RepairReferenceImage from '../components/RepairReferenceImage';
-import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, saveRepair, deleteSavedRepair, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
+import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
 import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor } from '../lib/store';
 import { ui } from '../lib/ui';
 
@@ -213,7 +213,15 @@ export default function SmartRepair() {
         + (result ? '\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ') + '\n' + (result.compliant ? '✅ Repair appears compliant' : '⚠ Needs another look') + (result.summary ? ' — ' + result.summary : '') : '');
       // Marked complete only when the after photo shows the repair done.
       await addResidentUpdate(jobId, result?.compliant ? 'resolved' : ((r?.status || 'in_progress') as any), noteText, a.name || 'FIAREP', [ev], ev.geo);
-      setSaved(result?.compliant ? 'Repair verified — the job is marked complete.' : 'After-repair photo added. FIAREP could not confirm the repair from the photo, so the job stays open.');
+      let sent = '';
+      if (result?.compliant && ticket) {
+        // Once complete it goes to management (and an emailed copy) per Platform Control.
+        const summary = ticketText(ticket, fromComplaint) + '\n\nFIAREP SUMMARY CARD\n' + summaryCard(ticket, area, 'Repaired — verified')
+          + '\n\nCOMPLETION VERIFICATION\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ');
+        const out = await reportRepairComplete({ jobId, issue: ticket.issueFound, address: [address.trim(), area].filter(Boolean).join(', '), summary });
+        sent = [out.notified ? 'sent to management' : '', out.emailed ? 'emailed a copy' : ''].filter(Boolean).join(' and ');
+      }
+      setSaved(result?.compliant ? 'Repair verified — the job is marked complete' + (sent ? ', ' + sent : '') + '.' : 'After-repair photo added. FIAREP could not confirm the repair from the photo, so the job stays open.');
     } catch (e: any) { setChecking(false); Alert.alert('After-repair photo', String(e?.message || e)); }
   }
 

@@ -279,6 +279,10 @@ export default function OwnerModules() {
   // FIAREP Smart Repair Instructions: master switch and the resident-complaint ticket. On unless switched off.
   const [smartRepairOn, setSmartRepairOn] = useState(true);
   const [smartRepairComplaints, setSmartRepairComplaints] = useState(true);
+  // When a Smart Repair is verified complete: to management in the app (on unless off), and an emailed copy (off until on).
+  const [smartRepairToMgmt, setSmartRepairToMgmt] = useState(true);
+  const [smartRepairEmailCopy, setSmartRepairEmailCopy] = useState(false);
+  const [smartRepairEmailTo, setSmartRepairEmailTo] = useState("");
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -345,6 +349,9 @@ export default function OwnerModules() {
     );
     setSmartRepairOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepair === false));
     setSmartRepairComplaints(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairComplaints === false));
+    setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
+    setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
+    setSmartRepairEmailTo(typeof organization.features?.smartRepairEmailTo === "string" ? String(organization.features.smartRepairEmailTo) : "");
     setDirty(false);
   }, [organization]);
 
@@ -404,6 +411,8 @@ export default function OwnerModules() {
 
   const toggleSmartRepair = (enabled: boolean) => { setSmartRepairOn(enabled); setDirty(true); };
   const toggleSmartRepairComplaints = (enabled: boolean) => { setSmartRepairComplaints(enabled); setDirty(true); };
+  const toggleSmartRepairToMgmt = (enabled: boolean) => { setSmartRepairToMgmt(enabled); setDirty(true); };
+  const toggleSmartRepairEmailCopy = (enabled: boolean) => { setSmartRepairEmailCopy(enabled); setDirty(true); };
   const toggleMessagingOpen = (enabled: boolean) => {
     setMessagingOpen(enabled);
     setDirty(true);
@@ -455,8 +464,9 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
+            smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
         },
       });
@@ -840,6 +850,53 @@ export default function OwnerModules() {
                     checked={smartRepairComplaints}
                     onCheckedChange={toggleSmartRepairComplaints}
                     aria-label={`${smartRepairComplaints ? "Disable" : "Enable"} Smart Field Ticket on resident complaints`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  smartRepairToMgmt ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    smartRepairToMgmt ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <Wrench className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Completed Smart Repair goes to management</p>
+                    <p className="text-xs text-slate-500">When the after-repair photo verifies the repair, management gets it in the app right away, with a push notification</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    smartRepairToMgmt ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {smartRepairToMgmt ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={smartRepairToMgmt}
+                    onCheckedChange={toggleSmartRepairToMgmt}
+                    aria-label={`${smartRepairToMgmt ? "Disable" : "Enable"} completed Smart Repair to management`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  smartRepairEmailCopy ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    smartRepairEmailCopy ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <Wrench className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Email a copy when a Smart Repair is complete</p>
+                    <p className="text-xs text-slate-500">The finished repair summary is emailed from fiarep@outlook.com to the address below (the client, or anyone you choose)</p>
+                    <input type="email" value={smartRepairEmailTo} onChange={(e) => { setSmartRepairEmailTo(e.target.value); setDirty(true); }} placeholder="client@example.com (separate several with commas)" className="mt-1.5 w-full max-w-md rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-900 focus:border-amber-500 focus:outline-none" aria-label="Email a copy to" />
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    smartRepairEmailCopy ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {smartRepairEmailCopy ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={smartRepairEmailCopy}
+                    onCheckedChange={toggleSmartRepairEmailCopy}
+                    aria-label={`${smartRepairEmailCopy ? "Disable" : "Enable"} email copy of completed Smart Repair`}
                   />
                 </div>
                 {isFiarep && (

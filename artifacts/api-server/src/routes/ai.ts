@@ -7,7 +7,8 @@ import { classifyMaterialImage } from "../lib/materialClassification";
 import { smartRepairTicket, verifyRepair, smartRepairDrawings } from "../lib/smartRepair";
 import { synthesizeSpeech, transcribeAudio, translateText } from "../lib/translator";
 import { actorFrom, requireAuth } from "../middlewares/auth";
-import { audit } from "../lib/audit";
+import { audit, notify } from "../lib/audit";
+import { ReplitConnectors } from "@replit/connectors-sdk";
 import { isBoroughDirector, isSupervisorPosition } from "../lib/domain";
 import { fileStorage } from "../lib/fileStorage";
 
@@ -163,6 +164,37 @@ router.post("/ai/smart-repair/drawings", requireAuth, async (req, res) => {
     req.log.warn({ err: error }, "Smart Repair drawings failed");
     res.status(503).json({ error: "Drawings are temporarily unavailable" });
   }
+});
+
+// Smart Repair complete: the finished repair goes to management in the app, and a
+// copy is emailed when Platform Control says so. Both are switches per organization:
+// smartRepairToManagement (on unless switched off), smartRepairEmailCopy (off until
+// switched on, with the address in smartRepairEmailTo).
+const connectors = new ReplitConnectors();
+const escHtml = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
+router.post("/ai/smart-repair/complete", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  const [org] = await db.select({ name: organizations.name, features: organizations.features }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  const features = (org?.features ?? {}) as Record<string, unknown>;
+  const modules = (features["modules"] ?? {}) as Record<string, unknown>;
+  if (modules["smartRepair"] === false) { res.status(403).json({ error: "Smart Repair is switched off for this organization." }); return; }
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const s = (k: string, n: number) => (typeof b[k] === "string" ? (b[k] as string).slice(0, n) : "");
+  const jobId = s("jobId", 80), issue = s("issue", 200) || "Repair", address = s("address", 300), summary = s("summary", 8000);
+  let notified = false, emailed = false;
+  if (modules["smartRepairToManagement"] !== false) {
+    await notify(actor, "management", `Smart Repair complete: ${issue}`, [address, `Verified by ${actor.name}`].filter(Boolean).join(" · "), jobId || undefined).catch(() => undefined);
+    notified = true;
+  }
+  const to = typeof features["smartRepairEmailTo"] === "string" ? (features["smartRepairEmailTo"] as string).trim() : "";
+  if (modules["smartRepairEmailCopy"] === true && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    try {
+      const html = `<p><b>FIAREP Smart Repair — repair complete</b></p><p>${escHtml(org?.name)}${address ? " · " + escHtml(address) : ""}</p><pre style="font-family:Menlo,Consolas,monospace;font-size:13px">${escHtml(summary)}</pre><p>Verified by ${escHtml(actor.name)} on ${new Date().toLocaleString("en-US", { timeZone: "America/New_York" })}.</p>`;
+      const r = await connectors.proxy("outlook", "/v1.0/me/sendMail", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ message: { subject: `Repair complete: ${issue}${address ? " — " + address : ""}`, body: { contentType: "HTML", content: html }, toRecipients: to.split(/[,;]\s*/).filter(Boolean).map((address) => ({ emailAddress: { address } })) }, saveToSentItems: true }) });
+      emailed = r.ok;
+    } catch { emailed = false; }
+  }
+  res.json({ notified, emailed });
 });
 
 // Completion verification: before photo vs after photo.
