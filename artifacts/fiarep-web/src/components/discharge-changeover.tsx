@@ -8,7 +8,7 @@ import { bandFor, type Band } from "@/lib/pricing-ladder";
  * buildings when none are set) pick the band; on the changeover date the
  * client is on that band's maintenance price automatically — nothing is
  * switched off. */
-type Row = { id: string; name: string; units: number | null; unitsFrom: "licensed" | "buildings" | null; start: string | null; changeover: string | null; tier: "program" | "maintenance" | "none"; today: string };
+type Row = { id: string; name: string; status: string; units: number | null; unitsFrom: "licensed" | "buildings" | null; start: string | null; changeover: string | null; tier: "program" | "maintenance" | "none"; today: string };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const usDate = (d: string) => { const [y, m, day] = d.split("-"); return `${m}/${day}/${y}`; };
@@ -34,6 +34,14 @@ export function DischargeChangeover({ bands }: { bands: Band[] }) {
     const auto = !v.changeover || (v.start && v.changeover === plusFourMonths(v.start));
     setDraft({ ...draft, [r.id]: { start, changeover: auto && start ? plusFourMonths(start) : v.changeover } });
   };
+  // Shut off for non-payment (suspends the client: signed out, no sign-in) or turn back on.
+  const setService = async (r: Row, on: boolean) => {
+    if (!on && !window.confirm(`Shut off ${r.name}? Everyone at ${r.name} is signed out and can't sign in until you turn it back on. Nothing is deleted.`)) return;
+    try {
+      await customFetch(`/api/v1/platform/discharge-program/${encodeURIComponent(r.id)}/service`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }), responseType: "json" } as never);
+      void load();
+    } catch { setState((s) => ({ ...s, [r.id]: "error" })); }
+  };
   const save = async (r: Row) => {
     const v = value(r);
     setState({ ...state, [r.id]: "saving" });
@@ -53,10 +61,10 @@ export function DischargeChangeover({ bands }: { bands: Band[] }) {
       <p className="px-3 pt-3 text-sm font-semibold text-slate-900">City Violation Discharge Program — changeover</p>
       <p className="px-3 text-xs text-slate-500">Units come from the client's licensed units on the platform (or its registered buildings when none are set), so the band is picked for you. The changeover date fills in as the start + 4 months; change it to any date. On that date the client moves to the band's maintenance price on its own — nothing is switched off.</p>
       <table className="mt-2 w-full min-w-[980px] text-sm">
-        <thead><tr className="bg-slate-50"><th className={th}>Client</th><th className={`${th} text-right`}>Units</th><th className={th}>Band</th><th className={th}>Program start</th><th className={th}>Changeover date</th><th className={th}>Now on</th><th className={th}>After changeover</th><th className={th}></th></tr></thead>
+        <thead><tr className="bg-slate-50"><th className={th}>Client</th><th className={`${th} text-right`}>Units</th><th className={th}>Band</th><th className={th}>Program start</th><th className={th}>Changeover date</th><th className={th}>Now on</th><th className={th}>After changeover</th><th className={th}>Service</th><th className={th}></th></tr></thead>
         <tbody>
-          {rows === null && <tr><td className={`${td} text-slate-500`} colSpan={8}>Loading…</td></tr>}
-          {rows?.length === 0 && <tr><td className={`${td} text-slate-500`} colSpan={8}>No clients yet.</td></tr>}
+          {rows === null && <tr><td className={`${td} text-slate-500`} colSpan={9}>Loading…</td></tr>}
+          {rows?.length === 0 && <tr><td className={`${td} text-slate-500`} colSpan={9}>No clients yet.</td></tr>}
           {rows?.map((r) => {
             const v = value(r);
             const band = r.units != null ? bandFor(r.units, bands) : null;
@@ -74,6 +82,14 @@ export function DischargeChangeover({ bands }: { bands: Band[] }) {
                   ? <span className="rounded-full bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-800">Maintenance since {usDate(v.changeover)}</span>
                   : <span className="rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-800">Discharge Program</span>}</td>
                 <td className={td}>{maint != null ? <>Maintenance — {money(maint)}/mo</> : "Maintenance — rate not set yet"}</td>
+                <td className={`${td} whitespace-nowrap`}>{r.id === "default" ? <span className="text-xs text-slate-400">FIAREP — always on</span> : (() => { const on = r.status !== "suspended"; return (
+                  <label className="flex cursor-pointer items-center gap-2 text-xs text-slate-700">
+                    <button type="button" role="switch" aria-checked={on} aria-label={`Service for ${r.name}`} onClick={() => void setService(r, !on)}
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition ${on ? "bg-emerald-500" : "bg-red-500"}`}>
+                      <span className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition ${on ? "left-[18px]" : "left-0.5"}`} />
+                    </button>
+                    {on ? "On" : <span className="font-semibold text-red-700">Shut off — no payment</span>}
+                  </label>); })()}</td>
                 <td className={`${td} whitespace-nowrap text-right`}>
                   {state[r.id] === "saved" && !dirty && <span className="mr-2 text-xs text-emerald-700">Saved</span>}
                   {state[r.id] === "error" && <span className="mr-2 text-xs text-red-700">Could not save</span>}

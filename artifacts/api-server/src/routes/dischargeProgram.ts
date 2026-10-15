@@ -5,8 +5,8 @@
 // switched off: only the tier and its price change. Stored on the
 // organization's features, so there is no schema change.
 import { Router, type IRouter } from "express";
-import { eq, inArray } from "drizzle-orm";
-import { db, organizationProperties, organizations } from "@workspace/db";
+import { and, eq, inArray, isNull } from "drizzle-orm";
+import { db, organizationProperties, organizations, refreshSessions, staffAccounts } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
 
@@ -32,7 +32,7 @@ export function dischargeTier(features: unknown, on: string = today()): "program
 }
 
 router.get("/v1/platform/discharge-program", async (_req, res) => {
-  const orgs = await db.select({ id: organizations.id, name: organizations.name, licensedUnits: organizations.licensedUnits, features: organizations.features }).from(organizations);
+  const orgs = await db.select({ id: organizations.id, name: organizations.name, status: organizations.status, licensedUnits: organizations.licensedUnits, features: organizations.features }).from(organizations);
   const ids = orgs.map((o) => o.id);
   const props = ids.length ? await db.select({ org: organizationProperties.organizationId, units: organizationProperties.units, active: organizationProperties.active }).from(organizationProperties).where(inArray(organizationProperties.organizationId, ids)) : [];
   const now = today();
@@ -40,7 +40,7 @@ router.get("/v1/platform/discharge-program", async (_req, res) => {
     const registered = props.filter((p) => p.org === o.id && p.active).reduce((n, p) => n + (p.units ?? 0), 0);
     // Units: what the client is licensed for; the registered buildings when no licensed number is set.
     const units = o.licensedUnits ?? (registered || null);
-    return { id: o.id, name: o.name, units, unitsFrom: o.licensedUnits != null ? "licensed" : registered ? "buildings" : null, ...programOf(o.features), tier: dischargeTier(o.features, now), today: now };
+    return { id: o.id, name: o.name, status: o.status, units, unitsFrom: o.licensedUnits != null ? "licensed" : registered ? "buildings" : null, ...programOf(o.features), tier: dischargeTier(o.features, now), today: now };
   }));
 });
 
@@ -57,6 +57,26 @@ router.put("/v1/platform/discharge-program/:id", async (req, res) => {
   await db.update(organizations).set({ features, updatedAt: new Date() }).where(eq(organizations.id, id));
   await platformAudit(owner.name, "discharge-program.updated", id, before, next);
   res.json({ id, ...next, tier: dischargeTier(features) });
+});
+
+// Shut a client off for non-payment, or turn it back on — the same suspension as
+// Organizations Registry → Suspend: every staff session is signed out and sign-in is
+// refused until it is turned back on. Nothing is deleted.
+router.put("/v1/platform/discharge-program/:id/service", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const id = String(req.params["id"]);
+  if (id === "default") { res.status(400).json({ error: "FIAREP's own organization can't be shut off." }); return; }
+  const on = (req.body as Record<string, unknown>)?.["on"] === true;
+  const [before] = await db.select({ status: organizations.status }).from(organizations).where(eq(organizations.id, id)).limit(1);
+  if (!before) { res.status(404).json({ error: "No such client." }); return; }
+  const status = on ? "active" : "suspended";
+  await db.update(organizations).set({ status, updatedAt: new Date() }).where(eq(organizations.id, id));
+  if (!on && before.status !== "suspended") {
+    const staff = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(eq(staffAccounts.tenantId, id));
+    if (staff.length) await db.update(refreshSessions).set({ revokedAt: new Date(), updatedAt: new Date() }).where(and(inArray(refreshSessions.staffId, staff.map((s) => s.id)), isNull(refreshSessions.revokedAt)));
+  }
+  await platformAudit(owner.name, on ? "client.service-on" : "client.shut-off", id, { status: before.status }, { status });
+  res.json({ id, status });
 });
 
 export default router;
