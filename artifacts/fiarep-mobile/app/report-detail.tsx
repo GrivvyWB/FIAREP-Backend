@@ -1,7 +1,7 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import PhraseHelper from '../components/PhraseHelper';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
@@ -14,6 +14,7 @@ import ComplaintReceipts from '../components/ComplaintReceipts';
 import QuotePanel, { quoteOf } from '../components/QuotePanel';
 import { ui, ACCENT } from '../lib/ui';
 import { useRawModules } from '../lib/module-access';
+import { wasPrompted, markPrompted } from '../lib/smartRepair';
 import { syncAllEntities } from '../lib/sync';
 import { requestFileDownloadUrl } from '@workspace/api-client-react';
 
@@ -60,6 +61,25 @@ export default function ReportDetail() {
   const [actorName, setActorName] = useState('');
   const [assessing, setAssessing] = useState(false);
   const [reviewOpen, setReviewOpen] = useState(false);
+  // A resident's complaint photo asks the person receiving it to analyze it with Smart Repair (once per complaint).
+  useEffect(() => {
+    if (!r) return;
+    const staff = mode === 'management' || mode === 'administrator' || mode === 'inspector';
+    const hasPhoto = (r.photos && r.photos.length > 0) || remotePhotoUris.length > 0;
+    const fromResident = r.createdBy !== 'management';
+    const hasTicket = (r.updates || []).some((u: any) => typeof u?.note === 'string' && u.note.startsWith('📸 Resident Complaint Received'));
+    if (!staff || !hasPhoto || !fromResident || hasTicket || rawModules['smartRepair'] === false || rawModules['smartRepairComplaints'] === false) return;
+    let cancelled = false;
+    void wasPrompted(r.id).then((done) => {
+      if (done || cancelled) return;
+      void markPrompted(r.id);
+      Alert.alert('Analyze the resident\'s photo?', 'FIAREP Smart Repair turns the photo into a repair plan: issue, exact location, tools, materials, steps and priority.', [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'Analyze', onPress: () => router.push(('/smart-repair?reportId=' + encodeURIComponent(r.id)) as any) },
+      ]);
+    });
+    return () => { cancelled = true; };
+  }, [r?.id, remotePhotoUris.length, mode]);
   const [reviewReason, setReviewReason] = useState('');
   const [reviewBusy, setReviewBusy] = useState(false);
   const [completionNote, setCompletionNote] = useState('');

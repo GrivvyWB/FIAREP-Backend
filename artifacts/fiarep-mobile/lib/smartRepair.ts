@@ -220,3 +220,23 @@ export async function reportRepairComplete(input: { jobId: string | null; issue:
     return { notified: p.notified === true, emailed: p.emailed === true };
   } catch { return { notified: false, emailed: false }; }
 }
+
+// A resident's photo asks the person who receives it to analyze it — once per complaint.
+const PROMPTED_KEY = 'smart_repair_prompted';
+export async function wasPrompted(reportId: string): Promise<boolean> {
+  try {
+    const d = await db();
+    const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', PROMPTED_KEY);
+    const ids: string[] = row?.value ? JSON.parse(row.value) : [];
+    return ids.includes(reportId);
+  } catch { return false; }
+}
+export async function markPrompted(reportId: string): Promise<void> {
+  try {
+    const d = await db();
+    const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', PROMPTED_KEY);
+    const ids: string[] = row?.value ? JSON.parse(row.value) : [];
+    if (!ids.includes(reportId)) ids.push(reportId);
+    await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', PROMPTED_KEY, JSON.stringify(ids.slice(-500)));
+  } catch {}
+}
