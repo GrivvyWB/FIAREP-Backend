@@ -2,7 +2,7 @@
 // moment of the photo, finds the street address from GPS, and asks the server
 // for the Smart Field Ticket.
 import * as FileSystem from 'expo-file-system/legacy';
-import { getAccessToken } from './store';
+import { getAccessToken, db } from './store';
 import { currentFix, placeFor } from './clock-location';
 
 let Location: any = null;
@@ -165,4 +165,42 @@ export async function requestDrawings(t: SmartTicket): Promise<SmartDrawings> {
   if (!res.ok) throw new Error('Drawings unavailable (' + res.status + ')');
   const p = await res.json();
   return { diagram: p.diagram || null, part: p.part || null, items: p.items && typeof p.items === 'object' ? p.items : {} };
+}
+
+// ── Saved repairs: each photo and its repair directions stay on the phone until
+// the member deletes them.
+export type SavedRepair = {
+  id: string; at: string; photo: string | null; heading: number | null; address: string; apt: string; room: string; note: string;
+  reportId?: string; ticket: SmartTicket; jobId?: string | null; ordered?: boolean; after?: string | null; check?: RepairVerification | null;
+};
+const SAVED_KEY = 'smart_repairs';
+
+export async function listSavedRepairs(): Promise<SavedRepair[]> {
+  try {
+    const d = await db();
+    const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key = ?', SAVED_KEY);
+    const list = row?.value ? JSON.parse(row.value) : [];
+    return Array.isArray(list) ? list : [];
+  } catch { return []; }
+}
+async function writeSaved(list: SavedRepair[]): Promise<void> {
+  const d = await db();
+  await d.runAsync('INSERT INTO settings (key,value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value', SAVED_KEY, JSON.stringify(list.slice(0, 200)));
+}
+export async function saveRepair(item: SavedRepair): Promise<void> {
+  const list = await listSavedRepairs();
+  await writeSaved([item, ...list.filter((x) => x.id !== item.id)]);
+}
+/** Delete a saved repair and its photos. A photo that went onto a work order stays — the job still uses it. */
+export async function deleteSavedRepair(id: string): Promise<void> {
+  const list = await listSavedRepairs();
+  const item = list.find((x) => x.id === id);
+  await writeSaved(list.filter((x) => x.id !== id));
+  if (!item) return;
+  const drop = async (p?: string | null) => {
+    if (!p || !p.startsWith('photos/')) return;
+    try { await FileSystem.deleteAsync(FileSystem.documentDirectory + p, { idempotent: true }); } catch {}
+  };
+  if (!item.jobId && !item.reportId) await drop(item.photo);
+  if (!item.jobId) await drop(item.after);
 }

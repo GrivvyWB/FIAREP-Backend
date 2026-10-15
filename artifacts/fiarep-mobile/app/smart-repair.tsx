@@ -10,7 +10,7 @@ import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { takePhoto, pickPhoto, photoBase64, takePhotoWithGeo } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import RepairReferenceImage from '../components/RepairReferenceImage';
-import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, type SmartTicket, type RepairVerification, type SmartDrawings } from '../lib/smartRepair';
+import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, saveRepair, deleteSavedRepair, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
 import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor } from '../lib/store';
 import { ui } from '../lib/ui';
 
@@ -99,6 +99,37 @@ export default function SmartRepair() {
   const [after, setAfter] = useState<string | null>(null);
   const [check, setCheck] = useState<RepairVerification | null>(null);
   const [checking, setChecking] = useState(false);
+  // Every photo and its repair directions are kept on the phone until deleted.
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [savedList, setSavedList] = useState<SavedRepair[]>([]);
+  const refreshSaved = () => { void listSavedRepairs().then(setSavedList); };
+  useEffect(() => { refreshSaved(); }, []);
+  const persist = async (over: Partial<SavedRepair> & { ticket: SmartTicket }, id = savedId) => {
+    const item: SavedRepair = {
+      id: id || Date.now().toString(36) + Math.random().toString(36).slice(2, 6), at: new Date().toISOString(),
+      photo, heading, address: address.trim(), apt: apt.trim(), room: room.trim(), note: note.trim(),
+      reportId: reportId ? String(reportId) : undefined, jobId, ordered, after, check, ...over,
+    };
+    await saveRepair(item).catch(() => undefined);
+    setSavedId(item.id); refreshSaved();
+  };
+  function openSaved(it: SavedRepair) {
+    setSavedId(it.id); setPhoto(it.photo); setHeading(it.heading); setAddress(it.address); setApt(it.apt); setRoom(it.room); setNote(it.note);
+    setTakenAt(new Date(it.at)); setTicket(it.ticket); setJobId(it.jobId ?? (it.reportId || null)); setOrdered(!!it.ordered);
+    setAfter(it.after ?? null); setCheck(it.check ?? null); setSaved('');
+    setDrawing(true); setDrawings(null);
+    requestDrawings(it.ticket).then(setDrawings).catch(() => setDrawings({ diagram: null, part: null, items: {} })).finally(() => setDrawing(false));
+  }
+  function startOver() {
+    setSavedId(null); setPhoto(null); setTicket(null); setDrawings(null); setOrdered(false); setAfter(null); setCheck(null); setSaved('');
+    setJobId(reportId ? String(reportId) : null); setHeading(null); setTakenAt(null);
+  }
+  function confirmDelete(id: string, then?: () => void) {
+    Alert.alert('Delete this repair?', 'The photo and its repair directions are removed from this phone. A work order already created stays in the jobs list.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: async () => { await deleteSavedRepair(id); refreshSaved(); then?.(); } },
+    ]);
+  }
 
   // From a resident complaint: its photo, address, apartment and words come along.
   useEffect(() => {
@@ -121,7 +152,7 @@ export default function SmartRepair() {
     try {
       const u = await fn();
       if (!u) return;
-      setPhoto(u); setTakenAt(new Date()); setTicket(null); setDrawings(null); setSaved(''); setOrdered(false); setAfter(null); setCheck(null);
+      setSavedId(null); setPhoto(u); setTakenAt(new Date()); setTicket(null); setDrawings(null); setSaved(''); setOrdered(false); setAfter(null); setCheck(null);
       setHeading(await readHeading());
     } catch (e: any) { Alert.alert('Photo', String(e?.message || e)); }
   }
@@ -134,6 +165,7 @@ export default function SmartRepair() {
       if (!b64) throw new Error('Could not read the photo.');
       const t = await requestSmartTicket({ image: b64, heading, address: address.trim(), area, note: note.trim() });
       setTicket(t);
+      await persist({ ticket: t, at: new Date().toISOString() });
       // The drawings come in after the ticket; each panel fills as they arrive.
       setDrawing(true); setDrawings(null);
       requestDrawings(t).then(setDrawings).catch(() => setDrawings({ diagram: null, part: null, items: {} })).finally(() => setDrawing(false));
@@ -153,9 +185,11 @@ export default function SmartRepair() {
       } else {
         const r = await createManagementReport(area, '', address.trim(), text, photo ? [photo] : []);
         setJobId(r.id);
+        await persist({ ticket, ordered: true, jobId: r.id });
         setSaved('Work order created — it is in the jobs list to assign.');
       }
       setOrdered(true);
+      await persist({ ticket, ordered: true, jobId: jobId || undefined });
     } catch (e: any) { Alert.alert('Work order', String(e?.message || e)); }
   }
 
@@ -172,6 +206,7 @@ export default function SmartRepair() {
         if (before && afterB64) result = await requestVerification(before, afterB64, ticket?.issueFound || '');
       } catch (e: any) { Alert.alert('Verification', String(e?.message || e)); }
       setCheck(result); setChecking(false);
+      if (ticket) await persist({ ticket, after: ev.uri, check: result });
       const a = await getCurrentActor();
       const r = await getResidentReport(jobId);
       const noteText = 'After-repair photo (Smart Repair)'
@@ -199,6 +234,27 @@ export default function SmartRepair() {
           <Text style={{ color: '#cbd5e1', fontSize: 13 }}>Identify • Locate • Instruct • Prepare • Repair</Text>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 12, marginTop: 4 }}>RIGHT REPAIR. RIGHT TOOLS. FIRST TIME. ✅</Text>
         </View>
+
+        {!fromComplaint && !ticket && !photo && savedList.length > 0 && (
+          <View style={{ backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#dbe3ee', overflow: 'hidden' }}>
+            <View style={{ backgroundColor: '#334155', paddingHorizontal: 12, paddingVertical: 7 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>SAVED REPAIRS ({savedList.length})</Text></View>
+            {savedList.map((it) => (
+              <View key={it.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 10, borderTopWidth: 1, borderTopColor: '#eef2f7' }}>
+                <Pressable style={{ flex: 1, flexDirection: 'row', gap: 10, alignItems: 'center' }} onPress={() => openSaved(it)}>
+                  {it.photo ? <RemotePhoto localUri={it.photo} style={{ width: 54, height: 54, borderRadius: 6, backgroundColor: '#111' }} resizeMode="cover" /> : <View style={{ width: 54, height: 54, borderRadius: 6, backgroundColor: '#e2e8f0' }} />}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '700' }} numberOfLines={1}>{it.ticket.issueFound}</Text>
+                    <Text style={ui.listSub} numberOfLines={1}>{when(new Date(it.at))}{it.address ? ' · ' + it.address : ''}</Text>
+                    <Text style={[ui.listSub, { color: it.check?.compliant ? '#166534' : it.ordered ? BLUE : '#64748b' }]}>{it.check?.compliant ? 'Repaired — verified' : it.ordered ? 'Work order created' : 'Ready for repair'}</Text>
+                  </View>
+                </Pressable>
+                <Pressable onPress={() => confirmDelete(it.id)} hitSlop={8} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#dc2626' }}>
+                  <Text style={{ color: '#dc2626', fontWeight: '700', fontSize: 13 }}>Delete</Text>
+                </Pressable>
+              </View>
+            ))}
+          </View>
+        )}
 
         <Panel n={1} title={fromComplaint ? 'Resident complaint photo' : 'Photo'}>
           {!fromComplaint && (
@@ -334,6 +390,17 @@ export default function SmartRepair() {
               <Text style={{ fontWeight: '800', fontSize: 12, color: BLUE, letterSpacing: 0.4, marginBottom: 6 }}>FIAREP SUMMARY CARD</Text>
               <Text style={{ fontFamily: MONO, fontSize: 13, lineHeight: 18 }}>{summaryCard(ticket, area, check?.compliant ? 'Repaired — verified' : 'Ready For Repair')}</Text>
             </View>
+
+            {!fromComplaint && (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => { startOver(); refreshSaved(); }}><Text style={ui.btnOutlineText}>New repair / saved list</Text></Pressable>
+                {!!savedId && (
+                  <Pressable style={[ui.btnOutline, { flex: 1, borderColor: '#dc2626' }]} onPress={() => confirmDelete(savedId, startOver)}>
+                    <Text style={{ color: '#dc2626', fontWeight: '600', textAlign: 'center' }}>Delete this repair</Text>
+                  </Pressable>
+                )}
+              </View>
+            )}
           </>
         )}
 
