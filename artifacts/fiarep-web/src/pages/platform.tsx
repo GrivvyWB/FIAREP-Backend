@@ -29,6 +29,62 @@ const roles = [
   { name: "Vendors", icon: HardHat, desc: "Project bids, external contracting, and supply.", color: "text-orange-500", bg: "bg-orange-500/10", border: "border-orange-500/20" }
 ];
 
+const WORDING_BLOCKS = [
+  {
+    title: "Know What's Broken. Know What's at Risk. Know What's Next.",
+    body: "FIAREP gives property owners complete visibility into violations, repairs, inspections, resident issues, and compliance from a single dashboard.",
+    tag: "Reduce fines. Accelerate repairs. Protect your portfolio.",
+  },
+  {
+    title: "The Operating System for Building Compliance and Property Operations",
+    body: "From resident complaints and city violations to inspections, procurement, and completed repairs, FIAREP connects every part of building operations in one platform.",
+    tag: "Built for owners, managers, inspectors, vendors, and residents.",
+  },
+  {
+    title: "Photo In. Repair Out.",
+    body: "Residents report issues with a photo. FIAREP identifies the problem, creates repair instructions, assigns the right trade, tracks the work, and keeps everyone updated.",
+    tag: "Smarter Buildings. Faster Repairs. Fewer Violations.",
+  },
+  {
+    title: "Stop Managing Problems. Start Managing Performance.",
+    body: "FIAREP combines compliance tracking, violation management, inspections, repairs, resident communication, and AI-powered building intelligence into one powerful platform.",
+    tag: "Reduce Risk. Improve Response Times. Gain Complete Visibility.",
+  },
+];
+
+function FiarepWording() {
+  return (
+    <div className="space-y-8" data-testid="text-hero-subheading">
+      <div>
+        <p className="text-2xl font-bold tracking-tight text-foreground mb-3">
+          One Platform. Every Repair. Every Violation. Every Resident.
+        </p>
+        <p className="text-base text-muted-foreground leading-relaxed mb-4">
+          Turn resident complaints into completed repairs, track violations in real time, manage inspections, and reduce compliance risk with AI-powered building operations.
+        </p>
+        <span className="inline-flex items-center rounded-full bg-primary px-4 py-1.5 text-sm font-extrabold text-primary-foreground shadow-sm">
+          Photo In. Solution Out.
+        </span>
+      </div>
+      {WORDING_BLOCKS.map((block) => (
+        <div key={block.title} className="border-l-4 border-primary pl-4">
+          <h3 className="text-lg font-bold leading-snug text-foreground mb-2">{block.title}</h3>
+          <p className="text-sm text-muted-foreground leading-relaxed mb-3">{block.body}</p>
+          <p className="text-sm font-semibold text-foreground">{block.tag}</p>
+        </div>
+      ))}
+      <div className="flex flex-col gap-3">
+        <a href="mailto:fiarep@outlook.com?subject=Schedule%20a%20Demo" className="inline-flex items-center justify-center rounded-lg bg-card px-4 py-3 text-sm font-semibold text-foreground shadow-sm border border-border hover:border-accent/30 transition-all" data-testid="link-hero-demo">
+          Schedule a Demo
+        </a>
+        <Link href="/join" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all whitespace-nowrap" data-testid="link-hero-pilot">
+          Start Your 90-Day Pilot <ArrowRight className="ml-2 h-4 w-4" />
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 export default function Platform() {
   return (
     <div className="min-h-[100dvh] bg-background text-foreground overflow-x-hidden font-sans" data-testid="page-platform">
@@ -57,6 +113,9 @@ export default function Platform() {
         </div>
       </header>
 
+      {/* Page content on the left; FIAREP wording down the right side on computers */}
+      <div className="xl:flex xl:items-stretch">
+      <div className="min-w-0 flex-1">
       {/* Hero Section */}
       <section className="relative pt-24 pb-32 px-6 lg:px-8 max-w-7xl mx-auto flex flex-col items-center text-center">
         <motion.div 
@@ -82,9 +141,6 @@ export default function Platform() {
             </span>
           </motion.h1>
           
-          <motion.p variants={fadeIn} className="text-xl md:text-2xl text-muted-foreground mb-12 leading-relaxed max-w-3xl mx-auto" data-testid="text-hero-subheading">
-            Connect management, staff, residents, and vendors in one platform built around the daily work of housing developments.
-          </motion.p>
           
         </motion.div>
 
@@ -322,6 +378,15 @@ export default function Platform() {
         </div>
       </section>
 
+      </div>
+      <aside className="hidden xl:block w-72 shrink-0 border-l border-border bg-card/50 px-5 py-24" data-testid="aside-fiarep-wording">
+        <FiarepWording />
+      </aside>
+      </div>
+      {/* On a phone or a smaller screen there is no room at the side: the same wording sits here, above the footer */}
+      <section className="xl:hidden border-t border-border bg-card/50 px-6 py-16" data-testid="section-fiarep-wording">
+        <div className="max-w-xl mx-auto"><FiarepWording /></div>
+      </section>
       <WebsiteFooter />
     </div>
   );
