@@ -121,6 +121,7 @@ export default function CpmHome() {
       color: '#1F5C45',
       tiles: [
         ...(isInspectorRole ? [{ label: 'HUD Inspections', onPress: () => router.push('/hud-inspections'), tone: 'solid' as Tone }] : []),
+        { label: 'Building Baseline', onPress: () => router.push('/baseline'), tone: 'solid' as Tone },
         ...(isCpmRole ? [{ label: 'Projects', onPress: () => router.push('/?list=1'), tone: 'outline' as Tone }] : []),
         ...(isCpmRole ? [{ label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' as Tone }] : []),
         // Standing in the apartment: what the job needs bought, priced off the

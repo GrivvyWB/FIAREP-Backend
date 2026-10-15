@@ -7,6 +7,7 @@
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { db, entityRecords, residentReportPhotos } from "@workspace/db";
 import { fileStorage } from "./fileStorage";
+import { assessmentsForClient, compareWithBaseline } from "./baseline";
 
 export type Triage = {
   issue: string; room: string; trade: string;
@@ -70,7 +71,7 @@ export function priorityScore(t: Triage): number {
 }
 const STATUS_WORD: Record<string, string> = { "Dispatch immediately": "Immediate", "Same-day response": "Same Day", "Repair within 24 hours": "24 Hours", "Repair within 3 days": "Scheduled", "Schedule with next maintenance cycle": "Low" };
 
-export type QueueItem = { rank: number; reportId: string; location: string; issue: string; trade: string; level: Triage["level"]; risk: string; action: string; status: string; reportStatus: string; createdAt: string };
+export type QueueItem = { rank: number; reportId: string; location: string; issue: string; trade: string; level: Triage["level"]; risk: string; action: string; status: string; reportStatus: string; createdAt: string; baseline: string };
 export type BuildingQueue = { building: string; items: QueueItem[]; routes: Array<{ trade: string; stops: string[] }> };
 
 type Scope = { tenantId: string; developments: string[] | null };
@@ -102,6 +103,8 @@ export async function priorityQueue(scope: Scope, apiKey: string, maxNew = 25): 
       } catch { /* left for the next time the queue is opened */ }
     }));
   }
+  // Each complaint against the building's baseline: existing, new, reoccurring or escalating.
+  const baselines = await assessmentsForClient(scope.tenantId).catch(() => []);
   const groups = new Map<string, typeof open>();
   for (const r of open) {
     const key = String(r.state["address"] || r.development || "Building not given").trim();
@@ -113,7 +116,7 @@ export async function priorityQueue(scope: Scope, apiKey: string, maxNew = 25): 
     const items: QueueItem[] = triaged.map(({ r, t }, i) => {
       const unit = String(r.state["unit"] || "").trim();
       const where = [unit ? (/^apt/i.test(unit) ? unit : `Apt ${unit}`) : "", t.room || String(r.state["location"] || "").trim()].filter(Boolean).join(" · ") || "Location not given";
-      return { rank: i + 1, reportId: r.id, location: where, issue: t.issue, trade: t.trade, level: t.level, risk: t.risk, action: t.action, status: STATUS_WORD[t.action] || t.action, reportStatus: String(r.state["status"] || ""), createdAt: String(r.state["createdAt"] || "") };
+      return { rank: i + 1, reportId: r.id, location: where, issue: t.issue, trade: t.trade, level: t.level, risk: t.risk, action: t.action, status: STATUS_WORD[t.action] || t.action, reportStatus: String(r.state["status"] || ""), createdAt: String(r.state["createdAt"] || ""), baseline: compareWithBaseline(baselines, { address: building, unit, trade: t.trade, level: t.level }) };
     });
     const byTrade = new Map<string, string[]>();
     for (const it of items) {

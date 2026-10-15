@@ -14,6 +14,8 @@ import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
 import PhoneComplaintsToggle from '../components/PhoneComplaintsToggle';
+import { useBaselineWaiting, COMPLAINT_TILES } from '../lib/baseline';
+import BaselineWaitingBanner from '../components/BaselineWaitingBanner';
 import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
 
 type Tone = 'solid' | 'outline' | 'tint';
@@ -46,6 +48,7 @@ export default function AdminHome() {
   // who act: supervisors, CPMs, HR, Procurement). Dead button removed.
   const modules = useModuleAccess();
   const rawModules = useRawModules();
+  const baselineWaiting = useBaselineWaiting();
   // FIAREP's own administrators (Timothy Winn, Emily Winn) also work in the
   // field: they get every technician tool here, and every request inside
   // FIAREP comes to them, so they get an Inbox too.
@@ -107,6 +110,7 @@ export default function AdminHome() {
       color: '#1F5C45',
       tiles: [
         { label: 'HUD Inspections', onPress: () => router.push(fiarepAdmin ? '/hud-inspections' : '/hud-review'), tone: 'solid' },
+        { label: 'Building Baseline', onPress: () => router.push('/baseline'), tone: 'solid' },
         { label: 'Projects / Inspections', onPress: () => router.push('/'), tone: 'outline' },
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' },
         { label: 'Assign Route', onPress: () => router.push('/assign-route'), tone: 'tint' },
@@ -158,7 +162,8 @@ export default function AdminHome() {
     },
   ];
 
-  const keep = (t: Tile) => { if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && !fiarepAdmin && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; };
+  // A client whose baseline is required but not done yet: complaint tools wait for it.
+  const keep = (t: Tile) => { if (baselineWaiting && COMPLAINT_TILES.has(t.label.replace(/\s*\(\d+\)\s*$/, ''))) return false; if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && !fiarepAdmin && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; };
   const homeSections = sections.map((sec) => ({ heading: sec.heading, tiles: sec.tiles.filter(keep).filter((t) => t.label !== 'Attendance').map((t) => ({ label: t.label, onPress: t.onPress })) }));
   const hasAttendance = sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === 'Attendance'));
   const has = (label: string) => sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === label));
@@ -170,7 +175,7 @@ export default function AdminHome() {
   return (
     <FieldHome
       title={title}
-      banner={<>{showMessages ? <MessagesBar dark label={fiarepAdmin ? 'Messages' : 'Message FIAREP'} sub={fiarepAdmin ? 'Clients writing to you, and the codes you hand out' : 'FIAREP Services or the administrator'} onPress={() => router.push(fiarepAdmin ? '/fiarep-messages' : '/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly && !fiarepAdmin ? <ReadOnlyBanner /> : null}<UpperManagementMuteToggle /><PhoneComplaintsToggle dark /></>}
+      banner={<>{showMessages ? <MessagesBar dark label={fiarepAdmin ? 'Messages' : 'Message FIAREP'} sub={fiarepAdmin ? 'Clients writing to you, and the codes you hand out' : 'FIAREP Services or the administrator'} onPress={() => router.push(fiarepAdmin ? '/fiarep-messages' : '/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly && !fiarepAdmin ? <ReadOnlyBanner /> : null}{baselineWaiting ? <BaselineWaitingBanner /> : null}<UpperManagementMuteToggle /><PhoneComplaintsToggle dark /></>}
       clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
       sections={homeSections}
       tabs={tabs}

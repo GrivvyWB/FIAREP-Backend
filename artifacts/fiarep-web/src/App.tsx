@@ -67,6 +67,7 @@ import OwnerWorkRequests from '@/pages/platform-owner/work-requests';
 import OwnerAepRegistry from '@/pages/platform-owner/aep-registry';
 import OwnerBuildingLookup from '@/pages/platform-owner/building-lookup';
 import OwnerPricing from '@/pages/platform-owner/pricing';
+import BaselinePage from '@/pages/baseline';
 import OwnerForms from '@/pages/platform-owner/forms';
 import OwnerAlerts from '@/pages/platform-owner/alerts';
 import OwnerCrew from '@/pages/platform-owner/crew';
@@ -271,6 +272,8 @@ function AppRouter() {
           <Route path="/settings" component={SettingsRoute} />
           <Route path="/shared-data" component={SharedDataRoute} />
           <Route path="/complaint-dashboard" component={ComplaintDashboardRoute} />
+          <Route path="/baseline-report/:id">{() => <BaselinePage />}</Route>
+          <Route path="/baseline-report">{() => <BaselinePage />}</Route>
           <Route path="/community" component={CommunityRoute} />
           <Route path="/messages" component={Messages} />
           <Route path="/quick-quote" component={QuickQuote} />
@@ -397,6 +400,8 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/aep" component={OwnerAepRegistry} />
           <Route path="/platform-owner/building-lookup" component={OwnerBuildingLookup} />
           <Route path="/platform-owner/pricing" component={OwnerPricing} />
+          <Route path="/platform-owner/baseline/:id">{() => <BaselinePage owner />}</Route>
+          <Route path="/platform-owner/baseline">{() => <BaselinePage owner />}</Route>
           <Route path="/platform-owner/forms" component={OwnerForms} />
           <Route path="/platform-owner/alerts" component={OwnerAlerts} />
           <Route path="/platform-owner/crew" component={OwnerCrew} />

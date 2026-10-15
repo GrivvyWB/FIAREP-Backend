@@ -13,6 +13,8 @@ import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
 import PhoneComplaintsToggle from '../components/PhoneComplaintsToggle';
+import { useBaselineWaiting, COMPLAINT_TILES } from '../lib/baseline';
+import BaselineWaitingBanner from '../components/BaselineWaitingBanner';
 import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
 import MessagesBar from '../components/MessagesBar';
 import { useMessagingOpen } from '../lib/fiarep-messaging';
@@ -40,7 +42,9 @@ export default function ManagementHome() {
   const readOnly = readOnlyState === true;
   const [positionLoaded, setPositionLoaded] = useState(false);
   const actionTiles = new Set(['Send Violation', 'Inspection Approvals', 'HUD Inspections', 'In-house assignments', 'Assign a Job', 'Cover a Site', 'Create Report', '+ New Project', 'Manage Trucks', 'Add Job for Mgmt', 'Assign Route', 'Assign Emergency Unit', 'Staff Member Jobs', 'Review Reports', 'CPM Supervisor Scope Review', 'CPM Supervisor', 'Default rates']);
+  const baselineWaiting = useBaselineWaiting();
   const enabledTiles = (tiles: Tile[]) => tiles.filter((tile) => {
+    if (baselineWaiting && COMPLAINT_TILES.has(tile.label.replace(/\s*\(\d+\)\s*$/, ''))) return false;
     if (!tileEnabled('management', tile.label, rawModules)) return false;
     if (readOnly && actionTiles.has(tile.label)) return false;
     const module = moduleForTile(tile.label);
@@ -98,7 +102,7 @@ export default function ManagementHome() {
     return (
       <FieldHome
         title={title}
-        banner={<>{showMessages ? <MessagesBar dark label="Message FIAREP" sub="FIAREP Services or the administrator" onPress={() => router.push('/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}{!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor ? <UpperManagementMuteToggle /> : null}<PhoneComplaintsToggle dark /></>}
+        banner={<>{showMessages ? <MessagesBar dark label="Message FIAREP" sub="FIAREP Services or the administrator" onPress={() => router.push('/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}{!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor ? <UpperManagementMuteToggle /> : null}{baselineWaiting ? <BaselineWaitingBanner /> : null}<PhoneComplaintsToggle dark /></>}
         clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
         sections={all}
         tabs={tabs}
@@ -183,6 +187,7 @@ export default function ManagementHome() {
         ...(!restricted ? [{ label: 'Review Reports', onPress: () => router.push('/management'), tone: 'solid' as Tone }] : []),
         { label: 'Smart Repair', onPress: () => router.push('/smart-repair'), tone: 'tint' as Tone },
         ...(!restricted ? [{ label: 'Priority Queue', onPress: () => router.push('/priority-queue'), tone: 'solid' as Tone }] : []),
+        { label: 'Building Baseline', onPress: () => router.push('/baseline'), tone: 'tint' as Tone },
       ],
     },
     {

@@ -1,4 +1,5 @@
 import { isCpmSupervisorTitle } from "@/lib/titles";
+import { useBaselineWaiting } from "@/components/baseline-waiting";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { communityUnitPlural, hasModuleAccess, isCommunityCoordinator, isFiarepAdministrator, isProcurementDesk } from "@/lib/access-policy";
@@ -35,12 +36,16 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     if (window.matchMedia("(max-width: 767px)").matches) setOpen(false);
   };
 
+  // While a client waits for its baseline walk-through, the complaint tools wait too.
+  const baselineWaiting = useBaselineWaiting(!!staff && (staff.tenantId || "default") !== "default");
   const navItems = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard, module: "dashboard" as const },
     // Quick quote: FIAREP's own crew pricing a walk where they stand.
     ...((staff?.tenantId || "default") === "default"
       ? [{ name: "Quick Quote", href: "/quick-quote", icon: Zap, module: "dashboard" as const }] : []),
-    { name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const },
+    ...(baselineWaiting ? [] : [{ name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const }]),
+    // The onboarding walk-through and its baseline report, for every building.
+    { name: "Building Baseline", href: "/baseline-report", icon: ClipboardCheck, module: "dashboard" as const },
     { name: communityUnitPlural(staff?.tenantId), href: "/community", icon: UsersRound, module: "community" as const },
     { name: "Translator", href: "/translator", icon: Languages, module: "translator" as const },
     { name: "HPD / DOB Lookup", href: "/property-lookup", icon: Building2, module: "property-lookup" as const },

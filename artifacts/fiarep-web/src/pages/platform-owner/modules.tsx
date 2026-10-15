@@ -155,7 +155,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Review Reports", "Send Violation", "Assign a Job", "In-house assignments", "Staff Member Jobs", "Cover a Site", "Create Report", "+ New Project",
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
     "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
-    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue",
+    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue", "Building Baseline",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
     "Audit Log",
@@ -165,16 +165,16 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     // FIAREP's administrators (Timothy Winn, Emily Winn) also get the technician's tools.
     "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
     "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order",
-    "Request Time Off", "Inbox", "Smart Repair", "Priority Queue",
+    "Request Time Off", "Inbox", "Smart Repair", "Priority Queue", "Building Baseline",
   ] },
   { id: "cpm", screen: "CPM / Inspector home", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair", "Building Baseline",
   ] },
   // FIAREP's technicians have their own switches, separate from CPM / Inspector.
   { id: "tech", screen: "Technician home (FIAREP technicians sign in here)", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair", "Building Baseline",
   ] },
   { id: "worker", screen: "Worker home", tabs: [
     "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off", "Smart Repair",
@@ -283,6 +283,8 @@ export default function OwnerModules() {
   const [smartRepairToMgmt, setSmartRepairToMgmt] = useState(true);
   // FIAREP Multi-Complaint Priority Engine — on unless switched off.
   const [priorityEngineOn, setPriorityEngineOn] = useState(true);
+  // New client: complaint tools wait for the baseline walk-through. Off unless switched on.
+  const [requireBaseline, setRequireBaseline] = useState(false);
   const [smartRepairEmailCopy, setSmartRepairEmailCopy] = useState(false);
   const [smartRepairEmailTo, setSmartRepairEmailTo] = useState("");
   const [deletionSaving, setDeletionSaving] = useState(false);
@@ -351,6 +353,7 @@ export default function OwnerModules() {
     );
     setSmartRepairOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepair === false));
     setSmartRepairComplaints(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairComplaints === false));
+    setRequireBaseline(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).requireBaseline === true));
     setPriorityEngineOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).priorityEngine === false));
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
@@ -414,6 +417,7 @@ export default function OwnerModules() {
 
   const toggleSmartRepair = (enabled: boolean) => { setSmartRepairOn(enabled); setDirty(true); };
   const toggleSmartRepairComplaints = (enabled: boolean) => { setSmartRepairComplaints(enabled); setDirty(true); };
+  const toggleRequireBaseline = (enabled: boolean) => { setRequireBaseline(enabled); setDirty(true); };
   const togglePriorityEngine = (enabled: boolean) => { setPriorityEngineOn(enabled); setDirty(true); };
   const toggleSmartRepairToMgmt = (enabled: boolean) => { setSmartRepairToMgmt(enabled); setDirty(true); };
   const toggleSmartRepairEmailCopy = (enabled: boolean) => { setSmartRepairEmailCopy(enabled); setDirty(true); };
@@ -468,7 +472,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, ...(isFiarep ? {} : { requireBaseline }), smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -926,6 +930,31 @@ export default function OwnerModules() {
                     aria-label={`${priorityEngineOn ? "Disable" : "Enable"} Multi-Complaint Priority Engine`}
                   />
                 </div>
+                {!isFiarep && (
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  requireBaseline ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    requireBaseline ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <ClipboardCheck className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Baseline assessment before complaint management</p>
+                    <p className="text-xs text-slate-500">On: this client's complaint tools (Review Reports, Manage All Requests, Resident Reports, Priority Queue) wait until FIAREP completes the building baseline walk-through; residents can still send complaints. Off: no wait</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    requireBaseline ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {requireBaseline ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={requireBaseline}
+                    onCheckedChange={toggleRequireBaseline}
+                    aria-label={`${requireBaseline ? "Disable" : "Enable"} baseline assessment before complaint management`}
+                  />
+                </div>
+                )}
                 {isFiarep && (
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
                   messagingOpen ? "" : "opacity-60"

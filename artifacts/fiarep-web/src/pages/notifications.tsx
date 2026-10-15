@@ -8,6 +8,7 @@ import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
 import { PhoneComplaintsToggle } from "@/components/phone-complaints-toggle";
+import { BaselineWaitingNote } from "@/components/baseline-waiting";
 
 function isUrgent(notification: { message: string; detail?: string | null }) {
   const text = `${notification.message} ${notificationTitle(notification.message)} ${notification.detail ?? ""}`.toLowerCase();
@@ -94,6 +95,7 @@ export default function Notifications() {
       </div>
 
       {managementSurface && <PhoneComplaintsToggle />}
+      {managementSurface && <BaselineWaitingNote />}
 
       {markRead.isError && (
         <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
