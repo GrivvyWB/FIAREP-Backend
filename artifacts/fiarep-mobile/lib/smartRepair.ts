@@ -14,8 +14,11 @@ export type SmartTicket = {
   issueFound: string; location: string; exactArea: string; repairRequired: string;
   tools: string[]; supplies: string[]; fixtures: string[]; steps: string[];
   trade: string; priority: 'Low' | 'Medium' | 'High'; priorityNote: string; estimatedTime: string; status: string;
+  spec: string; diagram: string; partLabel: string;
+  mark: { x: number; y: number; r: number }; arrow: { x: number; y: number };
   facing: string | null;
 };
+export type RepairVerification = { before: string[]; after: string[]; compliant: boolean; summary: string };
 
 /** Compass heading in degrees (0 = north), or null when the phone can't tell. */
 export async function readHeading(): Promise<number | null> {
@@ -88,8 +91,39 @@ export async function requestSmartTicket(input: { image: string; heading: number
     repairRequired: String(p.repairRequired || ''), tools: arr(p.tools), supplies: arr(p.supplies), fixtures: arr(p.fixtures), steps: arr(p.steps),
     trade: String(p.trade || ''), priority: (['Low', 'Medium', 'High'].includes(p.priority) ? p.priority : 'Medium'),
     priorityNote: String(p.priorityNote || ''), estimatedTime: String(p.estimatedTime || ''), status: String(p.status || 'Action Required'),
+    spec: String(p.spec || ''), diagram: String(p.diagram || ''), partLabel: String(p.partLabel || ''),
+    mark: { x: Number(p.mark?.x ?? 0.5), y: Number(p.mark?.y ?? 0.5), r: Number(p.mark?.r ?? 0.15) },
+    arrow: { x: Number(p.arrow?.x ?? 0.5), y: Number(p.arrow?.y ?? 0.5) },
     facing: p.facing ? String(p.facing) : null,
   };
+}
+
+/** Before photo vs after photo: is the repair done? */
+export async function requestVerification(before: string, after: string, issue: string): Promise<RepairVerification> {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  if (!domain) throw new Error('The FIAREP backend domain is not configured.');
+  const token = await getAccessToken();
+  if (!token) throw new Error('Sign in first.');
+  const res = await fetch(`https://${domain}/api/ai/smart-repair/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ before, after, issue }),
+  });
+  if (!res.ok) { const t = await res.json().catch(() => null); throw new Error((t && t.error) || 'Verification failed (' + res.status + ')'); }
+  const p = await res.json();
+  const arr = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
+  return { before: arr(p.before), after: arr(p.after), compliant: p.compliant === true, summary: String(p.summary || '') };
+}
+
+/** FIAREP Summary Card, as text. */
+export function summaryCard(t: SmartTicket, area: string, status: string): string {
+  const block = (k: string, v: string | string[]) => `${k}:\n` + (Array.isArray(v) ? (v.length ? v.join('\n') : '—') : (v || '—'));
+  const loc = [t.facing ? t.facing.charAt(0).toUpperCase() + t.facing.slice(1) + ' Wall' : '', area].filter(Boolean).join('\n') || t.exactArea;
+  return [
+    block('ISSUE', t.issueFound), block('LOCATION', loc), block('TRADE', t.trade), block('TOOLS', t.tools),
+    block('MATERIALS', [...t.fixtures, ...t.supplies]), block('SPEC', t.spec),
+    block('DIAGRAM', t.diagram ? 'Included' : '—'), block('REFERENCE IMAGE', 'Included'), block('STATUS', status),
+  ].join('\n\n');
 }
 
 /** The ticket as plain text — what goes on the work order. */
@@ -108,5 +142,7 @@ export function ticketText(t: SmartTicket, fromComplaint: boolean): string {
     + list('Bring These Supplies', t.supplies)
     + list('Fixtures / Parts', t.fixtures)
     + (t.steps.length ? '\nRepair Instructions\n' + t.steps.map((s, i) => `${i + 1}. ${s}`).join('\n') : '')
-    + `\n👷 Trade Required: ${t.trade}\n⏱ Estimated Repair Time: ${t.estimatedTime}`;
+    + `\n👷 Trade Required: ${t.trade}\n⏱ Estimated Repair Time: ${t.estimatedTime}`
+    + (t.spec ? `\nSpec: ${t.spec}` : '')
+    + (t.diagram ? `\n\nRepair Diagram\n${t.diagram}` : '');
 }

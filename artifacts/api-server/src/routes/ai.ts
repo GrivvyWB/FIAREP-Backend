@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizations, residentReportPhotos } from "@workspace/db";
 import { classifyViolationImage } from "../lib/violationClassification";
 import { classifyMaterialImage } from "../lib/materialClassification";
-import { smartRepairTicket } from "../lib/smartRepair";
+import { smartRepairTicket, verifyRepair } from "../lib/smartRepair";
 import { synthesizeSpeech, transcribeAudio, translateText } from "../lib/translator";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { audit } from "../lib/audit";
@@ -142,6 +142,26 @@ router.post("/ai/smart-repair", requireAuth, async (req, res) => {
   } catch (error) {
     req.log.warn({ err: error }, "Smart Repair failed");
     res.status(503).json({ error: "Smart Repair is temporarily unavailable" });
+  }
+});
+
+// Completion verification: before photo vs after photo.
+router.post("/ai/smart-repair/verify", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  const modules = (org?.features as Record<string, unknown> | undefined)?.["modules"] as Record<string, unknown> | undefined;
+  if (modules && modules["smartRepair"] === false) { res.status(403).json({ error: "Smart Repair is switched off for this organization." }); return; }
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const img = (k: string) => (typeof b[k] === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(b[k] as string) ? b[k] as string : "");
+  const before = img("before"), after = img("after");
+  if (!before || !after) { res.status(400).json({ error: "The before and after photos are both required" }); return; }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) { res.status(503).json({ error: "Smart Repair is unavailable (AI key not configured)" }); return; }
+  try {
+    res.json(await verifyRepair(before, after, typeof b["issue"] === "string" ? (b["issue"] as string).slice(0, 200) : "", apiKey));
+  } catch (error) {
+    req.log.warn({ err: error }, "Smart Repair verification failed");
+    res.status(503).json({ error: "Verification is temporarily unavailable" });
   }
 });
 

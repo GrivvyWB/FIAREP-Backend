@@ -18,8 +18,15 @@ export type SmartRepairTicket = {
   priorityNote: string;
   estimatedTime: string;
   status: string;
+  spec: string;
+  diagram: string;
+  partLabel: string;
+  mark: { x: number; y: number; r: number };
+  arrow: { x: number; y: number };
   facing: string | null;
 };
+
+export type RepairVerification = { before: string[]; after: string[]; compliant: boolean; summary: string };
 
 export type SmartRepairInput = { image: string; heading?: number | null; address?: string; area?: string; note?: string };
 
@@ -47,6 +54,13 @@ supplies and replacement parts the first time.
   that worsen; Low for cosmetic. priorityNote: e.g. "Repair within 24 hours".
 - estimatedTime: a range, e.g. "30–60 minutes", "2–4 hours".
 - status: "Action Required" unless the photo shows nothing to repair, then "No action needed".
+- spec: the material specification that matters for the part (e.g. "Schedule 40 PVC", "Type L copper", "Type N mortar"); "" if none.
+- diagram: a small plain-text repair diagram (max 16 lines, max 34 characters wide) of the assembly, top to bottom, using
+  only │ ─ ┌ ┐ └ ┘ and letters, with "← Replace" (or "← Repair") next to the part to work on. Example for a sink:
+  SINK BASIN / │ / TAILPIECE / │ / ┌─────┐ / │ P   │  ← Replace / │TRAP │ / └─────┘ / │ / WALL DRAIN (one item per line).
+- partLabel: the replacement part in a few words (e.g. "Replace 1-1/2\" P-trap"); "" if nothing is replaced.
+- mark: where the damaged part is in the photo, as fractions of the image (x from left, y from top, 0–1) and r the circle
+  radius as a fraction of the image width (0.05–0.4). arrow: the point of the leak source / worst damage (0–1). Best estimates.
 If the photo is unclear, say so in issueFound and keep the rest to what can honestly be inferred.`;
 
 function responseText(payload: unknown): string | null {
@@ -89,12 +103,15 @@ export async function smartRepairTicket(input: SmartRepairInput, apiKey: string,
             strict: true,
             schema: {
               type: "object", additionalProperties: false,
-              required: ["issueFound", "location", "exactArea", "repairRequired", "tools", "supplies", "fixtures", "steps", "trade", "priority", "priorityNote", "estimatedTime", "status"],
+              required: ["issueFound", "location", "exactArea", "repairRequired", "tools", "supplies", "fixtures", "steps", "trade", "priority", "priorityNote", "estimatedTime", "status", "spec", "diagram", "partLabel", "mark", "arrow"],
               properties: {
                 issueFound: { type: "string" }, location: { type: "string" }, exactArea: { type: "string" }, repairRequired: { type: "string" },
                 tools: list, supplies: list, fixtures: list, steps: list,
                 trade: { type: "string" }, priority: { type: "string", enum: ["Low", "Medium", "High"] },
                 priorityNote: { type: "string" }, estimatedTime: { type: "string" }, status: { type: "string" },
+                spec: { type: "string" }, diagram: { type: "string" }, partLabel: { type: "string" },
+                mark: { type: "object", additionalProperties: false, required: ["x", "y", "r"], properties: { x: { type: "number" }, y: { type: "number" }, r: { type: "number" } } },
+                arrow: { type: "object", additionalProperties: false, required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
               },
             },
           },
@@ -106,7 +123,47 @@ export async function smartRepairTicket(input: SmartRepairInput, apiKey: string,
     const text = responseText(await response.json());
     if (!text) throw new Error("OpenAI returned an invalid ticket");
     const t = JSON.parse(text) as Omit<SmartRepairTicket, "facing">;
-    return { ...t, facing };
+    const c = (n: unknown, lo: number, hi: number, d: number) => (typeof n === "number" && Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d);
+    return {
+      ...t,
+      mark: { x: c(t.mark?.x, 0, 1, 0.5), y: c(t.mark?.y, 0, 1, 0.5), r: c(t.mark?.r, 0.05, 0.4, 0.15) },
+      arrow: { x: c(t.arrow?.x, 0, 1, 0.5), y: c(t.arrow?.y, 0, 1, 0.5) },
+      facing,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/** Completion verification: the before photo and the after photo, compared. */
+export async function verifyRepair(before: string, after: string, issue: string, apiKey: string, fetchImpl: typeof fetch = fetch): Promise<RepairVerification> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 45_000);
+  try {
+    const response = await fetchImpl("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-5-mini",
+        messages: [
+          { role: "system", content: "You verify building repairs for FIAREP. Compare the BEFORE photo with the AFTER photo of the same spot. Return only JSON. before: short findings in the before photo (e.g. \"Active leak detected\"). after: short findings in the after photo (e.g. \"Leak no longer visible\", \"New fixture installed\", \"Repair appears compliant\"). compliant: true only if the after photo shows the defect corrected and the work looks finished and code-appropriate; false if the defect is still visible, the photos are not the same spot, or it cannot be told. summary: one sentence." },
+          { role: "user", content: [
+            { type: "text", text: `The repair was for: ${issue || "the defect in the before photo"}. First image: BEFORE. Second image: AFTER.` },
+            { type: "image_url", image_url: { url: before, detail: "high" } },
+            { type: "image_url", image_url: { url: after, detail: "high" } },
+          ] },
+        ],
+        response_format: { type: "json_schema", json_schema: { name: "repair_verification", strict: true, schema: {
+          type: "object", additionalProperties: false, required: ["before", "after", "compliant", "summary"],
+          properties: { before: list, after: list, compliant: { type: "boolean" }, summary: { type: "string" } },
+        } } },
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`OpenAI request failed with status ${response.status}`);
+    const text = responseText(await response.json());
+    if (!text) throw new Error("OpenAI returned an invalid verification");
+    return JSON.parse(text) as RepairVerification;
   } finally {
     clearTimeout(timeout);
   }
