@@ -207,4 +207,19 @@ export class ReplitFileStorage {
   }
 }
 
+/** Smart Repair drawings (tools, materials, parts, diagrams). Not tenant data:
+ *  a drawing of an adjustable wrench is the same for everyone, so it is drawn
+ *  once and kept under one shared folder. */
+export const smartRepairArt = {
+  path(key: string): string { return `${privateObjectDir()}/smart-repair-art/${safeSegment(key)}.png`; },
+  async url(key: string, ttlSeconds = 60 * 60): Promise<string> { return signObjectUrl(this.path(key), "GET", ttlSeconds); },
+  async exists(key: string): Promise<boolean> {
+    try { const res = await fetch(await signObjectUrl(this.path(key), "GET", 60), { headers: { Range: "bytes=0-0" }, signal: AbortSignal.timeout(10_000) }); await res.body?.cancel().catch(() => undefined); return res.ok; } catch { return false; }
+  },
+  async put(key: string, bytes: Buffer): Promise<void> {
+    const res = await fetch(await signObjectUrl(this.path(key), "PUT", 5 * 60), { method: "PUT", headers: { "Content-Type": "image/png" }, body: bytes, signal: AbortSignal.timeout(30_000) });
+    if (!res.ok) throw new Error(`Storing drawing failed with status ${res.status}`);
+  },
+};
+
 export const fileStorage = new ReplitFileStorage();

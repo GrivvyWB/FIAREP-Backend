@@ -1,3 +1,4 @@
+import { smartRepairArt } from "./fileStorage";
 // FIAREP Smart Repair Instructions — photo in, repair plan out. The photo is
 // read by the same AI as FIAREP Vision; the phone adds where it was taken
 // (GPS address, typed apartment/area) and which way the camera faced (compass),
@@ -19,6 +20,11 @@ export type SmartRepairTicket = {
   estimatedTime: string;
   status: string;
   spec: string;
+  issueDetail: string;
+  room: string;
+  spot: string;
+  distance: string;
+  specs: Array<{ label: string; value: string }>;
   diagram: string;
   partLabel: string;
   mark: { x: number; y: number; r: number };
@@ -54,6 +60,11 @@ supplies and replacement parts the first time.
   that worsen; Low for cosmetic. priorityNote: e.g. "Repair within 24 hours".
 - estimatedTime: a range, e.g. "30–60 minutes", "2–4 hours".
 - status: "Action Required" unless the photo shows nothing to repair, then "No action needed".
+- issueDetail: one sentence on what was detected (e.g. "Water leak detected at the P-trap connection.").
+- room: the room (Kitchen, Bathroom, Bedroom, Stairwell, Basement, Exterior…). spot: where in it (e.g. "Under Sink",
+  "Behind toilet", "15 ft above sidewalk"). distance: e.g. "Approximately 8 feet in front of you" ("" if it can't be judged).
+- specs: 4–6 rows for the specification table, e.g. Pipe Size, Material, Type, Standards ("Code compliant (IPC/NYC)"),
+  Replacement, Test — use the labels that fit the trade (for masonry: Brick, Mortar, Joint, Standards, Cure, Test).
 - spec: the material specification that matters for the part (e.g. "Schedule 40 PVC", "Type L copper", "Type N mortar"); "" if none.
 - diagram: a small plain-text repair diagram (max 16 lines, max 34 characters wide) of the assembly, top to bottom, using
   only │ ─ ┌ ┐ └ ┘ and letters, with "← Replace" (or "← Repair") next to the part to work on. Example for a sink:
@@ -103,13 +114,15 @@ export async function smartRepairTicket(input: SmartRepairInput, apiKey: string,
             strict: true,
             schema: {
               type: "object", additionalProperties: false,
-              required: ["issueFound", "location", "exactArea", "repairRequired", "tools", "supplies", "fixtures", "steps", "trade", "priority", "priorityNote", "estimatedTime", "status", "spec", "diagram", "partLabel", "mark", "arrow"],
+              required: ["issueFound", "location", "exactArea", "repairRequired", "tools", "supplies", "fixtures", "steps", "trade", "priority", "priorityNote", "estimatedTime", "status", "spec", "issueDetail", "room", "spot", "distance", "specs", "diagram", "partLabel", "mark", "arrow"],
               properties: {
                 issueFound: { type: "string" }, location: { type: "string" }, exactArea: { type: "string" }, repairRequired: { type: "string" },
                 tools: list, supplies: list, fixtures: list, steps: list,
                 trade: { type: "string" }, priority: { type: "string", enum: ["Low", "Medium", "High"] },
                 priorityNote: { type: "string" }, estimatedTime: { type: "string" }, status: { type: "string" },
                 spec: { type: "string" }, diagram: { type: "string" }, partLabel: { type: "string" },
+                issueDetail: { type: "string" }, room: { type: "string" }, spot: { type: "string" }, distance: { type: "string" },
+                specs: { type: "array", items: { type: "object", additionalProperties: false, required: ["label", "value"], properties: { label: { type: "string" }, value: { type: "string" } } } },
                 mark: { type: "object", additionalProperties: false, required: ["x", "y", "r"], properties: { x: { type: "number" }, y: { type: "number" }, r: { type: "number" } } },
                 arrow: { type: "object", additionalProperties: false, required: ["x", "y"], properties: { x: { type: "number" }, y: { type: "number" } } },
               },
@@ -167,4 +180,55 @@ export async function verifyRepair(before: string, after: string, issue: string,
   } finally {
     clearTimeout(timeout);
   }
+}
+
+// ── Drawings: tools, materials, the replacement part and an exploded diagram ──
+
+const slug = (v: string) => v.toLowerCase().replace(/["'’]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+
+async function drawImage(prompt: string, quality: "low" | "medium", apiKey: string): Promise<Buffer> {
+  const res = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: "gpt-image-1", prompt, size: "1024x1024", quality, n: 1 }),
+    signal: AbortSignal.timeout(120_000),
+  });
+  if (!res.ok) throw new Error(`Image request failed with status ${res.status}`);
+  const json = (await res.json()) as { data?: Array<{ b64_json?: string }> };
+  const b64 = json.data?.[0]?.b64_json;
+  if (!b64) throw new Error("Image request returned no image");
+  return Buffer.from(b64, "base64");
+}
+
+/** One drawing, made once and kept: the same key always comes back from storage. */
+async function cachedDrawing(key: string, prompt: string, quality: "low" | "medium", apiKey: string): Promise<string | null> {
+  try {
+    if (!(await smartRepairArt.exists(key))) await smartRepairArt.put(key, await drawImage(prompt, quality, apiKey));
+    return await smartRepairArt.url(key);
+  } catch { return null; }
+}
+
+async function inBatches<T, R>(items: T[], size: number, fn: (t: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = [];
+  for (let i = 0; i < items.length; i += size) out.push(...(await Promise.all(items.slice(i, i + size).map(fn))));
+  return out;
+}
+
+export type SmartRepairDrawings = { diagram: string | null; part: string | null; items: Record<string, string | null> };
+
+const NO_BRANDS = "No text, no words, no logos, no brand names or labels on the object.";
+
+export async function smartRepairDrawings(input: { issue: string; trade: string; partLabel: string; spec: string; diagram: string; tools: string[]; materials: string[] }, apiKey: string): Promise<SmartRepairDrawings> {
+  const names = [...new Set([...input.tools, ...input.materials].map((n) => n.trim()).filter(Boolean))].slice(0, 16);
+  const itemJob = (name: string) => cachedDrawing(`item-${slug(name)}`, `Clean catalog illustration of a ${name} used in building repair, a single object centered on a plain white background, realistic, soft shadow. ${NO_BRANDS}`, "low", apiKey);
+  const partJob = input.partLabel.trim()
+    ? cachedDrawing(`part-${slug(input.partLabel + " " + input.spec)}`, `Catalog product illustration of the replacement part: ${input.partLabel.replace(/^replace\s+/i, "")}${input.spec ? ", " + input.spec : ""}. Single part centered on a plain white background, realistic. ${NO_BRANDS}`, "medium", apiKey)
+    : Promise.resolve(null);
+  const diagramKey = `diagram-${slug(input.issue + " " + input.partLabel)}`;
+  const diagramJob = cachedDrawing(diagramKey,
+    `Exploded-view technical illustration for a ${input.trade || "maintenance"} repair: ${input.issue}. Show the assembly from top to bottom as in this outline:\n${input.diagram}\n`
+    + `Clean white background, simple realistic shading. Add short English part labels with thin arrows. Draw the part to be replaced${input.partLabel ? " (" + input.partLabel + ")" : ""} highlighted in red with the label "Replace". No brand names or logos.`,
+    "medium", apiKey);
+  const [diagram, part, itemUrls] = await Promise.all([diagramJob, partJob, inBatches(names, 6, itemJob)]);
+  return { diagram, part, items: Object.fromEntries(names.map((n, i) => [n, itemUrls[i] ?? null])) };
 }

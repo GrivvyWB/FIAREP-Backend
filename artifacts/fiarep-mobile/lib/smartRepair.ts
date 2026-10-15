@@ -15,6 +15,7 @@ export type SmartTicket = {
   tools: string[]; supplies: string[]; fixtures: string[]; steps: string[];
   trade: string; priority: 'Low' | 'Medium' | 'High'; priorityNote: string; estimatedTime: string; status: string;
   spec: string; diagram: string; partLabel: string;
+  issueDetail: string; room: string; spot: string; distance: string; specs: Array<{ label: string; value: string }>;
   mark: { x: number; y: number; r: number }; arrow: { x: number; y: number };
   facing: string | null;
 };
@@ -92,6 +93,8 @@ export async function requestSmartTicket(input: { image: string; heading: number
     trade: String(p.trade || ''), priority: (['Low', 'Medium', 'High'].includes(p.priority) ? p.priority : 'Medium'),
     priorityNote: String(p.priorityNote || ''), estimatedTime: String(p.estimatedTime || ''), status: String(p.status || 'Action Required'),
     spec: String(p.spec || ''), diagram: String(p.diagram || ''), partLabel: String(p.partLabel || ''),
+    issueDetail: String(p.issueDetail || ''), room: String(p.room || ''), spot: String(p.spot || ''), distance: String(p.distance || ''),
+    specs: Array.isArray(p.specs) ? p.specs.filter((x: any) => x && x.label).map((x: any) => ({ label: String(x.label), value: String(x.value || '') })) : [],
     mark: { x: Number(p.mark?.x ?? 0.5), y: Number(p.mark?.y ?? 0.5), r: Number(p.mark?.r ?? 0.15) },
     arrow: { x: Number(p.arrow?.x ?? 0.5), y: Number(p.arrow?.y ?? 0.5) },
     facing: p.facing ? String(p.facing) : null,
@@ -145,4 +148,21 @@ export function ticketText(t: SmartTicket, fromComplaint: boolean): string {
     + `\n👷 Trade Required: ${t.trade}\n⏱ Estimated Repair Time: ${t.estimatedTime}`
     + (t.spec ? `\nSpec: ${t.spec}` : '')
     + (t.diagram ? `\n\nRepair Diagram\n${t.diagram}` : '');
+}
+
+export type SmartDrawings = { diagram: string | null; part: string | null; items: Record<string, string | null> };
+
+/** FIAREP's drawings for a ticket: exploded diagram, replacement part, each tool and material. */
+export async function requestDrawings(t: SmartTicket): Promise<SmartDrawings> {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const token = await getAccessToken();
+  if (!domain || !token) throw new Error('Sign in first.');
+  const res = await fetch(`https://${domain}/api/ai/smart-repair/drawings`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ issue: t.issueFound, trade: t.trade, partLabel: t.partLabel, spec: t.spec, diagram: t.diagram, tools: t.tools.slice(0, 6), materials: [...t.fixtures, ...t.supplies].slice(0, 6) }),
+  });
+  if (!res.ok) throw new Error('Drawings unavailable (' + res.status + ')');
+  const p = await res.json();
+  return { diagram: p.diagram || null, part: p.part || null, items: p.items && typeof p.items === 'object' ? p.items : {} };
 }

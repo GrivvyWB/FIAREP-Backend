@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizations, residentReportPhotos } from "@workspace/db";
 import { classifyViolationImage } from "../lib/violationClassification";
 import { classifyMaterialImage } from "../lib/materialClassification";
-import { smartRepairTicket, verifyRepair } from "../lib/smartRepair";
+import { smartRepairTicket, verifyRepair, smartRepairDrawings } from "../lib/smartRepair";
 import { synthesizeSpeech, transcribeAudio, translateText } from "../lib/translator";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { audit } from "../lib/audit";
@@ -142,6 +142,26 @@ router.post("/ai/smart-repair", requireAuth, async (req, res) => {
   } catch (error) {
     req.log.warn({ err: error }, "Smart Repair failed");
     res.status(503).json({ error: "Smart Repair is temporarily unavailable" });
+  }
+});
+
+// Drawings for the ticket: exploded diagram, replacement part, each tool and material.
+// Tools, materials and parts are drawn once and reused for every later ticket.
+router.post("/ai/smart-repair/drawings", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  const modules = (org?.features as Record<string, unknown> | undefined)?.["modules"] as Record<string, unknown> | undefined;
+  if (modules && modules["smartRepair"] === false) { res.status(403).json({ error: "Smart Repair is switched off for this organization." }); return; }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) { res.status(503).json({ error: "Smart Repair is unavailable (AI key not configured)" }); return; }
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const str = (k: string, n = 300) => (typeof b[k] === "string" ? (b[k] as string).slice(0, n) : "");
+  const arr = (k: string) => (Array.isArray(b[k]) ? (b[k] as unknown[]).filter((x): x is string => typeof x === "string").map((x) => x.slice(0, 80)).slice(0, 12) : []);
+  try {
+    res.json(await smartRepairDrawings({ issue: str("issue"), trade: str("trade", 60), partLabel: str("partLabel", 120), spec: str("spec", 120), diagram: str("diagram", 800), tools: arr("tools"), materials: arr("materials") }, apiKey));
+  } catch (error) {
+    req.log.warn({ err: error }, "Smart Repair drawings failed");
+    res.status(503).json({ error: "Drawings are temporarily unavailable" });
   }
 });
 
