@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, inArray, or } from "drizzle-orm";
-import { db, entityRecords, notifications, staffAccounts } from "@workspace/db";
+import { db, entityRecords, notifications, settings, staffAccounts } from "@workspace/db";
+import { phoneComplaintsKey } from "../lib/push";
 import { recordOpened, tracksReceipts } from "../lib/complaintReceipts";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { visibleNotificationsFor } from "../lib/notificationVisibility";
@@ -31,6 +32,21 @@ async function pendingEmployeeReminderIds(
     .filter((row) => row.reportId && pendingIds.has(row.reportId))
     .map((row) => row.id));
 }
+
+// "Complaints on my phone": each person's own switch, shared by the platform and the app.
+// Off = complaints still arrive on the platform and in the app's Inbox, but no push to the phone.
+router.get("/v1/notifications/phone-complaints", async (_req, res) => {
+  const actor = actorFrom(res);
+  const [row] = await db.select({ value: settings.value }).from(settings).where(and(eq(settings.tenantId, actor.tenantId), eq(settings.key, phoneComplaintsKey(actor.id)))).limit(1);
+  res.json({ on: row?.value !== true });
+});
+router.put("/v1/notifications/phone-complaints", async (req, res) => {
+  const actor = actorFrom(res);
+  const on = (req.body as Record<string, unknown>)?.["on"] !== false;
+  await db.insert(settings).values({ tenantId: actor.tenantId, key: phoneComplaintsKey(actor.id), value: !on })
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value: !on, updatedAt: new Date() } });
+  res.json({ on });
+});
 
 router.get("/v1/notifications", async (_req, res) => {
   const actor = actorFrom(res);

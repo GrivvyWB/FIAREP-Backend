@@ -7,6 +7,7 @@ import { Bell, Check, CheckCircle2, ExternalLink, Loader2, RefreshCw, Trash2 } f
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/hooks/use-auth";
+import { PhoneComplaintsToggle } from "@/components/phone-complaints-toggle";
 
 function isUrgent(notification: { message: string; detail?: string | null }) {
   const text = `${notification.message} ${notificationTitle(notification.message)} ${notification.detail ?? ""}`.toLowerCase();
@@ -91,6 +92,8 @@ export default function Notifications() {
           </Button>
         )}
       </div>
+
+      {managementSurface && <PhoneComplaintsToggle />}
 
       {markRead.isError && (
         <div role="alert" className="rounded-xl border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">

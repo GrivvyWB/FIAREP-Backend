@@ -13,6 +13,7 @@ import { hasAnyMeasurementAccess } from '../lib/measurement-access';
 import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
+import PhoneComplaintsToggle from '../components/PhoneComplaintsToggle';
 import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
 
 type Tone = 'solid' | 'outline' | 'tint';
@@ -169,7 +170,7 @@ export default function AdminHome() {
   return (
     <FieldHome
       title={title}
-      banner={<>{showMessages ? <MessagesBar dark label={fiarepAdmin ? 'Messages' : 'Message FIAREP'} sub={fiarepAdmin ? 'Clients writing to you, and the codes you hand out' : 'FIAREP Services or the administrator'} onPress={() => router.push(fiarepAdmin ? '/fiarep-messages' : '/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly && !fiarepAdmin ? <ReadOnlyBanner /> : null}<UpperManagementMuteToggle /></>}
+      banner={<>{showMessages ? <MessagesBar dark label={fiarepAdmin ? 'Messages' : 'Message FIAREP'} sub={fiarepAdmin ? 'Clients writing to you, and the codes you hand out' : 'FIAREP Services or the administrator'} onPress={() => router.push(fiarepAdmin ? '/fiarep-messages' : '/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly && !fiarepAdmin ? <ReadOnlyBanner /> : null}<UpperManagementMuteToggle /><PhoneComplaintsToggle dark /></>}
       clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
       sections={homeSections}
       tabs={tabs}

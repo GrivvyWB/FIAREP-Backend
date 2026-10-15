@@ -12,6 +12,7 @@ import { unreadCount, getCurrentActor, displayStaffPosition } from '../lib/store
 import { ACCENT } from '../lib/ui';
 import AlertBanner from '../components/AlertBanner';
 import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
+import PhoneComplaintsToggle from '../components/PhoneComplaintsToggle';
 import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
 import MessagesBar from '../components/MessagesBar';
 import { useMessagingOpen } from '../lib/fiarep-messaging';
@@ -97,7 +98,7 @@ export default function ManagementHome() {
     return (
       <FieldHome
         title={title}
-        banner={<>{showMessages ? <MessagesBar dark label="Message FIAREP" sub="FIAREP Services or the administrator" onPress={() => router.push('/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}{!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor ? <UpperManagementMuteToggle /> : null}</>}
+        banner={<>{showMessages ? <MessagesBar dark label="Message FIAREP" sub="FIAREP Services or the administrator" onPress={() => router.push('/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}{!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor ? <UpperManagementMuteToggle /> : null}<PhoneComplaintsToggle dark /></>}
         clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}
         sections={all}
         tabs={tabs}

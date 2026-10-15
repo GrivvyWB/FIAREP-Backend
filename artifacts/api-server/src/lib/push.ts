@@ -11,7 +11,9 @@ import {
 import {
   db,
   deviceTokens,
+  entityRecords,
   pushDeliveries,
+  settings,
   staffAccounts,
 } from "@workspace/db";
 import { logger } from "./logger";
@@ -68,10 +70,25 @@ function chunks<T>(items: T[], size: number): T[][] {
   return batches;
 }
 
+/** The per-person "Complaints on my phone" switch: off means complaints stay on
+ *  the platform and in the app's Inbox, with no push to the phone. */
+export const phoneComplaintsKey = (staffId: string) => `phone-complaints-off:${staffId}`;
+
+async function withoutComplaintOptOuts(notification: PushNotification, recipients: Recipient[]): Promise<Recipient[]> {
+  if (!notification.reportId || recipients.length === 0) return recipients;
+  const [report] = await db.select({ id: entityRecords.id }).from(entityRecords)
+    .where(and(eq(entityRecords.id, notification.reportId), eq(entityRecords.tenantId, notification.tenantId), eq(entityRecords.entity, "resident-reports"))).limit(1);
+  if (!report) return recipients;
+  const off = await db.select({ key: settings.key, value: settings.value }).from(settings)
+    .where(and(eq(settings.tenantId, notification.tenantId), inArray(settings.key, [...new Set(recipients.map((r) => phoneComplaintsKey(r.staffId)))])));
+  const quiet = new Set(off.filter((row) => row.value === true).map((row) => row.key));
+  return recipients.filter((r) => !quiet.has(phoneComplaintsKey(r.staffId)));
+}
+
 async function recipientsFor(
   notification: PushNotification,
 ): Promise<Recipient[]> {
-  return db
+  return withoutComplaintOptOuts(notification, await db
     .select({
       tokenId: deviceTokens.id,
       token: deviceTokens.token,
@@ -95,7 +112,7 @@ async function recipientsFor(
           eq(staffAccounts.role, notification.target),
         ),
       ),
-    );
+    ));
 }
 
 async function recordDelivery(
