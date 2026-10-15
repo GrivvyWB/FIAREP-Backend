@@ -298,6 +298,7 @@ function AdministratorStack() {
       <Stack.Screen name="quick-quote" options={{ title: 'Quick Quote', headerBackTitle: 'Back' }} />
       <Stack.Screen name="price-quote" options={{ title: 'Price Quote', headerBackTitle: 'Back' }} />
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="inspector-routes" options={{ title: 'My Routes', headerBackTitle: 'Back' }} />
       <Stack.Screen name="my-inspections" options={{ title: 'My Inspections', headerBackTitle: 'Back' }} />
       <Stack.Screen name="create-report" options={{ title: 'Create Report', headerBackTitle: 'Back' }} />
@@ -331,6 +332,7 @@ function InspectorStack() {
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'Log Violations' }} />
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision' }} />
+      <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="inspector-routes" options={{ title: 'My Routes' }} />
       <Stack.Screen name="scope-submit" options={{ title: 'Submit Scope' }} />
@@ -391,6 +393,7 @@ function ManagementStack() {
       <Stack.Screen name="audit-log" options={{ title: 'Audit Log' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="management" options={{ title: 'Resident Reports' }} />
+      <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
       <Stack.Screen name="resident" options={{ title: 'Report an Issue' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
@@ -444,6 +447,7 @@ function WorkerStack() {
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="worker-change-order" options={{ title: 'Change Work Order' }} />
+      <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
       <Stack.Screen name="project/elevator" options={{ title: 'Elevator Services' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />

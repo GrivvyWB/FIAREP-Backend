@@ -13,6 +13,7 @@ import PhotoViewer from '../components/PhotoViewer';
 import ComplaintReceipts from '../components/ComplaintReceipts';
 import QuotePanel, { quoteOf } from '../components/QuotePanel';
 import { ui, ACCENT } from '../lib/ui';
+import { useRawModules } from '../lib/module-access';
 import { syncAllEntities } from '../lib/sync';
 import { requestFileDownloadUrl } from '@workspace/api-client-react';
 
@@ -44,6 +45,7 @@ export default function ReportDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { mode } = useAppMode();
+  const rawModules = useRawModules();
   const readOnly = useAppReadOnly() === true;
   const [position, setPosition] = useState('');
   useFocusEffect(useCallback(() => { getCurrentPosition().then(setPosition).catch(() => {}); }, []));
@@ -297,6 +299,12 @@ export default function ReportDetail() {
             </View>
           );
         })()}
+        {(mode === 'management' || mode === 'administrator' || mode === 'inspector') && rawModules['smartRepair'] !== false && rawModules['smartRepairComplaints'] !== false
+          && ((r.photos && r.photos.length > 0) || remotePhotoUris.length > 0) && (
+          <Pressable style={[ui.btn, { marginTop: 8 }]} onPress={() => router.push(('/smart-repair?reportId=' + encodeURIComponent(r.id)) as any)}>
+            <Text style={ui.btnText}>Smart Field Ticket — photo in, repair plan out</Text>
+          </Pressable>
+        )}
         {(mode === 'management' || mode === 'administrator') && r.status !== 'resolved' && (() => {
           const base = 'preAddress=' + encodeURIComponent(r.address || '')
             + '&preReportId=' + encodeURIComponent(r.id)

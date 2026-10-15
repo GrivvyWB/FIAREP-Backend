@@ -94,6 +94,7 @@ export default function WorkerHome() {
         ...(modules['proj-new'] && canStartProject(position) && on('+ New Project') ? [{ label: '+ New Project', onPress: () => router.push('/?new=1') }] : []),
         ...(position === 'Elevator Service' && on('Elevator Jobs') ? [{ label: 'Elevator Jobs', onPress: () => router.push('/elevator-jobs') }] : []),
         ...(isEmergencyMaintenance && on('Emergency Units') ? [{ label: 'Emergency Units', onPress: () => router.push('/emergency-units') }] : []),
+        ...(on('Smart Repair') ? [{ label: 'Smart Repair', onPress: () => router.push('/smart-repair') }] : []),
         ...(on('Change Work Order') ? [{ label: 'Change Work Order', onPress: () => router.push('/worker-change-order') }] : []),
         ...(on('Request Time Off') ? [{ label: 'Request Time Off', onPress: () => router.push('/leave-request') }] : []),
       ],

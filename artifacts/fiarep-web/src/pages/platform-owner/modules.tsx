@@ -155,7 +155,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Review Reports", "Send Violation", "Assign a Job", "In-house assignments", "Staff Member Jobs", "Cover a Site", "Create Report", "+ New Project",
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
     "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
-    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP",
+    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
     "Audit Log",
@@ -165,19 +165,19 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     // FIAREP's administrators (Timothy Winn, Emily Winn) also get the technician's tools.
     "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
     "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order",
-    "Request Time Off", "Inbox",
+    "Request Time Off", "Inbox", "Smart Repair",
   ] },
   { id: "cpm", screen: "CPM / Inspector home", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair",
   ] },
   // FIAREP's technicians have their own switches, separate from CPM / Inspector.
   { id: "tech", screen: "Technician home (FIAREP technicians sign in here)", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair",
   ] },
   { id: "worker", screen: "Worker home", tabs: [
-    "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off",
+    "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off", "Smart Repair",
   ] },
 ];
 // Keyed per screen so the same label on two screens has two switches.
@@ -276,6 +276,9 @@ export default function OwnerModules() {
   const [fiarepMessagingEnabled, setFiarepMessagingEnabled] = useState(false);
   // FIAREP's own master switch for messaging (codes and client messages). On unless switched off.
   const [messagingOpen, setMessagingOpen] = useState(true);
+  // FIAREP Smart Repair Instructions: master switch and the resident-complaint ticket. On unless switched off.
+  const [smartRepairOn, setSmartRepairOn] = useState(true);
+  const [smartRepairComplaints, setSmartRepairComplaints] = useState(true);
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -340,6 +343,8 @@ export default function OwnerModules() {
       !(configured && typeof configured === "object" &&
         (configured as Record<string, unknown>).fiarepMessagingOpen === false),
     );
+    setSmartRepairOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepair === false));
+    setSmartRepairComplaints(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairComplaints === false));
     setDirty(false);
   }, [organization]);
 
@@ -397,6 +402,8 @@ export default function OwnerModules() {
     setDirty(true);
   };
 
+  const toggleSmartRepair = (enabled: boolean) => { setSmartRepairOn(enabled); setDirty(true); };
+  const toggleSmartRepairComplaints = (enabled: boolean) => { setSmartRepairComplaints(enabled); setDirty(true); };
   const toggleMessagingOpen = (enabled: boolean) => {
     setMessagingOpen(enabled);
     setDirty(true);
@@ -448,7 +455,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
           },
         },
@@ -789,6 +796,52 @@ export default function OwnerModules() {
                   />
                 </div>
                 )}
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  smartRepairOn ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    smartRepairOn ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <Wrench className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">FIAREP Smart Repair Instructions</p>
+                    <p className="text-xs text-slate-500">Photo in, repair plan out: issue, exact location (GPS + compass), tools, supplies, fixtures, repair steps, trade, priority and time. Off hides Smart Repair everywhere in this organization; each home screen also has its own switch under App tabs</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    smartRepairOn ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {smartRepairOn ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={smartRepairOn}
+                    onCheckedChange={toggleSmartRepair}
+                    aria-label={`${smartRepairOn ? "Disable" : "Enable"} Smart Repair Instructions`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  smartRepairComplaints ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    smartRepairComplaints ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <Wrench className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Smart Field Ticket on resident complaints</p>
+                    <p className="text-xs text-slate-500">Staff get a Smart Field Ticket button on a resident complaint that came in with a photo</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    smartRepairComplaints ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {smartRepairComplaints ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={smartRepairComplaints}
+                    onCheckedChange={toggleSmartRepairComplaints}
+                    aria-label={`${smartRepairComplaints ? "Disable" : "Enable"} Smart Field Ticket on resident complaints`}
+                  />
+                </div>
                 {isFiarep && (
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
                   messagingOpen ? "" : "opacity-60"

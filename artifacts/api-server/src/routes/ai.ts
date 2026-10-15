@@ -4,6 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizations, residentReportPhotos } from "@workspace/db";
 import { classifyViolationImage } from "../lib/violationClassification";
 import { classifyMaterialImage } from "../lib/materialClassification";
+import { smartRepairTicket } from "../lib/smartRepair";
 import { synthesizeSpeech, transcribeAudio, translateText } from "../lib/translator";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { audit } from "../lib/audit";
@@ -119,6 +120,28 @@ router.post("/ai/classify-violation", requireAuth, async (req, res) => {
         ? "AI returned an unusable classification"
         : "AI classification is temporarily unavailable",
     });
+  }
+});
+
+// FIAREP Smart Repair Instructions: photo + GPS address + compass heading → Smart Field Ticket.
+// Off when the organization's master switch (features.modules.smartRepair) is false.
+router.post("/ai/smart-repair", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  const modules = (org?.features as Record<string, unknown> | undefined)?.["modules"] as Record<string, unknown> | undefined;
+  if (modules && modules["smartRepair"] === false) { res.status(403).json({ error: "Smart Repair is switched off for this organization." }); return; }
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const image = typeof b["image"] === "string" ? b["image"] : "";
+  if (!/^data:image\/(jpeg|png|webp);base64,/.test(image)) { res.status(400).json({ error: "A JPEG, PNG or WebP photo is required" }); return; }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) { res.status(503).json({ error: "Smart Repair is unavailable (AI key not configured)" }); return; }
+  const heading = typeof b["heading"] === "number" && Number.isFinite(b["heading"]) ? b["heading"] : null;
+  const str = (k: string) => (typeof b[k] === "string" ? (b[k] as string).slice(0, 300) : "");
+  try {
+    res.json(await smartRepairTicket({ image, heading, address: str("address"), area: str("area"), note: str("note") }, apiKey));
+  } catch (error) {
+    req.log.warn({ err: error }, "Smart Repair failed");
+    res.status(503).json({ error: "Smart Repair is temporarily unavailable" });
   }
 });
 

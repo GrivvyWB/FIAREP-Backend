@@ -82,6 +82,7 @@ export default function AdminHome() {
       { label: '+ New Project', onPress: () => router.push('/?new=1'), tone: 'solid' },
       { label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' },
       { label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' },
+      { label: 'Smart Repair', onPress: () => router.push('/smart-repair'), tone: 'solid' },
       { label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' },
       { label: 'My Inspections', onPress: () => router.push('/my-inspections'), tone: 'outline' },
       { label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' },

@@ -180,6 +180,7 @@ export default function ManagementHome() {
       color: '#C0392B',
       tiles: [
         ...(!restricted ? [{ label: 'Review Reports', onPress: () => router.push('/management'), tone: 'solid' as Tone }] : []),
+        { label: 'Smart Repair', onPress: () => router.push('/smart-repair'), tone: 'tint' as Tone },
       ],
     },
     {
