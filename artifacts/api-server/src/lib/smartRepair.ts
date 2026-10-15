@@ -55,7 +55,10 @@ supplies and replacement parts the first time.
 - repairRequired: one sentence of what must be done.
 - tools: hand tools and equipment to bring. supplies: consumables. fixtures: replacement parts/fixtures (empty if none).
 - steps: numbered-order repair instructions, short imperative sentences, ending with testing/verifying the repair.
-- trade: one trade (Plumber, Electrician, Mason, Carpenter, Painter, Exterminator, Locksmith, HVAC, General maintenance).
+- trade: one trade (Plumber, Electrician, Mason, Carpenter, Painter, Exterminator, Locksmith, HVAC, Elevator Service, Glazier,
+  Roofer, Welder / Ironworker, Flooring, Fire Safety, General maintenance). Elevators, cabs, doors, buttons and machine rooms → Elevator Service;
+  window glass and glazing → Glazier; roofs, flashing and parapet roofing → Roofer; railings, fire escapes and steel → Welder / Ironworker;
+  sprinklers, extinguishers, alarms, fire doors and egress signs → Fire Safety.
 - priority: High for active leaks, electrical, structural, fire/life-safety, lead, no heat/hot water; Medium for conditions
   that worsen; Low for cosmetic. priorityNote: e.g. "Repair within 24 hours".
 - estimatedTime: a range, e.g. "30–60 minutes", "2–4 hours".
