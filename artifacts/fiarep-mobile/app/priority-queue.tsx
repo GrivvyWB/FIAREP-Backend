@@ -7,7 +7,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { getAccessToken } from '../lib/store';
 import { ui } from '../lib/ui';
 
-type Item = { rank: number; reportId: string; location: string; issue: string; trade: string; level: 'Emergency' | 'High' | 'Medium' | 'Low'; risk: string; action: string; status: string; reportStatus: string };
+type Item = { rank: number; reportId: string; location: string; issue: string; trade: string; level: 'Emergency' | 'High' | 'Medium' | 'Low'; risk: string; action: string; status: string; reportStatus: string; baseline?: string };
 type Building = { building: string; items: Item[]; routes: Array<{ trade: string; stops: string[] }> };
 type Queue = { buildings: Building[]; analyzed: number; pending: number };
 
@@ -77,6 +77,7 @@ export default function PriorityQueue() {
                 <Text style={{ fontSize: 14 }}>👷 Trade: {it.trade}</Text>
                 {!!it.risk && <Text style={{ fontSize: 14 }}>🚨 Risk: {it.risk}</Text>}
                 <Text style={{ fontSize: 14 }}>🔧 Action: <Text style={{ fontWeight: '700' }}>{it.action}</Text></Text>
+                {!!it.baseline && <Text style={{ fontSize: 13, color: '#1C4E86', fontWeight: '600' }}>📋 Baseline: {it.baseline}</Text>}
                 {!!it.reportStatus && <Text style={ui.listSub}>Complaint status: {it.reportStatus.replace('_', ' ')}</Text>}
               </View>
             </Pressable>
