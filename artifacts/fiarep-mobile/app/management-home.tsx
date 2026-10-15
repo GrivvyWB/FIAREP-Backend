@@ -181,6 +181,7 @@ export default function ManagementHome() {
       tiles: [
         ...(!restricted ? [{ label: 'Review Reports', onPress: () => router.push('/management'), tone: 'solid' as Tone }] : []),
         { label: 'Smart Repair', onPress: () => router.push('/smart-repair'), tone: 'tint' as Tone },
+        ...(!restricted ? [{ label: 'Priority Queue', onPress: () => router.push('/priority-queue'), tone: 'solid' as Tone }] : []),
       ],
     },
     {

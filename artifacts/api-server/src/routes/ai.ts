@@ -5,6 +5,7 @@ import { db, entityRecords, organizations, residentReportPhotos } from "@workspa
 import { classifyViolationImage } from "../lib/violationClassification";
 import { classifyMaterialImage } from "../lib/materialClassification";
 import { smartRepairTicket, verifyRepair, smartRepairDrawings } from "../lib/smartRepair";
+import { priorityQueue } from "../lib/priorityEngine";
 import { synthesizeSpeech, transcribeAudio, translateText } from "../lib/translator";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { audit, notify } from "../lib/audit";
@@ -195,6 +196,26 @@ router.post("/ai/smart-repair/complete", requireAuth, async (req, res) => {
     } catch { emailed = false; }
   }
   res.json({ notified, emailed });
+});
+
+// FIAREP Multi-Complaint Priority Engine: open complaints per building, most critical first.
+router.post("/v1/priority-queue", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  const allowed = actor.role === "management" || actor.role === "administrator" || isBoroughDirector(actor) || isSupervisorPosition(actor);
+  if (!allowed) { res.status(403).json({ error: "The priority queue is for management and administrators." }); return; }
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  const modules = (org?.features as Record<string, unknown> | undefined)?.["modules"] as Record<string, unknown> | undefined;
+  if (modules && modules["priorityEngine"] === false) { res.status(403).json({ error: "The Priority Engine is switched off for this organization." }); return; }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) { res.status(503).json({ error: "The Priority Engine is unavailable (AI key not configured)" }); return; }
+  try {
+    // Administrators and directors see every building; everyone else, their own developments.
+    const all = actor.role === "administrator" || isBoroughDirector(actor);
+    res.json(await priorityQueue({ tenantId: actor.tenantId, developments: all ? null : actor.developments }, apiKey));
+  } catch (error) {
+    req.log.warn({ err: error }, "Priority queue failed");
+    res.status(503).json({ error: "The priority queue is temporarily unavailable" });
+  }
 });
 
 // Completion verification: before photo vs after photo.

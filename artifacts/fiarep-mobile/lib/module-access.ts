@@ -242,6 +242,7 @@ export function tileEnabled(screen: AppTabScreen, label: string, raw: Record<str
   const map = raw || {};
   // FIAREP Smart Repair Instructions has a master switch over every screen's tile.
   if (label === 'Smart Repair' && map['smartRepair'] === false) return false;
+  if (label === 'Priority Queue' && map['priorityEngine'] === false) return false;
   const value = map[appTabKey(screen, label)];
   // Technician switches not saved yet fall back to the CPM / Inspector ones
   // they were split from, so a technician's home does not change on its own.

@@ -142,6 +142,7 @@ export default function AdminHome() {
       tiles: [
         { label: 'Manage All Requests', onPress: () => router.push('/manage-requests'), tone: 'solid' },
         { label: 'Resident Reports', onPress: () => router.push('/management'), tone: 'outline' },
+        { label: 'Priority Queue', onPress: () => router.push('/priority-queue'), tone: 'solid' },
       ],
     },
     {

@@ -301,6 +301,7 @@ function AdministratorStack() {
       <Stack.Screen name="price-quote" options={{ title: 'Price Quote', headerBackTitle: 'Back' }} />
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision', headerBackTitle: 'Back' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="priority-queue" options={{ title: 'Priority Queue', headerBackTitle: 'Back' }} />
       <Stack.Screen name="inspector-routes" options={{ title: 'My Routes', headerBackTitle: 'Back' }} />
       <Stack.Screen name="my-inspections" options={{ title: 'My Inspections', headerBackTitle: 'Back' }} />
       <Stack.Screen name="create-report" options={{ title: 'Create Report', headerBackTitle: 'Back' }} />
@@ -396,6 +397,7 @@ function ManagementStack() {
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="management" options={{ title: 'Resident Reports' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="priority-queue" options={{ title: 'Priority Queue', headerBackTitle: 'Back' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
       <Stack.Screen name="resident" options={{ title: 'Report an Issue' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
