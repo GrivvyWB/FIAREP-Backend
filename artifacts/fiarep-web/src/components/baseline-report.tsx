@@ -143,7 +143,7 @@ export function BaselineReport({ a }: { a: BAssessment }) {
 
       <h2 className={H}>FIAREP Baseline Assessment Certification</h2>
       <p>The building walk-through inspection has been completed and all observed conditions have been documented and entered into the FIAREP platform. This report establishes the property's initial operating condition and serves as the foundation for ongoing compliance, maintenance, repair management, and resident complaint tracking.</p>
-      <p className="mt-2">Inspector Signature: <b>{a.signatures.inspector || "___________________"}</b></p>
+      <p className="mt-2">Inspected by: <b>{a.signatures.inspector || "___________________"}</b></p>
       <p>Property Representative: <b>{a.signatures.representative || "___________________"}</b></p>
       <p>Date: <b>{a.signatures.date || "___________________"}</b></p>
       <div className="mt-6 text-center italic text-slate-500"><p>FIAREP Motto</p><p>"Inspect. Prioritize. Repair. Track."</p><p>"Building Baselines Create Better Buildings."</p></div>

@@ -354,7 +354,7 @@ export default function BaselineAssess() {
         <Text style={{ fontSize: 13, lineHeight: 19 }}>The building walk-through inspection has been completed and all observed conditions have been documented and entered into the FIAREP platform. This report establishes the property's initial operating condition and serves as the foundation for ongoing compliance, maintenance, repair management, and resident complaint tracking.</Text>
         {editable ? (
           <>
-            <TextInput style={ui.input} value={sign.inspector} onChangeText={(v) => setSign((x) => ({ ...x, inspector: v }))} placeholder="Inspector signature (type full name)" />
+            <TextInput style={ui.input} value={sign.inspector} onChangeText={(v) => setSign((x) => ({ ...x, inspector: v }))} placeholder="Inspected by (type full name)" />
             <TextInput style={ui.input} value={sign.representative} onChangeText={(v) => setSign((x) => ({ ...x, representative: v }))} placeholder="Property representative (type full name)" />
             <TextInput style={ui.input} value={sign.date} onChangeText={(v) => setSign((x) => ({ ...x, date: v }))} placeholder="Date" />
             <Pressable style={[ui.btn, { backgroundColor: '#16a34a' }]} onPress={() => Alert.alert('Complete the baseline?', 'The report is locked and sent to the client\'s platform and app.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Complete', onPress: () => void save({ signatures: sign, status: 'complete' }, 'Completing…') }])}>
@@ -362,7 +362,7 @@ export default function BaselineAssess() {
             </Pressable>
           </>
         ) : (
-          <Text style={{ fontSize: 14 }}>Inspector Signature: <Text style={{ fontWeight: '700' }}>{a.signatures.inspector || '—'}</Text>{'\n'}Property Representative: <Text style={{ fontWeight: '700' }}>{a.signatures.representative || '—'}</Text>{'\n'}Date: <Text style={{ fontWeight: '700' }}>{a.signatures.date || '—'}</Text></Text>
+          <Text style={{ fontSize: 14 }}>Inspected by: <Text style={{ fontWeight: '700' }}>{a.signatures.inspector || '—'}</Text>{'\n'}Property Representative: <Text style={{ fontWeight: '700' }}>{a.signatures.representative || '—'}</Text>{'\n'}Date: <Text style={{ fontWeight: '700' }}>{a.signatures.date || '—'}</Text></Text>
         )}
         <Text style={{ textAlign: 'center', fontStyle: 'italic', color: '#475569', marginTop: 6 }}>"Inspect. Prioritize. Repair. Track."{'\n'}"Building Baselines Create Better Buildings."</Text>
       </Panel>
