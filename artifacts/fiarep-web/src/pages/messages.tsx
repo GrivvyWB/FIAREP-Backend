@@ -6,7 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { communityUnit, isCommunityCoordinator, isFiarepAdministrator } from "@/lib/access-policy";
-import { Copy, KeyRound, MessageSquare, Send, X } from "lucide-react";
+import { Copy, KeyRound, MessageSquare, Search, Send, X } from "lucide-react";
 
 // Text messaging with FIAREP Services.
 //
@@ -36,7 +36,7 @@ export default function Messages() {
   const mine = (isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") || admin;
   const unit = communityUnit("default");
   const clientSide = !mine && (staff?.role === "administrator" || staff?.role === "management") &&
-    organizationModules["fiarepMessaging"] === true;
+    organizationModules["fiarepMessaging"] !== false;
 
   if (mine) return <CoordinatorMessages unit={unit} admin={admin} toast={toast} />;
   if (clientSide) return <ClientMessages unit={unit} toast={toast} />;
@@ -56,6 +56,21 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
   const [address, setAddress] = useState("");
   const [apartment, setApartment] = useState("");
   const [issuing, setIssuing] = useState(false);
+  // Someone who signed up in the app: type the name, click it, the conversation lands on their phone.
+  const [q, setQ] = useState("");
+  const [people, setPeople] = useState<Array<{ id: string; name: string; apartment: string; building: string }>>([]);
+  const [starting, setStarting] = useState("");
+  async function find(text: string) {
+    setQ(text);
+    if (text.trim().length < 2) { setPeople([]); return; }
+    try { setPeople(await get(`/api/v1/fiarep/messages/people?q=${encodeURIComponent(text.trim())}`)); } catch { setPeople([]); }
+  }
+  async function start(id: string) {
+    setStarting(id);
+    try { const r = await post<{ threadId: string }>(`/api/v1/fiarep/messages/people/${encodeURIComponent(id)}/start`, {}); setQ(""); setPeople([]); await load(); setOpenId(r.threadId); }
+    catch (err: any) { toast({ variant: "destructive", title: "Could not start it", description: err?.data?.error || "Try again." }); }
+    finally { setStarting(""); }
+  }
 
   const load = useCallback(async () => {
     try { setRows(await get<ThreadRow[]>("/api/v1/fiarep/messages")); }
@@ -91,6 +106,22 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
           Give someone a code at the door and they can write to you — in the app or on the website — and to nobody else.
           You are the only person at FIAREP who reads it.{admin ? " Client companies on the plan can also write to the administrator here." : ""}
         </p>
+      </div>
+
+      <div className="space-y-2 rounded-lg border bg-card p-4">
+        <h2 className="flex items-center gap-2 text-sm font-semibold"><Search className="h-4 w-4" />Find a person</h2>
+        <Input placeholder="Type their name" value={q} onChange={(e) => void find(e.target.value)} />
+        {q.trim().length >= 2 && people.length === 0 && <p className="text-xs text-muted-foreground">Nobody signed up under that name yet.</p>}
+        {people.length > 0 && (
+          <div className="divide-y rounded-md border">
+            {people.map((p) => (
+              <button key={p.id} type="button" disabled={!!starting} onClick={() => void start(p.id)} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-muted/50">
+                <span className="min-w-0"><span className="block text-sm font-medium">{p.name}</span><span className="block truncate text-xs text-muted-foreground">{[p.building, p.apartment ? `Apt ${p.apartment}` : ""].filter(Boolean).join(" · ") || "Signed up in the app"}</span></span>
+                <span className="shrink-0 text-xs font-semibold text-[#185FA5]">{starting === p.id ? "Opening…" : "Message"}</span>
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="space-y-3 rounded-lg border bg-card p-4">

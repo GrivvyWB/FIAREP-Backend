@@ -22,6 +22,21 @@ export default function FiarepMessages() {
   const [apartment, setApartment] = useState('');
   const [issued, setIssued] = useState<{ code: string; who: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // Find someone who signed up in the app: type the name, tap it, the conversation lands on their phone.
+  const [q, setQ] = useState('');
+  const [people, setPeople] = useState<Array<{ id: string; name: string; apartment: string; building: string }>>([]);
+  const [starting, setStarting] = useState('');
+  async function find(text: string) {
+    setQ(text);
+    if (text.trim().length < 2) { setPeople([]); return; }
+    try { setPeople(await msgGet(`/api/v1/fiarep/messages/people?q=${encodeURIComponent(text.trim())}`)); } catch { setPeople([]); }
+  }
+  async function start(id: string) {
+    setStarting(id);
+    try { const r = await msgPost<{ threadId: string }>(`/api/v1/fiarep/messages/people/${encodeURIComponent(id)}/start`, {}); setQ(''); setPeople([]); await load(); setOpenId(r.threadId); }
+    catch (e: any) { Alert.alert('Could not start it', e?.data?.error || e?.message || 'Try again.'); }
+    finally { setStarting(''); }
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -52,6 +67,17 @@ export default function FiarepMessages() {
     <ScrollView contentContainerStyle={[ui.wrap, { paddingTop: 16 }]} keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}>
       <Text style={ui.label}>Hand someone a code and they can write to you - in the app or on the website - and to nobody else. Only you read it.</Text>
+      <View style={[ui.card, { gap: 8 }]}>
+        <Text style={{ fontWeight: '700' }}>Find a person</Text>
+        <TextInput style={ui.input} value={q} onChangeText={(t) => void find(t)} placeholder="Type their name" autoCorrect={false} />
+        {q.trim().length >= 2 && people.length === 0 && <Text style={ui.listSub}>Nobody signed up under that name yet.</Text>}
+        {people.map((p) => (
+          <Pressable key={p.id} onPress={() => void start(p.id)} disabled={!!starting} style={{ paddingVertical: 8, borderTopWidth: 1, borderTopColor: '#eee' }}>
+            <Text style={{ fontWeight: '600' }}>{starting === p.id ? 'Opening…' : p.name}</Text>
+            <Text style={ui.listSub}>{[p.building, p.apartment ? `Apt ${p.apartment}` : ''].filter(Boolean).join(' · ') || 'Signed up in the app'}</Text>
+          </Pressable>
+        ))}
+      </View>
       <View style={[ui.card, { gap: 8 }]}>
         <Text style={{ fontWeight: '700' }}>Hand out a code</Text>
         <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="Who is it for" />

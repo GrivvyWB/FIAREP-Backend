@@ -287,7 +287,7 @@ export default function OwnerModules() {
   const [residentPhotoAiEnabled, setResidentPhotoAiEnabled] = useState(false);
   const [communityReviewEnabled, setCommunityReviewEnabled] = useState(true);
   const [fiarepRoutingEnabled, setFiarepRoutingEnabled] = useState(false);
-  const [fiarepMessagingEnabled, setFiarepMessagingEnabled] = useState(false);
+  const [fiarepMessagingEnabled, setFiarepMessagingEnabled] = useState(true);
   // FIAREP's own master switch for messaging (codes and client messages). On unless switched off.
   const [messagingOpen, setMessagingOpen] = useState(true);
   // FIAREP Smart Repair Instructions: master switch and the resident-complaint ticket. On unless switched off.
@@ -358,10 +358,10 @@ export default function OwnerModules() {
       Boolean(configured && typeof configured === "object" &&
         (configured as Record<string, unknown>).fiarepComplaintRouting === true),
     );
-    // Same: only a client whose plan includes it writes to FIAREP Services.
+    // Every client can write to FIAREP Services unless it is switched off here.
     setFiarepMessagingEnabled(
-      Boolean(configured && typeof configured === "object" &&
-        (configured as Record<string, unknown>).fiarepMessaging === true),
+      !(configured && typeof configured === "object" &&
+        (configured as Record<string, unknown>).fiarepMessaging === false),
     );
     setMessagingOpen(
       !(configured && typeof configured === "object" &&
@@ -1009,7 +1009,7 @@ export default function OwnerModules() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-semibold text-slate-900">Message FIAREP Services</p>
-                    <p className="truncate text-xs text-slate-500">The client's management can write to FIAREP Services from inside their own account and get an answer back. OFF for every client until their plan includes it; on the regular plan a company deals with its own residents and its own team</p>
+                    <p className="truncate text-xs text-slate-500">The client's management can write to FIAREP Services from inside their own account and get an answer back. ON for every client; switch it off for a client who does not want it</p>
                   </div>
                   <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
                     fiarepMessagingEnabled ? "text-emerald-700" : "text-slate-400"

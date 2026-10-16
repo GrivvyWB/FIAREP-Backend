@@ -183,7 +183,7 @@ function PersonaPicker({ onPick }: { onPick: (persona: InstallationPersona) => v
   if (messaging) return <Screen><CodeMessage onBack={() => setMessaging(false)} /></Screen>;
   return (
     <Screen>
-      {open && <MessagesBar label="Message FIAREP" sub="Client with a code from FIAREP Services? Text them here." onPress={() => setMessaging(true)} />}
+      {open && <MessagesBar label="Message FIAREP" sub="Sign up with your name, or type a code from FIAREP Services." onPress={() => setMessaging(true)} />}
       <Image
         source={require('../assets/field-inspection-logo.png')}
         accessibilityLabel="FIAREP logo"

@@ -12,6 +12,7 @@ import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
 import {
   THREAD_ENTITY, mayMessage, clientMessagingEnabled, clientThread, contactView, isFiarepServices, messagingOpen,
   issueCode, loadThread, markRead, postMessage, rememberContactPhone, revokeCode, threadForCode, threadOf,
+  personInbox, searchPeople, signUpPerson, startWithPerson,
 } from "../lib/fiarepMessages";
 
 const router: IRouter = Router();
@@ -68,6 +69,25 @@ router.post("/v1/fiarep/messages/codes", async (req, res) => {
   const issued = await issueCode(actor, body);
   await audit(actor, "fiarep-messages.code-issued", text(body["contactName"], 120), issued.threadId);
   res.status(201).json({ code: issued.code, threadId: issued.threadId });
+});
+
+/** Type a name: the people who signed up in the app under it. */
+router.get("/v1/fiarep/messages/people", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you. The administrator turns it on." }); return; }
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await searchPeople(String((req.query ?? {})["q"] ?? "")));
+});
+
+/** Tap a name: the conversation opens and lands on that person's phone. */
+router.post("/v1/fiarep/messages/people/:id/start", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await messagingOpen())) { res.status(403).json({ error: "Messaging is switched off in Module Management." }); return; }
+  if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you. The administrator turns it on." }); return; }
+  const started = await startWithPerson(actor, String(req.params["id"] || ""));
+  if (!started) { res.status(404).json({ error: "That person is no longer signed up." }); return; }
+  await audit(actor, "fiarep-messages.person-started", "", started.threadId);
+  res.status(201).json(started);
 });
 
 router.post("/v1/fiarep/messages/:id/close", async (req, res) => {
@@ -163,6 +183,22 @@ router.use("/v1/public/messages", async (req, res, next) => {
   if (req.path === "/status") { next(); return; }
   if (!(await messagingOpen())) { res.status(403).json({ error: "Messaging FIAREP is switched off right now." }); return; }
   next();
+});
+
+/** Sign up with first and last name and apartment, so FIAREP Services can find you and message you. */
+router.post("/v1/public/messages/signup", async (req, res) => {
+  const r = await signUpPerson((req.body ?? {}) as Record<string, unknown>);
+  if ("error" in r) { res.status(400).json({ error: r.error }); return; }
+  res.status(201).json(r);
+});
+
+/** The signed-up person's conversations (the phone holds the id and secret). */
+router.post("/v1/public/messages/me", async (req, res) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const inbox = await personInbox(String(b["id"] ?? ""), String(b["secret"] ?? ""), b["pushToken"]);
+  if (!inbox) { res.status(404).json({ error: "Not signed up on this phone." }); return; }
+  res.setHeader("Cache-Control", "no-store");
+  res.json(inbox);
 });
 
 router.post("/v1/public/messages/open", async (req, res) => {

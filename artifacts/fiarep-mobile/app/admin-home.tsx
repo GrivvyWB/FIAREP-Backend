@@ -58,7 +58,7 @@ export default function AdminHome() {
   // read their own conversations; a client company on the plan writes to
   // FIAREP Services or the administrator.
   const messagingOpen = useMessagingOpen();
-  const clientPlan = tenant !== 'default' && rawModules['fiarepMessaging'] === true;
+  const clientPlan = tenant !== 'default' && rawModules['fiarepMessaging'] !== false;
   const showMessages = messagingOpen === true && (fiarepAdmin || clientPlan) && tileEnabled('admin', 'Messages', rawModules);
   const [position, setPosition] = useState('');
   useFocusEffect(useCallback(() => { (async () => {

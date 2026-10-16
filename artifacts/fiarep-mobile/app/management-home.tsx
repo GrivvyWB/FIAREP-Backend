@@ -36,7 +36,7 @@ export default function ManagementHome() {
   const messagingOpen = useMessagingOpen();
   const [tenantId, setTenantId] = useState('default');
   useFocusEffect(useCallback(() => { getIdentityForMessages().then((i) => setTenantId(i?.tenantId || 'default')).catch(() => undefined); }, []));
-  const showMessages = messagingOpen === true && tenantId !== 'default' && rawModules['fiarepMessaging'] === true && tileEnabled('management', 'Message FIAREP', rawModules);
+  const showMessages = messagingOpen === true && tenantId !== 'default' && rawModules['fiarepMessaging'] !== false && tileEnabled('management', 'Message FIAREP', rawModules);
   // View-only on the app: action tiles live on fiarep.com.
   const readOnlyState = useAppReadOnly();
   const readOnly = readOnlyState === true;
