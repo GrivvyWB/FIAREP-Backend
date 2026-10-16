@@ -1,5 +1,7 @@
 // FIAREP Building Baseline Report — the printable report (client platform and
 // Platform Control). Print / Save as PDF uses the browser's print.
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 export type BFinding = {
   id: string; code?: string; area: string; floor: string; unit: string; wall: string; issue: string; description: string; trade: string;
   priority: "Critical" | "High" | "Medium" | "Low"; time: string; action: string; tools: string[]; materials: string[]; fixtures: string[];
@@ -25,6 +27,8 @@ const where = (f: BFinding) => [f.area, f.floor && `Floor ${f.floor}`, f.unit &&
 
 export function BaselineReport({ a }: { a: BAssessment }) {
   const H = "mt-6 text-lg font-bold text-slate-900";
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [openLevel, setOpenLevel] = useState<string | null>(null);
   return (
     <div className="mx-auto max-w-4xl space-y-2 bg-white p-6 text-sm text-slate-800 print:p-0">
       <div className="flex items-start justify-between gap-4 print:hidden">
@@ -74,8 +78,13 @@ export function BaselineReport({ a }: { a: BAssessment }) {
       {LEVELS.map((lv) => {
         const rows = a.findings.filter((f) => f.priority === lv.p);
         return (
-          <div key={lv.p} className="break-inside-avoid">
-            <p className="mt-3 font-bold" style={{ color: lv.color }}>{lv.title}</p>
+          <div key={lv.p} className="mb-2 break-inside-avoid rounded-lg border border-slate-200 p-3">
+            {/* Each priority level opens and closes on its own; printing shows them all. */}
+            <button type="button" onClick={() => setOpenLevel((o) => (o === lv.p ? null : lv.p))} aria-expanded={openLevel === lv.p} className="flex w-full items-center justify-between gap-3 text-left">
+              <span className="font-bold" style={{ color: lv.color }}>{lv.title}</span>
+              <span className="flex shrink-0 items-center gap-2 text-sm text-slate-500 print:hidden">{rows.length}<ChevronDown className={`h-4 w-4 transition-transform ${openLevel === lv.p ? "rotate-180" : ""}`} /></span>
+            </button>
+            <div className={openLevel === lv.p ? "mt-1" : "hidden print:block"}>
             <p className="text-xs text-slate-500">{lv.note}</p>
             <table className="mt-1 w-full border border-slate-200 text-xs">
               <thead><tr className="bg-slate-50 text-left"><th className="p-1.5">ID</th><th className="p-1.5">Location</th><th className="p-1.5">Issue</th><th className="p-1.5">Trade</th><th className="p-1.5">Priority</th></tr></thead>
@@ -84,15 +93,20 @@ export function BaselineReport({ a }: { a: BAssessment }) {
                 {rows.map((f) => <tr key={f.id} className="border-t border-slate-100"><td className="p-1.5 font-semibold">{f.code}</td><td className="p-1.5">{where(f)}</td><td className="p-1.5">{f.issue}{f.status === "repaired" ? " ✅" : ""}</td><td className="p-1.5">{f.trade}</td><td className="p-1.5">{lv.p}</td></tr>)}
               </tbody>
             </table>
+            </div>
           </div>
         );
       })}
 
       <h2 className={H}>Violation Detail Pages</h2>
       {a.findings.map((f) => (
-        <div key={f.id} className="break-inside-avoid rounded-lg border border-slate-200 p-4 print:break-before-page">
-          <p className="font-bold">Violation ID: FIAREP-{f.code}{f.existing ? ` · Existing known violation${f.sourceRef ? " (" + f.sourceRef + ")" : ""}` : " · Newly identified"}</p>
-          <div className="mt-2 grid gap-4 md:grid-cols-2">
+        <div key={f.id} className="mb-2 break-inside-avoid rounded-lg border border-slate-200 p-4 print:break-before-page">
+          {/* Each violation opens and closes on its own; printing shows them all. */}
+          <button type="button" onClick={() => setOpenId((o) => (o === f.id ? null : f.id))} aria-expanded={openId === f.id} className="flex w-full items-center justify-between gap-3 text-left">
+            <span className="font-bold">Violation ID: FIAREP-{f.code} · {f.issue}{f.existing ? ` · Existing known violation${f.sourceRef ? " (" + f.sourceRef + ")" : ""}` : " · Newly identified"}</span>
+            <span className="flex shrink-0 items-center gap-2 text-sm text-slate-500 print:hidden">{f.priority}<ChevronDown className={`h-4 w-4 transition-transform ${openId === f.id ? "rotate-180" : ""}`} /></span>
+          </button>
+          <div className={`mt-2 grid gap-4 md:grid-cols-2 ${openId === f.id ? "" : "hidden print:grid"}`}>
             <div className="space-y-1">
               <p className="font-semibold">Location</p>
               <p>Building Area: {f.area || "—"}<br />Floor: {f.floor || "—"}<br />Unit: {f.unit || "—"}<br />Wall/Area: {f.wall || "—"}</p>
