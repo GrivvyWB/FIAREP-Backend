@@ -94,6 +94,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "measurement", name: "Measurement", description: "AR/LiDAR material take-off (concrete, sheetrock, window openings)", icon: Building2 },
   { id: "company-forms", name: "Company Forms (locked folder)", description: "FIAREP's own compliance forms — DOB certificate of correction, vermin, lead, tenant notices. OFF for every client; switch on only for FIAREP's organization", icon: AlertTriangle },
   { id: "property-lookup", name: "HPD / DOB Lookup", description: "Look up a building's HPD and DOB violations by address (website and app) — pick the trades below", icon: AlertTriangle },
+  { id: "site-checkins", name: "Site Check-Ins", description: "Where each member checked in (the building tapped vs. where the phone was) and when they left and came back", icon: Building2 },
   { id: "translator", name: "Translator", description: "Voice-to-voice interpreter for talking with residents (website and app)", icon: Users },
   { id: "violation-alerts", name: "Violation Alerts (menu page)", description: "New 311 complaints, HPD / DOB violations and OATH summonses on the client's watched buildings, checked every 30 minutes, as a page in their menu. OFF for every client; switch on per client, then assign their buildings on Platform -> Alerts", icon: AlertTriangle },
   { id: "violation-alerts-command", name: "Violation Alerts — Upper Management Complaint Command", description: "The same alerts as a red strip at the top of the Borough Director's Complaint Command, with its own on / off switch for the director. Separate from the menu page; OFF for every client", icon: AlertTriangle },
@@ -168,7 +169,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Review Reports", "Send Violation", "Assign a Job", "In-house assignments", "Staff Member Jobs", "Cover a Site", "Create Report", "+ New Project",
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
     "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
-    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue", "Building Baseline",
+    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
     "Audit Log",
@@ -178,19 +179,19 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     // FIAREP's administrators (Timothy Winn, Emily Winn) also get the technician's tools.
     "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
     "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order",
-    "Request Time Off", "Inbox", "Smart Repair", "Priority Queue", "Building Baseline",
+    "Request Time Off", "Inbox", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In",
   ] },
   { id: "cpm", screen: "CPM / Inspector home", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair", "Building Baseline",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair", "Building Baseline", "Building Check-In",
   ] },
   // FIAREP's technicians have their own switches, separate from CPM / Inspector.
   { id: "tech", screen: "Technician home (FIAREP technicians sign in here)", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair", "Building Baseline",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Smart Repair", "Building Baseline", "Building Check-In",
   ] },
   { id: "worker", screen: "Worker home", tabs: [
-    "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off", "Smart Repair",
+    "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off", "Smart Repair", "Building Check-In",
   ] },
 ];
 // Keyed per screen so the same label on two screens has two switches.

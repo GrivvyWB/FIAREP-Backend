@@ -1,7 +1,8 @@
 // Registers the background location task for the time clock before any screen renders.
 import '../lib/clock-location';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState, Image } from 'react-native';
+import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState, Image, Linking } from 'react-native';
+import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import {
@@ -93,11 +94,11 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
           return;
         }
         const modeRole = actualRole as AppMode;
-        // Workers' app: location is part of the job. No permission, no sign-in.
-        if (modeRole === 'worker' || (actor?.tenantId === 'default' && modeRole === 'inspector')) {
+        // Location is part of using the app, for every staff role, no exceptions.
+        {
           const { requireWorkerLocation } = await import('../lib/clock-location');
           const ok = await requireWorkerLocation();
-          if (!ok) { setMsg('FIAREP needs your location to sign in as a worker — set Location to "Always" for FIAREP in your phone settings, then try again.'); return; }
+          if (!ok) { setMsg('FIAREP needs your location to sign in — set Location to "Always" for FIAREP in your phone settings, then try again.'); return; }
         }
         await setRememberedStaff(modeRole, name.trim()).catch(() => undefined);
         await syncAllEntities().catch(() => undefined);
@@ -301,6 +302,7 @@ function AdministratorStack() {
       <Stack.Screen name="price-quote" options={{ title: 'Price Quote', headerBackTitle: 'Back' }} />
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision', headerBackTitle: 'Back' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
       <Stack.Screen name="priority-queue" options={{ title: 'Priority Queue', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline-assess" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
@@ -338,6 +340,7 @@ function InspectorStack() {
       <Stack.Screen name="inspector-violations" options={{ title: 'Log Violations' }} />
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline-assess" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
       <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
@@ -401,6 +404,7 @@ function ManagementStack() {
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
       <Stack.Screen name="management" options={{ title: 'Resident Reports' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
       <Stack.Screen name="priority-queue" options={{ title: 'Priority Queue', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline-assess" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
@@ -458,6 +462,7 @@ function WorkerStack() {
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="worker-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
       <Stack.Screen name="project/elevator" options={{ title: 'Elevator Services' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />
@@ -541,6 +546,7 @@ export default function Layout() {
   const [persona, setPersona] = useState<InstallationPersona | null>(null);
   const [booting, setBooting] = useState(true);
   const [notice, setNotice] = useState('');
+  const [locationBlocked, setLocationBlocked] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -656,8 +662,37 @@ export default function Layout() {
     setMode(m);
   }
 
+  // Every staff role keeps Location on "Always": checked on every open and every
+  // return to the app. Turned off, the app stops at this screen until it is back.
+  const staffMode = !!mode && mode !== 'resident' && mode !== 'vendor';
+  useEffect(() => {
+    if (!staffMode) { setLocationBlocked(false); return; }
+    const check = async () => {
+      try {
+        const fg = await Location.getForegroundPermissionsAsync();
+        const bg = await Location.getBackgroundPermissionsAsync();
+        setLocationBlocked(!(fg.granted && bg.granted));
+      } catch { setLocationBlocked(false); }
+    };
+    void check();
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') void check(); });
+    return () => sub.remove();
+  }, [staffMode]);
+
   let content;
-  if (booting) {
+  if (!booting && staffMode && locationBlocked) {
+    content = (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', padding: 24, gap: 14, backgroundColor: '#fff' }}>
+        <Text style={{ fontSize: 22, fontWeight: '800', textAlign: 'center' }}>Location is required</Text>
+        <Text style={{ fontSize: 15, color: '#444', textAlign: 'center' }}>FIAREP records where you are while you use the app: the building you check in at, when you leave it and when you come back. Set Location to "Always" for FIAREP to keep using the app.</Text>
+        <Pressable style={ui.btn} onPress={() => void (async () => {
+          const { requireWorkerLocation } = await import('../lib/clock-location');
+          if (await requireWorkerLocation()) setLocationBlocked(false);
+        })()}><Text style={{ color: '#fff', fontWeight: '700' }}>Allow location</Text></Pressable>
+        <Pressable style={ui.btnOutline} onPress={() => void Linking.openSettings()}><Text style={{ color: ACCENT, fontWeight: '700' }}>Open Settings</Text></Pressable>
+      </SafeAreaView>
+    );
+  } else if (booting) {
     content = (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <ActivityIndicator size="large" color={ACCENT} />

@@ -29,6 +29,7 @@ const C: Record<string, TileArt> = {
   'Log Violations': { lib: 'mci', icon: 'alert-octagon-outline', desc: 'Record violations on site.' },
   'FIAREP Vision (AI)': { lib: 'mci', icon: 'eye-outline', desc: 'Photo analysis for conditions.' },
   'Smart Repair': { lib: 'mci', icon: 'toolbox-outline', desc: 'Photo in. Repair plan out.' },
+  'Building Check-In': { lib: 'mci', icon: 'map-marker-check-outline', desc: 'Check in at the building; your location and times are recorded.' },
   'Building Baseline': { lib: 'mci', icon: 'office-building-marker-outline', desc: 'Walk-through, findings and the baseline report.' },
   'Priority Queue': { lib: 'mci', icon: 'sort-descending', desc: 'Every complaint ranked, most critical first.' },
   'My Routes': { lib: 'mci', icon: 'map-marker-path', desc: 'Buildings on your route today.' },

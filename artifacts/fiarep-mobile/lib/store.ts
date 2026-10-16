@@ -3499,6 +3499,7 @@ export async function checkInVendorWalkthrough(
   trackingId: string,
   vendorName: string,
   location: { latitude: number; longitude: number; accuracy?: number; capturedAt: string },
+  buildingLocation: { latitude: number; longitude: number } | null = null,
 ): Promise<VendorWalkthroughCheckIn> {
   const id = `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
   return createPublicVendorWalkthroughCheckIn(trackingId.trim(), {
@@ -3508,7 +3509,9 @@ export async function checkInVendorWalkthrough(
     longitude: location.longitude,
     accuracy: location.accuracy,
     capturedAt: location.capturedAt,
-  });
+    // The phone's map of the building address, for buildings outside New York City.
+    ...(buildingLocation ? { buildingLocation } : {}),
+  } as never);
 }
 
 // Vendor marks their awarded job as started. No-op unless it is awarded.

@@ -97,12 +97,20 @@ export default function VendorHome() {
         Alert.alert('Location required', 'Enable location access to check in.');
         return;
       }
+      // The building's point from the phone's map, so a building outside NYC is checked too.
+      let buildingLocation: { latitude: number; longitude: number } | null = null;
+      try {
+        const Location = await import('expo-location');
+        const street = String(job.address || '').replace(/\s+(unit|apt|apartment|#)\s*\S+$/i, '').trim();
+        const g = street ? await Location.geocodeAsync(street) : [];
+        if (g[0]) buildingLocation = { latitude: g[0].latitude, longitude: g[0].longitude };
+      } catch { /* the server uses the City's map */ }
       const checkIn = await checkInVendorWalkthrough(job.trackingId, bidName, {
         latitude: geo.lat,
         longitude: geo.lng,
         accuracy: geo.accuracy,
         capturedAt: geo.at,
-      });
+      }, buildingLocation);
       setWalkthroughCheckIn(checkIn);
       Alert.alert('Checked in', 'Your time and location were sent to Procurement.');
     } catch (e: any) {

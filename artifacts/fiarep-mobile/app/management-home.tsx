@@ -185,6 +185,7 @@ export default function ManagementHome() {
       color: '#C0392B',
       tiles: [
         ...(!restricted ? [{ label: 'Review Reports', onPress: () => router.push('/management'), tone: 'solid' as Tone }] : []),
+        { label: 'Building Check-In', onPress: () => router.push('/site-checkin'), tone: 'tint' as Tone },
         { label: 'Smart Repair', onPress: () => router.push('/smart-repair'), tone: 'tint' as Tone },
         ...(!restricted ? [{ label: 'Priority Queue', onPress: () => router.push('/priority-queue'), tone: 'solid' as Tone }] : []),
         { label: 'Building Baseline', onPress: () => router.push('/baseline'), tone: 'tint' as Tone },

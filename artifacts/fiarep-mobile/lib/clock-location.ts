@@ -108,8 +108,31 @@ export async function handleFixes(fixes: Fix[]): Promise<void> {
 
 TaskManager.defineTask(CLOCK_LOCATION_TASK, async ({ data, error }: { data?: { locations?: Location.LocationObject[] }; error?: unknown }) => {
   if (error || !data?.locations?.length) return;
-  await handleFixes(data.locations.map((l) => ({ latitude: l.coords.latitude, longitude: l.coords.longitude, accuracyM: l.coords.accuracy ?? null })));
+  const fixes = data.locations.map((l) => ({ latitude: l.coords.latitude, longitude: l.coords.longitude, accuracyM: l.coords.accuracy ?? null }));
+  const { handleSiteFix, siteTrackingOnly } = await import('./site-checkin');
+  // The time clock's stops only while clocked in; a building check-in alone does not make them.
+  if (!(await siteTrackingOnly())) await handleFixes(fixes);
+  for (const f of fixes) await handleSiteFix(f);
 });
+
+/** Start the background location task if it is not running. Returns true if it already was. */
+export async function ensureLocationTracking(): Promise<boolean> {
+  if (await Location.hasStartedLocationUpdatesAsync(CLOCK_LOCATION_TASK).catch(() => false)) return true;
+  await Location.startLocationUpdatesAsync(CLOCK_LOCATION_TASK, {
+    accuracy: Location.Accuracy.Balanced,
+    distanceInterval: 50,
+    deferredUpdatesInterval: 60_000,
+    deferredUpdatesDistance: 50,
+    pausesUpdatesAutomatically: false,
+    showsBackgroundLocationIndicator: true,
+    foregroundService: { notificationTitle: 'FIAREP check-in', notificationBody: 'Checked in at a building — recording when you leave and come back.', notificationColor: '#0B2A4A' },
+  });
+  return false;
+}
+/** Stop the background location task. */
+export async function stopLocationTracking(): Promise<void> {
+  try { if (await Location.hasStartedLocationUpdatesAsync(CLOCK_LOCATION_TASK)) await Location.stopLocationUpdatesAsync(CLOCK_LOCATION_TASK); } catch { /* not running */ }
+}
 
 /** Workers must allow location (foreground and background) before they can use the app. */
 export async function requireWorkerLocation(): Promise<boolean> {
@@ -129,6 +152,9 @@ export async function startClockTracking(first: Fix | null): Promise<boolean> {
     const bg = await Location.requestBackgroundPermissionsAsync();
     if (!bg.granted) return false;
     const now = Date.now();
+    // Clocking in: the clock's stops run again even if a check-in started the task.
+    const { setSiteTrackingOnly } = await import('./site-checkin');
+    await setSiteTrackingOnly(false);
     await writeAnchor(first ? { latitude: first.latitude, longitude: first.longitude, since: now, reported: false, stopId: null, key: `stop-${now}-${Math.random().toString(36).slice(2)}` } : null);
     if (await Location.hasStartedLocationUpdatesAsync(CLOCK_LOCATION_TASK)) return true;
     await Location.startLocationUpdatesAsync(CLOCK_LOCATION_TASK, {
@@ -146,6 +172,9 @@ export async function startClockTracking(first: Fix | null): Promise<boolean> {
 
 /** Stop watching after a punch out; the server closes the open stop itself. */
 export async function stopClockTracking(): Promise<void> {
-  try { if (await Location.hasStartedLocationUpdatesAsync(CLOCK_LOCATION_TASK)) await Location.stopLocationUpdatesAsync(CLOCK_LOCATION_TASK); } catch { /* not running */ }
   await writeAnchor(null);
+  // Still checked in at a building: keep watching it; the clock's stops end.
+  const { activeSiteCheckin, setSiteTrackingOnly } = await import('./site-checkin');
+  if (await activeSiteCheckin()) { await setSiteTrackingOnly(true); return; }
+  await stopLocationTracking();
 }

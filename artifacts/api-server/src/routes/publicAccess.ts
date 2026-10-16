@@ -576,7 +576,17 @@ router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async 
   // Where the building is, so Procurement can see the vendor was really there.
   // Street address without the unit ("… Unit 4B").
   const buildingAddress = String(scope.state["address"] ?? "").replace(/\s+(unit|apt|apartment|#)\s*\S+$/i, "").trim();
-  const building = await geocodeNycPoint(buildingAddress);
+  // The building's point: the City's map inside New York City; the vendor phone's own
+  // map of the address elsewhere, or when the City's match is miles from it (a CT
+  // street that shares a name with an NYC one).
+  const fromPhone = (() => {
+    const v = req.body?.buildingLocation as { latitude?: unknown; longitude?: unknown } | undefined;
+    const la = Number(v?.latitude), lo = Number(v?.longitude);
+    return Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180 ? { latitude: la, longitude: lo } : null;
+  })();
+  const outsideNyc = /,\s*(?!NY\b)[A-Z]{2}(\s+\d{5})?\s*(,\s*USA)?\s*$/i.test(buildingAddress) || /\b(connecticut|new jersey|westchester)\b/i.test(buildingAddress);
+  const fromCity = outsideNyc ? null : await geocodeNycPoint(buildingAddress);
+  const building = fromCity && fromPhone && distanceMeters(fromCity, fromPhone) > 20_000 ? fromPhone : (fromCity || fromPhone);
   const existing = await db.select().from(vendorWalkthroughCheckIns).where(eq(vendorWalkthroughCheckIns.id, id)).limit(1);
   if (existing[0]) {
     if (existing[0].procurementId !== scope.id || normalize(existing[0].vendorName) !== normalize(vendorName)) {

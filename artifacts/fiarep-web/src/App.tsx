@@ -31,6 +31,7 @@ import ChangeOrders from '@/pages/change-orders';
 import Elevators from '@/pages/elevators';
 import Leave from '@/pages/leave';
 import TimeClock from '@/pages/time-clock';
+import SiteCheckins from '@/pages/site-checkins';
 import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
 import SharedData from '@/pages/shared-data';
@@ -268,6 +269,7 @@ function AppRouter() {
           <Route path="/elevators" component={ElevatorsRoute} />
           <Route path="/leave" component={LeaveRoute} />
           <Route path="/time-clock" component={TimeClock} />
+          <Route path="/site-checkins" component={SiteCheckinsRoute} />
           <Route path="/notifications" component={NotificationsRoute} />
           <Route path="/settings" component={SettingsRoute} />
           <Route path="/shared-data" component={SharedDataRoute} />
@@ -302,6 +304,7 @@ function ModuleRoute({ module, children }: { module: StaffModule; children: Reac
 const DashboardRoute = () => <ModuleRoute module="dashboard"><Dashboard /></ModuleRoute>;
 const CommunityRoute = () => <ModuleRoute module="community"><CommunityCoordinators /></ModuleRoute>;
 const TranslatorRoute = () => <ModuleRoute module="translator"><Translator /></ModuleRoute>;
+const SiteCheckinsRoute = () => <ModuleRoute module="site-checkins"><SiteCheckins /></ModuleRoute>;
 const PropertyLookupRoute = () => <ModuleRoute module="property-lookup"><PropertyLookup /></ModuleRoute>;
 const ViolationAlertsRoute = () => <ModuleRoute module="violation-alerts"><ViolationAlerts /></ModuleRoute>;
 const CompanyFormsRoute = () => <ModuleRoute module="company-forms"><CompanyForms /></ModuleRoute>;
