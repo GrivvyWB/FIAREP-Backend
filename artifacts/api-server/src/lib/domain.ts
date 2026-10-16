@@ -1490,7 +1490,7 @@ function canPerformEntityActionByRole(
   ) {
     if (entity === "resident-reports") {
       if (
-        waitsToBeSentComplaints(actor) &&
+        waitsToBeSentComplaints(actor) && !(actor as Actor).locksOff?.includes("tradeSupWaitForSend") &&
         normalizeAssignment(state).assignedStaffId !== actor.id &&
         state["assignedByStaffId"] !== actor.id &&
         state["directedToStaffId"] !== actor.id
@@ -1543,7 +1543,7 @@ function canPerformEntityActionByRole(
     // development supervisor, emergency supervisor or upper management sends
     // it to them (assigned to them, or they made the assignment).
     if (
-      waitsToBeSentComplaints(actor) &&
+      waitsToBeSentComplaints(actor) && !(actor as Actor).locksOff?.includes("tradeSupWaitForSend") &&
       ["assign", "clear", "approve-work", "reject-work"].includes(action) &&
       normalizeAssignment(state).assignedStaffId !== actor.id &&
       state["assignedByStaffId"] !== actor.id &&

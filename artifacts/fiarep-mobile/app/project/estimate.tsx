@@ -1,3 +1,4 @@
+import { lockOnCached } from '../../lib/module-access';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -13,7 +14,8 @@ import * as Sharing from 'expo-sharing';
 export default function Estimate() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const { mode } = useAppMode();
-  const readOnly = mode === 'administrator';
+  // Administrators view projects read-only only when that lock is switched on in Platform Control.
+  const readOnly = mode === 'administrator' && lockOnCached('adminProjectsViewOnly');
   const [state, setState] = useState<CostEstimateState>(EMPTY_COST_ESTIMATE);
   const [scopeRef, setScopeRef] = useState<ProcurementRequest | null>(null);
   const [catPicker, setCatPicker] = useState(false);

@@ -1,3 +1,4 @@
+import { lockOnCached } from '../lib/module-access';
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -239,6 +240,8 @@ export default function Management() {
   // Management with assigned developments edits only reports in those developments; others are read-only.
   function canEdit(r: ResidentReport): boolean {
     if (mode === 'administrator') return true;
+    // "Management edits only its own developments' reports" is a read-only lock in Platform Control; off unless switched on.
+    if (!lockOnCached('reportsOtherDevelopments')) return true;
     const pos = (currentPosition || '').trim().toLowerCase();
     // Any management supervisor / superintendent sees and edits all reports.
     if (pos.includes('supervisor') || pos.startsWith('superintendent')) return true;

@@ -1,3 +1,4 @@
+import { lockOnCached } from '../../lib/module-access';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -15,7 +16,8 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 export default function Intake() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const { mode } = useAppMode();
-  const readOnly = mode === 'administrator';
+  // Administrators view projects read-only only when that lock is switched on in Platform Control.
+  const readOnly = mode === 'administrator' && lockOnCached('adminProjectsViewOnly');
   const [s, setS] = useState<IntakeState>(EMPTY_INTAKE);
   const [open, setOpen] = useState<Record<string, boolean>>({ cover: true });
 

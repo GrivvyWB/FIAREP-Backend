@@ -1,3 +1,4 @@
+import { lockOnCached } from '../../lib/module-access';
 import { useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,7 +18,8 @@ const FIELDS: { key: keyof Rates; label: string }[] = [
 export default function ProjectRates() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const { mode } = useAppMode();
-  const readOnly = mode === 'administrator';
+  // Administrators view projects read-only only when that lock is switched on in Platform Control.
+  const readOnly = mode === 'administrator' && lockOnCached('adminProjectsViewOnly');
   const router = useRouter();
   const [r, setR] = useState<Rates | null>(null);
   const [usingOverride, setUsingOverride] = useState(false);

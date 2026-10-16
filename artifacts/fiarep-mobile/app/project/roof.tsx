@@ -1,3 +1,4 @@
+import { lockOnCached } from '../../lib/module-access';
 import { useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -12,7 +13,8 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 export default function RoofLookup() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const { mode } = useAppMode();
-  const readOnly = mode === 'administrator';
+  // Administrators view projects read-only only when that lock is switched on in Platform Control.
+  const readOnly = mode === 'administrator' && lockOnCached('adminProjectsViewOnly');
   const router = useRouter();
   const [address, setAddress] = useState('');
   const [loading, setLoading] = useState(false);

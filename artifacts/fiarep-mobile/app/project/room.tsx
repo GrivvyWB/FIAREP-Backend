@@ -1,3 +1,4 @@
+import { lockOnCached } from '../../lib/module-access';
 import { useEffect, useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, Modal, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter, useFocusEffect } from 'expo-router';
@@ -24,7 +25,8 @@ const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 
 export default function RoomEditor() {
   const { projectId, roomId } = useLocalSearchParams<{ projectId: string; roomId?: string }>();
   const { mode } = useAppMode();
-  const readOnly = mode === 'administrator';
+  // Administrators view projects read-only only when that lock is switched on in Platform Control.
+  const readOnly = mode === 'administrator' && lockOnCached('adminProjectsViewOnly');
   const router = useRouter();
   const [roomName, setRoomName] = useState('');
   const [unit, setUnit] = useState('');

@@ -140,6 +140,19 @@ export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = ca
   return value !== false;
 }
 
+/**
+ * Read-only locks (Platform Control -> Module Management -> Read-only locks).
+ * A lock is OFF unless switched on: with it off, nobody is blocked by it.
+ */
+export type LockKey = 'appViewOnly' | 'defaultRatesDirectorOnly' | 'adminProjectsViewOnly' | 'approvedInspection' | 'reportsOtherDevelopments' | 'tradeSupWaitForSend';
+export function lockOnCached(key: LockKey): boolean {
+  return cached?.features?.modules?.['lock.' + key] === true;
+}
+export async function lockOn(key: LockKey): Promise<boolean> {
+  const c = await loadModuleConfig().catch(() => null);
+  return c?.features?.modules?.['lock.' + key] === true;
+}
+
 export async function loadModuleConfig(): Promise<ModuleConfig | null> {
   const key = await settingKey();
   if (cached && cachedOwner === key) return cached;

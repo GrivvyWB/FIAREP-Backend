@@ -220,7 +220,7 @@ function statusLabel(status: unknown) {
 export default function Reports() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { staff: actor } = useAuth();
+  const { staff: actor, organizationModules } = useAuth();
   // Developments this supervisor has an active coverage unlock for. They may
   // assign at those sites for 24h, so treat them as part of the actor's scope
   // for the assignment picker (server enforces the same on the assign action).
@@ -262,7 +262,9 @@ export default function Reports() {
     const st = (report.state || {}) as Record<string, unknown>;
     return String(st.assignedStaffId || "") === actor?.id || String(st.assignedByStaffId || "") === actor?.id || String(st.directedToStaffId || "") === actor?.id;
   };
-  const canActOn = (report: Report) => canHandleComplaints && (!isTradeSup || sentToMe(report));
+  // "A trade supervisor acts only once management sends it" is a read-only lock in Platform Control; off unless switched on.
+  const tradeSupWaits = organizationModules["lock.tradeSupWaitForSend"] === true;
+  const canActOn = (report: Report) => canHandleComplaints && (!isTradeSup || !tradeSupWaits || sentToMe(report));
   // CPM Supervisor: the CPM's scope for a complaint, so the complaint page can
   // say where it is and link to Scope Review (Procurement / in-house buttons).
   const isCpmSup = isCpmSupervisorTitle(actor?.position);
@@ -630,7 +632,7 @@ export default function Reports() {
               <div className="mt-3 flex flex-wrap items-center gap-2 pl-14">
                 {!!String(state.assignedTo || "") && <span className="text-xs text-muted-foreground inline-flex items-center gap-1"><UserRound className="h-3 w-3" />{String(state.assignedTo)}</span>}
                 {canActOn(report) && (currentStatus === "submitted" || (currentStatus === "assigned" && String(state.assignedStaffId || "") === actor?.id)) && <Button size="sm" variant="outline" disabled={action.isPending || assigning === report.id} onClick={() => openReport(report, "assign")}>{currentStatus === "assigned" ? (isCpmSupervisorTitle(actor?.position) ? "Send to a CPM" : "Hand to a worker") : "Assign"}</Button>}
-                {isTradeSup && !sentToMe(report) && <span className="text-xs rounded-full bg-muted px-2 py-1 text-muted-foreground">Read only — waiting for building management to send it to you</span>}
+                {isTradeSup && tradeSupWaits && !sentToMe(report) && <span className="text-xs rounded-full bg-muted px-2 py-1 text-muted-foreground">Read only — waiting for building management to send it to you</span>}
                  {!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button size="sm" onClick={() => openReport(report, "details")} disabled={action.isPending}><CheckCircle2 className="h-3.5 w-3.5 mr-1" />Complete</Button>}
                  {canActOn(report) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canReview(report) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}

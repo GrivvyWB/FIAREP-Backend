@@ -1,3 +1,4 @@
+import { lockOnCached } from '../../lib/module-access';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -9,7 +10,8 @@ import { useAppMode } from '../_layout';
 export default function Checklist() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const { mode } = useAppMode();
-  const readOnly = mode === 'administrator';
+  // Administrators view projects read-only only when that lock is switched on in Platform Control.
+  const readOnly = mode === 'administrator' && lockOnCached('adminProjectsViewOnly');
   const [state, setState] = useState<ChecklistState>({});
   const [open, setOpen] = useState<Record<string, boolean>>({});
 

@@ -384,6 +384,10 @@ export async function getRoom(id: string): Promise<Room | null> {
 // Throws if a project is approved (locked). Called by every project-content mutator so that
 // no screen can edit an approved inspection, regardless of UI gating. Review reversal is exempt.
 async function assertProjectUnlocked(projectId: string): Promise<void> {
+  // The approved-inspection lock is a switch in Platform Control; off unless switched on.
+  // Loaded lazily: module-access imports this file.
+  const { lockOn } = require('./module-access') as typeof import('./module-access');
+  if (!(await lockOn('approvedInspection'))) return;
   if (await isProjectApproved(projectId)) {
     throw new Error('This inspection is approved and locked. Editing is disabled.');
   }

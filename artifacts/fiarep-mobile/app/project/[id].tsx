@@ -1,3 +1,4 @@
+import { lockOnCached } from '../../lib/module-access';
 import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Alert, TextInput, Modal, FlatList, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
@@ -15,7 +16,8 @@ export default function ProjectDetail() {
   const canDelete = useDeletionPolicy(mode !== null && mode !== 'resident' && mode !== 'vendor');
   const modules = useModuleAccess();
   const [locked, setLocked] = useState(false);
-  const readOnly = mode === 'administrator' || locked;
+  // Both are read-only locks switched in Platform Control; off unless switched on.
+  const readOnly = (mode === 'administrator' && lockOnCached('adminProjectsViewOnly')) || (locked && lockOnCached('approvedInspection'));
   const [notes, setNotes] = useState<ProjectNote[]>([]);
   const [noteText, setNoteText] = useState('');
   const canReview = mode === 'administrator' || mode === 'management';
@@ -148,7 +150,7 @@ export default function ProjectDetail() {
           {(project as any)._meta.unit ? ' · Unit ' + (project as any)._meta.unit : ''}
         </Text>
       )}
-      {locked && (<View style={{ backgroundColor: '#eafaf0', borderColor: '#1a8f4c', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8 }}>
+      {locked && lockOnCached('approvedInspection') && (<View style={{ backgroundColor: '#eafaf0', borderColor: '#1a8f4c', borderWidth: 1, borderRadius: 8, padding: 10, marginTop: 8 }}>
         <Text style={{ color: '#1a8f4c', fontWeight: '700' }}>Approved · locked</Text>
         <Text style={{ color: '#1a8f4c', fontSize: 13, marginTop: 2 }}>This inspection is approved. Editing is disabled for all parties.</Text>
       </View>)}

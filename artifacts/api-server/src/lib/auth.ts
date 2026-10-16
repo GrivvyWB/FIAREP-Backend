@@ -23,6 +23,8 @@ export type Actor = {
   position: string;
   developments: string[];
   sessionVersion: number;
+  /** Read-only locks switched off for this person's organization (Platform Control). */
+  locksOff?: string[];
 };
 
 export type PlatformOwner = { name: string; sessionId: string; typ: "platform_owner"; iat: number; exp: number };

@@ -51,6 +51,7 @@ import { canActOnDevelopment, hasAnyActiveCoverage, isHomeDevelopment } from "..
 import { isCommunityCoordinator, isCommunityCoordinatorSupervisor, isCommunityEntity, isCoverageEligible, isSuperintendentE } from "../lib/domain";
 import { isCpmSupervisorTitle, isCrewForTrade, isOfficeTradeSupervisorTitle, isSupervisorForTrade, isSupervisorTitle, sameTitle } from "../lib/titles";
 import { APP_READ_ONLY_MESSAGE, appReadOnlyDecision, isAppReadOnlyActor, isMobileAppRequest } from "../lib/appReadOnly";
+import { lockOn } from "../lib/locks";
 import { hasScopePackage, snapshotElevator, snapshotEstimate, snapshotScope } from "../lib/scopeSnapshot";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -70,16 +71,23 @@ import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
+// Read-only locks switched off in Platform Control lift their blocks for this request.
+router.use("/v1", async (_req, res, next) => {
+  const actor = res.locals["actor"] as Actor | undefined;
+  if (actor && !(await lockOn(actor.tenantId, "tradeSupWaitForSend"))) actor.locksOff = [...(actor.locksOff || []), "tradeSupWaitForSend"];
+  next();
+});
 
 // Supervisors/managers are view-only on the phone app (see appReadOnly.ts).
-router.use("/v1/:entity", (req, res, next) => {
+router.use("/v1/:entity", async (req, res, next) => {
   const entity = req.params["entity"] || "";
   if (!validEntity(entity) || !isMobileAppRequest(req)) {
     next();
     return;
   }
   const actor = actorFrom(res);
-  if (!isAppReadOnlyActor(actor)) {
+  // The lock is a switch in Platform Control (Read-only locks); off unless switched on.
+  if (!isAppReadOnlyActor(actor) || !(await lockOn(actor.tenantId, "appViewOnly"))) {
     next();
     return;
   }
@@ -769,7 +777,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     // this supervisor. Inspection, CPM and trade supervisors don't act on
     // their own.
     const sourceReportId = typeof rawState["sourceReportId"] === "string" ? rawState["sourceReportId"].trim() : "";
-    if (waitsToBeSentComplaints(actor)) {
+    if (waitsToBeSentComplaints(actor) && !actor.locksOff?.includes("tradeSupWaitForSend")) {
       const [complaint] = sourceReportId
         ? await db.select().from(entityRecords).where(and(
             eq(entityRecords.id, sourceReportId),
@@ -1628,7 +1636,8 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   if (entity === "hr-approvals" &&
-      ["approved", "consumed"].includes(normalizeStatus(current.state["status"]))) {
+      ["approved", "consumed"].includes(normalizeStatus(current.state["status"])) &&
+      await lockOn(actor.tenantId, "approvalEvidence")) {
     res.status(409).json({ error: "Approved company approval evidence is immutable" });
     return;
   }
@@ -1662,13 +1671,15 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
   }
   if (entity === "procurement" &&
       actor.role === "inspector" && actor.position === "CPM" &&
-      !["draft", "returned"].includes(String(current.state["status"] ?? ""))) {
+      !["draft", "returned"].includes(String(current.state["status"] ?? "")) &&
+      await lockOn(actor.tenantId, "procurementSubmitted")) {
     res.status(403).json({ error: "Submitted procurement scopes are read-only" });
     return;
   }
   if (
     entity === "procurement" &&
-     current.state["status"] === "closed"
+     current.state["status"] === "closed" &&
+     await lockOn(actor.tenantId, "procurementClosed")
   ) {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
@@ -2248,7 +2259,8 @@ router.post(
   }
   if (
     entity === "procurement" &&
-     current.state["status"] === "closed"
+     current.state["status"] === "closed" &&
+     await lockOn(actor.tenantId, "procurementClosed")
   ) {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
@@ -4149,7 +4161,8 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
   }
   if (actor.role !== "administrator" &&
       entity === "hr-approvals" &&
-      ["approved", "consumed"].includes(normalizeStatus(current.state["status"]))) {
+      ["approved", "consumed"].includes(normalizeStatus(current.state["status"])) &&
+      await lockOn(actor.tenantId, "approvalEvidence")) {
     res.status(409).json({ error: "Approved company approval evidence is immutable" });
     return;
   }
@@ -4171,12 +4184,14 @@ router.delete("/v1/:entity/:id", async (req, res, next) => {
   if (actor.role !== "administrator" &&
       entity === "procurement" &&
       actor.role === "inspector" && actor.position === "CPM" &&
-      !["draft", "returned"].includes(String(current.state["status"] ?? ""))) {
+      !["draft", "returned"].includes(String(current.state["status"] ?? "")) &&
+      await lockOn(actor.tenantId, "procurementSubmitted")) {
     res.status(403).json({ error: "Submitted procurement scopes cannot be deleted" });
     return;
   }
   if (actor.role !== "administrator" &&
-      entity === "procurement" && current.state["status"] === "closed") {
+      entity === "procurement" && current.state["status"] === "closed" &&
+      await lockOn(actor.tenantId, "procurementClosed")) {
     res.status(409).json({ error: "Closed procurement records are immutable" });
     return;
   }

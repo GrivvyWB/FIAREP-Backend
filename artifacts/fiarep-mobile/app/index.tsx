@@ -1,3 +1,4 @@
+import { lockOnCached } from '../lib/module-access';
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter, Redirect } from 'expo-router';
@@ -158,7 +159,7 @@ export default function Projects() {
           <View style={{ flex: 1 }}>
             <Text style={ui.listTitle}>{p.name}</Text>
             {!!p.client && <Text style={ui.listSub}>{p.client}</Text>}
-            {isApproved && <Text style={{ fontSize: 12, color: '#1a8f4c', fontWeight: '700', marginTop: 2 }}>Completed · approved (locked)</Text>}
+            {isApproved && <Text style={{ fontSize: 12, color: '#1a8f4c', fontWeight: '700', marginTop: 2 }}>{lockOnCached('approvedInspection') ? 'Completed · approved (locked)' : 'Completed · approved'}</Text>}
           </View>
           <Text style={{ color: '#999', fontSize: 20 }}>›</Text>
         </Pressable>

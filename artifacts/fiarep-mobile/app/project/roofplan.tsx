@@ -1,3 +1,4 @@
+import { lockOnCached } from '../../lib/module-access';
 import { useCallback, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, PanResponder, KeyboardAvoidingView, Platform } from 'react-native';
 import Svg, { Polygon, Circle, Rect, Text as SvgText } from 'react-native-svg';
@@ -30,7 +31,7 @@ const PRESETS: Record<string, Pt[]> = {
 export default function RoofPlan() {
   const { projectId } = useLocalSearchParams<{ projectId: string }>();
   const { mode: appMode } = useAppMode();
-  const readOnly = appMode === 'administrator';
+  const readOnly = appMode === 'administrator' && lockOnCached('adminProjectsViewOnly');
   const [points, setPoints] = useState<Pt[]>(PRESETS.Rectangle);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [edgeLabels, setEdgeLabels] = useState<EdgeLabel[]>([]);

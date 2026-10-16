@@ -1,3 +1,4 @@
+import { lockOn } from "../lib/locks";
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
@@ -96,7 +97,12 @@ router.get("/v1/settings/:key", async (req, res) => {
 
 router.put("/v1/settings/:key", async (req, res) => {
   const actor = actorFrom(res);
-  if (!isElevated(actor)) {
+  // Shared default rates: with the "only the Borough Director" lock off
+  // (Platform Control), administrators and management change them too.
+  const ratesOpen = req.params["key"] === "default-rates" &&
+    (actor.role === "administrator" || actor.role === "management") &&
+    !(await lockOn(actor.tenantId, "defaultRatesDirectorOnly"));
+  if (!isElevated(actor) && !ratesOpen) {
     res.status(403).json({ error: "Elevated management access required" });
     return;
   }

@@ -21,7 +21,10 @@ export default function Settings() {
   const [rates, setRates] = useState(DEFAULT_RATES);
   const [ratesLoading, setRatesLoading] = useState(true);
   const [ratesSaving, setRatesSaving] = useState(false);
-  const canEditRates = staff?.position === "Borough Director";
+  // "Only the Borough Director changes shared default rates" is a read-only lock
+  // switched in Platform Control; off unless switched on.
+  const ratesLocked = organizationModules["lock.defaultRatesDirectorOnly"] === true;
+  const canEditRates = staff?.position === "Borough Director" || (!ratesLocked && (staff?.role === "administrator" || staff?.role === "management"));
   const canReadRates = canReadSharedDefaultRates(staff);
   const isHumanResources = staff?.role === "human_resources";
 

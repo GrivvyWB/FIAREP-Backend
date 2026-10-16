@@ -49,6 +49,19 @@ type ModuleDefinition = {
   icon: LucideIcon;
 };
 
+// Read-only locks. Every one starts OFF; the platform owner switches on the ones a client wants.
+const READ_ONLY_LOCKS: Array<{ key: string; name: string; description: string }> = [
+  { key: "appViewOnly", name: "Managers, supervisors and directors are view-only in the app", description: "On: they act on fiarep.com; in the app only time off, attendance, Inbox and emergency requests work. Off: they act in the app too" },
+  { key: "defaultRatesDirectorOnly", name: "Only the Borough Director changes shared default rates", description: "On: Settings -> Shared Default Rates is read-only for everyone else. Off: administrators and management change them too" },
+  { key: "adminProjectsViewOnly", name: "Administrators open projects view-only in the app", description: "On: rooms, estimate, scope, inspection, photos and the other project tools are read-only for administrators. Off: they edit them" },
+  { key: "approvedInspection", name: "An approved inspection can no longer be edited", description: "On: once approved, an inspection's rooms, estimate and scope are locked for everyone. Off: it stays editable" },
+  { key: "procurementSubmitted", name: "A CPM's submitted procurement scope is read-only", description: "On: after the CPM submits, the CPM can no longer change or delete it unless it is returned. Off: it stays editable" },
+  { key: "procurementClosed", name: "A closed procurement record can no longer be changed", description: "On: closed procurement records cannot be changed or deleted. Off: they can" },
+  { key: "approvalEvidence", name: "Approved company approval evidence can no longer be changed", description: "On: an approved or used HR / company approval cannot be changed or deleted. Off: it can" },
+  { key: "reportsOtherDevelopments", name: "Management edits resident reports only in its own developments", description: "On: a manager with assigned developments sees other developments' reports read-only in the app. Off: edits all" },
+  { key: "tradeSupWaitForSend", name: "Trade supervisors act on a complaint only once management sends it", description: "On: plumbing, electrical, CPM and other trade supervisors read a complaint but act only after it is sent to them. Off: they act on it right away" },
+];
+
 const MODULES: ModuleDefinition[] = [
   { id: "dashboard", name: "Dashboard", description: "Organization dashboard", icon: Home },
   { id: "complaint-dashboard", name: "Complaint Dashboard", description: "Resident complaint management", icon: AlertTriangle },
@@ -285,6 +298,8 @@ export default function OwnerModules() {
   const [priorityEngineOn, setPriorityEngineOn] = useState(true);
   // New client: complaint tools wait for the baseline walk-through. Off unless switched on.
   const [requireBaseline, setRequireBaseline] = useState(false);
+  // Read-only locks: each one OFF unless switched on (features.modules["lock.<key>"]).
+  const [locks, setLocks] = useState<Record<string, boolean>>({});
   const [smartRepairEmailCopy, setSmartRepairEmailCopy] = useState(false);
   const [smartRepairEmailTo, setSmartRepairEmailTo] = useState("");
   const [deletionSaving, setDeletionSaving] = useState(false);
@@ -354,6 +369,7 @@ export default function OwnerModules() {
     setSmartRepairOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepair === false));
     setSmartRepairComplaints(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairComplaints === false));
     setRequireBaseline(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).requireBaseline === true));
+    setLocks(Object.fromEntries(READ_ONLY_LOCKS.map((l) => [`lock.${l.key}`, Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>)[`lock.${l.key}`] === true)])));
     setPriorityEngineOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).priorityEngine === false));
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
@@ -418,6 +434,7 @@ export default function OwnerModules() {
   const toggleSmartRepair = (enabled: boolean) => { setSmartRepairOn(enabled); setDirty(true); };
   const toggleSmartRepairComplaints = (enabled: boolean) => { setSmartRepairComplaints(enabled); setDirty(true); };
   const toggleRequireBaseline = (enabled: boolean) => { setRequireBaseline(enabled); setDirty(true); };
+  const toggleLock = (key: string, on: boolean) => { setLocks((m) => ({ ...m, [`lock.${key}`]: on })); setDirty(true); };
   const togglePriorityEngine = (enabled: boolean) => { setPriorityEngineOn(enabled); setDirty(true); };
   const toggleSmartRepairToMgmt = (enabled: boolean) => { setSmartRepairToMgmt(enabled); setDirty(true); };
   const toggleSmartRepairEmailCopy = (enabled: boolean) => { setSmartRepairEmailCopy(enabled); setDirty(true); };
@@ -472,7 +489,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, ...(isFiarep ? {} : { requireBaseline }), smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -1041,6 +1058,23 @@ export default function OwnerModules() {
                     aria-label={`${deletionEnabled ? "Disable" : "Enable"} deletion`}
                   />
                 </div>
+                <div className="border-t border-slate-200 bg-slate-50 px-5 py-3">
+                  <p className="text-sm font-semibold text-slate-900">Read-only locks</p>
+                  <p className="text-xs text-slate-500">Each one is off unless you switch it on. Off: nobody is blocked by it. On: the lock works as described.</p>
+                </div>
+                {READ_ONLY_LOCKS.map((l) => {
+                  const on = locks[`lock.${l.key}`] === true;
+                  return (
+                    <div key={l.key} className={`flex min-h-14 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${on ? "" : "opacity-60"}`}>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900">{l.name}</p>
+                        <p className="text-xs text-slate-500">{l.description}</p>
+                      </div>
+                      <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${on ? "text-emerald-700" : "text-slate-400"}`}>{on ? "Locked" : "Off"}</span>
+                      <Switch checked={on} onCheckedChange={(v) => toggleLock(l.key, v)} aria-label={`${on ? "Turn off" : "Turn on"} ${l.name}`} />
+                    </div>
+                  );
+                })}
               </div>
             </section>
 
