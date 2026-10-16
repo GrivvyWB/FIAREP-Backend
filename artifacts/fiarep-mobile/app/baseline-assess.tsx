@@ -229,10 +229,6 @@ export default function BaselineAssess() {
                   {editable && (a.areaNotes?.[ar]?.photos.length || 0) > 0 && <Text style={ui.listSub}>Hold a photo to remove it.</Text>}
                   {editable && (
                     <>
-                      <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => void addAreaPhoto(ar, takePhoto)}><Text style={ui.btnOutlineText}>📷 Take photo</Text></Pressable>
-                        <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => void addAreaPhoto(ar, pickPhoto)}><Text style={ui.btnOutlineText}>Choose photo</Text></Pressable>
-                      </View>
                       <Pressable style={[ui.btn, !!busy && { opacity: 0.6 }]} disabled={!!busy} onPress={() => void saveNote(ar)}><Text style={ui.btnText}>Save note</Text></Pressable>
                       {!!busy && <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator /><Text style={ui.listSub}>{busy}</Text></View>}
                       {!busy && noteSaved === ar && <Text style={{ color: '#166534', fontWeight: '700', textAlign: 'center' }}>✓ Note saved</Text>}
