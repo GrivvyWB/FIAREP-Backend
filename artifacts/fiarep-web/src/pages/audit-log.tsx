@@ -2,7 +2,7 @@
 // on the site and in the app. Administrators only (the server checks too).
 import { useEffect, useMemo, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
-import { ChevronDown, Download, ExternalLink, Loader2, Printer } from "lucide-react";
+import { ChevronDown, Download, ExternalLink, Loader2, Printer, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 type Entry = { id: string; at: string; actorRole: string; actorName: string; action: string; detail: string; reportId?: string | null };
@@ -101,6 +101,22 @@ export default function AuditLog() {
     }
   };
 
+  const [deleting, setDeleting] = useState("");
+  const deleteEntry = async (e: Entry) => {
+    if (!window.confirm("Delete this audit entry? This cannot be undone.")) return;
+    setDeleting(e.id);
+    try { await customFetch(`/api/v1/audit-log/${encodeURIComponent(e.id)}`, { method: "DELETE", responseType: "json" } as never); setRows((r) => (r || []).filter((x) => x.id !== e.id)); setOpenId(null); }
+    catch (err) { setError((err as Error)?.message || "Could not delete."); }
+    finally { setDeleting(""); }
+  };
+  const deleteAll = async () => {
+    if (!window.confirm(`Delete all ${(rows || []).length} audit entries? This cannot be undone.`)) return;
+    setDeleting("all");
+    try { await customFetch("/api/v1/audit-log", { method: "DELETE", responseType: "json" } as never); setRows([]); setOpenId(null); }
+    catch (err) { setError((err as Error)?.message || "Could not delete."); }
+    finally { setDeleting(""); }
+  };
+
   const printEntry = (e: Entry) => {
     const o = opened[e.id];
     const w = window.open("", "_blank");
@@ -149,13 +165,13 @@ export default function AuditLog() {
     <div className="mx-auto max-w-5xl space-y-4 p-4 md:p-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Audit Log</h1>
-        <p className="text-sm text-muted-foreground">Who did what, and when.</p>
       </div>
       <div className="flex flex-wrap items-center gap-3">
         <select value={cat} onChange={(e) => setCat(Number(e.target.value))} className="h-9 min-w-56 rounded-md border border-slate-300 bg-white px-2 text-sm font-semibold">
           {CATEGORIES.map((c, i) => <option key={c.label} value={i}>{c.label}</option>)}
         </select>
         <Button size="sm" variant="outline" className="h-9" disabled={shown.length === 0} onClick={exportCsv}><Download className="mr-1 h-4 w-4" />Export CSV</Button>
+        <Button size="sm" variant="outline" className="h-9 border-rose-200 text-rose-700 hover:bg-rose-50" disabled={!rows || rows.length === 0 || deleting === "all"} onClick={() => void deleteAll()}><Trash2 className="mr-1 h-4 w-4" />{deleting === "all" ? "Deleting…" : "Delete all"}</Button>
         {rows && <span className="text-sm text-muted-foreground">{shown.length} entr{shown.length === 1 ? "y" : "ies"}</span>}
       </div>
       {error && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
@@ -181,6 +197,7 @@ export default function AuditLog() {
                   <div className="flex flex-wrap gap-2">
                     <Button size="sm" variant="outline" className="h-8 bg-white" disabled={o?.loading} onClick={() => printEntry(e)}><Printer className="mr-1 h-4 w-4" />Print</Button>
                     <Button size="sm" variant="outline" className="h-8 bg-white" disabled={o?.loading} onClick={() => void downloadEntry(e)}><Download className="mr-1 h-4 w-4" />Download</Button>
+                    <Button size="sm" variant="outline" className="h-8 border-rose-200 bg-white text-rose-700 hover:bg-rose-50" disabled={deleting === e.id} onClick={() => void deleteEntry(e)}><Trash2 className="mr-1 h-4 w-4" />{deleting === e.id ? "Deleting…" : "Delete"}</Button>
                   </div>
                   {o?.loading && <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" />Opening…</div>}
                   {o?.note && <p className="text-sm text-slate-500">{o.note}</p>}

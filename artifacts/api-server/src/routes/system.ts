@@ -138,6 +138,27 @@ router.get("/v1/audit-log", async (_req, res) => {
   res.json(rows);
 });
 
+// Delete one audit entry, or every entry, for the organization. Administrators only.
+router.delete("/v1/audit-log/:id", async (req, res) => {
+  const actor = actorFrom(res);
+  if (!canReadAuditLog(actor)) {
+    res.status(403).json({ error: "Audit Log is restricted to administrators" });
+    return;
+  }
+  await db.delete(auditLog).where(and(eq(auditLog.tenantId, actor.tenantId), eq(auditLog.id, String(req.params["id"] || ""))));
+  res.json({ ok: true });
+});
+
+router.delete("/v1/audit-log", async (_req, res) => {
+  const actor = actorFrom(res);
+  if (!canReadAuditLog(actor)) {
+    res.status(403).json({ error: "Audit Log is restricted to administrators" });
+    return;
+  }
+  await db.delete(auditLog).where(eq(auditLog.tenantId, actor.tenantId));
+  res.json({ ok: true });
+});
+
 router.get("/v1/push-deliveries", async (req, res) => {
   const actor = actorFrom(res);
   if (!isElevated(actor)) {
