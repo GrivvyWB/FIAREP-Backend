@@ -34,11 +34,22 @@ function soql(dataset: string, params: Record<string, string>): string {
   for (const [k, v] of Object.entries(params)) u.searchParams.set(k, v);
   return u.toString();
 }
+// NYC Open Data answers 503 / 429 when it is busy or a query runs long: try again
+// with a pause (1 s, 3 s, 6 s) before giving up. An app token, if one is set,
+// gets FIAREP its own request allowance instead of the shared one.
 async function fetchJson(url: string): Promise<Record<string, unknown>[]> {
-  const response = await fetch(url, { headers: { accept: "application/json", "user-agent": "FIAREP/1.0 AEP registry" }, signal: AbortSignal.timeout(20_000) });
-  if (!response.ok) throw new Error(`NYC Open Data returned HTTP ${response.status}`);
-  const data = await response.json();
-  return Array.isArray(data) ? (data as Record<string, unknown>[]) : [];
+  const token = process.env["NYC_OPEN_DATA_APP_TOKEN"] || process.env["SOCRATA_APP_TOKEN"] || "";
+  let last = "";
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, [1000, 3000, 6000][attempt - 1]));
+    try {
+      const response = await fetch(url, { headers: { accept: "application/json", "user-agent": "FIAREP/1.0 AEP registry", ...(token ? { "X-App-Token": token } : {}) }, signal: AbortSignal.timeout(60_000) });
+      if (response.ok) { const data = await response.json(); return Array.isArray(data) ? (data as Record<string, unknown>[]) : []; }
+      last = `NYC Open Data returned HTTP ${response.status}`;
+      if (response.status !== 429 && response.status < 500) break;
+    } catch (e) { last = e instanceof Error && e.name === "TimeoutError" ? "NYC Open Data took too long to answer" : (e instanceof Error ? e.message : String(e)); }
+  }
+  throw new Error(last || "NYC Open Data unavailable");
 }
 
 export type AepBuilding = {
@@ -94,11 +105,15 @@ async function loadCandidates(): Promise<{ rows: AepCandidate[]; since: string }
   if (candidateCache && Date.now() - candidateCache.at < CACHE_MS) return candidateCache;
   const since = new Date(Date.now() - 5 * 365.25 * 24 * 3600 * 1000).toISOString().slice(0, 10);
   // 1. Open B/C violations issued in the past five years, by BBL. 9 is the floor (3 units × ratio 3).
-  const counts = await fetchJson(soql(HPD_VIOLATIONS, {
-    $select: "bbl,count(*) as n,max(housenumber) as hn,max(streetname) as st,max(boroid) as boroid",
-    $where: `violationstatus='Open' AND class in('B','C') AND novissueddate > '${since}'`,
-    $group: "bbl", $having: "n >= 9", $order: "n DESC", $limit: "4000",
-  }));
+  // One borough at a time: the whole city in one count is the query NYC Open Data times out on.
+  const counts: Record<string, unknown>[] = [];
+  for (const boro of ["1", "2", "3", "4", "5"]) {
+    counts.push(...await fetchJson(soql(HPD_VIOLATIONS, {
+      $select: "bbl,count(*) as n,max(housenumber) as hn,max(streetname) as st,max(boroid) as boroid",
+      $where: `starts_with(bbl, '${boro}') AND violationstatus='Open' AND class in('B','C') AND novissueddate > '${since}'`,
+      $group: "bbl", $having: "n >= 9", $order: "n DESC", $limit: "4000",
+    })));
+  }
   const bbls = counts.map((r) => text(r["bbl"])).filter((b) => /^\d{10}$/.test(b));
   // 2. Units per BBL from the DOF assessment roll (latest year).
   const units = new Map<string, { units: number; year: string }>();
