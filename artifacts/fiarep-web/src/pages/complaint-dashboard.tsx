@@ -439,7 +439,7 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Upper Management Complaint Command</h1>
           </div>
           <p className="text-sm text-blue-100 max-w-2xl ml-11">High-stakes operational surface. Real-time active complaint concentration mapping and deep drill-down analytics.</p>
-          {allClients && <p className="text-sm font-semibold text-amber-300 ml-11">FIAREP · every client that hires FIAREP</p>}
+          {allClients && <p className="text-sm font-semibold text-amber-300 ml-11">FIAREP Clients</p>}
         </div>
       </header>
 
