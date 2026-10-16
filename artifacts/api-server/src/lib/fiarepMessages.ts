@@ -46,7 +46,7 @@ export type Message = {
 };
 
 export type Thread = {
-  kind: "code" | "client";
+  kind: "code" | "client" | "member";
   /** A client thread goes to FIAREP Services ("services") or to FIAREP's
    *  administrator ("admin"); each is its own conversation. */
   to?: "services" | "admin";
@@ -65,6 +65,9 @@ export type Thread = {
   /** The phone of the person holding the code, so a reply reaches it as a
    *  push notification. They have no account; this is all we keep. */
   contactPush?: string;
+  /** A member thread: one staff member (any company, any role) writing to FIAREP. */
+  memberId?: string;
+  memberTenantId?: string;
 };
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -301,6 +304,24 @@ export async function clientThread(tenantId: string, company: string, to: "servi
   return { id, version: 1, thread };
 }
 
+/** One staff member's own conversation with FIAREP Services, or - separately - with FIAREP's administrator. */
+export async function memberThread(actor: Actor, company: string, to: "services" | "admin" = "services"): Promise<{ id: string; version: number; thread: Thread }> {
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.entity, THREAD_ENTITY), eq(entityRecords.tenantId, FIAREP_TENANT),
+    eq(entityRecords.deleted, false), sql`${entityRecords.state}->>'memberId' = ${actor.id}`,
+  )).limit(10);
+  const existing = rows.find((r) => (threadOf(r.state).to || "services") === to);
+  if (existing) return { id: existing.id, version: existing.version ?? 1, thread: threadOf(existing.state) };
+  const now = new Date();
+  const id = randomUUID();
+  const thread = emptyThread({ kind: "member", to, memberId: actor.id, memberTenantId: actor.tenantId, contactName: actor.name, clientCompany: company, lastAt: now.toISOString() });
+  await db.insert(entityRecords).values({
+    id, tenantId: FIAREP_TENANT, entity: THREAD_ENTITY, version: 1,
+    state: thread as unknown as Record<string, unknown>, createdBy: actor.id, createdAt: now, updatedAt: now,
+  });
+  return { id, version: 1, thread };
+}
+
 /** Add a message and tell the other side. */
 export async function postMessage(
   threadId: string,
@@ -334,17 +355,22 @@ export async function postMessage(
       await alertFiarep([next.coordinatorId], `${who} sent you a message`, where, threadId);
     } else if (next.to === "admin") {
       const modules = await fiarepModules();
-      await alertFiarep((await fiarepAdministrators()).filter((id) => modules[`msg.${id}`] !== false), `${next.clientCompany} sent the administrator a message`, "", threadId);
+      const sender = next.kind === "member" ? `${next.contactName}${next.clientCompany ? ` (${next.clientCompany})` : ""}` : next.clientCompany;
+      await alertFiarep((await fiarepAdministrators()).filter((id) => modules[`msg.${id}`] !== false), `${sender} sent the administrator a message`, "", threadId);
     } else {
       const unit = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
         eq(staffAccounts.tenantId, FIAREP_TENANT), eq(staffAccounts.status, "approved"),
         eq(staffAccounts.role, "community_coordinator"),
       ));
       const modules = await fiarepModules();
-      await alertFiarep(unit.map((u) => u.id).filter((id) => modules[`msg.${id}`] !== false), `${next.clientCompany} sent FIAREP Services a message`, "", threadId);
+      const sender = next.kind === "member" ? `${next.contactName}${next.clientCompany ? ` (${next.clientCompany})` : ""}` : next.clientCompany;
+      await alertFiarep(unit.map((u) => u.id).filter((id) => modules[`msg.${id}`] !== false), `${sender} sent FIAREP Services a message`, "", threadId);
     }
   } else if (next.kind === "code" && next.contactPush) {
     await pushToContact(next.contactPush, `${author.name || next.coordinatorName || "FIAREP Services"} replied`, trimmed, threadId);
+  } else if (next.kind === "member" && next.memberId && next.memberTenantId) {
+    const rows = await db.insert(notifications).values([{ id: randomUUID(), tenantId: next.memberTenantId, target: next.memberId, message: next.to === "admin" ? "FIAREP's administrator replied" : "FIAREP Services replied", detail: trimmed.slice(0, 120), reportId: threadId }]).returning();
+    for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
   } else if (next.kind === "client" && next.clientTenantId) {
     await alertClient(next.clientTenantId, next.to === "admin" ? "FIAREP's administrator replied" : "FIAREP Services replied", trimmed.slice(0, 120), threadId);
   }

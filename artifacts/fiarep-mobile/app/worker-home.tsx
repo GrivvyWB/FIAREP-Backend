@@ -14,6 +14,8 @@ import {
   listManpowerRequests,
 } from '../lib/store';
 import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
+import { useMessagingOpen } from '../lib/fiarep-messaging';
+import { getSessionIdentity as getIdentityForMessages } from '../lib/store';
 import { hasAnyMeasurementAccess, tradeKeyForPosition } from '../lib/measurement-access';
 import { catalogForTrade } from '../lib/trade-catalogs';
 
@@ -38,6 +40,9 @@ export default function WorkerHome() {
   const modules = useModuleAccess();
   const rawModules = useRawModules();
   const [jobCount, setJobCount] = useState(0);
+  const messagingOpen = useMessagingOpen();
+  const [msgTenant, setMsgTenant] = useState('default');
+  useFocusEffect(useCallback(() => { getIdentityForMessages().then((i) => setMsgTenant(i?.tenantId || 'default')).catch(() => undefined); }, []));
   const [position, setPosition] = useState('');
   const [isEmergencyMaintenance, setIsEmergencyMaintenance] = useState(false);
   const isTradeWorker = /^(plumber|electrician|electric|elevator service|painter|carpenter|roofer|heating service|heat plant|bricklayer|brick layer|mason|general construction|cctv installation)$/.test((position || '').trim().toLowerCase());
@@ -111,6 +116,7 @@ export default function WorkerHome() {
       heading: 'System',
       tiles: [
         ...(on('Inbox') ? [{ label: 'Inbox', onPress: () => router.push('/notifications') }] : []),
+        ...(on('Messages') && messagingOpen === true && (msgTenant === 'default' || rawModules['fiarepMessaging'] !== false) ? [{ label: 'Messages', onPress: () => router.push('/client-messages?member=1') }] : []),
         ...(!isTradeWorker ? [{ label: 'Check Report Status', onPress: () => router.push('/resident-lookup') }] : []),
         ...(modules['property-lookup'] ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
         ...(modules['translator'] ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),

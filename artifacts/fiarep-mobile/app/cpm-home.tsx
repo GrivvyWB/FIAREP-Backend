@@ -5,6 +5,7 @@ import { syncAllEntities } from '../lib/sync';
 import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition, getSessionIdentity, listResidentReports, listRoutedInspectionsFor, listManpowerRequests } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
+import { useMessagingOpen } from '../lib/fiarep-messaging';
 import { hasAnyMeasurementAccess } from '../lib/measurement-access';
 import AlertBanner from '../components/AlertBanner';
 import FieldHome from '../components/FieldHome';
@@ -24,6 +25,7 @@ export default function CpmHome() {
   const [position, setPosition] = useState('');
   // FIAREP's own crew (tenant "default") are technicians: same tools, named for what they do.
   const [isTechnician, setIsTechnician] = useState(false);
+  const messagingOpen = useMessagingOpen();
   const [clockedIn, setClockedIn] = useState(false);
   const navigation = useNavigation();
   useFocusEffect(useCallback(() => {
@@ -158,6 +160,7 @@ export default function CpmHome() {
       color: '#4A5560',
       tiles: [
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
+        ...(messagingOpen === true && (isTechnician || rawModules['fiarepMessaging'] !== false) ? [{ label: 'Messages', onPress: () => router.push('/client-messages?member=1'), tone: 'outline' as const }] : []),
         ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
         ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },

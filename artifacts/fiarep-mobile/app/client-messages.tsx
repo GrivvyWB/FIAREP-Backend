@@ -3,6 +3,7 @@
 // a worker. Each conversation is seen only by its two sides.
 import { useCallback, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import { ui, ACCENT } from '../lib/ui';
 import ChatThread from '../components/ChatThread';
 import { msgGet, msgPost, type ChatMessage } from '../lib/fiarep-messaging';
@@ -11,7 +12,9 @@ type Raw = { id: string; messages: Array<{ id: string; mine: boolean; authorName
 
 export default function ClientMessages() {
   const [to, setTo] = useState<'services' | 'admin'>('services');
-  const url = to === 'admin' ? '/api/v1/client/messages?to=admin' : '/api/v1/client/messages';
+  // ?member=1: this staff member's own conversation (every member has one), not the company's.
+  const base = useLocalSearchParams<{ member?: string }>().member === '1' ? '/api/v1/member/messages' : '/api/v1/client/messages';
+  const url = to === 'admin' ? `${base}?to=admin` : base;
   const load = useCallback(async (): Promise<ChatMessage[]> => {
     const r = await msgGet<Raw>(url);
     return (r.messages || []).map((m) => ({ id: m.id, mine: m.mine, author: m.authorName, body: m.body, at: m.at }));
@@ -25,7 +28,7 @@ export default function ClientMessages() {
   return (
     <ScrollView contentContainerStyle={[ui.wrap, { paddingTop: 16 }]} keyboardShouldPersistTaps="handled">
       <Text style={{ fontSize: 22, fontWeight: '700' }}>Message FIAREP</Text>
-      <Text style={ui.label}>Write to {to === 'admin' ? "FIAREP's administrator" : 'FIAREP Services'}. Only the two of you see it; your residents never do.</Text>
+      <Text style={ui.label}>Write to {to === 'admin' ? "FIAREP's administrator" : 'FIAREP Services'}. Only the two of you see it.</Text>
       <View style={{ flexDirection: 'row', gap: 8 }}>
         {tab('services', 'FIAREP Services')}
         {tab('admin', 'Administrator')}

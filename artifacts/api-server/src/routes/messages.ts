@@ -12,7 +12,7 @@ import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
 import {
   THREAD_ENTITY, mayMessage, clientMessagingEnabled, clientThread, contactView, isFiarepServices, messagingOpen,
   issueCode, loadThread, markRead, postMessage, rememberContactPhone, revokeCode, threadForCode, threadOf,
-  personInbox, searchPeople, signUpPerson, startWithPerson,
+  personInbox, searchPeople, signUpPerson, startWithPerson, memberThread, answersForFiarep,
 } from "../lib/fiarepMessages";
 
 const router: IRouter = Router();
@@ -47,7 +47,7 @@ router.get("/v1/fiarep/messages", async (_req, res) => {
     .map(({ id, thread }) => ({
       id,
       kind: thread.kind,
-      who: thread.kind === "client" ? thread.clientCompany : thread.contactName,
+      who: thread.kind === "client" ? thread.clientCompany : thread.kind === "member" ? [thread.contactName, thread.clientCompany].filter(Boolean).join(" · ") : thread.contactName,
       coordinator: thread.coordinatorName,
       address: thread.address,
       apartment: thread.apartment,
@@ -165,6 +165,41 @@ router.post("/v1/client/messages", async (_req, res) => {
   if (!gate) { res.status(403).json({ error: "Messaging FIAREP Services is not part of your plan." }); return; }
   const to = String((_req.query ?? {})["to"] ?? "") === "admin" ? "admin" as const : "services" as const;
   const { id, version, thread } = await clientThread(gate.actor.tenantId, gate.company, to);
+  const result = await postMessage(id, version, thread, "contact", gate.actor, String((req.body ?? {})["body"] ?? ""));
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.status(201).json(result.message);
+});
+
+// ── Every member's side: any staff member, any company, writes to FIAREP ──
+router.use("/v1/member/messages", requireAuth);
+
+async function memberGate(res: Parameters<typeof actorFrom>[0]) {
+  const actor = actorFrom(res);
+  if (!(await messagingOpen())) return null;
+  if (["resident", "vendor"].includes(String(actor.role))) return null;
+  // FIAREP Services and FIAREP's administrators answer on their own Messages screen.
+  if (actor.tenantId === FIAREP_TENANT && answersForFiarep(actor)) return null;
+  if (actor.tenantId !== FIAREP_TENANT && !(await clientMessagingEnabled(actor.tenantId))) return null;
+  const [org] = await db.select({ name: organizations.name }).from(organizations)
+    .where(eq(organizations.id, actor.tenantId)).limit(1);
+  return { actor, company: actor.tenantId === FIAREP_TENANT ? "FIAREP" : org?.name || actor.tenantId };
+}
+
+router.get("/v1/member/messages", async (req, res) => {
+  const gate = await memberGate(res);
+  if (!gate) { res.status(403).json({ error: "Messaging FIAREP is switched off for you." }); return; }
+  const to = String((req.query ?? {})["to"] ?? "") === "admin" ? "admin" as const : "services" as const;
+  const { id, version, thread } = await memberThread(gate.actor, gate.company, to);
+  await markRead(id, version, thread, "contact");
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ id, messages: thread.messages.map((m) => ({ ...m, mine: m.from === "contact" })) });
+});
+
+router.post("/v1/member/messages", async (req, res) => {
+  const gate = await memberGate(res);
+  if (!gate) { res.status(403).json({ error: "Messaging FIAREP is switched off for you." }); return; }
+  const to = String((req.query ?? {})["to"] ?? "") === "admin" ? "admin" as const : "services" as const;
+  const { id, version, thread } = await memberThread(gate.actor, gate.company, to);
   const result = await postMessage(id, version, thread, "contact", gate.actor, String((req.body ?? {})["body"] ?? ""));
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   res.status(201).json(result.message);
