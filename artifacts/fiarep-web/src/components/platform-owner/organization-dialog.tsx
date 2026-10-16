@@ -667,6 +667,13 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                     <div className="mt-1 text-xl font-semibold text-slate-900">{configuredDevelopments.length}</div>
                   </div>
                 </div>
+                {/* Add all buildings from DOF sits at the top, above the developments list. */}
+                {isEditing && organization && (
+                  <div className="mb-3 space-y-3">
+                    <DofBulkAdd organizationId={organization.id} defaultOwner={organization.name} onAdded={refreshProperties} />
+                    <BuildingSwitchList organizationId={organization.id} buildings={propertyRows.map((p) => ({ id: p.id, displayAddress: p.displayAddress, units: p.units ?? null, active: p.active }))} onChanged={refreshProperties} />
+                  </div>
+                )}
                 <Collapsible open={developmentsOpen} onOpenChange={setDevelopmentsOpen}>
                   <CollapsibleTrigger asChild>
                     <Button type="button" variant="ghost" className="h-auto w-full justify-between rounded-none border-b border-slate-100 px-0 pb-2 pt-0 hover:bg-transparent">
@@ -777,12 +784,6 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                 )}
                   </CollapsibleContent>
                 </Collapsible>
-                {isEditing && organization && (
-                  <div className="mt-3 space-y-3">
-                    <DofBulkAdd organizationId={organization.id} defaultOwner={organization.name} onAdded={refreshProperties} />
-                    <BuildingSwitchList organizationId={organization.id} buildings={propertyRows.map((p) => ({ id: p.id, displayAddress: p.displayAddress, units: p.units ?? null, active: p.active }))} onChanged={refreshProperties} />
-                  </div>
-                )}
             </div>
 
             {!isEditing && (
