@@ -3,7 +3,7 @@ import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { MessageSquare, Send } from "lucide-react";
+import { KeyRound, MessageSquare, Send } from "lucide-react";
 
 // The code door. Someone a FIAREP Services coordinator met at a building types
 // in the code they were handed and writes to that coordinator. No account, no
@@ -20,7 +20,7 @@ const post = <T,>(url: string, body: unknown) => customFetch<T>(url, {
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), responseType: "json",
 } as never);
 
-export default function PublicMessage() {
+export default function PublicMessage({ embedded = false, senderName = "" }: { embedded?: boolean; senderName?: string } = {}) {
   const [code, setCode] = useState(() => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } });
   const [view, setView] = useState<View | null>(null);
   const [name, setName] = useState("");
@@ -55,7 +55,7 @@ export default function PublicMessage() {
     if (!text) return;
     setBusy(true);
     try {
-      await post("/api/v1/public/messages/send", { code: code.trim().toUpperCase(), name: name.trim(), body: text });
+      await post("/api/v1/public/messages/send", { code: code.trim().toUpperCase(), name: name.trim() || senderName, body: text });
       setBody("");
       await open(code, true);
     } catch (err: any) {
@@ -64,13 +64,20 @@ export default function PublicMessage() {
   }
 
   return (
-    <div className="mx-auto max-w-lg space-y-4 p-4 sm:p-8">
+    <div className={embedded ? "space-y-3" : "mx-auto max-w-lg space-y-4 p-4 sm:p-8"}>
+      {embedded ? (
+        <div>
+          <h2 className="flex items-center gap-2 text-sm font-semibold"><KeyRound className="h-4 w-4" />Have a code?</h2>
+          <p className="text-xs text-muted-foreground">{view ? `You are writing to ${view.coordinator || view.unit}.` : "Type the code someone gave you and you can write to the person who gave it."}</p>
+        </div>
+      ) : (
       <div className="text-center">
         <h1 className="flex items-center justify-center gap-2 text-2xl font-bold tracking-tight"><MessageSquare className="h-6 w-6" />Message</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           {view ? `You are writing to ${view.coordinator || view.unit}.` : "Type in the code you were given and you can write to the person who gave it to you."}
         </p>
       </div>
+      )}
 
       {!view && (
         <div className="space-y-3 rounded-lg border bg-card p-4">
@@ -106,7 +113,7 @@ export default function PublicMessage() {
             <p className="text-center text-sm text-muted-foreground">This conversation has been closed.</p>
           ) : (
             <>
-              {view.messages.length === 0 && (
+              {view.messages.length === 0 && !senderName && (
                 <Input placeholder="Your name" value={name} onChange={(e) => setName(e.target.value)} />
               )}
               <div className="flex items-end gap-2">

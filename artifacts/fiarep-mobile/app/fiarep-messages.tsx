@@ -8,6 +8,8 @@ import { useFocusEffect } from 'expo-router';
 import { ui } from '../lib/ui';
 import ChatThread from '../components/ChatThread';
 import { msgGet, msgPost, type ChatMessage } from '../lib/fiarep-messaging';
+import CodeMessage from '../components/CodeMessage';
+import { getCurrentActor } from '../lib/store';
 
 type Row = { id: string; kind: 'code' | 'client'; who: string; address: string; apartment: string; last: string; lastAt: string; unread: number; closed: boolean };
 type Full = { id: string; closed: boolean; messages: Array<{ id: string; from: 'fiarep' | 'contact'; authorName: string; body: string; at: string }> };
@@ -22,6 +24,8 @@ export default function FiarepMessages() {
   const [apartment, setApartment] = useState('');
   const [issued, setIssued] = useState<{ code: string; who: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [me, setMe] = useState('');
+  useFocusEffect(useCallback(() => { getCurrentActor().then((a) => setMe(a.name || '')).catch(() => undefined); }, []));
   // Find someone who signed up in the app: type the name, tap it, the conversation lands on their phone.
   const [q, setQ] = useState('');
   const [people, setPeople] = useState<Array<{ id: string; name: string; apartment: string; building: string }>>([]);
@@ -97,6 +101,8 @@ export default function FiarepMessages() {
           </View>
         )}
       </View>
+
+      <View style={ui.card}><CodeMessage codeOnly senderName={me} /></View>
 
       {rows.length === 0 && !loading && <Text style={ui.empty}>Nobody has written yet.</Text>}
       {rows.map((r) => (

@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
 import { communityUnit, isCommunityCoordinator, isFiarepAdministrator } from "@/lib/access-policy";
 import { Copy, KeyRound, MessageSquare, Search, Send, X } from "lucide-react";
+import PublicMessage from "@/pages/public-message";
 
 // Text messaging with FIAREP Services.
 //
@@ -36,15 +37,17 @@ export default function Messages() {
   const mine = (isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") || admin;
   const unit = communityUnit("default");
   const clientSide = !mine && (staff?.role === "administrator" || staff?.role === "management") &&
-    organizationModules["fiarepMessaging"] !== false;
+    (staff?.tenantId || "default") !== "default" && organizationModules["fiarepMessaging"] !== false;
+  const memberSide = !mine && !clientSide && !!staff && !["resident", "vendor"].includes(String(staff.role)) &&
+    ((staff.tenantId || "default") === "default" || organizationModules["fiarepMessaging"] !== false);
 
-  if (mine) return <CoordinatorMessages unit={unit} admin={admin} toast={toast} />;
-  if (clientSide) return <ClientMessages unit={unit} toast={toast} />;
-  return (
-    <div className="mx-auto max-w-lg p-10 text-center text-sm text-muted-foreground">
-      Messaging {unit} is not part of your plan.
-    </div>
-  );
+  // Every page has the code box: a code someone handed you opens a conversation with whoever made it.
+  const codeBox = (width: string) => <div className={`mx-auto ${width} px-4 pb-6 sm:px-6`}><div className="rounded-lg border bg-card p-4"><PublicMessage embedded senderName={staff?.name || ""} /></div></div>;
+  if (mine) return <><CoordinatorMessages unit={unit} admin={admin} toast={toast} />{codeBox("max-w-3xl")}</>;
+  if (clientSide) return <><ClientMessages unit={unit} toast={toast} />{codeBox("max-w-2xl")}</>;
+  // Every other member (CPM, inspector, technician, worker…): their own conversation with FIAREP.
+  if (memberSide) return <><ClientMessages unit={unit} toast={toast} base="/api/v1/member/messages" />{codeBox("max-w-2xl")}</>;
+  return codeBox("max-w-2xl");
 }
 
 /** FIAREP's side: hand out a code, read and answer. */
@@ -191,22 +194,22 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
 /** A plan client's side, no code needed: one conversation with FIAREP
  *  Services and a separate one with FIAREP's administrator. Never a
  *  technician or a worker. */
-function ClientMessages({ unit, toast }: { unit: string; toast: ReturnType<typeof useToast>["toast"] }) {
+function ClientMessages({ unit, toast, base = "/api/v1/client/messages" }: { unit: string; toast: ReturnType<typeof useToast>["toast"]; base?: string }) {
   const [to, setTo] = useState<"services" | "admin">("services");
-  const url = to === "admin" ? "/api/v1/client/messages?to=admin" : "/api/v1/client/messages";
+  const url = to === "admin" ? `${base}?to=admin` : base;
   const name = to === "admin" ? "FIAREP's administrator" : unit;
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 sm:p-6">
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><MessageSquare className="h-6 w-6" />Message FIAREP</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Write to {name} and they answer here. Only the two of you see it; your residents never do.</p>
+        <p className="mt-1 text-sm text-muted-foreground">Write to {name} and they answer here. Only the two of you see it.</p>
       </div>
       <div className="flex gap-2">
         <Button variant={to === "services" ? "default" : "outline"} onClick={() => setTo("services")}>{unit}</Button>
         <Button variant={to === "admin" ? "default" : "outline"} onClick={() => setTo("admin")}>Administrator</Button>
       </div>
       <div className="rounded-lg border bg-card">
-        <Thread key={to} id={`client-${to}`} readUrl={url} sendUrl={url} side="contact" closed={false} toast={toast} />
+        <Thread key={`${base}-${to}`} id={`client-${to}`} readUrl={url} sendUrl={url} side="contact" closed={false} toast={toast} />
       </div>
     </div>
   );

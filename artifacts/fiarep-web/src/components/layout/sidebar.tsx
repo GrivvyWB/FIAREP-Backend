@@ -87,8 +87,9 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     ...(isCommunityCoordinator(staff) ? [{ name: "Alerts", href: "/notifications", icon: BellRing, module: "notifications" as const }] : []),
     // Messages: FIAREP Services on FIAREP's own side, and a client company
     // whose plan includes writing to them.
+    // Messages: every staff member (never residents or vendors), unless messaging is switched off for the client.
     ...((isCommunityCoordinator(staff) && (staff?.tenantId || "default") === "default") || isFiarepAdministrator(staff) ||
-      ((staff?.role === "administrator" || staff?.role === "management") && organizationModules["fiarepMessaging"] !== false)
+      (!!staff && !["resident", "vendor"].includes(String(staff.role)) && ((staff.tenantId || "default") === "default" || organizationModules["fiarepMessaging"] !== false))
       ? [{ name: "Messages", href: "/messages", icon: MessageSquare, module: "notifications" as const }] : []),
     { name: "Audit Log", href: "/audit-log", icon: History, module: "audit-log" as const },
     { name: "Shared Data", href: "/shared-data", icon: Database, module: "shared-data" as const },

@@ -1,17 +1,21 @@
 // A client company on the plan writes to FIAREP: to FIAREP Services, or - a
 // separate conversation - to FIAREP's administrator. Never to a technician or
 // a worker. Each conversation is seen only by its two sides.
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { ui, ACCENT } from '../lib/ui';
 import ChatThread from '../components/ChatThread';
 import { msgGet, msgPost, type ChatMessage } from '../lib/fiarep-messaging';
+import CodeMessage from '../components/CodeMessage';
+import { getCurrentActor } from '../lib/store';
 
 type Raw = { id: string; messages: Array<{ id: string; mine: boolean; authorName: string; body: string; at: string }> };
 
 export default function ClientMessages() {
   const [to, setTo] = useState<'services' | 'admin'>('services');
+  const [me, setMe] = useState('');
+  useEffect(() => { getCurrentActor().then((a) => setMe(a.name || '')).catch(() => undefined); }, []);
   // ?member=1: this staff member's own conversation (every member has one), not the company's.
   const base = useLocalSearchParams<{ member?: string }>().member === '1' ? '/api/v1/member/messages' : '/api/v1/client/messages';
   const url = to === 'admin' ? `${base}?to=admin` : base;
@@ -36,6 +40,8 @@ export default function ClientMessages() {
       <View key={to} style={[ui.card, { borderColor: ACCENT + '33' }]}>
         <ChatThread load={load} send={send} />
       </View>
+      {/* A code someone handed you: write to whoever made it. */}
+      <View style={ui.card}><CodeMessage codeOnly senderName={me} /></View>
     </ScrollView>
   );
 }

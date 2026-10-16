@@ -161,7 +161,7 @@ function AppRouter() {
       <RoutedErrorBoundary>
         <Switch>
           <Route path="/resident" component={PublicResident} />
-          <Route path="/message" component={PublicMessage} />
+          <Route path="/message">{() => <PublicMessage />}</Route>
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
@@ -173,7 +173,7 @@ function AppRouter() {
       <RoutedErrorBoundary>
         <Switch>
           <Route path="/vendor" component={PublicVendor} />
-          <Route path="/message" component={PublicMessage} />
+          <Route path="/message">{() => <PublicMessage />}</Route>
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>
@@ -194,7 +194,7 @@ function AppRouter() {
           <Route path="/procurement/login" component={ProcurementLogin} />
           <Route path="/resident" component={PublicResident} />
           <Route path="/vendor" component={PublicVendor} />
-          <Route path="/message" component={PublicMessage} />
+          <Route path="/message">{() => <PublicMessage />}</Route>
           <Route component={NotFound} />
         </Switch>
       </RoutedErrorBoundary>

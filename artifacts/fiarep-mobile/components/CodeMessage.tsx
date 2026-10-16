@@ -16,7 +16,7 @@ const KEY = 'fiarep.message.code';
 const PERSON_KEY = 'fiarep.message.person';
 type Inbox = { name: string; apartment: string; building: string; conversations: Array<{ code: string; coordinator: string; last: string; lastAt: string; unread: number; closed: boolean }> };
 
-export default function CodeMessage({ onBack }: { onBack?: () => void }) {
+export default function CodeMessage({ onBack, codeOnly = false, senderName = '' }: { onBack?: () => void; codeOnly?: boolean; senderName?: string }) {
   const [code, setCode] = useState('');
   const [name, setName] = useState('');
   const [opened, setOpened] = useState<View_ | null>(null);
@@ -25,7 +25,8 @@ export default function CodeMessage({ onBack }: { onBack?: () => void }) {
   // the conversation shows up here. No code to type.
   const [person, setPerson] = useState<{ id: string; secret: string } | null>(null);
   const [inbox, setInbox] = useState<Inbox | null>(null);
-  const [mode, setMode] = useState<'start' | 'code'>('start');
+  // codeOnly: a signed-in member's screens - just the code box, no sign-up.
+  const [mode, setMode] = useState<'start' | 'code'>(codeOnly ? 'code' : 'start');
   const [first, setFirst] = useState(''); const [last, setLast] = useState('');
   const [apt, setApt] = useState(''); const [building, setBuilding] = useState('');
 
@@ -72,8 +73,8 @@ export default function CodeMessage({ onBack }: { onBack?: () => void }) {
     return v.messages;
   }, [code]);
   const send = useCallback(async (body: string) => {
-    await msgPost('/api/v1/public/messages/send', { code: code.trim(), name: name.trim() || inbox?.name || '', body });
-  }, [code, name, inbox]);
+    await msgPost('/api/v1/public/messages/send', { code: code.trim(), name: name.trim() || inbox?.name || senderName, body });
+  }, [code, name, inbox, senderName]);
 
   if (!opened && mode === 'start') {
     return (
@@ -115,15 +116,15 @@ export default function CodeMessage({ onBack }: { onBack?: () => void }) {
   if (!opened) {
     return (
       <View style={{ gap: 10 }}>
-        <Text style={{ fontSize: 22, fontWeight: '700', textAlign: 'center' }}>Message FIAREP</Text>
-        <Text style={[ui.label, { textAlign: 'center' }]}>Type the code a FIAREP Services member gave you. You text that member, and nobody else.</Text>
+        <Text style={{ fontSize: codeOnly ? 17 : 22, fontWeight: '700', textAlign: codeOnly ? 'left' : 'center' }}>{codeOnly ? 'Have a code?' : 'Message FIAREP'}</Text>
+        <Text style={[ui.label, { textAlign: codeOnly ? 'left' : 'center' }]}>Type the code someone gave you. You text the person who made it, and nobody else.</Text>
         <TextInput style={[ui.input, { fontSize: 22, letterSpacing: 4, textAlign: 'center' }]} value={code} onChangeText={(v) => setCode(v.toUpperCase())}
           placeholder="ABCD-EFGH" autoCapitalize="characters" autoCorrect={false} />
-        <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="Your name (optional)" />
+        {!senderName && <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="Your name (optional)" />}
         <Pressable style={[ui.btn, (busy || code.trim().length < 4) && ui.btnMuted]} disabled={busy || code.trim().length < 4} onPress={() => void open()}>
           <Text style={ui.btnText}>{busy ? 'Opening…' : 'Open'}</Text>
         </Pressable>
-        <Pressable onPress={() => setMode('start')} style={{ padding: 10 }}><Text style={{ textAlign: 'center', color: '#666' }}>Back</Text></Pressable>
+        {!codeOnly && <Pressable onPress={() => setMode('start')} style={{ padding: 10 }}><Text style={{ textAlign: 'center', color: '#666' }}>Back</Text></Pressable>}
       </View>
     );
   }
@@ -132,7 +133,7 @@ export default function CodeMessage({ onBack }: { onBack?: () => void }) {
       <Text style={{ fontSize: 20, fontWeight: '700' }}>{opened.coordinator || opened.unit}</Text>
       <Text style={ui.listSub}>{opened.unit} · only the two of you see this</Text>
       <ChatThread load={load} send={send} closed={opened.closed} />
-      <Pressable onPress={() => { setOpened(null); setMode('start'); if (person) void loadInbox(person); }} style={{ padding: 10 }}><Text style={{ textAlign: 'center', color: '#666' }}>Back</Text></Pressable>
+      <Pressable onPress={() => { setOpened(null); setMode(codeOnly ? 'code' : 'start'); if (person) void loadInbox(person); }} style={{ padding: 10 }}><Text style={{ textAlign: 'center', color: '#666' }}>{codeOnly ? 'Close' : 'Back'}</Text></Pressable>
     </View>
   );
 }
