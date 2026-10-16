@@ -405,6 +405,7 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/pricing" component={OwnerPricing} />
           <Route path="/platform-owner/baseline/:id">{() => <BaselinePage owner />}</Route>
           <Route path="/platform-owner/baseline">{() => <BaselinePage owner />}</Route>
+          <Route path="/platform-owner/complaints">{() => <ComplaintDashboard source="platform" />}</Route>
           <Route path="/platform-owner/forms" component={OwnerForms} />
           <Route path="/platform-owner/alerts" component={OwnerAlerts} />
           <Route path="/platform-owner/crew" component={OwnerCrew} />

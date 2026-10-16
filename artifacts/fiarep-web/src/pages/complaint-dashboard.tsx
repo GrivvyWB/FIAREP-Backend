@@ -7,7 +7,10 @@ import {
   getSearchNychaAddressesQueryKey,
   useSearchNychaAddresses,
   type NychaDevelopment,
+  customFetch,
 } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
+import { useOptionalAuth } from "@/hooks/use-auth";
 import { 
   Building2, ChevronDown, ChevronRight, Clock, 
   Flame, Loader2, MapPin, Search, 
@@ -25,7 +28,7 @@ import {
   updateDevelopmentPage,
 } from "@/lib/complaint-dashboard-rotation";
 
-type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
+type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number; tenantId?: string; clientName?: string };
 const NYC_MAP_URL = "https://www.openstreetmap.org/export/embed.html?bbox=-74.25909%2C40.477399%2C-73.700181%2C40.916178&layer=mapnik";
 
 function normalizedDevelopmentName(development: string | null | undefined) {
@@ -161,7 +164,15 @@ function SummaryCard({ title, value, subValue, icon: Icon, colorClass, testId, o
   );
 }
 
-export default function ComplaintDashboard() {
+/**
+ * "tenant": the signed-in organization's own complaints. "fiarep": FIAREP's
+ * platform — every client that hires FIAREP. "platform": the same, in Platform
+ * Control. FIAREP's own staff get the all-clients view automatically.
+ */
+export default function ComplaintDashboard({ source = "tenant" }: { source?: "tenant" | "fiarep" | "platform" }) {
+  const staff = useOptionalAuth()?.staff;
+  const mode = source === "tenant" && staff && (staff.tenantId || "default") === "default" ? "fiarep" : source;
+  const allClients = mode !== "tenant";
   const reportsQuery = useListEntityRecords("resident-reports", undefined, {
     query: {
       queryKey: getListEntityRecordsQueryKey("resident-reports"),
@@ -169,10 +180,17 @@ export default function ComplaintDashboard() {
       staleTime: 10_000,
       refetchOnWindowFocus: true,
       refetchOnReconnect: true,
+      enabled: !allClients,
     }
   });
-
-  const reports = (reportsQuery.data || []) as Report[];
+  const feedQuery = useQuery({
+    queryKey: ["complaint-feed", mode],
+    queryFn: () => customFetch<Report[]>(mode === "platform" ? "/api/v1/platform/complaint-feed" : "/api/v1/fiarep/complaint-feed", { responseType: "json" } as never),
+    refetchInterval: 15_000,
+    enabled: allClients,
+  });
+  const [clientFilter, setClientFilter] = useState("all");
+  const reports = ((allClients ? feedQuery.data : reportsQuery.data) || []) as Report[];
   const developmentCatalogQuery = useListNychaDevelopments({
     query: {
       queryKey: getListNychaDevelopmentsQueryKey(),
@@ -207,6 +225,8 @@ export default function ComplaintDashboard() {
 
   const filterOptions = useMemo(() => {
     const boroughs = new Set<string>();
+    const clients = new Map<string, string>();
+    reports.forEach(r => { if (r.tenantId) clients.set(r.tenantId, r.clientName || r.tenantId); });
     
     reports.forEach(r => {
       const boro = boroughOf(r);
@@ -216,6 +236,7 @@ export default function ComplaintDashboard() {
     
     return {
       boroughs: Array.from(boroughs).sort(),
+      clients: Array.from(clients.entries()).sort((a, b) => a[1].localeCompare(b[1])),
     };
   }, [reports]);
 
@@ -231,6 +252,7 @@ export default function ComplaintDashboard() {
       }
       
       if (boroughFilter !== "all" && boro !== boroughFilter.toLowerCase()) return false;
+      if (clientFilter !== "all" && r.tenantId !== clientFilter) return false;
       
       const time = new Date(r.createdAt).getTime();
       if (fromDate && time < new Date(fromDate).getTime()) return false;
@@ -417,12 +439,13 @@ export default function ComplaintDashboard() {
             <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-white">Upper Management Complaint Command</h1>
           </div>
           <p className="text-sm text-blue-100 max-w-2xl ml-11">High-stakes operational surface. Real-time active complaint concentration mapping and deep drill-down analytics.</p>
+          {allClients && <p className="text-sm font-semibold text-amber-300 ml-11">FIAREP · every client that hires FIAREP</p>}
         </div>
       </header>
 
       <div className="px-4 md:px-6 space-y-4">
         {/* Violation alerts (opt-in per organization; director's own on/off switch) */}
-        <ViolationAlertsStrip />
+        {!allClients && <ViolationAlertsStrip />}
         {/* 7 Summary Panels */}
         <div className="overflow-x-auto pb-1">
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-7 lg:min-w-[980px]">
@@ -449,6 +472,17 @@ export default function ComplaintDashboard() {
              />
           </div>
           <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+             {allClients && (
+             <div className="relative flex min-w-[160px] items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm">
+               <Users className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 pointer-events-none" />
+               <span className="flex-1 text-xs text-slate-700 pointer-events-none truncate">{clientFilter === "all" ? "All Clients" : (filterOptions.clients.find(([id]) => id === clientFilter)?.[1] || clientFilter)}</span>
+               <ChevronDown className="w-3.5 h-3.5 text-slate-500 ml-2 pointer-events-none" />
+               <select value={clientFilter} onChange={e => setClientFilter(e.target.value)} className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label="Client">
+                <option value="all">All Clients</option>
+                {filterOptions.clients.map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+              </select>
+             </div>
+             )}
              <div className="relative flex min-w-[145px] items-center border border-slate-200 rounded-md bg-white px-2 h-9 shadow-sm hover:border-blue-300 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 transition-colors">
                <MapPin className="w-3.5 h-3.5 text-slate-400 mr-1.5 shrink-0 pointer-events-none" />
                <span className="flex-1 text-xs text-slate-700 pointer-events-none truncate">{boroughFilter === "all" ? "All Boroughs" : boroughFilter}</span>

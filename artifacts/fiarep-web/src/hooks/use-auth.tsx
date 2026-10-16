@@ -259,6 +259,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** The staff session when there is one; null in Platform Control (no staff session). */
+export function useOptionalAuth() {
+  return useContext(AuthContext);
+}
+
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) {

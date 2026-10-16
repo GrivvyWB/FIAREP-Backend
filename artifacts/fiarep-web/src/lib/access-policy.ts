@@ -285,6 +285,8 @@ export function hasModuleAccess(
     return staff.role === "worker";
   }
   if (module === "complaint-dashboard") {
+    // FIAREP's administrators and management watch every client's complaints.
+    if ((staff.tenantId || "default") === "default" && (staff.role === "administrator" || staff.role === "management")) return true;
     return MANAGEMENT_ROLES.has(staff.role) && UPPER_MANAGEMENT_POSITIONS.has(staff.position || "");
   }
   if (ADMIN_ONLY_MODULES.has(module)) return staff.role === "administrator";
