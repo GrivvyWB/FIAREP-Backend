@@ -45,11 +45,13 @@ function Fold({ id, title, summary, badge, defaultOpen = false, tone = "white", 
   );
 }
 
-export default function OwnerCrew() {
+export default function OwnerCrew({ unit = "all" }: { unit?: "all" | "services" }) {
+  // Platform Control → FIAREP Services: the same controls, only the FIAREP Services people.
+  const services = unit === "services";
   const [crew, setCrew] = useState<Crew | null>(null);
   const [range, setRange] = useState(thisWeek);
   const [error, setError] = useState("");
-  const [add, setAdd] = useState({ name: "", kind: "technician", hourlyRate: "" });
+  const [add, setAdd] = useState({ name: "", kind: services ? "community-coordinator" : "technician", hourlyRate: "" });
   const [adding, setAdding] = useState(false);
   const [edits, setEdits] = useState<Record<string, string>>({});
   const [open, setOpen] = useState<string>("");
@@ -74,7 +76,7 @@ export default function OwnerCrew() {
   const addMember = async () => {
     if (!add.name.trim() || !Number(add.hourlyRate)) return;
     setAdding(true); setError("");
-    try { await req("/api/v1/platform/crew", "POST", { name: add.name.trim(), kind: add.kind, hourlyRate: Number(add.hourlyRate) }); setAdd({ name: "", kind: "technician", hourlyRate: "" }); await load(); }
+    try { await req("/api/v1/platform/crew", "POST", { name: add.name.trim(), kind: add.kind, hourlyRate: Number(add.hourlyRate) }); setAdd({ name: "", kind: services ? "community-coordinator" : "technician", hourlyRate: "" }); await load(); }
     catch (e) { setError((e as { data?: { error?: string } })?.data?.error || (e as Error)?.message || "Could not add."); }
     finally { setAdding(false); }
   };
@@ -144,15 +146,18 @@ export default function OwnerCrew() {
     </div>
   ) : null;
 
-  const active = crew?.members.filter((m) => m.status === "approved") ?? [];
-  const removed = crew?.members.filter((m) => m.status !== "approved") ?? [];
+  const members = (crew?.members ?? []).filter((m) => !services || m.role === "community_coordinator");
+  const active = members.filter((m) => m.status === "approved");
+  const removed = members.filter((m) => m.status !== "approved");
+  const totalHours = services ? Math.round(active.reduce((t, m) => t + m.hours, 0) * 100) / 100 : crew?.totalHours ?? 0;
+  const totalPay = services ? active.reduce((t, m) => t + (m.pay ?? 0), 0) : crew?.totalPay ?? 0;
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-950">FIAREP crew</h1>
-          <p className="text-sm text-slate-500">FIAREP's own technicians — issued as CPM / Inspector accounts so they have every field tool in the app (projects, HUD inspections, violations, measurement, scopes, change orders). Add a person, hand them their code; they clock in and out on the Attendance screen. Hours here are what the plan's labor pool is measured against.</p>
+          <h1 className="text-2xl font-bold text-slate-950">{services ? "FIAREP Services" : "FIAREP crew"}</h1>
+          {services ? <p className="text-sm text-slate-500">FIAREP Services coordinators — add a person, hand them their code, set their rate, turn messaging on or off, see their hours, pay and day history, remove or reinstate.</p> : <p className="text-sm text-slate-500">FIAREP's own technicians — issued as CPM / Inspector accounts so they have every field tool in the app (projects, HUD inspections, violations, measurement, scopes, change orders). Add a person, hand them their code; they clock in and out on the Attendance screen. Hours here are what the plan's labor pool is measured against.</p>}
         </div>
         <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <div>
@@ -164,7 +169,7 @@ export default function OwnerCrew() {
       </div>
       {error && <p className="rounded-md border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-800">{error}</p>}
 
-      <Fold id="jobs" title="Jobs from client companies" badge={`${openJobs.length} open`} defaultOpen summary="Send a resident complaint to one of your technicians.">
+      {!services && <><Fold id="jobs" title="Jobs from client companies" badge={`${openJobs.length} open`} defaultOpen summary="Send a resident complaint to one of your technicians.">
         <div className="border-b border-slate-100 px-4 py-2">
           <p className="text-xs text-slate-500">Every open resident complaint on the platform. Pick a technician and send — it lands in his My Jobs and Inbox with a push; the company sees "FIAREP · name" and every step he takes.</p>
         </div>
@@ -186,7 +191,8 @@ export default function OwnerCrew() {
         )}
       </Fold>
 
-      <Fold id="done" title="Completed by the crew" badge={String(doneJobs.length)} summary="Every job the crew finished — who, when, the note and the photos. Stays here for the record.">
+      </>}
+      {!services && <Fold id="done" title="Completed by the crew" badge={String(doneJobs.length)} summary="Every job the crew finished — who, when, the note and the photos. Stays here for the record.">
         {doneJobs.length === 0 ? <p className="px-4 py-6 text-sm text-slate-500">Nothing finished yet.</p> : (
           <ul className="divide-y divide-slate-100">{doneJobs.map((j) => (
             <li key={j.id}>
@@ -200,14 +206,14 @@ export default function OwnerCrew() {
             </li>
           ))}</ul>
         )}
-      </Fold>
+      </Fold>}
 
       <Fold id="add" title="Add an employee" summary="Name, rate, and the code is issued on the spot.">
         <div className="flex flex-wrap items-end gap-2 px-4 pt-3">
           <label className="text-xs text-slate-600">Name<input value={add.name} onChange={(e) => setAdd({ ...add, name: e.target.value })} placeholder="First and last name" className="mt-1 block h-9 w-56 rounded-md border border-slate-300 px-2 text-sm text-slate-900" /></label>
           <label className="text-xs text-slate-600">Role
             <select value={add.kind} onChange={(e) => setAdd({ ...add, kind: e.target.value })} className="mt-1 block h-9 w-72 rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900">
-              {CREW_KINDS.map((k) => <option key={k.kind} value={k.kind}>{k.label} — {k.blurb}</option>)}
+              {CREW_KINDS.filter((k) => !services || k.kind === "community-coordinator").map((k) => <option key={k.kind} value={k.kind}>{k.label} — {k.blurb}</option>)}
             </select>
           </label>
           <label className="text-xs text-slate-600">Hourly rate<span className="mt-1 flex h-9 items-center rounded-md border border-slate-300 px-2 text-sm text-slate-900"><span className="text-slate-400">$</span><input type="number" min={1} step={0.5} value={add.hourlyRate} onChange={(e) => setAdd({ ...add, hourlyRate: e.target.value })} placeholder="38" className="w-20 bg-transparent px-1 text-right focus:outline-none" /><span className="text-slate-400">/hr</span></span></label>
@@ -216,7 +222,7 @@ export default function OwnerCrew() {
         <p className="px-4 pb-3 pt-2 text-xs text-slate-500">The rate is what FIAREP pays the person; it never appears to clients. The sign-in code is issued the moment you add them.</p>
       </Fold>
 
-      <Fold id="hours" title="Hours and pay" badge={crew ? `${active.length} on the crew · ${crew.totalHours} h · ${money(crew.totalPay)}` : undefined} defaultOpen summary="Who is on the clock, hours and pay for the period, sign-in codes.">
+      <Fold id="hours" title="Hours and pay" badge={crew ? `${active.length} on the ${services ? "team" : "crew"} · ${totalHours} h · ${money(totalPay)}` : undefined} defaultOpen summary="Who is on the clock, hours and pay for the period, sign-in codes.">
         <div className="flex flex-wrap items-center justify-end gap-3 border-b border-slate-100 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <label>From <input type="date" value={range.from} onChange={(e) => setRange({ ...range, from: e.target.value })} className="h-8 rounded-md border border-slate-300 px-2 text-sm text-slate-900" /></label>
@@ -258,12 +264,12 @@ export default function OwnerCrew() {
               </>
             ))}
           </tbody>
-          {active.length > 0 && <tfoot><tr className="border-t-2 border-slate-200 font-semibold text-slate-950"><td className="px-4 py-2" colSpan={4}>{crew?.from} – {crew?.to}</td><td className="px-2 py-2 text-right">{crew?.totalHours.toFixed(2)}</td><td className="px-2 py-2 text-right">{money(crew?.totalPay ?? 0)}</td><td></td></tr></tfoot>}
+          {active.length > 0 && <tfoot><tr className="border-t-2 border-slate-200 font-semibold text-slate-950"><td className="px-4 py-2" colSpan={4}>{crew?.from} – {crew?.to}</td><td className="px-2 py-2 text-right">{totalHours.toFixed(2)}</td><td className="px-2 py-2 text-right">{money(totalPay)}</td><td></td></tr></tfoot>}
         </table>
         <p className="px-4 py-2 text-xs text-slate-500">Hours pair each clock-in with the next clock-out; a shift still open counts up to now. Pay = hours × rate, before taxes and overtime.</p>
       </Fold>
 
-      {(crew?.administrators?.length ?? 0) > 0 && (
+      {!services && (crew?.administrators?.length ?? 0) > 0 && (
         <Fold id="admins" title="Administrators" summary="Messaging on or off for each administrator" defaultOpen>
           <ul className="divide-y divide-slate-100">
             {crew!.administrators!.map((a) => (
@@ -289,13 +295,13 @@ export default function OwnerCrew() {
         </Fold>
       )}
 
-      <Fold id="howto" title="What the employee does" tone="grey" summary="Install the app, sign in with name + code, punch the Time Clock.">
+      {!services && <Fold id="howto" title="What the employee does" tone="grey" summary="Install the app, sign in with name + code, punch the Time Clock.">
         <ol className="list-decimal space-y-0.5 px-4 py-3 pl-9 text-sm text-slate-700">
           <li>Installs the FIAREP app (App Store) or opens the site.</li>
           <li>Signs in with the name exactly as entered here and the 4-character code — the app opens the CPM / Inspector home with every field tool.</li>
           <li>Opens <b>Time Clock</b> and taps <b>Clock in</b> on arrival, <b>Clock out</b> when done. Each tap is time-stamped on the server.</li>
         </ol>
-      </Fold>
+      </Fold>}
     </div>
   );
 }

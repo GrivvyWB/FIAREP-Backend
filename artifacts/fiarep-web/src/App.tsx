@@ -409,6 +409,7 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/forms" component={OwnerForms} />
           <Route path="/platform-owner/alerts" component={OwnerAlerts} />
           <Route path="/platform-owner/crew" component={OwnerCrew} />
+          <Route path="/platform-owner/fiarep-services">{() => <OwnerCrew unit="services" />}</Route>
           <Route path="/platform-owner/properties" component={OwnerProperties} />
           <Route path="/platform-owner" component={OwnerDashboard} />
           <Route component={NotFound} />
