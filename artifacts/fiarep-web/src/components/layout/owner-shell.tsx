@@ -49,11 +49,13 @@ export function OwnerShell({ children }: { children: ReactNode }) {
         </div>
       </header>
 
-      <nav className="border-b border-slate-200 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-12 flex items-end gap-6">
+      {/* Tabs on the right side of the page (a row on top on small screens). */}
+      <div className="flex-1 flex flex-col lg:flex-row-reverse">
+      <nav className="border-b lg:border-b-0 lg:border-l border-slate-200 bg-white lg:w-60 lg:shrink-0">
+        <div className="px-4 py-2 lg:px-3 lg:py-4 flex flex-wrap lg:flex-col gap-x-5 gap-y-1 lg:gap-1 lg:sticky lg:top-16">
           <Link
             href="/platform-owner"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -64,7 +66,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/properties"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/properties"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -75,7 +77,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/modules"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/modules"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -86,7 +88,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/join-requests"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/join-requests"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -97,7 +99,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/work-requests"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/work-requests"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -108,7 +110,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/aep"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/aep"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -119,7 +121,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/building-lookup"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/building-lookup"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -130,7 +132,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/repair-prices"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/repair-prices"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -141,7 +143,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/pricing"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/pricing"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -152,7 +154,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/complaints"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location.startsWith("/platform-owner/complaints")
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -163,7 +165,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/baseline"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location.startsWith("/platform-owner/baseline")
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -174,7 +176,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/forms"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/forms"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -185,7 +187,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/crew"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/crew"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -196,7 +198,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/fiarep-services"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/fiarep-services"
                 ? "border-[#185FA5] text-slate-950"
                 : "border-transparent text-slate-500 hover:text-slate-900"
@@ -207,7 +209,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </Link>
           <Link
             href="/platform-owner/alerts"
-            className={`h-12 flex items-center gap-2 border-b-2 text-sm font-semibold transition-colors ${
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/alerts"
                 ? "border-[#185FA5] text-slate-950"
                 : unseen > 0 ? "border-transparent text-rose-700" : "border-transparent text-slate-500 hover:text-slate-900"
@@ -220,9 +222,10 @@ export function OwnerShell({ children }: { children: ReactNode }) {
         </div>
       </nav>
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="flex-1 min-w-0 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {children}
       </main>
+      </div>
     </div>
   );
 }
