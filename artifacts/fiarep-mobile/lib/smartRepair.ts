@@ -48,6 +48,30 @@ export async function readHeading(): Promise<number | null> {
   return null;
 }
 
+/**
+ * A steadier compass reading for the Building Baseline: the phone's own heading
+ * (tilt-compensated by iOS / Android), several readings over about 2 seconds,
+ * averaged. No raw-magnetometer guess — no reading is better than a wrong one.
+ */
+export async function readHeadingSteady(): Promise<number | null> {
+  if (!Location?.watchHeadingAsync) return readHeading();
+  try {
+    const perm = await Location.requestForegroundPermissionsAsync();
+    if (!perm?.granted) return null;
+    const samples: number[] = [];
+    const sub = await Location.watchHeadingAsync((h: { trueHeading: number; magHeading: number }) => {
+      const v = h && (h.trueHeading >= 0 ? h.trueHeading : h.magHeading);
+      if (typeof v === 'number' && v >= 0) samples.push(v);
+    });
+    await new Promise((r) => setTimeout(r, 2000));
+    try { sub?.remove?.(); } catch {}
+    if (samples.length === 0) return null;
+    const rad = samples.slice(-10).map((d) => (d * Math.PI) / 180);
+    const x = rad.reduce((n, r) => n + Math.cos(r), 0), y = rad.reduce((n, r) => n + Math.sin(r), 0);
+    return Math.round(((Math.atan2(y, x) * 180) / Math.PI + 360) % 360);
+  } catch { return null; }
+}
+
 export const facingLabel = (h: number | null): string | null => {
   if (h == null) return null;
   return ['North', 'Northeast', 'East', 'Southeast', 'South', 'Southwest', 'West', 'Northwest'][Math.round(h / 45) % 8]!;

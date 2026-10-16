@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect } from 'expo-router';
 import { getAccessToken } from './store';
 import { photoUri } from './photos';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export type Priority = 'Critical' | 'High' | 'Medium' | 'Low';
 export type Finding = {
@@ -44,6 +45,20 @@ export async function deleteBaseline(id: string): Promise<void> {
   const res = await fetch(`https://${domain}/api/v1/baseline/${encodeURIComponent(id)}`, { method: 'DELETE', headers: { Authorization: `Bearer ${token}` } });
   if (!res.ok) { const t = await res.json().catch(() => null); throw new Error((t && t.error) || 'Delete failed (' + res.status + ')'); }
 }
+/** One finding from one photo — the short, fast analysis. */
+export type FindingAI = { issueFound: string; issueDetail: string; exactArea: string; repairRequired: string; trade: string; priority: 'Low' | 'Medium' | 'High'; priorityNote: string; estimatedTime: string; tools: string[]; supplies: string[]; fixtures: string[] };
+export const analyzeFinding = (image: string, area: string, note: string) => api<FindingAI>('/ai/baseline-finding', 'POST', { image, area, note });
+
+/** The finding being written, kept on the phone so leaving the screen by mistake loses nothing. */
+export type FindingDraft = { openArea: string | null; draft: Finding; photo: string | null; heading: number | null; noteArea: string | null; noteText: string; analyzing?: boolean };
+const draftKey = (id: string) => 'baseline-draft:' + id;
+export async function loadFindingDraft(id: string): Promise<FindingDraft | null> {
+  try { const v = await AsyncStorage.getItem(draftKey(id)); return v ? JSON.parse(v) as FindingDraft : null; } catch { return null; }
+}
+export async function saveFindingDraft(id: string, d: FindingDraft | null): Promise<void> {
+  try { if (d) await AsyncStorage.setItem(draftKey(id), JSON.stringify(d)); else await AsyncStorage.removeItem(draftKey(id)); } catch { /* best effort */ }
+}
+
 export const importViolations = (id: string) => api<{ added: number; assessment: Assessment }>('/v1/baseline/' + encodeURIComponent(id) + '/import-violations', 'POST', {});
 
 /** Send a finding's photo to FIAREP's storage; returns its stored path. */

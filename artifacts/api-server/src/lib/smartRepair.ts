@@ -235,3 +235,64 @@ export async function smartRepairDrawings(input: { issue: string; trade: string;
   const [diagram, part, itemUrls] = await Promise.all([diagramJob, partJob, inBatches(names, 6, itemJob)]);
   return { diagram, part, items: Object.fromEntries(names.map((n, i) => [n, itemUrls[i] ?? null])) };
 }
+
+/** Building Baseline finding — the short version of the ticket, built to come back fast. */
+export type BaselineFindingAI = {
+  issueFound: string; issueDetail: string; exactArea: string; repairRequired: string; trade: string;
+  priority: "Low" | "Medium" | "High"; priorityNote: string; estimatedTime: string; tools: string[]; supplies: string[]; fixtures: string[];
+};
+const BASELINE_PROMPT = `You are FIAREP, filling in one finding of a building baseline inspection in New York City from ONE photo.
+Return only JSON matching the schema, short and practical.
+- issueFound: the defect in a few words. issueDetail: one sentence on what is seen.
+- exactArea: where on the item or in the space (e.g. "top hinge side of the door", "under the sink"). Do NOT give a compass
+  direction (north/south/east/west) — the inspector records the wall with the phone's compass separately.
+- repairRequired: one sentence. trade: one trade (Plumber, Electrician, Mason, Carpenter, Painter, Roofer, HVAC, Glazier,
+  Locksmith, Elevator Service, Welder / Ironworker, Flooring, Fire Safety, General maintenance).
+- priority: High for leaks, electrical, structural, fire/life-safety, lead, no heat/hot water; Medium for conditions that worsen;
+  Low for cosmetic. priorityNote: e.g. "Repair within 24 hours". estimatedTime: a range.
+- tools, supplies, fixtures: short lists (fixtures empty if no part is replaced).
+If the photo is unclear, say so in issueFound.`;
+
+export async function baselineFinding(input: { image: string; area: string; note?: string }, apiKey: string, fetchImpl: typeof fetch = fetch): Promise<BaselineFindingAI> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 40_000);
+  try {
+    const response = await fetchImpl("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-5-mini",
+        reasoning_effort: "minimal",
+        messages: [
+          { role: "system", content: BASELINE_PROMPT },
+          { role: "user", content: [
+            { type: "text", text: [input.area?.trim() ? `Inspection area: ${input.area.trim()}` : "", input.note?.trim() ? `Inspector's note: "${input.note.trim()}"` : ""].filter(Boolean).join("\n") + "\n\nFill in the finding for this photo." },
+            { type: "image_url", image_url: { url: input.image, detail: "high" } },
+          ] },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "baseline_finding", strict: true,
+            schema: {
+              type: "object", additionalProperties: false,
+              required: ["issueFound", "issueDetail", "exactArea", "repairRequired", "trade", "priority", "priorityNote", "estimatedTime", "tools", "supplies", "fixtures"],
+              properties: {
+                issueFound: { type: "string" }, issueDetail: { type: "string" }, exactArea: { type: "string" }, repairRequired: { type: "string" },
+                trade: { type: "string" }, priority: { type: "string", enum: ["Low", "Medium", "High"] }, priorityNote: { type: "string" },
+                estimatedTime: { type: "string" }, tools: list, supplies: list, fixtures: list,
+              },
+            },
+          },
+        },
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`OpenAI request failed with status ${response.status}`);
+    const text = responseText(await response.json());
+    if (!text) throw new Error("OpenAI returned an invalid finding");
+    return JSON.parse(text) as BaselineFindingAI;
+  } finally {
+    clearTimeout(timeout);
+  }
+}

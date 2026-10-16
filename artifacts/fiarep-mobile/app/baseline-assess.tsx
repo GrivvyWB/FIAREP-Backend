@@ -2,14 +2,14 @@
 // Every area reviewed, every issue photographed and located; FIAREP fills in
 // the issue, trade, priority, repair, tools, materials and fixtures from the
 // photo; findings are numbered by priority (P1-001 …) into the baseline report.
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, Image, Linking, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getSessionIdentity } from '../lib/store';
 import { takePhoto, pickPhoto, photoBase64 } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
-import { readHeading, facingLabel, requestSmartTicket } from '../lib/smartRepair';
-import { getBaseline, updateBaseline, importViolations, uploadFindingPhoto, priorityFromTicket, tradeCategory, PRIORITY_COLOR, BAND_ICON, type Assessment, type Finding, type Priority } from '../lib/baseline';
+import { readHeadingSteady, facingLabel } from '../lib/smartRepair';
+import { analyzeFinding, loadFindingDraft, saveFindingDraft, type FindingDraft, getBaseline, updateBaseline, importViolations, uploadFindingPhoto, priorityFromTicket, tradeCategory, PRIORITY_COLOR, BAND_ICON, type Assessment, type Finding, type Priority } from '../lib/baseline';
 import { ui } from '../lib/ui';
 
 const NAVY = '#0B2A4A';
@@ -45,6 +45,23 @@ export default function BaselineAssess() {
   const [heading, setHeading] = useState<number | null>(null);
   const [busy, setBusy] = useState('');
   const [sign, setSign] = useState({ inspector: '', representative: '', date: '' });
+  const [analyzing, setAnalyzing] = useState(false);
+  const restored = useRef(false);
+
+  // Auto-save: the finding and note being written stay on the phone, so coming
+  // off the screen by mistake loses nothing. Cleared when the finding is saved.
+  useEffect(() => {
+    if (!restored.current || !id) return;
+    const empty = !openArea && !noteArea && !photo;
+    void saveFindingDraft(String(id), empty ? null : { openArea, draft, photo, heading, noteArea, noteText, analyzing });
+  }, [id, openArea, draft, photo, heading, noteArea, noteText, analyzing]);
+  useEffect(() => {
+    if (restored.current || !id) return;
+    void loadFindingDraft(String(id)).then((d) => {
+      if (d) { setOpenArea(d.openArea); setDraft(d.draft); setPhoto(d.photo); setHeading(d.heading); setNoteArea(d.noteArea); setNoteText(d.noteText || ''); }
+      restored.current = true;
+    });
+  }, [id]);
 
   const load = useCallback(() => {
     void (async () => {
@@ -69,26 +86,52 @@ export default function BaselineAssess() {
   async function shoot(fn: () => Promise<string | null>) {
     const u = await fn().catch(() => null);
     if (!u) return;
-    setPhoto(u); setHeading(await readHeading());
+    // The wall's direction comes from the compass button, read while pointing
+    // at the wall — not after the camera closes, when the phone points anywhere.
+    setPhoto(u);
   }
   /** Compass button: read which way the phone points and write it as the wall. */
   async function compassWall() {
-    const h = await readHeading();
+    setBusy('Reading the compass — hold the phone pointing at the wall…');
+    const h = await readHeadingSteady();
+    setBusy('');
     const f = facingLabel(h);
-    if (h == null || !f) { Alert.alert('Compass', 'No compass reading. Hold the phone flat, point it at the wall and try again.'); return; }
+    if (h == null || !f) { Alert.alert('Compass', 'No compass reading. Point the phone at the wall, hold it still and try again.'); return; }
     setHeading(h);
     setDraft((d) => ({ ...d, wall: `${f} wall (${h}°)` }));
   }
+  /**
+   * Analyze runs in the background: keep writing, walk on, even leave the screen.
+   * Whatever it finds fills in the boxes still empty, and is saved with the draft.
+   */
   async function analyze() {
-    if (!photo) return;
-    setBusy('FIAREP is reading the photo…');
+    if (!photo || analyzing) return;
+    const shot = photo;
+    const area = [openArea, draft.floor && 'Floor ' + draft.floor, draft.unit && 'Unit ' + draft.unit].filter(Boolean).join(' · ');
+    setAnalyzing(true);
     try {
-      const b64 = await photoBase64(photo);
+      const b64 = await photoBase64(shot);
       if (!b64) throw new Error('Could not read the photo.');
-      const t = await requestSmartTicket({ image: b64, heading, address: a!.address, area: [openArea, draft.floor && 'Floor ' + draft.floor, draft.unit && 'Unit ' + draft.unit].filter(Boolean).join(' · ') });
-      setDraft((d) => ({ ...d, issue: t.issueFound, description: t.issueDetail || t.repairRequired, trade: tradeCategory(t.trade), priority: priorityFromTicket(t.priority, t.priorityNote), time: t.estimatedTime, action: t.repairRequired, tools: t.tools, materials: t.supplies, fixtures: t.fixtures, wall: d.wall || t.exactArea }));
+      const t = await analyzeFinding(b64, area, noteText);
+      const fill = (d: Finding): Finding => ({
+        ...d,
+        issue: d.issue || t.issueFound,
+        description: d.description || t.issueDetail || t.repairRequired,
+        trade: d.trade || tradeCategory(t.trade),
+        priority: priorityFromTicket(t.priority, t.priorityNote),
+        time: d.time || t.estimatedTime,
+        action: d.action || t.repairRequired,
+        tools: d.tools.length ? d.tools : t.tools,
+        materials: d.materials.length ? d.materials : t.supplies,
+        fixtures: d.fixtures.length ? d.fixtures : t.fixtures,
+        wall: !d.wall ? t.exactArea : d.wall.includes(t.exactArea) ? d.wall : `${d.wall} — ${t.exactArea}`,
+      });
+      setDraft(fill);
+      // Off the screen already? Put it into the saved draft so it is there on return.
+      const kept = await loadFindingDraft(String(id));
+      if (kept && kept.photo === shot) await saveFindingDraft(String(id), { ...kept, draft: fill(kept.draft), analyzing: false });
     } catch (e: any) { Alert.alert('Analyze', String(e?.message || e)); }
-    finally { setBusy(''); }
+    finally { setAnalyzing(false); }
   }
   async function saveFinding() {
     if (!draft.issue.trim()) { Alert.alert('Finding', 'Describe the issue (or analyze the photo).'); return; }
@@ -97,7 +140,7 @@ export default function BaselineAssess() {
       const photos = photo ? [await uploadFindingPhoto(photo)] : [];
       const f: Finding = { ...draft, id: '', photos, createdAt: new Date().toISOString() };
       setA(await updateBaseline(a!.id, { findings: [...a!.findings, f], areas: { ...a!.areas, [openArea || draft.area]: true } }));
-      setOpenArea(null); setPhoto(null); setDraft(blank(''));
+      setOpenArea(null); setPhoto(null); setDraft(blank('')); setHeading(null);
     } catch (e: any) { Alert.alert('Finding', String(e?.message || e)); }
     finally { setBusy(''); }
   }
@@ -148,7 +191,8 @@ export default function BaselineAssess() {
             </Pressable>
             <TextInput style={[ui.input, { flex: 1 }]} value={draft.wall} onChangeText={(v) => set('wall', v)} placeholder="Wall / area (e.g. north wall, right-side handrail)" />
           </View>
-          {!!photo && <Pressable style={[ui.btn, { backgroundColor: BLUE }]} onPress={analyze}><Text style={ui.btnText}>Analyze photo — fill in the finding</Text></Pressable>}
+          {!!photo && <Pressable style={[ui.btn, { backgroundColor: BLUE }, analyzing && { opacity: 0.7 }]} disabled={analyzing} onPress={() => void analyze()}><Text style={ui.btnText}>{analyzing ? 'Analyzing…' : 'Analyze photo — fill in the finding'}</Text></Pressable>}
+          {analyzing && <Text style={ui.listSub}>Keep going — it fills in the boxes when it's done, even if you leave this screen.</Text>}
           <TextInput style={ui.input} value={draft.issue} onChangeText={(v) => set('issue', v)} placeholder="Issue detected" />
           <TextInput style={[ui.input, { minHeight: 60 }]} multiline value={draft.description} onChangeText={(v) => set('description', v)} placeholder="Description" />
           <Text style={ui.label}>Recommended trade</Text>
@@ -175,7 +219,7 @@ export default function BaselineAssess() {
           <Pressable onPress={() => set('existing', !draft.existing)}><Text style={{ fontSize: 14 }}>{draft.existing ? '☑' : '☐'} Existing known violation</Text></Pressable>
           {draft.existing && <TextInput style={ui.input} value={draft.sourceRef} onChangeText={(v) => set('sourceRef', v)} placeholder="Violation # (e.g. HPD #1234567)" />}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => { setOpenArea(null); setPhoto(null); }}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
+            <Pressable style={[ui.btnOutline, { flex: 1 }]} onPress={() => { setOpenArea(null); setPhoto(null); setDraft(blank('')); setHeading(null); }}><Text style={ui.btnOutlineText}>Cancel</Text></Pressable>
             <Pressable style={[ui.btn, { flex: 1 }]} onPress={saveFinding}><Text style={ui.btnText}>Save finding</Text></Pressable>
           </View>
         </Panel>

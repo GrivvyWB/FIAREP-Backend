@@ -4,7 +4,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizations, residentReportPhotos } from "@workspace/db";
 import { classifyViolationImage } from "../lib/violationClassification";
 import { classifyMaterialImage } from "../lib/materialClassification";
-import { smartRepairTicket, verifyRepair, smartRepairDrawings } from "../lib/smartRepair";
+import { smartRepairTicket, verifyRepair, smartRepairDrawings, baselineFinding } from "../lib/smartRepair";
 import { priorityQueue } from "../lib/priorityEngine";
 import { synthesizeSpeech, transcribeAudio, translateText } from "../lib/translator";
 import { actorFrom, requireAuth } from "../middlewares/auth";
@@ -144,6 +144,22 @@ router.post("/ai/smart-repair", requireAuth, async (req, res) => {
   } catch (error) {
     req.log.warn({ err: error }, "Smart Repair failed");
     res.status(503).json({ error: "Smart Repair is temporarily unavailable" });
+  }
+});
+
+// Building Baseline: one finding from one photo, the short fast version.
+router.post("/ai/baseline-finding", requireAuth, async (req, res) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const image = typeof b["image"] === "string" ? b["image"] : "";
+  if (!/^data:image\/(jpeg|png|webp);base64,/.test(image)) { res.status(400).json({ error: "A JPEG, PNG or WebP photo is required" }); return; }
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) { res.status(503).json({ error: "Analysis is unavailable (AI key not configured)" }); return; }
+  const str = (k: string) => (typeof b[k] === "string" ? (b[k] as string).slice(0, 300) : "");
+  try {
+    res.json(await baselineFinding({ image, area: str("area"), note: str("note") }, apiKey));
+  } catch (error) {
+    req.log.warn({ err: error }, "Baseline finding analysis failed");
+    res.status(503).json({ error: "Analysis is temporarily unavailable" });
   }
 });
 
