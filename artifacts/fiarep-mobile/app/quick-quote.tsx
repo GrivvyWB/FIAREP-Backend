@@ -1,12 +1,11 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, RefreshControl } from 'react-native';
-import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { customFetch } from '@workspace/api-client-react';
 import { takePhoto, pickPhoto, photoUri, uploadPhoto } from '../lib/photos';
 import { type Receipt } from '../lib/quote-receipt';
 import ReceiptSheet from '../components/ReceiptSheet';
 import { PickOne } from '../lib/community-ui';
-import { useRawModules, tileEnabled } from '../lib/module-access';
 import { getSessionIdentity } from '../lib/store';
 import { ui, ACCENT, money } from '../lib/ui';
 
@@ -47,7 +46,6 @@ const post = <T,>(url: string, body: unknown) => customFetch<T>(url, {
 
 export default function QuickQuoteScreen() {
   const router = useRouter();
-  const rawModules = useRawModules();
   const [catalog, setCatalog] = useState<CatalogLine[]>([]);
   const [buildings, setBuildings] = useState<Building[]>([]);
   const [clients, setClients] = useState<Client[]>([]);
@@ -63,9 +61,12 @@ export default function QuickQuoteScreen() {
   const [busy, setBusy] = useState('');
   const [sent, setSent] = useState<QuickQuote | null>(null);
   const [past, setPast] = useState<Array<{ projectId: string; quote: QuickQuote }>>([]);
-  // Opened from the Past quotes tile on home: the list starts open.
+  // Opened from the Past quotes tile on home, this screen is Past Quotes: only
+  // the quotes already made and their receipts. Opened from Quick Quote, it is
+  // only for making a quote; the receipt then lives in Past Quotes.
   const params = useLocalSearchParams<{ past?: string }>();
-  const [showPast, setShowPast] = useState(params.past === '1');
+  const pastMode = params.past === '1';
+  const [, setShowPast] = useState(pastMode);
   const [error, setError] = useState('');
   const [showReceipt, setShowReceipt] = useState<Receipt | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -180,6 +181,10 @@ export default function QuickQuoteScreen() {
     } finally { setBusy(''); }
   }
 
+  /** One line per past quote in the drop-down: building · total · date. */
+  const pastLabel = (row: { projectId: string; quote: QuickQuote }) =>
+    [row.quote.building || 'Quote', money(row.quote.total), row.quote.sentAt ? new Date(row.quote.sentAt).toLocaleDateString() : ''].filter(Boolean).join(' · ') + (past.filter((r) => (r.quote.building || 'Quote') === (row.quote.building || 'Quote') && r.quote.total === row.quote.total).length > 1 ? ` (#${row.projectId.slice(-4)})` : '');
+
   /** Pull a past quote back up: its building, its lines, its receipt. */
   function openPast(row: { projectId: string; quote: QuickQuote }) {
     setProjectId(row.projectId);
@@ -189,6 +194,8 @@ export default function QuickQuoteScreen() {
     setSent(row.quote);
     setDrafts([]);
     setShowPast(false);
+    // Past Quotes: picking one opens its receipt straight away.
+    setShowReceipt({ ...row.quote, building: row.quote.building || '' } as Receipt);
   }
 
   async function send(mode: 'self' | 'client' | 'admin') {
@@ -215,7 +222,7 @@ export default function QuickQuoteScreen() {
       });
       setDrafts([]); setNote(''); setSent(saved);
       Alert.alert(mode === 'self' ? 'Approved — go ahead' : mode === 'admin' ? 'Sent to the administrator' : 'Sent to the owner',
-        mode === 'self' ? 'Recorded against the building in your name.' : mode === 'admin' ? 'You will hear when it is approved, sent on or turned back.' : 'Their management have been told.');
+        (mode === 'self' ? 'Recorded against the building in your name.' : mode === 'admin' ? 'You will hear when it is approved, sent on or turned back.' : 'Their management have been told.') + ' The receipt is in Past Quotes.');
     } catch (e: any) {
       Alert.alert('Not sent', e?.data?.error || e?.message || 'Check your connection and try again.');
     } finally { setBusy(''); }
@@ -227,30 +234,28 @@ export default function QuickQuoteScreen() {
       keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
     >
-      <Text style={ui.label}>
+      <Stack.Screen options={{ title: pastMode ? 'Past Quotes' : 'Quick Quote' }} />
+      {!pastMode && <Text style={ui.label}>
         What this building needs replacing or fixing, priced off FIAREP's book. Send it to the owner, or approve it yourself when it is small enough to just do.
-      </Text>
+      </Text>}
       {!!error && <Text style={{ color: '#991b1b' }}>{error}</Text>}
 
-      {past.length > 0 && tileEnabled('tech', 'Past quotes', rawModules) && (
+      {pastMode && past.length === 0 && !loading && <Text style={ui.listSub}>No past quotes yet.</Text>}
+      {pastMode && past.length > 0 && (
         <View style={{ marginTop: 12 }}>
-          <Pressable onPress={() => setShowPast((v) => !v)} style={ui.btnOutline}>
-            <Text style={ui.btnOutlineText}>{showPast ? 'Hide past quotes' : `Past quotes (${past.length})`}</Text>
-          </Pressable>
-          {showPast && past.map((row) => (
-            <Pressable key={row.projectId} onPress={() => openPast(row)} style={[ui.card, { marginTop: 8, gap: 2 }]}>
-              <Text style={{ fontWeight: '700' }}>{row.quote.building || 'Quote'}</Text>
-              <Text style={ui.listSub}>
-                {money(row.quote.total)} · {standing(row.quote)}
-              </Text>
-              <Text style={ui.listSub}>
-                {row.quote.sentAt ? new Date(row.quote.sentAt).toLocaleString() : ''}{row.quote.sentBy ? ` · ${row.quote.sentBy}` : ''}
-              </Text>
-            </Pressable>
-          ))}
+          {/* Past quotes sit in a drop-down: press it, pick one, its receipt opens. */}
+          <PickOne
+            options={past.map(pastLabel)}
+            value=""
+            onChange={(v) => { const row = past.find((r) => pastLabel(r) === v); if (row) openPast(row); }}
+            placeholder={`Past quotes (${past.length})`}
+            title="Past quotes"
+            clearLabel="Close"
+          />
         </View>
       )}
 
+      {!pastMode && <>
       <Text style={[ui.label, { marginTop: 12 }]}>Building</Text>
       <PickOne
         options={buildings.map(label)}
@@ -271,8 +276,9 @@ export default function QuickQuoteScreen() {
         </Pressable>
       </View>
       {!!projectId && <Text style={{ color: '#065f46', fontSize: 13 }}>Pricing {place}.</Text>}
+      </>}
 
-      {sent && (
+      {pastMode && sent && (
         <View style={[ui.card, { gap: 4, marginTop: 12 }]}>
           <Text style={{ fontWeight: '700' }}>
             Sent — {money(sent.total)} · {standing(sent)}
@@ -310,7 +316,7 @@ export default function QuickQuoteScreen() {
         </View>
       )}
 
-      {!!projectId && (
+      {!pastMode && !!projectId && (
         <>
           <Text style={[ui.label, { marginTop: 14 }]}>Add what it needs</Text>
           <TextInput style={ui.input} value={search} onChangeText={setSearch} placeholder="Flapper, GFCI, hinge, filter, wax ring…" autoCorrect={false} />
