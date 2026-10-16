@@ -46,6 +46,7 @@ export default function BaselineAssess() {
   const [busy, setBusy] = useState('');
   const [sign, setSign] = useState({ inspector: '', representative: '', date: '' });
   const [analyzing, setAnalyzing] = useState(false);
+  const [openFinding, setOpenFinding] = useState<string | null>(null);
   const restored = useRef(false);
 
   // Auto-save: the finding and note being written stay on the phone, so coming
@@ -315,10 +316,18 @@ export default function BaselineAssess() {
               <View key={f.id} style={{ borderTopWidth: 1, borderTopColor: '#eef2f7', paddingTop: 6, gap: 2 }}>
                 <Text style={{ fontWeight: '800' }}>{f.code} · {f.issue}{f.status === 'repaired' ? '  ✅ repaired' : ''}</Text>
                 <Text style={{ fontSize: 13 }}>📍 {[f.area, f.floor && 'Floor ' + f.floor, f.unit && 'Unit ' + f.unit, f.wall].filter(Boolean).join(' · ') || '—'}</Text>
-                <Text style={{ fontSize: 13 }}>👷 {f.trade || '—'}{f.time ? ' · ⏱ ' + f.time : ''}{f.existing ? ' · Existing known' + (f.sourceRef ? ' (' + f.sourceRef + ')' : '') : ' · Newly identified'}</Text>
-                {!!f.action && <Text style={{ fontSize: 13 }}>🔧 {f.action}</Text>}
-                {(f.tools.length > 0 || f.materials.length > 0 || f.fixtures.length > 0) && <Text style={ui.listSub}>Tools: {f.tools.join(', ') || '—'} · Materials: {f.materials.join(', ') || '—'} · Fixtures: {f.fixtures.join(', ') || '—'}</Text>}
-                {f.photos.map((p) => a.photoUrls[p] ? <Image key={p} source={{ uri: a.photoUrls[p] }} style={{ width: '100%', height: 170, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" /> : null)}
+                {/* Notes and photos sit in a drop-down once saved, to keep the page clean. */}
+                <Pressable onPress={() => setOpenFinding((o) => (o === f.id ? null : f.id))} hitSlop={6}>
+                  <Text style={{ color: BLUE, fontWeight: '700', fontSize: 13 }}>{openFinding === f.id ? '▾' : '▸'} Notes & photos{f.photos.length ? ` (📷${f.photos.length})` : ''}</Text>
+                </Pressable>
+                {openFinding === f.id && (
+                  <>
+                    <Text style={{ fontSize: 13 }}>👷 {f.trade || '—'}{f.time ? ' · ⏱ ' + f.time : ''}{f.existing ? ' · Existing known' + (f.sourceRef ? ' (' + f.sourceRef + ')' : '') : ' · Newly identified'}</Text>
+                    {!!f.action && <Text style={{ fontSize: 13 }}>🔧 {f.action}</Text>}
+                    {(f.tools.length > 0 || f.materials.length > 0 || f.fixtures.length > 0) && <Text style={ui.listSub}>Tools: {f.tools.join(', ') || '—'} · Materials: {f.materials.join(', ') || '—'} · Fixtures: {f.fixtures.join(', ') || '—'}</Text>}
+                    {f.photos.map((p) => a.photoUrls[p] ? <Image key={p} source={{ uri: a.photoUrls[p] }} style={{ width: '100%', height: 170, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" /> : null)}
+                  </>
+                )}
                 {fiarep && (
                   <View style={{ flexDirection: 'row', gap: 14, marginTop: 2 }}>
                     <Pressable onPress={() => toggleRepaired(f)}><Text style={{ color: BLUE, fontWeight: '700', fontSize: 13 }}>{f.status === 'repaired' ? 'Mark open' : 'Mark repaired'}</Text></Pressable>
