@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { DofBulkAdd } from "@/components/platform-owner/dof-bulk-add";
+import { DofBulkAdd, BuildingSwitchList } from "@/components/platform-owner/dof-bulk-add";
 import { Building2, Loader2, Plus, Search, Trash2, X } from "lucide-react";
 
 /**
@@ -401,6 +401,7 @@ export default function OwnerProperties() {
       ) : (
         <>
           {organization && <DofBulkAdd key={organization.id} organizationId={organization.id} defaultOwner={organization.name} onAdded={reload} />}
+          {organization && <BuildingSwitchList organizationId={organization.id} buildings={properties.map((p) => ({ id: p.id, displayAddress: p.displayAddress, units: p.units ?? null, active: p.active }))} onChanged={reload} />}
 
           {/* ── Portfolio pull ── */}
           <section className="space-y-3 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">

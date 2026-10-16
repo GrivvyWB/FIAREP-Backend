@@ -113,6 +113,22 @@ export function BuildingSwitchList({ organizationId, buildings, onChanged }: { o
     return (t ? buildings.filter((b) => b.displayAddress.toLowerCase().includes(t)) : buildings).slice().sort((a, b) => a.displayAddress.localeCompare(b.displayAddress));
   }, [buildings, q]);
   const onCount = buildings.filter((b) => b.active).length;
+  const [bulk, setBulk] = useState<"" | "on" | "off">("");
+
+  // Switch every building on (or off) the plan in one press.
+  async function switchAll(active: boolean) {
+    const targets = buildings.filter((b) => b.active !== active);
+    if (targets.length === 0) return;
+    setBulk(active ? "on" : "off"); setError("");
+    let failed = 0; let firstError = "";
+    for (const b of targets) {
+      try { await customFetch(`/api/v1/platform/organizations/${encodeURIComponent(organizationId)}/properties/${encodeURIComponent(b.id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ active }), responseType: "json" } as never); }
+      catch (e) { failed += 1; if (!firstError) firstError = errText(e, "Could not switch it."); }
+    }
+    await onChanged();
+    if (failed) setError(`${failed.toLocaleString()} of ${targets.length.toLocaleString()} could not be switched ${active ? "on" : "off"}: ${firstError}`);
+    setBulk("");
+  }
 
   async function flip(b: SwitchBuilding) {
     setBusyId(b.id); setError("");
@@ -133,6 +149,10 @@ export function BuildingSwitchList({ organizationId, buildings, onChanged }: { o
         </span>
       </button>
       {open && <>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" className="h-8 bg-slate-900 text-white hover:bg-slate-800" disabled={bulk !== "" || onCount === buildings.length} onClick={() => void switchAll(true)}>{bulk === "on" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}{bulk === "on" ? "Switching on…" : `Switch all on (${(buildings.length - onCount).toLocaleString()})`}</Button>
+        <Button type="button" size="sm" variant="outline" className="h-8" disabled={bulk !== "" || onCount === 0} onClick={() => void switchAll(false)}>{bulk === "off" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}{bulk === "off" ? "Switching off…" : "Switch all off"}</Button>
+      </div>
       <Input aria-label="Search buildings" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search an address" className="h-8 bg-white text-sm" />
       {error && <p className="text-xs text-red-700">{error}</p>}
       <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto">
