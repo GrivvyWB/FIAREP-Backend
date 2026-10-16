@@ -124,7 +124,7 @@ export default function PublicMessage({ embedded = false, senderName = "" }: { e
             </>
           )}
           <button type="button" className="text-xs text-muted-foreground underline" onClick={() => { setView(null); setCode(""); try { localStorage.removeItem(KEY); } catch { /* private window */ } }}>
-            Use a different code
+            {embedded ? "Done — log off" : "Use a different code"}
           </button>
         </div>
       )}

@@ -1,6 +1,7 @@
 import { motion, type Variants } from 'framer-motion';
 import { Link } from 'wouter';
 import { WebsiteFooter } from '@/components/layout/website-footer';
+import PublicMessage from '@/pages/public-message';
 import { 
   ClipboardCheck, Wrench, 
   UserCog, ShoppingCart, Target, Briefcase, ArrowRight, Home,
@@ -380,12 +381,17 @@ export default function Platform() {
 
       </div>
       <aside className="hidden xl:block w-72 shrink-0 border-l border-border bg-card/50 px-5 py-24" data-testid="aside-fiarep-wording">
+        {/* Someone handed a code types it here and talks to that person right on this page. */}
+        <div className="mb-10 rounded-xl border border-border bg-background p-4 shadow-sm"><PublicMessage embedded /></div>
         <FiarepWording />
       </aside>
       </div>
       {/* On a phone or a smaller screen there is no room at the side: the same wording sits here, above the footer */}
       <section className="xl:hidden border-t border-border bg-card/50 px-6 py-16" data-testid="section-fiarep-wording">
-        <div className="max-w-xl mx-auto"><FiarepWording /></div>
+        <div className="max-w-xl mx-auto">
+          <div className="mb-10 rounded-xl border border-border bg-background p-4 shadow-sm"><PublicMessage embedded /></div>
+          <FiarepWording />
+        </div>
       </section>
       <WebsiteFooter />
     </div>
