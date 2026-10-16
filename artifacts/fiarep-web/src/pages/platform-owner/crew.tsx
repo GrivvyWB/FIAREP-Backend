@@ -7,8 +7,10 @@ import { ChevronDown } from "lucide-react";
 const CREW_KINDS = [
   { kind: "technician", label: "Technician", blurb: "FIAREP CPM / Inspector — all field tools" },
   { kind: "community-coordinator", label: "FIAREP Services", blurb: "Resident visits and building checks, on FIAREP's own team" },
+  { kind: "tradesmen", label: "FIAREP Tradesmen", blurb: "FIAREP's own tradesmen on the jobs" },
+  { kind: "sub-worker", label: "Sub-Worker", blurb: "Someone who joins temporarily as a sub" },
 ] as const;
-const kindOfRole = (role: string) => (role === "community_coordinator" ? "FIAREP Services" : "Technician");
+const kindOfRole = (role: string, position = "") => (role === "community_coordinator" ? "FIAREP Services" : role === "administrator" ? "Administrator" : role === "worker" ? (position || "Worker") : "Technician");
 
 type Member = { id: string; name: string; position: string; role: string; code: string; status: string; hourlyRate: number | null; hours: number; shifts: number; pay: number | null; clockedInSince: string | null; lastPunch: { direction: string; at: string } | null; messaging?: boolean };
 type Crew = { clockEnabled: boolean; from: string; to: string; members: Member[]; totalHours: number; totalPay: number; administrators?: Array<{ id: string; name: string; messaging: boolean }> };
@@ -237,7 +239,7 @@ export default function OwnerCrew({ unit = "all" }: { unit?: "all" | "services" 
             {active.map((m) => (
               <>
                 <tr key={m.id} className="border-t border-slate-100 align-top">
-                  <td className="px-4 py-2"><span className="font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">{kindOfRole(m.role)}{m.position && m.position !== kindOfRole(m.role) ? ` · ${m.position}` : ""}</span>
+                  <td className="px-4 py-2"><span className="font-medium text-slate-900">{m.name}</span><span className="block text-xs text-slate-500">{kindOfRole(m.role, m.position)}{m.position && m.position !== kindOfRole(m.role, m.position) ? ` · ${m.position}` : ""}</span>
                     {m.role === "community_coordinator" && (
                       <label className="mt-1 flex cursor-pointer items-center gap-2 text-xs text-slate-600">
                         <button type="button" role="switch" aria-checked={m.messaging !== false} aria-label={`Messaging for ${m.name}`} onClick={() => void setMessaging(m, m.messaging === false)}

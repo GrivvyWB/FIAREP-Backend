@@ -7,7 +7,7 @@
 // clock on, adds people, sets rates and reads the hours.
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
-import { and, asc, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, lte, notInArray, or, sql } from "drizzle-orm";
 import { db, entityRecords, notifications, organizationProperties, organizations, staffAccounts, timeClockLocations, timeClockPunches } from "@workspace/db";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
@@ -29,7 +29,10 @@ const TENANT = "default";
 const CREW_KINDS = {
   technician: { role: "inspector", position: "CPM", label: "Technician" },
   "community-coordinator": { role: "community_coordinator", position: "FIAREP Services", label: "FIAREP Services" },
+  tradesmen: { role: "worker", position: "FIAREP Tradesmen", label: "FIAREP Tradesmen" },
+  "sub-worker": { role: "worker", position: "Sub-Worker", label: "Sub-Worker" },
 } as const;
+const WORKER_POSITIONS: string[] = [CREW_KINDS.tradesmen.position, CREW_KINDS["sub-worker"].position];
 type CrewKind = keyof typeof CREW_KINDS;
 const CREW_ROLES = [...new Set(Object.values(CREW_KINDS).map((k) => k.role))];
 const crewKind = (v: unknown): CrewKind => (typeof v === "string" && v in CREW_KINDS ? v as CrewKind : "technician");
@@ -97,8 +100,13 @@ router.get("/v1/platform/crew", async (req, res) => {
   const org = await crewOrg();
   const { from, to } = parseRange(req.query as Record<string, unknown>);
   // Crew added before the switch to CPM / Inspector come along: same person, full tools.
-  await db.update(staffAccounts).set({ role: CREW_ROLE, position: CREW_POSITION, updatedAt: new Date() }).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER), eq(staffAccounts.role, "worker")));
-  const members = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER), inArray(staffAccounts.role, CREW_ROLES), inArray(staffAccounts.status, ["approved", "revoked"]))).orderBy(asc(staffAccounts.name));
+  // (FIAREP Tradesmen and Sub-Workers are workers on purpose and stay as they are.)
+  await db.update(staffAccounts).set({ role: CREW_ROLE, position: CREW_POSITION, updatedAt: new Date() }).where(and(eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER), eq(staffAccounts.role, "worker"), notInArray(staffAccounts.position, WORKER_POSITIONS)));
+  // The crew, and FIAREP's administrators too: they work and get paid like everyone else.
+  const members = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, TENANT), or(
+    and(eq(staffAccounts.issuerName, ISSUER), inArray(staffAccounts.role, CREW_ROLES), inArray(staffAccounts.status, ["approved", "revoked"])),
+    and(eq(staffAccounts.role, "administrator"), inArray(staffAccounts.status, ["approved", "revoked"])),
+  ))).orderBy(asc(staffAccounts.name));
   const ids = members.map((m) => m.id);
   const punches = ids.length ? await db.select({ staffId: timeClockPunches.staffId, direction: timeClockPunches.direction, punchAt: timeClockPunches.punchAt }).from(timeClockPunches)
     .where(and(eq(timeClockPunches.tenantId, TENANT), inArray(timeClockPunches.staffId, ids), gte(timeClockPunches.punchAt, new Date(from.getTime() - 24 * 36e5)), lte(timeClockPunches.punchAt, to))) : [];
@@ -186,7 +194,7 @@ router.post("/v1/platform/crew", async (req, res) => {
 router.patch("/v1/platform/crew/:id", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
   const b = (req.body ?? {}) as Record<string, unknown>;
-  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, req.params.id!), eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER))).limit(1);
+  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, req.params.id!), eq(staffAccounts.tenantId, TENANT), or(eq(staffAccounts.issuerName, ISSUER), eq(staffAccounts.role, "administrator")))).limit(1);
   if (!before) { res.status(404).json({ error: "Crew member not found" }); return; }
   const updates: Partial<typeof staffAccounts.$inferInsert> = { updatedAt: new Date() };
   if ("hourlyRate" in b) { const r = cents(b["hourlyRate"]); if (r == null || r <= 0) { res.status(400).json({ error: "Invalid hourly rate" }); return; } updates.hourlyRateCents = r; }
@@ -199,7 +207,7 @@ router.patch("/v1/platform/crew/:id", async (req, res) => {
 
 router.post("/v1/platform/crew/:id/reset-code", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
-  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, req.params.id!), eq(staffAccounts.tenantId, TENANT), eq(staffAccounts.issuerName, ISSUER))).limit(1);
+  const [before] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.id, req.params.id!), eq(staffAccounts.tenantId, TENANT), or(eq(staffAccounts.issuerName, ISSUER), eq(staffAccounts.role, "administrator")))).limit(1);
   if (!before) { res.status(404).json({ error: "Crew member not found" }); return; }
   const after = await db.transaction(async (tx) => {
     const code = await allocateStaffCode(tx, TENANT, before.name);
