@@ -355,6 +355,30 @@ router.get("/v1/staff/developments", async (_req, res) => {
   ], actor));
 });
 
+// The client's own developments: the buildings registered to this organization,
+// grouped by development (a building with no development is listed by address).
+router.get("/v1/staff/development-catalog", async (_req, res) => {
+  const actor = actorFrom(res);
+  if (!canBrowseStaffDirectory(actor)) {
+    res.status(403).json({ error: "The staff directory is restricted to supervisors" });
+    return;
+  }
+  const rows = await db
+    .select({ id: organizationProperties.id, address: organizationProperties.displayAddress, development: organizationProperties.development })
+    .from(organizationProperties)
+    .where(and(eq(organizationProperties.organizationId, actor.tenantId), eq(organizationProperties.active, true)));
+  const byName = new Map<string, { id: string; name: string; buildings: string[] }>();
+  for (const r of rows) {
+    const name = (r.development || "").trim() || r.address.trim();
+    if (!name) continue;
+    const key = name.toLowerCase();
+    const entry = byName.get(key) || { id: r.id, name, buildings: [] };
+    entry.buildings.push(r.address);
+    byName.set(key, entry);
+  }
+  res.json([...byName.values()].sort((x, y) => x.name.localeCompare(y.name)));
+});
+
 router.post("/v1/staff", async (req, res) => {
   const actor = actorFrom(res);
   const input = req.body as Record<string, unknown>;

@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getGetHrWorkspaceQueryKey,
   getListStaffDevelopmentsQueryKey,
   getListStaffQueryKey,
   useConfigureStaffDevelopments,
+  customFetch,
   useGetHrWorkspace,
-  useListNychaDevelopments,
   useListStaffDevelopments,
   useUpdateStaffDevelopments,
 } from "@workspace/api-client-react";
@@ -22,7 +22,11 @@ function messageFor(error: unknown) {
 export function DevelopmentManagement() {
   const queryClient = useQueryClient();
   const { data: configured = [] } = useListStaffDevelopments();
-  const { data: catalog = [] } = useListNychaDevelopments();
+  // The client's own developments (its registered buildings), never another company's list.
+  const { data: catalog = [] } = useQuery({
+    queryKey: ["staff-development-catalog"],
+    queryFn: () => customFetch<Array<{ id: string; name: string; buildings: string[] }>>("/api/v1/staff/development-catalog", { responseType: "json" } as never),
+  });
   const workspace = useGetHrWorkspace();
   const configure = useConfigureStaffDevelopments();
   const updateAssignment = useUpdateStaffDevelopments();
@@ -38,7 +42,7 @@ export function DevelopmentManagement() {
     const query = search.trim().toLowerCase();
     return catalog.filter((item) => !configuredSet.has(item.name) &&
       (!query || item.name.toLowerCase().includes(query) ||
-        item.borough?.toLowerCase().includes(query))).slice(0, 100);
+        item.buildings.some((b) => b.toLowerCase().includes(query)))).slice(0, 200);
   }, [catalog, configuredSet, search]);
   const employees = useMemo(
     () => (workspace.data?.staff || []).filter((member) => member.canManage === true)
@@ -123,10 +127,10 @@ export function DevelopmentManagement() {
                     : [...current, development.name])}
               />
               <span className="flex-1">{development.name}</span>
-              <span className="text-xs text-muted-foreground">{development.borough}</span>
+              <span className="text-xs text-muted-foreground">{development.buildings.length === 1 && development.buildings[0] === development.name ? "" : `${development.buildings.length} building${development.buildings.length === 1 ? "" : "s"}`}</span>
             </label>
           ))}
-          {filteredCatalog.length === 0 && <div className="p-4 text-sm text-muted-foreground">No developments found.</div>}
+          {filteredCatalog.length === 0 && <div className="p-4 text-sm text-muted-foreground">{catalog.length === 0 ? "No buildings registered for this company yet." : "No developments found."}</div>}
         </div>
         <Button onClick={() => void addDevelopments(selectedCatalog)} disabled={!selectedCatalog.length || configure.isPending}>
           Add selected
