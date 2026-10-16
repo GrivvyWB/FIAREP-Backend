@@ -1,9 +1,10 @@
 // Building Check-In. Tap the building you are at; the phone reads where it
 // really is. The time and the place your phone was are what the client sees.
 import { useCallback, useMemo, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, RefreshControl, Image } from 'react-native';
+import { takePhoto, photoUri } from '../lib/photos';
 import { useFocusEffect } from 'expo-router';
-import { activeSiteCheckin, checkInAt, checkOut, listSiteBuildings, mySiteCheckins, type SiteBuilding, type SiteCheckin } from '../lib/site-checkin';
+import { activeSiteCheckin, checkInAt, checkOut, hereNow, listSiteBuildings, mySiteCheckins, recordVisit, type AptVisit, type SiteBuilding, type SiteCheckin } from '../lib/site-checkin';
 import { ui } from '../lib/ui';
 
 const NAVY = '#0B2A4A';
@@ -21,6 +22,19 @@ function Where({ c }: { c: SiteCheckin }) {
     </>
   );
 }
+function VisitLine({ v }: { v: AptVisit }) {
+  return (
+    <View style={{ borderTopWidth: 1, borderTopColor: '#eef2f7', paddingVertical: 6, gap: 2 }}>
+      <Text style={{ fontWeight: '700', color: v.outcome === 'access' ? '#166534' : '#b91c1c' }}>{time(v.at)} · Apt {v.unit} — {v.outcome === 'access' ? 'Access gained' : 'Tenant refused access'}</Text>
+      <Text style={{ fontSize: 12, color: '#475569' }}>
+        {v.atBuilding === true ? '✓ At the building' : v.atBuilding === false ? `⚠ ${far(v.distanceM)} from the building` : 'Location recorded'}
+        {v.doorNumber ? (v.doorMatches ? ` · Door shows ${v.doorNumber} ✓` : ` · ⚠ Door shows ${v.doorNumber}`) : ' · Door number not visible in the photo'}
+      </Text>
+      {!!v.photoUrl && <Image source={{ uri: v.photoUrl }} style={{ width: '100%', height: 160, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" />}
+    </View>
+  );
+}
+
 function Timeline({ c }: { c: SiteCheckin }) {
   return (
     <View style={{ marginTop: 6, gap: 2 }}>
@@ -42,6 +56,12 @@ export default function SiteCheckinScreen() {
   const [q, setQ] = useState('');
   const [busy, setBusy] = useState('');
   const [loading, setLoading] = useState(false);
+  // Apartment visit being recorded, and the saved visits' drop-down.
+  const [visitOpen, setVisitOpen] = useState(false);
+  const [unit, setUnit] = useState('');
+  const [here, setHere] = useState<Awaited<ReturnType<typeof hereNow>>>(null);
+  const [doorPhoto, setDoorPhoto] = useState<string | null>(null);
+  const [visitsOpen, setVisitsOpen] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +93,24 @@ export default function SiteCheckinScreen() {
       })() },
     ]);
   }
+  async function confirmLocation() {
+    setBusy('Reading your location…');
+    try { const h = await hereNow(); if (!h) throw new Error('Could not read where your phone is. Step near a window and try again.'); setHere(h); }
+    catch (e: any) { Alert.alert('Location', e?.message || 'Try again.'); }
+    finally { setBusy(''); }
+  }
+  async function saveVisit(outcome: 'access' | 'refused') {
+    if (!unit.trim()) { Alert.alert('Apartment', 'Enter the apartment.'); return; }
+    if (!doorPhoto) { Alert.alert('Door photo', 'Take a photo of the apartment door.'); return; }
+    setBusy('Saving the visit…');
+    try {
+      await recordVisit({ unit: unit.trim(), outcome, photo: doorPhoto, here });
+      setVisitOpen(false); setUnit(''); setHere(null); setDoorPhoto(null);
+      await load();
+    } catch (e: any) { Alert.alert('Apartment visit', e?.data?.error || e?.message || 'Try again.'); }
+    finally { setBusy(''); }
+  }
+
   function out() {
     Alert.alert(
       'Are you completely finished at this building for today?',
@@ -105,6 +143,36 @@ export default function SiteCheckinScreen() {
           <Text style={ui.listSub}>Since {time(active.checkedInAt)} · {day(active.checkedInAt)}</Text>
           <Where c={active} />
           <Timeline c={active} />
+
+          {/* Apartment visits: location, door photo, Access Gained / Tenant Refused Access. */}
+          {!visitOpen ? (
+            <Pressable style={[ui.btnOutline, { marginTop: 10 }]} disabled={!!busy} onPress={() => { setVisitOpen(true); setHere(null); setDoorPhoto(null); }}><Text style={{ color: '#1C4E86', fontWeight: '700' }}>+ Apartment visit</Text></Pressable>
+          ) : (
+            <View style={{ marginTop: 10, gap: 8, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#dbe3ee', padding: 10 }}>
+              <Text style={{ fontWeight: '800' }}>Apartment visit</Text>
+              <TextInput style={ui.input} value={unit} onChangeText={setUnit} placeholder="Apartment (e.g. 4B)" autoCapitalize="characters" />
+              <Pressable style={ui.btnOutline} disabled={!!busy} onPress={() => void confirmLocation()}><Text style={{ color: '#1C4E86', fontWeight: '700' }}>{here ? 'Read my location again' : '1. Confirm my location'}</Text></Pressable>
+              {!!here && (here.distanceM != null && here.distanceM <= 150 + Math.min(here.accuracyM ?? 0, 100)
+                ? <Text style={{ color: '#166534', fontWeight: '700' }}>✓ You are at the building ({here.distanceM} m)</Text>
+                : <Text style={{ color: '#b91c1c', fontWeight: '700' }}>⚠ You are {here.distanceM != null ? far(here.distanceM) : 'away'} from the building</Text>)}
+              <Pressable style={ui.btnOutline} disabled={!!busy} onPress={() => void (async () => { const u = await takePhoto().catch(() => null); if (u) setDoorPhoto(u); })()}><Text style={{ color: '#1C4E86', fontWeight: '700' }}>{doorPhoto ? 'Retake door photo' : '2. 📷 Photo of the apartment door'}</Text></Pressable>
+              {!!doorPhoto && <Image source={{ uri: photoUri(doorPhoto) }} style={{ width: '100%', height: 170, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" />}
+              <Text style={ui.label}>3. What happened</Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Pressable style={[ui.btn, { flex: 1, backgroundColor: '#166534' }]} disabled={!!busy} onPress={() => void saveVisit('access')}><Text style={{ color: '#fff', fontWeight: '700' }}>Access Gained</Text></Pressable>
+                <Pressable style={[ui.btn, { flex: 1, backgroundColor: '#b91c1c' }]} disabled={!!busy} onPress={() => void saveVisit('refused')}><Text style={{ color: '#fff', fontWeight: '700', textAlign: 'center' }}>Tenant Refused Access</Text></Pressable>
+              </View>
+              <Pressable onPress={() => setVisitOpen(false)}><Text style={{ color: '#64748b', textAlign: 'center' }}>Cancel</Text></Pressable>
+            </View>
+          )}
+          {(active.visits?.length || 0) > 0 && (
+            <>
+              <Pressable onPress={() => setVisitsOpen((o) => !o)} style={{ marginTop: 8 }}>
+                <Text style={{ color: '#1C4E86', fontWeight: '700' }}>{visitsOpen ? '▾' : '▸'} Apartment visits ({active.visits!.length}) · {active.visits!.filter((v) => v.outcome === 'access').length} access, {active.visits!.filter((v) => v.outcome === 'refused').length} refused</Text>
+              </Pressable>
+              {visitsOpen && active.visits!.slice().reverse().map((v) => <VisitLine key={v.id} v={v} />)}
+            </>
+          )}
           <Pressable style={[ui.btn, { backgroundColor: '#b91c1c', marginTop: 10 }]} disabled={!!busy} onPress={out}><Text style={{ color: '#fff', fontWeight: '700' }}>Done for today — check out</Text></Pressable>
         </View>
       ) : (

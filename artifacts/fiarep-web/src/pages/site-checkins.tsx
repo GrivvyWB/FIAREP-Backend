@@ -12,7 +12,9 @@ type Row = {
   building: { address: string }; phone: { address: string; latitude: number; longitude: number; accuracyM: number | null };
   distanceM: number | null; atBuilding: boolean | null; checkedInAt: string; checkedOutAt: string; events: Ev[];
   checkoutPhone?: { address?: string } | null;
+  visits?: Visit[];
 };
+type Visit = { id: string; unit: string; outcome: "access" | "refused"; at: string; photoUrl?: string; address?: string; distanceM: number | null; atBuilding: boolean | null; doorNumber: string | null; doorMatches: boolean | null };
 type VendorRow = { id: string; vendorName: string; address: string; trackingId: string; walkthroughAt: string; capturedAt: string; distanceMeters: number | null; onSite: boolean | null; minutesFromSchedule: number | null; accuracy: number | null };
 const time = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
 const far = (m: number | null) => (m == null ? "" : m < 1000 ? `${m} m` : `${(m / 1609).toFixed(1)} mi`);
@@ -27,6 +29,7 @@ export default function SiteCheckins() {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState<string | null>(null);
   const [vendors, setVendors] = useState<VendorRow[]>([]);
+  const [visitsOpen, setVisitsOpen] = useState<string | null>(null);
 
   useEffect(() => {
     setRows(null); setError("");
@@ -76,6 +79,7 @@ export default function SiteCheckins() {
                   <p className="font-semibold">{new Date(r.checkedInAt).toLocaleDateString()}</p>
                   <p>{time(r.checkedInAt)}–{r.checkedOutAt ? time(r.checkedOutAt) : "still in"}</p>
                   <p className="text-xs text-muted-foreground">{away === 0 ? "never left" : `left ${away}×`}</p>
+                  {(r.visits?.length || 0) > 0 && <p className="text-xs text-muted-foreground">{r.visits!.length} apartment{r.visits!.length === 1 ? "" : "s"} · {r.visits!.filter((v) => v.outcome === "refused").length} refused</p>}
                   <ChevronDown className={`ml-auto mt-1 h-4 w-4 text-slate-500 transition-transform ${isOpen ? "rotate-180" : ""}`} />
                 </div>
               </button>
@@ -90,6 +94,29 @@ export default function SiteCheckins() {
                     </li>
                   ))}
                   {r.checkedOutAt && <li>🔴 {time(r.checkedOutAt)} checked out{r.checkoutPhone?.address ? ` — phone at ${r.checkoutPhone.address}` : ""}</li>}
+                  {(r.visits?.length || 0) > 0 && (
+                    <li className="pt-2">
+                      {/* Apartment visits sit in their own drop-down. */}
+                      <button type="button" onClick={() => setVisitsOpen(visitsOpen === r.id ? null : r.id)} className="flex items-center gap-1 font-semibold text-[#185FA5]">
+                        <ChevronDown className={`h-4 w-4 transition-transform ${visitsOpen === r.id ? "rotate-180" : ""}`} />
+                        Apartment visits ({r.visits!.length}) · {r.visits!.filter((v) => v.outcome === "access").length} access gained, {r.visits!.filter((v) => v.outcome === "refused").length} refused
+                      </button>
+                      {visitsOpen === r.id && (
+                        <div className="mt-2 grid gap-3 sm:grid-cols-2">
+                          {r.visits!.map((v) => (
+                            <div key={v.id} className="rounded-md border border-slate-200 p-2">
+                              <p className={`font-semibold ${v.outcome === "access" ? "text-emerald-700" : "text-red-700"}`}>{time(v.at)} · Apt {v.unit} — {v.outcome === "access" ? "Access gained" : "Tenant refused access"}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {v.atBuilding === true ? "✓ At the building" : v.atBuilding === false ? `⚠ ${far(v.distanceM)} from the building` : "Location recorded"}
+                                {v.doorNumber ? (v.doorMatches ? ` · Door shows ${v.doorNumber} ✓` : ` · ⚠ Door shows ${v.doorNumber}`) : " · Door number not visible in the photo"}
+                              </p>
+                              {v.photoUrl && <img src={v.photoUrl} alt={`Door of apartment ${v.unit}`} className="mt-1 w-full rounded border border-slate-200" />}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </li>
+                  )}
                 </ol>
               )}
             </div>

@@ -6,6 +6,8 @@
 import * as Location from 'expo-location';
 import { customFetch } from '@workspace/api-client-react';
 import { db } from './store';
+import * as FileSystem from 'expo-file-system/legacy';
+import { photoUri, photoBase64 } from './photos';
 
 const SITE_KEY = 'site_checkin_active';
 const SITE_ONLY_KEY = 'site_tracking_only'; // tracking runs for the check-in, not for the clock
@@ -19,7 +21,11 @@ export type SiteEvent = { type: 'left' | 'stop' | 'back'; at: string; until?: st
 export type SiteCheckin = {
   id: string; staffName: string; building: { address: string; latitude: number | null; longitude: number | null };
   phone: { latitude: number; longitude: number; address: string }; distanceM: number | null; atBuilding: boolean | null;
-  checkedInAt: string; checkedOutAt: string; events: SiteEvent[];
+  checkedInAt: string; checkedOutAt: string; events: SiteEvent[]; visits?: AptVisit[];
+};
+export type AptVisit = {
+  id: string; unit: string; outcome: 'access' | 'refused'; at: string; photoUrl?: string; address?: string;
+  distanceM: number | null; atBuilding: boolean | null; doorNumber: string | null; doorMatches: boolean | null;
 };
 type Active = {
   id: string; address: string; latitude: number; longitude: number; status: 'on' | 'away';
@@ -139,4 +145,34 @@ export async function checkOut(): Promise<void> {
     const { stopLocationTracking } = await import('./clock-location');
     await stopLocationTracking();
   }
+}
+
+
+/** Where the phone is right now, against the checked-in building (for an apartment visit). */
+export async function hereNow(): Promise<{ latitude: number; longitude: number; accuracyM: number | null; distanceM: number | null } | null> {
+  const s = await activeSiteCheckin();
+  const pos = await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }), new Promise<null>((r) => setTimeout(() => r(null), 12000))]).catch(() => null);
+  if (!pos) return null;
+  const here = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracyM: pos.coords.accuracy ?? null };
+  return { ...here, distanceM: s ? Math.round(metersBetween(s, here)) : null };
+}
+
+/**
+ * Record an apartment visit: the door photo (taken now), the unit, and Access
+ * Gained / Tenant Refused Access. The server stamps the time and keeps it for good.
+ */
+export async function recordVisit(input: { unit: string; outcome: 'access' | 'refused'; photo: string; here: { latitude: number; longitude: number; accuracyM: number | null } | null }): Promise<AptVisit> {
+  const s = await activeSiteCheckin();
+  if (!s) throw new Error('Check in at the building first.');
+  const uri = photoUri(input.photo);
+  const info = await FileSystem.getInfoAsync(uri);
+  if (!info.exists || !('size' in info) || !info.size) throw new Error('The door photo is unavailable. Take it again.');
+  const { uploadUrl, objectPath } = await post<{ uploadUrl: string; objectPath: string }>(`/api/v1/site-checkins/${encodeURIComponent(s.id)}/upload-url`, { size: info.size });
+  const up = await FileSystem.uploadAsync(uploadUrl, uri, { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, mimeType: 'image/jpeg' });
+  if (up.status < 200 || up.status >= 300) throw new Error('Photo upload failed (' + up.status + ').');
+  const image = await photoBase64(input.photo);
+  return post<AptVisit>(`/api/v1/site-checkins/${encodeURIComponent(s.id)}/visits`, {
+    unit: input.unit, outcome: input.outcome, photo: objectPath, image,
+    location: input.here, deviceAddress: input.here ? await placeFor(input.here) : null,
+  });
 }

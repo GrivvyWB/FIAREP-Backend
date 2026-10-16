@@ -8,6 +8,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizationProperties } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { geocodeNycPoint, reverseGeocodeNyc } from "../lib/nycProperty";
+import { fileStorage } from "../lib/fileStorage";
+import { readDoorNumber } from "../lib/smartRepair";
 
 const router: IRouter = Router();
 router.use("/v1/site-checkins", requireAuth);
@@ -134,6 +136,63 @@ router.post("/v1/site-checkins/:id/events", async (req, res) => {
   res.json({ ok: true });
 });
 
+/** A door photo for an apartment visit goes straight to storage. */
+router.post("/v1/site-checkins/:id/upload-url", async (req, res) => {
+  const a = actorFrom(res);
+  const row = await loadRecord(String(req.params["id"]));
+  if (!row || row.state["staffId"] !== a.id || row.state["checkedOutAt"]) { res.status(404).json({ error: "Check in at the building first." }); return; }
+  const size = Number((req.body ?? {})["size"]);
+  if (!size || size > 15 * 1024 * 1024) { res.status(400).json({ error: "Photo too large." }); return; }
+  const { uploadUrl, file } = await fileStorage.createUpload(row.tenantId, a.id, { kind: "inspection-evidence", name: "door.jpg", size, contentType: "image/jpeg" });
+  res.json({ uploadUrl, objectPath: file.objectPath });
+});
+
+const unitKey = (v: string) => v.toUpperCase().replace(/^(APT|APARTMENT|UNIT|#)\s*/i, "").replace(/[^A-Z0-9]/g, "");
+
+/**
+ * Apartment visit: the unit, the door photo, and Access Gained / Tenant Refused
+ * Access. Timestamped by the server, with where the phone was. Kept for good:
+ * there is no way to change or delete a visit.
+ */
+router.post("/v1/site-checkins/:id/visits", async (req, res) => {
+  const a = actorFrom(res);
+  const row = await loadRecord(String(req.params["id"]));
+  if (!row || row.state["staffId"] !== a.id || row.state["checkedOutAt"]) { res.status(404).json({ error: "Check in at the building first." }); return; }
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const unit = str(b["unit"], 20);
+  const outcome = b["outcome"] === "access" ? "access" : b["outcome"] === "refused" ? "refused" : "";
+  const photo = str(b["photo"], 300);
+  if (!unit) { res.status(400).json({ error: "Enter the apartment." }); return; }
+  if (!outcome) { res.status(400).json({ error: "Pick Access Gained or Tenant Refused Access." }); return; }
+  if (!photo.startsWith(`/objects/tenants/${row.tenantId}/`)) { res.status(400).json({ error: "Take a photo of the apartment door." }); return; }
+  const p = pointOf(b["location"]);
+  const bld = (row.state["building"] ?? {}) as { latitude?: number | null; longitude?: number | null };
+  const distanceM = p && bld.latitude != null && bld.longitude != null ? metersBetween({ latitude: bld.latitude, longitude: bld.longitude }, p) : null;
+  // The door photo's apartment number, read from the picture, against the unit typed.
+  const image = typeof b["image"] === "string" && /^data:image\/(jpeg|png|webp);base64,/.test(b["image"]) ? (b["image"] as string) : "";
+  const doorNumber = image && process.env.OPENAI_API_KEY ? await readDoorNumber(image, process.env.OPENAI_API_KEY) : null;
+  const visit = {
+    id: randomUUID(), unit, outcome, photo, at: new Date().toISOString(),
+    ...(p ? { latitude: p.latitude, longitude: p.longitude, accuracyM: p.accuracyM, address: await placeName(p, b["deviceAddress"]) } : {}),
+    distanceM, atBuilding: distanceM == null ? null : distanceM <= AT_BUILDING_M + Math.min(p?.accuracyM ?? 0, 100),
+    doorNumber, doorMatches: doorNumber ? unitKey(doorNumber) === unitKey(unit) : null,
+  };
+  const visits = Array.isArray(row.state["visits"]) ? (row.state["visits"] as unknown[]) : [];
+  await db.update(entityRecords).set({ state: { ...row.state, visits: [...visits, visit].slice(-500) }, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() }).where(eq(entityRecords.id, row.id));
+  res.status(201).json(visit);
+});
+
+/** Short-lived links for the door photos on a list of check-ins. */
+async function withPhotoUrls(list: Array<Record<string, unknown> & { id: string }>, tenantOf: Map<string, string>) {
+  for (const r of list) {
+    const visits = Array.isArray(r["visits"]) ? (r["visits"] as Record<string, unknown>[]) : [];
+    for (const v of visits) {
+      try { v["photoUrl"] = (await fileStorage.createDownload(tenantOf.get(r.id) || "", String(v["photo"] || ""))).downloadUrl; } catch { /* missing photo */ }
+    }
+  }
+  return list;
+}
+
 router.post("/v1/site-checkins/:id/checkout", async (req, res) => {
   const a = actorFrom(res);
   const row = await loadRecord(String(req.params["id"]));
@@ -149,7 +208,9 @@ router.post("/v1/site-checkins/:id/checkout", async (req, res) => {
 router.get("/v1/site-checkins/mine", async (_req, res) => {
   const a = actorFrom(res);
   const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, SITE_CHECKIN_ENTITY), eq(entityRecords.deleted, false), sql`${entityRecords.state}->>'staffId' = ${a.id}`));
-  res.json(rows.map((r) => ({ id: r.id, ...r.state }) as Record<string, unknown>).sort((x, y) => String(y["checkedInAt"]).localeCompare(String(x["checkedInAt"]))).slice(0, 50));
+  const tenantOf = new Map(rows.map((r) => [r.id, r.tenantId]));
+  const list = rows.map((r) => ({ id: r.id, ...r.state }) as Record<string, unknown> & { id: string }).sort((x, y) => String(y["checkedInAt"]).localeCompare(String(x["checkedInAt"]))).slice(0, 50);
+  res.json(await withPhotoUrls(list, tenantOf));
 });
 
 /** The platform: every check-in at this organization's buildings (FIAREP: all), for a date range. */
@@ -166,7 +227,7 @@ router.get("/v1/site-checkins", async (req, res) => {
       return (!from || day >= from) && (!to || day <= to);
     })
     .sort((x, y) => String(y["checkedInAt"]).localeCompare(String(x["checkedInAt"])));
-  res.json(list.slice(0, 1000));
+  res.json(await withPhotoUrls(list.slice(0, 1000), new Map(rows.map((r) => [r.id, r.tenantId]))));
 });
 
 /** Vendor walk-throughs: where each vendor's phone was when they checked in for a

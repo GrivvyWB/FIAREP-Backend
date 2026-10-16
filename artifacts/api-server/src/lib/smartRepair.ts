@@ -296,3 +296,30 @@ export async function baselineFinding(input: { image: string; area: string; note
     clearTimeout(timeout);
   }
 }
+
+/** The apartment number on a door photo ("4B", "12", "PH-1"), or null when none is visible. */
+export async function readDoorNumber(image: string, apiKey: string, fetchImpl: typeof fetch = fetch): Promise<string | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 25_000);
+  try {
+    const response = await fetchImpl("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "gpt-5-mini",
+        reasoning_effort: "minimal",
+        messages: [
+          { role: "system", content: "Read the apartment / unit number shown on or beside this apartment door (on the door, a plate, a sticker or the frame). Return only JSON. If no number is clearly visible, visible=false and number=\"\". Never guess." },
+          { role: "user", content: [{ type: "image_url", image_url: { url: image, detail: "high" } }] },
+        ],
+        response_format: { type: "json_schema", json_schema: { name: "door_number", strict: true, schema: { type: "object", additionalProperties: false, required: ["visible", "number"], properties: { visible: { type: "boolean" }, number: { type: "string" } } } } },
+      }),
+      signal: controller.signal,
+    });
+    if (!response.ok) return null;
+    const text = responseText(await response.json());
+    if (!text) return null;
+    const r = JSON.parse(text) as { visible: boolean; number: string };
+    return r.visible && r.number.trim() ? r.number.trim().slice(0, 20) : null;
+  } catch { return null; } finally { clearTimeout(timeout); }
+}
