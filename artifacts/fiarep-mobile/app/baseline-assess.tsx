@@ -8,7 +8,7 @@ import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { getSessionIdentity } from '../lib/store';
 import { takePhoto, pickPhoto, photoBase64 } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
-import { readHeading, requestSmartTicket } from '../lib/smartRepair';
+import { readHeading, facingLabel, requestSmartTicket } from '../lib/smartRepair';
 import { getBaseline, updateBaseline, importViolations, uploadFindingPhoto, priorityFromTicket, tradeCategory, PRIORITY_COLOR, BAND_ICON, type Assessment, type Finding, type Priority } from '../lib/baseline';
 import { ui } from '../lib/ui';
 
@@ -70,6 +70,14 @@ export default function BaselineAssess() {
     const u = await fn().catch(() => null);
     if (!u) return;
     setPhoto(u); setHeading(await readHeading());
+  }
+  /** Compass button: read which way the phone points and write it as the wall. */
+  async function compassWall() {
+    const h = await readHeading();
+    const f = facingLabel(h);
+    if (h == null || !f) { Alert.alert('Compass', 'No compass reading. Hold the phone flat, point it at the wall and try again.'); return; }
+    setHeading(h);
+    setDraft((d) => ({ ...d, wall: `${f} wall (${h}°)` }));
   }
   async function analyze() {
     if (!photo) return;
@@ -133,7 +141,13 @@ export default function BaselineAssess() {
             <TextInput style={[ui.input, { flex: 1 }]} value={draft.floor} onChangeText={(v) => set('floor', v)} placeholder="Floor" />
             <TextInput style={[ui.input, { flex: 1 }]} value={draft.unit} onChangeText={(v) => set('unit', v)} placeholder="Unit" />
           </View>
-          <TextInput style={ui.input} value={draft.wall} onChangeText={(v) => set('wall', v)} placeholder="Wall / area (e.g. north wall, right-side handrail)" />
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            {/* Compass: point the phone at the wall, tap, and the direction goes in. */}
+            <Pressable onPress={() => void compassWall()} accessibilityLabel="Compass — fill in which wall" style={{ width: 46, height: 46, borderRadius: 8, borderWidth: 1, borderColor: BLUE, alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' }}>
+              <Text style={{ fontSize: 22 }}>🧭</Text>
+            </Pressable>
+            <TextInput style={[ui.input, { flex: 1 }]} value={draft.wall} onChangeText={(v) => set('wall', v)} placeholder="Wall / area (e.g. north wall, right-side handrail)" />
+          </View>
           {!!photo && <Pressable style={[ui.btn, { backgroundColor: BLUE }]} onPress={analyze}><Text style={ui.btnText}>Analyze photo — fill in the finding</Text></Pressable>}
           <TextInput style={ui.input} value={draft.issue} onChangeText={(v) => set('issue', v)} placeholder="Issue detected" />
           <TextInput style={[ui.input, { minHeight: 60 }]} multiline value={draft.description} onChangeText={(v) => set('description', v)} placeholder="Description" />
