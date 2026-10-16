@@ -94,6 +94,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "measurement", name: "Measurement", description: "AR/LiDAR material take-off (concrete, sheetrock, window openings)", icon: Building2 },
   { id: "company-forms", name: "Company Forms (locked folder)", description: "FIAREP's own compliance forms — DOB certificate of correction, vermin, lead, tenant notices. OFF for every client; switch on only for FIAREP's organization", icon: AlertTriangle },
   { id: "property-lookup", name: "HPD / DOB Lookup", description: "Look up a building's HPD and DOB violations by address (website and app) — pick the trades below", icon: AlertTriangle },
+  { id: "audit-log", name: "Audit Log", description: "Who did what, and when — on the website, for administrators", icon: FileBarChart },
   { id: "site-checkins", name: "Site Check-Ins", description: "Where each member checked in (the building tapped vs. where the phone was) and when they left and came back", icon: Building2 },
   { id: "translator", name: "Translator", description: "Voice-to-voice interpreter for talking with residents (website and app)", icon: Users },
   { id: "violation-alerts", name: "Violation Alerts (menu page)", description: "New 311 complaints, HPD / DOB violations and OATH summonses on the client's watched buildings, checked every 30 minutes, as a page in their menu. OFF for every client; switch on per client, then assign their buildings on Platform -> Alerts", icon: AlertTriangle },
@@ -172,7 +173,6 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
-    "Audit Log",
     "Manage All Requests", "Resident Reports", "Send Violation", "Assign a Job", "Staff Member Jobs", "Add Job for Mgmt", "Projects / Inspections",
     "HUD Inspections", "Change Orders", "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score",
     "Development Scores", "Building & Residential Scores", "Assign Route", "Leave Calendar", "Attendance", "Messages",

@@ -32,6 +32,7 @@ import Elevators from '@/pages/elevators';
 import Leave from '@/pages/leave';
 import TimeClock from '@/pages/time-clock';
 import SiteCheckins from '@/pages/site-checkins';
+import AuditLog from '@/pages/audit-log';
 import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
 import SharedData from '@/pages/shared-data';
@@ -270,6 +271,7 @@ function AppRouter() {
           <Route path="/leave" component={LeaveRoute} />
           <Route path="/time-clock" component={TimeClock} />
           <Route path="/site-checkins" component={SiteCheckinsRoute} />
+          <Route path="/audit-log" component={AuditLogRoute} />
           <Route path="/notifications" component={NotificationsRoute} />
           <Route path="/settings" component={SettingsRoute} />
           <Route path="/shared-data" component={SharedDataRoute} />
@@ -305,6 +307,7 @@ const DashboardRoute = () => <ModuleRoute module="dashboard"><Dashboard /></Modu
 const CommunityRoute = () => <ModuleRoute module="community"><CommunityCoordinators /></ModuleRoute>;
 const TranslatorRoute = () => <ModuleRoute module="translator"><Translator /></ModuleRoute>;
 const SiteCheckinsRoute = () => <ModuleRoute module="site-checkins"><SiteCheckins /></ModuleRoute>;
+const AuditLogRoute = () => <ModuleRoute module="audit-log"><AuditLog /></ModuleRoute>;
 const PropertyLookupRoute = () => <ModuleRoute module="property-lookup"><PropertyLookup /></ModuleRoute>;
 const ViolationAlertsRoute = () => <ModuleRoute module="violation-alerts"><ViolationAlerts /></ModuleRoute>;
 const CompanyFormsRoute = () => <ModuleRoute module="company-forms"><CompanyForms /></ModuleRoute>;
@@ -408,7 +411,7 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/complaints">{() => <ComplaintDashboard source="platform" />}</Route>
           <Route path="/platform-owner/forms" component={OwnerForms} />
           <Route path="/platform-owner/alerts" component={OwnerAlerts} />
-          <Route path="/platform-owner/crew" component={OwnerCrew} />
+          <Route path="/platform-owner/crew">{() => <OwnerCrew />}</Route>
           <Route path="/platform-owner/fiarep-services">{() => <OwnerCrew unit="services" />}</Route>
           <Route path="/platform-owner/properties" component={OwnerProperties} />
           <Route path="/platform-owner" component={OwnerDashboard} />

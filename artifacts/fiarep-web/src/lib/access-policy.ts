@@ -9,7 +9,7 @@ export type StaffModule =
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
    | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections"
-   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins";
+   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -190,6 +190,8 @@ export function hasModuleAccess(
   if (module === "violation-alerts" || module === "violation-alerts-command") return !["vendor", "resident", "procurement"].includes(String(staff.role));
   // Site check-ins: where each member checked in and when they left and came back — for management.
   if (module === "site-checkins") return staff.role === "administrator" || staff.role === "management";
+  // Audit Log: the organization's administrators (the server allows only them).
+  if (module === "audit-log") return staff.role === "administrator";
   // The live translator: every signed-in staff member who talks to residents.
   if (module === "translator") return !["vendor", "resident", "procurement"].includes(String(staff.role));
   // HPD / DOB lookup (read-only): staff who work a building, unless the

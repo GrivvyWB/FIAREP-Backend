@@ -155,7 +155,6 @@ export default function AdminHome() {
       heading: 'System',
       color: '#4A5560',
       tiles: [
-        { label: 'Audit Log', onPress: () => router.push('/audit-log'), tone: 'outline' },
         ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
         ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
@@ -171,7 +170,6 @@ export default function AdminHome() {
   const tabs = [
     ...(has('Manage All Requests') ? [{ label: 'Requests', icon: 'file-tray-full-outline', onPress: () => router.push('/manage-requests') }] : []),
     ...(has('Resident Reports') ? [{ label: 'Reports', icon: 'document-text-outline', onPress: () => router.push('/management') }] : []),
-    ...(has('Audit Log') ? [{ label: 'Audit', icon: 'list-outline', onPress: () => router.push('/audit-log') }] : []),
   ];
   return (
     <FieldHome
