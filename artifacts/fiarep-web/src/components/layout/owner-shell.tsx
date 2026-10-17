@@ -2,7 +2,7 @@ import { ReactNode, useEffect, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { useOwnerAuth } from "@/hooks/use-owner-auth";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LayoutDashboard, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer, HardHat, UsersRound } from "lucide-react";
+import { ClipboardCheck, BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LayoutDashboard, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer, HardHat, UsersRound, Mic } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function OwnerShell({ children }: { children: ReactNode }) {
@@ -218,6 +218,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
             <BellRing className={`h-4 w-4 ${unseen > 0 ? "animate-pulse text-rose-600" : ""}`} />
             Alerts
             {unseen > 0 && <span className="rounded-full bg-rose-600 px-2 py-0.5 text-xs font-bold text-white animate-pulse" style={{ animationDuration: "1s" }}>{unseen}</span>}
+          </Link>
+          <Link
+            href="/platform-owner/command-center"
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/command-center"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <Mic className="h-4 w-4" />
+            Command Center
           </Link>
         </div>
       </nav>

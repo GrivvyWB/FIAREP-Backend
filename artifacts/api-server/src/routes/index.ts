@@ -29,11 +29,15 @@ import fiarepComplaintsRouter from "./fiarepComplaints";
 import crewRouter from "./crew";
 import messagesRouter from "./messages";
 import quickQuoteRouter from "./quickQuote";
+import commandRouter from "./command";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+// Before the staff routers: the desktop agent and Platform Control routes carry
+// their own auth and must not hit the staff routers' requireAuth.
+router.use(commandRouter);
 router.use(organizationsRouter);
 router.use(publicAccessRouter);
 router.use(joinRouter);

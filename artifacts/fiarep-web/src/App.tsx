@@ -72,6 +72,7 @@ import OwnerPricing from '@/pages/platform-owner/pricing';
 import BaselinePage from '@/pages/baseline';
 import OwnerForms from '@/pages/platform-owner/forms';
 import OwnerAlerts from '@/pages/platform-owner/alerts';
+import OwnerCommandCenter from '@/pages/platform-owner/command-center';
 import OwnerCrew from '@/pages/platform-owner/crew';
 import OwnerProperties from '@/pages/platform-owner/properties';
 import { getStoredPersona, setStoredPersona, evaluateAccess, Persona, hasModuleAccess, isProcurementDesk, type StaffModule } from '@/lib/access-policy';
@@ -411,6 +412,7 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/complaints">{() => <ComplaintDashboard source="platform" />}</Route>
           <Route path="/platform-owner/forms" component={OwnerForms} />
           <Route path="/platform-owner/alerts" component={OwnerAlerts} />
+          <Route path="/platform-owner/command-center" component={OwnerCommandCenter} />
           <Route path="/platform-owner/crew">{() => <OwnerCrew />}</Route>
           <Route path="/platform-owner/fiarep-services">{() => <OwnerCrew unit="services" />}</Route>
           <Route path="/platform-owner/properties" component={OwnerProperties} />

@@ -21,6 +21,7 @@
         "NSCameraUsageDescription": "Take photos of rooms and areas for estimates.",
         "NSPhotoLibraryUsageDescription": "Attach existing photos to estimates.",
         "ITSAppUsesNonExemptEncryption": false,
+        "NSFaceIDUsageDescription": "Face ID approves Command Center actions before they run.",
         "NSLocationWhenInUseUsageDescription": "Tag inspections and photos with their location for accurate field records.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "While you are clocked in, FIAREP records the places you work so your hours and job sites match.",
         "UIBackgroundModes": [

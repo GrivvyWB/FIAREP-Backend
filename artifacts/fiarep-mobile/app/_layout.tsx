@@ -255,6 +255,7 @@ function AdministratorStack() {
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
+      <Stack.Screen name="command-center" options={{ title: 'Command Center' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
       <Stack.Screen name="in-house-assignments" options={{ title: 'In-house assignments' }} />
@@ -330,6 +331,7 @@ function InspectorStack() {
       <Stack.Screen name="cpm-home" options={{ title: 'Tech', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
+      <Stack.Screen name="command-center" options={{ title: 'Command Center' }} />
       <Stack.Screen name="my-inspections" options={{ title: 'My Inspections' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="create-report" options={{ title: 'Create Report' }} />
@@ -382,6 +384,7 @@ function ManagementStack() {
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
+      <Stack.Screen name="command-center" options={{ title: 'Command Center' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
       <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
       <Stack.Screen name="message" options={{ title: 'Message' }} />
@@ -448,6 +451,7 @@ function WorkerStack() {
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
+      <Stack.Screen name="command-center" options={{ title: 'Command Center' }} />
       <Stack.Screen name="index" options={{ title: 'Projects', headerRight: () => <ProjectsHome to="/worker-home" /> }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
       <Stack.Screen name="project/room" options={{ title: 'Add room', presentation: 'modal' }} />
@@ -488,6 +492,7 @@ function EmergencyStack() {
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
+      <Stack.Screen name="command-center" options={{ title: 'Command Center' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
@@ -517,6 +522,7 @@ function CommunityStack() {
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
+      <Stack.Screen name="command-center" options={{ title: 'Command Center' }} />
       <Stack.Screen name="community-resident" options={{ title: 'Resident' }} />
       <Stack.Screen name="community-building" options={{ title: 'Building & owner' }} />
       <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />

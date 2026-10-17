@@ -157,6 +157,8 @@ export default function AdminHome() {
       tiles: [
         ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
         ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
+        // FIAREP's own administrators: talk to FIAREP / the Mac from the phone.
+        ...(fiarepAdmin ? [{ label: '🎙 Command Center', onPress: () => router.push('/command-center'), tone: 'solid' as const }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
       ],
     },

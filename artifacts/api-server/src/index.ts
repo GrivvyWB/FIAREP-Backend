@@ -5,6 +5,8 @@ import { ensureNotificationReadsTable } from "./lib/notificationReads";
 import { ensureFiarepServiceTitles } from "./lib/fiarepServices";
 import { ensureFiarepAdministrators } from "./lib/fiarepAdmins";
 import { startPushReceiptWorker } from "./lib/push";
+import { ensureCommandTables } from "./lib/command/tables";
+import { expireStaleProposals } from "./lib/command/engine";
 
 const rawPort = process.env["PORT"];
 
@@ -24,6 +26,8 @@ await ensureNychaCatalog();
 await ensureNotificationReadsTable();
 await ensureFiarepServiceTitles();
 await ensureFiarepAdministrators();
+await ensureCommandTables();
+setInterval(() => { void expireStaleProposals().catch(() => undefined); }, 60_000).unref();
 
 app.listen(port, (err) => {
   if (err) {

@@ -42,6 +42,11 @@ app.use("/api/v1/measurements", express.json({ limit: "4mb" }));
 app.use("/api/v1/public/vendor-scopes", express.json({ limit: "12mb" }));
 // An apartment visit carries the door photo for reading the apartment number.
 app.use("/api/v1/site-checkins", express.json({ limit: "15mb" }));
+// Command Center: keep the exact body bytes — each phone request is signed over them.
+app.use("/api/v1/command", express.json({
+  limit: "256kb",
+  verify: (req, _res, buf) => { (req as unknown as { rawBody?: Buffer }).rawBody = Buffer.from(buf); },
+}));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 

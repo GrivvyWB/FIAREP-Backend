@@ -1,0 +1,42 @@
+{
+  "apiBase": "https://fiarep.com/api",
+  "token": "fca_PASTE_THE_TOKEN_FROM_PLATFORM_CONTROL",
+  "name": "Tim's Mac",
+  "trustedConfirmKeys": [],
+  "folders": ["~/Desktop/FIAREP-Backend", "~/Desktop/_demo_thumbs"],
+  "apps": ["Xcode", "Terminal", "Safari", "Simulator"],
+  "tasks": {
+    "git-status": {
+      "description": "Git status of the FIAREP monorepo on the Mac",
+      "command": ["git", "-C", "~/Desktop/FIAREP-Backend", "status", "--short", "--branch"],
+      "confirm": false,
+      "timeoutSec": 30
+    },
+    "git-pull": {
+      "description": "Pull main from GitHub into the FIAREP monorepo on the Mac",
+      "command": ["git", "-C", "~/Desktop/FIAREP-Backend", "pull", "--ff-only", "origin", "main"],
+      "confirm": true,
+      "timeoutSec": 120
+    },
+    "typecheck": {
+      "description": "Typecheck the FIAREP monorepo (pnpm run typecheck)",
+      "command": ["pnpm", "run", "typecheck"],
+      "cwd": "~/Desktop/FIAREP-Backend",
+      "confirm": false,
+      "timeoutSec": 600
+    },
+    "site-health": {
+      "description": "Check fiarep.com API health from the Mac",
+      "command": ["curl", "-sS", "-m", "15", "-w", "\nHTTP %{http_code} in %{time_total}s\n", "https://fiarep.com/api/healthz"],
+      "confirm": false,
+      "timeoutSec": 30
+    },
+    "git-log": {
+      "description": "Last N commits on the Mac monorepo",
+      "command": ["git", "-C", "~/Desktop/FIAREP-Backend", "log", "--oneline", "-n", "{count}"],
+      "params": { "count": { "description": "How many commits (1-50)", "pattern": "[1-9]|[1-4][0-9]|50" } },
+      "confirm": false,
+      "timeoutSec": 30
+    }
+  }
+}
