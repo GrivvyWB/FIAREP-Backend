@@ -14,6 +14,7 @@ import {
 import { VIOLATION_CODES, HAZARD_CLASSES, type HazardClass } from '../lib/violationCodes';
 import { ui, ACCENT } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
+import { useRawModules } from '../lib/module-access';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch (e) { return iso; }
@@ -26,6 +27,8 @@ export default function InspectorViolations() {
   // ?lookup=1: anyone on staff checks a building's HPD / DOB record; no logging.
   const lookupMode = String(lookup || '') === '1';
   const router = useRouter();
+  // Take me there: on unless switched off in Module Management.
+  const guideOn = (useRawModules() || {})['violationGuide'] !== false;
   const [authorized, setAuthorized] = useState(false);
   // CPMs open this from a complaint to look up DOB/HPD records; only field
   // Inspectors log violations here.
@@ -266,6 +269,11 @@ export default function InspectorViolations() {
               {matchesAssignedUnit(v.apartment) && <Text style={{ color: '#1E7D4F', fontWeight: '700', fontSize: 12, marginTop: 3 }}>Matches assigned unit</Text>}
               <Text style={{ fontSize: 13, marginTop: 4 }}>{v.description}</Text>
               {!!v.inspectionDate && <Text style={[ui.listSub, { marginTop: 4 }]}>Inspected: {v.inspectionDate}</Text>}
+              {guideOn && (
+                <Pressable style={[ui.btn, { marginTop: 8, paddingVertical: 10 }]} onPress={() => router.push({ pathname: '/violation-guide', params: { description: v.description || '', apartment: v.apartment || '', story: (v as { story?: string | null }).story || '', cls: v.class || '', id: v.id || '', address: building || '' } } as never)}>
+                  <Text style={ui.btnText}>🧭 Take me there</Text>
+                </Pressable>
+              )}
             </View>
           )))}
 

@@ -253,6 +253,7 @@ function AdministratorStack() {
     <Stack initialRouteName="admin-home">
       <Stack.Screen name="admin-home" options={{ title: 'Administrator', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
+      <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="dispatch-job" options={{ title: 'Assign a Job' }} />
@@ -340,6 +341,7 @@ function InspectorStack() {
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'Log Violations' }} />
+      <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
@@ -378,6 +380,7 @@ function ManagementStack() {
       <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="client-messages" options={{ title: 'Message FIAREP', headerBackTitle: 'Back' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
+      <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
       <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
@@ -443,6 +446,7 @@ function WorkerStack() {
       <Stack.Screen name="elevator-jobs" options={{ title: 'My Elevator Jobs' }} />
       <Stack.Screen name="worker-home" options={{ title: 'Worker', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
+      <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="index" options={{ title: 'Projects', headerRight: () => <ProjectsHome to="/worker-home" /> }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
@@ -482,6 +486,7 @@ function EmergencyStack() {
     <Stack initialRouteName="worker-home">
       <Stack.Screen name="worker-home" options={{ title: 'Emergency Maintenance', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
+      <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="attendance" options={{ title: 'Attendance' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
@@ -510,6 +515,7 @@ function CommunityStack() {
     <Stack initialRouteName="community-home">
       <Stack.Screen name="community-home" options={{ title: 'Community Coordinators', headerBackVisible: false }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
+      <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="community-resident" options={{ title: 'Resident' }} />
       <Stack.Screen name="community-building" options={{ title: 'Building & owner' }} />

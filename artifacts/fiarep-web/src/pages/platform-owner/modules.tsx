@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
+  MapPin,
   AlertTriangle,
   Building2,
   Check,
@@ -297,6 +298,7 @@ export default function OwnerModules() {
   const [smartRepairToMgmt, setSmartRepairToMgmt] = useState(true);
   // FIAREP Multi-Complaint Priority Engine — on unless switched off.
   const [priorityEngineOn, setPriorityEngineOn] = useState(true);
+  const [violationGuideOn, setViolationGuideOn] = useState(true);
   // New client: complaint tools wait for the baseline walk-through. Off unless switched on.
   const [requireBaseline, setRequireBaseline] = useState(false);
   // Read-only locks: each one OFF unless switched on (features.modules["lock.<key>"]).
@@ -372,6 +374,7 @@ export default function OwnerModules() {
     setRequireBaseline(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).requireBaseline === true));
     setLocks(Object.fromEntries(READ_ONLY_LOCKS.map((l) => [`lock.${l.key}`, Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>)[`lock.${l.key}`] === true)])));
     setPriorityEngineOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).priorityEngine === false));
+    setViolationGuideOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).violationGuide === false));
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
     setSmartRepairEmailTo(typeof organization.features?.smartRepairEmailTo === "string" ? String(organization.features.smartRepairEmailTo) : "");
@@ -437,6 +440,7 @@ export default function OwnerModules() {
   const toggleRequireBaseline = (enabled: boolean) => { setRequireBaseline(enabled); setDirty(true); };
   const toggleLock = (key: string, on: boolean) => { setLocks((m) => ({ ...m, [`lock.${key}`]: on })); setDirty(true); };
   const togglePriorityEngine = (enabled: boolean) => { setPriorityEngineOn(enabled); setDirty(true); };
+  const toggleViolationGuide = (enabled: boolean) => { setViolationGuideOn(enabled); setDirty(true); };
   const toggleSmartRepairToMgmt = (enabled: boolean) => { setSmartRepairToMgmt(enabled); setDirty(true); };
   const toggleSmartRepairEmailCopy = (enabled: boolean) => { setSmartRepairEmailCopy(enabled); setDirty(true); };
   const toggleMessagingOpen = (enabled: boolean) => {
@@ -490,7 +494,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -946,6 +950,29 @@ export default function OwnerModules() {
                     checked={priorityEngineOn}
                     onCheckedChange={togglePriorityEngine}
                     aria-label={`${priorityEngineOn ? "Disable" : "Enable"} Multi-Complaint Priority Engine`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  violationGuideOn ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    violationGuideOn ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <MapPin className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Take me there (HPD violation navigation)</p>
+                    <p className="text-xs text-slate-500">On every HPD violation in the app: step-by-step guidance to the floor, the apartment, the room and the wall the HPD inspector wrote, with a live compass arrow. For every member. Off hides the button for this organization</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    violationGuideOn ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {violationGuideOn ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={violationGuideOn}
+                    onCheckedChange={toggleViolationGuide}
+                    aria-label={`${violationGuideOn ? "Disable" : "Enable"} Take me there`}
                   />
                 </div>
                 {!isFiarep && (
