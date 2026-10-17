@@ -2,7 +2,7 @@
 // separate conversation - to FIAREP's administrator. Never to a technician or
 // a worker. Each conversation is seen only by its two sides.
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, Pressable, ScrollView } from 'react-native';
+import { View, Text, Pressable, ScrollView, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ui, ACCENT } from '../lib/ui';
 import ChatThread from '../components/ChatThread';
@@ -15,6 +15,7 @@ type Raw = { id: string; messages: Array<{ id: string; mine: boolean; authorName
 export default function ClientMessages() {
   const [to, setTo] = useState<'services' | 'admin'>('services');
   const router = useRouter();
+  const [cleared, setCleared] = useState(0);
   const [me, setMe] = useState('');
   useEffect(() => { getCurrentActor().then((a) => setMe(a.name || '')).catch(() => undefined); }, []);
   // ?member=1: this staff member's own conversation (every member has one), not the company's.
@@ -39,7 +40,14 @@ export default function ClientMessages() {
         {tab('admin', 'Administrator')}
       </View>
       <View key={to} style={[ui.card, { borderColor: ACCENT + '33' }]}>
-        <ChatThread load={load} send={send} />
+        <ChatThread key={`${to}-${cleared}`} load={load} send={send} />
+        <Pressable onPress={() => Alert.alert('Delete these messages?', 'They are removed on your side.', [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => void (async () => {
+            try { await msgPost(`${base}/clear${to === 'admin' ? '?to=admin' : ''}`, {}); setCleared((n) => n + 1); }
+            catch (e: any) { Alert.alert('Could not delete', e?.data?.error || 'Try again.'); }
+          })() },
+        ])} style={{ paddingTop: 8 }}><Text style={{ color: '#b91c1c', fontWeight: '600' }}>Delete messages</Text></Pressable>
       </View>
       {/* Hand out your own code: whoever has it writes to you. */}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/fiarep-messages?member=1')}>

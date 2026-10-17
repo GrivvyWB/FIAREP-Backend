@@ -216,6 +216,7 @@ function CoordinatorMessages({ unit, admin, toast, member = false }: { unit: str
 function ClientMessages({ unit, toast, base = "/api/v1/client/messages" }: { unit: string; toast: ReturnType<typeof useToast>["toast"]; base?: string }) {
   const [to, setTo] = useState<"services" | "admin">("services");
   const url = to === "admin" ? `${base}?to=admin` : base;
+  const [cleared, setCleared] = useState(0);
   const name = to === "admin" ? "FIAREP's administrator" : unit;
   return (
     <div className="mx-auto max-w-2xl space-y-4 p-4 sm:p-6">
@@ -228,7 +229,12 @@ function ClientMessages({ unit, toast, base = "/api/v1/client/messages" }: { uni
         <Button variant={to === "admin" ? "default" : "outline"} onClick={() => setTo("admin")}>Administrator</Button>
       </div>
       <div className="rounded-lg border bg-card">
-        <Thread key={`${base}-${to}`} id={`client-${to}`} readUrl={url} sendUrl={url} side="contact" closed={false} toast={toast} />
+        <Thread key={`${base}-${to}-${cleared}`} id={`client-${to}`} readUrl={url} sendUrl={url} side="contact" closed={false} toast={toast}
+          footer={<Button variant="ghost" size="sm" className="text-destructive" onClick={() => void (async () => {
+            if (!window.confirm("Delete these messages? They are removed on your side.")) return;
+            try { await post(`${base}/clear${to === "admin" ? "?to=admin" : ""}`, {}); setCleared((n) => n + 1); }
+            catch (err: any) { toast({ variant: "destructive", title: "Could not delete", description: err?.data?.error || "Try again." }); }
+          })()}>Delete messages</Button>} />
       </div>
     </div>
   );

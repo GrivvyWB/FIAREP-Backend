@@ -170,7 +170,7 @@ router.get("/v1/client/messages", async (_req, res) => {
   const { id, version, thread } = await clientThread(gate.actor.tenantId, gate.company, to);
   await markRead(id, version, thread, "contact");
   res.setHeader("Cache-Control", "no-store");
-  res.json({ id, messages: thread.messages.map((m) => ({ ...m, mine: m.from === "contact" })) });
+  res.json({ id, messages: thread.messages.filter((m) => !thread.contactClearedAt || m.at > thread.contactClearedAt).map((m) => ({ ...m, mine: m.from === "contact" })) });
 });
 
 router.post("/v1/client/messages", async (_req, res) => {
@@ -233,7 +233,7 @@ router.get("/v1/member/messages", async (req, res) => {
   const { id, version, thread } = await memberThread(gate.actor, gate.company, to);
   await markRead(id, version, thread, "contact");
   res.setHeader("Cache-Control", "no-store");
-  res.json({ id, messages: thread.messages.map((m) => ({ ...m, mine: m.from === "contact" })) });
+  res.json({ id, messages: thread.messages.filter((m) => !thread.contactClearedAt || m.at > thread.contactClearedAt).map((m) => ({ ...m, mine: m.from === "contact" })) });
 });
 
 router.post("/v1/member/messages", async (req, res) => {
@@ -244,6 +244,24 @@ router.post("/v1/member/messages", async (req, res) => {
   const result = await postMessage(id, version, thread, "contact", gate.actor, String((req.body ?? {})["body"] ?? ""));
   if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
   res.status(201).json(result.message);
+});
+
+/** Delete the messages in your own conversation with FIAREP (your side only). */
+router.post("/v1/client/messages/clear", async (req, res) => {
+  const gate = await clientGate(res);
+  if (!gate) { res.status(403).json({ error: "Messaging FIAREP Services is not part of your plan." }); return; }
+  const to = String((req.query ?? {})["to"] ?? "") === "admin" ? "admin" as const : "services" as const;
+  const { id, version, thread } = await clientThread(gate.actor.tenantId, gate.company, to);
+  await clearContactSide(id, version, thread);
+  res.json({ ok: true });
+});
+router.post("/v1/member/messages/clear", async (req, res) => {
+  const gate = await memberGate(res);
+  if (!gate) { res.status(403).json({ error: "Messaging FIAREP is switched off for you." }); return; }
+  const to = String((req.query ?? {})["to"] ?? "") === "admin" ? "admin" as const : "services" as const;
+  const { id, version, thread } = await memberThread(gate.actor, gate.company, to);
+  await clearContactSide(id, version, thread);
+  res.json({ ok: true });
 });
 
 // ── Any member hands out codes too: the person with the code writes to them ──
