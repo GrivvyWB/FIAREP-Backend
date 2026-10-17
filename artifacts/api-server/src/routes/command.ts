@@ -18,6 +18,7 @@ import { ACTIONS } from "../lib/command/actions";
 import { getSwitches, saveSwitches, DEFAULT_MODEL } from "../lib/command/switches";
 import { confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
+import { relayUrl, syncRelayDevices } from "../lib/command/relay";
 
 const router: IRouter = Router();
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -151,6 +152,11 @@ router.post("/v1/command/actions/:id/deny", ...phone, requireCommandDevice, asyn
   res.json(publicAction(row));
 });
 
+// The backup relay's address, cached on the phone for when fiarep.com is down.
+router.get("/v1/command/relay", ...phone, requireCommandDevice, async (_req, res) => {
+  res.json({ url: relayUrl() });
+});
+
 router.get("/v1/command/work-orders", ...phone, requireCommandDevice, async (req, res) => {
   const status = str(req.query["status"], 20) || "draft";
   const rows = await db.select().from(commandWorkOrders).where(status === "any" ? undefined : eq(commandWorkOrders.status, status)).orderBy(desc(commandWorkOrders.createdAt)).limit(200);
@@ -258,7 +264,7 @@ router.get("/v1/platform/command", async (_req, res) => {
     verifyAuditChain(),
   ]);
   res.json({
-    switches, defaultModel: DEFAULT_MODEL, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
+    switches, defaultModel: DEFAULT_MODEL, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
     actions: ACTIONS.map((a) => ({ name: a.name, label: a.label, risk: a.risk, confirmDefault: a.confirmDefault, target: a.target })),
     devices: devices.map((d) => ({ id: d.id, name: d.name, staffName: d.staffName, status: d.status, confirmKey: d.confirmKey, createdAt: d.createdAt, approvedAt: d.approvedAt, approvedBy: d.approvedBy, lastUsedAt: d.lastUsedAt })),
     agents: agents.map((a) => ({ id: a.id, name: a.name, status: a.status, online: a.status === "active" && !!a.lastSeenAt && Date.now() - a.lastSeenAt.getTime() < ONLINE_WINDOW_MS, lastSeenAt: a.lastSeenAt, info: a.info, tasks: a.tasks, folders: a.folders, apps: a.apps, createdAt: a.createdAt })),
@@ -292,7 +298,8 @@ router.post("/v1/platform/command/devices/:id/:decision", async (req, res) => {
     .where(and(eq(commandDevices.id, id), decision === "approve" ? eq(commandDevices.status, "pending") : undefined)).returning();
   if (!row) { res.status(404).json({ error: decision === "approve" ? "No pending device with that id" : "Unknown device" }); return; }
   await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: `device.${decision === "approve" ? "approved" : "revoked"}`, deviceId: id, detail: { name: row.name, staffName: row.staffName } });
-  res.json({ id: row.id, status: row.status });
+  const relay = await syncRelayDevices();
+  res.json({ id: row.id, status: row.status, relaySynced: relay.ok, relayError: relay.error });
 });
 
 router.post("/v1/platform/command/agents", async (req, res) => {
@@ -312,6 +319,10 @@ router.post("/v1/platform/command/agents/:id/revoke", async (req, res) => {
     .where(and(eq(commandActions.target, row.id), inArray(commandActions.status, ["queued", "running"])));
   await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "agent.revoked", detail: { id: row.id, name: row.name } });
   res.json({ id: row.id, status: row.status });
+});
+
+router.post("/v1/platform/command/relay/sync", async (_req, res) => {
+  res.json(await syncRelayDevices());
 });
 
 router.get("/v1/platform/command/audit", async (req, res) => {

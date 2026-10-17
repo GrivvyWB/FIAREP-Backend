@@ -9,7 +9,7 @@ type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: R
 type Device = { id: string; name: string; staffName: string; status: "pending" | "active" | "revoked"; confirmKey: string; createdAt: string; approvedAt: string | null; approvedBy: string | null; lastUsedAt: string | null };
 type AgentTask = { name: string; description: string; confirm: boolean; params: Record<string, { description: string; pattern: string }> };
 type Agent = { id: string; name: string; status: string; online: boolean; lastSeenAt: string | null; info: Record<string, unknown>; tasks: AgentTask[]; folders: string[]; apps: string[]; createdAt: string };
-type Overview = { switches: Switches; defaultModel: string; claudeKeyConfigured: boolean; voiceKeyConfigured: boolean; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; audit: { ok: boolean; rows: number; brokenAt: number | null } };
+type Overview = { switches: Switches; defaultModel: string; relay?: { url: string | null; serverTokenSet: boolean }; claudeKeyConfigured: boolean; voiceKeyConfigured: boolean; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; audit: { ok: boolean; rows: number; brokenAt: number | null } };
 type AuditRow = { seq: number; at: string; actor: string; event: string; detail: Record<string, unknown> };
 type WorkOrder = { id: string; status: string; urgency: string; address: string; borough: string; kind: string; title: string; createdAt: string; decidedBy: string | null };
 
@@ -64,6 +64,10 @@ export default function OwnerCommandCenter() {
     if (!window.confirm(`Revoke ${a.name}? Its token stops working immediately.`)) return;
     try { await api(`/v1/platform/command/agents/${encodeURIComponent(a.id)}/revoke`, { method: "POST" }); await load(); } catch (err) { fail("Could not revoke")(err); }
   }
+  async function syncRelay() {
+    try { const r = await api<{ ok: boolean; error?: string }>("/v1/platform/command/relay/sync", { method: "POST" }); toast(r.ok ? { title: "Phones sent to the backup relay" } : { variant: "destructive", title: "Relay sync failed", description: r.error }); }
+    catch (err) { fail("Relay sync failed")(err); }
+  }
   const copy = (text: string, what: string) => { void navigator.clipboard.writeText(text); toast({ title: `${what} copied` }); };
 
   if (!data) return <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">Loading…</p>;
@@ -117,6 +121,16 @@ export default function OwnerCommandCenter() {
           </table></div>
         )}
         {data.devices.length === 0 && <p className="mt-3 text-sm text-slate-500">No phones yet.</p>}
+      </section>
+
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <h2 className="text-base font-semibold text-slate-950">Backup relay (when FIAREP is down)</h2>
+        <p className="text-xs text-slate-500">A Cloudflare Worker outside Replit. When fiarep.com stops answering, the Mac reports it there, your phone gets a push, and a Face ID approval lets the Mac republish on Replit.</p>
+        {data.relay?.url && data.relay.serverTokenSet ? (
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm"><span className="h-2.5 w-2.5 rounded-full bg-emerald-500" /><code className="text-xs text-slate-700">{data.relay.url}</code><Button size="sm" variant="outline" onClick={() => void syncRelay()}>Send phones to relay</Button></div>
+        ) : (
+          <p className="mt-2 text-sm text-amber-800">Not connected — run <code>artifacts/fiarep-relay/setup.sh</code> on the Mac, then add <b>RELAY_URL</b> and <b>RELAY_SERVER_TOKEN</b> in Replit Secrets.</p>
+        )}
       </section>
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

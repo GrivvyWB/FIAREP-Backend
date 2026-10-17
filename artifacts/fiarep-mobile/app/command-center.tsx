@@ -8,7 +8,8 @@ import { ui, ACCENT } from '../lib/ui';
 import { getCurrentActor } from '../lib/store';
 import {
   approveAction, commandFetch, commandSupport, confirmPublicKey, deviceStatus, enrollDevice, forgetDevice,
-  type CommandAction, type CommandRun, type DeviceState,
+  relayApprove, relayDeny, relayRegisterPush, relaySetAutoFix, relayState, relayUrl,
+  type CommandAction, type CommandRun, type DeviceState, type RelayIncident, type RelayState,
 } from '../lib/command';
 
 const STATUS_COLOR: Record<string, string> = { done: '#1F5C45', failed: '#C0392B', proposed: '#B4741A', queued: '#185FA5', running: '#185FA5', denied: '#666', expired: '#666', approved: '#185FA5' };
@@ -34,6 +35,10 @@ export default function CommandCenter() {
   const [threadId, setThreadId] = useState(newThread);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const playerRef = useRef<AudioPlayer | null>(null);
+  // Backup relay: outage alerts and republish approvals that work when fiarep.com is down.
+  const [relayBase, setRelayBase] = useState<string | null>(null);
+  const [relay, setRelay] = useState<RelayState | null>(null);
+  const pushRegistered = useRef(false);
 
   const loadDevice = useCallback(async () => {
     try { setDevice(await deviceStatus()); } catch (e) { setDevice(null); Alert.alert('Command Center', errText(e)); }
@@ -51,7 +56,23 @@ export default function CommandCenter() {
     }
   }, [loadDevice]);
 
+  const loadRelay = useCallback(async () => {
+    try {
+      const base = relayBase ?? (await relayUrl());
+      setRelayBase(base);
+      if (!base) return;
+      setRelay(await relayState(base));
+      if (!pushRegistered.current) { pushRegistered.current = true; await relayRegisterPush(base).catch(() => undefined); }
+    } catch { /* shown as "relay unreachable" */ setRelay(null); }
+  }, [relayBase]);
+
   useEffect(() => { if (support.ok) void loadDevice(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useFocusEffect(useCallback(() => {
+    if (device?.status !== 'active') return undefined;
+    void loadRelay();
+    const t = setInterval(() => void loadRelay(), 15000);
+    return () => clearInterval(t);
+  }, [device?.status, loadRelay]));
   useFocusEffect(useCallback(() => {
     if (device?.status !== 'active') return undefined;
     void refresh();
@@ -132,6 +153,26 @@ export default function CommandCenter() {
     setPending((p) => p.filter((x) => x.id !== a.id)); void refresh();
   }
 
+  async function approveOutage(i: RelayIncident) {
+    if (!relayBase) return;
+    setBusy('Approving…');
+    try { await relayApprove(relayBase, i); await loadRelay(); Alert.alert('Approved', 'The Mac will republish FIAREP on Replit within about a minute and tell you when it is back.'); }
+    catch (e: any) { if (!/cancel/i.test(String(e?.message))) Alert.alert('Not approved', errText(e)); }
+    finally { setBusy(''); }
+  }
+  async function denyOutage(i: RelayIncident) {
+    if (!relayBase) return;
+    try { await relayDeny(relayBase, i); } catch { /* reload corrects */ }
+    void loadRelay();
+  }
+  async function toggleAutoFix(on: boolean) {
+    if (!relayBase) return;
+    setBusy('Saving…');
+    try { await relaySetAutoFix(relayBase, on); await loadRelay(); }
+    catch (e: any) { if (!/cancel/i.test(String(e?.message))) Alert.alert('Not changed', errText(e)); }
+    finally { setBusy(''); }
+  }
+
   async function shareKey() {
     const key = await confirmPublicKey();
     if (key) await Share.share({ message: key });
@@ -183,6 +224,48 @@ export default function CommandCenter() {
   return (
     <View style={{ flex: 1 }}>
       <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
+        {device.offline && (
+          <View style={[ui.card, { borderColor: '#C0392B', backgroundColor: '#fdecea' }]}>
+            <Text style={{ fontWeight: '700', color: '#C0392B' }}>fiarep.com is not answering</Text>
+            <Text style={{ fontSize: 13, color: '#333', marginTop: 4 }}>Commands need fiarep.com. Outage approvals below go through the backup relay and still work.</Text>
+          </View>
+        )}
+        {relayBase && (() => {
+          const open = relay?.incidents.filter((i) => i.status === 'open') ?? [];
+          const latest = relay?.incidents.find((i) => i.status !== 'open');
+          const macMinutes = relay?.agentSeen ? Math.round((Date.now() - relay.agentSeen) / 60000) : null;
+          return (
+            <View style={ui.card}>
+              <Text style={{ fontWeight: '700' }}>When FIAREP goes down</Text>
+              <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
+                {!relay ? 'Backup relay unreachable.' : macMinutes === null ? 'The Mac has not checked in with the backup relay yet.' : macMinutes <= 15 ? 'The Mac is watching fiarep.com.' : `The Mac last checked in ${macMinutes} min ago — is it asleep?`}
+              </Text>
+              {open.map((i) => (
+                <View key={i.id} style={{ marginTop: 10, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: '#C0392B', backgroundColor: '#fdecea' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#C0392B' }}>FIAREP IS DOWN · {Math.max(0, Math.round((i.expiresAt - Date.now()) / 60000))} MIN TO APPROVE</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', marginTop: 4 }}>Republish FIAREP on Replit from the Mac</Text>
+                  {!!i.detail && <Text style={{ fontSize: 12, color: '#333', marginTop: 2 }}>{i.detail}</Text>}
+                  <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
+                    <Pressable style={[ui.btn, { flex: 1 }, !!busy && ui.btnMuted]} disabled={!!busy} onPress={() => void approveOutage(i)}><Text style={ui.btnText}>Republish with Face ID</Text></Pressable>
+                    <Pressable style={[ui.btnOutline, { flex: 1, borderColor: '#C0392B' }]} onPress={() => void denyOutage(i)}><Text style={[ui.btnOutlineText, { color: '#C0392B' }]}>Not now</Text></Pressable>
+                  </View>
+                </View>
+              ))}
+              {latest && (
+                <Text style={{ fontSize: 12, color: latest.status === 'done' ? '#1F5C45' : latest.status === 'failed' ? '#C0392B' : '#666', marginTop: 8 }}>
+                  Last outage {new Date(latest.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}: {latest.status}{latest.autoFixed ? ' (fixed without asking)' : ''}{latest.result?.detail ? ` — ${latest.result.detail}` : ''}
+                </Text>
+              )}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={{ fontSize: 14 }}>Fix outages without asking</Text>
+                  <Text style={{ fontSize: 11, color: '#666' }}>The Mac republishes on its own and tells you after. Changing this needs Face ID.</Text>
+                </View>
+                <Switch value={!!relay?.settings.autoFix} disabled={!relay || !!busy} onValueChange={(v) => void toggleAutoFix(v)} />
+              </View>
+            </View>
+          );
+        })()}
         {pending.map((a) => {
           const minutes = Math.max(0, Math.round((a.expiresAt - Date.now()) / 60000));
           return (

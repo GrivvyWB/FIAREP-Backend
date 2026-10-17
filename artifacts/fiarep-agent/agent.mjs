@@ -63,6 +63,17 @@ function loadConfig() {
     apiBase: c.apiBase.replace(/\/$/, ""), token: c.token, name: String(c.name || os.hostname()),
     trustedConfirmKeys: (c.trustedConfirmKeys || []).filter((k) => typeof k === "string" && Buffer.from(k, "base64").length === 32),
     folders, apps: (c.apps || []).filter((a) => typeof a === "string"), tasks,
+    relay: c.relay?.url && c.relay?.token && !/PASTE|YOUR-SUBDOMAIN/.test(c.relay.url + c.relay.token) ? { url: String(c.relay.url).replace(/\/$/, ""), token: String(c.relay.token) } : null,
+    watch: {
+      url: String(c.watch?.url || c.apiBase.replace(/\/$/, "") + "/healthz"),
+      everySec: Math.min(Math.max(Number(c.watch?.everySec) || 60, 15), 3600),
+      failuresBeforeAlert: Math.min(Math.max(Number(c.watch?.failuresBeforeAlert) || 3, 1), 30),
+    },
+    republish: {
+      command: Array.isArray(c.republish?.command) ? c.republish.command.map(String) : [process.execPath, path.join(path.dirname(CONFIG_PATH), "republish.mjs"), "--run"],
+      timeoutSec: Math.min(Math.max(Number(c.republish?.timeoutSec) || 180, 30), 900),
+      waitUpSec: Math.min(Math.max(Number(c.republish?.waitUpSec) || 300, 30), 1800),
+    },
   };
 }
 
@@ -187,6 +198,74 @@ async function poll(cfg, wait) {
   return (jobs || []).length;
 }
 
+// ── Outage watch + backup relay ────────────────────────────────────────────
+// When fiarep.com stops answering, the Mac reports it to the backup relay (a
+// Cloudflare Worker, not on Replit), your phone gets a push, you approve with
+// Face ID, and the Mac republishes on Replit. The approval is checked HERE
+// against your pinned phone keys; without pinned keys the relay path does nothing.
+const relayHandled = new Set();
+let relaySettings = { autoFix: false };
+
+async function relayApi(cfg, method, p, body) {
+  const res = await fetch(`${cfg.relay.url}${p}`, { method, headers: { authorization: `Bearer ${cfg.relay.token}`, "content-type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body), signal: AbortSignal.timeout(20_000) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `relay HTTP ${res.status}`);
+  return data;
+}
+const autoFixVerified = (cfg, s) => s?.autoFix === true && cfg.trustedConfirmKeys.some((k) => verifyEd25519(k, `FIAREP-RELAY-AUTOFIX\ntrue\n${s.time}`, s.signature));
+const incidentVerified = (cfg, i) => cfg.trustedConfirmKeys.some((k) => verifyEd25519(k, confirmMessage({ id: i.id, action: i.action, target: i.target, params: { incident: i.id, kind: i.kind }, nonce: i.nonce, expiresAt: i.expiresAt }), i.signature));
+
+async function siteUp(cfg) {
+  try { const r = await fetch(cfg.watch.url, { signal: AbortSignal.timeout(15_000), headers: { "user-agent": `fiarep-agent/${VERSION}` } }); return r.ok; }
+  catch { return false; }
+}
+
+async function republishAndReport(cfg, incident) {
+  log(`republishing (incident ${incident.id})`);
+  try { await relayApi(cfg, "POST", `/agent/incidents/${incident.id}/start`, {}); } catch (e) { log(`relay start: ${e.message}`); }
+  const [file, ...argv] = cfg.republish.command.map(expandHome);
+  const r = await run(file, argv, { timeoutMs: cfg.republish.timeoutSec * 1000 });
+  const clicked = r.exitCode === 0 && !r.timedOut;
+  let up = false;
+  const deadline = Date.now() + cfg.republish.waitUpSec * 1000;
+  while (Date.now() < deadline) { if ((up = await siteUp(cfg))) break; await new Promise((res) => setTimeout(res, 10_000)); }
+  const detail = up ? `Back up${clicked ? " after republish" : " (republish step failed, but the site answered)"}.` : `${clicked ? "Republished, but" : "Republish failed and"} fiarep.com is still not answering. ${tail(r.stderr || r.stdout, 300).trim()}`;
+  log(detail);
+  try { await relayApi(cfg, "POST", `/agent/incidents/${incident.id}/result`, { ok: up, detail }); } catch (e) { log(`relay result: ${e.message}`); }
+}
+
+async function relayLoop(cfg) {
+  for (;;) {
+    try {
+      const state = await relayApi(cfg, "GET", "/agent/poll");
+      relaySettings = state.settings || { autoFix: false };
+      for (const inc of state.approved || []) {
+        if (relayHandled.has(inc.id)) continue;
+        relayHandled.add(inc.id);
+        if (!incidentVerified(cfg, inc)) { log(`refused relay approval ${inc.id}: not signed by a pinned phone`); await relayApi(cfg, "POST", `/agent/incidents/${inc.id}/result`, { ok: false, detail: "Refused on the Mac: approval not signed by a trusted phone." }).catch(() => undefined); continue; }
+        await republishAndReport(cfg, inc);
+      }
+    } catch (e) { log(`relay unreachable: ${e.message}`); }
+    await new Promise((r) => setTimeout(r, 30_000));
+  }
+}
+
+async function watchLoop(cfg) {
+  let failures = 0;
+  for (;;) {
+    if (await siteUp(cfg)) failures = 0;
+    else if (++failures === cfg.watch.failuresBeforeAlert) {
+      const auto = autoFixVerified(cfg, relaySettings);
+      log(`fiarep.com down (${failures} checks in a row) — reporting${auto ? ", auto-fix is on" : ""}`);
+      try {
+        const inc = await relayApi(cfg, "POST", "/agent/incidents", { detail: `${cfg.watch.url} stopped answering (${failures} checks, ${cfg.watch.everySec}s apart).`, autoFix: auto });
+        if (auto && inc.status === "running" && !relayHandled.has(inc.id)) { relayHandled.add(inc.id); await republishAndReport(cfg, inc); }
+      } catch (e) { log(`could not report outage: ${e.message}`); failures -= 1; }
+    }
+    await new Promise((r) => setTimeout(r, cfg.watch.everySec * 1000));
+  }
+}
+
 async function main() {
   const cfg = loadConfig();
   if (args.includes("--check")) {
@@ -195,11 +274,20 @@ async function main() {
   }
   if (args.includes("--once")) { log(`handled ${await poll(cfg, false)} job(s)`); return; }
   log(`FIAREP agent ${VERSION} → ${cfg.apiBase} · ${Object.keys(cfg.tasks).length} tasks · ${cfg.folders.length} folders · ${cfg.trustedConfirmKeys.length ? `${cfg.trustedConfirmKeys.length} pinned phone key(s)` : "no pinned phone keys (trusting the server for approvals)"}`);
+  if (cfg.relay) {
+    if (!cfg.trustedConfirmKeys.length) log("backup relay configured, but no pinned phone keys — outages will be reported, nothing will be republished.");
+    log(`watching ${cfg.watch.url} every ${cfg.watch.everySec}s · backup relay ${cfg.relay.url}`);
+    void relayLoop(cfg); void watchLoop(cfg);
+  }
   let backoff = 5_000;
   for (;;) {
     try { await poll(cfg, true); backoff = 5_000; }
     catch (e) {
-      if (e.status === 401) { log(`token rejected (${e.message}) — stopping. Create a new agent token in Platform Control.`); process.exit(2); }
+      if (e.status === 401) {
+        log(`token rejected (${e.message}) — API connection stopped. Create a new agent token in Platform Control.`);
+        if (cfg.relay) return; // keep watching the site through the backup relay
+        process.exit(2);
+      }
       log(`API unreachable: ${e.message}; retrying in ${backoff / 1000}s`);
       await new Promise((r) => setTimeout(r, backoff));
       backoff = Math.min(backoff * 2, 60_000);

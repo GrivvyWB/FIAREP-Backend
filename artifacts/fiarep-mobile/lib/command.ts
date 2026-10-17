@@ -8,11 +8,14 @@ import nacl from 'tweetnacl';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 import { customFetch } from '@workspace/api-client-react';
+import { registerForPush } from './push';
 
 const K_DEVICE_ID = 'cmd.deviceId';
 const K_DEVICE_SEED = 'cmd.deviceSeed';
 const K_CONFIRM_SEED = 'cmd.confirmSeed';
 const K_CONFIRM_PUB = 'cmd.confirmPub';
+const K_STATUS = 'cmd.lastStatus';
+const K_RELAY = 'cmd.relayUrl';
 const plain = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 const biometric = {
   keychainAccessible: SecureStore.WHEN_PASSCODE_SET_THIS_DEVICE_ONLY,
@@ -88,7 +91,7 @@ const signWithSeed = (seedB64: string, message: string) =>
   toB64(nacl.sign.detached(utf8(message), nacl.sign.keyPair.fromSeed(fromB64(seedB64)).secretKey));
 
 // ── enrollment ───────────────────────────────────────────────────────────
-export type DeviceState = { id: string; status: 'pending' | 'active' | 'revoked' } | null;
+export type DeviceState = { id: string; status: 'pending' | 'active' | 'revoked'; offline?: boolean } | null;
 
 export async function storedDeviceId(): Promise<string | null> {
   return SecureStore.getItemAsync(K_DEVICE_ID, plain);
@@ -122,15 +125,20 @@ export async function deviceStatus(): Promise<DeviceState> {
   if (!id) return null;
   try {
     const r = await customFetch<{ id: string; status: 'pending' | 'active' | 'revoked' }>(`/api/v1/command/devices/${encodeURIComponent(id)}/status`, { responseType: 'json' } as never);
+    await SecureStore.setItemAsync(K_STATUS, r.status, plain);
     return r;
   } catch (e: any) {
     if (e?.status === 404) { await forgetDevice(); return null; }
+    // fiarep.com unreachable: keep working from the last known status so the
+    // backup relay (outage approvals) still opens.
+    const last = await SecureStore.getItemAsync(K_STATUS, plain);
+    if (last === 'active' || last === 'pending') return { id, status: last, offline: true };
     throw e;
   }
 }
 
 export async function forgetDevice(): Promise<void> {
-  for (const k of [K_DEVICE_ID, K_DEVICE_SEED, K_CONFIRM_PUB]) await SecureStore.deleteItemAsync(k, plain).catch(() => undefined);
+  for (const k of [K_DEVICE_ID, K_DEVICE_SEED, K_CONFIRM_PUB, K_STATUS]) await SecureStore.deleteItemAsync(k, plain).catch(() => undefined);
   await SecureStore.deleteItemAsync(K_CONFIRM_SEED, biometric).catch(() => undefined);
 }
 
@@ -170,4 +178,72 @@ export async function approveAction(a: CommandAction): Promise<CommandAction> {
   if (!seed) throw new Error('Face ID key missing — set this phone up again.');
   const signature = signWithSeed(seed, message);
   return commandFetch<CommandAction>('POST', `/v1/command/actions/${encodeURIComponent(a.id)}/confirm`, { signature });
+}
+
+// ── Backup relay (works when fiarep.com is down) ─────────────────────────
+export type RelayIncident = {
+  id: string; kind: string; action: string; target: string; detail: string; status: string;
+  nonce: string; expiresAt: number; createdAt: number; autoFixed?: boolean; approvedBy?: string;
+  result?: { ok: boolean; detail: string; at: number };
+};
+export type RelayState = { agentSeen: number; settings: { autoFix: boolean }; incidents: RelayIncident[] };
+
+/** The relay's address: asked from fiarep.com when it's up, remembered for when it isn't. */
+export async function relayUrl(): Promise<string | null> {
+  try {
+    const r = await commandFetch<{ url: string | null }>('GET', '/v1/command/relay');
+    if (r.url) await SecureStore.setItemAsync(K_RELAY, r.url, plain); else await SecureStore.deleteItemAsync(K_RELAY, plain);
+    return r.url;
+  } catch {
+    return SecureStore.getItemAsync(K_RELAY, plain);
+  }
+}
+
+async function relayFetch<T>(base: string, method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+  const id = await storedDeviceId();
+  const seed = await SecureStore.getItemAsync(K_DEVICE_SEED, plain);
+  if (!id || !seed) throw new Error('This phone is not set up for the Command Center.');
+  const bodyStr = body === undefined ? '' : JSON.stringify(body);
+  const time = String(Date.now());
+  const sig = signWithSeed(seed, `FIAREP-CMD-REQ\n${method}\n${path}\n${time}\n${await sha256hex(bodyStr)}`);
+  const res = await fetch(`${base}${path}`, {
+    method,
+    headers: { 'Content-Type': 'application/json', 'X-Command-Device': id, 'X-Command-Time': time, 'X-Command-Sig': sig },
+    body: body === undefined ? undefined : bodyStr,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw Object.assign(new Error((data as { error?: string }).error || `Relay HTTP ${res.status}`), { status: res.status, data });
+  return data as T;
+}
+
+export async function relayState(base: string): Promise<RelayState> {
+  return relayFetch<RelayState>(base, 'GET', '/phone/state');
+}
+
+/** Give the relay this phone's push token, so an outage reaches the phone. */
+export async function relayRegisterPush(base: string): Promise<boolean> {
+  const token = await registerForPush();
+  if (!token) return false;
+  await relayFetch(base, 'POST', '/phone/push', { token });
+  return true;
+}
+
+/** Face ID → approve the Mac republishing FIAREP on Replit. The Mac checks this signature too. */
+export async function relayApprove(base: string, i: RelayIncident): Promise<RelayIncident> {
+  const message = `FIAREP-CMD-CONFIRM\n${i.id}\n${i.action}\n${i.target}\n${await sha256hex(canonicalJson({ incident: i.id, kind: i.kind }))}\n${i.nonce}\n${i.expiresAt}`;
+  const seed = await SecureStore.getItemAsync(K_CONFIRM_SEED, biometric); // ← Face ID
+  if (!seed) throw new Error('Face ID key missing — set this phone up again.');
+  return relayFetch<RelayIncident>(base, 'POST', `/phone/incidents/${encodeURIComponent(i.id)}/approve`, { signature: signWithSeed(seed, message) });
+}
+
+export async function relayDeny(base: string, i: RelayIncident): Promise<void> {
+  await relayFetch(base, 'POST', `/phone/incidents/${encodeURIComponent(i.id)}/deny`, {});
+}
+
+/** Face ID → turn "fix outages without asking" on or off. The Mac checks this signature too. */
+export async function relaySetAutoFix(base: string, autoFix: boolean): Promise<void> {
+  const time = String(Date.now());
+  const seed = await SecureStore.getItemAsync(K_CONFIRM_SEED, biometric); // ← Face ID
+  if (!seed) throw new Error('Face ID key missing — set this phone up again.');
+  await relayFetch(base, 'POST', '/phone/settings', { autoFix, time, signature: signWithSeed(seed, `FIAREP-RELAY-AUTOFIX\n${autoFix}\n${time}`) });
 }

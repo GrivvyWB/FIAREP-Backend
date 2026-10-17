@@ -15,3 +15,16 @@ It only calls out to FIAREP (long-poll); nothing connects in.
 
 `node ~/.fiarep-agent/agent.mjs --check` prints what the config allows.
 `./install-mac.sh --uninstall` stops it.
+
+## Outage watch + Replit republish (backup relay)
+
+When `relay` is set in the config, the Mac checks `watch.url` (fiarep.com/api/healthz) every minute.
+After 3 failed checks it reports the outage to the backup relay (Cloudflare Worker, see `artifacts/fiarep-relay`),
+your phone gets a push, you approve with Face ID in Command Center, and the Mac clicks **Republish** on Replit,
+then waits for fiarep.com to answer and reports back. Approvals are checked on the Mac against
+`trustedConfirmKeys`; with none pinned, nothing is republished.
+
+One-time Replit sign-in on this Mac: `node ~/.fiarep-agent/republish.mjs --login` (sign in, open the
+FIAREP deployment page, close the window). Test without clicking: `node ~/.fiarep-agent/republish.mjs --check`.
+Replit has no documented republish API — if Replit changes its page and `--check` stops finding the button, it needs updating.
+The Mac must be awake (System Settings → Energy: prevent sleep when plugged in).

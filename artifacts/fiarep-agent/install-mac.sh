@@ -23,6 +23,12 @@ NODE="$(command -v node || true)"
 mkdir -p "$DIR" "$HOME/Library/LaunchAgents"
 chmod 700 "$DIR"
 cp "$HERE/agent.mjs" "$DIR/agent.mjs"
+cp "$HERE/republish.mjs" "$DIR/republish.mjs"
+# Playwright drives the browser that clicks Republish on Replit.
+if [ ! -d "$DIR/node_modules/playwright" ]; then
+  echo "Installing Playwright (for Replit republish)…"
+  ( cd "$DIR" && { [ -f package.json ] || echo '{"private":true,"type":"module"}' > package.json; } && npm install --silent playwright@1 && npx --yes playwright install chromium )
+fi
 if [ ! -f "$DIR/config.json" ]; then
   cp "$HERE/config.example.json" "$DIR/config.json"
   chmod 600 "$DIR/config.json"
@@ -50,7 +56,9 @@ cat > "$PLIST" <<PLISTEOF
 PLISTEOF
 
 launchctl bootout "gui/$UID_NUM/$LABEL" 2>/dev/null || true
-launchctl bootstrap "gui/$UID_NUM" "$PLIST"
+# bootout finishes in the background; wait for it before loading again.
+for _ in 1 2 3 4 5 6 7 8 9 10; do launchctl print "gui/$UID_NUM/$LABEL" >/dev/null 2>&1 || break; sleep 1; done
+launchctl bootstrap "gui/$UID_NUM" "$PLIST" 2>/dev/null || launchctl kickstart -k "gui/$UID_NUM/$LABEL"
 sleep 2
 tail -n 3 "$DIR/agent.log" || true
 echo "Agent running. Log: $DIR/agent.log"

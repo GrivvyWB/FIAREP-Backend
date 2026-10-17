@@ -7,6 +7,7 @@ import { ensureFiarepAdministrators } from "./lib/fiarepAdmins";
 import { startPushReceiptWorker } from "./lib/push";
 import { ensureCommandTables } from "./lib/command/tables";
 import { expireStaleProposals } from "./lib/command/engine";
+import { syncRelayDevices } from "./lib/command/relay";
 
 const rawPort = process.env["PORT"];
 
@@ -27,6 +28,7 @@ await ensureNotificationReadsTable();
 await ensureFiarepServiceTitles();
 await ensureFiarepAdministrators();
 await ensureCommandTables();
+void syncRelayDevices();
 setInterval(() => { void expireStaleProposals().catch(() => undefined); }, 60_000).unref();
 
 app.listen(port, (err) => {
