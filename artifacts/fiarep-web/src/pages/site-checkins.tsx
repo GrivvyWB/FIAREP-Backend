@@ -3,7 +3,8 @@
 // building, where they stopped and when they came back.
 import { useEffect, useMemo, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
-import { ChevronDown, Loader2, MapPin } from "lucide-react";
+import { ChevronDown, Loader2, MapPin, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
 type Ev = { type: "left" | "stop" | "back"; at: string; until?: string | null; address?: string };
@@ -13,6 +14,7 @@ type Row = {
   distanceM: number | null; atBuilding: boolean | null; checkedInAt: string; checkedOutAt: string; events: Ev[];
   checkoutPhone?: { address?: string } | null;
   visits?: Visit[];
+  outOfNetwork?: boolean; requestedBy?: string;
 };
 type Visit = { id: string; unit: string; outcome: "access" | "refused"; at: string; photoUrl?: string; address?: string; distanceM: number | null; atBuilding: boolean | null; doorNumber: string | null; doorMatches: boolean | null };
 type VendorRow = { id: string; vendorName: string; address: string; trackingId: string; walkthroughAt: string; capturedAt: string; distanceMeters: number | null; onSite: boolean | null; minutesFromSchedule: number | null; accuracy: number | null };
@@ -30,6 +32,7 @@ export default function SiteCheckins() {
   const [open, setOpen] = useState<string | null>(null);
   const [vendors, setVendors] = useState<VendorRow[]>([]);
   const [visitsOpen, setVisitsOpen] = useState<string | null>(null);
+  const [tab, setTab] = useState<"live" | "archive">("live");
 
   useEffect(() => {
     setRows(null); setError("");
@@ -51,6 +54,11 @@ export default function SiteCheckins() {
         <h1 className="text-2xl font-bold tracking-tight">Site Check-Ins</h1>
         <p className="text-sm text-muted-foreground">The building each member tapped in the app, where their phone actually was, and every time they left and came back.</p>
       </div>
+      <div className="flex gap-2">
+        <Button size="sm" variant={tab === "live" ? "default" : "outline"} onClick={() => setTab("live")}>Check-ins</Button>
+        <Button size="sm" variant={tab === "archive" ? "default" : "outline"} onClick={() => setTab("archive")}>Archive</Button>
+      </div>
+      {tab === "archive" ? <CheckinArchive /> : <>
       <div className="flex flex-wrap items-end gap-3">
         <label className="text-xs text-muted-foreground">From<Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" /></label>
         <label className="text-xs text-muted-foreground">To<Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" /></label>
@@ -69,7 +77,7 @@ export default function SiteCheckins() {
               <button type="button" onClick={() => setOpen(isOpen ? null : r.id)} className="flex w-full items-start justify-between gap-3 text-left">
                 <div className="min-w-0">
                   <p className="font-semibold">{r.staffName} <span className="text-xs font-normal text-muted-foreground">{r.position}{r.staffTenant === "default" ? " · FIAREP" : ""}</span></p>
-                  <p className="text-sm">Tapped: <b>{r.building.address}</b></p>
+                  <p className="text-sm">Tapped: <b>{r.building.address}</b>{r.outOfNetwork && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">Out of network complaint{r.requestedBy ? ` · asked by ${r.requestedBy}` : ""}</span>}</p>
                   <p className="text-sm"><MapPin className="mr-1 inline h-3.5 w-3.5" />Phone was at: <b>{r.phone.address}</b></p>
                   {r.atBuilding === true && <p className="text-sm font-semibold text-emerald-700">✓ At the building</p>}
                   {r.atBuilding === false && <p className="text-sm font-semibold text-red-700">⚠ Not at the building — {far(r.distanceM)} away</p>}
@@ -148,6 +156,90 @@ export default function SiteCheckins() {
           ))}
         </div>
       )}
+      </>}
+    </div>
+  );
+}
+
+// ── Archive: every closed check-in, by building, ready to print (e.g. for court) ──
+const esc = (v: unknown) => String(v ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]!));
+const stamp = (iso?: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
+
+function printCheckins(list: Row[], title: string) {
+  const w = window.open("", "_blank");
+  if (!w) return;
+  const one = (r: Row) => `
+    <section>
+      <h2>${esc(r.building.address)}${r.outOfNetwork ? ' <span class="tag">Out of network complaint</span>' : ""}</h2>
+      ${r.outOfNetwork && r.requestedBy ? `<p>Asked by: <b>${esc(r.requestedBy)}</b></p>` : ""}
+      <table>
+        <tr><th>Member</th><td>${esc(r.staffName)} · ${esc(r.position)}</td></tr>
+        <tr><th>Checked in</th><td>${esc(stamp(r.checkedInAt))} — phone at ${esc(r.phone.address)}${r.phone.accuracyM ? ` (±${Math.round(r.phone.accuracyM)} m)` : ""}</td></tr>
+        <tr><th>At the building</th><td>${r.atBuilding === true ? "Yes" : r.atBuilding === false ? `No — ${esc(far(r.distanceM))} away` : "Building location not found on the map"}</td></tr>
+        <tr><th>Checked out</th><td>${esc(stamp(r.checkedOutAt))}${r.checkoutPhone?.address ? ` — phone at ${esc(r.checkoutPhone.address)}` : ""}</td></tr>
+      </table>
+      ${r.events.length ? `<h3>Movements</h3><ul>${r.events.map((e) => `<li>${e.type === "left" ? `${esc(stamp(e.at))} left the building${e.address ? ` — at ${esc(e.address)}` : ""}` : e.type === "stop" ? `${esc(stamp(e.at))}–${esc(time(e.until))} at ${esc(e.address || "a stop")} (${minutes(e.at, e.until)} min)` : `${esc(stamp(e.at))} back at the building`}</li>`).join("")}</ul>` : ""}
+      ${(r.visits?.length || 0) ? `<h3>Apartment visits</h3>${r.visits!.map((v) => `
+        <div class="visit"><p><b>${esc(stamp(v.at))} · Apt ${esc(v.unit)} — ${v.outcome === "access" ? "Access gained" : "Tenant refused access"}</b><br/>
+        ${v.atBuilding === true ? "At the building" : v.atBuilding === false ? `${esc(far(v.distanceM))} from the building` : "Location recorded"}${v.address ? ` · phone at ${esc(v.address)}` : ""}${v.doorNumber ? ` · door shows ${esc(v.doorNumber)}${v.doorMatches ? " (matches)" : " (does not match)"}` : ""}</p>
+        ${v.photoUrl ? `<img src="${esc(v.photoUrl)}"/>` : ""}</div>`).join("")}` : ""}
+    </section>`;
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:-apple-system,Segoe UI,Arial,sans-serif;margin:32px;color:#0f172a}h1{font-size:20px;margin:0}h2{font-size:16px;margin:24px 0 6px}h3{font-size:13px;margin:12px 0 4px}p{font-size:12px;margin:2px 0}.sub{color:#64748b;font-size:12px;margin-bottom:12px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #e2e8f0;padding:5px 7px;text-align:left;vertical-align:top}th{width:22%;background:#f8fafc}ul{font-size:12px;margin:0;padding-left:18px}.visit{border:1px solid #e2e8f0;border-radius:6px;padding:6px;margin:6px 0;page-break-inside:avoid}.visit img{max-width:260px;margin-top:4px;border:1px solid #e2e8f0}.tag{font-size:11px;background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px}section{page-break-inside:avoid;border-top:2px solid #0f172a;padding-top:4px}</style></head><body><h1>FIAREP · Site Check-In record</h1><p class="sub">${esc(title)} · Printed ${esc(new Date().toLocaleString())} · Times are recorded by the FIAREP server; locations come from the member's phone.</p>${list.map(one).join("")}<script>window.onload=function(){setTimeout(function(){window.print()},500)}<\/script></body></html>`);
+  w.document.close();
+}
+
+export function CheckinArchive() {
+  const [rows, setRows] = useState<Row[] | null>(null);
+  const [q, setQ] = useState("");
+  const [openBldg, setOpenBldg] = useState<string | null>(null);
+  const [openRow, setOpenRow] = useState<string | null>(null);
+  useEffect(() => {
+    customFetch<Row[]>("/api/v1/site-checkins?archive=1", { responseType: "json" } as never).then(setRows).catch(() => setRows([]));
+  }, []);
+  const groups = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    const m = new Map<string, Row[]>();
+    for (const r of rows || []) {
+      if (t && !r.building.address.toLowerCase().includes(t) && !r.staffName.toLowerCase().includes(t)) continue;
+      m.set(r.building.address, [...(m.get(r.building.address) || []), r]);
+    }
+    return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [rows, q]);
+  return (
+    <div className="space-y-3">
+      <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a building or a member" className="h-9" />
+      {rows === null && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}
+      {rows && groups.length === 0 && <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">Nothing in the archive yet. A check-in lands here once the member checks out.</p>}
+      {groups.map(([address, list]) => (
+        <div key={address} className="rounded-lg border border-slate-200 bg-white">
+          <button type="button" onClick={() => setOpenBldg(openBldg === address ? null : address)} className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left">
+            <span className="font-semibold">{address}{list.some((r) => r.outOfNetwork) && <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-800">Out of network</span>}</span>
+            <span className="flex items-center gap-2 text-xs text-muted-foreground">{list.length} visit{list.length === 1 ? "" : "s"}<ChevronDown className={`h-4 w-4 transition-transform ${openBldg === address ? "rotate-180" : ""}`} /></span>
+          </button>
+          {openBldg === address && (
+            <div className="space-y-2 border-t border-slate-100 px-4 py-3">
+              <Button size="sm" variant="outline" onClick={() => printCheckins(list, address)}><Printer className="mr-1 h-4 w-4" />Print all for this building</Button>
+              {list.map((r) => (
+                <div key={r.id} className="rounded-md border border-slate-200">
+                  <button type="button" onClick={() => setOpenRow(openRow === r.id ? null : r.id)} className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm">
+                    <span><b>{new Date(r.checkedInAt).toLocaleDateString()}</b> · {time(r.checkedInAt)}–{time(r.checkedOutAt)} · {r.staffName}{r.atBuilding === false && <span className="ml-1 font-semibold text-red-700">· not at the building</span>}</span>
+                    <ChevronDown className={`h-4 w-4 shrink-0 text-slate-500 transition-transform ${openRow === r.id ? "rotate-180" : ""}`} />
+                  </button>
+                  {openRow === r.id && (
+                    <div className="space-y-1 border-t border-slate-100 px-3 py-2 text-sm">
+                      {r.outOfNetwork && <p className="font-semibold text-amber-800">Out of network complaint{r.requestedBy ? ` · asked by ${r.requestedBy}` : ""}</p>}
+                      <p>Phone at check-in: <b>{r.phone.address}</b>{r.atBuilding === true ? " · ✓ at the building" : r.atBuilding === false ? ` · ⚠ ${far(r.distanceM)} away` : ""}</p>
+                      <p>Movements: {r.events.length === 0 ? "never left" : `${r.events.filter((e) => e.type === "left").length} time(s) left`}</p>
+                      <p>Apartment visits: {r.visits?.length || 0}{(r.visits?.length || 0) > 0 ? ` · ${r.visits!.filter((v) => v.outcome === "refused").length} refused` : ""}</p>
+                      <Button size="sm" className="mt-1" onClick={() => printCheckins([r], `${address} · ${new Date(r.checkedInAt).toLocaleDateString()}`)}><Printer className="mr-1 h-4 w-4" />Print</Button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

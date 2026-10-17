@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, eq, sql } from "drizzle-orm";
-import { db, entityRecords, organizationProperties } from "@workspace/db";
+import { db, entityRecords, organizationProperties, organizations } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { geocodeNycPoint, reverseGeocodeNyc } from "../lib/nycProperty";
 import { fileStorage } from "../lib/fileStorage";
@@ -55,6 +55,14 @@ router.get("/v1/site-checkins/buildings", async (_req, res) => {
   res.json(list.map((r) => ({ id: r.id, address: r.address, development: r.development })).sort((x, y) => x.address.localeCompare(y.address)));
 });
 
+/** Out of network: the client companies a FIAREP member can file a check-in for. */
+router.get("/v1/site-checkins/clients", async (_req, res) => {
+  const a = actorFrom(res);
+  if (a.tenantId !== FIAREP_TENANT) { res.json([]); return; }
+  const rows = await db.select({ id: organizations.id, name: organizations.name }).from(organizations);
+  res.json(rows.filter((r) => r.id !== FIAREP_TENANT).sort((x, y) => x.name.localeCompare(y.name)));
+});
+
 async function loadRecord(id: string) {
   const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, id), eq(entityRecords.entity, SITE_CHECKIN_ENTITY), eq(entityRecords.deleted, false))).limit(1);
   return row || null;
@@ -77,7 +85,21 @@ router.post("/v1/site-checkins", async (req, res) => {
     // Outside New York City the City's map does not apply (empty state = NYC by history).
     inNyc = !p.state || p.state.toUpperCase() === "NY";
   }
-  if (!address) { res.status(400).json({ error: "Pick the building you are at." }); return; }
+  // Out of network complaint: a building that is not in the system - the client
+  // asked the member to go check it. Filed under that client (FIAREP's crew picks
+  // the client; anyone else files under their own company).
+  const outOfNetwork = !propertyId && b["outOfNetwork"] === true;
+  const requestedBy = str(b["requestedBy"], 120);
+  if (outOfNetwork && a.tenantId === FIAREP_TENANT) {
+    const clientId = str(b["clientId"], 80);
+    if (clientId) {
+      const [org] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, clientId)).limit(1);
+      if (!org) { res.status(404).json({ error: "That client was not found." }); return; }
+      tenantId = org.id;
+    }
+  }
+  if (!propertyId && !outOfNetwork) { res.status(400).json({ error: "Pick the building you are at." }); return; }
+  if (!address) { res.status(400).json({ error: outOfNetwork ? "Type the address of the building." : "Pick the building you are at." }); return; }
   // The building's own point: the City's map in New York, else the phone's map of the address.
   const fromPhone = pointOf(b["buildingLocation"]);
   const fromCity = inNyc ? await geocodeNycPoint(address).catch(() => null) : null;
@@ -112,6 +134,7 @@ router.post("/v1/site-checkins", async (req, res) => {
     phone: { ...at, address: await placeName(at, b["deviceAddress"]) },
     distanceM, atBuilding: distanceM == null ? null : distanceM <= AT_BUILDING_M + Math.min(at.accuracyM ?? 0, 100),
     checkedInAt: now.toISOString(), events: [] as unknown[], checkedOutAt: "",
+    ...(outOfNetwork ? { outOfNetwork: true, requestedBy } : {}),
   };
   const id = randomUUID();
   await db.insert(entityRecords).values({ id, tenantId, entity: SITE_CHECKIN_ENTITY, development: address.slice(0, 200), state, createdBy: a.id, createdAt: now, updatedAt: now } as never);
@@ -218,10 +241,13 @@ router.get("/v1/site-checkins", async (req, res) => {
   const a = actorFrom(res);
   if (!isManager(a.role)) { res.status(403).json({ error: "For management." }); return; }
   const from = str(req.query["from"], 10), to = str(req.query["to"], 10);
+  // ?archive=1: every closed (checked-out) check-in - the client's archive.
+  const archive = req.query["archive"] === "1";
   const rows = await db.select().from(entityRecords).where(a.tenantId === FIAREP_TENANT
     ? and(eq(entityRecords.entity, SITE_CHECKIN_ENTITY), eq(entityRecords.deleted, false))
     : and(eq(entityRecords.entity, SITE_CHECKIN_ENTITY), eq(entityRecords.deleted, false), eq(entityRecords.tenantId, a.tenantId)));
   const list = rows.map((r) => ({ id: r.id, ...r.state }) as Record<string, unknown> & { id: string })
+    .filter((r) => !archive || !!r["checkedOutAt"])
     .filter((r) => {
       const day = String(r["checkedInAt"] || "").slice(0, 10);
       return (!from || day >= from) && (!to || day <= to);

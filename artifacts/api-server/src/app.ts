@@ -40,6 +40,8 @@ app.use("/api/ai", express.json({ limit: "15mb" }));
 app.use("/api/v1/measurements", express.json({ limit: "4mb" }));
 // Vendor change work orders carry up to 6 photos.
 app.use("/api/v1/public/vendor-scopes", express.json({ limit: "12mb" }));
+// An apartment visit carries the door photo for reading the apartment number.
+app.use("/api/v1/site-checkins", express.json({ limit: "15mb" }));
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true, limit: "1mb" }));
 

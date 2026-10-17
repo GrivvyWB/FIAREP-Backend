@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { takePhoto, photoUri } from '../lib/photos';
 import { useFocusEffect } from 'expo-router';
-import { activeSiteCheckin, checkInAt, checkOut, hereNow, listSiteBuildings, mySiteCheckins, recordVisit, type AptVisit, type SiteBuilding, type SiteCheckin } from '../lib/site-checkin';
+import { activeSiteCheckin, checkInAt, checkOut, hereNow, listSiteBuildings, listSiteClients, mySiteCheckins, recordVisit, type AptVisit, type SiteBuilding, type SiteCheckin } from '../lib/site-checkin';
 import { ui } from '../lib/ui';
 
 const NAVY = '#0B2A4A';
@@ -62,6 +62,12 @@ export default function SiteCheckinScreen() {
   const [here, setHere] = useState<Awaited<ReturnType<typeof hereNow>>>(null);
   const [doorPhoto, setDoorPhoto] = useState<string | null>(null);
   const [visitsOpen, setVisitsOpen] = useState(false);
+  // Out of network complaint: a building not in the system that a client asked a member to check.
+  const [oonOpen, setOonOpen] = useState(false);
+  const [oonAddress, setOonAddress] = useState('');
+  const [oonBy, setOonBy] = useState('');
+  const [oonClient, setOonClient] = useState('');
+  const [clients, setClients] = useState<Array<{ id: string; name: string }>>([]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -69,6 +75,7 @@ export default function SiteCheckinScreen() {
     setActiveId(act?.id || null);
     try { setBuildings(await listSiteBuildings()); } catch { /* shown empty */ }
     try { setMine(await mySiteCheckins()); } catch { /* shown empty */ }
+    try { setClients(await listSiteClients()); } catch { setClients([]); }
     setLoading(false);
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
@@ -81,6 +88,21 @@ export default function SiteCheckinScreen() {
     const t = q.trim().toLowerCase();
     return (t ? buildings.filter((b) => b.address.toLowerCase().includes(t) || (b.development || '').toLowerCase().includes(t)) : buildings).slice(0, 40);
   }, [buildings, q]);
+
+  function checkInOutOfNetwork() {
+    const address = oonAddress.trim();
+    if (address.length < 5) { Alert.alert('Out of network complaint', 'Type the full address of the building.'); return; }
+    if (clients.length > 0 && !oonClient) { Alert.alert('Out of network complaint', 'Pick the client who asked you to check this building.'); return; }
+    Alert.alert('Check in here?', `${address}\nOut of network complaint. Your phone's location is recorded with the time.`, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Check in', onPress: () => void (async () => {
+        setBusy('Reading your location…');
+        try { const c = await checkInAt({ address, outOfNetwork: true, requestedBy: oonBy.trim(), clientId: oonClient }); setActiveId(c.id); setOonOpen(false); setOonAddress(''); setOonBy(''); setOonClient(''); await load(); }
+        catch (e: any) { Alert.alert('Check-in', e?.data?.error || e?.message || 'Try again.'); }
+        finally { setBusy(''); }
+      })() },
+    ]);
+  }
 
   function confirm(b: SiteBuilding) {
     Alert.alert('Check in here?', `${b.address}\nYour phone's location is recorded with the time.`, [
@@ -140,6 +162,7 @@ export default function SiteCheckinScreen() {
         <View style={[ui.card, { gap: 2 }]}>
           <Text style={{ fontWeight: '800', color: '#166534' }}>CHECKED IN</Text>
           <Text style={{ fontWeight: '800', fontSize: 16 }}>{active.building.address}</Text>
+          {active.outOfNetwork && <Text style={{ fontSize: 12, color: '#92400e', fontWeight: '700' }}>Out of network complaint{active.requestedBy ? ` · asked by ${active.requestedBy}` : ''}</Text>}
           <Text style={ui.listSub}>Since {time(active.checkedInAt)} · {day(active.checkedInAt)}</Text>
           <Where c={active} />
           <Timeline c={active} />
@@ -191,12 +214,35 @@ export default function SiteCheckinScreen() {
           })}
           {buildings.length === 0 && !loading && <Text style={ui.listSub}>No buildings yet — they are added in Platform Control → Properties.</Text>}
           {buildings.length > matches.length && <Text style={ui.listSub}>Showing {matches.length} of {buildings.length.toLocaleString()} — type to narrow it down.</Text>}
+          {/* A building that is not in the system: the client asked you to go check it. */}
+          <Pressable onPress={() => setOonOpen((o) => !o)} style={{ marginTop: 8, paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#eef2f7' }}>
+            <Text style={{ color: '#1C4E86', fontWeight: '800' }}>{oonOpen ? '▾' : '▸'} Out of network complaint</Text>
+            <Text style={ui.listSub}>A building that is not in the system</Text>
+          </Pressable>
+          {oonOpen && (
+            <View style={{ gap: 8 }}>
+              <TextInput style={ui.input} value={oonAddress} onChangeText={setOonAddress} placeholder="Address of the building" autoCapitalize="characters" />
+              <TextInput style={ui.input} value={oonBy} onChangeText={setOonBy} placeholder="Who asked / who called (optional)" />
+              {clients.length > 0 && (
+                <View style={{ gap: 4 }}>
+                  <Text style={ui.label}>For which client?</Text>
+                  {clients.map((c) => (
+                    <Pressable key={c.id} onPress={() => setOonClient(c.id)} style={{ paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, borderWidth: 1, borderColor: oonClient === c.id ? '#1C4E86' : '#e2e8f0', backgroundColor: oonClient === c.id ? '#eff6ff' : '#fff' }}>
+                      <Text style={{ fontWeight: oonClient === c.id ? '800' : '500' }}>{oonClient === c.id ? '✓ ' : ''}{c.name}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+              <Pressable style={[ui.btn, { marginTop: 4 }]} disabled={!!busy} onPress={checkInOutOfNetwork}><Text style={ui.btnText}>Check in — out of network</Text></Pressable>
+            </View>
+          )}
         </View>
       )}
 
       {mine.filter((c) => c.id !== active?.id).slice(0, 10).map((c) => (
         <View key={c.id} style={[ui.card, { gap: 2, padding: 12 }]}>
           <Text style={{ fontWeight: '700' }}>{c.building.address}</Text>
+          {c.outOfNetwork && <Text style={{ fontSize: 12, color: '#92400e', fontWeight: '700' }}>Out of network complaint{c.requestedBy ? ` · asked by ${c.requestedBy}` : ''}</Text>}
           <Text style={ui.listSub}>{day(c.checkedInAt)} · {time(c.checkedInAt)}{c.checkedOutAt ? `–${time(c.checkedOutAt)}` : ''}</Text>
           <Where c={c} />
         </View>

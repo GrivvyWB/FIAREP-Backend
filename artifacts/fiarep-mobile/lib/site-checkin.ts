@@ -21,7 +21,7 @@ export type SiteEvent = { type: 'left' | 'stop' | 'back'; at: string; until?: st
 export type SiteCheckin = {
   id: string; staffName: string; building: { address: string; latitude: number | null; longitude: number | null };
   phone: { latitude: number; longitude: number; address: string }; distanceM: number | null; atBuilding: boolean | null;
-  checkedInAt: string; checkedOutAt: string; events: SiteEvent[]; visits?: AptVisit[];
+  checkedInAt: string; checkedOutAt: string; events: SiteEvent[]; visits?: AptVisit[]; outOfNetwork?: boolean; requestedBy?: string;
 };
 export type AptVisit = {
   id: string; unit: string; outcome: 'access' | 'refused'; at: string; photoUrl?: string; address?: string;
@@ -106,10 +106,12 @@ export async function handleSiteFix(fix: { latitude: number; longitude: number; 
 }
 
 export const listSiteBuildings = () => get<SiteBuilding[]>('/api/v1/site-checkins/buildings');
+/** Out of network: the client companies FIAREP's crew can file a check-in for (empty for everyone else). */
+export const listSiteClients = () => get<Array<{ id: string; name: string }>>('/api/v1/site-checkins/clients');
 export const mySiteCheckins = () => get<SiteCheckin[]>('/api/v1/site-checkins/mine');
 
 /** Check in at a building: the phone's real position goes with it, then tracking starts. */
-export async function checkInAt(b: { propertyId?: string; address: string }): Promise<SiteCheckin> {
+export async function checkInAt(b: { propertyId?: string; address: string; outOfNetwork?: boolean; requestedBy?: string; clientId?: string }): Promise<SiteCheckin> {
   const fg = await Location.requestForegroundPermissionsAsync();
   if (!fg.granted) throw new Error('Turn Location on for FIAREP (Settings → FIAREP → Location → Always) to check in.');
   const bg = await Location.requestBackgroundPermissionsAsync();
@@ -122,7 +124,7 @@ export async function checkInAt(b: { propertyId?: string; address: string }): Pr
   const here = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracyM: pos.coords.accuracy ?? null };
   let buildingLocation: { latitude: number; longitude: number } | null = null;
   try { const g = await Location.geocodeAsync(b.address); if (g[0]) buildingLocation = { latitude: g[0].latitude, longitude: g[0].longitude }; } catch { /* the server uses the City's map */ }
-  const c = await post<SiteCheckin>('/api/v1/site-checkins', { propertyId: b.propertyId || '', address: b.address, location: here, deviceAddress: await placeFor(here), buildingLocation });
+  const c = await post<SiteCheckin>('/api/v1/site-checkins', { propertyId: b.propertyId || '', address: b.address, location: here, deviceAddress: await placeFor(here), buildingLocation, outOfNetwork: !!b.outOfNetwork, requestedBy: b.requestedBy || '', clientId: b.clientId || '' });
   const center = c.building.latitude != null && c.building.longitude != null ? { latitude: c.building.latitude, longitude: c.building.longitude } : here;
   const onSite = metersBetween(center, here) <= LEAVE_M + Math.min(here.accuracyM ?? 0, 100);
   await writeSetting(SITE_KEY, { id: c.id, address: c.building.address, ...center, status: onSite ? 'on' : 'away', anchor: onSite ? null : { latitude: here.latitude, longitude: here.longitude, since: Date.now(), key: newKey() } } as Active);
