@@ -68,6 +68,9 @@ export type Thread = {
   /** A member thread: one staff member (any company, any role) writing to FIAREP. */
   memberId?: string;
   memberTenantId?: string;
+  /** A code made by a member of a client company: their company, so the alert reaches their phone. */
+  coordinatorTenantId?: string;
+  coordinatorCompany?: string;
 };
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -193,11 +196,11 @@ async function saveThread(id: string, version: number, thread: Thread): Promise<
     .where(and(eq(entityRecords.id, id), eq(entityRecords.tenantId, FIAREP_TENANT)));
 }
 
-async function alertFiarep(targets: string[], message: string, detail: string, threadId: string): Promise<void> {
+async function alertFiarep(targets: string[], message: string, detail: string, threadId: string, tenantId: string = FIAREP_TENANT): Promise<void> {
   const ids = [...new Set(targets.filter(Boolean))];
   if (!ids.length) return;
   const rows = await db.insert(notifications).values(
-    ids.map((target) => ({ id: randomUUID(), tenantId: FIAREP_TENANT, target, message, detail, reportId: threadId })),
+    ids.map((target) => ({ id: randomUUID(), tenantId, target, message, detail, reportId: threadId })),
   ).returning();
   for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
 }
@@ -218,6 +221,7 @@ async function alertClient(tenantId: string, message: string, detail: string, th
 export async function issueCode(
   actor: Actor,
   input: { contactName?: unknown; address?: unknown; apartment?: unknown },
+  company = "",
 ): Promise<{ code: string; threadId: string; codeId: string }> {
   const now = new Date();
   const threadId = randomUUID();
@@ -227,6 +231,8 @@ export async function issueCode(
     kind: "code",
     coordinatorId: actor.id,
     coordinatorName: actor.name,
+    coordinatorTenantId: actor.tenantId,
+    coordinatorCompany: actor.tenantId === FIAREP_TENANT ? "" : company,
     contactName: text(input.contactName, 120),
     address: text(input.address),
     apartment: text(input.apartment, 40),
@@ -352,7 +358,8 @@ export async function postMessage(
   const where = [next.address, next.apartment ? `Apt ${next.apartment}` : ""].filter(Boolean).join(" · ");
   if (from === "contact") {
     if (next.kind === "code") {
-      await alertFiarep([next.coordinatorId], `${who} sent you a message`, where, threadId);
+      // The person who made the code - at FIAREP or at a client company - gets it on their phone.
+      await alertFiarep([next.coordinatorId], `${who} sent you a message`, where, threadId, next.coordinatorTenantId || FIAREP_TENANT);
     } else if (next.to === "admin") {
       const modules = await fiarepModules();
       const sender = next.kind === "member" ? `${next.contactName}${next.clientCompany ? ` (${next.clientCompany})` : ""}` : next.clientCompany;
@@ -382,7 +389,7 @@ export async function postMessage(
 export function contactView(thread: Thread) {
   return {
     coordinator: thread.coordinatorName,
-    unit: "FIAREP Services",
+    unit: thread.coordinatorCompany || "FIAREP Services",
     closed: Boolean(thread.closedAt),
     messages: thread.messages.map((m) => ({
       id: m.id, mine: m.from === "contact", author: m.from === "fiarep" ? m.authorName : "You", body: m.body, at: m.at,

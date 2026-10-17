@@ -335,6 +335,8 @@ function InspectorStack() {
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
       <Stack.Screen name="leave-dashboard" options={{ title: 'Leave Calendar' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="client-messages" options={{ title: 'Message FIAREP', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'Log Violations' }} />
@@ -378,6 +380,7 @@ function ManagementStack() {
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="manage-requests" options={{ title: 'Manage Requests' }} />
       <Stack.Screen name="in-house-assignments" options={{ title: 'In-house assignments' }} />
@@ -458,6 +461,8 @@ function WorkerStack() {
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="client-messages" options={{ title: 'Message FIAREP', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="worker-change-order" options={{ title: 'Change Work Order' }} />
@@ -482,6 +487,8 @@ function EmergencyStack() {
       <Stack.Screen name="report-detail" options={{ title: 'Job Details' }} />
       <Stack.Screen name="change-orders" options={{ title: 'Change Orders' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="client-messages" options={{ title: 'Message FIAREP', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs' }} />
       <Stack.Screen name="worker-change-order" options={{ title: 'Change Work Order' }} />
@@ -508,6 +515,7 @@ function CommunityStack() {
       <Stack.Screen name="community-building" options={{ title: 'Building & owner' }} />
       <Stack.Screen name="fiarep-messages" options={{ title: 'Messages', headerBackTitle: 'Back' }} />
       <Stack.Screen name="notifications" options={{ title: 'Inbox' }} />
+      <Stack.Screen name="client-messages" options={{ title: 'Message FIAREP', headerBackTitle: 'Back' }} />
       <Stack.Screen name="message" options={{ title: 'Message' }} />
       <Stack.Screen name="settings" options={{ title: 'Settings' }} />
     </Stack>

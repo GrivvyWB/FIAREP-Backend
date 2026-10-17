@@ -4,7 +4,7 @@
 // writing to their side. Nobody reads anyone else's conversation.
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, RefreshControl } from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { ui } from '../lib/ui';
 import ChatThread from '../components/ChatThread';
 import { msgGet, msgPost, type ChatMessage } from '../lib/fiarep-messaging';
@@ -16,6 +16,10 @@ type Full = { id: string; closed: boolean; messages: Array<{ id: string; from: '
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 
 export default function FiarepMessages() {
+  // ?member=1: anyone at a client company (or FIAREP's crew) hands out their own codes here.
+  const member = useLocalSearchParams<{ member?: string }>().member === '1';
+  const LIST = member ? '/api/v1/member/messages/codes' : '/api/v1/fiarep/messages';
+  const ISSUE = member ? '/api/v1/member/messages/codes' : '/api/v1/fiarep/messages/codes';
   const [rows, setRows] = useState<Row[]>([]);
   const [openId, setOpenId] = useState('');
   const [loading, setLoading] = useState(false);
@@ -44,17 +48,17 @@ export default function FiarepMessages() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    try { setRows(await msgGet<Row[]>('/api/v1/fiarep/messages')); }
+    try { setRows(await msgGet<Row[]>(LIST)); }
     catch (e: any) { Alert.alert('Could not load messages', e?.data?.error || e?.message || 'Try again.'); }
     finally { setLoading(false); }
-  }, []);
+  }, [LIST]);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   async function issue() {
     if (!name.trim()) { Alert.alert('Who is the code for?'); return; }
     setBusy(true);
     try {
-      const r = await msgPost<{ code: string }>('/api/v1/fiarep/messages/codes', { contactName: name.trim(), address: address.trim(), apartment: apartment.trim() });
+      const r = await msgPost<{ code: string }>(ISSUE, { contactName: name.trim(), address: address.trim(), apartment: apartment.trim() });
       setIssued({ code: r.code, who: name.trim() }); setName(''); setAddress(''); setApartment('');
       await load();
     } catch (e: any) { Alert.alert('Could not make a code', e?.data?.error || e?.message || 'Try again.'); }
@@ -62,7 +66,7 @@ export default function FiarepMessages() {
   }
 
   async function close(id: string) {
-    try { await msgPost(`/api/v1/fiarep/messages/${encodeURIComponent(id)}/close`, {}); if (openId === id) setOpenId(''); await load(); }
+    try { await msgPost(`${LIST}/${encodeURIComponent(id)}/close`, {}); if (openId === id) setOpenId(''); await load(); }
     catch (e: any) { Alert.alert('Could not block them', e?.data?.error || e?.message || 'Try again.'); }
   }
 
@@ -71,7 +75,7 @@ export default function FiarepMessages() {
     <ScrollView contentContainerStyle={[ui.wrap, { paddingTop: 16 }]} keyboardShouldPersistTaps="handled"
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}>
       <Text style={ui.label}>Hand someone a code and they can write to you - in the app or on the website - and to nobody else. Only you read it.</Text>
-      <View style={[ui.card, { gap: 8 }]}>
+      {!member && <View style={[ui.card, { gap: 8 }]}>
         <Text style={{ fontWeight: '700' }}>Find a person</Text>
         <TextInput style={ui.input} value={q} onChangeText={(t) => void find(t)} placeholder="Type their name" autoCorrect={false} />
         {q.trim().length >= 2 && people.length === 0 && <Text style={ui.listSub}>Nobody signed up under that name yet.</Text>}
@@ -81,7 +85,7 @@ export default function FiarepMessages() {
             <Text style={ui.listSub}>{[p.building, p.apartment ? `Apt ${p.apartment}` : ''].filter(Boolean).join(' · ') || 'Signed up in the app'}</Text>
           </Pressable>
         ))}
-      </View>
+      </View>}
       <View style={[ui.card, { gap: 8 }]}>
         <Text style={{ fontWeight: '700' }}>Hand out a code</Text>
         <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="Who is it for" />
@@ -118,7 +122,7 @@ export default function FiarepMessages() {
             <Text style={[ui.listSub, { fontSize: 11 }]}>{when(r.lastAt)}</Text>
           </Pressable>
           {openId === r.id && (
-            <OpenThread id={r.id} onSent={load} closed={r.closed}
+            <OpenThread id={r.id} base={member ? '/api/v1/member/messages/codes' : '/api/v1/fiarep/messages'} onSent={load} closed={r.closed}
               footer={r.kind === 'code' && !r.closed ? (
                 <Pressable onPress={() => Alert.alert(`Block ${r.who || 'this person'}?`, 'Their code stops working and they can no longer message you.', [
                   { text: 'Cancel', style: 'cancel' },
@@ -133,11 +137,11 @@ export default function FiarepMessages() {
 }
 
 /** One open conversation. Its load / send are stable so the thread does not refetch on every render. */
-function OpenThread({ id, closed, onSent, footer }: { id: string; closed: boolean; onSent: () => Promise<void>; footer?: React.ReactNode }) {
+function OpenThread({ id, base, closed, onSent, footer }: { id: string; base: string; closed: boolean; onSent: () => Promise<void>; footer?: React.ReactNode }) {
   const load = useCallback(async (): Promise<ChatMessage[]> => {
-    const r = await msgGet<Full>(`/api/v1/fiarep/messages/${encodeURIComponent(id)}`);
+    const r = await msgGet<Full>(`${base}/${encodeURIComponent(id)}`);
     return r.messages.map((m) => ({ id: m.id, mine: m.from === 'fiarep', author: m.authorName, body: m.body, at: m.at }));
-  }, [id]);
-  const send = useCallback(async (body: string) => { await msgPost(`/api/v1/fiarep/messages/${encodeURIComponent(id)}`, { body }); await onSent(); }, [id, onSent]);
+  }, [id, base]);
+  const send = useCallback(async (body: string) => { await msgPost(`${base}/${encodeURIComponent(id)}`, { body }); await onSent(); }, [id, base, onSent]);
   return <ChatThread load={load} send={send} closed={closed} footer={footer} />;
 }

@@ -205,6 +205,76 @@ router.post("/v1/member/messages", async (req, res) => {
   res.status(201).json(result.message);
 });
 
+// ── Any member hands out codes too: the person with the code writes to them ──
+async function memberCodeGate(res: Parameters<typeof actorFrom>[0]) {
+  const gate = await memberGate(res);
+  if (gate) return gate;
+  // A client's administrators and managers use the company page; they make codes as well.
+  const actor = actorFrom(res);
+  if (!(await messagingOpen()) || ["resident", "vendor"].includes(String(actor.role))) return null;
+  if (actor.tenantId === FIAREP_TENANT || !(await clientMessagingEnabled(actor.tenantId))) return null;
+  const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+  return { actor, company: org?.name || actor.tenantId };
+}
+
+router.get("/v1/member/messages/codes", async (_req, res) => {
+  const gate = await memberCodeGate(res);
+  if (!gate) { res.status(403).json({ error: "Messaging is switched off for you." }); return; }
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.entity, THREAD_ENTITY), eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+  )).orderBy(desc(entityRecords.updatedAt)).limit(300);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(rows.map((row) => ({ id: row.id, thread: threadOf(row.state) }))
+    .filter(({ thread }) => thread.kind === "code" && thread.coordinatorId === gate.actor.id)
+    .map(({ id, thread }) => ({
+      id, kind: thread.kind, who: thread.contactName, coordinator: thread.coordinatorName, address: thread.address, apartment: thread.apartment,
+      last: thread.messages[thread.messages.length - 1]?.body ?? "", lastAt: thread.lastAt, unread: thread.openForFiarep, closed: Boolean(thread.closedAt),
+    })));
+});
+
+router.post("/v1/member/messages/codes", async (req, res) => {
+  const gate = await memberCodeGate(res);
+  if (!gate) { res.status(403).json({ error: "Messaging is switched off for you." }); return; }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const issued = await issueCode(gate.actor, body, gate.company);
+  await audit(gate.actor, "fiarep-messages.code-issued", text(body["contactName"], 120), issued.threadId);
+  res.status(201).json({ code: issued.code, threadId: issued.threadId });
+});
+
+async function ownCodeThread(res: Parameters<typeof actorFrom>[0], id: string) {
+  const gate = await memberCodeGate(res);
+  if (!gate) return { error: 403 as const };
+  const row = await loadThread(id);
+  if (!row) return { error: 404 as const };
+  const thread = threadOf(row.state);
+  if (thread.kind !== "code" || thread.coordinatorId !== gate.actor.id) return { error: 403 as const };
+  return { gate, row, thread };
+}
+
+router.get("/v1/member/messages/codes/:id", async (req, res) => {
+  const r = await ownCodeThread(res, String(req.params["id"] || ""));
+  if ("error" in r) { res.status(r.error ?? 403).json({ error: "That conversation is not yours." }); return; }
+  await markRead(r.row.id, r.row.version ?? 1, r.thread, "fiarep");
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ id: r.row.id, kind: r.thread.kind, closed: Boolean(r.thread.closedAt), who: r.thread.contactName, address: r.thread.address, apartment: r.thread.apartment, messages: r.thread.messages });
+});
+
+router.post("/v1/member/messages/codes/:id", async (req, res) => {
+  const r = await ownCodeThread(res, String(req.params["id"] || ""));
+  if ("error" in r) { res.status(r.error ?? 403).json({ error: "That conversation is not yours." }); return; }
+  const result = await postMessage(r.row.id, r.row.version ?? 1, r.thread, "fiarep", r.gate.actor, String((req.body ?? {})["body"] ?? ""));
+  if (!result.ok) { res.status(result.status).json({ error: result.error }); return; }
+  res.status(201).json(result.message);
+});
+
+router.post("/v1/member/messages/codes/:id/close", async (req, res) => {
+  const r = await ownCodeThread(res, String(req.params["id"] || ""));
+  if ("error" in r) { res.status(r.error ?? 403).json({ error: "That conversation is not yours." }); return; }
+  await revokeCode(r.gate.actor, r.row.id);
+  await audit(r.gate.actor, "fiarep-messages.code-closed", "", r.row.id);
+  res.json({ ok: true });
+});
+
 // ── The code door: no account, no plan, nothing but the conversation ──────
 router.use("/v1/public/messages", rateLimit("public-messages", 60));
 

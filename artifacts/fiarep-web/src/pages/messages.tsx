@@ -44,14 +44,19 @@ export default function Messages() {
   // Every page has the code box: a code someone handed you opens a conversation with whoever made it.
   const codeBox = (width: string) => <div className={`mx-auto ${width} px-4 pb-6 sm:px-6`}><div className="rounded-lg border bg-card p-4"><PublicMessage embedded senderName={staff?.name || ""} /></div></div>;
   if (mine) return <><CoordinatorMessages unit={unit} admin={admin} toast={toast} />{codeBox("max-w-3xl")}</>;
-  if (clientSide) return <><ClientMessages unit={unit} toast={toast} />{codeBox("max-w-2xl")}</>;
+  if (clientSide) return <><ClientMessages unit={unit} toast={toast} />{codeBox("max-w-2xl")}<CoordinatorMessages unit={unit} admin={false} toast={toast} member /></>;
   // Every other member (CPM, inspector, technician, worker…): their own conversation with FIAREP.
-  if (memberSide) return <><ClientMessages unit={unit} toast={toast} base="/api/v1/member/messages" />{codeBox("max-w-2xl")}</>;
+  if (memberSide) return <><ClientMessages unit={unit} toast={toast} base="/api/v1/member/messages" />{codeBox("max-w-2xl")}<CoordinatorMessages unit={unit} admin={false} toast={toast} member /></>;
   return codeBox("max-w-2xl");
 }
 
 /** FIAREP's side: hand out a code, read and answer. */
-function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: boolean; toast: ReturnType<typeof useToast>["toast"] }) {
+function CoordinatorMessages({ unit, admin, toast, member = false }: { unit: string; admin: boolean; toast: ReturnType<typeof useToast>["toast"]; member?: boolean }) {
+  // member: anyone at a client company (or FIAREP's crew) hands out their own codes; the person with the code writes to them.
+  const M = "/api/v1/member/messages/codes", F = "/api/v1/fiarep/messages";
+  const listUrl = member ? M : F;
+  const issueUrl = member ? M : `${F}/codes`;
+  const threadUrl = (id: string) => `${member ? M : F}/${encodeURIComponent(id)}`;
   const [rows, setRows] = useState<ThreadRow[]>([]);
   const [openId, setOpenId] = useState("");
   const [issued, setIssued] = useState<{ code: string; who: string } | null>(null);
@@ -76,7 +81,7 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
   }
 
   const load = useCallback(async () => {
-    try { setRows(await get<ThreadRow[]>("/api/v1/fiarep/messages")); }
+    try { setRows(await get<ThreadRow[]>(listUrl)); }
     catch (err: any) { toast({ variant: "destructive", title: "Could not load messages", description: err?.data?.error || "Try again." }); }
   }, [toast]);
   useEffect(() => { void load(); const t = setInterval(() => void load(), 30000); return () => clearInterval(t); }, [load]);
@@ -85,7 +90,7 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
     if (!name.trim()) { toast({ variant: "destructive", title: "Who is the code for?" }); return; }
     setIssuing(true);
     try {
-      const r = await post<{ code: string; threadId: string }>("/api/v1/fiarep/messages/codes", {
+      const r = await post<{ code: string; threadId: string }>(issueUrl, {
         contactName: name.trim(), address: address.trim(), apartment: apartment.trim(),
       });
       setIssued({ code: r.code, who: name.trim() });
@@ -97,21 +102,21 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
   }
 
   async function close(id: string) {
-    try { await post(`/api/v1/fiarep/messages/${encodeURIComponent(id)}/close`, {}); await load(); if (openId === id) setOpenId(""); }
+    try { await post(`${threadUrl(id)}/close`, {}); await load(); if (openId === id) setOpenId(""); }
     catch (err: any) { toast({ variant: "destructive", title: "Could not close it", description: err?.data?.error || "Try again." }); }
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-5 p-4 sm:p-6">
-      <div>
+    <div className={member ? "mx-auto max-w-2xl space-y-4 px-4 pb-6 sm:px-6" : "mx-auto max-w-3xl space-y-5 p-4 sm:p-6"}>
+      {member ? <h2 className="text-lg font-semibold">People you gave a code to</h2> : <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight"><MessageSquare className="h-6 w-6" />Messages</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Give someone a code at the door and they can write to you — in the app or on the website — and to nobody else.
           You are the only person at FIAREP who reads it.{admin ? " Client companies on the plan can also write to the administrator here." : ""}
         </p>
-      </div>
+      </div>}
 
-      <div className="space-y-2 rounded-lg border bg-card p-4">
+      {!member && <div className="space-y-2 rounded-lg border bg-card p-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><Search className="h-4 w-4" />Find a person</h2>
         <Input placeholder="Type their name" value={q} onChange={(e) => void find(e.target.value)} />
         {q.trim().length >= 2 && people.length === 0 && <p className="text-xs text-muted-foreground">Nobody signed up under that name yet.</p>}
@@ -125,7 +130,7 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
             ))}
           </div>
         )}
-      </div>
+      </div>}
 
       <div className="space-y-3 rounded-lg border bg-card p-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold"><KeyRound className="h-4 w-4" />Hand out a code</h2>
@@ -150,7 +155,7 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
         )}
       </div>
 
-      {rows.length === 0 && <p className="py-8 text-center text-sm text-muted-foreground">Nobody has written yet.</p>}
+      {rows.length === 0 && <p className={member ? "text-sm text-muted-foreground" : "py-8 text-center text-sm text-muted-foreground"}>Nobody has written yet.</p>}
       <div className="space-y-2">
         {rows.map((r) => (
           <div key={r.id} className="rounded-lg border bg-card">
@@ -172,8 +177,8 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
             {openId === r.id && (
               <Thread
                 id={r.id}
-                readUrl={`/api/v1/fiarep/messages/${encodeURIComponent(r.id)}`}
-                sendUrl={`/api/v1/fiarep/messages/${encodeURIComponent(r.id)}`}
+                readUrl={threadUrl(r.id)}
+                sendUrl={threadUrl(r.id)}
                 side="fiarep"
                 closed={r.closed}
                 onSent={load}
@@ -186,7 +191,7 @@ function CoordinatorMessages({ unit, admin, toast }: { unit: string; admin: bool
           </div>
         ))}
       </div>
-      {!admin && <p className="text-xs text-muted-foreground">A client company on the plan writes to the whole {unit} unit — any coordinator can answer.</p>}
+      {!admin && !member && <p className="text-xs text-muted-foreground">A client company on the plan writes to the whole {unit} unit — any coordinator can answer.</p>}
     </div>
   );
 }

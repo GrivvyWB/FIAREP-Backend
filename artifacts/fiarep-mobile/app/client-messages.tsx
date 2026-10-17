@@ -3,7 +3,7 @@
 // a worker. Each conversation is seen only by its two sides.
 import { useCallback, useEffect, useState } from 'react';
 import { View, Text, Pressable, ScrollView } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ui, ACCENT } from '../lib/ui';
 import ChatThread from '../components/ChatThread';
 import { msgGet, msgPost, type ChatMessage } from '../lib/fiarep-messaging';
@@ -14,6 +14,7 @@ type Raw = { id: string; messages: Array<{ id: string; mine: boolean; authorName
 
 export default function ClientMessages() {
   const [to, setTo] = useState<'services' | 'admin'>('services');
+  const router = useRouter();
   const [me, setMe] = useState('');
   useEffect(() => { getCurrentActor().then((a) => setMe(a.name || '')).catch(() => undefined); }, []);
   // ?member=1: this staff member's own conversation (every member has one), not the company's.
@@ -40,6 +41,10 @@ export default function ClientMessages() {
       <View key={to} style={[ui.card, { borderColor: ACCENT + '33' }]}>
         <ChatThread load={load} send={send} />
       </View>
+      {/* Hand out your own code: whoever has it writes to you. */}
+      <Pressable style={ui.btnOutline} onPress={() => router.push('/fiarep-messages?member=1')}>
+        <Text style={ui.btnOutlineText}>Hand out a code · People you gave a code to</Text>
+      </Pressable>
       {/* A code someone handed you: write to whoever made it. */}
       <View style={ui.card}><CodeMessage codeOnly senderName={me} /></View>
     </ScrollView>
