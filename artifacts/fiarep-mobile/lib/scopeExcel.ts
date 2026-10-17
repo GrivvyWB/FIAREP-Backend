@@ -1,4 +1,5 @@
-import ExcelJS from 'exceljs';
+// exceljs loads its own Promise polyfill; loaded only when exporting, not at app start.
+import type ExcelJS from 'exceljs';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { COST_CATEGORIES, COST_DISCLAIMER, type CostEstimateState } from './costEstimate';
@@ -14,7 +15,9 @@ const allBorders = { top: border1, bottom: border1, left: border1, right: border
 // layout) it is exported with Division/Section/line rows; otherwise the legacy
 // Nature-of-Work cost estimate is exported. Runs on-device with styled cells.
 export async function exportScopeExcel(req: ProcurementRequest, est: CostEstimateState | any, divScope?: VendorScope | null): Promise<void> {
-  const wb = new ExcelJS.Workbook();
+  const xlMod = require('exceljs') as typeof ExcelJS & { default?: typeof ExcelJS };
+  const XL = xlMod.default ?? xlMod;
+  const wb = new XL.Workbook();
   const ws = wb.addWorksheet('Scope');
   const merges: any[] = [];
   let R = 0;
