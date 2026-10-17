@@ -179,7 +179,7 @@ router.post("/v1/site-checkins/:id/upload-url", async (req, res) => {
   if (!row || row.state["staffId"] !== a.id || row.state["checkedOutAt"]) { res.status(404).json({ error: "Check in at the building first." }); return; }
   const size = Number((req.body ?? {})["size"]);
   if (!size || size > 15 * 1024 * 1024) { res.status(400).json({ error: "Photo too large." }); return; }
-  const { uploadUrl, file } = await fileStorage.createUpload(row.tenantId, a.id, { kind: "inspection-evidence", name: "door.jpg", size, contentType: "image/jpeg" });
+  const { uploadUrl, file } = await fileStorage.createUpload(row.tenantId, a.id, { kind: "inspection-evidence", name: (req.body ?? {})["name"] === "complaint.jpg" ? "complaint.jpg" : "door.jpg", size, contentType: "image/jpeg" });
   res.json({ uploadUrl, objectPath: file.objectPath });
 });
 
@@ -218,12 +218,44 @@ router.post("/v1/site-checkins/:id/visits", async (req, res) => {
   res.status(201).json(visit);
 });
 
+/**
+ * Notes & photos: what happened while the member was there, with pictures of
+ * the complaint. Timestamped by the server, with where the phone was. Kept for
+ * good: there is no way to change or delete a note.
+ */
+router.post("/v1/site-checkins/:id/notes", async (req, res) => {
+  const a = actorFrom(res);
+  const row = await loadRecord(String(req.params["id"]));
+  if (!row || row.state["staffId"] !== a.id || row.state["checkedOutAt"]) { res.status(404).json({ error: "Check in at the building first." }); return; }
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const text = str(b["text"], 4000);
+  const photos = (Array.isArray(b["photos"]) ? b["photos"] : []).map((x) => str(x, 300)).filter(Boolean).slice(0, 10);
+  if (!text && photos.length === 0) { res.status(400).json({ error: "Write a note or take a picture." }); return; }
+  if (photos.some((ph) => !ph.startsWith(`/objects/tenants/${row.tenantId}/`))) { res.status(400).json({ error: "Take the picture again." }); return; }
+  const p = pointOf(b["location"]);
+  const note = {
+    id: randomUUID(), text, photos, at: new Date().toISOString(),
+    ...(p ? { latitude: p.latitude, longitude: p.longitude, accuracyM: p.accuracyM, address: await placeName(p, b["deviceAddress"]) } : {}),
+  };
+  const notes = Array.isArray(row.state["notes"]) ? (row.state["notes"] as unknown[]) : [];
+  await db.update(entityRecords).set({ state: { ...row.state, notes: [...notes, note].slice(-500) }, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() }).where(eq(entityRecords.id, row.id));
+  res.status(201).json(note);
+});
+
 /** Short-lived links for the door photos on a list of check-ins. */
 async function withPhotoUrls(list: Array<Record<string, unknown> & { id: string }>, tenantOf: Map<string, string>) {
   for (const r of list) {
     const visits = Array.isArray(r["visits"]) ? (r["visits"] as Record<string, unknown>[]) : [];
     for (const v of visits) {
       try { v["photoUrl"] = (await fileStorage.createDownload(tenantOf.get(r.id) || "", String(v["photo"] || ""))).downloadUrl; } catch { /* missing photo */ }
+    }
+    const notes = Array.isArray(r["notes"]) ? (r["notes"] as Record<string, unknown>[]) : [];
+    for (const n of notes) {
+      const urls: string[] = [];
+      for (const ph of Array.isArray(n["photos"]) ? (n["photos"] as unknown[]) : []) {
+        try { urls.push((await fileStorage.createDownload(tenantOf.get(r.id) || "", String(ph || ""))).downloadUrl); } catch { /* missing photo */ }
+      }
+      n["photoUrls"] = urls;
     }
   }
   return list;

@@ -28,9 +28,30 @@ type Row = {
   distanceM: number | null; atBuilding: boolean | null; checkedInAt: string; checkedOutAt: string; events: Ev[];
   checkoutPhone?: { address?: string } | null;
   visits?: Visit[];
+  notes?: Note[];
   outOfNetwork?: boolean; requestedBy?: string; staffId?: string; recordTenant?: string;
 };
 type Visit = { id: string; unit: string; outcome: "access" | "refused"; at: string; photoUrl?: string; address?: string; distanceM: number | null; atBuilding: boolean | null; doorNumber: string | null; doorMatches: boolean | null };
+type Note = { id: string; text: string; at: string; photoUrls?: string[]; address?: string };
+
+/** Notes & photos the member saved while there: what happened, pictures of the complaint. */
+function NotesList({ notes }: { notes: Note[] }) {
+  return (
+    <div className="mt-2 space-y-2">
+      {notes.map((n) => (
+        <div key={n.id} className="rounded-md border border-slate-200 p-2">
+          <p className="text-xs font-semibold text-slate-600">{time(n.at)}{n.address ? ` · ${n.address}` : ""}</p>
+          {n.text && <p className="whitespace-pre-wrap text-sm">{n.text}</p>}
+          {(n.photoUrls?.length || 0) > 0 && (
+            <div className="mt-1 grid gap-2 sm:grid-cols-2">
+              {n.photoUrls!.map((u, i) => <a key={i} href={u} target="_blank" rel="noreferrer"><img src={u} alt="Complaint" className="w-full rounded border border-slate-200" /></a>)}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 type VendorRow = { id: string; vendorName: string; address: string; trackingId: string; walkthroughAt: string; capturedAt: string; distanceMeters: number | null; onSite: boolean | null; minutesFromSchedule: number | null; accuracy: number | null };
 const time = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "");
 const far = (m: number | null) => (m == null ? "" : m < 1000 ? `${m} m` : `${(m / 1609).toFixed(1)} mi`);
@@ -103,6 +124,7 @@ export default function SiteCheckins() {
                   <p className="font-semibold">{new Date(r.checkedInAt).toLocaleDateString()}</p>
                   <p>{time(r.checkedInAt)}–{r.checkedOutAt ? time(r.checkedOutAt) : "still in"}</p>
                   <p className="text-xs text-muted-foreground">{away === 0 ? "never left" : `left ${away}×`}</p>
+                  {(r.notes?.length || 0) > 0 && <p className="text-xs text-muted-foreground">{r.notes!.length} note{r.notes!.length === 1 ? "" : "s"} & photos</p>}
                   {(r.visits?.length || 0) > 0 && <p className="text-xs text-muted-foreground">{r.visits!.length} apartment{r.visits!.length === 1 ? "" : "s"} · {r.visits!.filter((v) => v.outcome === "refused").length} refused</p>}
                   <ChevronDown className={`ml-auto mt-1 h-4 w-4 text-slate-500 transition-transform ${isOpen ? "rotate-180" : ""}`} />
                 </div>
@@ -145,6 +167,12 @@ export default function SiteCheckins() {
                           ))}
                         </div>
                       )}
+                    </li>
+                  )}
+                  {(r.notes?.length || 0) > 0 && (
+                    <li className="pt-2">
+                      <p className="font-semibold text-[#185FA5]">Notes & photos ({r.notes!.length})</p>
+                      <NotesList notes={r.notes!} />
                     </li>
                   )}
                 </ol>
@@ -205,6 +233,10 @@ function printCheckins(list: Row[], title: string) {
         <div class="visit"><p><b>${esc(stamp(v.at))} · Apt ${esc(v.unit)} — ${v.outcome === "access" ? "Access gained" : "Tenant refused access"}</b><br/>
         ${v.atBuilding === true ? "At the building" : v.atBuilding === false ? `${esc(far(v.distanceM))} from the building` : "Location recorded"}${v.address ? ` · phone at ${esc(v.address)}` : ""}${v.doorNumber ? ` · door shows ${esc(v.doorNumber)}${v.doorMatches ? " (matches)" : " (does not match)"}` : ""}</p>
         ${v.photoUrl ? `<img src="${esc(v.photoUrl)}"/>` : ""}</div>`).join("")}` : ""}
+      ${(r.notes?.length || 0) ? `<h3>Notes & photos</h3>${r.notes!.map((n) => `
+        <div class="visit"><p><b>${esc(stamp(n.at))}</b>${n.address ? ` · phone at ${esc(n.address)}` : ""}</p>
+        ${n.text ? `<p style="white-space:pre-wrap">${esc(n.text)}</p>` : ""}
+        ${(n.photoUrls || []).map((u) => `<img src="${esc(u)}"/>`).join("")}</div>`).join("")}` : ""}
     </section>`;
   w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(title)}</title><style>body{font-family:-apple-system,Segoe UI,Arial,sans-serif;margin:32px;color:#0f172a}h1{font-size:20px;margin:0}h2{font-size:16px;margin:24px 0 6px}h3{font-size:13px;margin:12px 0 4px}p{font-size:12px;margin:2px 0}.sub{color:#64748b;font-size:12px;margin-bottom:12px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border:1px solid #e2e8f0;padding:5px 7px;text-align:left;vertical-align:top}th{width:22%;background:#f8fafc}ul{font-size:12px;margin:0;padding-left:18px}.visit{border:1px solid #e2e8f0;border-radius:6px;padding:6px;margin:6px 0;page-break-inside:avoid}.visit img{max-width:260px;margin-top:4px;border:1px solid #e2e8f0}.tag{font-size:11px;background:#fef3c7;color:#92400e;padding:2px 6px;border-radius:4px}section{page-break-inside:avoid;border-top:2px solid #0f172a;padding-top:4px}</style></head><body><h1>FIAREP · Site Check-In record</h1><p class="sub">${esc(title)} · Printed ${esc(new Date().toLocaleString())} · Times are recorded by the FIAREP server; locations come from the member's phone.</p>${list.map(one).join("")}<script>window.onload=function(){setTimeout(function(){window.print()},500)}<\/script></body></html>`);
   w.document.close();
@@ -254,6 +286,7 @@ export function CheckinArchive() {
                       <p>Phone at check-in: <b>{r.phone.address}</b>{r.atBuilding === true ? " · ✓ at the building" : r.atBuilding === false ? ` · ⚠ ${far(r.distanceM)} away` : ""}</p>
                       <p>Movements: {r.events.length === 0 ? "never left" : `${r.events.filter((e) => e.type === "left").length} time(s) left`}</p>
                       <p>Apartment visits: {r.visits?.length || 0}{(r.visits?.length || 0) > 0 ? ` · ${r.visits!.filter((v) => v.outcome === "refused").length} refused` : ""}</p>
+                      {(r.notes?.length || 0) > 0 && <><p className="font-semibold">Notes & photos ({r.notes!.length})</p><NotesList notes={r.notes!} /></>}
                       <div className="mt-1 flex flex-wrap gap-2">
                         <Button size="sm" onClick={() => printCheckins([r], `${address} · ${new Date(r.checkedInAt).toLocaleDateString()}`)}><Printer className="mr-1 h-4 w-4" />Print</Button>
                         {canDelete(r) && <Button size="sm" variant="outline" className="text-red-700" onClick={() => void deleteCheckin(r.id).then((ok) => { if (ok) setRows((x) => (x || []).filter((y) => y.id !== r.id)); })}><Trash2 className="mr-1 h-4 w-4" />Delete</Button>}

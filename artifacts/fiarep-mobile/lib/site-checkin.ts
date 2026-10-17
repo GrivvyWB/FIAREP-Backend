@@ -21,12 +21,13 @@ export type SiteEvent = { type: 'left' | 'stop' | 'back'; at: string; until?: st
 export type SiteCheckin = {
   id: string; staffName: string; building: { address: string; latitude: number | null; longitude: number | null };
   phone: { latitude: number; longitude: number; address: string }; distanceM: number | null; atBuilding: boolean | null;
-  checkedInAt: string; checkedOutAt: string; events: SiteEvent[]; visits?: AptVisit[]; outOfNetwork?: boolean; requestedBy?: string;
+  checkedInAt: string; checkedOutAt: string; events: SiteEvent[]; visits?: AptVisit[]; notes?: SiteNote[]; outOfNetwork?: boolean; requestedBy?: string;
 };
 export type AptVisit = {
   id: string; unit: string; outcome: 'access' | 'refused'; at: string; photoUrl?: string; address?: string;
   distanceM: number | null; atBuilding: boolean | null; doorNumber: string | null; doorMatches: boolean | null;
 };
+export type SiteNote = { id: string; text: string; at: string; photoUrls?: string[]; address?: string };
 type Active = {
   id: string; address: string; latitude: number; longitude: number; status: 'on' | 'away';
   anchor: { latitude: number; longitude: number; since: number; key: string } | null;
@@ -187,5 +188,29 @@ export async function recordVisit(input: { unit: string; outcome: 'access' | 're
   return post<AptVisit>(`/api/v1/site-checkins/${encodeURIComponent(s.id)}/visits`, {
     unit: input.unit, outcome: input.outcome, photo: objectPath, image,
     location: input.here, deviceAddress: input.here ? await placeFor(input.here) : null,
+  });
+}
+
+/**
+ * Notes & photos: what happened while you were there, with pictures of the
+ * complaint. The server stamps the time and keeps it for good.
+ */
+export async function addSiteNote(input: { text: string; photos: string[] }): Promise<SiteNote> {
+  const s = await activeSiteCheckin();
+  if (!s) throw new Error('Check in first.');
+  const paths: string[] = [];
+  for (const ph of input.photos) {
+    const uri = photoUri(ph);
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists || !('size' in info) || !info.size) throw new Error('A picture is unavailable. Take it again.');
+    const { uploadUrl, objectPath } = await post<{ uploadUrl: string; objectPath: string }>(`/api/v1/site-checkins/${encodeURIComponent(s.id)}/upload-url`, { size: info.size, name: 'complaint.jpg' });
+    const up = await FileSystem.uploadAsync(uploadUrl, uri, { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, mimeType: 'image/jpeg' });
+    if (up.status < 200 || up.status >= 300) throw new Error('Picture upload failed (' + up.status + ').');
+    paths.push(objectPath);
+  }
+  const here = await hereNow().catch(() => null);
+  return post<SiteNote>(`/api/v1/site-checkins/${encodeURIComponent(s.id)}/notes`, {
+    text: input.text, photos: paths,
+    location: here, deviceAddress: here ? await placeFor(here) : null,
   });
 }

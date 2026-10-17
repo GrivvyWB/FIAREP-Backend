@@ -4,7 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator, RefreshControl, Image } from 'react-native';
 import { takePhoto, photoUri } from '../lib/photos';
 import { useFocusEffect } from 'expo-router';
-import { activeSiteCheckin, addressHere, checkInAt, checkOut, hereNow, listSiteBuildings, listSiteClients, mySiteCheckins, recordVisit, type AptVisit, type SiteBuilding, type SiteCheckin } from '../lib/site-checkin';
+import { activeSiteCheckin, addressHere, checkInAt, checkOut, hereNow, listSiteBuildings, listSiteClients, mySiteCheckins, recordVisit, addSiteNote, type AptVisit, type SiteNote, type SiteBuilding, type SiteCheckin } from '../lib/site-checkin';
 import { ui } from '../lib/ui';
 import { useRawModules } from '../lib/module-access';
 import { getSessionIdentity } from '../lib/store';
@@ -37,6 +37,16 @@ function VisitLine({ v }: { v: AptVisit }) {
   );
 }
 
+function NoteLine({ n }: { n: SiteNote }) {
+  return (
+    <View style={{ borderTopWidth: 1, borderTopColor: '#eef2f7', paddingVertical: 6, gap: 4 }}>
+      <Text style={{ fontWeight: '700', color: '#334155' }}>{time(n.at)}{n.address ? ` · ${n.address}` : ''}</Text>
+      {!!n.text && <Text style={{ fontSize: 14 }}>{n.text}</Text>}
+      {(n.photoUrls || []).map((u, i) => <Image key={i} source={{ uri: u }} style={{ width: '100%', height: 160, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" />)}
+    </View>
+  );
+}
+
 function Timeline({ c }: { c: SiteCheckin }) {
   return (
     <View style={{ marginTop: 6, gap: 2 }}>
@@ -64,6 +74,11 @@ export default function SiteCheckinScreen() {
   const [here, setHere] = useState<Awaited<ReturnType<typeof hereNow>>>(null);
   const [doorPhoto, setDoorPhoto] = useState<string | null>(null);
   const [visitsOpen, setVisitsOpen] = useState(false);
+  // Notes & photos: what happened while there, with pictures of the complaint.
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteText, setNoteText] = useState('');
+  const [notePhotos, setNotePhotos] = useState<string[]>([]);
+  const [notesOpen, setNotesOpen] = useState(false);
   // Out of network complaint: a building not in the system that a client asked a member to check.
   const [oonOpen, setOonOpen] = useState(false);
   const rawModules = useRawModules();
@@ -143,6 +158,17 @@ export default function SiteCheckinScreen() {
     finally { setBusy(''); }
   }
 
+  async function saveNote() {
+    if (!noteText.trim() && notePhotos.length === 0) { Alert.alert('Notes & photos', 'Write what happened or take a picture.'); return; }
+    setBusy('Saving the note…');
+    try {
+      await addSiteNote({ text: noteText.trim(), photos: notePhotos });
+      setNoteOpen(false); setNoteText(''); setNotePhotos([]); setNotesOpen(true);
+      await load();
+    } catch (e: any) { Alert.alert('Notes & photos', e?.data?.error || e?.message || 'Try again.'); }
+    finally { setBusy(''); }
+  }
+
   function out() {
     Alert.alert(
       'Are you completely finished at this building for today?',
@@ -204,6 +230,32 @@ export default function SiteCheckinScreen() {
                 <Text style={{ color: '#1C4E86', fontWeight: '700' }}>{visitsOpen ? '▾' : '▸'} Apartment visits ({active.visits!.length}) · {active.visits!.filter((v) => v.outcome === 'access').length} access, {active.visits!.filter((v) => v.outcome === 'refused').length} refused</Text>
               </Pressable>
               {visitsOpen && active.visits!.slice().reverse().map((v) => <VisitLine key={v.id} v={v} />)}
+            </>
+          )}
+          {/* Notes & photos: what happened while there, with pictures of the complaint. */}
+          {!noteOpen ? (
+            <Pressable style={[ui.btnOutline, { marginTop: 10 }]} disabled={!!busy} onPress={() => { setNoteOpen(true); setNoteText(''); setNotePhotos([]); }}><Text style={{ color: '#1C4E86', fontWeight: '700' }}>+ Notes & photos</Text></Pressable>
+          ) : (
+            <View style={{ marginTop: 10, gap: 8, backgroundColor: '#f8fafc', borderRadius: 8, borderWidth: 1, borderColor: '#dbe3ee', padding: 10 }}>
+              <Text style={{ fontWeight: '800' }}>Notes & photos</Text>
+              <TextInput style={[ui.input, { minHeight: 100, textAlignVertical: 'top' }]} value={noteText} onChangeText={setNoteText} placeholder="What happened while you were here" multiline />
+              <Pressable style={ui.btnOutline} disabled={!!busy || notePhotos.length >= 10} onPress={() => void (async () => { const u = await takePhoto().catch(() => null); if (u) setNotePhotos((l) => [...l, u]); })()}><Text style={{ color: '#1C4E86', fontWeight: '700' }}>📷 Take a picture of the complaint{notePhotos.length ? ` (${notePhotos.length})` : ''}</Text></Pressable>
+              {notePhotos.map((ph, i) => (
+                <View key={ph + i}>
+                  <Image source={{ uri: photoUri(ph) }} style={{ width: '100%', height: 170, borderRadius: 8, backgroundColor: '#111' }} resizeMode="cover" />
+                  <Pressable onPress={() => setNotePhotos((l) => l.filter((_, j) => j !== i))} style={{ position: 'absolute', top: 6, right: 6, backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: 14, paddingHorizontal: 10, paddingVertical: 4 }}><Text style={{ color: '#fff', fontWeight: '700' }}>Remove</Text></Pressable>
+                </View>
+              ))}
+              <Pressable style={[ui.btn, { backgroundColor: '#1C4E86' }]} disabled={!!busy} onPress={() => void saveNote()}><Text style={{ color: '#fff', fontWeight: '700' }}>Save</Text></Pressable>
+              <Pressable onPress={() => setNoteOpen(false)}><Text style={{ color: '#64748b', textAlign: 'center' }}>Cancel</Text></Pressable>
+            </View>
+          )}
+          {(active.notes?.length || 0) > 0 && (
+            <>
+              <Pressable onPress={() => setNotesOpen((o) => !o)} style={{ marginTop: 8 }}>
+                <Text style={{ color: '#1C4E86', fontWeight: '700' }}>{notesOpen ? '▾' : '▸'} Notes & photos ({active.notes!.length})</Text>
+              </Pressable>
+              {notesOpen && active.notes!.slice().reverse().map((n) => <NoteLine key={n.id} n={n} />)}
             </>
           )}
           <Pressable style={[ui.btn, { backgroundColor: '#b91c1c', marginTop: 10 }]} disabled={!!busy} onPress={out}><Text style={{ color: '#fff', fontWeight: '700' }}>Done for today — check out</Text></Pressable>
