@@ -129,7 +129,11 @@ export default function PublicMessage({ embedded = false, senderName = "" }: { e
               {error && <p className="text-sm text-destructive">{error}</p>}
             </>
           )}
-          <button type="button" className="text-xs text-muted-foreground underline" onClick={() => { setView(null); setCode(""); try { localStorage.removeItem(KEY); } catch { /* private window */ } }}>
+          <button type="button" className="text-xs text-muted-foreground underline" onClick={() => {
+            // Logging off clears the old messages: next time this code opens a clean conversation.
+            if (embedded) void post("/api/v1/public/messages/clear", { code: code.trim().toUpperCase() }).catch(() => undefined);
+            setView(null); setCode(""); seen.current = ""; try { localStorage.removeItem(KEY); } catch { /* private window */ }
+          }}>
             {embedded ? "Done — log off" : "Use a different code"}
           </button>
         </div>

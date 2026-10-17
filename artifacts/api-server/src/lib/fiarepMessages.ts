@@ -71,6 +71,9 @@ export type Thread = {
   /** A code made by a member of a client company: their company, so the alert reaches their phone. */
   coordinatorTenantId?: string;
   coordinatorCompany?: string;
+  /** The person with the code cleared their side (logged off on the website, or deleted in the app):
+   *  they no longer see anything said before this. The other side keeps the whole conversation. */
+  contactClearedAt?: string;
 };
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -391,10 +394,15 @@ export function contactView(thread: Thread) {
     coordinator: thread.coordinatorName,
     unit: thread.coordinatorCompany || "FIAREP Services",
     closed: Boolean(thread.closedAt),
-    messages: thread.messages.map((m) => ({
+    messages: thread.messages.filter((m) => !thread.contactClearedAt || m.at > thread.contactClearedAt).map((m) => ({
       id: m.id, mine: m.from === "contact", author: m.from === "fiarep" ? m.authorName : "You", body: m.body, at: m.at,
     })),
   };
+}
+
+/** Clear the code holder's side of a conversation. */
+export async function clearContactSide(threadId: string, version: number, thread: Thread): Promise<void> {
+  await saveThread(threadId, version, { ...thread, contactClearedAt: new Date().toISOString(), openForContact: 0 });
 }
 
 export async function markRead(threadId: string, version: number, thread: Thread, side: "fiarep" | "contact"): Promise<void> {

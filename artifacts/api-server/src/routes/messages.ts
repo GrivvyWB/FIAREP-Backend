@@ -12,7 +12,7 @@ import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
 import {
   THREAD_ENTITY, mayMessage, clientMessagingEnabled, clientThread, contactView, isFiarepServices, messagingOpen,
   issueCode, loadThread, markRead, postMessage, rememberContactPhone, revokeCode, threadForCode, threadOf,
-  personInbox, searchPeople, signUpPerson, startWithPerson, memberThread, answersForFiarep,
+  personInbox, searchPeople, signUpPerson, startWithPerson, memberThread, answersForFiarep, clearContactSide,
 } from "../lib/fiarepMessages";
 
 const router: IRouter = Router();
@@ -342,6 +342,14 @@ router.post("/v1/public/messages/open", async (req, res) => {
   await markRead(fresh.id, fresh.version, fresh.thread, "contact");
   res.setHeader("Cache-Control", "no-store");
   res.json(contactView(fresh.thread));
+});
+
+/** The person with the code clears their side: logged off on the website, or deleted in the app. */
+router.post("/v1/public/messages/clear", async (req, res) => {
+  const found = await threadForCode(String((req.body ?? {})["code"] ?? ""));
+  if (!found) { res.status(404).json({ error: "That code does not open anything." }); return; }
+  await clearContactSide(found.id, found.version, found.thread);
+  res.json({ ok: true });
 });
 
 router.post("/v1/public/messages/send", async (req, res) => {

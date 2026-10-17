@@ -21,6 +21,7 @@ export default function CodeMessage({ onBack, codeOnly = false, senderName = '' 
   const [name, setName] = useState('');
   const [opened, setOpened] = useState<View_ | null>(null);
   const [busy, setBusy] = useState(false);
+  const [clearedKey, setClearedKey] = useState(0);
   // Signed up with first and last name: FIAREP Services finds them by name and
   // the conversation shows up here. No code to type.
   const [person, setPerson] = useState<{ id: string; secret: string } | null>(null);
@@ -132,7 +133,15 @@ export default function CodeMessage({ onBack, codeOnly = false, senderName = '' 
     <View style={{ gap: 10 }}>
       <Text style={{ fontSize: 20, fontWeight: '700' }}>{opened.coordinator || opened.unit}</Text>
       <Text style={ui.listSub}>{opened.unit} · only the two of you see this</Text>
-      <ChatThread load={load} send={send} closed={opened.closed} />
+      <ChatThread key={clearedKey} load={load} send={send} closed={opened.closed} />
+      {/* On the phone the messages stay until the person deletes them. */}
+      <Pressable onPress={() => Alert.alert('Delete these messages?', 'They are removed from this conversation on your side. The other person still has them.', [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Delete', style: 'destructive', onPress: () => void (async () => {
+          try { await msgPost('/api/v1/public/messages/clear', { code: code.trim() }); setClearedKey((k) => k + 1); }
+          catch (e: any) { Alert.alert('Could not delete', e?.data?.error || 'Try again.'); }
+        })() },
+      ])} style={{ padding: 6 }}><Text style={{ textAlign: 'center', color: '#b91c1c', fontWeight: '600' }}>Delete messages</Text></Pressable>
       <Pressable onPress={() => { setOpened(null); setMode(codeOnly ? 'code' : 'start'); if (person) void loadInbox(person); }} style={{ padding: 10 }}><Text style={{ textAlign: 'center', color: '#666' }}>{codeOnly ? 'Close' : 'Back'}</Text></Pressable>
     </View>
   );
