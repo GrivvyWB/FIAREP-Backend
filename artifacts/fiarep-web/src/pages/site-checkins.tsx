@@ -5,6 +5,20 @@ import { useEffect, useMemo, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { ChevronDown, Loader2, MapPin, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Trash2 } from "lucide-react";
+import { useAuth } from "@/hooks/use-auth";
+
+/** Only the client whose building it is can delete a check-in - never the member who made it. */
+function useCanDelete() {
+  const { staff } = useAuth();
+  return (r: Row) => !!staff && (staff.role === "administrator" || staff.role === "management")
+    && (r.recordTenant || "") === (staff.tenantId || "default") && r.staffId !== staff.id;
+}
+async function deleteCheckin(id: string): Promise<boolean> {
+  if (!window.confirm("Delete this check-in for good? It is removed from the record and the archive.")) return false;
+  try { await customFetch(`/api/v1/site-checkins/${encodeURIComponent(id)}`, { method: "DELETE", responseType: "json" } as never); return true; }
+  catch (e: any) { window.alert(e?.data?.error || "Could not delete."); return false; }
+}
 import { Input } from "@/components/ui/input";
 
 type Ev = { type: "left" | "stop" | "back"; at: string; until?: string | null; address?: string };
@@ -14,7 +28,7 @@ type Row = {
   distanceM: number | null; atBuilding: boolean | null; checkedInAt: string; checkedOutAt: string; events: Ev[];
   checkoutPhone?: { address?: string } | null;
   visits?: Visit[];
-  outOfNetwork?: boolean; requestedBy?: string;
+  outOfNetwork?: boolean; requestedBy?: string; staffId?: string; recordTenant?: string;
 };
 type Visit = { id: string; unit: string; outcome: "access" | "refused"; at: string; photoUrl?: string; address?: string; distanceM: number | null; atBuilding: boolean | null; doorNumber: string | null; doorMatches: boolean | null };
 type VendorRow = { id: string; vendorName: string; address: string; trackingId: string; walkthroughAt: string; capturedAt: string; distanceMeters: number | null; onSite: boolean | null; minutesFromSchedule: number | null; accuracy: number | null };
@@ -33,6 +47,7 @@ export default function SiteCheckins() {
   const [vendors, setVendors] = useState<VendorRow[]>([]);
   const [visitsOpen, setVisitsOpen] = useState<string | null>(null);
   const [tab, setTab] = useState<"live" | "archive">("live");
+  const canDelete = useCanDelete();
 
   useEffect(() => {
     setRows(null); setError("");
@@ -64,7 +79,8 @@ export default function SiteCheckins() {
         <label className="text-xs text-muted-foreground">To<Input type="date" value={to} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" /></label>
         <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search a member or a building" className="h-9 flex-1 min-w-48" />
       </div>
-      {rows && <p className="text-sm">{shown.length} check-in{shown.length === 1 ? "" : "s"}{flagged > 0 && <span className="ml-2 font-semibold text-red-700">· {flagged} not at the building they tapped</span>}</p>}
+      {rows && <div className="flex flex-wrap items-center justify-between gap-2"><p className="text-sm">{shown.length} check-in{shown.length === 1 ? "" : "s"}{flagged > 0 && <span className="ml-2 font-semibold text-red-700">· {flagged} not at the building they tapped</span>}</p>
+        {shown.length > 0 && <Button size="sm" variant="outline" onClick={() => printCheckins(shown, `Site Check-Ins ${from} to ${to}`)}><Printer className="mr-1 h-4 w-4" />Print these</Button>}</div>}
       {rows === null && <div className="flex justify-center py-10"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}
       {error && <p className="text-sm text-red-700">{error}</p>}
       {rows && shown.length === 0 && !error && <p className="rounded-lg border border-dashed p-6 text-center text-sm text-muted-foreground">No check-ins for these dates.</p>}
@@ -91,6 +107,12 @@ export default function SiteCheckins() {
                   <ChevronDown className={`ml-auto mt-1 h-4 w-4 text-slate-500 transition-transform ${isOpen ? "rotate-180" : ""}`} />
                 </div>
               </button>
+              {isOpen && (
+                <div className="mt-3 flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+                  <Button size="sm" onClick={() => printCheckins([r], `${r.building.address} · ${new Date(r.checkedInAt).toLocaleDateString()}`)}><Printer className="mr-1 h-4 w-4" />Print</Button>
+                  {canDelete(r) && <Button size="sm" variant="outline" className="text-red-700" onClick={() => void deleteCheckin(r.id).then((ok) => { if (ok) setRows((x) => (x || []).filter((y) => y.id !== r.id)); })}><Trash2 className="mr-1 h-4 w-4" />Delete</Button>}
+                </div>
+              )}
               {isOpen && (
                 <ol className="mt-3 space-y-1 border-t border-slate-100 pt-3 text-sm">
                   <li>🟢 {time(r.checkedInAt)} checked in — phone at {r.phone.address}{r.phone.accuracyM ? ` (±${Math.round(r.phone.accuracyM)} m)` : ""}</li>
@@ -193,6 +215,7 @@ export function CheckinArchive() {
   const [q, setQ] = useState("");
   const [openBldg, setOpenBldg] = useState<string | null>(null);
   const [openRow, setOpenRow] = useState<string | null>(null);
+  const canDelete = useCanDelete();
   useEffect(() => {
     customFetch<Row[]>("/api/v1/site-checkins?archive=1", { responseType: "json" } as never).then(setRows).catch(() => setRows([]));
   }, []);
@@ -231,7 +254,10 @@ export function CheckinArchive() {
                       <p>Phone at check-in: <b>{r.phone.address}</b>{r.atBuilding === true ? " · ✓ at the building" : r.atBuilding === false ? ` · ⚠ ${far(r.distanceM)} away` : ""}</p>
                       <p>Movements: {r.events.length === 0 ? "never left" : `${r.events.filter((e) => e.type === "left").length} time(s) left`}</p>
                       <p>Apartment visits: {r.visits?.length || 0}{(r.visits?.length || 0) > 0 ? ` · ${r.visits!.filter((v) => v.outcome === "refused").length} refused` : ""}</p>
-                      <Button size="sm" className="mt-1" onClick={() => printCheckins([r], `${address} · ${new Date(r.checkedInAt).toLocaleDateString()}`)}><Printer className="mr-1 h-4 w-4" />Print</Button>
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        <Button size="sm" onClick={() => printCheckins([r], `${address} · ${new Date(r.checkedInAt).toLocaleDateString()}`)}><Printer className="mr-1 h-4 w-4" />Print</Button>
+                        {canDelete(r) && <Button size="sm" variant="outline" className="text-red-700" onClick={() => void deleteCheckin(r.id).then((ok) => { if (ok) setRows((x) => (x || []).filter((y) => y.id !== r.id)); })}><Trash2 className="mr-1 h-4 w-4" />Delete</Button>}
+                      </div>
                     </div>
                   )}
                 </div>

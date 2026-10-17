@@ -240,6 +240,21 @@ router.post("/v1/site-checkins/:id/checkout", async (req, res) => {
   res.json({ ok: true, checkedOutAt: now });
 });
 
+/**
+ * Delete a check-in: only the client whose building it is (its administrators
+ * and managers), on the website - never the member who checked in, so nobody
+ * can erase a record that shows they were not at the building.
+ */
+router.delete("/v1/site-checkins/:id", async (req, res) => {
+  const a = actorFrom(res);
+  const row = await loadRecord(String(req.params["id"]));
+  if (!row) { res.status(404).json({ error: "Not found." }); return; }
+  if (!isManager(a.role) || row.tenantId !== a.tenantId) { res.status(403).json({ error: "Only the client whose building this is can delete it." }); return; }
+  if (row.state["staffId"] === a.id) { res.status(403).json({ error: "You cannot delete your own check-in." }); return; }
+  await db.update(entityRecords).set({ deleted: true, updatedAt: new Date() }).where(eq(entityRecords.id, row.id));
+  res.json({ ok: true });
+});
+
 /** The member's own check-ins (the phone), newest first. */
 router.get("/v1/site-checkins/mine", async (_req, res) => {
   const a = actorFrom(res);
@@ -259,7 +274,7 @@ router.get("/v1/site-checkins", async (req, res) => {
   const rows = await db.select().from(entityRecords).where(a.tenantId === FIAREP_TENANT
     ? and(eq(entityRecords.entity, SITE_CHECKIN_ENTITY), eq(entityRecords.deleted, false))
     : and(eq(entityRecords.entity, SITE_CHECKIN_ENTITY), eq(entityRecords.deleted, false), eq(entityRecords.tenantId, a.tenantId)));
-  const list = rows.map((r) => ({ id: r.id, ...r.state }) as Record<string, unknown> & { id: string })
+  const list = rows.map((r) => ({ id: r.id, ...r.state, recordTenant: r.tenantId }) as Record<string, unknown> & { id: string })
     .filter((r) => !archive || !!r["checkedOutAt"])
     .filter((r) => {
       const day = String(r["checkedInAt"] || "").slice(0, 10);
