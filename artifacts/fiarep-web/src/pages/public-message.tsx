@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { KeyRound, MessageSquare, Send } from "lucide-react";
+import { messageAlert, primeMessageSound } from "@/lib/message-alert";
 
 // The code door. Someone a FIAREP Services coordinator met at a building types
 // in the code they were handed and writes to that coordinator. No account, no
@@ -28,6 +29,7 @@ export default function PublicMessage({ embedded = false, senderName = "" }: { e
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const end = useRef<HTMLDivElement>(null);
+  const seen = useRef<string>("");
 
   const open = useCallback(async (value: string, quiet = false) => {
     const typed = value.trim().toUpperCase();
@@ -35,6 +37,10 @@ export default function PublicMessage({ embedded = false, senderName = "" }: { e
     if (!quiet) setBusy(true);
     try {
       const r = await post<View>("/api/v1/public/messages/open", { code: typed });
+      // A new reply from the other side while the page is open: chime and a notice.
+      const lastIn = [...r.messages].reverse().find((m) => !m.mine);
+      if (lastIn && seen.current && lastIn.id !== seen.current) messageAlert(`New message from ${lastIn.author || r.coordinator || "FIAREP"}`, lastIn.body);
+      if (lastIn) seen.current = lastIn.id; else if (!seen.current) seen.current = "-";
       setView(r); setError("");
       try { localStorage.setItem(KEY, typed); } catch { /* private window */ }
     } catch (err: any) {
@@ -88,7 +94,7 @@ export default function PublicMessage({ embedded = false, senderName = "" }: { e
             onKeyDown={(e) => { if (e.key === "Enter") void open(code); }}
             className="text-center text-lg tracking-[0.2em]"
           />
-          <Button className="w-full" onClick={() => void open(code)} disabled={busy || !code.trim()}>{busy ? "Checking…" : "Open"}</Button>
+          <Button className="w-full" onClick={() => { primeMessageSound(); void open(code); }} disabled={busy || !code.trim()}>{busy ? "Checking…" : "Open"}</Button>
           {error && <p className="text-center text-sm text-destructive">{error}</p>}
         </div>
       )}

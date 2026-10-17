@@ -4,6 +4,8 @@ import { Topbar } from "./topbar";
 import { useAuth } from "@/hooks/use-auth";
 import { Redirect, useLocation } from "wouter";
 import { PageBackButton } from "./page-back-button";
+import { useMessageAlerts } from "@/hooks/use-message-alerts";
+import { useToast } from "@/hooks/use-toast";
 
 export function Shell({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
@@ -11,6 +13,9 @@ export function Shell({ children }: { children: React.ReactNode }) {
     () => typeof window !== "undefined" && window.matchMedia("(min-width: 768px)").matches,
   );
   const { isAuthenticated, isLoading } = useAuth();
+  const { toast } = useToast();
+  // A new message anywhere: chime, desktop notice, and a note on the screen.
+  useMessageAlerts((who, body) => toast({ title: `New message from ${who}`, description: body }));
 
   if (isLoading) {
     return (

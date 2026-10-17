@@ -170,6 +170,33 @@ router.post("/v1/client/messages", async (_req, res) => {
   res.status(201).json(result.message);
 });
 
+// ── How many unread messages are waiting for this person, anywhere ─────────
+// The website plays a sound and shows a notice when this goes up.
+router.get("/v1/messages/unread", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  res.setHeader("Cache-Control", "no-store");
+  if (!(await messagingOpen())) { res.json({ unread: 0, latest: null }); return; }
+  const answers = actor.tenantId === FIAREP_TENANT && (await mayMessage(actor));
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.entity, THREAD_ENTITY), eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+  )).orderBy(desc(entityRecords.updatedAt)).limit(500);
+  let unread = 0;
+  let latest: { who: string; body: string; at: string } | null = null;
+  for (const row of rows) {
+    const t = threadOf(row.state);
+    let n = 0;
+    if (t.kind === "code" && t.coordinatorId === actor.id) n = t.openForFiarep;
+    else if (answers && t.kind !== "code" && canSee(actor, t)) n = t.openForFiarep;
+    else if (t.kind === "member" && t.memberId === actor.id) n = t.openForContact;
+    else if (t.kind === "client" && t.clientTenantId === actor.tenantId && ["administrator", "management"].includes(actor.role)) n = t.openForContact;
+    if (!n) continue;
+    unread += n;
+    const last = t.messages[t.messages.length - 1];
+    if (last && (!latest || last.at > latest.at)) latest = { who: last.authorName || t.contactName || t.clientCompany || "Someone", body: last.body.slice(0, 120), at: last.at };
+  }
+  res.json({ unread, latest });
+});
+
 // ── Every member's side: any staff member, any company, writes to FIAREP ──
 router.use("/v1/member/messages", requireAuth);
 
