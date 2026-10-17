@@ -55,12 +55,19 @@ router.get("/v1/site-checkins/buildings", async (_req, res) => {
   res.json(list.map((r) => ({ id: r.id, address: r.address, development: r.development })).sort((x, y) => x.address.localeCompare(y.address)));
 });
 
+/** Out of network complaint is a paid add-on: OFF for a client until it is switched on in Module Management. */
+function outOfNetworkOn(features: unknown): boolean {
+  const modules = (features as { modules?: Record<string, unknown> } | null)?.modules;
+  return !!modules && modules["outOfNetwork"] === true;
+}
+
 /** Out of network: the client companies a FIAREP member can file a check-in for. */
 router.get("/v1/site-checkins/clients", async (_req, res) => {
   const a = actorFrom(res);
   if (a.tenantId !== FIAREP_TENANT) { res.json([]); return; }
-  const rows = await db.select({ id: organizations.id, name: organizations.name }).from(organizations);
-  res.json(rows.filter((r) => r.id !== FIAREP_TENANT).sort((x, y) => x.name.localeCompare(y.name)));
+  const rows = await db.select({ id: organizations.id, name: organizations.name, features: organizations.features }).from(organizations);
+  // Only the clients that have the Out of network add-on switched on.
+  res.json(rows.filter((r) => r.id !== FIAREP_TENANT && outOfNetworkOn(r.features)).map((r) => ({ id: r.id, name: r.name })).sort((x, y) => x.name.localeCompare(y.name)));
 });
 
 async function loadRecord(id: string) {
@@ -99,10 +106,16 @@ router.post("/v1/site-checkins", async (req, res) => {
     }
   }
   if (!propertyId && !outOfNetwork) { res.status(400).json({ error: "Pick the building you are at." }); return; }
-  if (!address) { res.status(400).json({ error: outOfNetwork ? "Type the address of the building." : "Pick the building you are at." }); return; }
+  if (outOfNetwork) {
+    const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+    if (!org || !outOfNetworkOn(org.features)) { res.status(403).json({ error: "Out of network complaint is not part of this client's plan." }); return; }
+    // The building is where the phone is: its address is read from the location.
+    if (!address) address = (await placeName(at, b["deviceAddress"])).slice(0, 200);
+  }
+  if (!address) { res.status(400).json({ error: "Pick the building you are at." }); return; }
   // The building's own point: the City's map in New York, else the phone's map of the address.
   const fromPhone = pointOf(b["buildingLocation"]);
-  const fromCity = inNyc ? await geocodeNycPoint(address).catch(() => null) : null;
+  const fromCity = inNyc && !outOfNetwork ? await geocodeNycPoint(address).catch(() => null) : null;
   // A typed address outside the City can still match some NYC street by name: if the
   // City's point is miles from the phone's map of the same address, use the phone's.
   const building = fromCity && fromPhone && metersBetween(fromCity, fromPhone) > 20_000 ? fromPhone : (fromCity || fromPhone);

@@ -299,6 +299,8 @@ export default function OwnerModules() {
   // FIAREP Multi-Complaint Priority Engine — on unless switched off.
   const [priorityEngineOn, setPriorityEngineOn] = useState(true);
   const [violationGuideOn, setViolationGuideOn] = useState(true);
+  // Paid add-on: OFF until switched on for the client.
+  const [outOfNetworkOn, setOutOfNetworkOn] = useState(false);
   // New client: complaint tools wait for the baseline walk-through. Off unless switched on.
   const [requireBaseline, setRequireBaseline] = useState(false);
   // Read-only locks: each one OFF unless switched on (features.modules["lock.<key>"]).
@@ -375,6 +377,7 @@ export default function OwnerModules() {
     setLocks(Object.fromEntries(READ_ONLY_LOCKS.map((l) => [`lock.${l.key}`, Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>)[`lock.${l.key}`] === true)])));
     setPriorityEngineOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).priorityEngine === false));
     setViolationGuideOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).violationGuide === false));
+    setOutOfNetworkOn(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).outOfNetwork === true));
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
     setSmartRepairEmailTo(typeof organization.features?.smartRepairEmailTo === "string" ? String(organization.features.smartRepairEmailTo) : "");
@@ -441,6 +444,7 @@ export default function OwnerModules() {
   const toggleLock = (key: string, on: boolean) => { setLocks((m) => ({ ...m, [`lock.${key}`]: on })); setDirty(true); };
   const togglePriorityEngine = (enabled: boolean) => { setPriorityEngineOn(enabled); setDirty(true); };
   const toggleViolationGuide = (enabled: boolean) => { setViolationGuideOn(enabled); setDirty(true); };
+  const toggleOutOfNetwork = (enabled: boolean) => { setOutOfNetworkOn(enabled); setDirty(true); };
   const toggleSmartRepairToMgmt = (enabled: boolean) => { setSmartRepairToMgmt(enabled); setDirty(true); };
   const toggleSmartRepairEmailCopy = (enabled: boolean) => { setSmartRepairEmailCopy(enabled); setDirty(true); };
   const toggleMessagingOpen = (enabled: boolean) => {
@@ -494,7 +498,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -973,6 +977,29 @@ export default function OwnerModules() {
                     checked={violationGuideOn}
                     onCheckedChange={toggleViolationGuide}
                     aria-label={`${violationGuideOn ? "Disable" : "Enable"} Take me there`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  outOfNetworkOn ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    outOfNetworkOn ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <MapPin className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Out of network complaint (paid add-on)</p>
+                    <p className="text-xs text-slate-500">A member checks in at a building that is not in the system: one press reads the address from where the phone is, and it is filed for this client as Out of network. OFF for every client until you switch it on</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    outOfNetworkOn ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {outOfNetworkOn ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={outOfNetworkOn}
+                    onCheckedChange={toggleOutOfNetwork}
+                    aria-label={`${outOfNetworkOn ? "Disable" : "Enable"} Out of network complaint`}
                   />
                 </div>
                 {!isFiarep && (

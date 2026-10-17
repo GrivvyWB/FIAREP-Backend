@@ -123,7 +123,9 @@ export async function checkInAt(b: { propertyId?: string; address: string; outOf
   if (!pos) throw new Error('Could not read where your phone is. Step outside or near a window and try again.');
   const here = { latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracyM: pos.coords.accuracy ?? null };
   let buildingLocation: { latitude: number; longitude: number } | null = null;
-  try { const g = await Location.geocodeAsync(b.address); if (g[0]) buildingLocation = { latitude: g[0].latitude, longitude: g[0].longitude }; } catch { /* the server uses the City's map */ }
+  // Out of network: the building is where the phone is.
+  if (b.outOfNetwork) buildingLocation = { latitude: here.latitude, longitude: here.longitude };
+  else try { const g = await Location.geocodeAsync(b.address); if (g[0]) buildingLocation = { latitude: g[0].latitude, longitude: g[0].longitude }; } catch { /* the server uses the City's map */ }
   const c = await post<SiteCheckin>('/api/v1/site-checkins', { propertyId: b.propertyId || '', address: b.address, location: here, deviceAddress: await placeFor(here), buildingLocation, outOfNetwork: !!b.outOfNetwork, requestedBy: b.requestedBy || '', clientId: b.clientId || '' });
   const center = c.building.latitude != null && c.building.longitude != null ? { latitude: c.building.latitude, longitude: c.building.longitude } : here;
   const onSite = metersBetween(center, here) <= LEAVE_M + Math.min(here.accuracyM ?? 0, 100);
@@ -151,6 +153,15 @@ export async function checkOut(): Promise<void> {
 
 
 /** Where the phone is right now, against the checked-in building (for an apartment visit). */
+/** Out of network: the street address of where the phone is right now. */
+export async function addressHere(): Promise<string> {
+  const fg = await Location.requestForegroundPermissionsAsync();
+  if (!fg.granted) throw new Error('Turn Location on for FIAREP to check in.');
+  const pos = await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }), new Promise<null>((r) => setTimeout(() => r(null), 12000))]);
+  if (!pos) throw new Error('Could not read where your phone is. Step outside or near a window and try again.');
+  return (await placeFor({ latitude: pos.coords.latitude, longitude: pos.coords.longitude })) || '';
+}
+
 export async function hereNow(): Promise<{ latitude: number; longitude: number; accuracyM: number | null; distanceM: number | null } | null> {
   const s = await activeSiteCheckin();
   const pos = await Promise.race([Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }), new Promise<null>((r) => setTimeout(() => r(null), 12000))]).catch(() => null);
