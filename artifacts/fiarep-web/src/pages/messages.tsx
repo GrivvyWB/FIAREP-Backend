@@ -101,6 +101,15 @@ function CoordinatorMessages({ unit, admin, toast, member = false }: { unit: str
     } finally { setIssuing(false); }
   }
 
+  const [cleared, setCleared] = useState(0);
+  // Clear: empty the messages, keep the conversation. Delete: take it off your list (it comes back if they write again).
+  async function wipe(id: string, action: "clear" | "delete") {
+    const ask = action === "clear" ? "Clear these messages? The conversation stays open." : "Delete this conversation from your list? It comes back only if they write again.";
+    if (!window.confirm(ask)) return;
+    try { await post(`${threadUrl(id)}/${action}`, {}); if (action === "delete" && openId === id) setOpenId(""); setCleared((n) => n + 1); await load(); }
+    catch (err: any) { toast({ variant: "destructive", title: action === "clear" ? "Could not clear" : "Could not delete", description: err?.data?.error || "Try again." }); }
+  }
+
   async function close(id: string) {
     try { await post(`${threadUrl(id)}/close`, {}); await load(); if (openId === id) setOpenId(""); }
     catch (err: any) { toast({ variant: "destructive", title: "Could not close it", description: err?.data?.error || "Try again." }); }
@@ -176,6 +185,7 @@ function CoordinatorMessages({ unit, admin, toast, member = false }: { unit: str
             </button>
             {openId === r.id && (
               <Thread
+                key={`${r.id}-${cleared}`}
                 id={r.id}
                 readUrl={threadUrl(r.id)}
                 sendUrl={threadUrl(r.id)}
@@ -183,9 +193,13 @@ function CoordinatorMessages({ unit, admin, toast, member = false }: { unit: str
                 closed={r.closed}
                 onSent={load}
                 toast={toast}
-                footer={r.kind === "code" && !r.closed ? (
-                  <Button variant="ghost" size="sm" className="text-destructive" onClick={() => { if (window.confirm(`Block ${r.who || "this person"}? Their code stops working and they can no longer message you.`)) void close(r.id); }}>Block this person</Button>
-                ) : null}
+                footer={(
+                  <div className="flex flex-wrap gap-1">
+                    <Button variant="ghost" size="sm" onClick={() => void wipe(r.id, "clear")}>Clear</Button>
+                    <Button variant="ghost" size="sm" className="text-destructive" onClick={() => void wipe(r.id, "delete")}>Delete</Button>
+                    {r.kind === "code" && !r.closed && <Button variant="ghost" size="sm" className="text-destructive" onClick={() => { if (window.confirm(`Block ${r.who || "this person"}? Their code stops working and they can no longer message you.`)) void close(r.id); }}>Block this person</Button>}
+                  </div>
+                )}
               />
             )}
           </div>

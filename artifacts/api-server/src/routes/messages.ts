@@ -12,7 +12,7 @@ import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
 import {
   THREAD_ENTITY, mayMessage, clientMessagingEnabled, clientThread, contactView, isFiarepServices, messagingOpen,
   issueCode, loadThread, markRead, postMessage, rememberContactPhone, revokeCode, threadForCode, threadOf,
-  personInbox, searchPeople, signUpPerson, startWithPerson, memberThread, answersForFiarep, clearContactSide,
+  personInbox, searchPeople, signUpPerson, startWithPerson, memberThread, answersForFiarep, clearContactSide, clearFiarepSide, fiarepMessages,
 } from "../lib/fiarepMessages";
 
 const router: IRouter = Router();
@@ -43,7 +43,7 @@ router.get("/v1/fiarep/messages", async (_req, res) => {
     // Only the conversations this person is part of: the codes they handed
     // out, and the plan clients writing to their side (FIAREP Services, or
     // the administrator). Nobody reads anyone else's conversation.
-    .filter(({ thread }) => canSee(actor, thread))
+    .filter(({ thread }) => canSee(actor, thread) && !thread.hiddenForFiarep)
     .map(({ id, thread }) => ({
       id,
       kind: thread.kind,
@@ -51,7 +51,7 @@ router.get("/v1/fiarep/messages", async (_req, res) => {
       coordinator: thread.coordinatorName,
       address: thread.address,
       apartment: thread.apartment,
-      last: thread.messages[thread.messages.length - 1]?.body ?? "",
+      last: fiarepMessages(thread)[fiarepMessages(thread).length - 1]?.body ?? "",
       lastAt: thread.lastAt,
       unread: thread.openForFiarep,
       closed: Boolean(thread.closedAt),
@@ -99,6 +99,20 @@ router.post("/v1/fiarep/messages/:id/close", async (req, res) => {
   res.json({ ok: true });
 });
 
+/** Clear the messages (the conversation stays) or delete the conversation from your list. */
+for (const action of ["clear", "delete"] as const) {
+  router.post(`/v1/fiarep/messages/:id/${action}`, async (req, res) => {
+    const actor = actorFrom(res);
+    if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you." }); return; }
+    const row = await loadThread(String(req.params["id"] || ""));
+    if (!row) { res.status(404).json({ error: "No such conversation." }); return; }
+    const thread = threadOf(row.state);
+    if (!canSee(actor, thread)) { res.status(403).json({ error: "That conversation is not yours." }); return; }
+    await clearFiarepSide(row.id, row.version ?? 1, thread, action === "delete");
+    res.json({ ok: true });
+  });
+}
+
 router.get("/v1/fiarep/messages/:id", async (req, res) => {
   const actor = actorFrom(res);
   if (!(await mayMessage(actor))) { res.status(403).json({ error: "Messaging is not switched on for you. The administrator turns it on." }); return; }
@@ -117,7 +131,7 @@ router.get("/v1/fiarep/messages/:id", async (req, res) => {
     id: row.id, kind: thread.kind, closed: Boolean(thread.closedAt),
     who: thread.kind === "client" ? thread.clientCompany : thread.contactName,
     address: thread.address, apartment: thread.apartment,
-    messages: thread.messages,
+    messages: fiarepMessages(thread),
   });
 });
 
@@ -252,10 +266,10 @@ router.get("/v1/member/messages/codes", async (_req, res) => {
   )).orderBy(desc(entityRecords.updatedAt)).limit(300);
   res.setHeader("Cache-Control", "no-store");
   res.json(rows.map((row) => ({ id: row.id, thread: threadOf(row.state) }))
-    .filter(({ thread }) => thread.kind === "code" && thread.coordinatorId === gate.actor.id)
+    .filter(({ thread }) => thread.kind === "code" && thread.coordinatorId === gate.actor.id && !thread.hiddenForFiarep)
     .map(({ id, thread }) => ({
       id, kind: thread.kind, who: thread.contactName, coordinator: thread.coordinatorName, address: thread.address, apartment: thread.apartment,
-      last: thread.messages[thread.messages.length - 1]?.body ?? "", lastAt: thread.lastAt, unread: thread.openForFiarep, closed: Boolean(thread.closedAt),
+      last: fiarepMessages(thread)[fiarepMessages(thread).length - 1]?.body ?? "", lastAt: thread.lastAt, unread: thread.openForFiarep, closed: Boolean(thread.closedAt),
     })));
 });
 
@@ -283,7 +297,7 @@ router.get("/v1/member/messages/codes/:id", async (req, res) => {
   if ("error" in r) { res.status(r.error ?? 403).json({ error: "That conversation is not yours." }); return; }
   await markRead(r.row.id, r.row.version ?? 1, r.thread, "fiarep");
   res.setHeader("Cache-Control", "no-store");
-  res.json({ id: r.row.id, kind: r.thread.kind, closed: Boolean(r.thread.closedAt), who: r.thread.contactName, address: r.thread.address, apartment: r.thread.apartment, messages: r.thread.messages });
+  res.json({ id: r.row.id, kind: r.thread.kind, closed: Boolean(r.thread.closedAt), who: r.thread.contactName, address: r.thread.address, apartment: r.thread.apartment, messages: fiarepMessages(r.thread) });
 });
 
 router.post("/v1/member/messages/codes/:id", async (req, res) => {
@@ -301,6 +315,15 @@ router.post("/v1/member/messages/codes/:id/close", async (req, res) => {
   await audit(r.gate.actor, "fiarep-messages.code-closed", "", r.row.id);
   res.json({ ok: true });
 });
+
+for (const action of ["clear", "delete"] as const) {
+  router.post(`/v1/member/messages/codes/:id/${action}`, async (req, res) => {
+    const r = await ownCodeThread(res, String(req.params["id"] || ""));
+    if ("error" in r) { res.status(r.error ?? 403).json({ error: "That conversation is not yours." }); return; }
+    await clearFiarepSide(r.row.id, r.row.version ?? 1, r.thread, action === "delete");
+    res.json({ ok: true });
+  });
+}
 
 // ── The code door: no account, no plan, nothing but the conversation ──────
 router.use("/v1/public/messages", rateLimit("public-messages", 60));

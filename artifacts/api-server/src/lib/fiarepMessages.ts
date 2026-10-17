@@ -74,6 +74,9 @@ export type Thread = {
   /** The person with the code cleared their side (logged off on the website, or deleted in the app):
    *  they no longer see anything said before this. The other side keeps the whole conversation. */
   contactClearedAt?: string;
+  /** FIAREP's side (or the member who made the code) cleared the messages / deleted the conversation. */
+  fiarepClearedAt?: string;
+  hiddenForFiarep?: boolean;
 };
 
 const EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send";
@@ -353,6 +356,8 @@ export async function postMessage(
     messages: [...thread.messages, message].slice(-MAX_MESSAGES),
     lastAt: message.at,
     openForFiarep: from === "contact" ? thread.openForFiarep + 1 : 0,
+    // A deleted conversation comes back when the other person writes again.
+    hiddenForFiarep: from === "contact" ? false : thread.hiddenForFiarep,
     openForContact: from === "fiarep" ? thread.openForContact + 1 : 0,
   };
   await saveThread(threadId, version, next);
@@ -399,6 +404,13 @@ export function contactView(thread: Thread) {
     })),
   };
 }
+
+/** The answering side clears the messages (keep the conversation) or deletes it from their list. */
+export async function clearFiarepSide(threadId: string, version: number, thread: Thread, hide: boolean): Promise<void> {
+  await saveThread(threadId, version, { ...thread, fiarepClearedAt: new Date().toISOString(), openForFiarep: 0, hiddenForFiarep: hide });
+}
+/** What the answering side still sees after clearing. */
+export const fiarepMessages = (thread: Thread) => thread.messages.filter((m) => !thread.fiarepClearedAt || m.at > thread.fiarepClearedAt);
 
 /** Clear the code holder's side of a conversation. */
 export async function clearContactSide(threadId: string, version: number, thread: Thread): Promise<void> {

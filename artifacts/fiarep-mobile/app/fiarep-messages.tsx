@@ -65,6 +65,18 @@ export default function FiarepMessages() {
     finally { setBusy(false); }
   }
 
+  const [cleared, setCleared] = useState(0);
+  // Clear: empty the messages, keep the conversation. Delete: off your list (back only if they write again).
+  function wipe(id: string, action: 'clear' | 'delete') {
+    Alert.alert(action === 'clear' ? 'Clear these messages?' : 'Delete this conversation?', action === 'clear' ? 'The conversation stays open.' : 'It comes back only if they write again.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: action === 'clear' ? 'Clear' : 'Delete', style: 'destructive', onPress: () => void (async () => {
+        try { await msgPost(`${LIST}/${encodeURIComponent(id)}/${action}`, {}); if (action === 'delete' && openId === id) setOpenId(''); setCleared((n) => n + 1); await load(); }
+        catch (e: any) { Alert.alert('Could not do that', e?.data?.error || e?.message || 'Try again.'); }
+      })() },
+    ]);
+  }
+
   async function close(id: string) {
     try { await msgPost(`${LIST}/${encodeURIComponent(id)}/close`, {}); if (openId === id) setOpenId(''); await load(); }
     catch (e: any) { Alert.alert('Could not block them', e?.data?.error || e?.message || 'Try again.'); }
@@ -122,13 +134,17 @@ export default function FiarepMessages() {
             <Text style={[ui.listSub, { fontSize: 11 }]}>{when(r.lastAt)}</Text>
           </Pressable>
           {openId === r.id && (
-            <OpenThread id={r.id} base={member ? '/api/v1/member/messages/codes' : '/api/v1/fiarep/messages'} onSent={load} closed={r.closed}
-              footer={r.kind === 'code' && !r.closed ? (
-                <Pressable onPress={() => Alert.alert(`Block ${r.who || 'this person'}?`, 'Their code stops working and they can no longer message you.', [
-                  { text: 'Cancel', style: 'cancel' },
-                  { text: 'Block', style: 'destructive', onPress: () => void close(r.id) },
-                ])}><Text style={{ color: '#b91c1c', fontWeight: '600' }}>Block this person</Text></Pressable>
-              ) : null} />
+            <OpenThread key={`${r.id}-${cleared}`} id={r.id} base={member ? '/api/v1/member/messages/codes' : '/api/v1/fiarep/messages'} onSent={load} closed={r.closed}
+              footer={(
+                <View style={{ flexDirection: 'row', gap: 18, flexWrap: 'wrap' }}>
+                  <Pressable onPress={() => wipe(r.id, 'clear')}><Text style={{ color: '#185FA5', fontWeight: '600' }}>Clear</Text></Pressable>
+                  <Pressable onPress={() => wipe(r.id, 'delete')}><Text style={{ color: '#b91c1c', fontWeight: '600' }}>Delete</Text></Pressable>
+                  {r.kind === 'code' && !r.closed && <Pressable onPress={() => Alert.alert(`Block ${r.who || 'this person'}?`, 'Their code stops working and they can no longer message you.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    { text: 'Block', style: 'destructive', onPress: () => void close(r.id) },
+                  ])}><Text style={{ color: '#b91c1c', fontWeight: '600' }}>Block this person</Text></Pressable>}
+                </View>
+              )} />
           )}
         </View>
       ))}
