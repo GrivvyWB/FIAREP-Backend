@@ -8,7 +8,16 @@
     "token": "PASTE_AGENT_TOKEN_FROM_RELAY_SETUP"
   },
   "watch": {
-    "url": "https://fiarep.com/api/healthz",
+    "sites": [
+      {
+        "name": "FIAREP",
+        "url": "https://fiarep.com/api/healthz"
+      },
+      {
+        "name": "SetupRides",
+        "url": "https://setuprides.com/api/healthz"
+      }
+    ],
     "everySec": 60,
     "failuresBeforeAlert": 3
   },

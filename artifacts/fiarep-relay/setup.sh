@@ -49,7 +49,7 @@ if [ -f "$AGENT_DIR/config.json" ]; then
   node -e '
     const fs=require("fs"); const p=process.argv[1]; const c=JSON.parse(fs.readFileSync(p,"utf8"));
     c.relay={url:process.argv[2],token:process.argv[3]};
-    c.watch=c.watch||{url:"https://fiarep.com/api/healthz",everySec:60,failuresBeforeAlert:3};
+    if(!c.watch||!Array.isArray(c.watch.sites)) c.watch={sites:[{name:"FIAREP",url:"https://fiarep.com/api/healthz"},{name:"SetupRides",url:"https://setuprides.com/api/healthz"}],everySec:60,failuresBeforeAlert:3};
     fs.writeFileSync(p, JSON.stringify(c,null,2)+"\n",{mode:0o600});' "$AGENT_DIR/config.json" "$URL" "$AGENT_TOKEN"
   launchctl kickstart -k "gui/$(id -u)/com.fiarep.agent" 2>/dev/null && echo "   agent restarted" || echo "   (agent not installed as a login item yet — run artifacts/fiarep-agent/install-mac.sh)"
 else

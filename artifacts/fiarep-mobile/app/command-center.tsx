@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share, Linking } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AudioModule, RecordingPresets, createAudioPlayer, setAudioModeAsync, useAudioRecorder, type AudioPlayer } from 'expo-audio';
@@ -232,30 +232,43 @@ export default function CommandCenter() {
         )}
         {relayBase && (() => {
           const open = relay?.incidents.filter((i) => i.status === 'open') ?? [];
-          const latest = relay?.incidents.find((i) => i.status !== 'open');
+          const fixing = relay?.incidents.find((i) => i.status === 'approved' || i.status === 'running');
+          const replitLink = (i?: RelayIncident) => i?.replitUrl ? (
+            <Pressable style={[ui.btnOutline, { marginTop: 8 }]} onPress={() => void Linking.openURL(i.replitUrl!)}><Text style={ui.btnOutlineText}>Open Replit (republish from the phone)</Text></Pressable>
+          ) : null;
+          const latest = relay?.incidents.find((i) => ['done', 'failed', 'denied', 'expired'].includes(i.status));
           const macMinutes = relay?.agentSeen ? Math.round((Date.now() - relay.agentSeen) / 60000) : null;
           return (
             <View style={ui.card}>
-              <Text style={{ fontWeight: '700' }}>When FIAREP goes down</Text>
+              <Text style={{ fontWeight: '700' }}>When a site goes down</Text>
               <Text style={{ fontSize: 12, color: '#666', marginTop: 2 }}>
-                {!relay ? 'Backup relay unreachable.' : macMinutes === null ? 'The Mac has not checked in with the backup relay yet.' : macMinutes <= 15 ? 'The Mac is watching fiarep.com.' : `The Mac last checked in ${macMinutes} min ago — is it asleep?`}
+                {!relay ? 'Backup relay unreachable.' : macMinutes === null ? 'The Mac has not checked in with the backup relay yet.' : macMinutes <= 15 ? 'The Mac is watching your sites.' : `The Mac last checked in ${macMinutes} min ago — is it asleep?`}
               </Text>
               {open.map((i) => (
                 <View key={i.id} style={{ marginTop: 10, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: '#C0392B', backgroundColor: '#fdecea' }}>
-                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#C0392B' }}>FIAREP IS DOWN · {Math.max(0, Math.round((i.expiresAt - Date.now()) / 60000))} MIN TO APPROVE</Text>
-                  <Text style={{ fontSize: 15, fontWeight: '600', marginTop: 4 }}>Republish FIAREP on Replit from the Mac</Text>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#C0392B' }}>{(i.site || 'FIAREP').toUpperCase()} IS DOWN · {Math.max(0, Math.round((i.expiresAt - Date.now()) / 60000))} MIN TO APPROVE</Text>
+                  <Text style={{ fontSize: 15, fontWeight: '600', marginTop: 4 }}>Republish {i.site || 'FIAREP'} on Replit from the Mac</Text>
                   {!!i.detail && <Text style={{ fontSize: 12, color: '#333', marginTop: 2 }}>{i.detail}</Text>}
                   <View style={{ flexDirection: 'row', gap: 10, marginTop: 10 }}>
                     <Pressable style={[ui.btn, { flex: 1 }, !!busy && ui.btnMuted]} disabled={!!busy} onPress={() => void approveOutage(i)}><Text style={ui.btnText}>Republish with Face ID</Text></Pressable>
                     <Pressable style={[ui.btnOutline, { flex: 1, borderColor: '#C0392B' }]} onPress={() => void denyOutage(i)}><Text style={[ui.btnOutlineText, { color: '#C0392B' }]}>Not now</Text></Pressable>
                   </View>
+                  {replitLink(i)}
                 </View>
               ))}
+              {fixing && (
+                <View style={{ marginTop: 10, padding: 10, borderRadius: 10, borderWidth: 2, borderColor: '#185FA5', backgroundColor: '#eaf2fb' }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#185FA5' }}>{(fixing.site || 'FIAREP').toUpperCase()} · {fixing.status === 'approved' ? 'APPROVED · THE MAC IS STARTING' : 'FIXING · REPLIT IS OPEN ON THE MAC'}</Text>
+                  <Text style={{ fontSize: 13, color: '#333', marginTop: 4 }}>If Replit asks to sign in or "verify you are human", do it on the Mac — it carries on by itself. Not at the Mac? Republish from the phone.</Text>
+                  {replitLink(fixing)}
+                </View>
+              )}
               {latest && (
                 <Text style={{ fontSize: 12, color: latest.status === 'done' ? '#1F5C45' : latest.status === 'failed' ? '#C0392B' : '#666', marginTop: 8 }}>
-                  Last outage {new Date(latest.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}: {latest.status}{latest.autoFixed ? ' (fixed without asking)' : ''}{latest.result?.detail ? ` — ${latest.result.detail}` : ''}
+                  Last outage ({latest.site || 'FIAREP'}) {new Date(latest.createdAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}: {latest.status}{latest.autoFixed ? ' (fixed without asking)' : ''}{latest.result?.detail ? ` — ${latest.result.detail}` : ''}
                 </Text>
               )}
+              {latest?.status === 'failed' && replitLink(latest)}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
                 <View style={{ flex: 1, paddingRight: 10 }}>
                   <Text style={{ fontSize: 14 }}>Fix outages without asking</Text>

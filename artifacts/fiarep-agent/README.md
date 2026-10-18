@@ -24,7 +24,10 @@ your phone gets a push, you approve with Face ID in Command Center, and the Mac 
 then waits for fiarep.com to answer and reports back. Approvals are checked on the Mac against
 `trustedConfirmKeys`; with none pinned, nothing is republished.
 
-One-time Replit sign-in on this Mac: `node ~/.fiarep-agent/republish.mjs --login` (sign in, open the
-FIAREP deployment page, close the window). Test without clicking: `node ~/.fiarep-agent/republish.mjs --check`.
+Sites are listed in `watch.sites` (FIAREP and SetupRides by default), each with its own Replit page.
+One-time Replit sign-in per site: `node ~/.fiarep-agent/republish.mjs --login --site FIAREP` (and `--site SetupRides`):
+sign in, open that app's Replit page, close the window. Test without clicking: `… --check --site FIAREP`.
+Replit's security check may ask "Verify you are human": the window is visible and the Mac waits (up to 10 min)
+for you to do it on the Mac, then carries on. Away from the Mac? Use "Open Replit" in Command Center.
 Replit has no documented republish API — if Replit changes its page and `--check` stops finding the button, it needs updating.
 The Mac must be awake (System Settings → Energy: prevent sleep when plugged in).

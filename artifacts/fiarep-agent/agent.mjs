@@ -64,14 +64,17 @@ function loadConfig() {
     trustedConfirmKeys: (c.trustedConfirmKeys || []).filter((k) => typeof k === "string" && Buffer.from(k, "base64").length === 32),
     folders, apps: (c.apps || []).filter((a) => typeof a === "string"), tasks,
     relay: c.relay?.url && c.relay?.token && !/PASTE|YOUR-SUBDOMAIN/.test(c.relay.url + c.relay.token) ? { url: String(c.relay.url).replace(/\/$/, ""), token: String(c.relay.token) } : null,
+    // Sites to watch. Old configs with a single watch.url keep working as "FIAREP".
     watch: {
-      url: String(c.watch?.url || c.apiBase.replace(/\/$/, "") + "/healthz"),
+      sites: (Array.isArray(c.watch?.sites) && c.watch.sites.length ? c.watch.sites : [{ name: "FIAREP", url: c.watch?.url || c.apiBase.replace(/\/$/, "") + "/healthz" }])
+        .map((x) => ({ name: String(x.name || "Site").replace(/[^\w .-]/g, "").slice(0, 40) || "Site", url: String(x.url || "") }))
+        .filter((x) => /^https?:\/\//.test(x.url)),
       everySec: Math.min(Math.max(Number(c.watch?.everySec) || 60, 15), 3600),
       failuresBeforeAlert: Math.min(Math.max(Number(c.watch?.failuresBeforeAlert) || 3, 1), 30),
     },
     republish: {
       command: Array.isArray(c.republish?.command) ? c.republish.command.map(String) : [process.execPath, path.join(path.dirname(CONFIG_PATH), "republish.mjs"), "--run"],
-      timeoutSec: Math.min(Math.max(Number(c.republish?.timeoutSec) || 180, 30), 900),
+      timeoutSec: Math.min(Math.max(Number(c.republish?.timeoutSec) || 900, 30), 2400),
       waitUpSec: Math.min(Math.max(Number(c.republish?.waitUpSec) || 300, 30), 1800),
     },
   };
@@ -215,21 +218,33 @@ async function relayApi(cfg, method, p, body) {
 const autoFixVerified = (cfg, s) => s?.autoFix === true && cfg.trustedConfirmKeys.some((k) => verifyEd25519(k, `FIAREP-RELAY-AUTOFIX\ntrue\n${s.time}`, s.signature));
 const incidentVerified = (cfg, i) => cfg.trustedConfirmKeys.some((k) => verifyEd25519(k, confirmMessage({ id: i.id, action: i.action, target: i.target, params: { incident: i.id, kind: i.kind }, nonce: i.nonce, expiresAt: i.expiresAt }), i.signature));
 
-async function siteUp(cfg) {
-  try { const r = await fetch(cfg.watch.url, { signal: AbortSignal.timeout(15_000), headers: { "user-agent": `fiarep-agent/${VERSION}` } }); return r.ok; }
+// The Replit page the Mac republishes a site from, also sent to the phone as "Open Replit".
+// replit.json: { "sites": { "FIAREP": { "deploymentUrl": … }, "SetupRides": { … } } } (old: top-level deploymentUrl = FIAREP)
+function replitUrl(site) {
+  try {
+    const j = JSON.parse(readFileSync(path.join(path.dirname(CONFIG_PATH), "replit.json"), "utf8"));
+    const u = j.sites?.[site]?.deploymentUrl || (site === "FIAREP" ? j.deploymentUrl : undefined);
+    return /^https:\/\/replit\.com\//.test(u || "") ? u : undefined;
+  } catch { return undefined; }
+}
+const siteNamed = (cfg, name) => cfg.watch.sites.find((x) => x.name === name) || cfg.watch.sites[0];
+
+async function siteUp(site) {
+  try { const r = await fetch(site.url, { signal: AbortSignal.timeout(15_000), headers: { "user-agent": `fiarep-agent/${VERSION}` } }); return r.ok; }
   catch { return false; }
 }
 
 async function republishAndReport(cfg, incident) {
-  log(`republishing (incident ${incident.id})`);
+  const site = siteNamed(cfg, incident.site || "FIAREP");
+  log(`republishing ${site.name} (incident ${incident.id})`);
   try { await relayApi(cfg, "POST", `/agent/incidents/${incident.id}/start`, {}); } catch (e) { log(`relay start: ${e.message}`); }
   const [file, ...argv] = cfg.republish.command.map(expandHome);
-  const r = await run(file, argv, { timeoutMs: cfg.republish.timeoutSec * 1000 });
+  const r = await run(file, [...argv, "--site", site.name], { timeoutMs: cfg.republish.timeoutSec * 1000 });
   const clicked = r.exitCode === 0 && !r.timedOut;
   let up = false;
   const deadline = Date.now() + cfg.republish.waitUpSec * 1000;
-  while (Date.now() < deadline) { if ((up = await siteUp(cfg))) break; await new Promise((res) => setTimeout(res, 10_000)); }
-  const detail = up ? `Back up${clicked ? " after republish" : " (republish step failed, but the site answered)"}.` : `${clicked ? "Republished, but" : "Republish failed and"} fiarep.com is still not answering. ${tail(r.stderr || r.stdout, 300).trim()}`;
+  while (Date.now() < deadline) { if ((up = await siteUp(site))) break; await new Promise((res) => setTimeout(res, 10_000)); }
+  const detail = up ? `${site.name} back up${clicked ? " after republish" : " (republish step failed, but the site answered)"}.` : `${clicked ? "Republished, but" : "Republish failed and"} ${site.name} is still not answering. ${tail(r.stderr || r.stdout, 300).trim()}`;
   log(detail);
   try { await relayApi(cfg, "POST", `/agent/incidents/${incident.id}/result`, { ok: up, detail }); } catch (e) { log(`relay result: ${e.message}`); }
 }
@@ -250,15 +265,15 @@ async function relayLoop(cfg) {
   }
 }
 
-async function watchLoop(cfg) {
+async function watchLoop(cfg, site) {
   let failures = 0;
   for (;;) {
-    if (await siteUp(cfg)) failures = 0;
+    if (await siteUp(site)) failures = 0;
     else if (++failures === cfg.watch.failuresBeforeAlert) {
       const auto = autoFixVerified(cfg, relaySettings);
-      log(`fiarep.com down (${failures} checks in a row) — reporting${auto ? ", auto-fix is on" : ""}`);
+      log(`${site.name} down (${failures} checks in a row) — reporting${auto ? ", auto-fix is on" : ""}`);
       try {
-        const inc = await relayApi(cfg, "POST", "/agent/incidents", { detail: `${cfg.watch.url} stopped answering (${failures} checks, ${cfg.watch.everySec}s apart).`, autoFix: auto });
+        const inc = await relayApi(cfg, "POST", "/agent/incidents", { site: site.name, detail: `${site.url} stopped answering (${failures} checks, ${cfg.watch.everySec}s apart).`, autoFix: auto, replitUrl: replitUrl(site.name) });
         if (auto && inc.status === "running" && !relayHandled.has(inc.id)) { relayHandled.add(inc.id); await republishAndReport(cfg, inc); }
       } catch (e) { log(`could not report outage: ${e.message}`); failures -= 1; }
     }
@@ -276,8 +291,9 @@ async function main() {
   log(`FIAREP agent ${VERSION} → ${cfg.apiBase} · ${Object.keys(cfg.tasks).length} tasks · ${cfg.folders.length} folders · ${cfg.trustedConfirmKeys.length ? `${cfg.trustedConfirmKeys.length} pinned phone key(s)` : "no pinned phone keys (trusting the server for approvals)"}`);
   if (cfg.relay) {
     if (!cfg.trustedConfirmKeys.length) log("backup relay configured, but no pinned phone keys — outages will be reported, nothing will be republished.");
-    log(`watching ${cfg.watch.url} every ${cfg.watch.everySec}s · backup relay ${cfg.relay.url}`);
-    void relayLoop(cfg); void watchLoop(cfg);
+    log(`watching ${cfg.watch.sites.map((x) => `${x.name} (${x.url})`).join(", ")} every ${cfg.watch.everySec}s · backup relay ${cfg.relay.url}`);
+    void relayLoop(cfg);
+    for (const site of cfg.watch.sites) void watchLoop(cfg, site);
   }
   let backoff = 5_000;
   for (;;) {

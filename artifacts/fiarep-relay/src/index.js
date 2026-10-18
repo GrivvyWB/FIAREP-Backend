@@ -126,19 +126,21 @@ export default {
         return json({ settings: await get(env, "settings", { autoFix: false }), approved: list.filter((i) => i.status === "approved"), open: list.filter((i) => i.status === "open").map((i) => i.id) });
       }
       if (p === "/agent/incidents" && req.method === "POST") {
+        const site = String(body.site || "FIAREP").replace(/[^\w .-]/g, "").slice(0, 40) || "FIAREP";
         const list = await incidents(env);
-        const already = list.find((i) => ["open", "approved", "running"].includes(i.status));
+        const already = list.find((i) => (i.site || "FIAREP") === site && ["open", "approved", "running"].includes(i.status));
         if (already) return json(already);
         const now = Date.now();
         const inc = {
-          id: crypto.randomUUID(), kind: "site_down", action: "relay_republish", target: "relay",
+          id: crypto.randomUUID(), site, kind: "site_down", action: "relay_republish", target: "relay",
           detail: String(body.detail || "").slice(0, 300), createdAt: now, status: "open",
           nonce: [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, "0")).join(""),
           expiresAt: now + INCIDENT_TTL_MS, autoFixed: body.autoFix === true,
+          replitUrl: /^https:\/\/replit\.com\/[\w@./?=&#%-]{1,200}$/.test(String(body.replitUrl || "")) ? String(body.replitUrl) : undefined,
         };
         if (inc.autoFixed) inc.status = "running";
         await saveIncident(env, inc);
-        await push(env, inc.autoFixed ? "FIAREP is down — republishing now" : "FIAREP is down",
+        await push(env, inc.autoFixed ? `${site} is down — republishing now` : `${site} is down`,
           inc.autoFixed ? "Auto-fix is on; the Mac is republishing on Replit." : "Open Command Center to approve a republish with Face ID.");
         return json(inc, 201);
       }
@@ -146,11 +148,14 @@ export default {
       if (m && req.method === "POST") {
         const inc = (await get(env, "incidents", [])).find((i) => i.id === m[1]);
         if (!inc) return json({ error: "Unknown incident" }, 404);
-        if (m[2] === "start") inc.status = "running";
+        if (m[2] === "start") {
+          inc.status = "running";
+          await push(env, `Fixing ${inc.site || "FIAREP"} — Replit is open on the Mac`, "If it asks you to sign in or verify you're human, do it on the Mac. Away? Open Replit from Command Center.");
+        }
         else {
           inc.status = body.ok ? "done" : "failed";
           inc.result = { ok: !!body.ok, detail: String(body.detail || "").slice(0, 500), at: Date.now() };
-          await push(env, body.ok ? "FIAREP is back up" : "Republish did not bring FIAREP back", inc.result.detail || "");
+          await push(env, body.ok ? `${inc.site || "FIAREP"} is back up` : `Republish did not bring ${inc.site || "FIAREP"} back`, inc.result.detail || "");
         }
         await saveIncident(env, inc);
         return json(view(inc));

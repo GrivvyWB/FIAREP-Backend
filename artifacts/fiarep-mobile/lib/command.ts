@@ -182,8 +182,8 @@ export async function approveAction(a: CommandAction): Promise<CommandAction> {
 
 // ── Backup relay (works when fiarep.com is down) ─────────────────────────
 export type RelayIncident = {
-  id: string; kind: string; action: string; target: string; detail: string; status: string;
-  nonce: string; expiresAt: number; createdAt: number; autoFixed?: boolean; approvedBy?: string;
+  id: string; site?: string; kind: string; action: string; target: string; detail: string; status: string;
+  nonce: string; expiresAt: number; createdAt: number; autoFixed?: boolean; approvedBy?: string; replitUrl?: string;
   result?: { ok: boolean; detail: string; at: number };
 };
 export type RelayState = { agentSeen: number; settings: { autoFix: boolean }; incidents: RelayIncident[] };
