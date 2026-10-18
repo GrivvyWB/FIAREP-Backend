@@ -8,6 +8,7 @@ import { commandActions, commandRuns } from "./tables";
 import { commandAuditLog } from "./audit";
 import { actionOn, confirmOn, effectiveSwitches, getSwitches, PLATFORM_TENANT, type CommandSwitches } from "./switches";
 import { costMicroUsd, monthUsage } from "./usage";
+import { geminiLoop } from "./gemini";
 import { signalAgent, waitForActionResult } from "./agentBus";
 import { confirmMessage } from "./crypto";
 import { logger } from "../logger";
@@ -182,9 +183,19 @@ export async function runCommand(input: { text: string; threadId?: string; staff
   const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, input.tenantId)).limit(1);
   const system = systemPrompt(input.actorName, await agentCatalog(input.tenantId), org?.name || "your company", isPlatform(input.tenantId));
   const usage: Record<string, number> = { input_tokens: 0, output_tokens: 0 };
+  // Engine: Claude (default) or Gemini — Platform Control → Command Center → Engine.
+  const gemini = switches.provider === "gemini";
+  const model = gemini ? switches.geminiModel : switches.model;
   let reply = "";
   try {
-    for (let turn = 0; turn < MAX_TURNS; turn += 1) {
+    if (gemini) {
+      reply = await geminiLoop({
+        model, system, tools, maxTurns: MAX_TURNS, usage, text: input.text,
+        history: messages.slice(0, -1).map((m) => ({ role: m.role, content: String(m.content) })),
+        runTool: (name, params) => runTool(name, params, ctx, switches),
+      });
+    }
+    else for (let turn = 0; turn < MAX_TURNS; turn += 1) {
       const res = await callClaude(switches.model, system, tools, messages);
       for (const [k, v] of Object.entries(res.usage ?? {})) if (typeof v === "number") usage[k] = (usage[k] ?? 0) + v;
       const content = res.content ?? [];
@@ -201,14 +212,14 @@ export async function runCommand(input: { text: string; threadId?: string; staff
       if (turn === MAX_TURNS - 1) reply = reply || "I ran out of steps on that one. Try asking a narrower question.";
     }
     if (!reply) reply = "Done.";
-    const cost = costMicroUsd(switches.model, usage);
+    const cost = costMicroUsd(model, usage);
     if (cost !== null) usage["cost_usd_micro"] = cost;
     await db.update(commandRuns).set({ reply, status: "done", usage, updatedAt: new Date() }).where(eq(commandRuns.id, runId));
-    await commandAuditLog({ tenantId: input.tenantId, actor: "FIAREP Command Center", event: "reply", deviceId: input.deviceId, runId, detail: { reply, usage } });
+    await commandAuditLog({ tenantId: input.tenantId, actor: "FIAREP Command Center", event: "reply", deviceId: input.deviceId, runId, detail: { reply, usage, engine: gemini ? "gemini" : "claude", model } });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Command failed";
     logger.error({ err, runId }, "Command run failed");
-    const cost = costMicroUsd(switches.model, usage);
+    const cost = costMicroUsd(model, usage);
     if (cost !== null) usage["cost_usd_micro"] = cost;
     await db.update(commandRuns).set({ status: "failed", error: message, usage, updatedAt: new Date() }).where(eq(commandRuns.id, runId));
     await commandAuditLog({ tenantId: input.tenantId, actor: "FIAREP Command Center", event: "command.failed", deviceId: input.deviceId, runId, detail: { error: message } });

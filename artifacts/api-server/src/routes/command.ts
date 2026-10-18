@@ -20,7 +20,7 @@ import { commandActions, commandAgents, commandDevices, commandRuns, commandWork
 import { isEd25519Key, requestMessage, sha256hex, verifyEd25519 } from "../lib/command/crypto";
 import { commandAuditLog, recentAudit, verifyAuditChain } from "../lib/command/audit";
 import { ACTIONS, actionsFor, isPlatform } from "../lib/command/actions";
-import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
+import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
 import { capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
@@ -373,7 +373,7 @@ router.get("/v1/platform/command", async (req, res) => {
   ]);
   const usageOf = new Map(usage.map((u) => [u.tenantId, u]));
   res.json({
-    switches, defaultModel: DEFAULT_MODEL, prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
+    switches, defaultModel: DEFAULT_MODEL, defaultGeminiModel: DEFAULT_GEMINI_MODEL, geminiKeyConfigured: Boolean(process.env["GEMINI_API_KEY"]), prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
     actions: actionMeta(PLATFORM_TENANT),
     devices: devices.map(deviceMeta),
     agents: agents.map(agentMeta),
@@ -402,6 +402,8 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     actions: "actions" in b ? bools(b["actions"], PLATFORM_TENANT) : before.actions,
     confirm: "confirm" in b ? bools(b["confirm"], PLATFORM_TENANT) : before.confirm,
     model: typeof b["model"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["model"].trim()) ? b["model"].trim() : before.model,
+    provider: b["provider"] === "gemini" || b["provider"] === "claude" ? b["provider"] : before.provider,
+    geminiModel: typeof b["geminiModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["geminiModel"].trim()) ? b["geminiModel"].trim() : before.geminiModel,
     caps: before.caps ?? {},
   };
   await saveSwitches(next, PLATFORM_TENANT);
@@ -496,7 +498,8 @@ router.get("/v1/org/command", ...org, async (req, res) => {
     actions: actionMeta(tenantId), devices: devices.map(deviceMeta), agents: agents.map(agentMeta),
     install: installLines(publicApiBase(req), null, devices.filter((d) => d.status === "active").map((d) => d.confirmKey)),
     usage: usage[0] ?? null, cap: platform.caps?.[tenantId] ?? null, capProblem: await capProblem(tenantId),
-    claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]),
+    // "Ready" for whichever engine FIAREP has on (Claude or Gemini).
+    claudeKeyConfigured: Boolean(process.env[effective.provider === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY"]),
     audit: { ok: chain.ok, rows: auditRows.length },
   });
 });
@@ -509,7 +512,7 @@ router.put("/v1/org/command/switches", ...org, async (req, res) => {
     enabled: typeof b["enabled"] === "boolean" ? b["enabled"] : before.enabled,
     actions: "actions" in b ? bools(b["actions"], tenantId) : before.actions,
     confirm: "confirm" in b ? bools(b["confirm"], tenantId) : before.confirm,
-    model: before.model, // the Claude model is FIAREP's choice (Platform Control)
+    model: before.model, provider: before.provider, geminiModel: before.geminiModel, // the engine and model are FIAREP's choice (Platform Control)
   };
   await saveSwitches(next, tenantId);
   await commandAuditLog({ tenantId, actor: by(res), event: "switches.changed", detail: { before, after: next } });

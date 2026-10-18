@@ -11,12 +11,19 @@ export type CommandSwitches = {
   enabled: boolean;
   actions: Record<string, boolean>;
   confirm: Record<string, boolean>;
+  /** The Claude model. */
   model: string;
+  /** Which model reads the commands: "claude" (default) or "gemini". Platform row only; applies to every client. */
+  provider: "claude" | "gemini";
+  /** The Gemini model, used when provider is "gemini". */
+  geminiModel: string;
   /** Platform row only: monthly Claude spending cap per client, in US dollars (absent = no cap). */
   caps?: Record<string, number>;
 };
 
 export const DEFAULT_MODEL = process.env["COMMAND_CENTER_MODEL"] || "claude-sonnet-5-5";
+/** Google's "most intelligent Flash model; built for agents" (ai.google.dev/gemini-api/docs/models, Oct 18 2026). */
+export const DEFAULT_GEMINI_MODEL = process.env["GEMINI_MODEL"] || "gemini-3.8-flash";
 export const PLATFORM_TENANT = "default";
 const KEY = "command-center";
 
@@ -33,6 +40,8 @@ export async function getSwitches(tenantId: string = PLATFORM_TENANT): Promise<C
     actions: v.actions && typeof v.actions === "object" ? v.actions : {},
     confirm: v.confirm && typeof v.confirm === "object" ? v.confirm : {},
     model: typeof v.model === "string" && v.model.trim() ? v.model.trim() : DEFAULT_MODEL,
+    provider: v.provider === "gemini" ? "gemini" : "claude",
+    geminiModel: typeof v.geminiModel === "string" && v.geminiModel.trim() ? v.geminiModel.trim() : DEFAULT_GEMINI_MODEL,
     ...(tenantId === PLATFORM_TENANT ? { caps } : {}),
   };
   cache.set(tenantId, { at: Date.now(), value });
@@ -69,6 +78,8 @@ export async function effectiveSwitches(tenantId: string): Promise<CommandSwitch
     actions,
     confirm: { ...platform.confirm, ...own.confirm },
     model: platform.model,
+    provider: platform.provider,
+    geminiModel: platform.geminiModel,
     moduleOn: on,
     platformEnabled: platform.enabled,
   };

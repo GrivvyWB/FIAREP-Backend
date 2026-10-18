@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ActionMeta = { name: string; label: string; risk: "read" | "write"; confirmDefault: boolean; target: "server" | "agent" };
-type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; caps?: Record<string, number> };
+type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; provider: "claude" | "gemini"; geminiModel: string; caps?: Record<string, number> };
 type Device = { id: string; name: string; staffName: string; status: "pending" | "active" | "revoked"; confirmKey: string; createdAt: string; approvedAt: string | null; approvedBy: string | null; lastUsedAt: string | null };
 type AgentTask = { name: string; description: string; confirm: boolean; params: Record<string, { description: string; pattern: string }> };
 type Agent = { id: string; name: string; status: string; online: boolean; lastSeenAt: string | null; info: Record<string, unknown>; tasks: AgentTask[]; folders: string[]; apps: string[]; createdAt: string };
@@ -15,7 +15,7 @@ type Client = { id: string; name: string; status: string; on: boolean; cap: numb
 type Overview = {
   switches: Switches; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; install: Install; usage: Usage | null; claudeKeyConfigured: boolean; audit: { ok: boolean; rows: number; brokenAt?: number | null };
   // Platform Control only
-  defaultModel?: string; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
+  defaultModel?: string; defaultGeminiModel?: string; geminiKeyConfigured?: boolean; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
   // A client's own only
   platformEnabled?: boolean; platformOff?: string[]; cap?: number | null; capProblem?: string | null;
 };
@@ -65,6 +65,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const [agentName, setAgentName] = useState("");
   const [newAgent, setNewAgent] = useState<{ name: string; token: string; install: Install } | null>(null);
   const [model, setModel] = useState("");
+  const [geminiModel, setGeminiModel] = useState("");
   const [caps, setCaps] = useState<Record<string, string>>({});
   const fail = (title: string) => (err: any) => toast({ variant: "destructive", title, description: err?.data?.error || err?.message });
 
@@ -75,7 +76,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         api<{ rows: AuditRow[] }>(`${base}/audit?limit=200`),
         api<WorkOrder[]>(`${base}/work-orders`),
       ]);
-      setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setLoadError("");
+      setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
     } catch (err: any) { setLoadError(err?.data?.error || err?.message || "Could not load the Command Center"); }
   }
   useEffect(() => { void load(); const t = setInterval(() => void load(), 15_000); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -118,6 +119,9 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const otherPhones = data.devices.filter((d) => d.status !== "pending");
   const drafts = orders.filter((o) => o.status === "draft");
   const offByFiarep = !platform && data.platformEnabled === false;
+  const gemini = data.switches.provider === "gemini";
+  const activeModel = gemini ? data.switches.geminiModel : data.switches.model;
+  const priceText = (m: string) => { const p = data.prices?.[m] as ({ input: number; output: number; source: string; until?: string; then?: { input: number; output: number } } | undefined); return p ? `$${p.input} in / $${p.output} out per million tokens${p.until && p.then ? ` through ${p.until}, then $${p.then.input} / $${p.then.output}` : ""} — ${p.source}` : "no price on file for this model: tokens are counted, no dollar figure"; };
 
   return (
     <div className="space-y-5">
@@ -136,9 +140,11 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
 
       {offByFiarep && <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">FIAREP has the Command Center switched off right now.</div>}
       {data.capProblem && <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{data.capProblem}</div>}
-      {(!data.claudeKeyConfigured || (platform && !data.voiceKeyConfigured)) && (
+      {((platform ? (gemini ? !data.geminiKeyConfigured : !data.claudeKeyConfigured) : !data.claudeKeyConfigured) || (platform && !data.voiceKeyConfigured)) && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          {!data.claudeKeyConfigured && <p>{platform ? <><b>ANTHROPIC_API_KEY</b> is not set on the API server — commands can't be understood until it is (Replit → Secrets).</> : "Commands are not available yet — FIAREP is finishing the setup."}</p>}
+          {platform && !gemini && !data.claudeKeyConfigured && <p><b>ANTHROPIC_API_KEY</b> is not set on the API server — commands can't be understood until it is (Replit → Secrets).</p>}
+          {platform && gemini && !data.geminiKeyConfigured && <p><b>GEMINI_API_KEY</b> is not set on the API server — with Gemini on, commands can't be understood until it is (Replit → Secrets).</p>}
+          {!platform && !data.claudeKeyConfigured && <p>Commands are not available yet — FIAREP is finishing the setup.</p>}
           {platform && !data.voiceKeyConfigured && <p><b>OPENAI_API_KEY</b> is not set — voice in/out won't work (typing still does).</p>}
         </div>
       )}
@@ -153,7 +159,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       {platform && data.clients && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Clients</h2>
-          <p className="text-xs text-slate-500">Every client has its own Command Center: its administrators set up their phones in the app and approve them, add their computers (Windows, Mac or Linux) and switch actions on fiarep.com → Command Center. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Claude usage runs on FIAREP's key; this month's cost per client is below{data.prices?.[data.switches.model] ? ` (${data.switches.model}: $${data.prices[data.switches.model]!.input} in / $${data.prices[data.switches.model]!.output} out per million tokens — ${data.prices[data.switches.model]!.source})` : ""}. A cap stops that client's commands for the rest of the month once reached.</p>
+          <p className="text-xs text-slate-500">Every client has its own Command Center: its administrators set up their phones in the app and approve them, add their computers (Windows, Mac or Linux) and switch actions on fiarep.com → Command Center. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Usage runs on FIAREP's {gemini ? "Gemini" : "Claude"} key; this month's cost per client is below ({activeModel}: {priceText(activeModel)}). A cap stops that client's commands for the rest of the month once reached.</p>
           <div className="mt-3 overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Client</th><th className="py-1 pr-3">On</th><th className="py-1 pr-3">This month</th><th className="py-1 pr-3">Monthly cap</th><th className="py-1 pr-3">Phones</th><th className="py-1">Computers</th></tr></thead>
             <tbody>{data.clients.map((c) => {
@@ -277,11 +283,32 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </tbody>
         </table></div>
         {platform && (
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-slate-600">Claude model</span>
-            <input value={model} onChange={(e) => setModel(e.target.value)} className="w-56 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
-            <Button size="sm" variant="outline" disabled={!model.trim() || model.trim() === data.switches.model} onClick={() => void saveSwitches({ model: model.trim() })}>Save</Button>
-            <span className="text-xs text-slate-500">default {data.defaultModel} · used by every client too{data.usage ? ` · FIAREP's own this month: ${money(data.usage.costUsd)}, ${data.usage.runs} commands` : ""}</span>
+          <div className="mt-4 rounded-lg border border-slate-200 p-3">
+            <p className="text-sm font-semibold text-slate-900">Engine — the model that reads each command</p>
+            <p className="text-xs text-slate-500">Same actions, same Face ID approvals and audit trail either way; only the model that understands the command changes. Applies to FIAREP's own and every client's. Voice in / out stays on OpenAI.</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {(["claude", "gemini"] as const).map((p) => (
+                <button key={p} type="button" onClick={() => { if (p !== data.switches.provider && window.confirm(p === "gemini" ? `Switch every Command Center to Gemini (${data.switches.geminiModel})?${data.geminiKeyConfigured ? "" : " GEMINI_API_KEY is not set yet, so commands will fail until it is."}` : `Switch every Command Center back to Claude (${data.switches.model})?`)) void saveSwitches({ provider: p }); }}
+                  className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${data.switches.provider === p ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>
+                  {p === "claude" ? "Claude" : "Gemini"}{data.switches.provider === p ? " · in use" : ""}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-14 text-slate-600">Claude</span>
+                <input value={model} onChange={(e) => setModel(e.target.value)} className="w-52 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
+                <Button size="sm" variant="outline" disabled={!model.trim() || model.trim() === data.switches.model} onClick={() => void saveSwitches({ model: model.trim() })}>Save</Button>
+                <span className="w-full text-xs text-slate-500">default {data.defaultModel} · {priceText(data.switches.model)} · key {data.claudeKeyConfigured ? "set" : <b className="text-amber-800">not set (ANTHROPIC_API_KEY)</b>}</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="w-14 text-slate-600">Gemini</span>
+                <input value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} className="w-52 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
+                <Button size="sm" variant="outline" disabled={!geminiModel.trim() || geminiModel.trim() === data.switches.geminiModel} onClick={() => void saveSwitches({ geminiModel: geminiModel.trim() })}>Save</Button>
+                <span className="w-full text-xs text-slate-500">default {data.defaultGeminiModel} · {priceText(data.switches.geminiModel)} · key {data.geminiKeyConfigured ? "set" : <b className="text-amber-800">not set (GEMINI_API_KEY)</b>}</span>
+              </div>
+            </div>
+            {data.usage ? <p className="mt-2 text-xs text-slate-500">FIAREP's own this month: {money(data.usage.costUsd)}, {data.usage.runs} commands</p> : null}
           </div>
         )}
       </section>
