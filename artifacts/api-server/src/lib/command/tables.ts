@@ -27,6 +27,8 @@ export const commandDevices = pgTable("command_devices", {
 /** A desktop agent (the Mac). It authenticates with a token shown once. */
 export const commandAgents = pgTable("command_agents", {
   id: text("id").primaryKey(),
+  /** The organization the computer belongs to ("default" = FIAREP / Platform Control). */
+  tenantId: text("tenant_id").notNull().default("default"),
   name: text("name").notNull(),
   tokenHash: text("token_hash").notNull(),
   status: text("status").notNull(), // active | revoked
@@ -66,6 +68,7 @@ export const commandRuns = pgTable("command_runs", {
  *  for a Face ID signature (when their confirm switch is on). */
 export const commandActions = pgTable("command_actions", {
   id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().default("default"),
   runId: text("run_id").notNull(),
   staffId: text("staff_id").notNull(),
   deviceId: text("device_id").notNull(),
@@ -93,6 +96,8 @@ export const commandActions = pgTable("command_actions", {
 export const commandAudit = pgTable("command_audit", {
   seq: bigserial("seq", { mode: "number" }).primaryKey(),
   at: ts("at").defaultNow().notNull(),
+  /** null = FIAREP / Platform Control (every row before clients had their own). */
+  tenantId: text("tenant_id"),
   actor: text("actor").notNull(),
   deviceId: text("device_id"),
   runId: text("run_id"),
@@ -105,6 +110,7 @@ export const commandAudit = pgTable("command_audit", {
 
 export const commandWorkOrders = pgTable("command_work_orders", {
   id: text("id").primaryKey(),
+  tenantId: text("tenant_id").notNull().default("default"),
   alertId: text("alert_id").notNull(),
   alertKey: text("alert_key").notNull(),
   address: text("address").notNull(),
@@ -160,4 +166,13 @@ export async function ensureCommandTables(): Promise<void> {
     detail text not null, urgency text not null, status text not null, note text, run_id text,
     decided_by text, decided_at timestamptz, created_at timestamptz not null default now())`);
   await db.execute(sql`create unique index if not exists command_work_orders_alert_idx on command_work_orders (alert_id)`);
+  // Each client has its own Command Center: everything carries the organization.
+  // Rows from before this belong to FIAREP ("default").
+  await db.execute(sql`alter table command_agents add column if not exists tenant_id text not null default 'default'`);
+  await db.execute(sql`alter table command_actions add column if not exists tenant_id text not null default 'default'`);
+  await db.execute(sql`alter table command_work_orders add column if not exists tenant_id text not null default 'default'`);
+  await db.execute(sql`alter table command_audit add column if not exists tenant_id text`);
+  await db.execute(sql`create index if not exists command_runs_tenant_idx on command_runs (tenant_id, created_at)`);
+  await db.execute(sql`create index if not exists command_devices_tenant_idx on command_devices (tenant_id)`);
+  await db.execute(sql`create index if not exists command_audit_tenant_idx on command_audit (tenant_id, seq)`);
 }

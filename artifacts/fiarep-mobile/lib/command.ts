@@ -91,7 +91,8 @@ const signWithSeed = (seedB64: string, message: string) =>
   toB64(nacl.sign.detached(utf8(message), nacl.sign.keyPair.fromSeed(fromB64(seedB64)).secretKey));
 
 // ── enrollment ───────────────────────────────────────────────────────────
-export type DeviceState = { id: string; status: 'pending' | 'active' | 'revoked'; offline?: boolean } | null;
+/** approveWhere: where this phone gets approved (FIAREP: Platform Control; a client: its own Command Center page). */
+export type DeviceState = { id: string; status: 'pending' | 'active' | 'revoked'; offline?: boolean; approveWhere?: string; platform?: boolean } | null;
 
 export async function storedDeviceId(): Promise<string | null> {
   return SecureStore.getItemAsync(K_DEVICE_ID, plain);
@@ -124,7 +125,7 @@ export async function deviceStatus(): Promise<DeviceState> {
   const id = await storedDeviceId();
   if (!id) return null;
   try {
-    const r = await customFetch<{ id: string; status: 'pending' | 'active' | 'revoked' }>(`/api/v1/command/devices/${encodeURIComponent(id)}/status`, { responseType: 'json' } as never);
+    const r = await customFetch<{ id: string; status: 'pending' | 'active' | 'revoked'; approveWhere?: string; platform?: boolean }>(`/api/v1/command/devices/${encodeURIComponent(id)}/status`, { responseType: 'json' } as never);
     await SecureStore.setItemAsync(K_STATUS, r.status, plain);
     return r;
   } catch (e: any) {

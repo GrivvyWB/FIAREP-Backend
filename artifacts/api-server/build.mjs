@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { build as esbuild } from "esbuild";
 import esbuildPluginPino from "esbuild-plugin-pino";
-import { copyFile, cp, rm } from "node:fs/promises";
+import { copyFile, cp, mkdir, rm } from "node:fs/promises";
 
 // Plugins (e.g. 'esbuild-plugin-pino') may use `require` to resolve dependencies
 globalThis.require = createRequire(import.meta.url);
@@ -125,6 +125,11 @@ globalThis.__dirname = __bannerPath.dirname(globalThis.__filename);
   );
   // FIAREP's locked compliance forms, served only to the unlocked organization.
   await cp(path.resolve(artifactDir, "company-forms"), path.resolve(distDir, "company-forms"), { recursive: true });
+  // The Command Center desktop agent and its installers, served at /api/v1/command/agent-files/*.
+  await mkdir(path.resolve(distDir, "agent-files"), { recursive: true });
+  for (const f of ["agent.mjs", "install.sh", "install.ps1"]) {
+    await copyFile(path.resolve(artifactDir, "../fiarep-agent", f), path.resolve(distDir, "agent-files", f));
+  }
 }
 
 buildAll().catch((err) => {

@@ -99,6 +99,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "site-checkins", name: "Site Check-Ins", description: "Where each member checked in (the building tapped vs. where the phone was) and when they left and came back", icon: Building2 },
   { id: "translator", name: "Translator", description: "Voice-to-voice interpreter for talking with residents (website and app)", icon: Users },
   { id: "violation-alerts", name: "Violation Alerts (menu page)", description: "New 311 complaints, HPD / DOB violations and OATH summonses on the client's watched buildings, checked every 30 minutes, as a page in their menu. OFF for every client; switch on per client, then assign their buildings on Platform -> Alerts", icon: AlertTriangle },
+  { id: "command-center", name: "Command Center", description: "The client's own Command Center: its administrators talk to their buildings, alerts, work orders and their own computers (Windows, Mac or Linux) from the phone, with Face ID approvals. Only that client's data, never the FIAREP server. Claude usage runs on FIAREP's key (usage and caps: Platform -> Command Center). ON unless switched off", icon: Users },
   { id: "violation-alerts-command", name: "Violation Alerts — Upper Management Complaint Command", description: "The same alerts as a red strip at the top of the Borough Director's Complaint Command, with its own on / off switch for the director. Separate from the menu page; OFF for every client", icon: AlertTriangle },
 ];
 

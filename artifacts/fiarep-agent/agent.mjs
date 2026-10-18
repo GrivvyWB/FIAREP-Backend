@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // FIAREP desktop agent — lets the Command Center on your phone run a fixed
-// set of things on this computer.
+// set of things on this computer. Windows, Mac and Linux.
 //
 // - Outbound only: it calls the FIAREP API (long-poll); nothing connects to it.
 // - It can only do what this computer's config allows: named tasks (argv, no
@@ -8,20 +8,33 @@
 // - With trustedConfirmKeys set, anything that needs approval must carry your
 //   phone's Face ID signature, checked HERE — the server alone can't approve it.
 //
-// Node 20+, no dependencies.   node agent.mjs [--config path] [--check] [--once]
+// Node 20+, no dependencies.
+//   node agent.mjs [--config path] [--log file] [--check] [--once]
+//   node agent.mjs --setup     write / update the config from FIAREP_TOKEN, FIAREP_KEYS,
+//                              FIAREP_API, FIAREP_NAME (what the one-line installers run)
 import { createHash, createPublicKey, verify } from "node:crypto";
-import { execFile } from "node:child_process";
-import { readFileSync, existsSync, realpathSync, statSync, readdirSync, openSync, readSync, closeSync } from "node:fs";
+import { execFile, spawn } from "node:child_process";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync, statSync, statfsSync, readdirSync, openSync, readSync, closeSync, appendFileSync, renameSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "1.0.0";
+const VERSION = "1.1.0";
+const WIN = process.platform === "win32";
 const args = process.argv.slice(2);
 const argValue = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
 const CONFIG_PATH = argValue("--config") || process.env.FIAREP_AGENT_CONFIG || path.join(os.homedir(), ".fiarep-agent", "config.json");
 
-const log = (...m) => console.log(new Date().toISOString(), ...m);
-const expandHome = (p) => (typeof p === "string" && (p === "~" || p.startsWith("~/")) ? path.join(os.homedir(), p.slice(1)) : p);
+// --log file: the agent writes its own log (Windows has no launchd/systemd to capture it). Kept under ~5 MB.
+const LOG_FILE = argValue("--log");
+const log = (...m) => {
+  const line = [new Date().toISOString(), ...m].join(" ");
+  if (!LOG_FILE) { console.log(line); return; }
+  try { if (existsSync(LOG_FILE) && statSync(LOG_FILE).size > 5e6) renameSync(LOG_FILE, `${LOG_FILE}.old`); appendFileSync(LOG_FILE, line + "\n"); } catch { console.log(line); }
+};
+const expandHome = (p) => (typeof p === "string" && (p === "~" || p.startsWith("~/") || p.startsWith("~\\")) ? path.join(os.homedir(), p.slice(1)) : p);
+// Windows paths are case-insensitive.
+const samePath = (a, b) => (WIN ? a.toLowerCase() === b.toLowerCase() : a === b);
+const under = (p, root) => samePath(p, root) || (WIN ? p.toLowerCase().startsWith(root.toLowerCase() + path.sep) : p.startsWith(root + path.sep));
 
 // ── Signatures (identical strings to the API and the phone) ────────────────
 function canonicalJson(value) {
@@ -45,7 +58,7 @@ function loadConfig() {
   if (!existsSync(CONFIG_PATH)) throw new Error(`No config at ${CONFIG_PATH}. Copy config.example.json there and fill in the token.`);
   const c = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
   if (typeof c.apiBase !== "string" || !/^https?:\/\//.test(c.apiBase)) throw new Error("config.apiBase must be the API URL, e.g. https://fiarep.com/api");
-  if (typeof c.token !== "string" || !c.token.startsWith("fca_")) throw new Error("config.token must be the fca_… token from Platform Control → Command Center → Agents");
+  if (typeof c.token !== "string" || !c.token.startsWith("fca_")) throw new Error("config.token must be the fca_… token from Command Center → Computers → Add computer");
   const tasks = {};
   for (const [name, t] of Object.entries(c.tasks || {})) {
     if (!/^[a-z0-9_-]{1,40}$/i.test(name)) throw new Error(`Task name "${name}": letters, numbers, - and _ only`);
@@ -83,7 +96,9 @@ function loadConfig() {
 // ── Built-in actions ───────────────────────────────────────────────────────
 function run(file, argv, opts = {}) {
   return new Promise((resolve) => {
-    execFile(file, argv, { timeout: opts.timeoutMs ?? 30_000, cwd: opts.cwd, maxBuffer: 4 * 1024 * 1024, env: process.env }, (error, stdout, stderr) => {
+    // Windows: npm / pnpm / yarn and other .cmd / .bat programs only start through cmd.exe.
+    if (WIN && /\.(cmd|bat)$/i.test(file)) { argv = ["/d", "/s", "/c", file, ...argv]; file = process.env.ComSpec || "cmd.exe"; }
+    execFile(file, argv, { timeout: opts.timeoutMs ?? 30_000, cwd: opts.cwd, maxBuffer: 4 * 1024 * 1024, env: process.env, windowsHide: true }, (error, stdout, stderr) => {
       resolve({ exitCode: error ? (typeof error.code === "number" ? error.code : -1) : 0, timedOut: !!error?.killed, stdout: String(stdout), stderr: String(stderr), spawnError: error && typeof error.code === "string" ? error.message : undefined });
     });
   });
@@ -94,18 +109,18 @@ function insideAllowed(cfg, requested) {
   const p = expandHome(String(requested || ""));
   if (!p || !path.isAbsolute(p)) throw new Error("Give a full path (or ~/…).");
   const real = realpathSync(p); // resolves symlinks, so a link can't point outside
-  if (!cfg.folders.some((root) => real === root || real.startsWith(root + path.sep))) throw new Error(`Not inside an allowed folder: ${cfg.folders.join(", ") || "(none configured)"}`);
+  if (!cfg.folders.some((root) => under(real, root))) throw new Error(`Not inside an allowed folder: ${cfg.folders.join(", ") || "(none configured)"}`);
   return real;
 }
 
 async function status(cfg) {
-  const df = await run("df", ["-k", os.homedir()]);
-  const line = df.stdout.trim().split("\n")[1]?.split(/\s+/) || [];
+  let diskFreeGb = null, diskUsed = null;
+  try { const f = statfsSync(os.homedir()); diskFreeGb = +((f.bavail * f.bsize) / 1e9).toFixed(1); diskUsed = `${Math.round(100 - (f.bavail / f.blocks) * 100)}%`; } catch {}
   const battery = process.platform === "darwin" ? (await run("pmset", ["-g", "batt"])).stdout.split("\n")[1]?.trim() : undefined;
   return {
     host: os.hostname(), platform: `${process.platform} ${os.release()}`, agentVersion: VERSION, uptimeHours: +(os.uptime() / 3600).toFixed(1),
-    load: os.loadavg().map((x) => +x.toFixed(2)), memoryFreeGb: +(os.freemem() / 1e9).toFixed(1), memoryTotalGb: +(os.totalmem() / 1e9).toFixed(1),
-    diskFreeGb: line[3] ? +(Number(line[3]) / 1e6).toFixed(1) : null, diskUsed: line[4] || null, battery,
+    load: WIN ? undefined : os.loadavg().map((x) => +x.toFixed(2)), cpus: os.cpus().length, memoryFreeGb: +(os.freemem() / 1e9).toFixed(1), memoryTotalGb: +(os.totalmem() / 1e9).toFixed(1),
+    diskFreeGb, diskUsed, battery,
     tasks: Object.keys(cfg.tasks), folders: cfg.folders, apps: cfg.apps,
   };
 }
@@ -127,11 +142,30 @@ function readFile(cfg, p) {
   return { path: real, size: st.size, truncated: st.size > buf.length, text: buf.toString("utf8") };
 }
 
+// Apps are named in the config. Mac: the app's name ("Microsoft Excel").
+// Windows: what you'd type in Start → Run ("excel", "winword", "outlook", "explorer", or a full path to an .exe).
+// Linux: the program's command ("libreoffice", "firefox").
+function launchDetached(file, argv) {
+  return new Promise((resolve) => {
+    try {
+      const child = spawn(file, argv, { detached: true, stdio: "ignore", windowsHide: false });
+      child.once("error", (e) => resolve({ ok: false, error: e.message }));
+      child.once("spawn", () => { child.unref(); resolve({ ok: true }); });
+    } catch (e) { resolve({ ok: false, error: e.message }); }
+  });
+}
 async function openApp(cfg, app) {
   if (!cfg.apps.includes(app)) throw new Error(`"${app}" is not in this computer's allowed apps.`);
-  if (process.platform !== "darwin") throw new Error("Opening apps is only set up for macOS.");
-  const r = await run("open", ["-a", app]);
-  return { ok: r.exitCode === 0, app, stderr: tail(r.stderr, 1000) };
+  if (process.platform === "darwin") { const r = await run("open", ["-a", app]); return { ok: r.exitCode === 0, app, stderr: tail(r.stderr, 1000) }; }
+  // Windows: "start" finds apps registered with Windows (App Paths), like Start → Run does.
+  if (WIN) {
+    if (/["&|<>^%!\r\n]/.test(app)) throw new Error("App names can't contain quotes or & | < > ^ % !");
+    const r = await new Promise((resolve) => execFile(process.env.ComSpec || "cmd.exe", ["/d", "/c", `start "" "${app}"`], { windowsVerbatimArguments: true, windowsHide: true, timeout: 30_000 },
+      (error, _out, stderr) => resolve({ ok: !error, stderr: String(stderr || error?.message || "") })));
+    return { ok: r.ok, app, stderr: tail(r.stderr, 1000) };
+  }
+  const r = await launchDetached(app, []);
+  return { ok: r.ok, app, stderr: r.error };
 }
 
 async function runTask(cfg, name, params) {
@@ -281,7 +315,34 @@ async function watchLoop(cfg, site) {
   }
 }
 
+// ── --setup: first install, or a re-run that adds phones / replaces the token ─
+function setup() {
+  const env = process.env;
+  const home = os.homedir();
+  const existing = existsSync(CONFIG_PATH) ? JSON.parse(readFileSync(CONFIG_PATH, "utf8")) : null;
+  const token = (env.FIAREP_TOKEN || "").trim();
+  if (!existing && !token.startsWith("fca_")) throw new Error("No FIAREP_TOKEN. Copy the install line from Command Center → Computers → Add computer.");
+  const keys = (env.FIAREP_KEYS || "").split(",").map((k) => k.trim()).filter((k) => Buffer.from(k, "base64").length === 32);
+  const docs = ["Documents", "Desktop"].flatMap((d) => [path.join(home, d), env.OneDrive ? path.join(env.OneDrive, d) : null]).filter((d) => d && existsSync(d));
+  const apps = process.platform === "darwin" ? ["Microsoft Excel", "Microsoft Word", "Microsoft Outlook", "Finder", "Safari", "Google Chrome"]
+    : WIN ? ["excel", "winword", "outlook", "explorer", "msedge", "chrome"] : [];
+  const cfg = existing ?? {
+    apiBase: (env.FIAREP_API || "https://fiarep.com/api").replace(/\/$/, ""),
+    token, name: (env.FIAREP_NAME || os.hostname()).slice(0, 60),
+    trustedConfirmKeys: [],
+    // The only things the Command Center can touch on this computer. Edit this file to change them.
+    folders: [...new Set(docs)], apps, tasks: {},
+  };
+  if (existing && token.startsWith("fca_")) cfg.token = token;
+  if (existing && env.FIAREP_API) cfg.apiBase = env.FIAREP_API.replace(/\/$/, "");
+  cfg.trustedConfirmKeys = [...new Set([...(cfg.trustedConfirmKeys || []), ...keys])];
+  mkdirSync(path.dirname(CONFIG_PATH), { recursive: true });
+  writeFileSync(CONFIG_PATH, JSON.stringify(cfg, null, 2) + "\n", { mode: 0o600 });
+  console.log(`${existing ? "Updated" : "Wrote"} ${CONFIG_PATH} · ${cfg.trustedConfirmKeys.length} phone key(s) pinned · folders: ${(cfg.folders || []).join(", ") || "none"} · apps: ${(cfg.apps || []).join(", ") || "none"}`);
+}
+
 async function main() {
+  if (args.includes("--setup")) { setup(); return; }
   const cfg = loadConfig();
   if (args.includes("--check")) {
     console.log(JSON.stringify({ config: CONFIG_PATH, apiBase: cfg.apiBase, folders: cfg.folders, apps: cfg.apps, tasks: Object.fromEntries(Object.entries(cfg.tasks).map(([k, t]) => [k, { command: t.command, confirm: t.confirm, params: t.params }])), trustedConfirmKeys: cfg.trustedConfirmKeys.length }, null, 2));
@@ -300,7 +361,7 @@ async function main() {
     try { await poll(cfg, true); backoff = 5_000; }
     catch (e) {
       if (e.status === 401) {
-        log(`token rejected (${e.message}) — API connection stopped. Create a new agent token in Platform Control.`);
+        log(`token rejected (${e.message}) — API connection stopped. Add the computer again in Command Center → Computers and run the new install line.`);
         if (cfg.relay) return; // keep watching the site through the backup relay
         process.exit(2);
       }

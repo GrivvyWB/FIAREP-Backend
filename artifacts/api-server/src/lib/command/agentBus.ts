@@ -35,8 +35,10 @@ export async function waitForActionResult(actionId: string, ms: number) {
   return row ?? null;
 }
 
-export async function onlineAgents() {
+/** The computers online for one organization (each client has its own; FIAREP's are "default"). */
+export async function onlineAgents(tenantId: string) {
   return db.select().from(commandAgents).where(and(
+    eq(commandAgents.tenantId, tenantId),
     eq(commandAgents.status, "active"),
     isNull(commandAgents.revokedAt),
     gt(commandAgents.lastSeenAt, new Date(Date.now() - ONLINE_WINDOW_MS)),

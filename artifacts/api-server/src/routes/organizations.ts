@@ -675,6 +675,10 @@ router.delete("/v1/platform/organizations/:id", async (req, res): Promise<void> 
     await tx.execute(sql`delete from audit_log where tenant_id = ${id}`);
     await tx.execute(sql`delete from settings where tenant_id = ${id}`);
     await tx.execute(sql`delete from device_tokens where tenant_id = ${id}`);
+    // The client's Command Center (its audit rows stay: the trail is append-only).
+    for (const t of ["command_devices", "command_agents", "command_runs", "command_actions", "command_work_orders"]) {
+      await tx.execute(sql`delete from ${sql.identifier(t)} where tenant_id = ${id}`);
+    }
     await tx.delete(organizationProperties).where(eq(organizationProperties.organizationId, id));
     await tx.delete(staffAccounts).where(eq(staffAccounts.tenantId, id));
     await tx.delete(organizations).where(eq(organizations.id, id));

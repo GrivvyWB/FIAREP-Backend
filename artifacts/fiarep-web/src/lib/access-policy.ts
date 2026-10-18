@@ -9,7 +9,7 @@ export type StaffModule =
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
    | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections"
-   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log";
+   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log" | "command-center";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -188,6 +188,10 @@ export function hasModuleAccess(
   // Violation alerts: new complaints, violations and summonses on the client's
   // watched buildings. Opt-in per client (Platform -> Modules); staff only.
   if (module === "violation-alerts" || module === "violation-alerts-command") return !["vendor", "resident", "procurement"].includes(String(staff.role));
+  // Command Center: a client's administrators (approve phones, add computers,
+  // switch actions). FIAREP's own is in Platform Control. On unless the platform
+  // owner switches it off for the client (Platform -> Modules).
+  if (module === "command-center") return staff.role === "administrator" && (staff.tenantId || "default") !== "default";
   // Site check-ins: where each member checked in and when they left and came back — for management.
   if (module === "site-checkins") return staff.role === "administrator" || staff.role === "management";
   // Audit Log: the organization's administrators (the server allows only them).

@@ -92,17 +92,20 @@ async function checkBuilding(row: { id: string; state: Record<string, unknown> }
   return fresh.length;
 }
 
-let running = false;
-export async function checkAllWatched(): Promise<{ checked: number; added: number; errors: number }> {
-  if (running) return { checked: 0, added: 0, errors: 0 };
-  running = true;
+const running = new Set<string>();
+/** Every watched building, or only one organization's (its Command Center's "check every building"). */
+export async function checkAllWatched(organizationId?: string): Promise<{ checked: number; added: number; errors: number }> {
+  const key = organizationId || "*";
+  if (running.has(key)) return { checked: 0, added: 0, errors: 0 };
+  running.add(key);
   const out = { checked: 0, added: 0, errors: 0 };
   try {
-    for (const row of await listWatch()) {
+    const rows = (await listWatch()).filter((r) => !organizationId || text(r.state["organizationId"]) === organizationId);
+    for (const row of rows) {
       try { out.added += await checkBuilding(row); out.checked++; }
       catch (error) { out.errors++; await db.update(entityRecords).set({ state: { ...row.state, lastError: error instanceof Error ? error.message : "check failed" }, updatedAt: new Date() }).where(eq(entityRecords.id, row.id)); }
     }
-  } finally { running = false; }
+  } finally { running.delete(key); }
   return out;
 }
 // Background sweep: first pass a minute after start, then every 30 minutes.

@@ -186,7 +186,7 @@ export default function CommandCenter() {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
         <Text style={ui.cardTitle}>Set up this phone</Text>
-        <Text style={ui.label}>This makes two keys that never leave the phone: one signs every command, the other sits behind Face ID and signs each approval. Then approve the phone on fiarep.com → Platform Control → Command Center.</Text>
+        <Text style={ui.label}>This makes two keys that never leave the phone: one signs every command, the other sits behind Face ID and signs each approval. Then the phone is approved on fiarep.com → Command Center → Phones.</Text>
         {device?.status === 'revoked' && <Text style={{ color: '#C0392B' }}>This phone was revoked. Set it up again to request a new approval.</Text>}
         <Pressable style={[ui.btn, !!busy && ui.btnMuted]} disabled={!!busy} onPress={() => void (device?.status === 'revoked' ? forgetDevice().then(setUp) : setUp())}>
           <Text style={ui.btnText}>{busy || 'Set up this phone'}</Text>
@@ -198,7 +198,7 @@ export default function CommandCenter() {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
         <Text style={ui.cardTitle}>Waiting for approval</Text>
-        <Text style={ui.label}>Approve this phone on fiarep.com → Platform Control → Command Center → Phones. Nothing can be sent from it until then.</Text>
+        <Text style={ui.label}>Approve this phone on {device.approveWhere || 'fiarep.com → Command Center → Phones'}. Nothing can be sent from it until then.</Text>
         <Pressable style={ui.btnOutline} onPress={() => void loadDevice()}><Text style={ui.btnOutlineText}>Check again</Text></Pressable>
       </ScrollView>
     );
@@ -295,7 +295,7 @@ export default function CommandCenter() {
           );
         })}
 
-        {runs.length === 0 && <Text style={ui.empty}>Ask anything — “Check every building we manage”, “Is FIAREP up?”, “Git status on my Mac”.</Text>}
+        {runs.length === 0 && <Text style={ui.empty}>{device.platform === false ? 'Ask anything — “Check every building we manage”, “Any urgent violations?”, “What’s in the Documents folder on the office PC?”.' : 'Ask anything — “Check every building we manage”, “Is FIAREP up?”, “Git status on my Mac”.'}</Text>}
         {runs.map((r) => (
           <View key={r.id} style={ui.card}>
             <Text style={{ color: '#666' }}>{r.text}</Text>
@@ -305,7 +305,7 @@ export default function CommandCenter() {
         ))}
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Pressable onPress={() => { setThreadId(newThread()); Alert.alert('New conversation', 'Earlier commands won’t be used as context.'); }}><Text style={{ color: ACCENT }}>New conversation</Text></Pressable>
-          <Pressable onPress={() => void shareKey()}><Text style={{ color: ACCENT }}>Share Face ID key (for the Mac)</Text></Pressable>
+          <Pressable onPress={() => void shareKey()}><Text style={{ color: ACCENT }}>Share Face ID key (for your computers)</Text></Pressable>
         </View>
       </ScrollView>
 

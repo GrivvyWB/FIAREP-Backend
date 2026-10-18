@@ -1,7 +1,12 @@
 // The Command Center's fixed list of actions. The interpreter can only pick
 // from this list and fill in parameters; nothing else can run. Each action is
-// switched on/off in Platform Control, and "write" actions wait for a Face ID
-// approval unless their confirm switch is turned off.
+// switched on/off (Platform Control for FIAREP and every client; each client's
+// own Command Center page for that client), and "write" actions wait for a
+// Face ID approval unless their confirm switch is turned off.
+// Every action runs inside one organization: a client's Command Center sees
+// only that client's buildings, alerts, work orders, complaints and computers.
+// FIAREP's own ("default", Platform Control) sees every client. Actions marked
+// platformOnly (the FIAREP server itself) exist only on FIAREP's.
 import { randomUUID } from "node:crypto";
 import os from "node:os";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -12,7 +17,9 @@ import { commandAgents, commandWorkOrders, type AgentTask } from "./tables";
 import { onlineAgents, ONLINE_WINDOW_MS } from "./agentBus";
 import { recentAudit } from "./audit";
 
-export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string };
+export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
+/** FIAREP's own Command Center (Platform Control): sees every client. */
+export const isPlatform = (tenantId: string) => tenantId === "default";
 export type Risk = "read" | "write";
 
 export type ActionDef = {
@@ -22,13 +29,15 @@ export type ActionDef = {
   risk: Risk;
   confirmDefault: boolean;
   target: "server" | "agent";
+  /** The FIAREP server itself: only on FIAREP's own Command Center, never a client's. */
+  platformOnly?: boolean;
   schema: Record<string, unknown>;
   /** Server actions only. */
   run?: (params: Record<string, unknown>, ctx: ActionContext) => Promise<unknown>;
   /** One line for the approval card. */
   describe: (params: Record<string, unknown>) => string;
   /** Optional richer line, looked up when the action is proposed. */
-  describeLive?: (params: Record<string, unknown>) => Promise<string | null>;
+  describeLive?: (params: Record<string, unknown>, ctx: ActionContext) => Promise<string | null>;
   /** Spoken line after it ran (writes, which don't go back through the interpreter). */
   spoken?: (result: unknown) => string;
 };
@@ -55,9 +64,13 @@ export function alertUrgency(a: { kind: string; title: string; detail: string })
   return "routine";
 }
 
-async function alertRows(scope: "unseen" | "all", limit: number, address?: string) {
+/** A client's alerts are the ones on its watched buildings (Platform -> Alerts assigns them). */
+const alertsOf = (tenantId: string) => isPlatform(tenantId) ? sql`true`
+  : sql`${entityRecords.state}->>'watchId' in (select w.id from entity_records w where w.entity = ${WATCH} and w.deleted = false and w.state->>'organizationId' = ${tenantId})`;
+
+async function alertRows(tenantId: string, scope: "unseen" | "all", limit: number, address?: string) {
   const rows = await db.select().from(entityRecords)
-    .where(and(eq(entityRecords.entity, ALERT), eq(entityRecords.deleted, false),
+    .where(and(eq(entityRecords.entity, ALERT), eq(entityRecords.deleted, false), alertsOf(tenantId),
       scope === "unseen" ? sql`${entityRecords.state}->>'seen' is distinct from 'true'` : sql`true`,
       address ? sql`upper(${entityRecords.state}->>'address') like ${`%${address.toUpperCase()}%`}` : sql`true`))
     .orderBy(desc(entityRecords.createdAt)).limit(limit);
@@ -84,20 +97,22 @@ function summarizeAlerts(items: Awaited<ReturnType<typeof alertRows>>) {
 
 async function draftWorkOrders(alertIds: string[], urgentOnly: boolean, ctx: ActionContext) {
   const items = alertIds.length
-    ? (await alertRows("all", 2000)).filter((a) => alertIds.includes(a.id))
-    : (await alertRows("unseen", 2000)).filter((a) => !urgentOnly || a.urgency === "urgent");
+    ? (await alertRows(ctx.tenantId, "all", 2000)).filter((a) => alertIds.includes(a.id))
+    : (await alertRows(ctx.tenantId, "unseen", 2000)).filter((a) => !urgentOnly || a.urgency === "urgent");
   const existing = items.length
     ? new Set((await db.select({ alertId: commandWorkOrders.alertId }).from(commandWorkOrders).where(inArray(commandWorkOrders.alertId, items.map((a) => a.id)))).map((r) => r.alertId))
     : new Set<string>();
   const fresh = items.filter((a) => !existing.has(a.id));
   for (const a of fresh) {
     await db.insert(commandWorkOrders).values({
-      id: randomUUID(), alertId: a.id, alertKey: a.key, address: a.address, borough: a.borough, company: a.company, bbl: a.bbl,
+      id: randomUUID(), tenantId: ctx.tenantId, alertId: a.id, alertKey: a.key, address: a.address, borough: a.borough, company: a.company, bbl: a.bbl,
       kind: a.kind, title: a.title, detail: a.detail, urgency: a.urgency, status: "draft", runId: ctx.runId,
     }).onConflictDoNothing();
   }
   return { drafted: fresh.length, alreadyDrafted: items.length - fresh.length, urgent: fresh.filter((a) => a.urgency === "urgent").length };
 }
+
+const workOrdersOf = (tenantId: string) => isPlatform(tenantId) ? sql`true` : eq(commandWorkOrders.tenantId, tenantId);
 
 const agentProp = { agent: { type: "string", description: "Agent name (the computer). Omit when only one agent is online." } };
 
@@ -107,10 +122,12 @@ export const ACTIONS: ActionDef[] = [
     name: "violation_sweep", label: "Check every watched building", risk: "read", confirmDefault: false, target: "server",
     description: "Check every watched client building against NYC Open Data right now (HPD complaints and violations, DOB violations, OATH/ECB summonses, 311), then summarize everything not yet marked seen: totals, urgent vs routine, by building, and the top items. Use for 'check every building', 'any new violations'.",
     schema: { type: "object", properties: {}, additionalProperties: false },
-    run: async () => {
-      const check = await checkAllWatched();
-      const watched = await db.select({ n: sql<number>`count(*)::int` }).from(entityRecords).where(and(eq(entityRecords.entity, WATCH), eq(entityRecords.deleted, false)));
-      return { checkedNow: check, watchedBuildings: watched[0]?.n ?? 0, note: check.checked === 0 && check.errors === 0 ? "A sweep was already running; showing current results." : undefined, unseen: summarizeAlerts(await alertRows("unseen", 2000)) };
+    run: async (_p, ctx) => {
+      const mine = isPlatform(ctx.tenantId) ? undefined : ctx.tenantId;
+      const check = await checkAllWatched(mine);
+      const watched = await db.select({ n: sql<number>`count(*)::int` }).from(entityRecords).where(and(eq(entityRecords.entity, WATCH), eq(entityRecords.deleted, false), mine ? sql`${entityRecords.state}->>'organizationId' = ${mine}` : sql`true`));
+      const n = watched[0]?.n ?? 0;
+      return { checkedNow: check, watchedBuildings: n, note: n === 0 ? "No buildings are on the watch list for this organization yet (FIAREP assigns them)." : check.checked === 0 && check.errors === 0 ? "A sweep was already running; showing current results." : undefined, unseen: summarizeAlerts(await alertRows(ctx.tenantId, "unseen", 2000)) };
     },
     describe: () => "Check every watched building now",
   },
@@ -118,7 +135,7 @@ export const ACTIONS: ActionDef[] = [
     name: "list_alerts", label: "List violation alerts", risk: "read", confirmDefault: false, target: "server",
     description: "List violation alerts already found on watched buildings, optionally only unseen and/or one address. Each has an id usable with prepare_work_orders and mark_alerts_seen.",
     schema: { type: "object", properties: { scope: { type: "string", enum: ["unseen", "all"] }, address: { type: "string", description: "Part of the street address" }, limit: { type: "integer", minimum: 1, maximum: 100 } }, additionalProperties: false },
-    run: async (p) => alertRows(p["scope"] === "all" ? "all" : "unseen", num(p["limit"], 30, 1, 100), str(p["address"], 120) || undefined),
+    run: async (p, ctx) => alertRows(ctx.tenantId, p["scope"] === "all" ? "all" : "unseen", num(p["limit"], 30, 1, 100), str(p["address"], 120) || undefined),
     describe: () => "List alerts",
   },
   {
@@ -135,11 +152,11 @@ export const ACTIONS: ActionDef[] = [
     describe: (p) => `Look up ${str(p["address"])}`,
   },
   {
-    name: "complaint_feed", label: "Resident complaints across clients", risk: "read", confirmDefault: false, target: "server",
-    description: "Most recent resident complaints at every client FIAREP serves, with their status.",
+    name: "complaint_feed", label: "Resident complaints", risk: "read", confirmDefault: false, target: "server",
+    description: "Most recent resident complaints with their status (on FIAREP's own Command Center: at every client FIAREP serves; on a client's: that client's).",
     schema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 50 } }, additionalProperties: false },
-    run: async (p) => {
-      const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false), sql`${entityRecords.tenantId} <> 'default'`))
+    run: async (p, ctx) => {
+      const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false), isPlatform(ctx.tenantId) ? sql`${entityRecords.tenantId} <> 'default'` : eq(entityRecords.tenantId, ctx.tenantId)))
         .orderBy(desc(entityRecords.createdAt)).limit(num(p["limit"], 20, 1, 50));
       const orgs = new Map((await db.select({ id: organizations.id, name: organizations.name }).from(organizations)).map((o) => [o.id, o.name]));
       return rows.map((r) => {
@@ -153,9 +170,9 @@ export const ACTIONS: ActionDef[] = [
     name: "list_work_orders", label: "List work orders", risk: "read", confirmDefault: false, target: "server",
     description: "List work orders prepared from violation alerts, by status (draft = waiting for approval).",
     schema: { type: "object", properties: { status: { type: "string", enum: ["draft", "approved", "rejected", "any"] } }, additionalProperties: false },
-    run: async (p) => {
+    run: async (p, ctx) => {
       const status = str(p["status"], 20) || "draft";
-      const rows = await db.select().from(commandWorkOrders).where(status === "any" ? sql`true` : eq(commandWorkOrders.status, status)).orderBy(desc(commandWorkOrders.createdAt)).limit(100);
+      const rows = await db.select().from(commandWorkOrders).where(and(workOrdersOf(ctx.tenantId), status === "any" ? sql`true` : eq(commandWorkOrders.status, status))).orderBy(desc(commandWorkOrders.createdAt)).limit(100);
       return rows.map((w) => ({ id: w.id, status: w.status, urgency: w.urgency, address: w.address, kind: w.kind, title: w.title, createdAt: w.createdAt }));
     },
     describe: () => "List work orders",
@@ -176,13 +193,13 @@ export const ACTIONS: ActionDef[] = [
       const id = str(p["workOrderId"], 80);
       const status = p["decision"] === "approve" ? "approved" : "rejected";
       const [row] = await db.update(commandWorkOrders).set({ status, note: str(p["note"], 500) || null, decidedBy: ctx.actorName, decidedAt: new Date() })
-        .where(and(eq(commandWorkOrders.id, id), eq(commandWorkOrders.status, "draft"))).returning();
+        .where(and(eq(commandWorkOrders.id, id), workOrdersOf(ctx.tenantId), eq(commandWorkOrders.status, "draft"))).returning();
       if (!row) return { error: "No draft work order with that id." };
       return { id: row.id, status: row.status, address: row.address, title: row.title };
     },
     describe: (p) => `${p["decision"] === "approve" ? "Approve" : "Reject"} work order ${str(p["workOrderId"], 12)}…`,
-    describeLive: async (p) => {
-      const [w] = await db.select().from(commandWorkOrders).where(eq(commandWorkOrders.id, str(p["workOrderId"], 80))).limit(1);
+    describeLive: async (p, ctx) => {
+      const [w] = await db.select().from(commandWorkOrders).where(and(eq(commandWorkOrders.id, str(p["workOrderId"], 80)), workOrdersOf(ctx.tenantId))).limit(1);
       return w ? `${p["decision"] === "approve" ? "Approve" : "Reject"} work order — ${w.address} · ${w.title}` : null;
     },
     spoken: (r) => { const x = r as { status?: string; address?: string; error?: string }; return x.error ?? `Work order ${x.status} for ${x.address}.`; },
@@ -191,9 +208,9 @@ export const ACTIONS: ActionDef[] = [
     name: "mark_alerts_seen", label: "Mark alerts seen", risk: "write", confirmDefault: true, target: "server",
     description: "Mark violation alerts as seen (they stop showing red). Give alert ids, or all=true for every unseen alert.",
     schema: { type: "object", properties: { alertIds: { type: "array", items: { type: "string" } }, all: { type: "boolean" } }, additionalProperties: false },
-    run: async (p) => {
+    run: async (p, ctx) => {
       const ids = strList(p["alertIds"], 2000);
-      const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, ALERT), eq(entityRecords.deleted, false),
+      const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, ALERT), eq(entityRecords.deleted, false), alertsOf(ctx.tenantId),
         sql`${entityRecords.state}->>'seen' is distinct from 'true'`, p["all"] === true ? sql`true` : ids.length ? inArray(entityRecords.id, ids) : sql`false`));
       const now = new Date();
       for (const r of rows) await db.update(entityRecords).set({ state: { ...r.state, seen: true }, updatedAt: now }).where(eq(entityRecords.id, r.id));
@@ -204,7 +221,7 @@ export const ACTIONS: ActionDef[] = [
   },
   // ── FIAREP server ───────────────────────────────────────────────────────
   {
-    name: "server_status", label: "FIAREP server status", risk: "read", confirmDefault: false, target: "server",
+    name: "server_status", label: "FIAREP server status", risk: "read", confirmDefault: false, target: "server", platformOnly: true,
     description: "Health of the FIAREP API right now: uptime, memory, database round-trip, alert checker, desktop agents online.",
     schema: { type: "object", properties: {}, additionalProperties: false },
     run: async () => {
@@ -213,7 +230,7 @@ export const ACTIONS: ActionDef[] = [
       const dbMs = Date.now() - t0;
       const lastCheck = await db.select({ at: sql<string>`max(${entityRecords.state}->>'lastCheckedAt')`, errors: sql<number>`count(*) filter (where coalesce(${entityRecords.state}->>'lastError','') <> '')::int` })
         .from(entityRecords).where(and(eq(entityRecords.entity, WATCH), eq(entityRecords.deleted, false)));
-      const agents = await db.select({ name: commandAgents.name, lastSeenAt: commandAgents.lastSeenAt }).from(commandAgents).where(eq(commandAgents.status, "active"));
+      const agents = await db.select({ name: commandAgents.name, lastSeenAt: commandAgents.lastSeenAt }).from(commandAgents).where(and(eq(commandAgents.status, "active"), eq(commandAgents.tenantId, "default")));
       const mem = process.memoryUsage();
       return {
         api: { up: true, uptimeMinutes: Math.round(process.uptime() / 60), node: process.version, rssMb: Math.round(mem.rss / 1e6), heapUsedMb: Math.round(mem.heapUsed / 1e6), host: os.hostname(), load1m: os.loadavg()[0] },
@@ -225,8 +242,8 @@ export const ACTIONS: ActionDef[] = [
     describe: () => "Server status",
   },
   {
-    name: "restart_api", label: "Restart the FIAREP API", risk: "write", confirmDefault: true, target: "server",
-    description: "Restart the FIAREP API process: it exits a few seconds after answering and its supervisor (Replit deployment / PM2) starts it again. Only when Tim asks to restart or fix a stuck API.",
+    name: "restart_api", label: "Restart the FIAREP API", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
+    description: "Restart the FIAREP API process: it exits a few seconds after answering and its supervisor (Replit deployment / PM2) starts it again. Only when asked to restart or fix a stuck API.",
     schema: { type: "object", properties: {}, additionalProperties: false },
     run: async () => {
       setTimeout(() => process.exit(0), 2_000).unref();
@@ -239,10 +256,10 @@ export const ACTIONS: ActionDef[] = [
     name: "audit_recent", label: "Read the command audit trail", risk: "read", confirmDefault: false, target: "server",
     description: "The most recent Command Center audit entries (who ran what, approvals, results).",
     schema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 50 } }, additionalProperties: false },
-    run: async (p) => (await recentAudit(num(p["limit"], 15, 1, 50))).map((r) => ({ at: r.at, actor: r.actor, event: r.event, detail: r.detail })),
+    run: async (p, ctx) => (await recentAudit(num(p["limit"], 15, 1, 50), ctx.tenantId)).map((r) => ({ at: r.at, actor: r.actor, event: r.event, detail: r.detail })),
     describe: () => "Read audit trail",
   },
-  // ── Desktop agent (the Mac) ─────────────────────────────────────────────
+  // ── Desktop agent (Windows, Mac or Linux) ───────────────────────────────
   {
     name: "desktop_status", label: "Computer status", risk: "read", confirmDefault: false, target: "agent",
     description: "Status of a desktop agent's computer: uptime, load, memory, disk, battery, its tasks.",
@@ -283,10 +300,12 @@ export const ACTIONS: ActionDef[] = [
 ];
 
 export const ACTION_MAP = new Map(ACTIONS.map((a) => [a.name, a]));
+/** The actions one organization's Command Center has. */
+export const actionsFor = (tenantId: string) => ACTIONS.filter((a) => isPlatform(tenantId) || !a.platformOnly);
 
 /** Which online agent a desktop_* action goes to, and is the request allowed by that agent's config? */
-export async function resolveAgent(action: ActionDef, params: Record<string, unknown>): Promise<{ agentId: string; taskConfirm: boolean } | { error: string }> {
-  const agents = await onlineAgents();
+export async function resolveAgent(action: ActionDef, params: Record<string, unknown>, tenantId: string): Promise<{ agentId: string; taskConfirm: boolean } | { error: string }> {
+  const agents = await onlineAgents(tenantId);
   if (!agents.length) return { error: "No desktop agent is online. The computer may be asleep or the agent stopped." };
   const wanted = str(params["agent"], 80).toLowerCase();
   const agent = wanted ? agents.find((a) => a.name.toLowerCase() === wanted) : agents.length === 1 ? agents[0] : undefined;
@@ -309,8 +328,8 @@ export async function resolveAgent(action: ActionDef, params: Record<string, unk
 }
 
 /** The part of the system prompt that tells the interpreter what each online agent offers. */
-export async function agentCatalog(): Promise<string> {
-  const agents = await onlineAgents();
+export async function agentCatalog(tenantId: string): Promise<string> {
+  const agents = await onlineAgents(tenantId);
   if (!agents.length) return "No desktop agent is online right now.";
   return agents.map((a) => {
     const tasks = (a.tasks as AgentTask[]).map((t) => `  - ${t.name}: ${t.description}${Object.keys(t.params).length ? ` (params: ${Object.entries(t.params).map(([k, v]) => `${k} — ${v.description}`).join("; ")})` : ""}`).join("\n");
