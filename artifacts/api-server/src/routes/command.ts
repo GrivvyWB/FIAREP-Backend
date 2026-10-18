@@ -23,6 +23,7 @@ import { ACTIONS, actionsFor, isPlatform } from "../lib/command/actions";
 import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
 import { capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
+import { checkGeminiKey, geminiKeyStatus, saveGeminiKey } from "../lib/command/keys";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
 import { relayUrl, syncRelayDevices } from "../lib/command/relay";
 
@@ -33,8 +34,8 @@ type Device = typeof commandDevices.$inferSelect;
 type Agent = typeof commandAgents.$inferSelect;
 
 // ── Who has a Command Center ───────────────────────────────────────────────
-// FIAREP's own: Timothy / Emily Winn. A client's: its administrators, while
-// the client is active and Platform -> Modules "Command Center" is on.
+// FIAREP's own: Timothy / Emily Winn. A client's: its administrators, once the
+// platform owner has switched it on for that client (off for every client until then).
 async function commandAdminProblem(actor: { tenantId: string; role: string; name: string }): Promise<string | null> {
   if (isPlatform(actor.tenantId)) return isFiarepAdmin(actor) ? null : "The Command Center is for FIAREP's administrators.";
   if (actor.role !== "administrator") return "The Command Center is for your company's administrators.";
@@ -361,7 +362,7 @@ router.use("/v1/platform/command", requirePlatformOwner);
 const ownerName = (res: Response) => (res.locals["platformOwner"] as { name: string }).name;
 
 router.get("/v1/platform/command", async (req, res) => {
-  const [switches, devices, agents, chain, orgs, usage, clientDevices, clientAgents] = await Promise.all([
+  const [switches, devices, agents, chain, orgs, usage, clientDevices, clientAgents, gemKey] = await Promise.all([
     getSwitches(PLATFORM_TENANT),
     db.select().from(commandDevices).where(eq(commandDevices.tenantId, PLATFORM_TENANT)).orderBy(desc(commandDevices.createdAt)),
     db.select().from(commandAgents).where(eq(commandAgents.tenantId, PLATFORM_TENANT)).orderBy(desc(commandAgents.createdAt)),
@@ -370,10 +371,11 @@ router.get("/v1/platform/command", async (req, res) => {
     monthUsage(),
     db.select({ tenantId: commandDevices.tenantId, status: commandDevices.status }).from(commandDevices).where(ne(commandDevices.tenantId, PLATFORM_TENANT)),
     db.select().from(commandAgents).where(and(ne(commandAgents.tenantId, PLATFORM_TENANT), eq(commandAgents.status, "active"))),
+    geminiKeyStatus(),
   ]);
   const usageOf = new Map(usage.map((u) => [u.tenantId, u]));
   res.json({
-    switches, defaultModel: DEFAULT_MODEL, defaultGeminiModel: DEFAULT_GEMINI_MODEL, geminiKeyConfigured: Boolean(process.env["GEMINI_API_KEY"]), prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
+    switches, defaultModel: DEFAULT_MODEL, defaultGeminiModel: DEFAULT_GEMINI_MODEL, geminiKeyConfigured: gemKey.set, geminiKey: gemKey, prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
     actions: actionMeta(PLATFORM_TENANT),
     devices: devices.map(deviceMeta),
     agents: agents.map(agentMeta),
@@ -381,7 +383,7 @@ router.get("/v1/platform/command", async (req, res) => {
     usage: usageOf.get(PLATFORM_TENANT) ?? null,
     clients: orgs.map((o) => {
       const modules = o.features && typeof o.features === "object" ? (o.features as Record<string, unknown>)["modules"] : null;
-      const on = !(modules && typeof modules === "object" && (modules as Record<string, unknown>)["command-center"] === false);
+      const on = !!(modules && typeof modules === "object" && (modules as Record<string, unknown>)["command-center"] === true);
       const mine = clientDevices.filter((d) => d.tenantId === o.id);
       const comps = clientAgents.filter((a) => a.tenantId === o.id);
       return {
@@ -458,6 +460,19 @@ router.post("/v1/platform/command/agents/:id/revoke", async (req, res) => {
   res.json(out);
 });
 
+/** Set (or clear, with null) the Gemini API key from the Terminal: set-gemini-key.sh. Checked with Google first; stored encrypted. */
+router.put("/v1/platform/command/keys/gemini", async (req, res) => {
+  const raw = (req.body as Record<string, unknown> | undefined)?.["key"];
+  if (raw === null) { await saveGeminiKey(null, ownerName(res)); await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "key.gemini.cleared" }); res.json(await geminiKeyStatus()); return; }
+  const key = typeof raw === "string" ? raw.trim() : "";
+  if (!/^[\w.-]{20,200}$/.test(key)) { res.status(400).json({ error: "That doesn't look like a Gemini API key (copy it from aistudio.google.com → Get API key)." }); return; }
+  const problem = await checkGeminiKey(key);
+  if (problem) { res.status(400).json({ error: problem }); return; }
+  await saveGeminiKey(key, ownerName(res));
+  await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "key.gemini.set", detail: { last4: key.slice(-4) } });
+  res.json({ ...(await geminiKeyStatus()), note: process.env["GEMINI_API_KEY"] ? "GEMINI_API_KEY in Replit Secrets is set and is used instead." : undefined });
+});
+
 router.post("/v1/platform/command/relay/sync", async (_req, res) => {
   res.json(await syncRelayDevices());
 });
@@ -499,7 +514,7 @@ router.get("/v1/org/command", ...org, async (req, res) => {
     install: installLines(publicApiBase(req), null, devices.filter((d) => d.status === "active").map((d) => d.confirmKey)),
     usage: usage[0] ?? null, cap: platform.caps?.[tenantId] ?? null, capProblem: await capProblem(tenantId),
     // "Ready" for whichever engine FIAREP has on (Claude or Gemini).
-    claudeKeyConfigured: Boolean(process.env[effective.provider === "gemini" ? "GEMINI_API_KEY" : "ANTHROPIC_API_KEY"]),
+    claudeKeyConfigured: effective.provider === "gemini" ? (await geminiKeyStatus()).set : Boolean(process.env["ANTHROPIC_API_KEY"]),
     audit: { ok: chain.ok, rows: auditRows.length },
   });
 });

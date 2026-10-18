@@ -56,13 +56,13 @@ export async function saveSwitches(next: CommandSwitches, tenantId: string = PLA
   return next;
 }
 
-/** Platform -> Modules "command-center": on for every client unless switched off. */
+/** Platform -> Modules "command-center": OFF for every client until the platform owner switches it on for that client. */
 export async function moduleOn(tenantId: string): Promise<boolean> {
   if (tenantId === PLATFORM_TENANT) return true;
   const [org] = await db.select({ features: organizations.features, status: organizations.status }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
   if (!org || org.status !== "active") return false;
   const modules = org.features && typeof org.features === "object" ? (org.features as Record<string, unknown>)["modules"] : null;
-  return !(modules && typeof modules === "object" && (modules as Record<string, unknown>)["command-center"] === false);
+  return !!(modules && typeof modules === "object" && (modules as Record<string, unknown>)["command-center"] === true);
 }
 
 /** What actually applies to one organization: Platform Control's switches on top of its own. */

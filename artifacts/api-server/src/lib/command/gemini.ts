@@ -8,7 +8,9 @@
 //   The model's turn is sent back exactly as received (it carries thought
 //   signatures on its functionCall parts); tool results go back as
 //   functionResponse parts in a user turn.
-// Env: GEMINI_API_KEY (Google AI Studio key), GEMINI_BASE_URL (tests only).
+// Key: GEMINI_API_KEY in Replit Secrets, or set from the Terminal (set-gemini-key.sh → keys.ts).
+// GEMINI_BASE_URL is for tests only.
+import { geminiKey } from "./keys";
 
 type Part = { text?: string; thought?: boolean; functionCall?: { name: string; args?: Record<string, unknown>; id?: string }; [k: string]: unknown };
 export type GeminiContent = { role: "user" | "model"; parts: Part[] };
@@ -16,8 +18,8 @@ type Tool = { name: string; description: string; input_schema: Record<string, un
 type Result = { content: string; isError: boolean };
 
 async function callGemini(model: string, system: string, tools: Tool[], contents: GeminiContent[]) {
-  const apiKey = process.env["GEMINI_API_KEY"];
-  if (!apiKey) throw Object.assign(new Error("GEMINI_API_KEY is not configured"), { status: 503 });
+  const apiKey = await geminiKey();
+  if (!apiKey) throw Object.assign(new Error("No Gemini API key yet (set-gemini-key.sh, or GEMINI_API_KEY in Replit Secrets)"), { status: 503 });
   const base = (process.env["GEMINI_BASE_URL"] || "https://generativelanguage.googleapis.com").replace(/\/$/, "");
   const body: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: system }] },

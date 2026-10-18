@@ -15,7 +15,7 @@ type Client = { id: string; name: string; status: string; on: boolean; cap: numb
 type Overview = {
   switches: Switches; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; install: Install; usage: Usage | null; claudeKeyConfigured: boolean; audit: { ok: boolean; rows: number; brokenAt?: number | null };
   // Platform Control only
-  defaultModel?: string; defaultGeminiModel?: string; geminiKeyConfigured?: boolean; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
+  defaultModel?: string; defaultGeminiModel?: string; geminiKeyConfigured?: boolean; geminiKey?: { set: boolean; source: "replit-secrets" | "terminal" | null; last4: string | null }; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
   // A client's own only
   platformEnabled?: boolean; platformOff?: string[]; cap?: number | null; capProblem?: string | null;
 };
@@ -143,7 +143,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       {((platform ? (gemini ? !data.geminiKeyConfigured : !data.claudeKeyConfigured) : !data.claudeKeyConfigured) || (platform && !data.voiceKeyConfigured)) && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           {platform && !gemini && !data.claudeKeyConfigured && <p><b>ANTHROPIC_API_KEY</b> is not set on the API server — commands can't be understood until it is (Replit → Secrets).</p>}
-          {platform && gemini && !data.geminiKeyConfigured && <p><b>GEMINI_API_KEY</b> is not set on the API server — with Gemini on, commands can't be understood until it is (Replit → Secrets).</p>}
+          {platform && gemini && !data.geminiKeyConfigured && <p>No Gemini API key yet — with Gemini on, commands can't be understood until one is set (run <code>set-gemini-key.sh</code> in Terminal on the Mac).</p>}
           {!platform && !data.claudeKeyConfigured && <p>Commands are not available yet — FIAREP is finishing the setup.</p>}
           {platform && !data.voiceKeyConfigured && <p><b>OPENAI_API_KEY</b> is not set — voice in/out won't work (typing still does).</p>}
         </div>
@@ -159,7 +159,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       {platform && data.clients && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Clients</h2>
-          <p className="text-xs text-slate-500">Every client has its own Command Center: its administrators set up their phones in the app and approve them, add their computers (Windows, Mac or Linux) and switch actions on fiarep.com → Command Center. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Usage runs on FIAREP's {gemini ? "Gemini" : "Claude"} key; this month's cost per client is below ({activeModel}: {priceText(activeModel)}). A cap stops that client's commands for the rest of the month once reached.</p>
+          <p className="text-xs text-slate-500">Every client starts with the Command Center <b>off</b> — it isn't in their menu or app and they don't see it. Switch it on here (or Platform → Modules) when a client asks for it. Once on, the client has its own Command Center: its administrators set up their phones in the app and approve them, add their computers (Windows, Mac or Linux) and switch actions on fiarep.com → Command Center. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Usage runs on FIAREP's {gemini ? "Gemini" : "Claude"} key; this month's cost per client is below ({activeModel}: {priceText(activeModel)}). A cap stops that client's commands for the rest of the month once reached.</p>
           <div className="mt-3 overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Client</th><th className="py-1 pr-3">On</th><th className="py-1 pr-3">This month</th><th className="py-1 pr-3">Monthly cap</th><th className="py-1 pr-3">Phones</th><th className="py-1">Computers</th></tr></thead>
             <tbody>{data.clients.map((c) => {
@@ -288,7 +288,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
             <p className="text-xs text-slate-500">Same actions, same Face ID approvals and audit trail either way; only the model that understands the command changes. Applies to FIAREP's own and every client's. Voice in / out stays on OpenAI.</p>
             <div className="mt-2 flex flex-wrap gap-2">
               {(["claude", "gemini"] as const).map((p) => (
-                <button key={p} type="button" onClick={() => { if (p !== data.switches.provider && window.confirm(p === "gemini" ? `Switch every Command Center to Gemini (${data.switches.geminiModel})?${data.geminiKeyConfigured ? "" : " GEMINI_API_KEY is not set yet, so commands will fail until it is."}` : `Switch every Command Center back to Claude (${data.switches.model})?`)) void saveSwitches({ provider: p }); }}
+                <button key={p} type="button" onClick={() => { if (p !== data.switches.provider && window.confirm(p === "gemini" ? `Switch every Command Center to Gemini (${data.switches.geminiModel})?${data.geminiKeyConfigured ? "" : " There's no Gemini API key yet, so commands will fail until you run set-gemini-key.sh."}` : `Switch every Command Center back to Claude (${data.switches.model})?`)) void saveSwitches({ provider: p }); }}
                   className={`rounded-md border px-3 py-1.5 text-sm font-semibold ${data.switches.provider === p ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-700 hover:bg-slate-50"}`}>
                   {p === "claude" ? "Claude" : "Gemini"}{data.switches.provider === p ? " · in use" : ""}
                 </button>
@@ -305,7 +305,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
                 <span className="w-14 text-slate-600">Gemini</span>
                 <input value={geminiModel} onChange={(e) => setGeminiModel(e.target.value)} className="w-52 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
                 <Button size="sm" variant="outline" disabled={!geminiModel.trim() || geminiModel.trim() === data.switches.geminiModel} onClick={() => void saveSwitches({ geminiModel: geminiModel.trim() })}>Save</Button>
-                <span className="w-full text-xs text-slate-500">default {data.defaultGeminiModel} · {priceText(data.switches.geminiModel)} · key {data.geminiKeyConfigured ? "set" : <b className="text-amber-800">not set (GEMINI_API_KEY)</b>}</span>
+                <span className="w-full text-xs text-slate-500">default {data.defaultGeminiModel} · {priceText(data.switches.geminiModel)} · key {data.geminiKey?.set ? `set ${data.geminiKey.source === "terminal" ? "from the Terminal" : "in Replit Secrets"} (…${data.geminiKey.last4})` : <b className="text-amber-800">not set — run set-gemini-key.sh in Terminal</b>}</span>
               </div>
             </div>
             {data.usage ? <p className="mt-2 text-xs text-slate-500">FIAREP's own this month: {money(data.usage.costUsd)}, {data.usage.runs} commands</p> : null}

@@ -20,7 +20,7 @@ const isElevatorTitle = (position: string | null | undefined) =>
   sameTitle(position, "Elevator Service") || supervisedTradeForPosition(position) === "Elevator Service";
 // Modules that are OFF until the platform owner enables them (none today;
 // the per-tool Project switches are handled in Module Management).
-const OPT_IN_MODULES = new Set<StaffModule>(["company-forms", "violation-alerts", "violation-alerts-command"]);
+const OPT_IN_MODULES = new Set<StaffModule>(["company-forms", "violation-alerts", "violation-alerts-command", "command-center"]);
 const CPM_ONLY_MODULES = new Set<StaffModule>([
   "estimates",
   "repairs",
@@ -189,8 +189,8 @@ export function hasModuleAccess(
   // watched buildings. Opt-in per client (Platform -> Modules); staff only.
   if (module === "violation-alerts" || module === "violation-alerts-command") return !["vendor", "resident", "procurement"].includes(String(staff.role));
   // Command Center: a client's administrators (approve phones, add computers,
-  // switch actions). FIAREP's own is in Platform Control. On unless the platform
-  // owner switches it off for the client (Platform -> Modules).
+  // switch actions). FIAREP's own is in Platform Control. Opt-in: OFF (and not in
+  // the menu) until the platform owner switches it on for the client.
   if (module === "command-center") return staff.role === "administrator" && (staff.tenantId || "default") !== "default";
   // Site check-ins: where each member checked in and when they left and came back — for management.
   if (module === "site-checkins") return staff.role === "administrator" || staff.role === "management";
