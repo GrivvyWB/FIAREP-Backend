@@ -357,6 +357,15 @@ async function revokeAgent(tenantId: string | null, id: string, by: string) {
   return { id: row.id, status: row.status };
 }
 
+/** Take a revoked computer off the list (only once revoked; its audit entries stay). */
+async function removeAgent(tenantId: string | null, id: string, by: string) {
+  const [row] = await db.delete(commandAgents)
+    .where(and(eq(commandAgents.id, id), eq(commandAgents.status, "revoked"), tenantId ? eq(commandAgents.tenantId, tenantId) : undefined)).returning();
+  if (!row) return null;
+  await commandAuditLog({ tenantId: row.tenantId, actor: by, event: "agent.removed", detail: { id: row.id, name: row.name } });
+  return { id: row.id, removed: true };
+}
+
 // ── Platform Control ───────────────────────────────────────────────────────
 router.use("/v1/platform/command", requirePlatformOwner);
 const ownerName = (res: Response) => (res.locals["platformOwner"] as { name: string }).name;
@@ -473,6 +482,12 @@ router.put("/v1/platform/command/keys/gemini", async (req, res) => {
   res.json({ ...(await geminiKeyStatus()), note: process.env["GEMINI_API_KEY"] ? "GEMINI_API_KEY in Replit Secrets is set and is used instead." : undefined });
 });
 
+router.delete("/v1/platform/command/agents/:id", async (req, res) => {
+  const out = await removeAgent(null, String(req.params["id"]), `owner:${ownerName(res)}`);
+  if (!out) { res.status(404).json({ error: "Only a revoked computer can be removed" }); return; }
+  res.json(out);
+});
+
 router.post("/v1/platform/command/relay/sync", async (_req, res) => {
   res.json(await syncRelayDevices());
 });
@@ -551,6 +566,12 @@ router.post("/v1/org/command/agents", ...org, async (req, res) => {
 router.post("/v1/org/command/agents/:id/revoke", ...org, async (req, res) => {
   const out = await revokeAgent(actorFrom(res).tenantId, String(req.params["id"]), by(res));
   if (!out) { res.status(404).json({ error: "Unknown computer" }); return; }
+  res.json(out);
+});
+
+router.delete("/v1/org/command/agents/:id", ...org, async (req, res) => {
+  const out = await removeAgent(actorFrom(res).tenantId, String(req.params["id"]), by(res));
+  if (!out) { res.status(404).json({ error: "Only a revoked computer can be removed" }); return; }
   res.json(out);
 });
 

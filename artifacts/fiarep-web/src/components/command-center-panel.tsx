@@ -104,6 +104,10 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
     if (!window.confirm(`Revoke ${a.name}? Its token stops working immediately.`)) return;
     try { await api(`${base}/agents/${encodeURIComponent(a.id)}/revoke`, { method: "POST" }); await load(); } catch (err) { fail("Could not revoke")(err); }
   }
+  async function removeAgent(a: Agent) {
+    if (!window.confirm(`Remove ${a.name} from the list?`)) return;
+    try { await api(`${base}/agents/${encodeURIComponent(a.id)}`, { method: "DELETE" }); await load(); } catch (err) { fail("Could not remove")(err); }
+  }
   async function syncRelay() {
     try { const r = await api<{ ok: boolean; error?: string }>("/v1/platform/command/relay/sync", { method: "POST" }); toast(r.ok ? { title: "Phones sent to the backup relay" } : { variant: "destructive", title: "Relay sync failed", description: r.error }); }
     catch (err) { fail("Relay sync failed")(err); }
@@ -250,6 +254,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
               <span className="font-semibold text-slate-950">{a.name}</span>
               <span className="text-xs text-slate-500">{a.status !== "active" ? "revoked" : a.online ? "online" : `offline · last seen ${when(a.lastSeenAt)}`}{typeof a.info["platform"] === "string" ? ` · ${({ win32: "Windows", darwin: "Mac", linux: "Linux" } as Record<string, string>)[a.info["platform"] as string] ?? a.info["platform"]}` : ""} · {a.tasks.length} task{a.tasks.length === 1 ? "" : "s"}{typeof a.info["pinnedKeys"] === "number" ? ` · ${a.info["pinnedKeys"]} pinned phone key(s)` : ""}</span>
               {a.status === "active" && <Button size="sm" variant="outline" className="ml-auto text-rose-700" onClick={(e) => { e.preventDefault(); void revokeAgent(a); }}>Revoke</Button>}
+              {a.status !== "active" && <Button size="sm" variant="outline" className="ml-auto text-slate-600" onClick={(e) => { e.preventDefault(); void removeAgent(a); }}>Remove</Button>}
             </summary>
             <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
               <div><p className="font-semibold text-slate-800">Tasks</p>{a.tasks.map((t) => <p key={t.name}><code>{t.name}</code> — {t.description}{t.confirm ? " · Face ID" : ""}</p>)}{!a.tasks.length && <p>none</p>}</div>
