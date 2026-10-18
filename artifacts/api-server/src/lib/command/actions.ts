@@ -16,6 +16,10 @@ import { lookupNycPropertyData } from "../nycProperty";
 import { commandAgents, commandWorkOrders, type AgentTask } from "./tables";
 import { onlineAgents, ONLINE_WINDOW_MS } from "./agentBus";
 import { recentAudit } from "./audit";
+import { notify } from "../audit";
+import type { Actor } from "../auth";
+
+import { bookingView, bookingsOn, createBooking, findMember, findSlot, nyDate, nyLabel, nyTime, staffBookings } from "./scheduling";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -113,6 +117,16 @@ async function draftWorkOrders(alertIds: string[], urgentOnly: boolean, ctx: Act
 }
 
 const workOrdersOf = (tenantId: string) => isPlatform(tenantId) ? sql`true` : eq(commandWorkOrders.tenantId, tenantId);
+
+/** "2026-10-20T09:00" / "2026-10-20 9:00" / "2026-10-20" → New York time. */
+function parseWhen(v: unknown): Date | undefined {
+  const t = str(v, 40);
+  const m = /^(\d{4}-\d{2}-\d{2})(?:[T ](\d{1,2}):(\d{2}))?/.exec(t);
+  if (!m) return undefined;
+  return nyTime(m[1]!, m[2] ? `${m[2].padStart(2, "0")}:${m[3]}` : "00:00");
+}
+/** Who notifications from the Command Center come from, inside the organization. */
+const commandActor = (ctx: ActionContext): Actor => ({ id: ctx.staffId, tenantId: ctx.tenantId, name: ctx.actorName, role: "administrator", position: "", developments: [], sessionVersion: 0 });
 
 const agentProp = { agent: { type: "string", description: "Agent name (the computer). Omit when only one agent is online." } };
 
@@ -258,6 +272,72 @@ export const ACTIONS: ActionDef[] = [
     schema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 50 } }, additionalProperties: false },
     run: async (p, ctx) => (await recentAudit(num(p["limit"], 15, 1, 50), ctx.tenantId)).map((r) => ({ at: r.at, actor: r.actor, event: r.event, detail: r.detail })),
     describe: () => "Read audit trail",
+  },
+  // ── Calendar: booking members for jobs ──────────────────────────────────
+  {
+    name: "staff_schedule", label: "A member's schedule", risk: "read", confirmDefault: false, target: "server",
+    description: "What a member is booked for on a day (default today), New York time: each job's time, building, apartments, and drive time from the job before.",
+    schema: { type: "object", properties: { member: { type: "string", description: "Member's name" }, date: { type: "string", description: "YYYY-MM-DD (New York). Omit for today." } }, required: ["member"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const m = await findMember(ctx.tenantId, str(p["member"], 80));
+      if ("error" in m) return m;
+      const date = /^\d{4}-\d{2}-\d{2}$/.test(str(p["date"], 10)) ? str(p["date"], 10) : nyDate(new Date());
+      return { member: m.name, date, jobs: (await bookingsOn(ctx.tenantId, m.id, date)).map(bookingView) };
+    },
+    describe: (p) => `Schedule for ${str(p["member"])}`,
+  },
+  {
+    name: "find_time", label: "Find a free time for a member", risk: "read", confirmDefault: false, target: "server",
+    description: "Find the earliest time a member can do a job at an address without clashing with their other bookings, counting drive time from the job before (Google Maps with traffic) and to the job after. Several apartments in one building can fill a whole building day. Does not book anything.",
+    schema: { type: "object", properties: {
+      member: { type: "string" }, address: { type: "string", description: "Building address (apartment separate)" },
+      apartments: { type: "array", items: { type: "string" } }, minutes: { type: "integer", minimum: 15, maximum: 720, description: "How long the job takes; omit to use the default" },
+      after: { type: "string", description: "Earliest start, ISO date-time or YYYY-MM-DD (New York)" }, wholeDay: { type: "boolean", description: "Keep the member in this building the whole day" },
+    }, required: ["member", "address"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const m = await findMember(ctx.tenantId, str(p["member"], 80));
+      if ("error" in m) return m;
+      const r = await findSlot(ctx.tenantId, m.id, { address: str(p["address"], 300), apartments: strList(p["apartments"], 50), minutes: p["minutes"] === undefined ? undefined : num(p["minutes"], 120, 15, 720), after: parseWhen(p["after"]), wholeDay: typeof p["wholeDay"] === "boolean" ? p["wholeDay"] : undefined });
+      return r.slot ? { member: m.name, start: nyLabel(r.slot.startAt), end: nyLabel(r.slot.endAt), minutes: r.minutes, wholeDay: r.wholeDay, driveFromPreviousJob: r.slot.travelDetail, daysSkipped: r.skipped.slice(0, 5) } : { member: m.name, error: "No free time in the next 3 weeks.", daysSkipped: r.skipped.slice(0, 8) };
+    },
+    describe: (p) => `Find a time for ${str(p["member"])} at ${str(p["address"])}`,
+  },
+  {
+    name: "book_job", label: "Book a member for a job (calendar)", risk: "write", confirmDefault: true, target: "server",
+    description: "Put a job on a member's calendar and notify them. With 'start' it books that exact time if it's free (including drive time); without it, the earliest free time. Never double-books: a member already at a job can't be booked for another at the same time, and on a building day can't be sent to another building.",
+    schema: { type: "object", properties: {
+      member: { type: "string" }, title: { type: "string", description: "What the job is" }, address: { type: "string" },
+      apartments: { type: "array", items: { type: "string" } }, minutes: { type: "integer", minimum: 15, maximum: 720 },
+      start: { type: "string", description: "Exact start, ISO date-time in New York time (e.g. 2026-10-20T09:00)" }, after: { type: "string" },
+      wholeDay: { type: "boolean" }, note: { type: "string" }, workOrderId: { type: "string", description: "Command Center work order this is for, if any" },
+    }, required: ["member", "title", "address"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const m = await findMember(ctx.tenantId, str(p["member"], 80));
+      if ("error" in m) return m;
+      const address = str(p["address"], 300);
+      const apartments = strList(p["apartments"], 50);
+      const r = await findSlot(ctx.tenantId, m.id, { address, apartments, minutes: p["minutes"] === undefined ? undefined : num(p["minutes"], 120, 15, 720), at: parseWhen(p["start"]), after: parseWhen(p["after"]), wholeDay: typeof p["wholeDay"] === "boolean" ? p["wholeDay"] : undefined });
+      if (!r.slot) return { error: p["start"] ? `${m.name} can't take that time: ${r.skipped[0]?.why ?? "it's taken"}.` : `${m.name} has no free time in the next 3 weeks.` };
+      const b = await createBooking(ctx.tenantId, m, { title: str(p["title"], 200), address, apartments, slot: r.slot, wholeDay: r.wholeDay, sourceEntity: str(p["workOrderId"], 80) ? "command-work-order" : undefined, sourceId: str(p["workOrderId"], 80) || undefined, note: str(p["note"], 1000) || undefined, createdBy: ctx.actorName });
+      if ("error" in b) return b;
+      await notify(commandActor(ctx), m.id, `New job: ${b.title}`, `${nyLabel(b.startAt)} at ${b.address}${apartments.length ? ` (${apartments.join(", ")})` : ""}`, b.id).catch(() => undefined);
+      return { booked: bookingView(b), driveFromPreviousJob: r.slot.travelDetail, notified: m.name };
+    },
+    describe: (p) => `Book ${str(p["member"])}: ${str(p["title"], 80)} at ${str(p["address"])}${str(p["start"]) ? ` (${str(p["start"])})` : " (first free time)"}`,
+    spoken: (r) => { const x = r as { booked?: { member: string; when: string }; error?: string }; return x.error ?? `Booked ${x.booked!.member} for ${x.booked!.when}. They've been notified.`; },
+  },
+  {
+    name: "cancel_booking", label: "Cancel a calendar booking", risk: "write", confirmDefault: true, target: "server",
+    description: "Cancel one booking (by id from staff_schedule) and tell the member.",
+    schema: { type: "object", properties: { bookingId: { type: "string" } }, required: ["bookingId"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const [b] = await db.update(staffBookings).set({ status: "cancelled" }).where(and(eq(staffBookings.id, str(p["bookingId"], 80)), eq(staffBookings.tenantId, ctx.tenantId), eq(staffBookings.status, "booked"))).returning();
+      if (!b) return { error: "No booking with that id." };
+      await notify(commandActor(ctx), b.staffId, `Job cancelled: ${b.title}`, `${nyLabel(b.startAt)} at ${b.address}`, b.id).catch(() => undefined);
+      return { cancelled: bookingView(b) };
+    },
+    describe: (p) => `Cancel booking ${str(p["bookingId"], 12)}…`,
+    spoken: (r) => { const x = r as { cancelled?: { member: string; when: string }; error?: string }; return x.error ?? `Cancelled ${x.cancelled!.member}'s job ${x.cancelled!.when}.`; },
   },
   // ── Desktop agent (Windows, Mac or Linux) ───────────────────────────────
   {

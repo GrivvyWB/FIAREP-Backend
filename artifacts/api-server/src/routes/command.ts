@@ -9,7 +9,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
-import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
 import { db, organizations, staffAccounts } from "@workspace/db";
 import { requireAuth, requirePlatformOwner, actorFrom } from "../middlewares/auth";
 import { isFiarepAdmin } from "../lib/fiarepAdminNames";
@@ -23,7 +23,8 @@ import { ACTIONS, actionsFor, isPlatform } from "../lib/command/actions";
 import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
 import { capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
-import { checkGeminiKey, geminiKeyStatus, saveGeminiKey } from "../lib/command/keys";
+import { bookingView, getSchedule, saveSchedule, staffBookings } from "../lib/command/scheduling";
+import { checkKey, geminiKeyStatus, KEY_ENV, keyStatus, saveKey, type KeyName } from "../lib/command/keys";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
 import { relayUrl, syncRelayDevices } from "../lib/command/relay";
 
@@ -371,7 +372,7 @@ router.use("/v1/platform/command", requirePlatformOwner);
 const ownerName = (res: Response) => (res.locals["platformOwner"] as { name: string }).name;
 
 router.get("/v1/platform/command", async (req, res) => {
-  const [switches, devices, agents, chain, orgs, usage, clientDevices, clientAgents, gemKey] = await Promise.all([
+  const [switches, devices, agents, chain, orgs, usage, clientDevices, clientAgents, gemKey, mapsKey, schedule] = await Promise.all([
     getSwitches(PLATFORM_TENANT),
     db.select().from(commandDevices).where(eq(commandDevices.tenantId, PLATFORM_TENANT)).orderBy(desc(commandDevices.createdAt)),
     db.select().from(commandAgents).where(eq(commandAgents.tenantId, PLATFORM_TENANT)).orderBy(desc(commandAgents.createdAt)),
@@ -381,10 +382,12 @@ router.get("/v1/platform/command", async (req, res) => {
     db.select({ tenantId: commandDevices.tenantId, status: commandDevices.status }).from(commandDevices).where(ne(commandDevices.tenantId, PLATFORM_TENANT)),
     db.select().from(commandAgents).where(and(ne(commandAgents.tenantId, PLATFORM_TENANT), eq(commandAgents.status, "active"))),
     geminiKeyStatus(),
+    keyStatus("googleMaps"),
+    getSchedule(PLATFORM_TENANT),
   ]);
   const usageOf = new Map(usage.map((u) => [u.tenantId, u]));
   res.json({
-    switches, defaultModel: DEFAULT_MODEL, defaultGeminiModel: DEFAULT_GEMINI_MODEL, geminiKeyConfigured: gemKey.set, geminiKey: gemKey, prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
+    switches, defaultModel: DEFAULT_MODEL, defaultGeminiModel: DEFAULT_GEMINI_MODEL, geminiKeyConfigured: gemKey.set, geminiKey: gemKey, mapsKey, schedule, prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
     actions: actionMeta(PLATFORM_TENANT),
     devices: devices.map(deviceMeta),
     agents: agents.map(agentMeta),
@@ -469,23 +472,35 @@ router.post("/v1/platform/command/agents/:id/revoke", async (req, res) => {
   res.json(out);
 });
 
-/** Set (or clear, with null) the Gemini API key from the Terminal: set-gemini-key.sh. Checked with Google first; stored encrypted. */
-router.put("/v1/platform/command/keys/gemini", async (req, res) => {
+/** Set (or clear, with null) an API key from the Terminal: set-gemini-key.sh (gemini), set-maps-key.sh (maps). Checked with Google first; stored encrypted. */
+const KEY_NAMES: Record<string, { name: KeyName; label: string; where: string }> = {
+  gemini: { name: "gemini", label: "Gemini", where: "aistudio.google.com → Get API key" },
+  maps: { name: "googleMaps", label: "Google Maps", where: "console.cloud.google.com → APIs & Services → Credentials, with Routes API enabled" },
+};
+router.put("/v1/platform/command/keys/:which", async (req, res) => {
+  const k = KEY_NAMES[String(req.params["which"])];
+  if (!k) { res.status(404).json({ error: "Unknown key" }); return; }
   const raw = (req.body as Record<string, unknown> | undefined)?.["key"];
-  if (raw === null) { await saveGeminiKey(null, ownerName(res)); await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "key.gemini.cleared" }); res.json(await geminiKeyStatus()); return; }
+  if (raw === null) { await saveKey(k.name, null, ownerName(res)); await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: `key.${k.name}.cleared` }); res.json(await keyStatus(k.name)); return; }
   const key = typeof raw === "string" ? raw.trim() : "";
-  if (!/^[\w.-]{20,200}$/.test(key)) { res.status(400).json({ error: "That doesn't look like a Gemini API key (copy it from aistudio.google.com → Get API key)." }); return; }
-  const problem = await checkGeminiKey(key);
+  if (!/^[\w.-]{20,200}$/.test(key)) { res.status(400).json({ error: `That doesn't look like a ${k.label} API key (${k.where}).` }); return; }
+  const problem = await checkKey(k.name, key);
   if (problem) { res.status(400).json({ error: problem }); return; }
-  await saveGeminiKey(key, ownerName(res));
-  await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "key.gemini.set", detail: { last4: key.slice(-4) } });
-  res.json({ ...(await geminiKeyStatus()), note: process.env["GEMINI_API_KEY"] ? "GEMINI_API_KEY in Replit Secrets is set and is used instead." : undefined });
+  await saveKey(k.name, key, ownerName(res));
+  await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: `key.${k.name}.set`, detail: { last4: key.slice(-4) } });
+  res.json({ ...(await keyStatus(k.name)), note: process.env[KEY_ENV[k.name]] ? `${KEY_ENV[k.name]} in Replit Secrets is set and is used instead.` : undefined });
 });
 
 router.delete("/v1/platform/command/agents/:id", async (req, res) => {
   const out = await removeAgent(null, String(req.params["id"]), `owner:${ownerName(res)}`);
   if (!out) { res.status(404).json({ error: "Only a revoked computer can be removed" }); return; }
   res.json(out);
+});
+
+router.put("/v1/platform/command/schedule", async (req, res) => {
+  const next = await saveSchedule(PLATFORM_TENANT, (req.body ?? {}) as Record<string, unknown>);
+  await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "schedule.changed", detail: next });
+  res.json(next);
 });
 
 router.post("/v1/platform/command/relay/sync", async (_req, res) => {
@@ -528,6 +543,7 @@ router.get("/v1/org/command", ...org, async (req, res) => {
     actions: actionMeta(tenantId), devices: devices.map(deviceMeta), agents: agents.map(agentMeta),
     install: installLines(publicApiBase(req), null, devices.filter((d) => d.status === "active").map((d) => d.confirmKey)),
     usage: usage[0] ?? null, cap: platform.caps?.[tenantId] ?? null, capProblem: await capProblem(tenantId),
+    schedule: await getSchedule(tenantId), mapsKey: { set: (await keyStatus("googleMaps")).set },
     // "Ready" for whichever engine FIAREP has on (Claude or Gemini).
     claudeKeyConfigured: effective.provider === "gemini" ? (await geminiKeyStatus()).set : Boolean(process.env["ANTHROPIC_API_KEY"]),
     audit: { ok: chain.ok, rows: auditRows.length },
@@ -575,6 +591,13 @@ router.delete("/v1/org/command/agents/:id", ...org, async (req, res) => {
   res.json(out);
 });
 
+router.put("/v1/org/command/schedule", ...org, async (req, res) => {
+  const tenantId = actorFrom(res).tenantId;
+  const next = await saveSchedule(tenantId, (req.body ?? {}) as Record<string, unknown>);
+  await commandAuditLog({ tenantId, actor: by(res), event: "schedule.changed", detail: next });
+  res.json(next);
+});
+
 router.get("/v1/org/command/audit", ...org, async (req, res) => {
   res.json({ rows: await recentAudit(Number(req.query["limit"]) || 200, actorFrom(res).tenantId) });
 });
@@ -582,6 +605,18 @@ router.get("/v1/org/command/audit", ...org, async (req, res) => {
 router.get("/v1/org/command/work-orders", ...org, async (req, res) => {
   const status = str(req.query["status"], 20) || "any";
   res.json(await db.select().from(commandWorkOrders).where(workOrdersWhere(actorFrom(res).tenantId, status)).orderBy(desc(commandWorkOrders.createdAt)).limit(500));
+});
+
+// ── Calendar: staff bookings (every signed-in member; members see their own, management / administrators everyone's) ──
+router.get("/v1/staff-bookings", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  const from = new Date(String(req.query["from"] ?? "")); const to = new Date(String(req.query["to"] ?? ""));
+  if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to <= from || to.getTime() - from.getTime() > 120 * 86_400_000) { res.status(400).json({ error: "from and to (ISO dates, up to 120 days apart) are required" }); return; }
+  const everyone = ["administrator", "management"].includes(actor.role);
+  const rows = await db.select().from(staffBookings).where(and(eq(staffBookings.tenantId, actor.tenantId), eq(staffBookings.status, "booked"),
+    lt(staffBookings.startAt, to), gte(staffBookings.endAt, from), everyone ? undefined : eq(staffBookings.staffId, actor.id))).orderBy(asc(staffBookings.startAt)).limit(2000);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(rows.map(bookingView));
 });
 
 export default router;

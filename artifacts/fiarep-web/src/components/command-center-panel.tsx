@@ -13,12 +13,13 @@ type Install = { windows: string; mac: string; linux: string };
 type Usage = { runs: number; inputTokens: number; outputTokens: number; costUsd: number; unpricedRuns: number };
 type Client = { id: string; name: string; status: string; on: boolean; cap: number | null; usage: Usage | null; phones: { active: number; pending: number }; computers: { total: number; online: number } };
 type Overview = {
-  switches: Switches; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; install: Install; usage: Usage | null; claudeKeyConfigured: boolean; audit: { ok: boolean; rows: number; brokenAt?: number | null };
+  switches: Switches; schedule?: Schedule; mapsKey?: { set: boolean; source?: string | null; last4?: string | null }; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; install: Install; usage: Usage | null; claudeKeyConfigured: boolean; audit: { ok: boolean; rows: number; brokenAt?: number | null };
   // Platform Control only
   defaultModel?: string; defaultGeminiModel?: string; geminiKeyConfigured?: boolean; geminiKey?: { set: boolean; source: "replit-secrets" | "terminal" | null; last4: string | null }; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
   // A client's own only
   platformEnabled?: boolean; platformOff?: string[]; cap?: number | null; capProblem?: string | null;
 };
+type Schedule = { dayStart: string; dayEnd: string; workDays: number[]; defaultJobMinutes: number; minutesPerApartment: number; buildingDayApartments: number };
 type AuditRow = { seq: number; at: string; actor: string; event: string; detail: Record<string, unknown> };
 type WorkOrder = { id: string; status: string; urgency: string; address: string; borough: string; kind: string; title: string; createdAt: string; decidedBy: string | null };
 type Os = keyof Install;
@@ -67,6 +68,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const [model, setModel] = useState("");
   const [geminiModel, setGeminiModel] = useState("");
   const [caps, setCaps] = useState<Record<string, string>>({});
+  const [sched, setSched] = useState<Schedule | null>(null);
   const fail = (title: string) => (err: any) => toast({ variant: "destructive", title, description: err?.data?.error || err?.message });
 
   async function load() {
@@ -76,7 +78,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         api<{ rows: AuditRow[] }>(`${base}/audit?limit=200`),
         api<WorkOrder[]>(`${base}/work-orders`),
       ]);
-      setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
+      setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setSched((x) => x ?? o.schedule ?? null); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
     } catch (err: any) { setLoadError(err?.data?.error || err?.message || "Could not load the Command Center"); }
   }
   useEffect(() => { void load(); const t = setInterval(() => void load(), 15_000); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -115,6 +117,11 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   async function saveClient(c: Client, patch: { on?: boolean; cap?: number | null }) {
     try { await api(`/v1/platform/command/clients/${encodeURIComponent(c.id)}`, json("PUT", patch)); await load(); toast({ title: `${c.name} saved` }); }
     catch (err) { fail("Could not save the client")(err); }
+  }
+  async function saveSchedule() {
+    if (!sched) return;
+    try { const r = await api<Schedule>(`${base}/schedule`, json("PUT", sched)); setSched(r); toast({ title: "Scheduling saved" }); await load(); }
+    catch (err) { fail("Could not save scheduling")(err); }
   }
   const copy = (text: string, what: string) => { void navigator.clipboard.writeText(text); toast({ title: `${what} copied` }); };
 
@@ -317,6 +324,26 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </div>
         )}
       </section>
+
+      {sched && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-950">Scheduling</h2>
+          <p className="text-xs text-slate-500">When the Command Center books a member for a job it puts it on the calendar with a start and end time. A member already booked can't be booked again for that time; the next job in another building starts after the drive there{platform ? " (Google Maps with traffic)" : ""}. Jobs in the same building can follow each other with no drive. When a member has this many apartments in one building that day, it becomes a building day: no other building that day. New York time.</p>
+          {platform && <p className="mt-1 text-xs text-slate-500">Google Maps key: {data.mapsKey?.set ? `set ${data.mapsKey.source === "terminal" ? "from the Terminal" : "in Replit Secrets"} (…${data.mapsKey.last4})` : <b className="text-amber-800">not set — run set-maps-key.sh in Terminal (until then drive times are a distance estimate)</b>} · Routes API with traffic: $10 per 1,000 lookups after 5,000 free a month (developers.google.com/maps/billing-and-pricing/pricing, Oct 16 2026). Each lookup is kept for 6 hours.</p>}
+          {!platform && data.mapsKey && !data.mapsKey.set && <p className="mt-1 text-xs text-slate-500">Drive times are estimated from distance until FIAREP turns on Google Maps.</p>}
+          <div className="mt-3 flex flex-wrap items-end gap-3 text-sm">
+            <label className="flex flex-col text-xs text-slate-600">Day starts<input type="time" value={sched.dayStart} onChange={(e) => setSched({ ...sched, dayStart: e.target.value })} className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+            <label className="flex flex-col text-xs text-slate-600">Day ends<input type="time" value={sched.dayEnd} onChange={(e) => setSched({ ...sched, dayEnd: e.target.value })} className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+            <div className="flex flex-col text-xs text-slate-600">Work days<div className="mt-1 flex gap-1">{["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
+              <button key={i} type="button" onClick={() => setSched({ ...sched, workDays: sched.workDays.includes(i) ? sched.workDays.filter((x) => x !== i) : [...sched.workDays, i].sort() })}
+                className={`h-8 w-8 rounded-md border text-xs font-semibold ${sched.workDays.includes(i) ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}>{d}</button>))}</div></div>
+            <label className="flex flex-col text-xs text-slate-600">A job takes (min)<input type="number" min={15} max={720} value={sched.defaultJobMinutes} onChange={(e) => setSched({ ...sched, defaultJobMinutes: Number(e.target.value) })} className="mt-1 w-24 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+            <label className="flex flex-col text-xs text-slate-600">Per apartment (min)<input type="number" min={15} max={720} value={sched.minutesPerApartment} onChange={(e) => setSched({ ...sched, minutesPerApartment: Number(e.target.value) })} className="mt-1 w-24 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+            <label className="flex flex-col text-xs text-slate-600">Building day from (apartments)<input type="number" min={2} max={50} value={sched.buildingDayApartments} onChange={(e) => setSched({ ...sched, buildingDayApartments: Number(e.target.value) })} className="mt-1 w-24 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+            <Button size="sm" variant="outline" disabled={JSON.stringify(sched) === JSON.stringify(data.schedule)} onClick={() => void saveSchedule()}>Save</Button>
+          </div>
+        </section>
+      )}
 
       <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <summary className="cursor-pointer text-base font-semibold text-slate-950">Work orders prepared by the Command Center ({drafts.length} waiting)</summary>

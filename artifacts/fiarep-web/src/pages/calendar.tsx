@@ -1,6 +1,8 @@
 import { sameTitle, supervisedTradeForPosition } from "@/lib/titles";
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, ClipboardCheck, FolderKanban, Loader2, Plane, Wrench, FileSearch } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, ClipboardCheck, FolderKanban, Loader2, Plane, Wrench, FileSearch, UserRoundCheck } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
+import { customFetch } from "@workspace/api-client-react";
 import { Link } from "wouter";
 import { getListEntityRecordsQueryKey, useListEntityRecords } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -8,8 +10,8 @@ import type { Staff } from "@workspace/api-client-react";
 
 type RecordItem = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt?: string; updatedAt?: string };
 type CalendarItem = RecordItem & { category: Category; label: string; href: string; start: Date; end: Date };
-type Category = "Projects" | "Inspections" | "Resident reports" | "Emergency jobs" | "Elevator jobs" | "Leave requests";
-const categories: Category[] = ["Projects", "Inspections", "Resident reports", "Emergency jobs", "Elevator jobs", "Leave requests"];
+type Category = "Projects" | "Inspections" | "Resident reports" | "Emergency jobs" | "Elevator jobs" | "Leave requests" | "Booked jobs";
+const categories: Category[] = ["Projects", "Inspections", "Resident reports", "Emergency jobs", "Elevator jobs", "Leave requests", "Booked jobs"];
 const meta: Record<Category, { entity: string; href: string; icon: typeof FolderKanban; color: string }> = {
   Projects: { entity: "projects", href: "/projects", icon: FolderKanban, color: "bg-[#dce7f1] text-[#526b80]" },
   Inspections: { entity: "inspections", href: "/inspections", icon: ClipboardCheck, color: "bg-[#fff5d6] text-[#b17d00]" },
@@ -17,7 +19,16 @@ const meta: Record<Category, { entity: string; href: string; icon: typeof Folder
   "Emergency jobs": { entity: "emergency-jobs", href: "/emergency", icon: AlertTriangle, color: "bg-[#f8dfdf] text-[#a44949]" },
   "Elevator jobs": { entity: "elevator-jobs", href: "/elevators", icon: Wrench, color: "bg-[#dcefe9] text-[#367461]" },
   "Leave requests": { entity: "leave-requests", href: "/leave", icon: Plane, color: "bg-[#e4e8f7] text-[#5265a0]" },
+  // Members booked for jobs by the Command Center (start and end time; one job at a time per member).
+  "Booked jobs": { entity: "staff-bookings", href: "/calendar", icon: UserRoundCheck, color: "bg-[#fdebd3] text-[#9a5b12]" },
 };
+type Booking = { id: string; member: string; title: string; address: string; apartments: string[]; wholeDay: boolean; start: string; end: string; travelMinutes: number; travelSource: string; development: string | null };
+const timeOf = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+const bookingItem = (b: Booking): CalendarItem => ({
+  id: b.id, development: b.development, category: "Booked jobs", href: "/calendar", start: new Date(b.start), end: new Date(b.end),
+  label: `${timeOf(new Date(b.start))} ${b.member} · ${b.title}`,
+  state: { status: `${timeOf(new Date(b.start))} – ${timeOf(new Date(b.end))} · ${b.address}${b.apartments.length ? ` (${b.apartments.join(", ")})` : ""}${b.wholeDay ? " · building day" : ""}${b.travelMinutes ? ` · ${b.travelMinutes} min drive before` : ""}` },
+});
 
 const value = (s: Record<string, unknown>, keys: string[]) => keys.map((key) => s[key]).find((v) => v !== undefined && v !== null && String(v).trim() !== "");
 const parseDate = (input: unknown, fallback: string | undefined) => {
@@ -92,6 +103,13 @@ export default function Calendar() {
   const emergencies = useListEntityRecords("emergency-jobs", undefined, options("emergency-jobs"));
   const elevators = useListEntityRecords("elevator-jobs", undefined, options("elevator-jobs"));
   const leave = useListEntityRecords("leave-requests", undefined, options("leave-requests"));
+  // Booked jobs for the month on screen (plus the days around it in the grid).
+  const range = useMemo(() => { const f = new Date(cursor.getFullYear(), cursor.getMonth(), 1); f.setDate(f.getDate() - 7); const t = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 7); return { from: f.toISOString(), to: t.toISOString() }; }, [cursor]);
+  const bookings = useQuery({
+    queryKey: ["staff-bookings", range.from, range.to],
+    queryFn: () => customFetch<Booking[]>(`/api/v1/staff-bookings?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`, { responseType: "json" } as never),
+    enabled: !!staff, refetchInterval: 30_000, staleTime: 10_000,
+  });
   const sources = [
     { query: projects, enabled: canReadCalendarEntity(staff, "projects") },
     { query: inspections, enabled: canReadCalendarEntity(staff, "inspections") },
@@ -99,11 +117,12 @@ export default function Calendar() {
     { query: emergencies, enabled: canReadCalendarEntity(staff, "emergency-jobs") },
     { query: elevators, enabled: canReadCalendarEntity(staff, "elevator-jobs") },
     { query: leave, enabled: canReadCalendarEntity(staff, "leave-requests") },
+    { query: bookings, enabled: !!staff },
   ] as const;
   const queries = sources.map(({ query }) => query);
   const records = useMemo(() => ([projects, inspections, reports, emergencies, elevators, leave] as const).flatMap((query, i) =>
     ((query.data || []) as RecordItem[]).map((record) => normalize(record, categories[i]))
-  ).filter((item): item is CalendarItem => Boolean(item)), [projects.data, inspections.data, reports.data, emergencies.data, elevators.data, leave.data]);
+  ).filter((item): item is CalendarItem => Boolean(item)).concat((bookings.data || []).map(bookingItem)), [projects.data, inspections.data, reports.data, emergencies.data, elevators.data, leave.data, bookings.data]);
   const visible = filter === "All" ? records : records.filter((item) => item.category === filter);
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const gridStart = new Date(first); gridStart.setDate(1 - first.getDay());
@@ -163,7 +182,7 @@ export default function Calendar() {
       <aside className="bg-card rounded-[14px] shadow-sm border border-border flex min-h-[280px] flex-col overflow-hidden">
         <div className="border-b border-border p-4"><h2 className="font-bold">{new Date(`${selected}T12:00:00`).toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" })}</h2><p className="mt-1 text-xs text-muted-foreground">{agenda.length} scheduled record{agenda.length === 1 ? "" : "s"}</p></div>
         <div className="flex-1 overflow-y-auto p-3">
-          {agenda.length === 0 ? <div className="flex h-full min-h-[180px] flex-col items-center justify-center text-center text-sm text-muted-foreground"><CalendarDays className="mb-3 h-9 w-9 opacity-25" />No records scheduled for this day.</div> : <div className="space-y-2">{agenda.map((item) => { const Icon = meta[item.category].icon; const s = item.state || {}; return <Link key={`${item.category}-${item.id}`} href={item.href} className="block rounded-xl border border-border p-3 hover:border-primary/50 hover:bg-muted/30"><div className="flex gap-3"><div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${meta[item.category].color}`}><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{item.label}</div><div className="mt-1 text-xs text-muted-foreground">{item.category} · {String(s.status || "New").replaceAll("_", " ")}</div><div className="mt-1 text-xs text-muted-foreground">{item.development || "All developments"} · {displayDate(item.start)}{item.end.getTime() !== item.start.getTime() ? ` – ${displayDate(item.end)}` : ""}</div></div></div></Link>; })}</div>}
+          {agenda.length === 0 ? <div className="flex h-full min-h-[180px] flex-col items-center justify-center text-center text-sm text-muted-foreground"><CalendarDays className="mb-3 h-9 w-9 opacity-25" />No records scheduled for this day.</div> : <div className="space-y-2">{agenda.map((item) => { const Icon = meta[item.category].icon; const s = item.state || {}; return <Link key={`${item.category}-${item.id}`} href={item.href} className="block rounded-xl border border-border p-3 hover:border-primary/50 hover:bg-muted/30"><div className="flex gap-3"><div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${meta[item.category].color}`}><Icon className="h-4 w-4" /></div><div className="min-w-0 flex-1"><div className="truncate text-sm font-semibold">{item.label}</div><div className="mt-1 text-xs text-muted-foreground">{item.category} · {item.category === "Booked jobs" ? String(s.status) : String(s.status || "New").replaceAll("_", " ")}</div><div className="mt-1 text-xs text-muted-foreground">{item.development || "All developments"} · {displayDate(item.start)}{item.end.getTime() !== item.start.getTime() ? ` – ${displayDate(item.end)}` : ""}</div></div></div></Link>; })}</div>}
         </div>
       </aside>
     </div>
