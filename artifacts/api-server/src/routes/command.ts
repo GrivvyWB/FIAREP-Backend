@@ -24,6 +24,8 @@ import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_GEMINI_
 import { capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
 import { bookingView, getSchedule, saveSchedule, staffBookings } from "../lib/command/scheduling";
+import { recentConversations, residentAiOn, residentComplaint, residentView, residentWrites, staffWrites } from "../lib/command/residentChat";
+import { entityRecords } from "@workspace/db";
 import { checkKey, geminiKeyStatus, KEY_ENV, keyStatus, saveKey, type KeyName } from "../lib/command/keys";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
 import { relayUrl, syncRelayDevices } from "../lib/command/relay";
@@ -417,6 +419,7 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     confirm: "confirm" in b ? bools(b["confirm"], PLATFORM_TENANT) : before.confirm,
     model: typeof b["model"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["model"].trim()) ? b["model"].trim() : before.model,
     provider: b["provider"] === "gemini" || b["provider"] === "claude" ? b["provider"] : before.provider,
+    residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
     geminiModel: typeof b["geminiModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["geminiModel"].trim()) ? b["geminiModel"].trim() : before.geminiModel,
     caps: before.caps ?? {},
   };
@@ -559,6 +562,7 @@ router.put("/v1/org/command/switches", ...org, async (req, res) => {
     actions: "actions" in b ? bools(b["actions"], tenantId) : before.actions,
     confirm: "confirm" in b ? bools(b["confirm"], tenantId) : before.confirm,
     model: before.model, provider: before.provider, geminiModel: before.geminiModel, // the engine and model are FIAREP's choice (Platform Control)
+    residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
   };
   await saveSwitches(next, tenantId);
   await commandAuditLog({ tenantId, actor: by(res), event: "switches.changed", detail: { before, after: next } });
@@ -618,5 +622,47 @@ router.get("/v1/staff-bookings", requireAuth, async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json(rows.map(bookingView));
 });
+
+// ── Resident chat (lib/command/residentChat.ts) ─────────────────────────────
+// The resident: complaint number + the status token their phone / browser kept.
+const residentAuth = async (req: Request) => residentComplaint(str(req.params["complaintNo"], 20), str(req.header("x-resident-token") ?? (req.body as Record<string, unknown> | undefined)?.["statusToken"], 200));
+router.get("/v1/public/resident-reports/:complaintNo/messages", rateLimit("resident-chat-read", 120), async (req, res) => {
+  const row = await residentAuth(req);
+  if (!row) { res.status(404).json({ error: "Report not found" }); return; }
+  res.setHeader("Cache-Control", "no-store");
+  res.json(residentView(row, await residentAiOn(row.tenantId)));
+});
+router.post("/v1/public/resident-reports/:complaintNo/messages", rateLimit("resident-chat", 20), async (req, res) => {
+  const row = await residentAuth(req);
+  if (!row) { res.status(404).json({ error: "Report not found" }); return; }
+  const text = str((req.body as Record<string, unknown> | undefined)?.["text"], 2000);
+  if (!text) { res.status(400).json({ error: "Write a message." }); return; }
+  const aiOn = await residentAiOn(row.tenantId);
+  if (!aiOn && !(Array.isArray(row.state["chat"]) && (row.state["chat"] as unknown[]).length)) { res.status(403).json({ error: "Messages aren't available for this complaint." }); return; }
+  res.json(residentView(await residentWrites(row, text), aiOn));
+});
+
+// Staff: conversations on the Command Center page (FIAREP's own, or a client's).
+async function chatScope(req: Request, res: Response): Promise<string | null> {
+  if (req.path.startsWith("/v1/platform/")) return PLATFORM_TENANT;
+  return actorFrom(res).tenantId;
+}
+for (const prefix of ["/v1/platform/command", "/v1/org/command"]) {
+  const guard = prefix.startsWith("/v1/platform") ? [] : org;
+  router.get(`${prefix}/resident-chats`, ...guard, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await recentConversations((await chatScope(req, res))!));
+  });
+  router.post(`${prefix}/resident-chats/:id`, ...guard, async (req, res) => {
+    const tenantId = (await chatScope(req, res))!;
+    const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, String(req.params["id"])), eq(entityRecords.tenantId, tenantId), eq(entityRecords.entity, "resident-reports"))).limit(1);
+    if (!row) { res.status(404).json({ error: "Unknown complaint" }); return; }
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const who = prefix.startsWith("/v1/platform") ? ownerName(res) : by(res);
+    const next = await staffWrites(row, who, { text: str(b["text"], 2000) || undefined, takeOver: b["takeOver"] === true, giveBack: b["giveBack"] === true });
+    await commandAuditLog({ tenantId, actor: who, event: "resident-chat.staff", detail: { complaint: row.state["complaintNo"], replied: !!str(b["text"], 10), takeOver: b["takeOver"] === true, giveBack: b["giveBack"] === true } });
+    res.json({ ok: true, human: next.state["chatHuman"] === true });
+  });
+}
 
 export default router;

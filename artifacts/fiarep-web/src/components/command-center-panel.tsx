@@ -5,7 +5,9 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ActionMeta = { name: string; label: string; risk: "read" | "write"; confirmDefault: boolean; target: "server" | "agent" };
-type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; provider: "claude" | "gemini"; geminiModel: string; caps?: Record<string, number> };
+type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; caps?: Record<string, number> };
+type ChatMsg = { id: string; from: "resident" | "office" | "staff"; text: string; at: string; by?: string };
+type Conversation = { id: string; complaintNo: string; address: string; unit: string; description: string; human: boolean; handoff: { reason?: string; urgent?: boolean } | null; appointment: string | null; lastAt: string; waiting: boolean; messages: ChatMsg[] };
 type Device = { id: string; name: string; staffName: string; status: "pending" | "active" | "revoked"; confirmKey: string; createdAt: string; approvedAt: string | null; approvedBy: string | null; lastUsedAt: string | null };
 type AgentTask = { name: string; description: string; confirm: boolean; params: Record<string, { description: string; pattern: string }> };
 type Agent = { id: string; name: string; status: string; online: boolean; lastSeenAt: string | null; info: Record<string, unknown>; tasks: AgentTask[]; folders: string[]; apps: string[]; createdAt: string };
@@ -21,7 +23,7 @@ type Overview = {
 };
 type Schedule = { dayStart: string; dayEnd: string; workDays: number[]; defaultJobMinutes: number; minutesPerApartment: number; buildingDayApartments: number };
 type AuditRow = { seq: number; at: string; actor: string; event: string; detail: Record<string, unknown> };
-type WorkOrder = { id: string; status: string; urgency: string; address: string; borough: string; kind: string; title: string; createdAt: string; decidedBy: string | null };
+type WorkOrder = { id: string; status: string; urgency: string; address: string; borough: string; kind: string; title: string; createdAt: string; decidedBy: string | null; assignedName?: string | null };
 type Os = keyof Install;
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never");
@@ -69,15 +71,20 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const [geminiModel, setGeminiModel] = useState("");
   const [caps, setCaps] = useState<Record<string, string>>({});
   const [sched, setSched] = useState<Schedule | null>(null);
+  const [chats, setChats] = useState<Conversation[]>([]);
+  const [openChat, setOpenChat] = useState<string | null>(null);
+  const [reply, setReply] = useState("");
   const fail = (title: string) => (err: any) => toast({ variant: "destructive", title, description: err?.data?.error || err?.message });
 
   async function load() {
     try {
-      const [o, a, w] = await Promise.all([
+      const [o, a, w, c] = await Promise.all([
         api<Overview>(base),
         api<{ rows: AuditRow[] }>(`${base}/audit?limit=200`),
         api<WorkOrder[]>(`${base}/work-orders`),
+        api<Conversation[]>(`${base}/resident-chats`).catch(() => [] as Conversation[]),
       ]);
+      setChats(c);
       setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setSched((x) => x ?? o.schedule ?? null); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
     } catch (err: any) { setLoadError(err?.data?.error || err?.message || "Could not load the Command Center"); }
   }
@@ -117,6 +124,10 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   async function saveClient(c: Client, patch: { on?: boolean; cap?: number | null }) {
     try { await api(`/v1/platform/command/clients/${encodeURIComponent(c.id)}`, json("PUT", patch)); await load(); toast({ title: `${c.name} saved` }); }
     catch (err) { fail("Could not save the client")(err); }
+  }
+  async function chatAction(c: Conversation, body: { text?: string; takeOver?: boolean; giveBack?: boolean }) {
+    try { await api(`${base}/resident-chats/${encodeURIComponent(c.id)}`, json("POST", body)); if (body.text) setReply(""); await load(); }
+    catch (err) { fail("Could not update the conversation")(err); }
   }
   async function saveSchedule() {
     if (!sched) return;
@@ -325,6 +336,51 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         )}
       </section>
 
+      <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-base font-semibold text-slate-950">Resident messages</h2>
+            <p className="text-xs text-slate-500">Residents can write about their complaint in the FIAREP app or on the website (from the phone or browser they filed it on). The Command Center answers for the office — status, open times, booking the visit on the crew's calendar — as "{"<company>"} Maintenance". It doesn't announce that it's automated, but if a resident asks whether they're talking to a person, it says it's the office's automated assistant and offers a staff member. Emergencies and anything it can't do go to staff. Reply here yourself at any time; replying takes the conversation over until you give it back.</p>
+          </div>
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+            <span className="font-semibold text-slate-900">Answer residents</span>
+            <Switch checked={data.switches.residentChat !== false} onCheckedChange={(v) => void saveSwitches({ residentChat: v })} />
+          </label>
+        </div>
+        <div className="mt-3 space-y-2">
+          {chats.map((c) => (
+            <div key={c.id} className={`rounded-lg border p-3 ${c.handoff?.urgent && c.human ? "border-rose-400 bg-rose-50" : c.waiting && c.human ? "border-amber-400 bg-amber-50" : "border-slate-200"}`}>
+              <button type="button" onClick={() => setOpenChat(openChat === c.id ? null : c.id)} className="flex w-full flex-wrap items-center gap-2 text-left">
+                <span className="font-semibold text-slate-950">#{c.complaintNo}</span>
+                <span className="text-xs text-slate-600">{c.address}{c.unit ? `, apt ${c.unit}` : ""} · {c.description.slice(0, 60)}</span>
+                <span className="ml-auto text-xs font-semibold">{c.human ? <span className={c.handoff?.urgent ? "text-rose-700" : "text-amber-800"}>{c.waiting ? "waiting for you" : "staff answering"}{c.handoff?.reason ? ` — ${c.handoff.reason}` : ""}</span> : <span className="text-emerald-700">assistant answering</span>}</span>
+                {c.appointment && <span className="w-full text-xs text-slate-500">Visit: {c.appointment}</span>}
+              </button>
+              {openChat === c.id && (
+                <div className="mt-2">
+                  <div className="max-h-72 space-y-1.5 overflow-y-auto rounded-md bg-slate-50 p-2">
+                    {c.messages.map((m) => (
+                      <div key={m.id} className={`flex ${m.from === "resident" ? "justify-start" : "justify-end"}`}>
+                        <div className={`max-w-[80%] rounded-xl px-3 py-1.5 text-sm ${m.from === "resident" ? "border border-slate-200 bg-white text-slate-900" : m.from === "staff" ? "bg-slate-800 text-white" : "bg-[#185FA5] text-white"}`}>
+                          {m.text}
+                          <div className="mt-0.5 text-[10px] opacity-70">{m.from === "resident" ? "Resident" : m.from === "staff" ? m.by || "Staff" : "Assistant"} · {when(m.at)}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <input value={reply} onChange={(e) => setReply(e.target.value)} placeholder="Reply as the office" className="h-9 min-w-0 flex-1 rounded-md border border-slate-300 px-2 text-sm" />
+                    <Button size="sm" disabled={!reply.trim()} onClick={() => void chatAction(c, { text: reply.trim() })}>Send</Button>
+                    {c.human ? <Button size="sm" variant="outline" onClick={() => void chatAction(c, { giveBack: true })}>Give back to the assistant</Button> : <Button size="sm" variant="outline" onClick={() => void chatAction(c, { takeOver: true })}>Take over</Button>}
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+          {!chats.length && <p className="text-sm text-slate-500">No resident messages yet.</p>}
+        </div>
+      </section>
+
       {sched && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Scheduling</h2>
@@ -352,7 +408,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
             <tr key={o.id} className="border-t border-slate-100">
               <td className="py-1.5 pr-3"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${o.urgency === "urgent" ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-700"}`}>{o.urgency}</span></td>
               <td className="py-1.5 pr-3 font-medium text-slate-900">{o.address}, {o.borough}<span className="block text-xs font-normal text-slate-500">{o.kind} · {o.title}</span></td>
-              <td className="py-1.5 pr-3 text-xs text-slate-600">{o.status}{o.decidedBy ? ` · ${o.decidedBy}` : ""}</td>
+              <td className="py-1.5 pr-3 text-xs text-slate-600">{o.status === "assigned" && o.assignedName ? `assigned to ${o.assignedName}` : o.status}{o.decidedBy ? ` · ${o.decidedBy}` : ""}</td>
               <td className="py-1.5 text-xs text-slate-500">{when(o.createdAt)}</td>
             </tr>))}
           </tbody>

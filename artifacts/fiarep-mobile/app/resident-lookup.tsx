@@ -3,6 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingVi
 import PhotoViewer from '../components/PhotoViewer';
 import { photoUri } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
+import ResidentChat from '../components/ResidentChat';
 import { findResidentReports, listSavedResidentReports, type ResidentReport, type SavedResidentReport } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 
@@ -31,6 +32,7 @@ export default function ResidentLookup() {
   const [results, setResults] = useState<ResidentReport[] | null>(null);
   const [searching, setSearching] = useState(false);
   const [saved, setSaved] = useState<SavedResidentReport[]>([]);
+  const [chatFor, setChatFor] = useState<{ complaintNo: string; statusToken: string } | null>(null);
   useEffect(() => { listSavedResidentReports().then(setSaved).catch(() => undefined); }, []);
 
   async function onLookup() {
@@ -45,6 +47,7 @@ export default function ResidentLookup() {
     try {
       const found = await findResidentReports(complaintNo.trim(), savedReport?.statusToken || '');
       setResults(found);
+      setChatFor(savedReport?.statusToken ? { complaintNo: complaintNo.trim().toUpperCase(), statusToken: savedReport.statusToken } : null);
     } catch (e: any) {
       Alert.alert('Lookup failed', e?.message ?? 'Could not look up reports.');
     } finally {
@@ -146,6 +149,7 @@ export default function ResidentLookup() {
           )}
         </View>
       ))}
+    {results !== null && results.length > 0 && !!chatFor && <ResidentChat complaintNo={chatFor.complaintNo} statusToken={chatFor.statusToken} />}
     <PhotoViewer uri={viewerUri} onClose={() => setViewerUri(null)} />
     </ScrollView>
     </KeyboardAvoidingView>

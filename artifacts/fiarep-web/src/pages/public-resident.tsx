@@ -23,6 +23,7 @@ import { ArrowLeft, LogOut } from 'lucide-react';
 import { customFetch } from '@workspace/api-client-react';
 import { useLocation } from 'wouter';
 import { clearStoredPersona, getStoredPersona, lockPersona } from '@/lib/access-policy';
+import { ResidentChat, rememberResidentToken } from '@/components/resident-chat';
 
 const reportSchema = z.object({
   development: z.string().min(1, 'Development is required'),
@@ -216,6 +217,7 @@ export default function PublicResident() {
         
         sessionStorage.setItem('fiarep_resident_complaint', returnedComplaintNo);
         sessionStorage.setItem('fiarep_resident_token', res.statusToken);
+        rememberResidentToken(returnedComplaintNo, res.statusToken);
         // Signed in: the website is now locked to this resident.
         lockPersona('resident');
         setLocked(true);
@@ -524,6 +526,8 @@ export default function PublicResident() {
                   />
                 </div>
               )}
+
+              <ResidentChat complaintNo={String(statusResult.complaintNo)} />
 
               {statusResult.updates && statusResult.updates.length > 0 && (
                 <div>

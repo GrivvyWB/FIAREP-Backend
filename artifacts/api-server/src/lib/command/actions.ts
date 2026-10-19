@@ -19,7 +19,8 @@ import { recentAudit } from "./audit";
 import { notify } from "../audit";
 import type { Actor } from "../auth";
 
-import { bookingView, bookingsOn, createBooking, findMember, findSlot, nyDate, nyLabel, nyTime, staffBookings } from "./scheduling";
+import { bookingView, bookingsOn, createBooking, findMember, findSlot, nyDate, nyLabel, nyTime, staffBookings, type Slot } from "./scheduling";
+import { staffAccounts } from "@workspace/db";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -125,6 +126,14 @@ function parseWhen(v: unknown): Date | undefined {
   if (!m) return undefined;
   return nyTime(m[1]!, m[2] ? `${m[2].padStart(2, "0")}:${m[3]}` : "00:00");
 }
+/** Members who can be sent to jobs; with a trade, only those whose title matches it ("plumb" matches Plumber, Plumbing Supervisor). */
+async function membersFor(tenantId: string, trade: string) {
+  const all = await db.select({ id: staffAccounts.id, name: staffAccounts.name, position: staffAccounts.position, role: staffAccounts.role }).from(staffAccounts)
+    .where(and(eq(staffAccounts.tenantId, tenantId), eq(staffAccounts.status, "approved")));
+  const field = all.filter((s) => !["resident", "vendor", "procurement", "human_resources"].includes(String(s.role)));
+  const t = trade.trim().toLowerCase().replace(/(ers?|ing|s)$/, "");
+  return (t ? field.filter((s) => String(s.position ?? "").toLowerCase().includes(t)) : field).map((s) => ({ id: s.id, name: s.name, position: s.position ?? "" }));
+}
 /** Who notifications from the Command Center come from, inside the organization. */
 const commandActor = (ctx: ActionContext): Actor => ({ id: ctx.staffId, tenantId: ctx.tenantId, name: ctx.actorName, role: "administrator", position: "", developments: [], sessionVersion: 0 });
 
@@ -183,11 +192,11 @@ export const ACTIONS: ActionDef[] = [
   {
     name: "list_work_orders", label: "List work orders", risk: "read", confirmDefault: false, target: "server",
     description: "List work orders prepared from violation alerts, by status (draft = waiting for approval).",
-    schema: { type: "object", properties: { status: { type: "string", enum: ["draft", "approved", "rejected", "any"] } }, additionalProperties: false },
+    schema: { type: "object", properties: { status: { type: "string", enum: ["draft", "approved", "rejected", "assigned", "any"] } }, additionalProperties: false },
     run: async (p, ctx) => {
       const status = str(p["status"], 20) || "draft";
       const rows = await db.select().from(commandWorkOrders).where(and(workOrdersOf(ctx.tenantId), status === "any" ? sql`true` : eq(commandWorkOrders.status, status))).orderBy(desc(commandWorkOrders.createdAt)).limit(100);
-      return rows.map((w) => ({ id: w.id, status: w.status, urgency: w.urgency, address: w.address, kind: w.kind, title: w.title, createdAt: w.createdAt }));
+      return rows.map((w) => ({ id: w.id, status: w.status, urgency: w.urgency, address: w.address, kind: w.kind, title: w.title, assignedTo: w.assignedName ?? undefined, createdAt: w.createdAt }));
     },
     describe: () => "List work orders",
   },
@@ -338,6 +347,68 @@ export const ACTIONS: ActionDef[] = [
     },
     describe: (p) => `Cancel booking ${str(p["bookingId"], 12)}…`,
     spoken: (r) => { const x = r as { cancelled?: { member: string; when: string }; error?: string }; return x.error ?? `Cancelled ${x.cancelled!.member}'s job ${x.cancelled!.when}.`; },
+  },
+  {
+    name: "find_members", label: "Members who can do a trade", risk: "read", confirmDefault: false, target: "server",
+    description: "List members of this organization, optionally only those whose title matches a trade (e.g. Plumber, Electrician, Painter), with their next free time for a job at an address if one is given.",
+    schema: { type: "object", properties: { trade: { type: "string" }, address: { type: "string" }, minutes: { type: "integer", minimum: 15, maximum: 720 } }, additionalProperties: false },
+    run: async (p, ctx) => {
+      const list = await membersFor(ctx.tenantId, str(p["trade"], 60));
+      const address = str(p["address"], 300);
+      const out = [];
+      for (const m of list.slice(0, 15)) {
+        const r = address ? await findSlot(ctx.tenantId, m.id, { address, minutes: p["minutes"] === undefined ? undefined : num(p["minutes"], 120, 15, 720) }) : null;
+        out.push({ name: m.name, title: m.position, nextFree: r?.slot ? nyLabel(r.slot.startAt) : address ? "nothing in 3 weeks" : undefined });
+      }
+      return { trade: str(p["trade"], 60) || "any", members: out };
+    },
+    describe: (p) => `Members${str(p["trade"]) ? ` (${str(p["trade"])})` : ""}`,
+  },
+  {
+    name: "assign_work_order", label: "Assign a work order to a member", risk: "write", confirmDefault: true, target: "server",
+    description: "Assign an approved (or draft) work order: to the named member, or — with a trade — to whichever member with that trade is free soonest. Books it on their calendar (no double booking, drive time counted) and notifies them. Approves a draft at the same time.",
+    schema: { type: "object", properties: {
+      workOrderId: { type: "string" }, member: { type: "string" }, trade: { type: "string" },
+      minutes: { type: "integer", minimum: 15, maximum: 720 }, start: { type: "string" }, after: { type: "string" }, apartments: { type: "array", items: { type: "string" } },
+    }, required: ["workOrderId"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const [w] = await db.select().from(commandWorkOrders).where(and(eq(commandWorkOrders.id, str(p["workOrderId"], 80)), workOrdersOf(ctx.tenantId))).limit(1);
+      if (!w) return { error: "No work order with that id." };
+      if (w.status === "rejected") return { error: "That work order was rejected." };
+      if (w.status === "assigned") return { error: `Already assigned to ${w.assignedName}.` };
+      const address = [w.address, w.borough].filter(Boolean).join(", ");
+      const apartments = strList(p["apartments"], 50).length ? strList(p["apartments"], 50) : (/Apt\s+([\w-]+)/i.exec(`${w.title} ${w.detail}`)?.[1] ? [/Apt\s+([\w-]+)/i.exec(`${w.title} ${w.detail}`)![1]!] : []);
+      const opts = { address, apartments, minutes: p["minutes"] === undefined ? undefined : num(p["minutes"], 120, 15, 720), at: parseWhen(p["start"]), after: parseWhen(p["after"]) };
+      let pick: { m: { id: string; name: string }; slot: Slot; wholeDay: boolean } | null = null;
+      if (str(p["member"], 80)) {
+        const m = await findMember(ctx.tenantId, str(p["member"], 80));
+        if ("error" in m) return m;
+        const r = await findSlot(ctx.tenantId, m.id, opts);
+        if (!r.slot) return { error: `${m.name} has no free time${opts.at ? " then" : " in the next 3 weeks"}.` };
+        pick = { m, slot: r.slot, wholeDay: r.wholeDay };
+      } else {
+        const trade = str(p["trade"], 60);
+        if (!trade) return { error: "Say who should do it, or which trade." };
+        const list = await membersFor(ctx.tenantId, trade);
+        if (!list.length) return { error: `No member's title matches "${trade}".` };
+        for (const m of list.slice(0, 25)) {
+          const r = await findSlot(ctx.tenantId, m.id, opts);
+          if (r.slot && (!pick || r.slot.startAt < pick.slot.startAt)) pick = { m, slot: r.slot, wholeDay: r.wholeDay };
+        }
+        if (!pick) return { error: `No ${trade} is free${opts.at ? " then" : " in the next 3 weeks"}.` };
+      }
+      const b = await createBooking(ctx.tenantId, pick.m, { title: `${w.kind}: ${w.title}`.slice(0, 200), address, apartments, slot: pick.slot, wholeDay: pick.wholeDay, sourceEntity: "command-work-order", sourceId: w.id, note: w.detail, createdBy: ctx.actorName });
+      if ("error" in b) return b;
+      await db.update(commandWorkOrders).set({ status: "assigned", assignedStaffId: pick.m.id, assignedName: pick.m.name, bookingId: b.id, decidedBy: w.decidedBy ?? ctx.actorName, decidedAt: w.decidedAt ?? new Date() }).where(eq(commandWorkOrders.id, w.id));
+      await notify(commandActor(ctx), pick.m.id, `New job: ${w.urgency === "urgent" ? "URGENT — " : ""}${w.title}`, `${nyLabel(b.startAt)} at ${address}${apartments.length ? ` (${apartments.join(", ")})` : ""} · ${w.kind}`, b.id).catch(() => undefined);
+      return { assigned: pick.m.name, booked: bookingView(b), driveFromPreviousJob: pick.slot.travelDetail, workOrder: { id: w.id, address, title: w.title } };
+    },
+    describe: (p) => `Assign work order ${str(p["workOrderId"], 12)}… to ${str(p["member"]) || `the first free ${str(p["trade"]) || "member"}`}`,
+    describeLive: async (p, ctx) => {
+      const [w] = await db.select().from(commandWorkOrders).where(and(eq(commandWorkOrders.id, str(p["workOrderId"], 80)), workOrdersOf(ctx.tenantId))).limit(1);
+      return w ? `Assign ${w.address} · ${w.title} to ${str(p["member"]) || `the first free ${str(p["trade"]) || "member"}`}` : null;
+    },
+    spoken: (r) => { const x = r as { assigned?: string; booked?: { when: string }; error?: string }; return x.error ?? `Assigned to ${x.assigned}, ${x.booked!.when}. They've been notified.`; },
   },
   // ── Desktop agent (Windows, Mac or Linux) ───────────────────────────────
   {

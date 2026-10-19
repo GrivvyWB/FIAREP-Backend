@@ -160,6 +160,39 @@ async function runTool(name: string, input: Record<string, unknown>, ctx: Action
   return { content: text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}… (truncated)` : text, isError: false };
 }
 
+/** One conversation turn with whichever engine is on (Claude or Gemini), with a given set of tools.
+ *  Used by the resident chat: its own tools and prompt, the organization's engine, usage and cap. */
+export async function modelTurn(opts: {
+  tenantId: string; system: string; tools: Array<{ name: string; description: string; input_schema: Record<string, unknown> }>;
+  history: Array<{ role: "user" | "assistant"; content: string }>; text: string; usage: Record<string, number>;
+  runTool: (name: string, input: Record<string, unknown>) => Promise<{ content: string; isError: boolean }>;
+}): Promise<{ reply: string; model: string }> {
+  const switches = await effectiveSwitches(opts.tenantId);
+  const gemini = switches.provider === "gemini";
+  const model = gemini ? switches.geminiModel : switches.model;
+  if (gemini) {
+    const reply = await geminiLoop({ model, system: opts.system, tools: opts.tools, history: opts.history, text: opts.text, maxTurns: MAX_TURNS, usage: opts.usage, runTool: opts.runTool });
+    return { reply, model };
+  }
+  const messages: Msg[] = [...opts.history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: opts.text }];
+  let reply = "";
+  for (let turn = 0; turn < MAX_TURNS; turn += 1) {
+    const res = await callClaude(model, opts.system, opts.tools, messages);
+    for (const [k, v] of Object.entries(res.usage ?? {})) if (typeof v === "number") opts.usage[k] = (opts.usage[k] ?? 0) + v;
+    const content = res.content ?? [];
+    reply = content.filter((b) => b.type === "text").map((b) => String(b["text"] ?? "")).join("\n").trim() || reply;
+    if (res.stop_reason !== "tool_use") break;
+    messages.push({ role: "assistant", content });
+    const results: Block[] = [];
+    for (const block of content.filter((b) => b.type === "tool_use")) {
+      const out = await opts.runTool(String(block["name"]), (block["input"] && typeof block["input"] === "object" ? block["input"] : {}) as Record<string, unknown>);
+      results.push({ type: "tool_result", tool_use_id: String(block["id"]), content: out.content, ...(out.isError ? { is_error: true } : {}) });
+    }
+    messages.push({ role: "user", content: results });
+  }
+  return { reply, model };
+}
+
 /** A client over its monthly cap (Platform Control → Command Center → Clients) can't run commands until next month. */
 export async function capProblem(tenantId: string): Promise<string | null> {
   if (isPlatform(tenantId)) return null;
