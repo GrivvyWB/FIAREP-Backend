@@ -158,7 +158,9 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
       const lines = full.body.split("\n").map((l) => l.startsWith("# ") ? `<h2>${esc(l.slice(2))}</h2>` : l.startsWith("- ") ? `<li>${esc(l.slice(2))}</li>` : l.trim() ? `<p>${esc(l)}</p>` : "").join("");
       const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(full.title)}</title><style>body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#0f172a;line-height:1.5}h1{font-size:24px;margin:0}h2{font-size:17px;margin:22px 0 6px}.m{color:#64748b;font-size:13px;margin:4px 0 20px}li{margin-left:18px}@media print{button{display:none}}</style></head><body><button onclick="print()">Print</button><h1>${esc(full.title)}</h1><p class="m">${esc(full.createdBy)} · ${new Date(full.createdAt).toLocaleString()}</p>${lines}</body></html>`;
-      if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+      // Contracts are saved as the finished page (built by FIAREP from the pricing ladder); print it from the browser.
+      const page = full.body.startsWith("<!doctype html>") ? full.body : html;
+      if (w) { w.document.open(); w.document.write(page); w.document.close(); }
     } catch (err) { w?.close(); fail("Could not open the report")(err); }
   }
 

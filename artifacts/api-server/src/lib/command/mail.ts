@@ -267,7 +267,7 @@ export async function attachmentFor(tenantId: string, ref: string): Promise<Atta
   const lines = (t: string) => t.split("\n").map((l) => l.startsWith("# ") ? `<h2>${esc(l.slice(2))}</h2>` : l.startsWith("- ") ? `<li>${esc(l.slice(2))}</li>` : l.trim() ? `<p>${esc(l)}</p>` : "").join("");
   const byTitle = /^[0-9a-f-]{36}$/i.test(r) ? null : (await listReports(tenantId, 200)).find((x) => x.title.toLowerCase() === r.toLowerCase());
   const rep = await getReport(tenantId, byTitle?.id ?? r).catch(() => null);
-  if (rep) return { name: `${rep.title.replace(/[^\w .-]+/g, "").slice(0, 60) || "Report"}.html`, html: page(rep.title, lines(rep.body)) };
+  if (rep) return { name: `${rep.title.replace(/[^\w .-]+/g, "").slice(0, 60) || "Report"}.html`, html: rep.body.startsWith("<!doctype html>") ? rep.body : page(rep.title, lines(rep.body)) };
   const sc = await findScope(tenantId, r);
   if (sc) {
     const st = sc.state;

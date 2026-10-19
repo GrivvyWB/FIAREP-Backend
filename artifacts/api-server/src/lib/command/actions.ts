@@ -25,6 +25,7 @@ import { residentPhotoToWorkOrder } from "./photoWorkOrder";
 import { notifyResident } from "../residentNotify";
 import { attachmentFor, findContacts, mailStatus, readEmail, readInbox, resolveRecipients, saveContact, sendEmail } from "./mail";
 import { createScope, listContractors, listReports, listScopes, saveReport, sendScope, findScope } from "./scopes";
+import { createContract, quotePlans, type ContractRequest } from "./sales";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -491,7 +492,7 @@ export const ACTIONS: ActionDef[] = [
     name: "write_report", label: "Write a report", risk: "write", confirmDefault: false, target: "server",
     description: "Save a report you wrote (from what the other actions returned: alerts, complaints, work orders, schedules, scopes) so it can be opened and printed from the Command Center page. Plain text; use lines starting with '# ' for headings and '- ' for list items.",
     schema: { type: "object", properties: { title: { type: "string" }, body: { type: "string" } }, required: ["title", "body"], additionalProperties: false },
-    run: async (p, ctx) => saveReport(ctx.tenantId, str(p["title"], 200), typeof p["body"] === "string" ? p["body"] : "", ctx.actorName, ctx.runId),
+    run: async (p, ctx) => saveReport(ctx.tenantId, str(p["title"], 200), typeof p["body"] === "string" ? p["body"].replace(/^\s*</, "‹") : "", ctx.actorName, ctx.runId), // only contracts are saved as pages
     describe: (p) => `Save the report "${str(p["title"], 120)}"`,
     spoken: (r) => { const x = r as { title?: string }; return `Report saved: ${x.title}. It's on the Command Center page.`; },
   },
@@ -501,6 +502,26 @@ export const ACTIONS: ActionDef[] = [
     schema: { type: "object", properties: {}, additionalProperties: false },
     run: async (_p, ctx) => ({ reports: await listReports(ctx.tenantId, 30) }),
     describe: () => "Saved reports",
+  },
+  // ── Sales: plan prices and contracts (FIAREP's own Command Center) ─────
+  {
+    name: "quote_plans", label: "Price the platform and the FIAREP plan", risk: "read", confirmDefault: false, target: "server", platformOnly: true,
+    description: "What a client with N units would pay each month: the platform only (plus setup) and the FIAREP plan (full service), from the owner's pricing ladder, plus the pilot prices. Use for \"XYZ has 475 units, how much for the platform / a plan?\". Say the monthly numbers (and setup), then ask: \"Would you like me to create a contract and send it over?\" If a rate isn't set, say so — never make up a price.",
+    schema: { type: "object", properties: { units: { type: "number" }, company: { type: "string" } }, required: ["units"], additionalProperties: false },
+    run: async (p) => quotePlans(Number(p["units"])),
+    describe: (p) => `Price ${Number(p["units"]) || "?"} units${str(p["company"]) ? ` for ${str(p["company"], 80)}` : ""}`,
+  },
+  {
+    name: "create_contract", label: "Create a contract", risk: "write", confirmDefault: false, target: "server", platformOnly: true,
+    description: "Create the FIAREP service agreement (the same one Platform Control's contract builder makes) for the platform or the FIAREP plan, priced from the pricing ladder, and save it so it can be opened, printed and emailed. Ask for anything missing first: company, who signs (name and title), their email, plan (platform or fiarep), units, pilot yes/no. Then to send it: send_email with attach set to the contract's title.",
+    schema: { type: "object", properties: {
+      kind: { type: "string", enum: ["platform", "fiarep"] }, company: { type: "string" }, contact: { type: "string" }, title: { type: "string" }, email: { type: "string" }, phone: { type: "string" }, address: { type: "string" },
+      units: { type: "number" }, buildings: { type: "array", maxItems: 200, items: { type: "object", properties: { name: { type: "string" }, address: { type: "string" }, units: { type: "number" } }, additionalProperties: false } },
+      startDate: { type: "string", description: "YYYY-MM-DD; today if not given" }, termMonths: { type: "number" }, pilot: { type: "boolean" }, notes: { type: "string" },
+    }, required: ["kind", "company", "contact", "units"], additionalProperties: false },
+    run: async (p, ctx) => createContract(ctx.tenantId, p as unknown as ContractRequest, ctx.actorName, ctx.runId),
+    describe: (p) => `Create a ${str(p["kind"]) === "platform" ? "platform" : "FIAREP plan"} contract for ${str(p["company"], 80)} (${Number(p["units"]) || "?"} units)`,
+    spoken: (r) => { const x = r as { title?: string; monthly?: number; error?: string }; return x.error ?? `Contract ready: ${x.title}, $${x.monthly?.toLocaleString("en-US")} a month.`; },
   },
   // ── Email ───────────────────────────────────────────────────────────────
   {
