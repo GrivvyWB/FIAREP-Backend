@@ -31,6 +31,7 @@ FIAREP_EXPO_API_DOMAIN = "fiarep.com"
 
 [userenv.shared]
 FIAREP_PLATFORM_OWNER_NAME = "FIAREP Platform Owner"
+RELAY_URL = "https://fiarep-relay.timlwinn0.workers.dev"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-d0d51f06-5a7d-472d-8e7b-d71c48379baa"
