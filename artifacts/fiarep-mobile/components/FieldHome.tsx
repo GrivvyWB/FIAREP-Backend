@@ -81,15 +81,19 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections,
   const colW = (n: number) => Math.floor((width - pad * 2 - gap * (n - 1)) / n);
   const heroColor = '#3B9BFF';
   const bannerIcon = icon || iconFor(title);
+  // Header skyline: the whole picture, below the status bar, anchored bottom-right (not zoomed in).
+  const [bannerH, setBannerH] = React.useState(0);
+  const imgTop = topGap && Platform.OS === 'ios' ? 40 : 0;
+  const imgH = Math.max(0, bannerH - imgTop);
   const sub = tagline ?? taglineFor(title);
   const live = sections.filter((s) => s.tiles.length > 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
       <ScrollView contentContainerStyle={{ paddingBottom: tabs.length ? 96 : 32 }} showsVerticalScrollIndicator={false}>
-        <View style={st.banner}>
+        <View style={st.banner} onLayout={(e) => setBannerH(e.nativeEvent.layout.height)}>
           <LinearGradient colors={['#06204F', '#03102A', '#03101F']} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={StyleSheet.absoluteFill} />
-          <Image source={HEADER_IMG} resizeMode="cover" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: width * 0.55, opacity: 1 }} />
+          {imgH > 0 ? <Image source={HEADER_IMG} resizeMode="stretch" style={{ position: 'absolute', right: 0, top: imgTop, height: imgH, width: imgH * 900 / 210, opacity: 1 }} /> : null}
           <LinearGradient colors={['#03102A', '#03102A00']} start={{ x: 0.45, y: 0 }} end={{ x: 0.56, y: 0 }} style={StyleSheet.absoluteFill} />
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: pad, paddingTop: topGap ? (Platform.OS === 'ios' ? 56 : 28) : 18, paddingBottom: 22 }}>
             <MaterialCommunityIcons name={bannerIcon as never} size={60} color="#3B9BFF" style={{ textShadowColor: '#3B9BFF', textShadowRadius: 14 }} />

@@ -576,6 +576,13 @@ export const ACTIONS: ActionDef[] = [
     describe: (p) => `Read ${str(p["path"])}`,
   },
   {
+    name: "desktop_send_file", label: "Send a file from the computer to the phone", risk: "read", confirmDefault: false, target: "agent",
+    description: "Send any file (PDF, picture, Word, Excel… up to 25 MB) from the computer to the person, e.g. \"send me the resident flyer\". Find it first with desktop_list_folder. The result has a private link that opens the file on the phone for 24 hours; give the link in your reply.",
+    schema: { type: "object", properties: { ...agentProp, path: { type: "string" } }, required: ["path"], additionalProperties: false },
+    describe: (p) => `Send ${str(p["path"]).split(/[\\/]/).pop() || "a file"} to the phone`,
+    spoken: (r) => { const x = r as { name?: string; url?: string }; return x?.url ? `Here's ${x.name} — tap Open file.` : "The file didn't come through — check the result."; },
+  },
+  {
     name: "desktop_open_app", label: "Open an app on the computer", risk: "write", confirmDefault: true, target: "agent",
     description: "Open an application on the computer. Only apps listed in the agent's config.",
     schema: { type: "object", properties: { ...agentProp, app: { type: "string" } }, required: ["app"], additionalProperties: false },

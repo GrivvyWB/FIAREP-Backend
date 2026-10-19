@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync, statS
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "1.1.0";
+const VERSION = "1.2.0";
 const WIN = process.platform === "win32";
 const args = process.argv.slice(2);
 const argValue = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
@@ -142,6 +142,21 @@ function readFile(cfg, p) {
   return { path: real, size: st.size, truncated: st.size > buf.length, text: buf.toString("utf8") };
 }
 
+// Send a file to the phone: uploaded to FIAREP, opened from a private 24-hour link.
+async function sendFile(cfg, p, jobId) {
+  const real = insideAllowed(cfg, p);
+  const st = statSync(real);
+  if (!st.isFile()) throw new Error("That is a folder, not a file.");
+  if (st.size > 25 * 1024 * 1024) throw new Error("That file is over 25 MB.");
+  const res = await fetch(`${cfg.apiBase}/v1/command/agent/files?job=${encodeURIComponent(jobId)}&name=${encodeURIComponent(path.basename(real))}`, {
+    method: "POST", headers: { authorization: `Bearer ${cfg.token}`, "content-type": "application/octet-stream", "user-agent": `fiarep-agent/${VERSION}` },
+    body: readFileSync(real), signal: AbortSignal.timeout(120_000),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Upload failed (HTTP ${res.status})`);
+  return { name: data.name, size: data.size, url: data.url };
+}
+
 // Apps are named in the config. Mac: the app's name ("Microsoft Excel").
 // Windows: what you'd type in Start → Run ("excel", "winword", "outlook", "explorer", or a full path to an .exe).
 // Linux: the program's command ("libreoffice", "firefox").
@@ -208,6 +223,7 @@ async function handle(cfg, job) {
       case "desktop_status": return { ok: true, output: await status(cfg) };
       case "desktop_list_folder": return { ok: true, output: listFolder(cfg, job.params.path) };
       case "desktop_read_file": return { ok: true, output: readFile(cfg, job.params.path) };
+      case "desktop_send_file": return { ok: true, output: await sendFile(cfg, job.params.path, job.id) };
       case "desktop_open_app": { const o = await openApp(cfg, String(job.params.app)); return { ok: o.ok, output: o, error: o.ok ? undefined : "open failed" }; }
       case "desktop_run_task": { const o = await runTask(cfg, String(job.params.task), job.params.params); return { ok: o.ok, output: o, error: o.ok ? undefined : o.error || (o.timedOut ? "timed out" : `exit code ${o.exitCode}`) }; }
       default: return { ok: false, error: `This agent does not know "${job.action}".` };

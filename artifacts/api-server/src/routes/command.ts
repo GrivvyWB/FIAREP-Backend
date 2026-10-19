@@ -31,6 +31,7 @@ import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/age
 import { relayUrl, syncRelayDevices } from "../lib/command/relay";
 import { getReport, listReports } from "../lib/command/scopes";
 import { connectMailbox, disconnectMailbox, mailStatus, presetFor } from "../lib/command/mail";
+import { loadFile, MAX_FILE_BYTES, saveFile } from "../lib/command/files";
 
 const router: IRouter = Router();
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -322,6 +323,29 @@ router.post("/v1/command/agent/jobs/:id/result", requireAgent, async (req, res) 
     void pushToStaff(row.staffId, ok ? `Done on ${agent.name}: ${row.summary}` : `Failed on ${agent.name}: ${row.summary}`, view.spoken ?? row.error ?? "");
   }
   res.json({ ok: true });
+});
+
+// A file the computer sends to the phone (desktop_send_file): the raw bytes come up here,
+// the phone opens them from the private link in the result (24 hours).
+router.post("/v1/command/agent/files", rateLimit("command-agent-files", 30), requireAgent, async (req, res) => {
+  const agent = res.locals["agent"] as Agent;
+  const body = req.body;
+  if (!Buffer.isBuffer(body) || !body.length) { res.status(400).json({ error: "No file" }); return; }
+  if (body.length > MAX_FILE_BYTES) { res.status(413).json({ error: "Over 25 MB" }); return; }
+  const [job] = await db.select().from(commandActions).where(and(eq(commandActions.id, str(req.query["job"], 80)), eq(commandActions.target, agent.id), eq(commandActions.status, "running"), eq(commandActions.action, "desktop_send_file"))).limit(1);
+  if (!job) { res.status(404).json({ error: "No running send-file job with that id for this agent" }); return; }
+  const f = await saveFile({ tenantId: agent.tenantId, agentId: agent.id, actionId: job.id, name: str(req.query["name"], 200) || "file", data: body });
+  res.json({ name: f.name, size: f.size, url: `${publicApiBase(req)}/v1/command/files/${f.id}?k=${f.key}` });
+});
+
+router.get("/v1/command/files/:id", async (req, res) => {
+  const f = await loadFile(String(req.params["id"]), str(req.query["k"], 100));
+  if (!f) { res.status(404).type("text/plain").send("This link has expired. Ask the Command Center for the file again."); return; }
+  res.setHeader("Content-Type", f.mime);
+  res.setHeader("Content-Disposition", `inline; filename="${f.name.replace(/"/g, "")}"`);
+  res.setHeader("Cache-Control", "private, no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.send(f.data);
 });
 
 // ── Shared by Platform Control and each client's control panel ─────────────

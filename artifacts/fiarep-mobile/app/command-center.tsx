@@ -213,6 +213,11 @@ export default function CommandCenter() {
         <Text style={{ fontSize: 13, flex: 1 }} numberOfLines={1}>{a.summary}</Text>
         <Text style={{ color: '#999' }}>{open[a.id] ? '▾' : '▸'}</Text>
       </View>
+      {typeof (a.result as { url?: unknown } | null)?.url === 'string' && /^https:\/\//.test((a.result as { url: string }).url) && (
+        <Pressable style={[ui.btn, { marginTop: 6 }]} onPress={() => void Linking.openURL((a.result as { url: string }).url)}>
+          <Text style={ui.btnText}>Open file{(a.result as { name?: string }).name ? ` · ${(a.result as { name?: string }).name}` : ''}</Text>
+        </Pressable>
+      )}
       {open[a.id] && (
         <Text selectable style={{ fontFamily: 'Menlo', fontSize: 11, color: '#333', marginTop: 4 }}>
           {a.error ? `Error: ${a.error}\n` : ''}{JSON.stringify(a.result ?? a.params, null, 1).slice(0, 3000)}

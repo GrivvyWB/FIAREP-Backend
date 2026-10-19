@@ -42,6 +42,8 @@ app.use("/api/v1/measurements", express.json({ limit: "4mb" }));
 app.use("/api/v1/public/vendor-scopes", express.json({ limit: "12mb" }));
 // An apartment visit carries the door photo for reading the apartment number.
 app.use("/api/v1/site-checkins", express.json({ limit: "15mb" }));
+// Command Center: a file a computer sends to the phone comes up as raw bytes (up to 25 MB).
+app.use("/api/v1/command/agent/files", express.raw({ type: () => true, limit: "25mb" }));
 // Command Center: keep the exact body bytes — each phone request is signed over them.
 app.use("/api/v1/command", express.json({
   limit: "256kb",
