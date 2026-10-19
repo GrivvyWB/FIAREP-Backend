@@ -33,6 +33,29 @@ const cfg = { ...fileCfg, ...(fileCfg.sites?.[SITE] || {}) };
 if (!fileCfg.sites?.[SITE]?.deploymentUrl && SITE !== "FIAREP") delete cfg.deploymentUrl;
 mkdirSync(PROFILE, { recursive: true });
 
+// Moving to another computer (e.g. the always-on server): copy the Replit sign-in.
+//   node republish.mjs --export-session FILE   on the computer already signed in
+//   node republish.mjs --import-session FILE   on the new one
+const argAfter = (flag) => { const i = process.argv.indexOf(flag); return i > 0 ? process.argv[i + 1] : null; };
+const exportTo = argAfter("--export-session"), importFrom = argAfter("--import-session");
+if (exportTo || importFrom) {
+  const ctx = await chromium.launchPersistentContext(PROFILE, { headless: true, executablePath: cfg.browserPath || undefined });
+  if (exportTo) {
+    const cookies = (await ctx.cookies()).filter((c) => /(^|\.)replit\.com$/.test(c.domain.replace(/^\./, "")));
+    writeFileSync(exportTo, JSON.stringify({ cookies }), { mode: 0o600 });
+    console.log(`Saved ${cookies.length} Replit sign-in cookies.`);
+  } else {
+    const keep = Math.floor(Date.now() / 1000) + 30 * 86_400; // session-only cookies would vanish when the browser closes
+    const cookies = (JSON.parse(readFileSync(importFrom, "utf8")).cookies || [])
+      .filter((c) => /(^|\.)replit\.com$/.test(String(c.domain).replace(/^\./, "")))
+      .map((c) => (c.expires > 0 ? c : { ...c, expires: keep }));
+    await ctx.addCookies(cookies);
+    console.log(`Loaded ${cookies.length} Replit sign-in cookies.`);
+  }
+  await ctx.close();
+  process.exit(0);
+}
+
 if (mode === "login") {
   const ctx = await chromium.launchPersistentContext(PROFILE, { headless: false, viewport: null, executablePath: cfg.browserPath || undefined });
   const page = ctx.pages()[0] || (await ctx.newPage());
