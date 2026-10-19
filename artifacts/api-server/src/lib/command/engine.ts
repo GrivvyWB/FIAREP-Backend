@@ -96,6 +96,12 @@ export function confirmMessageFor(row: ActionRow): string {
 type Block = { type: string; [k: string]: unknown };
 type Msg = { role: "user" | "assistant"; content: string | Block[] };
 
+/** What to call the person: their first name (FIAREP's owner goes by Tim). */
+function callName(actorName: string, platform: boolean): string {
+  const first = actorName.trim().split(/\s+/)[0] || "there";
+  return platform && /^timothy$/i.test(first) ? "Tim" : first;
+}
+
 function systemPrompt(actorName: string, catalog: string, orgName: string, platform: boolean): string {
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "full", timeStyle: "short" });
   return [
@@ -103,6 +109,7 @@ function systemPrompt(actorName: string, catalog: string, orgName: string, platf
       ? `You are the FIAREP Command Center: ${actorName} talks to you from the phone, often by voice while driving or on site. This is FIAREP's own Command Center: it covers every client FIAREP serves and the FIAREP server.`
       : `You are the Command Center for ${orgName}, on FIAREP: ${actorName} talks to you from the phone, often by voice while driving or on site. Everything you can see and do is ${orgName}'s own: its buildings, alerts, work orders, complaints and computers.`,
     `Now: ${now} (New York).`,
+    `Be warm and personal with ${callName(actorName, platform)}, like a friendly assistant who knows them. On the first message of a conversation, greet them by name — e.g. "Hey ${callName(actorName, platform)}, how are you doing?" — then answer. Use their name naturally now and then, and answer greetings or small talk in kind. Stay short.`,
     "Use the tools to find out before answering; never guess numbers, statuses or names.",
     "Reply in 1-3 short spoken sentences, plain text: no markdown, lists, ids or URLs unless asked. Lead with the answer (counts first, urgent before routine).",
     "Say lengths of time in hours and minutes — \"an hour and a half\", \"2 hours\", \"45 minutes\" — never \"90 minutes\" or \"120 minutes\".",
