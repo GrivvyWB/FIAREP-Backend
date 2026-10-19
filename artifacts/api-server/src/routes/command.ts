@@ -29,6 +29,7 @@ import { entityRecords } from "@workspace/db";
 import { checkKey, geminiKeyStatus, KEY_ENV, keyStatus, saveKey, type KeyName } from "../lib/command/keys";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
 import { relayUrl, syncRelayDevices } from "../lib/command/relay";
+import { getReport, listReports } from "../lib/command/scopes";
 
 const router: IRouter = Router();
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -664,6 +665,17 @@ for (const prefix of ["/v1/platform/command", "/v1/org/command"]) {
     const next = await staffWrites(row, who, { text: str(b["text"], 2000) || undefined, takeOver: b["takeOver"] === true, giveBack: b["giveBack"] === true });
     await commandAuditLog({ tenantId, actor: who, event: "resident-chat.staff", detail: { complaint: row.state["complaintNo"], replied: !!str(b["text"], 10), takeOver: b["takeOver"] === true, giveBack: b["giveBack"] === true } });
     res.json({ ok: true, human: next.state["chatHuman"] === true });
+  });
+  // Reports the Command Center wrote (write_report).
+  router.get(`${prefix}/reports`, ...guard, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await listReports((await chatScope(req, res))!));
+  });
+  router.get(`${prefix}/reports/:id`, ...guard, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    const r = await getReport((await chatScope(req, res))!, String(req.params["id"]));
+    if (!r) { res.status(404).json({ error: "Unknown report" }); return; }
+    res.json(r);
   });
 }
 

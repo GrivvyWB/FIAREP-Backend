@@ -23,6 +23,7 @@ import { bookingView, bookingsOn, createBooking, findMember, findSlot, hm, nyDat
 import { staffAccounts } from "@workspace/db";
 import { residentPhotoToWorkOrder } from "./photoWorkOrder";
 import { notifyResident } from "../residentNotify";
+import { createScope, listContractors, listScopes, saveReport, sendScope, findScope } from "./scopes";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -436,6 +437,62 @@ export const ACTIONS: ActionDef[] = [
       return w ? `Assign ${w.address} · ${w.title} to ${str(p["member"]) || `the first free ${str(p["trade"]) || "member"}`}` : null;
     },
     spoken: (r) => { const x = r as { assigned?: string; booked?: { when: string }; error?: string }; return x.error ?? `Assigned to ${x.assigned}, ${x.booked!.when}. They've been notified.`; },
+  },
+  // ── Scopes of work, contractors, reports ───────────────────────────────
+  {
+    name: "list_contractors", label: "Contractors on the vendor list", risk: "read", confirmDefault: false, target: "server",
+    description: "The contractors on this organization's vendor list (Procurement → Vendor Contacts): name, company, trade, email. Optionally only one trade.",
+    schema: { type: "object", properties: { trade: { type: "string" } }, additionalProperties: false },
+    run: async (p, ctx) => { const list = await listContractors(ctx.tenantId, str(p["trade"], 60)); return { count: list.length, contractors: list.slice(0, 50) }; },
+    describe: (p) => `Contractors${str(p["trade"]) ? ` (${str(p["trade"])})` : ""}`,
+  },
+  {
+    name: "list_scopes", label: "Scopes of work", risk: "read", confirmDefault: false, target: "server",
+    description: "Scopes of work in Procurement, newest first: code, status (draft, submitted, approved = ready to send, bidding = out to contractors, awarded, closed), address, who wrote it, whether it was emailed. Optionally one status.",
+    schema: { type: "object", properties: { status: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 50 } }, additionalProperties: false },
+    run: async (p, ctx) => ({ scopes: await listScopes(ctx.tenantId, str(p["status"], 30), num(p["limit"], 15, 1, 50)) }),
+    describe: () => "Scopes of work",
+  },
+  {
+    name: "write_scope_of_work", label: "Write a scope of work", risk: "write", confirmDefault: false, target: "server",
+    description: "Write a scope of work for contractors and save it in Procurement, ready to send (nothing is emailed yet). Base it on a work order (workOrderId, from list_work_orders), a resident complaint (complaintNo) or an address and what's wrong. You write: scope = a clear scope for contractors to bid on (the work, where, materials and standard, protection and clean-up, permits if any, what's excluded); lines = the items for contractors to price (title, location, description, no prices). Optional walk-through and bid-close times (YYYY-MM-DDTHH:MM, New York time).",
+    schema: { type: "object", properties: {
+      workOrderId: { type: "string" }, complaintNo: { type: "string" }, address: { type: "string" }, title: { type: "string" },
+      scope: { type: "string" },
+      lines: { type: "array", maxItems: 40, items: { type: "object", properties: { title: { type: "string" }, location: { type: "string" }, description: { type: "string" } }, required: ["title"], additionalProperties: false } },
+      walkthroughAt: { type: "string" }, walkthroughNote: { type: "string" }, bidCloseAt: { type: "string" },
+    }, required: ["scope"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const lines = Array.isArray(p["lines"]) ? (p["lines"] as Array<Record<string, unknown>>).map((l) => ({ title: str(l["title"], 120), location: str(l["location"], 120), description: str(l["description"], 600) })) : [];
+      const when = (v: unknown) => { const d = parseWhen(v); return d ? nyLabel(d) : str(v, 40); };
+      return createScope({ tenantId: ctx.tenantId, byId: ctx.staffId, byName: ctx.actorName, runId: ctx.runId, workOrderId: str(p["workOrderId"], 60) || undefined, complaintNo: str(p["complaintNo"], 20) || undefined,
+        address: str(p["address"], 300), title: str(p["title"], 200), scope: typeof p["scope"] === "string" ? p["scope"] : "", lines,
+        walkthroughAt: p["walkthroughAt"] ? when(p["walkthroughAt"]) : undefined, walkthroughNote: str(p["walkthroughNote"], 300), bidCloseAt: p["bidCloseAt"] ? when(p["bidCloseAt"]) : undefined });
+    },
+    describe: (p) => `Write a scope of work${str(p["complaintNo"]) ? ` for ${str(p["complaintNo"])}` : str(p["address"]) ? ` for ${str(p["address"])}` : ""}`,
+    spoken: (r) => { const x = r as { scope?: { code: string; address: string }; error?: string }; return x.error ?? `Scope ${x.scope!.code} for ${x.scope!.address} is saved in Procurement, ready to send to contractors.`; },
+  },
+  {
+    name: "send_scope_to_contractors", label: "Send a scope to contractors", risk: "write", confirmDefault: true, target: "server",
+    description: "Email a scope of work to contractors (FIAREP's Outlook), the same as Procurement's release: a scope ready to send gets its SR- vendor code and goes to every contractor on the vendor list, or only the ones named (name, company or email). A scope already out for bid goes again to the ones named, or to everyone on the list if none are named. Give the scope's code (sr-12345 / SR-12345) or its complaint number.",
+    schema: { type: "object", properties: { scope: { type: "string" }, contractors: { type: "array", items: { type: "string" }, maxItems: 30 } }, required: ["scope"], additionalProperties: false },
+    run: async (p, ctx) => sendScope(ctx.tenantId, str(p["scope"], 60), strList(p["contractors"], 30), { id: ctx.staffId, name: ctx.actorName, runId: ctx.runId }),
+    describe: (p) => `Send scope ${str(p["scope"], 60)} to ${strList(p["contractors"]).length ? strList(p["contractors"]).join(", ") : "every contractor on the vendor list"}`,
+    describeLive: async (p, ctx) => {
+      const r = await findScope(ctx.tenantId, str(p["scope"], 60)); if (!r) return null;
+      const names = strList(p["contractors"]);
+      const all = names.length ? 0 : (await listContractors(r.tenantId)).length;
+      return `Email scope ${str(r.state["trackingId"], 20)} (${str(r.state["address"], 120)}) to ${names.length ? names.join(", ") : `all ${all} contractors on the vendor list`}`;
+    },
+    spoken: (r) => { const x = r as { code?: string; emailed?: number; failed?: number; emailError?: string; error?: string }; return x.error ?? (x.emailError ? `Scope ${x.code} is out for bid, but email isn't working: ${x.emailError}.` : `Scope ${x.code} sent to ${x.emailed} contractor${x.emailed === 1 ? "" : "s"}${x.failed ? `; ${x.failed} didn't go through` : ""}.`); },
+  },
+  {
+    name: "write_report", label: "Write a report", risk: "write", confirmDefault: false, target: "server",
+    description: "Save a report you wrote (from what the other actions returned: alerts, complaints, work orders, schedules, scopes) so it can be opened and printed from the Command Center page. Plain text; use lines starting with '# ' for headings and '- ' for list items.",
+    schema: { type: "object", properties: { title: { type: "string" }, body: { type: "string" } }, required: ["title", "body"], additionalProperties: false },
+    run: async (p, ctx) => saveReport(ctx.tenantId, str(p["title"], 200), typeof p["body"] === "string" ? p["body"] : "", ctx.actorName, ctx.runId),
+    describe: (p) => `Save the report "${str(p["title"], 120)}"`,
+    spoken: (r) => { const x = r as { title?: string }; return `Report saved: ${x.title}. It's on the Command Center page.`; },
   },
   // ── Desktop agent (Windows, Mac or Linux) ───────────────────────────────
   {

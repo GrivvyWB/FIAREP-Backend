@@ -23,6 +23,7 @@ type Overview = {
 };
 type Schedule = { dayStart: string; dayEnd: string; workDays: number[]; defaultJobMinutes: number; minutesPerApartment: number; buildingDayApartments: number };
 type AuditRow = { seq: number; at: string; actor: string; event: string; detail: Record<string, unknown> };
+type Report = { id: string; title: string; createdBy: string; createdAt: string };
 type WorkOrder = { id: string; status: string; urgency: string; address: string; borough: string; kind: string; title: string; createdAt: string; decidedBy: string | null; assignedName?: string | null };
 type Os = keyof Install;
 
@@ -88,6 +89,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const [chats, setChats] = useState<Conversation[]>([]);
   const [openChat, setOpenChat] = useState<string | null>(null);
   const [reply, setReply] = useState("");
+  const [reports, setReports] = useState<Report[]>([]);
   const fail = (title: string) => (err: any) => toast({ variant: "destructive", title, description: err?.data?.error || err?.message });
 
   async function load() {
@@ -99,10 +101,23 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         api<Conversation[]>(`${base}/resident-chats`).catch(() => [] as Conversation[]),
       ]);
       setChats(c);
+      setReports(await api<Report[]>(`${base}/reports`).catch(() => [] as Report[]));
       setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setSched((x) => x ?? o.schedule ?? null); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
     } catch (err: any) { setLoadError(err?.data?.error || err?.message || "Could not load the Command Center"); }
   }
   useEffect(() => { void load(); const t = setInterval(() => void load(), 15_000); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Open a report in a new tab, laid out to print. */
+  async function openReport(r: Report) {
+    const w = window.open("", "_blank");
+    try {
+      const full = await api<Report & { body: string }>(`${base}/reports/${encodeURIComponent(r.id)}`);
+      const esc = (t: string) => t.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const lines = full.body.split("\n").map((l) => l.startsWith("# ") ? `<h2>${esc(l.slice(2))}</h2>` : l.startsWith("- ") ? `<li>${esc(l.slice(2))}</li>` : l.trim() ? `<p>${esc(l)}</p>` : "").join("");
+      const html = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(full.title)}</title><style>body{font-family:system-ui,sans-serif;max-width:760px;margin:40px auto;padding:0 20px;color:#0f172a;line-height:1.5}h1{font-size:24px;margin:0}h2{font-size:17px;margin:22px 0 6px}.m{color:#64748b;font-size:13px;margin:4px 0 20px}li{margin-left:18px}@media print{button{display:none}}</style></head><body><button onclick="print()">Print</button><h1>${esc(full.title)}</h1><p class="m">${esc(full.createdBy)} · ${new Date(full.createdAt).toLocaleString()}</p>${lines}</body></html>`;
+      if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+    } catch (err) { w?.close(); fail("Could not open the report")(err); }
+  }
 
   async function saveSwitches(patch: Partial<Switches>) {
     if (!data) return;
@@ -434,6 +449,18 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </tbody>
         </table></div>
         {!orders.length && <p className="mt-2 text-sm text-slate-500">None yet.</p>}
+      </details>
+
+      <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+        <summary className="cursor-pointer text-base font-semibold text-slate-950">Reports written by the Command Center ({reports.length})</summary>
+        <div className="mt-3 divide-y divide-slate-100">{reports.map((r) => (
+          <div key={r.id} className="flex items-center gap-3 py-1.5 text-sm">
+            <span className="min-w-0 flex-1 truncate font-medium text-slate-900">{r.title}</span>
+            <span className="text-xs text-slate-500">{r.createdBy} · {when(r.createdAt)}</span>
+            <Button size="sm" variant="outline" onClick={() => void openReport(r)}>Open</Button>
+          </div>))}
+        </div>
+        {!reports.length && <p className="mt-2 text-sm text-slate-500">None yet. Ask the Command Center for a report (for example "write a report on this week's complaints").</p>}
       </details>
 
       <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

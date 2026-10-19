@@ -180,4 +180,8 @@ export async function ensureCommandTables(): Promise<void> {
   await db.execute(sql`create index if not exists command_runs_tenant_idx on command_runs (tenant_id, created_at)`);
   await db.execute(sql`create index if not exists command_devices_tenant_idx on command_devices (tenant_id)`);
   await db.execute(sql`create index if not exists command_audit_tenant_idx on command_audit (tenant_id, seq)`);
+  await db.execute(sql`create table if not exists command_reports (
+    id text primary key, tenant_id text not null, title text not null, body text not null,
+    created_by text not null, run_id text, created_at timestamptz not null default now())`);
+  await db.execute(sql`create index if not exists command_reports_tenant_idx on command_reports (tenant_id, created_at)`);
 }
