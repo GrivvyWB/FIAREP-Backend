@@ -126,6 +126,7 @@ export const commandWorkOrders = pgTable("command_work_orders", {
   assignedStaffId: text("assigned_staff_id"),
   assignedName: text("assigned_name"),
   bookingId: text("booking_id"),
+  trade: text("trade"),
   runId: text("run_id"),
   decidedBy: text("decided_by"),
   decidedAt: ts("decided_at"),
@@ -175,7 +176,7 @@ export async function ensureCommandTables(): Promise<void> {
   await db.execute(sql`alter table command_actions add column if not exists tenant_id text not null default 'default'`);
   await db.execute(sql`alter table command_work_orders add column if not exists tenant_id text not null default 'default'`);
   await db.execute(sql`alter table command_audit add column if not exists tenant_id text`);
-  for (const col of ["assigned_staff_id", "assigned_name", "booking_id"]) await db.execute(sql`alter table command_work_orders add column if not exists ${sql.identifier(col)} text`);
+  for (const col of ["assigned_staff_id", "assigned_name", "booking_id", "trade"]) await db.execute(sql`alter table command_work_orders add column if not exists ${sql.identifier(col)} text`);
   await db.execute(sql`create index if not exists command_runs_tenant_idx on command_runs (tenant_id, created_at)`);
   await db.execute(sql`create index if not exists command_devices_tenant_idx on command_devices (tenant_id)`);
   await db.execute(sql`create index if not exists command_audit_tenant_idx on command_audit (tenant_id, seq)`);

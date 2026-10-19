@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ActionMeta = { name: string; label: string; risk: "read" | "write"; confirmDefault: boolean; target: "server" | "agent" };
-type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; caps?: Record<string, number> };
+type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; autoWorkOrders: boolean; caps?: Record<string, number> };
 type ChatMsg = { id: string; from: "resident" | "office" | "staff"; text: string; at: string; by?: string };
 type Conversation = { id: string; complaintNo: string; address: string; unit: string; description: string; human: boolean; handoff: { reason?: string; urgent?: boolean } | null; appointment: string | null; lastAt: string; waiting: boolean; messages: ChatMsg[] };
 type Device = { id: string; name: string; staffName: string; status: "pending" | "active" | "revoked"; confirmKey: string; createdAt: string; approvedAt: string | null; approvedBy: string | null; lastUsedAt: string | null };
@@ -37,6 +37,20 @@ const OS_HOW: Record<Os, string> = {
   linux: "On the Linux computer: open a terminal → paste the line → Enter. Needs Node.js 20+ (nodejs.org).",
 };
 const guessOs = (): Os => (/Windows/i.test(navigator.userAgent) ? "windows" : /Mac/i.test(navigator.userAgent) ? "mac" : "linux");
+
+/** A length of time as hours + minutes (1 hr 30 min, not 90 min). Stored in minutes. */
+function DurationField({ label, value, onChange }: { label: string; value: number; onChange: (minutes: number) => void }) {
+  const h = Math.floor(value / 60), m = value % 60;
+  const set = (hh: number, mm: number) => onChange(Math.min(720, Math.max(15, hh * 60 + mm)));
+  return (
+    <div className="flex flex-col text-xs text-slate-600">{label}
+      <div className="mt-1 flex items-center gap-1">
+        <select value={h} onChange={(e) => set(Number(e.target.value), m)} className="rounded-md border border-slate-300 px-1 py-1 text-sm">{Array.from({ length: 13 }, (_, i) => <option key={i} value={i}>{i} hr{i === 1 ? "" : "s"}</option>)}</select>
+        <select value={m} onChange={(e) => set(h, Number(e.target.value))} className="rounded-md border border-slate-300 px-1 py-1 text-sm">{[0, 15, 30, 45].map((x) => <option key={x} value={x}>{x} min</option>)}</select>
+      </div>
+    </div>
+  );
+}
 
 /** The install line per operating system, with a copy button. */
 function InstallLines({ lines, onCopy }: { lines: Install; onCopy: (text: string, what: string) => void }) {
@@ -340,12 +354,18 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="min-w-0 flex-1">
             <h2 className="text-base font-semibold text-slate-950">Resident messages</h2>
-            <p className="text-xs text-slate-500">Residents can write about their complaint in the FIAREP app or on the website (from the phone or browser they filed it on). The Command Center answers for the office — status, open times, booking the visit on the crew's calendar — as "{"<company>"} Maintenance". It doesn't announce that it's automated, but if a resident asks whether they're talking to a person, it says it's the office's automated assistant and offers a staff member. Emergencies and anything it can't do go to staff. Reply here yourself at any time; replying takes the conversation over until you give it back.</p>
+            <p className="text-xs text-slate-500">Residents can write about their complaint in the FIAREP app or on the website (from the phone or browser they filed it on). The Command Center answers for the office — status, open times, booking the visit on the crew's calendar — as "{"<company>"} Maintenance". It doesn't announce that it's automated, but if a resident asks whether they're talking to a person, it says it's the office's automated assistant and offers a staff member. Emergencies and anything it can't do go to staff. Reply here yourself at any time; replying takes the conversation over until you give it back. With "Work orders from resident photos" on, Smart Repair reads each complaint photo and drafts a work order with the repair instructions (trade, tools, parts, steps) for the supervisors; assigning it books the member and tells the resident the visit time.</p>
           </div>
-          <label className="flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
-            <span className="font-semibold text-slate-900">Answer residents</span>
-            <Switch checked={data.switches.residentChat !== false} onCheckedChange={(v) => void saveSwitches({ residentChat: v })} />
-          </label>
+          <div className="flex flex-col gap-2">
+            <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+              <span className="font-semibold text-slate-900">Answer residents</span>
+              <Switch checked={data.switches.residentChat !== false} onCheckedChange={(v) => void saveSwitches({ residentChat: v })} />
+            </label>
+            <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm" title="Smart Repair reads each resident photo and drafts a work order with repair instructions, then tells the supervisors">
+              <span className="font-semibold text-slate-900">Work orders from resident photos</span>
+              <Switch checked={data.switches.autoWorkOrders !== false} onCheckedChange={(v) => void saveSwitches({ autoWorkOrders: v })} />
+            </label>
+          </div>
         </div>
         <div className="mt-3 space-y-2">
           {chats.map((c) => (
@@ -353,7 +373,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
               <button type="button" onClick={() => setOpenChat(openChat === c.id ? null : c.id)} className="flex w-full flex-wrap items-center gap-2 text-left">
                 <span className="font-semibold text-slate-950">#{c.complaintNo}</span>
                 <span className="text-xs text-slate-600">{c.address}{c.unit ? `, apt ${c.unit}` : ""} · {c.description.slice(0, 60)}</span>
-                <span className="ml-auto text-xs font-semibold">{c.human ? <span className={c.handoff?.urgent ? "text-rose-700" : "text-amber-800"}>{c.waiting ? "waiting for you" : "staff answering"}{c.handoff?.reason ? ` — ${c.handoff.reason}` : ""}</span> : <span className="text-emerald-700">assistant answering</span>}</span>
+                <span className="ml-auto text-xs font-semibold">{c.human ? <span className={c.handoff?.urgent ? "text-rose-700" : "text-amber-800"}>{c.waiting ? "waiting for you" : "staff answering"}{c.handoff?.reason ? ` — ${c.handoff.reason}` : ""}</span> : null}</span>
                 {c.appointment && <span className="w-full text-xs text-slate-500">Visit: {c.appointment}</span>}
               </button>
               {openChat === c.id && (
@@ -393,8 +413,8 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
             <div className="flex flex-col text-xs text-slate-600">Work days<div className="mt-1 flex gap-1">{["S", "M", "T", "W", "T", "F", "S"].map((d, i) => (
               <button key={i} type="button" onClick={() => setSched({ ...sched, workDays: sched.workDays.includes(i) ? sched.workDays.filter((x) => x !== i) : [...sched.workDays, i].sort() })}
                 className={`h-8 w-8 rounded-md border text-xs font-semibold ${sched.workDays.includes(i) ? "border-slate-900 bg-slate-900 text-white" : "border-slate-300 bg-white text-slate-600"}`}>{d}</button>))}</div></div>
-            <label className="flex flex-col text-xs text-slate-600">A job takes (min)<input type="number" min={15} max={720} value={sched.defaultJobMinutes} onChange={(e) => setSched({ ...sched, defaultJobMinutes: Number(e.target.value) })} className="mt-1 w-24 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
-            <label className="flex flex-col text-xs text-slate-600">Per apartment (min)<input type="number" min={15} max={720} value={sched.minutesPerApartment} onChange={(e) => setSched({ ...sched, minutesPerApartment: Number(e.target.value) })} className="mt-1 w-24 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+            <DurationField label="A job takes" value={sched.defaultJobMinutes} onChange={(v) => setSched({ ...sched, defaultJobMinutes: v })} />
+            <DurationField label="Per apartment" value={sched.minutesPerApartment} onChange={(v) => setSched({ ...sched, minutesPerApartment: v })} />
             <label className="flex flex-col text-xs text-slate-600">Building day from (apartments)<input type="number" min={2} max={50} value={sched.buildingDayApartments} onChange={(e) => setSched({ ...sched, buildingDayApartments: Number(e.target.value) })} className="mt-1 w-24 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
             <Button size="sm" variant="outline" disabled={JSON.stringify(sched) === JSON.stringify(data.schedule)} onClick={() => void saveSchedule()}>Save</Button>
           </div>
@@ -407,7 +427,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           <tbody>{orders.map((o) => (
             <tr key={o.id} className="border-t border-slate-100">
               <td className="py-1.5 pr-3"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${o.urgency === "urgent" ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-700"}`}>{o.urgency}</span></td>
-              <td className="py-1.5 pr-3 font-medium text-slate-900">{o.address}, {o.borough}<span className="block text-xs font-normal text-slate-500">{o.kind} · {o.title}</span></td>
+              <td className="py-1.5 pr-3 font-medium text-slate-900">{[o.address, o.borough].filter(Boolean).join(", ")}<span className="block text-xs font-normal text-slate-500">{o.kind} · {o.title}</span></td>
               <td className="py-1.5 pr-3 text-xs text-slate-600">{o.status === "assigned" && o.assignedName ? `assigned to ${o.assignedName}` : o.status}{o.decidedBy ? ` · ${o.decidedBy}` : ""}</td>
               <td className="py-1.5 text-xs text-slate-500">{when(o.createdAt)}</td>
             </tr>))}

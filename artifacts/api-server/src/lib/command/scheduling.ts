@@ -68,8 +68,9 @@ export function cleanSchedule(v: Record<string, unknown>, base: ScheduleSettings
   const days = Array.isArray(v["workDays"]) ? [...new Set(v["workDays"].map(Number).filter((d) => Number.isInteger(d) && d >= 0 && d <= 6))].sort() : base.workDays;
   const out = {
     dayStart: hhmm(v["dayStart"], base.dayStart), dayEnd: hhmm(v["dayEnd"], base.dayEnd), workDays: days.length ? days : base.workDays,
-    defaultJobMinutes: intIn(v["defaultJobMinutes"], base.defaultJobMinutes, 15, 720),
-    minutesPerApartment: intIn(v["minutesPerApartment"], base.minutesPerApartment, 15, 720),
+    // Whole quarter hours (shown as hours + minutes on the page).
+    defaultJobMinutes: Math.round(intIn(v["defaultJobMinutes"], base.defaultJobMinutes, 15, 720) / 15) * 15,
+    minutesPerApartment: Math.round(intIn(v["minutesPerApartment"], base.minutesPerApartment, 15, 720) / 15) * 15,
     buildingDayApartments: intIn(v["buildingDayApartments"], base.buildingDayApartments, 2, 50),
   };
   if (out.dayEnd <= out.dayStart) { out.dayStart = base.dayStart; out.dayEnd = base.dayEnd; }
@@ -117,6 +118,14 @@ export function buildingKey(address: string): string {
     .replace(/[^\w ]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+/** 45 → "45 min", 60 → "1 hr", 90 → "1 hr 30 min", 120 → "2 hrs". */
+export function hm(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  const h = Math.floor(m / 60), r = m % 60;
+  if (!h) return `${r} min`;
+  return `${h} hr${h === 1 ? "" : "s"}${r ? ` ${r} min` : ""}`;
+}
+
 // ── drive time ──────────────────────────────────────────────────────────────
 export type Travel = { minutes: number; source: "same-building" | "google" | "estimate"; detail: string };
 const travelCache = new Map<string, { at: number; t: Travel }>();
@@ -143,7 +152,7 @@ export async function travelTime(from: string, to: string, departAt: Date): Prom
       });
       const data = (await r.json().catch(() => ({}))) as { routes?: Array<{ duration?: string; distanceMeters?: number }> };
       const sec = parseSeconds(data.routes?.[0]?.duration);
-      if (r.ok && Number.isFinite(sec)) t = { minutes: Math.ceil(sec / 60), source: "google", detail: `Google Maps with traffic: ${Math.ceil(sec / 60)} min, ${((data.routes?.[0]?.distanceMeters ?? 0) / 1609).toFixed(1)} mi` };
+      if (r.ok && Number.isFinite(sec)) t = { minutes: Math.ceil(sec / 60), source: "google", detail: `Google Maps with traffic: ${hm(Math.ceil(sec / 60))}, ${((data.routes?.[0]?.distanceMeters ?? 0) / 1609).toFixed(1)} mi` };
     } catch { /* falls back to the estimate */ }
   }
   if (!t) {
@@ -152,7 +161,7 @@ export async function travelTime(from: string, to: string, departAt: Date): Prom
     if (a && b) {
       const m = distanceMeters(a, b) * 1.4;
       const minutes = Math.ceil(m / 5.36 / 60) + 10;
-      t = { minutes, source: "estimate", detail: `estimate (${key ? "Google Maps didn't answer" : "no Google Maps key"}): ${(m / 1609).toFixed(1)} mi at 12 mph + 10 min parking` };
+      t = { minutes, source: "estimate", detail: `estimate (${key ? "Google Maps didn't answer" : "no Google Maps key"}): ${(m / 1609).toFixed(1)} mi at 12 mph + 10 min parking = ${hm(minutes)}` };
     } else t = { minutes: 45, source: "estimate", detail: `estimate (${key ? "Google Maps didn't answer" : "no Google Maps key"} and the address couldn't be placed): 45 min` };
   }
   travelCache.set(ck, { at: Date.now(), t });
@@ -258,5 +267,5 @@ export async function findMember(tenantId: string, who: string): Promise<{ id: s
 export const bookingView = (b: Booking) => ({
   id: b.id, member: b.staffName, staffId: b.staffId, title: b.title, address: b.address, apartments: b.apartments, wholeDay: b.wholeDay,
   start: b.startAt.toISOString(), end: b.endAt.toISOString(), when: `${nyLabel(b.startAt)} – ${b.endAt.toLocaleTimeString("en-US", { timeZone: TZ, hour: "numeric", minute: "2-digit" })}`,
-  travelMinutes: b.travelMinutes, travelSource: b.travelSource, status: b.status, development: b.development,
+  travelMinutes: b.travelMinutes, drive: b.travelMinutes ? hm(b.travelMinutes) : null, length: hm((b.endAt.getTime() - b.startAt.getTime()) / 60_000), travelSource: b.travelSource, status: b.status, development: b.development,
 });

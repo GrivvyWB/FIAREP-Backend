@@ -22,12 +22,12 @@ const meta: Record<Category, { entity: string; href: string; icon: typeof Folder
   // Members booked for jobs by the Command Center (start and end time; one job at a time per member).
   "Booked jobs": { entity: "staff-bookings", href: "/calendar", icon: UserRoundCheck, color: "bg-[#fdebd3] text-[#9a5b12]" },
 };
-type Booking = { id: string; member: string; title: string; address: string; apartments: string[]; wholeDay: boolean; start: string; end: string; travelMinutes: number; travelSource: string; development: string | null };
+type Booking = { id: string; member: string; title: string; address: string; apartments: string[]; wholeDay: boolean; start: string; end: string; travelMinutes: number; drive: string | null; length: string; travelSource: string; development: string | null };
 const timeOf = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
 const bookingItem = (b: Booking): CalendarItem => ({
   id: b.id, development: b.development, category: "Booked jobs", href: "/calendar", start: new Date(b.start), end: new Date(b.end),
   label: `${timeOf(new Date(b.start))} ${b.member} · ${b.title}`,
-  state: { status: `${timeOf(new Date(b.start))} – ${timeOf(new Date(b.end))} · ${b.address}${b.apartments.length ? ` (${b.apartments.join(", ")})` : ""}${b.wholeDay ? " · building day" : ""}${b.travelMinutes ? ` · ${b.travelMinutes} min drive before` : ""}` },
+  state: { status: `${timeOf(new Date(b.start))} – ${timeOf(new Date(b.end))} · ${b.address}${b.apartments.length ? ` (${b.apartments.join(", ")})` : ""}${b.wholeDay ? " · building day" : ""}${b.drive ? ` · ${b.drive} drive before` : ""}` },
 });
 
 const value = (s: Record<string, unknown>, keys: string[]) => keys.map((key) => s[key]).find((v) => v !== undefined && v !== null && String(v).trim() !== "");

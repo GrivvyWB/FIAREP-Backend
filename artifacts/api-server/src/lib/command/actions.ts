@@ -19,8 +19,10 @@ import { recentAudit } from "./audit";
 import { notify } from "../audit";
 import type { Actor } from "../auth";
 
-import { bookingView, bookingsOn, createBooking, findMember, findSlot, nyDate, nyLabel, nyTime, staffBookings, type Slot } from "./scheduling";
+import { bookingView, bookingsOn, createBooking, findMember, findSlot, hm, nyDate, nyLabel, nyTime, staffBookings, type Slot } from "./scheduling";
 import { staffAccounts } from "@workspace/db";
+import { residentPhotoToWorkOrder } from "./photoWorkOrder";
+import { notifyResident } from "../residentNotify";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -196,7 +198,7 @@ export const ACTIONS: ActionDef[] = [
     run: async (p, ctx) => {
       const status = str(p["status"], 20) || "draft";
       const rows = await db.select().from(commandWorkOrders).where(and(workOrdersOf(ctx.tenantId), status === "any" ? sql`true` : eq(commandWorkOrders.status, status))).orderBy(desc(commandWorkOrders.createdAt)).limit(100);
-      return rows.map((w) => ({ id: w.id, status: w.status, urgency: w.urgency, address: w.address, kind: w.kind, title: w.title, assignedTo: w.assignedName ?? undefined, createdAt: w.createdAt }));
+      return rows.map((w) => ({ id: w.id, status: w.status, urgency: w.urgency, address: w.address, kind: w.kind, title: w.title, trade: w.trade ?? undefined, assignedTo: w.assignedName ?? undefined, createdAt: w.createdAt }));
     },
     describe: () => "List work orders",
   },
@@ -307,7 +309,7 @@ export const ACTIONS: ActionDef[] = [
       const m = await findMember(ctx.tenantId, str(p["member"], 80));
       if ("error" in m) return m;
       const r = await findSlot(ctx.tenantId, m.id, { address: str(p["address"], 300), apartments: strList(p["apartments"], 50), minutes: p["minutes"] === undefined ? undefined : num(p["minutes"], 120, 15, 720), after: parseWhen(p["after"]), wholeDay: typeof p["wholeDay"] === "boolean" ? p["wholeDay"] : undefined });
-      return r.slot ? { member: m.name, start: nyLabel(r.slot.startAt), end: nyLabel(r.slot.endAt), minutes: r.minutes, wholeDay: r.wholeDay, driveFromPreviousJob: r.slot.travelDetail, daysSkipped: r.skipped.slice(0, 5) } : { member: m.name, error: "No free time in the next 3 weeks.", daysSkipped: r.skipped.slice(0, 8) };
+      return r.slot ? { member: m.name, start: nyLabel(r.slot.startAt), end: nyLabel(r.slot.endAt), length: hm(r.minutes), wholeDay: r.wholeDay, driveFromPreviousJob: r.slot.travelDetail, daysSkipped: r.skipped.slice(0, 5) } : { member: m.name, error: "No free time in the next 3 weeks.", daysSkipped: r.skipped.slice(0, 8) };
     },
     describe: (p) => `Find a time for ${str(p["member"])} at ${str(p["address"])}`,
   },
@@ -349,6 +351,23 @@ export const ACTIONS: ActionDef[] = [
     spoken: (r) => { const x = r as { cancelled?: { member: string; when: string }; error?: string }; return x.error ?? `Cancelled ${x.cancelled!.member}'s job ${x.cancelled!.when}.`; },
   },
   {
+    name: "complaint_to_work_order", label: "Work order from a resident's photo", risk: "write", confirmDefault: false, target: "server",
+    description: "Smart Repair reads a resident complaint's photo (what's wrong, where, trade, tools, parts, steps, priority) and drafts a work order with those repair instructions, then notifies the supervisors the complaint goes to. Give the complaint number (e.g. RC-12345). Does nothing twice for the same complaint.",
+    schema: { type: "object", properties: { complaintNo: { type: "string" } }, required: ["complaintNo"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const no = str(p["complaintNo"], 20).toUpperCase();
+      const [r] = await db.select({ id: entityRecords.id }).from(entityRecords).where(and(eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false), sql`${entityRecords.state}->>'complaintNo' = ${no}`, isPlatform(ctx.tenantId) ? sql`true` : eq(entityRecords.tenantId, ctx.tenantId))).limit(1);
+      if (!r) return { error: `No complaint ${no}.` };
+      const [row] = await db.select({ tenantId: entityRecords.tenantId }).from(entityRecords).where(eq(entityRecords.id, r.id)).limit(1);
+      const out = await residentPhotoToWorkOrder(row!.tenantId, r.id, ctx.actorName);
+      if ("error" in out) return out;
+      const w = out.workOrder;
+      return { workOrder: { id: w.id, title: w.title, trade: w.trade, urgency: w.urgency, status: w.status, instructions: w.detail.slice(0, 1200) }, alreadyExisted: !out.created };
+    },
+    describe: (p) => `Work order from complaint ${str(p["complaintNo"], 20)}'s photo`,
+    spoken: (r) => { const x = r as { workOrder?: { title: string; trade?: string | null; urgency: string }; error?: string }; return x.error ?? `Work order drafted: ${x.workOrder!.title}${x.workOrder!.trade ? `, for a ${x.workOrder!.trade}` : ""}${x.workOrder!.urgency === "urgent" ? ", urgent" : ""}.`; },
+  },
+  {
     name: "find_members", label: "Members who can do a trade", risk: "read", confirmDefault: false, target: "server",
     description: "List members of this organization, optionally only those whose title matches a trade (e.g. Plumber, Electrician, Painter), with their next free time for a job at an address if one is given.",
     schema: { type: "object", properties: { trade: { type: "string" }, address: { type: "string" }, minutes: { type: "integer", minimum: 15, maximum: 720 } }, additionalProperties: false },
@@ -366,7 +385,7 @@ export const ACTIONS: ActionDef[] = [
   },
   {
     name: "assign_work_order", label: "Assign a work order to a member", risk: "write", confirmDefault: true, target: "server",
-    description: "Assign an approved (or draft) work order: to the named member, or — with a trade — to whichever member with that trade is free soonest. Books it on their calendar (no double booking, drive time counted) and notifies them. Approves a draft at the same time.",
+    description: "Assign an approved (or draft) work order: to the named member, or — with a trade (or the trade Smart Repair found) — to whichever member with that trade is free soonest. For a resident's complaint it also tells the resident the visit time. Books it on their calendar (no double booking, drive time counted) and notifies them. Approves a draft at the same time.",
     schema: { type: "object", properties: {
       workOrderId: { type: "string" }, member: { type: "string" }, trade: { type: "string" },
       minutes: { type: "integer", minimum: 15, maximum: 720 }, start: { type: "string" }, after: { type: "string" }, apartments: { type: "array", items: { type: "string" } },
@@ -387,7 +406,7 @@ export const ACTIONS: ActionDef[] = [
         if (!r.slot) return { error: `${m.name} has no free time${opts.at ? " then" : " in the next 3 weeks"}.` };
         pick = { m, slot: r.slot, wholeDay: r.wholeDay };
       } else {
-        const trade = str(p["trade"], 60);
+        const trade = str(p["trade"], 60) || w.trade || "";
         if (!trade) return { error: "Say who should do it, or which trade." };
         const list = await membersFor(ctx.tenantId, trade);
         if (!list.length) return { error: `No member's title matches "${trade}".` };
@@ -400,6 +419,14 @@ export const ACTIONS: ActionDef[] = [
       const b = await createBooking(ctx.tenantId, pick.m, { title: `${w.kind}: ${w.title}`.slice(0, 200), address, apartments, slot: pick.slot, wholeDay: pick.wholeDay, sourceEntity: "command-work-order", sourceId: w.id, note: w.detail, createdBy: ctx.actorName });
       if ("error" in b) return b;
       await db.update(commandWorkOrders).set({ status: "assigned", assignedStaffId: pick.m.id, assignedName: pick.m.name, bookingId: b.id, decidedBy: w.decidedBy ?? ctx.actorName, decidedAt: w.decidedAt ?? new Date() }).where(eq(commandWorkOrders.id, w.id));
+      // A resident's complaint: put the visit on the complaint and tell the resident when.
+      if (w.alertId.startsWith("resident:")) {
+        const reportId = w.alertId.slice("resident:".length);
+        const appointment = { bookingId: b.id, startAt: b.startAt.toISOString(), endAt: b.endAt.toISOString(), staffId: pick.m.id, staffName: pick.m.name, bookedAt: new Date().toISOString(), by: ctx.actorName };
+        await db.update(entityRecords).set({ state: sql`${entityRecords.state} || ${JSON.stringify({ appointment, appointmentDate: appointment.startAt })}::jsonb`, updatedAt: new Date() }).where(eq(entityRecords.id, reportId));
+        const [rep] = await db.select().from(entityRecords).where(eq(entityRecords.id, reportId)).limit(1);
+        if (rep) await notifyResident(rep, "Visit scheduled", `Someone from maintenance is scheduled for ${nyLabel(b.startAt)}.`).catch(() => undefined);
+      }
       await notify(commandActor(ctx), pick.m.id, `New job: ${w.urgency === "urgent" ? "URGENT — " : ""}${w.title}`, `${nyLabel(b.startAt)} at ${address}${apartments.length ? ` (${apartments.join(", ")})` : ""} · ${w.kind}`, b.id).catch(() => undefined);
       return { assigned: pick.m.name, booked: bookingView(b), driveFromPreviousJob: pick.slot.travelDetail, workOrder: { id: w.id, address, title: w.title } };
     },

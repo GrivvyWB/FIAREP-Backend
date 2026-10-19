@@ -420,6 +420,7 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     model: typeof b["model"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["model"].trim()) ? b["model"].trim() : before.model,
     provider: b["provider"] === "gemini" || b["provider"] === "claude" ? b["provider"] : before.provider,
     residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
+    autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
     geminiModel: typeof b["geminiModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["geminiModel"].trim()) ? b["geminiModel"].trim() : before.geminiModel,
     caps: before.caps ?? {},
   };
@@ -563,6 +564,7 @@ router.put("/v1/org/command/switches", ...org, async (req, res) => {
     confirm: "confirm" in b ? bools(b["confirm"], tenantId) : before.confirm,
     model: before.model, provider: before.provider, geminiModel: before.geminiModel, // the engine and model are FIAREP's choice (Platform Control)
     residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
+    autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
   };
   await saveSwitches(next, tenantId);
   await commandAuditLog({ tenantId, actor: by(res), event: "switches.changed", detail: { before, after: next } });

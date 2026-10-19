@@ -24,6 +24,7 @@ import { routedComplaintRecipientIds, tradesForComplaint } from "../lib/complain
 import { recordNotifiedStaff } from "../lib/complaintReceipts";
 import { organizationForResidentCode, residentCompaniesNamed, resolveResidentOrganization } from "../lib/residentRouting";
 import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
+import { maybeAutoWorkOrder } from "../lib/command/photoWorkOrder";
 import { rateLimit } from "../lib/rateLimit";
 import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
 import { UpdateResidentReportPhotoBody } from "@workspace/api-zod";
@@ -401,6 +402,8 @@ router.post("/v1/public/resident-reports/:complaintNo/photos/confirm", async (re
   // supervisors/management see a real HPD/DOB code without pressing a button.
   // Fire-and-forget: it must never delay or break the resident's upload.
   void classifyResidentPhotoAndSave(auth.access.tenantId, photo.id);
+  // Command Center: Smart Repair reads the photo and drafts a work order (when switched on for this company).
+  void maybeAutoWorkOrder(auth.access.tenantId, photo.reportId).catch(() => undefined);
   res.status(201).json({ id: photo.id, contentType: photo.contentType });
 });
 

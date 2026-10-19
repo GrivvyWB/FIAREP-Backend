@@ -39,7 +39,8 @@ export async function residentComplaint(complaintNo: string, statusToken: string
   return row ?? null;
 }
 
-export const chatOf = (row: Row): ChatMessage[] => (Array.isArray(row.state["chat"]) ? (row.state["chat"] as ChatMessage[]) : []);
+export const chatOf = (row: Row): ChatMessage[] => (Array.isArray(row.state["chat"]) ? (row.state["chat"] as ChatMessage[]) : [])
+  .map((m) => (m.from === "resident" ? m : { ...m, text: stripOfferIds(m.text) })).filter((m) => m.text);
 export const humanOnly = (row: Row) => row.state["chatHuman"] === true;
 
 /** What the resident sees: the conversation and the booked visit. */
@@ -69,7 +70,7 @@ export async function residentAiOn(tenantId: string): Promise<boolean> {
 }
 
 /** Who hears about a resident message: the people this complaint was routed to; if nobody, the organization's administrators and management. */
-async function staffToTell(row: Row): Promise<string[]> {
+export async function staffToTell(row: Row): Promise<string[]> {
   const routed = await routedComplaintRecipientIds(row.tenantId, row.development ?? "", row.state).catch(() => [] as string[]);
   if (routed.length) return routed;
   const office = await db.select({ id: staffAccounts.id, role: staffAccounts.role }).from(staffAccounts).where(and(eq(staffAccounts.tenantId, row.tenantId), eq(staffAccounts.status, "approved")));
@@ -83,7 +84,7 @@ function systemPrompt(orgName: string, row: Row, offers: Offer[]): string {
   return [
     `You answer residents' messages for ${orgName}'s maintenance office, about one complaint. Sign nothing; the app shows the messages as "${orgName} Maintenance".`,
     `Now: ${now} (New York).`,
-    "Write like a friendly, efficient office coordinator: 1-3 short sentences, plain text, no lists or markdown.",
+    "Write like a friendly, efficient office coordinator: 1-3 short sentences, plain text, no lists or markdown. Say lengths of time in hours and minutes (\"an hour and a half\", \"45 minutes\"), never \"90 minutes\".",
     "You don't need to say you're automated. But if the resident asks whether they're talking to a person, a bot, AI or a computer, answer honestly that you're the office's automated assistant, and offer to have a staff member follow up (use hand_to_staff if they want that). Never claim or imply you're a person.",
     "You can only: look up this complaint's status, offer times for a visit (offer_times), book one of the times you offered (book_visit — only after the resident picks one), and pass the conversation to staff (hand_to_staff).",
     "Hand to staff when: it's an emergency (gas smell, fire, flooding, no heat in winter, sparks, someone hurt — also tell them to call 911 for danger), they're upset or want a person, they ask about rent, legal matters, other apartments or anything else you can't do. Don't promise anything the tools didn't confirm.",
@@ -195,7 +196,7 @@ async function answer(row: Row, residentText: string): Promise<Row> {
   let reply = "";
   try {
     const out = await modelTurn({ tenantId: row.tenantId, system: systemPrompt(orgName, row, offers), tools: TOOLS, history, text: residentText, usage, runTool });
-    reply = out.reply || "Thanks — someone from the office will follow up.";
+    reply = stripOfferIds(out.reply) || "Thanks — someone from the office will follow up.";
     const cost = costMicroUsd(out.model, usage); if (cost !== null) usage["cost_usd_micro"] = cost;
     await db.update(commandRuns).set({ reply, status: "done", usage, updatedAt: new Date() }).where(eq(commandRuns.id, runId));
   } catch (err) {
@@ -208,6 +209,15 @@ async function answer(row: Row, residentText: string): Promise<Row> {
   const next = await append(row, [{ id: randomUUID(), from: "office", text: reply.slice(0, 2000), at: new Date().toISOString() }], patch);
   await notifyResident(next, "New message", reply.slice(0, 300)).catch(() => undefined);
   return next;
+}
+
+/** Offer ids (T1-2b7d) are for book_visit only; never show them to the resident, even if the model writes them. */
+export function stripOfferIds(text: string): string {
+  return text
+    .replace(/\s*[\[(]\s*(?:(?:offer\s*)?ids?:?\s*)?T\d+-[0-9a-f]{4}(?:\s*[,;/]\s*T\d+-[0-9a-f]{4})*\s*[\])]/gi, "")
+    .replace(/\s*(?:\(|—|-|–)?\s*(?:offer\s*)?(?:id\s*)?T\d+-[0-9a-f]{4}\)?/gi, "")
+    .replace(/(?:^|\s)(?:offer\s*)?ids?:[ \t]*(?=\n|$)/gim, "")
+    .replace(/[ \t]+([,.;:!?])/g, "$1").replace(/[ \t]{2,}/g, " ").trim();
 }
 
 /** A resident's message. The assistant answers unless staff have taken the conversation over (or it's off). */
