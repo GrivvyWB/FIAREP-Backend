@@ -26,7 +26,7 @@ import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
 import { bookingView, getSchedule, saveSchedule, staffBookings } from "../lib/command/scheduling";
 import { recentConversations, residentAiOn, residentComplaint, residentView, residentWrites, staffWrites } from "../lib/command/residentChat";
 import { entityRecords } from "@workspace/db";
-import { checkKey, geminiKeyStatus, KEY_ENV, keyStatus, saveKey, type KeyName } from "../lib/command/keys";
+import { checkClientKey, checkKey, clientKeyStatus, geminiKeyStatus, KEY_ENV, keyFor, keyStatus, saveClientKey, saveKey, type ClientKeyName, type KeyName } from "../lib/command/keys";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
 import { relayUrl, syncRelayDevices } from "../lib/command/relay";
 import { getReport, listReports } from "../lib/command/scopes";
@@ -403,7 +403,7 @@ router.get("/v1/platform/command", async (req, res) => {
       const mine = clientDevices.filter((d) => d.tenantId === o.id);
       const comps = clientAgents.filter((a) => a.tenantId === o.id);
       return {
-        id: o.id, name: o.name, status: o.status, on, cap: switches.caps?.[o.id] ?? null, usage: usageOf.get(o.id) ?? null,
+        id: o.id, name: o.name, status: o.status, on, cap: switches.caps?.[o.id] ?? null, usage: usageOf.get(o.id) ?? null, paysOwn: switches.ownKeys?.[o.id] === true,
         phones: { active: mine.filter((d) => d.status === "active").length, pending: mine.filter((d) => d.status === "pending").length },
         computers: { total: comps.length, online: comps.filter((a) => agentMeta(a).online).length },
       };
@@ -426,6 +426,7 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     mailFallback: typeof b["mailFallback"] === "boolean" ? b["mailFallback"] : before.mailFallback,
     geminiModel: typeof b["geminiModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["geminiModel"].trim()) ? b["geminiModel"].trim() : before.geminiModel,
     caps: before.caps ?? {},
+    ownKeys: before.ownKeys ?? {},
   };
   await saveSwitches(next, PLATFORM_TENANT);
   await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "switches.changed", detail: { before, after: next } });
@@ -454,6 +455,14 @@ router.put("/v1/platform/command/clients/:id", async (req, res) => {
     if (cap === null) delete caps[id]; else caps[id] = Math.round(cap * 100) / 100;
     await saveSwitches({ ...sw, caps }, PLATFORM_TENANT);
     changes["cap"] = cap;
+  }
+  if (typeof b["paysOwn"] === "boolean") {
+    // Who pays for this client's AI: FIAREP (false) or the client with its own keys (true).
+    const sw = await getSwitches(PLATFORM_TENANT);
+    const ownKeys = { ...(sw.ownKeys ?? {}) };
+    if (b["paysOwn"]) ownKeys[id] = true; else delete ownKeys[id];
+    await saveSwitches({ ...sw, ownKeys }, PLATFORM_TENANT);
+    changes["paysOwn"] = b["paysOwn"];
   }
   await commandAuditLog({ tenantId: id, actor: `owner:${ownerName(res)}`, event: "client.changed", detail: { client: org.name, ...changes } });
   res.json({ id, ...changes });
@@ -550,9 +559,14 @@ router.get("/v1/org/command", ...org, async (req, res) => {
     actions: actionMeta(tenantId), devices: devices.map(deviceMeta), agents: agents.map(agentMeta),
     install: installLines(publicApiBase(req), null, devices.filter((d) => d.status === "active").map((d) => d.confirmKey)),
     usage: usage[0] ?? null, cap: platform.caps?.[tenantId] ?? null, capProblem: await capProblem(tenantId),
-    schedule: await getSchedule(tenantId), mapsKey: { set: (await keyStatus("googleMaps")).set },
-    // "Ready" for whichever engine FIAREP has on (Claude or Gemini).
-    claudeKeyConfigured: effective.provider === "gemini" ? (await geminiKeyStatus()).set : Boolean(process.env["ANTHROPIC_API_KEY"]),
+    schedule: await getSchedule(tenantId),
+    // Who pays for the AI: FIAREP, or this client with its own keys (Platform Control → Clients).
+    paysOwn: effective.paysOwn, provider: effective.provider,
+    ownKeys: effective.paysOwn ? await clientKeyStatus(tenantId) : null,
+    prices: effective.paysOwn ? MODEL_PRICES : undefined, models: effective.paysOwn ? { claude: effective.model, gemini: effective.geminiModel } : undefined,
+    mapsKey: { set: effective.paysOwn ? (await clientKeyStatus(tenantId)).googleMaps.set : (await keyStatus("googleMaps")).set },
+    // "Ready" for whichever engine is on (Claude or Gemini), with whoever's key pays.
+    claudeKeyConfigured: !!(await keyFor(tenantId, effective.provider === "gemini" ? "gemini" : "anthropic", effective.paysOwn)).key,
     audit: { ok: chain.ok, rows: auditRows.length },
   });
 });
@@ -565,7 +579,9 @@ router.put("/v1/org/command/switches", ...org, async (req, res) => {
     enabled: typeof b["enabled"] === "boolean" ? b["enabled"] : before.enabled,
     actions: "actions" in b ? bools(b["actions"], tenantId) : before.actions,
     confirm: "confirm" in b ? bools(b["confirm"], tenantId) : before.confirm,
-    model: before.model, provider: before.provider, geminiModel: before.geminiModel, // the engine and model are FIAREP's choice (Platform Control)
+    // The engine is FIAREP's choice (Platform Control), unless this client pays for its own AI: then it picks the one its key is for.
+    model: before.model, geminiModel: before.geminiModel,
+    provider: (b["provider"] === "gemini" || b["provider"] === "claude") && (await effectiveSwitches(tenantId)).paysOwn ? b["provider"] : before.provider,
     residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
     autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
     mailFallback: typeof b["mailFallback"] === "boolean" ? b["mailFallback"] : before.mailFallback,
@@ -573,6 +589,30 @@ router.put("/v1/org/command/switches", ...org, async (req, res) => {
   await saveSwitches(next, tenantId);
   await commandAuditLog({ tenantId, actor: by(res), event: "switches.changed", detail: { before, after: next } });
   res.json(next);
+});
+
+// A client that pays for its own AI adds its keys here (checked with the provider, stored encrypted).
+const CLIENT_KEY_PATHS: Record<string, ClientKeyName> = { anthropic: "anthropic", gemini: "gemini", openai: "openai", maps: "googleMaps" };
+router.put("/v1/org/command/own-keys/:which", ...org, async (req, res) => {
+  const tenantId = actorFrom(res).tenantId;
+  const name = CLIENT_KEY_PATHS[String(req.params["which"])];
+  if (!name) { res.status(404).json({ error: "Unknown key" }); return; }
+  if (!(await effectiveSwitches(tenantId)).paysOwn) { res.status(403).json({ error: "FIAREP pays for this organization's AI, so no keys are needed." }); return; }
+  const key = str((req.body as Record<string, unknown> | undefined)?.["key"], 300);
+  if (!key) { res.status(400).json({ error: "Paste the key." }); return; }
+  const problem = await checkClientKey(name, key);
+  if (problem) { res.status(400).json({ error: problem }); return; }
+  await saveClientKey(tenantId, name, key, by(res));
+  await commandAuditLog({ tenantId, actor: by(res), event: "own-key.set", detail: { key: name, last4: key.slice(-4) } });
+  res.json((await clientKeyStatus(tenantId))[name]);
+});
+router.delete("/v1/org/command/own-keys/:which", ...org, async (req, res) => {
+  const tenantId = actorFrom(res).tenantId;
+  const name = CLIENT_KEY_PATHS[String(req.params["which"])];
+  if (!name) { res.status(404).json({ error: "Unknown key" }); return; }
+  await saveClientKey(tenantId, name, null, by(res));
+  await commandAuditLog({ tenantId, actor: by(res), event: "own-key.removed", detail: { key: name } });
+  res.json((await clientKeyStatus(tenantId))[name]);
 });
 
 router.post("/v1/org/command/devices/:id/:decision", ...org, async (req, res) => {

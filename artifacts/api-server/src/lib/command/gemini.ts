@@ -10,16 +10,13 @@
 //   functionResponse parts in a user turn.
 // Key: GEMINI_API_KEY in Replit Secrets, or set from the Terminal (set-gemini-key.sh → keys.ts).
 // GEMINI_BASE_URL is for tests only.
-import { geminiKey } from "./keys";
 
 type Part = { text?: string; thought?: boolean; functionCall?: { name: string; args?: Record<string, unknown>; id?: string }; [k: string]: unknown };
 export type GeminiContent = { role: "user" | "model"; parts: Part[] };
 type Tool = { name: string; description: string; input_schema: Record<string, unknown> };
 type Result = { content: string; isError: boolean };
 
-async function callGemini(model: string, system: string, tools: Tool[], contents: GeminiContent[]) {
-  const apiKey = await geminiKey();
-  if (!apiKey) throw Object.assign(new Error("No Gemini API key yet (set-gemini-key.sh, or GEMINI_API_KEY in Replit Secrets)"), { status: 503 });
+async function callGemini(model: string, system: string, tools: Tool[], contents: GeminiContent[], apiKey: string) {
   const base = (process.env["GEMINI_BASE_URL"] || "https://generativelanguage.googleapis.com").replace(/\/$/, "");
   const body: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: system }] },
@@ -49,7 +46,7 @@ async function callGemini(model: string, system: string, tools: Tool[], contents
 /** The tool loop with Gemini. Returns the spoken reply; adds tokens to usage
  *  (input_tokens = prompt + tool-use prompt; output_tokens = response + thinking, which Google bills as output). */
 export async function geminiLoop(opts: {
-  model: string; system: string; tools: Tool[];
+  apiKey: string; model: string; system: string; tools: Tool[];
   history: Array<{ role: "user" | "assistant"; content: string }>; text: string; maxTurns: number;
   usage: Record<string, number>; runTool: (name: string, params: Record<string, unknown>) => Promise<Result>;
 }): Promise<string> {
@@ -59,7 +56,7 @@ export async function geminiLoop(opts: {
   ];
   let reply = "";
   for (let turn = 0; turn < opts.maxTurns; turn += 1) {
-    const res = await callGemini(opts.model, opts.system, opts.tools, contents);
+    const res = await callGemini(opts.model, opts.system, opts.tools, contents, opts.apiKey);
     const u = res.usageMetadata ?? {};
     opts.usage["input_tokens"] = (opts.usage["input_tokens"] ?? 0) + (u["promptTokenCount"] ?? 0) + (u["toolUsePromptTokenCount"] ?? 0);
     opts.usage["output_tokens"] = (opts.usage["output_tokens"] ?? 0) + (u["candidatesTokenCount"] ?? 0) + (u["thoughtsTokenCount"] ?? 0);

@@ -16,6 +16,7 @@ import type { Actor } from "../auth";
 import { staffToTell } from "./residentChat";
 import { commandWorkOrders } from "./tables";
 import { effectiveSwitches } from "./switches";
+import { keyFor } from "./keys";
 import { commandAuditLog } from "./audit";
 
 const ANALYZABLE = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -32,8 +33,9 @@ export async function residentPhotoToWorkOrder(tenantId: string, reportId: strin
   try {
     const [existing] = await db.select().from(commandWorkOrders).where(eq(commandWorkOrders.alertId, `resident:${reportId}`)).limit(1);
     if (existing) return { workOrder: existing, created: false };
-    const apiKey = process.env["OPENAI_API_KEY"];
-    if (!apiKey) return { error: "Smart Repair needs OPENAI_API_KEY on the server." };
+    const k = await keyFor(tenantId, "openai", (await effectiveSwitches(tenantId)).paysOwn);
+    if (!k.key) return { error: k.missing ?? "Smart Repair needs OPENAI_API_KEY on the server." };
+    const apiKey = k.key;
     const [report] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, reportId), eq(entityRecords.tenantId, tenantId), eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false))).limit(1);
     if (!report) return { error: "No complaint with that number." };
     const photos = await db.select().from(residentReportPhotos).where(and(eq(residentReportPhotos.reportId, reportId), eq(residentReportPhotos.tenantId, tenantId)));

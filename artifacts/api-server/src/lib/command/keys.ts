@@ -90,3 +90,70 @@ export async function saveKey(name: KeyName, key: string | null, by: string): Pr
 // Gemini names kept for the engine and Platform Control.
 export const geminiKey = () => apiKey("gemini");
 export const geminiKeyStatus = () => keyStatus("gemini");
+
+// ── A client's own keys ─────────────────────────────────────────────────────
+// When Platform Control → Clients sets "AI paid by: Client", that client's
+// Command Center uses the keys it adds on its own page (Anthropic or Google AI
+// Studio for the engine, OpenAI for reading resident photos, Google Maps for
+// drive times) and never FIAREP's. Stored encrypted the same way, per client
+// (settings key "command-own-keys").
+export type ClientKeyName = "anthropic" | "gemini" | "openai" | "googleMaps";
+export const CLIENT_KEYS: ClientKeyName[] = ["anthropic", "gemini", "openai", "googleMaps"];
+const OWN = "command-own-keys";
+
+async function clientStored(tenantId: string): Promise<Record<string, Sealed>> {
+  const [row] = await db.select().from(settings).where(and(eq(settings.tenantId, tenantId), eq(settings.key, OWN))).limit(1);
+  const v = (row?.value && typeof row.value === "object" ? row.value : {}) as Record<string, Sealed>;
+  return Object.fromEntries(Object.entries(v).filter(([, s]) => s && typeof s.data === "string"));
+}
+
+export async function clientKey(tenantId: string, name: ClientKeyName): Promise<string | null> {
+  const s = (await clientStored(tenantId))[name];
+  return s ? open(s) : null;
+}
+
+export async function clientKeyStatus(tenantId: string): Promise<Record<ClientKeyName, { set: boolean; last4: string | null; setAt: string | null; setBy: string | null }>> {
+  const all = await clientStored(tenantId);
+  return Object.fromEntries(CLIENT_KEYS.map((n) => {
+    const s = all[n];
+    return [n, s && open(s) !== null ? { set: true, last4: s.last4, setAt: s.setAt, setBy: s.setBy } : { set: false, last4: null, setAt: null, setBy: null }];
+  })) as Record<ClientKeyName, { set: boolean; last4: string | null; setAt: string | null; setBy: string | null }>;
+}
+
+/** Ask the provider whether the key works before saving it (each check is a free call). */
+export async function checkClientKey(name: ClientKeyName, key: string): Promise<string | null> {
+  if (name === "gemini" || name === "googleMaps") return checkKey(name, key);
+  try {
+    const r = name === "anthropic"
+      ? await fetch(`${(process.env["ANTHROPIC_BASE_URL"] || "https://api.anthropic.com").replace(/\/$/, "")}/v1/models?limit=1`, { headers: { "x-api-key": key, "anthropic-version": "2023-06-01" }, signal: AbortSignal.timeout(15_000) })
+      : await fetch(`${(process.env["OPENAI_BASE_URL"] || "https://api.openai.com").replace(/\/$/, "")}/v1/models`, { headers: { authorization: `Bearer ${key}` }, signal: AbortSignal.timeout(15_000) });
+    if (r.ok) return null;
+    const body = (await r.json().catch(() => ({}))) as { error?: { message?: string } };
+    return `${name === "anthropic" ? "Anthropic" : "OpenAI"} refused the key (HTTP ${r.status}${body.error?.message ? `: ${body.error.message}` : ""}).`;
+  } catch (e) { return `Could not reach ${name === "anthropic" ? "Anthropic" : "OpenAI"} to check the key (${e instanceof Error ? e.message : "network error"}).`; }
+}
+
+export async function saveClientKey(tenantId: string, name: ClientKeyName, key: string | null, by: string): Promise<void> {
+  const now = new Date();
+  const all = { ...(await clientStored(tenantId)) };
+  if (key) all[name] = { ...seal(key), last4: key.slice(-4), setAt: now.toISOString(), setBy: by };
+  else delete all[name];
+  await db.insert(settings).values({ tenantId, key: OWN, value: all, createdAt: now, updatedAt: now })
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value: all, updatedAt: now } });
+}
+
+/** FIAREP's own key for the same service. */
+async function fiarepKey(name: ClientKeyName): Promise<string | null> {
+  if (name === "anthropic") return process.env["ANTHROPIC_API_KEY"] || null;
+  if (name === "openai") return process.env["OPENAI_API_KEY"] || null;
+  return apiKey(name);
+}
+
+const LABEL: Record<ClientKeyName, string> = { anthropic: "Claude (Anthropic)", gemini: "Gemini (Google AI Studio)", openai: "OpenAI", googleMaps: "Google Maps" };
+
+/** The key to use for one organization: its own when it pays for its AI, otherwise FIAREP's. Never FIAREP's for a client that pays its own. */
+export async function keyFor(tenantId: string, name: ClientKeyName, paysOwn: boolean): Promise<{ key: string | null; payer: "fiarep" | "client"; missing?: string }> {
+  if (!paysOwn) return { key: await fiarepKey(name), payer: "fiarep" };
+  const key = await clientKey(tenantId, name);
+  return key ? { key, payer: "client" } : { key: null, payer: "client", missing: `Your organization pays for its own AI and hasn't added a ${LABEL[name]} key yet. Add it on the Command Center page (Your AI keys).` };
+}

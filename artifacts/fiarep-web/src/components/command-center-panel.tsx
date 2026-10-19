@@ -13,9 +13,12 @@ type AgentTask = { name: string; description: string; confirm: boolean; params: 
 type Agent = { id: string; name: string; status: string; online: boolean; lastSeenAt: string | null; info: Record<string, unknown>; tasks: AgentTask[]; folders: string[]; apps: string[]; createdAt: string };
 type Install = { windows: string; mac: string; linux: string };
 type Usage = { runs: number; inputTokens: number; outputTokens: number; costUsd: number; unpricedRuns: number };
-type Client = { id: string; name: string; status: string; on: boolean; cap: number | null; usage: Usage | null; phones: { active: number; pending: number }; computers: { total: number; online: number } };
+type Client = { id: string; name: string; status: string; on: boolean; cap: number | null; paysOwn?: boolean; usage: Usage | null; phones: { active: number; pending: number }; computers: { total: number; online: number } };
 type Overview = {
   switches: Switches; schedule?: Schedule; mapsKey?: { set: boolean; source?: string | null; last4?: string | null }; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; install: Install; usage: Usage | null; claudeKeyConfigured: boolean; audit: { ok: boolean; rows: number; brokenAt?: number | null };
+  // A client paying for its own AI (Platform Control → Clients → AI paid by)
+  paysOwn?: boolean; provider?: "claude" | "gemini"; models?: { claude: string; gemini: string };
+  ownKeys?: Record<"anthropic" | "gemini" | "openai" | "googleMaps", { set: boolean; last4: string | null; setAt: string | null; setBy: string | null }> | null;
   // Platform Control only
   defaultModel?: string; defaultGeminiModel?: string; geminiKeyConfigured?: boolean; geminiKey?: { set: boolean; source: "replit-secrets" | "terminal" | null; last4: string | null }; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
   // A client's own only
@@ -97,6 +100,8 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const [mailForm, setMailForm] = useState<MailForm>(emptyMail);
   const [mailNote, setMailNote] = useState("");
   const [mailBusy, setMailBusy] = useState(false);
+  const [ownKey, setOwnKey] = useState<Record<string, string>>({});
+  const [ownBusy, setOwnBusy] = useState("");
   const fail = (title: string) => (err: any) => toast({ variant: "destructive", title, description: err?.data?.error || err?.message });
 
   async function load() {
@@ -114,6 +119,17 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
     } catch (err: any) { setLoadError(err?.data?.error || err?.message || "Could not load the Command Center"); }
   }
   useEffect(() => { void load(); const t = setInterval(() => void load(), 15_000); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** A client paying for its own AI: save or remove one of its keys (checked with the provider first). */
+  async function saveOwnKey(which: string) {
+    setOwnBusy(which);
+    try { await api(`/v1/org/command/own-keys/${which}`, json("PUT", { key: ownKey[which] ?? "" })); setOwnKey(({ [which]: _, ...rest }) => rest); toast({ title: "Key saved" }); await load(); }
+    catch (err) { fail("Could not save the key")(err); }
+    finally { setOwnBusy(""); }
+  }
+  async function removeOwnKey(which: string) {
+    try { await api(`/v1/org/command/own-keys/${which}`, { method: "DELETE" }); await load(); } catch (err) { fail("Could not remove the key")(err); }
+  }
 
   /** Fill in the mail servers for the address's provider. */
   async function mailPreset(email: string) {
@@ -177,7 +193,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
     try { const r = await api<{ ok: boolean; error?: string }>("/v1/platform/command/relay/sync", { method: "POST" }); toast(r.ok ? { title: "Phones sent to the backup relay" } : { variant: "destructive", title: "Relay sync failed", description: r.error }); }
     catch (err) { fail("Relay sync failed")(err); }
   }
-  async function saveClient(c: Client, patch: { on?: boolean; cap?: number | null }) {
+  async function saveClient(c: Client, patch: { on?: boolean; cap?: number | null; paysOwn?: boolean }) {
     try { await api(`/v1/platform/command/clients/${encodeURIComponent(c.id)}`, json("PUT", patch)); await load(); toast({ title: `${c.name} saved` }); }
     catch (err) { fail("Could not save the client")(err); }
   }
@@ -222,7 +238,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           {platform && !gemini && !data.claudeKeyConfigured && <p><b>ANTHROPIC_API_KEY</b> is not set on the API server — commands can't be understood until it is (Replit → Secrets).</p>}
           {platform && gemini && !data.geminiKeyConfigured && <p>No Gemini API key yet — with Gemini on, commands can't be understood until one is set (run <code>set-gemini-key.sh</code> in Terminal on the Mac).</p>}
-          {!platform && !data.claudeKeyConfigured && <p>Commands are not available yet — FIAREP is finishing the setup.</p>}
+          {!platform && !data.claudeKeyConfigured && <p>{data.paysOwn ? `Commands are not available yet — add your ${data.provider === "gemini" ? "Gemini" : "Claude"} key under "Your AI keys" below.` : "Commands are not available yet — FIAREP is finishing the setup."}</p>}
           {platform && !data.voiceKeyConfigured && <p><b>OPENAI_API_KEY</b> is not set — voice in/out won't work (typing still does).</p>}
         </div>
       )}
@@ -230,16 +246,16 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       {!platform && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">This month</h2>
-          <p className="mt-1 text-sm text-slate-700">{data.usage ? `${data.usage.runs} command${data.usage.runs === 1 ? "" : "s"}` : "No commands yet"}{data.cap !== null && data.cap !== undefined ? ` · monthly limit ${money(data.cap)}${data.usage ? `, ${money(data.usage.costUsd)} used` : ""}` : ""}</p>
+          <p className="mt-1 text-sm text-slate-700">{data.usage ? `${data.usage.runs} command${data.usage.runs === 1 ? "" : "s"}` : "No commands yet"}{data.paysOwn ? " · billed to your own keys" : ""}{!data.paysOwn && data.cap !== null && data.cap !== undefined ? ` · monthly limit ${money(data.cap)}${data.usage ? `, ${money(data.usage.costUsd)} used` : ""}` : ""}</p>
         </section>
       )}
 
       {platform && data.clients && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Clients</h2>
-          <p className="text-xs text-slate-500">Every client starts with the Command Center <b>off</b> — it isn't in their menu or app and they don't see it. Switch it on here (or Platform → Modules) when a client asks for it. Once on, the client has its own Command Center: its administrators set up their phones in the app and approve them, add their computers (Windows, Mac or Linux) and switch actions on fiarep.com → Command Center. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Usage runs on FIAREP's {gemini ? "Gemini" : "Claude"} key; this month's cost per client is below ({activeModel}: {priceText(activeModel)}). A cap stops that client's commands for the rest of the month once reached.</p>
+          <p className="text-xs text-slate-500">Every client starts with the Command Center <b>off</b> — it isn't in their menu or app and they don't see it. Switch it on here (or Platform → Modules) when a client asks for it. Once on, the client has its own Command Center: its administrators set up their phones in the app and approve them, add their computers (Windows, Mac or Linux) and switch actions on fiarep.com → Command Center. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Usage runs on FIAREP's {gemini ? "Gemini" : "Claude"} key; this month's cost per client is below ({activeModel}: {priceText(activeModel)}). A cap stops that client's commands for the rest of the month once reached. "AI paid by: Client" means that client adds its own keys on its Command Center page (Claude or Gemini for commands and resident messages, OpenAI for reading resident photos, Google Maps for drive times) and pays those companies directly; FIAREP's keys are never used for them and no cap applies.</p>
           <div className="mt-3 overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Client</th><th className="py-1 pr-3">On</th><th className="py-1 pr-3">This month</th><th className="py-1 pr-3">Monthly cap</th><th className="py-1 pr-3">Phones</th><th className="py-1">Computers</th></tr></thead>
+            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Client</th><th className="py-1 pr-3">On</th><th className="py-1 pr-3">This month</th><th className="py-1 pr-3">AI paid by</th><th className="py-1 pr-3">Monthly cap</th><th className="py-1 pr-3">Phones</th><th className="py-1">Computers</th></tr></thead>
             <tbody>{data.clients.map((c) => {
               const capText = caps[c.id] ?? (c.cap === null ? "" : String(c.cap));
               return (
@@ -248,11 +264,17 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
                   <td className="py-1.5 pr-3"><Switch checked={c.on} onCheckedChange={(v) => void saveClient(c, { on: v })} /></td>
                   <td className="py-1.5 pr-3 text-xs text-slate-700">{c.usage ? <>{money(c.usage.costUsd)} · {c.usage.runs} cmd{c.usage.unpricedRuns ? ` (${c.usage.unpricedRuns} not priced)` : ""}<span className="block text-slate-500">{(c.usage.inputTokens / 1000).toFixed(0)}k in / {(c.usage.outputTokens / 1000).toFixed(0)}k out tokens</span></> : <span className="text-slate-400">—</span>}</td>
                   <td className="py-1.5 pr-3">
+                    <select value={c.paysOwn ? "client" : "fiarep"} onChange={(e) => void saveClient(c, { paysOwn: e.target.value === "client" })} className="rounded-md border border-slate-300 px-2 py-1 text-xs">
+                      <option value="fiarep">FIAREP (my keys)</option>
+                      <option value="client">Client (their own keys)</option>
+                    </select>
+                  </td>
+                  <td className="py-1.5 pr-3">{c.paysOwn ? <span className="text-xs text-slate-400">their bill</span> : (
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-slate-500">$</span>
                       <input value={capText} onChange={(e) => setCaps({ ...caps, [c.id]: e.target.value.replace(/[^\d.]/g, "") })} placeholder="no cap" inputMode="decimal" className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs" />
                       {caps[c.id] !== undefined && caps[c.id] !== (c.cap === null ? "" : String(c.cap)) && <Button size="sm" variant="outline" onClick={() => { void saveClient(c, { cap: caps[c.id] === "" ? null : Number(caps[c.id]) }); setCaps(({ [c.id]: _, ...rest }) => rest); }}>Save</Button>}
-                    </div>
+                    </div>)}
                   </td>
                   <td className="py-1.5 pr-3 text-xs text-slate-700">{c.phones.active}{c.phones.pending ? <span className="text-amber-700"> · {c.phones.pending} waiting</span> : null}</td>
                   <td className="py-1.5 text-xs text-slate-700">{c.computers.total ? `${c.computers.online}/${c.computers.total} online` : "—"}</td>
@@ -442,6 +464,41 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           {!chats.length && <p className="text-sm text-slate-500">No resident messages yet.</p>}
         </div>
       </section>
+
+      {!platform && data.paysOwn && data.ownKeys && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <h2 className="text-base font-semibold text-slate-950">Your AI keys</h2>
+          <p className="text-xs text-slate-500">Your organization pays for its own AI: the Command Center uses these keys and the companies bill you directly. Each key is checked with the company before it's saved, and stored encrypted. FIAREP's keys are never used for you.</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
+            <span className="font-medium text-slate-900">Engine:</span>
+            {(["claude", "gemini"] as const).map((p) => (
+              <button key={p} onClick={() => { void saveSwitches({ provider: p }).then(() => load()); }} className={`rounded-full px-3 py-1 text-xs font-semibold ${data.provider === p ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}>{p === "claude" ? "Claude" : "Gemini"}</button>
+            ))}
+            <span className="text-xs text-slate-500">{data.provider === "gemini" ? `${data.models?.gemini}: ${priceText(data.models?.gemini ?? "")}` : `${data.models?.claude}: ${priceText(data.models?.claude ?? "")}`}</span>
+          </div>
+          <div className="mt-3 divide-y divide-slate-100">
+            {([
+              ["anthropic", "anthropic", "Claude (Anthropic)", "Commands and resident messages when the engine is Claude. console.anthropic.com → API keys."],
+              ["gemini", "gemini", "Gemini (Google AI Studio)", "Commands and resident messages when the engine is Gemini. aistudio.google.com → Get API key."],
+              ["openai", "openai", "OpenAI", "Reads resident complaint photos for work orders. platform.openai.com → API keys."],
+              ["maps", "googleMaps", "Google Maps (optional)", "Drive time with traffic between jobs. Without it, drive time is estimated from distance. console.cloud.google.com → Credentials, Routes API enabled."],
+            ] as const).map(([path, key, label, what]) => {
+              const st = data.ownKeys![key];
+              return (
+                <div key={path} className="flex flex-wrap items-center gap-3 py-2 text-sm">
+                  <div className="min-w-[14rem] flex-1">
+                    <p className="font-medium text-slate-900">{label} {st.set ? <span className="text-xs font-normal text-emerald-700">· saved (…{st.last4}){st.setBy ? `, by ${st.setBy}` : ""}</span> : <span className="text-xs font-normal text-slate-400">· not added</span>}</p>
+                    <p className="text-xs text-slate-500">{what}</p>
+                  </div>
+                  <input type="password" autoComplete="off" value={ownKey[path] ?? ""} onChange={(e) => setOwnKey({ ...ownKey, [path]: e.target.value })} placeholder={st.set ? "Paste a new key to replace it" : "Paste the key"} className="mt-1 w-full rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" style={{ maxWidth: "18rem" }} />
+                  <Button size="sm" disabled={!ownKey[path] || ownBusy === path} onClick={() => void saveOwnKey(path)}>{ownBusy === path ? "Checking…" : "Save"}</Button>
+                  {st.set && <Button size="sm" variant="outline" onClick={() => void removeOwnKey(path)}>Remove</Button>}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {mail && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

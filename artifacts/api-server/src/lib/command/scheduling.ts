@@ -11,7 +11,8 @@ import { randomUUID } from "node:crypto";
 import { and, asc, eq, gte, lt, ne, sql } from "drizzle-orm";
 import { boolean, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/pg-core";
 import { db, settings, staffAccounts } from "@workspace/db";
-import { apiKey } from "./keys";
+import { keyFor } from "./keys";
+import { effectiveSwitches } from "./switches";
 import { distanceMeters, geocodeNycPoint } from "../nycProperty";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
@@ -132,14 +133,17 @@ const travelCache = new Map<string, { at: number; t: Travel }>();
 const parseSeconds = (s: unknown) => { const m = /^(\d+(?:\.\d+)?)s$/.exec(String(s ?? "")); return m ? Number(m[1]) : NaN; };
 
 /** Drive time from one building to another, leaving at `departAt`. */
-export async function travelTime(from: string, to: string, departAt: Date): Promise<Travel> {
+export async function travelTime(from: string, to: string, departAt: Date, tenantId = "default"): Promise<Travel> {
   if (buildingKey(from) === buildingKey(to)) return { minutes: 0, source: "same-building", detail: "same building" };
   const hour = Math.floor(departAt.getTime() / 3_600_000);
-  const ck = `${buildingKey(from)}|${buildingKey(to)}|${hour}`;
+  // A client paying for its own AI uses its own Google Maps key (or the free estimate), never FIAREP's.
+  const paysOwn = (await effectiveSwitches(tenantId)).paysOwn;
+  const key = (await keyFor(tenantId, "googleMaps", paysOwn)).key;
+  // Cached per payer, and an estimate is never served once a key is there.
+  const ck = `${paysOwn ? tenantId : "fiarep"}|${key ? "maps" : "estimate"}|${buildingKey(from)}|${buildingKey(to)}|${hour}`;
   const hit = travelCache.get(ck);
   if (hit && Date.now() - hit.at < 6 * 3_600_000) return hit.t;
   let t: Travel | null = null;
-  const key = await apiKey("googleMaps");
   if (key) {
     try {
       const base = (process.env["GOOGLE_ROUTES_BASE_URL"] || "https://routes.googleapis.com").replace(/\/$/, "");
@@ -194,13 +198,13 @@ async function fitDay(tenantId: string, staffId: string, date: string, want: Wan
   for (const next of candidates) {
     let start = prev ? new Date(prev.endAt) : dayStart;
     let travel: Travel | { minutes: number; source: "first"; detail: string } = { minutes: 0, source: "first", detail: "first job of the day" };
-    if (prev) { travel = await travelTime(prev.address, want.address, prev.endAt); start = new Date(start.getTime() + travel.minutes * 60_000); }
+    if (prev) { travel = await travelTime(prev.address, want.address, prev.endAt, tenantId); start = new Date(start.getTime() + travel.minutes * 60_000); }
     if (start < want.earliest) start = want.earliest;
     start = want.exactStart ?? ceil15(start);
     const end = new Date(start.getTime() + minMs);
     let fits = start >= (prev ? new Date(prev.endAt.getTime() + travel.minutes * 60_000) : dayStart) && end <= dayEnd;
     if (fits && next) {
-      const onward = await travelTime(want.address, next.address, end);
+      const onward = await travelTime(want.address, next.address, end, tenantId);
       fits = end.getTime() + onward.minutes * 60_000 <= next.startAt.getTime();
     }
     if (fits) return { slot: { startAt: start, endAt: end, travelMinutes: travel.minutes, travelSource: travel.source, travelDetail: travel.detail, date } };

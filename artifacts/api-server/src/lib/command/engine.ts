@@ -1,5 +1,6 @@
 // Command Center engine: turn a spoken / typed command into actions through
 // Claude tool use, run the reads, hold the writes for a Face ID approval.
+import { keyFor } from "./keys";
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, lt } from "drizzle-orm";
 import { db, organizations } from "@workspace/db";
@@ -113,9 +114,7 @@ function systemPrompt(actorName: string, catalog: string, orgName: string, platf
   ].join("\n");
 }
 
-async function callClaude(model: string, system: string, tools: unknown[], messages: Msg[]) {
-  const apiKey = process.env["ANTHROPIC_API_KEY"];
-  if (!apiKey) throw Object.assign(new Error("ANTHROPIC_API_KEY is not configured"), { status: 503 });
+async function callClaude(model: string, system: string, tools: unknown[], messages: Msg[], apiKey: string) {
   const base = (process.env["ANTHROPIC_BASE_URL"] || "https://api.anthropic.com").replace(/\/$/, "");
   const response = await fetch(`${base}/v1/messages`, {
     method: "POST",
@@ -171,14 +170,15 @@ export async function modelTurn(opts: {
   const switches = await effectiveSwitches(opts.tenantId);
   const gemini = switches.provider === "gemini";
   const model = gemini ? switches.geminiModel : switches.model;
+  const apiKey = await engineKey(opts.tenantId, gemini, switches.paysOwn);
   if (gemini) {
-    const reply = await geminiLoop({ model, system: opts.system, tools: opts.tools, history: opts.history, text: opts.text, maxTurns: MAX_TURNS, usage: opts.usage, runTool: opts.runTool });
+    const reply = await geminiLoop({ apiKey, model, system: opts.system, tools: opts.tools, history: opts.history, text: opts.text, maxTurns: MAX_TURNS, usage: opts.usage, runTool: opts.runTool });
     return { reply, model };
   }
   const messages: Msg[] = [...opts.history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: opts.text }];
   let reply = "";
   for (let turn = 0; turn < MAX_TURNS; turn += 1) {
-    const res = await callClaude(model, opts.system, opts.tools, messages);
+    const res = await callClaude(model, opts.system, opts.tools, messages, apiKey);
     for (const [k, v] of Object.entries(res.usage ?? {})) if (typeof v === "number") opts.usage[k] = (opts.usage[k] ?? 0) + v;
     const content = res.content ?? [];
     reply = content.filter((b) => b.type === "text").map((b) => String(b["text"] ?? "")).join("\n").trim() || reply;
@@ -194,10 +194,20 @@ export async function modelTurn(opts: {
   return { reply, model };
 }
 
+/** The engine key: FIAREP's, or the client's own when it pays for its AI (never FIAREP's then). */
+async function engineKey(tenantId: string, gemini: boolean, paysOwn: boolean): Promise<string> {
+  const k = await keyFor(tenantId, gemini ? "gemini" : "anthropic", paysOwn);
+  if (k.key) return k.key;
+  if (k.missing) throw Object.assign(new Error(k.missing), { status: 402 });
+  throw Object.assign(new Error(gemini ? "No Gemini API key yet (set-gemini-key.sh, or GEMINI_API_KEY in Replit Secrets)" : "ANTHROPIC_API_KEY is not configured"), { status: 503 });
+}
+
 /** A client over its monthly cap (Platform Control → Command Center → Clients) can't run commands until next month. */
 export async function capProblem(tenantId: string): Promise<string | null> {
   if (isPlatform(tenantId)) return null;
-  const cap = (await getSwitches(PLATFORM_TENANT)).caps?.[tenantId];
+  const platform = await getSwitches(PLATFORM_TENANT);
+  if (platform.ownKeys?.[tenantId] === true) return null; // pays for its own AI: FIAREP's cap doesn't apply
+  const cap = platform.caps?.[tenantId];
   if (typeof cap !== "number") return null;
   const [used] = await monthUsage(tenantId);
   return used && used.costUsd >= cap ? `This month's Command Center limit ($${cap.toFixed(2)}) is used up. It resets on the 1st, or FIAREP can raise it.` : null;
@@ -222,15 +232,16 @@ export async function runCommand(input: { text: string; threadId?: string; staff
   const model = gemini ? switches.geminiModel : switches.model;
   let reply = "";
   try {
+    const apiKey = await engineKey(input.tenantId, gemini, switches.paysOwn);
     if (gemini) {
       reply = await geminiLoop({
-        model, system, tools, maxTurns: MAX_TURNS, usage, text: input.text,
+        apiKey, model, system, tools, maxTurns: MAX_TURNS, usage, text: input.text,
         history: messages.slice(0, -1).map((m) => ({ role: m.role, content: String(m.content) })),
         runTool: (name, params) => runTool(name, params, ctx, switches),
       });
     }
     else for (let turn = 0; turn < MAX_TURNS; turn += 1) {
-      const res = await callClaude(switches.model, system, tools, messages);
+      const res = await callClaude(switches.model, system, tools, messages, apiKey);
       for (const [k, v] of Object.entries(res.usage ?? {})) if (typeof v === "number") usage[k] = (usage[k] ?? 0) + v;
       const content = res.content ?? [];
       reply = content.filter((b) => b.type === "text").map((b) => String(b["text"] ?? "")).join("\n").trim() || reply;
