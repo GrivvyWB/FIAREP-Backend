@@ -285,7 +285,7 @@ function allFeaturesOn(): Record<string, boolean> {
   for (const k of ["residentPhotoAiViolationReader", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "fiarepMessaging"]) on[k] = true;
   return on;
 }
-type PilotInfo = { days?: number; startedAt?: string; endsAt?: string; status?: "running" | "purchased" | "ended"; endedAt?: string; endedBy?: string; added?: string[] };
+type PilotInfo = { price?: number | null; days?: number; startedAt?: string; endsAt?: string; status?: "running" | "purchased" | "ended"; endedAt?: string; endedBy?: string; added?: string[] };
 
 export default function OwnerModules() {
   const { data: organizations = [], isLoading, error } = useListOrganizations();
@@ -326,6 +326,9 @@ export default function OwnerModules() {
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pilotBusy, setPilotBusy] = useState(false);
+  const [pilotPrices, setPilotPrices] = useState<Record<string, number | null>>({});
+  const [priceDraft, setPriceDraft] = useState<Record<string, string> | null>(null);
+  useEffect(() => { void customFetch<Record<string, number | null>>("/api/v1/platform/pilot-prices").then(setPilotPrices).catch(() => undefined); }, []);
 
   const selectableOrganizations = useMemo(
     () => organizations,
@@ -519,6 +522,16 @@ export default function OwnerModules() {
     } finally { setPilotBusy(false); }
   };
 
+  const savePilotPrices = async () => {
+    if (!priceDraft) return;
+    try {
+      const body = Object.fromEntries(Object.entries(priceDraft).map(([k, v]) => [k, v.trim() === "" ? null : Number(v)]));
+      setPilotPrices(await customFetch<Record<string, number | null>>("/api/v1/platform/pilot-prices", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
+      setPriceDraft(null);
+      toast({ title: "Pilot prices saved" });
+    } catch (e: any) { toast({ variant: "destructive", title: "Prices not saved", description: e?.data?.error || e?.message }); }
+  };
+
   const save = async () => {
     if (!organization) return;
     try {
@@ -612,14 +625,15 @@ export default function OwnerModules() {
             const day = (iso?: string) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
             const left = p?.status === "running" && p.endsAt ? Math.max(0, Math.ceil((new Date(p.endsAt).getTime() - Date.now()) / 86_400_000)) : 0;
             const length = (d?: number) => d === 365 ? "1-year" : `${d}-day`;
+            const money = (n?: number | null) => typeof n === "number" ? `$${n.toLocaleString("en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}` : "";
             return (
               <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
                     <h2 className="font-semibold text-slate-950">Pilot program</h2>
                     <p className="text-xs text-slate-500">Every feature on for the length of the pilot. When it ends: if they buy, mark it purchased and everything stays on; if they don't, the features the pilot added shut off and they go back to exactly what they had before the pilot.</p>
-                    {p?.status === "running" && <p className="mt-2 text-sm text-slate-800"><b>{length(p.days)} pilot running</b> · started {day(p.startedAt)} · ends <b>{day(p.endsAt)}</b> ({left} day{left === 1 ? "" : "s"} left) · {p.added?.length ?? 0} features added for the pilot</p>}
-                    {p?.status === "purchased" && <p className="mt-2 text-sm text-emerald-800"><b>Purchased</b> after the {length(p.days)} pilot ({day(p.endedAt)}) — every feature stays on.</p>}
+                    {p?.status === "running" && <p className="mt-2 text-sm text-slate-800"><b>{length(p.days)} pilot running</b>{typeof p.price === "number" ? <> · <b>{money(p.price)}</b></> : " · no price set"} · started {day(p.startedAt)} · ends <b>{day(p.endsAt)}</b> ({left} day{left === 1 ? "" : "s"} left) · {p.added?.length ?? 0} features added for the pilot</p>}
+                    {p?.status === "purchased" && <p className="mt-2 text-sm text-emerald-800"><b>Purchased</b> after the {length(p.days)}{typeof p.price === "number" ? ` (${money(p.price)})` : ""} pilot ({day(p.endedAt)}) — every feature stays on.</p>}
                     {p?.status === "ended" && <p className="mt-2 text-sm text-slate-700"><b>{length(p.days)} pilot ended</b> {day(p.endedAt)}{p.endedBy ? ` (${p.endedBy})` : ""} — back to the features they had before.</p>}
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -631,12 +645,26 @@ export default function OwnerModules() {
                     ) : (
                       <>
                         {[60, 90, 365].map((d) => (
-                          <Button key={d} type="button" variant="outline" disabled={pilotBusy} onClick={() => void pilotAction({ action: "start", days: d, modules: allFeaturesOn() }, `${length(d)} pilot started — every feature on`)}>{d === 365 ? "1-year pilot" : `${d}-day pilot`}</Button>
+                          <Button key={d} type="button" variant="outline" disabled={pilotBusy} onClick={() => void pilotAction({ action: "start", days: d, modules: allFeaturesOn() }, `${length(d)} pilot started — every feature on`)}>{d === 365 ? "1-year pilot" : `${d}-day pilot`}{typeof pilotPrices[String(d)] === "number" ? ` · ${money(pilotPrices[String(d)])}` : ""}</Button>
                         ))}
                         {p?.status === "ended" && <Button type="button" disabled={pilotBusy} onClick={() => void pilotAction({ action: "purchase" }, "Purchased — the pilot's features are back on")}>They purchased — turn everything back on</Button>}
                       </>
                     )}
                   </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
+                  <span className="text-xs font-semibold text-slate-700">Pilot prices (every client)</span>
+                  {(["60", "90", "365"] as const).map((k) => (
+                    <label key={k} className="flex flex-col text-xs text-slate-600">{k === "365" ? "1 year" : `${k} days`}
+                      <span className="mt-1 flex items-center gap-1"><span className="text-slate-500">$</span>
+                        <input inputMode="decimal" value={priceDraft ? priceDraft[k] ?? "" : (pilotPrices[k] ?? "") === "" || pilotPrices[k] === null || pilotPrices[k] === undefined ? "" : String(pilotPrices[k])}
+                          onChange={(e) => setPriceDraft({ "60": String(pilotPrices["60"] ?? ""), "90": String(pilotPrices["90"] ?? ""), "365": String(pilotPrices["365"] ?? ""), ...(priceDraft ?? {}), [k]: e.target.value.replace(/[^\d.]/g, "") })}
+                          placeholder="not set" className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+                      </span>
+                    </label>
+                  ))}
+                  {priceDraft && <Button type="button" size="sm" onClick={() => void savePilotPrices()}>Save prices</Button>}
+                  <span className="text-xs text-slate-500">The price of the option picked is kept with that client's pilot.</span>
                 </div>
               </section>
             );

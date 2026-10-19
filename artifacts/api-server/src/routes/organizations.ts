@@ -5,7 +5,7 @@ import { db, entityRecords, organizationProperties, organizations, staffAccounts
 import { requirePlatformOwner } from "../middlewares/auth";
 import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
-import { endPilot, expirePilots, purchasePilot, startPilot } from "../lib/pilot";
+import { endPilot, expirePilots, getPilotPrices, purchasePilot, savePilotPrices, startPilot } from "../lib/pilot";
 import { ensureResidentCode, newResidentCode, withResidentCode } from "../lib/residentRouting";
 import {
   getTimeClockConfig,
@@ -573,6 +573,15 @@ router.post("/v1/platform/organizations/:id/resident-code", async (req, res) => 
   const owner = res.locals["platformOwner"] as { name: string };
   await platformAudit(owner.name, "organization.resident-code", id, before, org);
   res.json({ code, created: true });
+});
+
+// The price of each pilot option (60 days, 90 days, 1 year).
+router.get("/v1/platform/pilot-prices", requirePlatformOwner, async (_req, res) => { res.json(await getPilotPrices()); });
+router.put("/v1/platform/pilot-prices", requirePlatformOwner, async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const out = await savePilotPrices((req.body ?? {}) as Record<string, unknown>, owner.name);
+  if ("error" in out) { res.status(400).json(out); return; }
+  res.json(out);
 });
 
 // Pilot program: 60 days, 90 days or 1 year with every feature on (Platform -> Modules).
