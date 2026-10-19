@@ -23,7 +23,8 @@ import { bookingView, bookingsOn, createBooking, findMember, findSlot, hm, nyDat
 import { staffAccounts } from "@workspace/db";
 import { residentPhotoToWorkOrder } from "./photoWorkOrder";
 import { notifyResident } from "../residentNotify";
-import { createScope, listContractors, listScopes, saveReport, sendScope, findScope } from "./scopes";
+import { attachmentFor, findContacts, mailStatus, readEmail, readInbox, resolveRecipients, saveContact, sendEmail } from "./mail";
+import { createScope, listContractors, listReports, listScopes, saveReport, sendScope, findScope } from "./scopes";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -493,6 +494,67 @@ export const ACTIONS: ActionDef[] = [
     run: async (p, ctx) => saveReport(ctx.tenantId, str(p["title"], 200), typeof p["body"] === "string" ? p["body"] : "", ctx.actorName, ctx.runId),
     describe: (p) => `Save the report "${str(p["title"], 120)}"`,
     spoken: (r) => { const x = r as { title?: string }; return `Report saved: ${x.title}. It's on the Command Center page.`; },
+  },
+  {
+    name: "list_reports", label: "Saved reports", risk: "read", confirmDefault: false, target: "server",
+    description: "Reports saved with write_report, newest first (title, id, who, when).",
+    schema: { type: "object", properties: {}, additionalProperties: false },
+    run: async (_p, ctx) => ({ reports: await listReports(ctx.tenantId, 30) }),
+    describe: () => "Saved reports",
+  },
+  // ── Email ───────────────────────────────────────────────────────────────
+  {
+    name: "read_inbox", label: "Read the inbox", risk: "read", confirmDefault: false, target: "server",
+    description: "List recent emails in this organization's inbox (FIAREP's Outlook for FIAREP; a client's own connected mailbox): who from, subject, date, a short preview, unread. Optionally only unread, only from someone, or containing words. Use read_email for the whole email.",
+    schema: { type: "object", properties: { unreadOnly: { type: "boolean" }, from: { type: "string" }, search: { type: "string" }, limit: { type: "integer", minimum: 1, maximum: 25 } }, additionalProperties: false },
+    run: async (p, ctx) => readInbox(ctx.tenantId, { unreadOnly: p["unreadOnly"] === true, from: str(p["from"], 200) || undefined, search: str(p["search"], 200) || undefined, limit: num(p["limit"], 10, 1, 25) }),
+    describe: (p) => `Inbox${p["unreadOnly"] ? " (unread)" : ""}${str(p["from"]) ? ` from ${str(p["from"])}` : ""}`,
+  },
+  {
+    name: "read_email", label: "Read an email", risk: "read", confirmDefault: false, target: "server",
+    description: "The whole text of one email from read_inbox (give its id).",
+    schema: { type: "object", properties: { id: { type: "string" } }, required: ["id"], additionalProperties: false },
+    run: async (p, ctx) => readEmail(ctx.tenantId, str(p["id"], 600)),
+    describe: () => "Read an email",
+  },
+  {
+    name: "find_contact", label: "Look up an email address", risk: "read", confirmDefault: false, target: "server",
+    description: "Find people's email addresses by name: saved contacts, staff (HR records), contractors, the HR mailbox.",
+    schema: { type: "object", properties: { name: { type: "string" } }, additionalProperties: false },
+    run: async (p, ctx) => ({ contacts: await findContacts(ctx.tenantId, str(p["name"], 120)) }),
+    describe: (p) => `Email address for ${str(p["name"], 80) || "everyone"}`,
+  },
+  {
+    name: "save_contact", label: "Save an email contact", risk: "write", confirmDefault: false, target: "server",
+    description: "Save a name and email address (for example a building owner) so emails can be sent to them by name. Optional note (owner of 1 Acme St, insurance agent…).",
+    schema: { type: "object", properties: { name: { type: "string" }, email: { type: "string" }, note: { type: "string" } }, required: ["name", "email"], additionalProperties: false },
+    run: async (p, ctx) => saveContact(ctx.tenantId, str(p["name"], 120), str(p["email"], 200), str(p["note"], 60), ctx.actorName),
+    describe: (p) => `Save ${str(p["name"], 80)} <${str(p["email"], 120)}>`,
+    spoken: (r) => { const x = r as { saved?: { name: string }; error?: string }; return x.error ?? `Saved ${x.saved!.name}.`; },
+  },
+  {
+    name: "send_email", label: "Send an email", risk: "write", confirmDefault: true, target: "server",
+    description: "Send an email from this organization's mailbox (its own if connected, otherwise FIAREP's Outlook). to / cc: names (looked up like find_contact; a name must match one person) or email addresses. You write the subject and body (plain text, blank line between paragraphs). attach: saved report titles or ids (list_reports / write_report) or scope codes, sent as files.",
+    schema: { type: "object", properties: {
+      to: { type: "array", items: { type: "string" }, minItems: 1, maxItems: 20 }, cc: { type: "array", items: { type: "string" }, maxItems: 20 },
+      subject: { type: "string" }, body: { type: "string" }, attach: { type: "array", items: { type: "string" }, maxItems: 5 },
+    }, required: ["to", "subject", "body"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const to = await resolveRecipients(ctx.tenantId, strList(p["to"], 20)); if ("error" in to) return to;
+      const cc = await resolveRecipients(ctx.tenantId, strList(p["cc"], 20)); if ("error" in cc) return cc;
+      const att = [];
+      for (const a of strList(p["attach"], 5)) { const r = await attachmentFor(ctx.tenantId, a); if ("error" in r) return r; att.push(r); }
+      try { return await sendEmail(ctx.tenantId, { to: to.to, cc: cc.to, subject: str(p["subject"], 200), body: typeof p["body"] === "string" ? p["body"].slice(0, 20000) : "", attachments: att }, ctx.actorName, ctx.runId); }
+      catch (e) { return { error: `Email didn't send: ${e instanceof Error ? e.message : "failed"}` }; }
+    },
+    describe: (p) => `Email "${str(p["subject"], 80)}" to ${strList(p["to"]).join(", ")}${strList(p["attach"]).length ? ` (${strList(p["attach"]).length} attached)` : ""}`,
+    describeLive: async (p, ctx) => {
+      const to = await resolveRecipients(ctx.tenantId, strList(p["to"], 20));
+      if ("error" in to) return null;
+      const st = await mailStatus(ctx.tenantId);
+      return `Email "${str(p["subject"], 80)}" to ${to.to.map((c) => c.email).join(", ")}${strList(p["cc"]).length ? `, cc ${strList(p["cc"]).join(", ")}` : ""} from ${st.sends ?? "no mailbox"}${strList(p["attach"]).length ? ` · ${strList(p["attach"]).length} attached` : ""}`;
+    },
+    spoken: (r) => { const x = r as { to?: string[]; from?: string; error?: string }; return x.error ?? `Sent to ${x.to!.join(", ")} from ${x.from}.`; },
   },
   // ── Desktop agent (Windows, Mac or Linux) ───────────────────────────────
   {

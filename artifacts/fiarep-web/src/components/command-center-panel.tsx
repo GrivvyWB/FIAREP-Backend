@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ActionMeta = { name: string; label: string; risk: "read" | "write"; confirmDefault: boolean; target: "server" | "agent" };
-type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; autoWorkOrders: boolean; caps?: Record<string, number> };
+type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; autoWorkOrders: boolean; mailFallback?: boolean; caps?: Record<string, number> };
 type ChatMsg = { id: string; from: "resident" | "office" | "staff"; text: string; at: string; by?: string };
 type Conversation = { id: string; complaintNo: string; address: string; unit: string; description: string; human: boolean; handoff: { reason?: string; urgent?: boolean } | null; appointment: string | null; lastAt: string; waiting: boolean; messages: ChatMsg[] };
 type Device = { id: string; name: string; staffName: string; status: "pending" | "active" | "revoked"; confirmKey: string; createdAt: string; approvedAt: string | null; approvedBy: string | null; lastUsedAt: string | null };
@@ -23,6 +23,9 @@ type Overview = {
 };
 type Schedule = { dayStart: string; dayEnd: string; workDays: number[]; defaultJobMinutes: number; minutesPerApartment: number; buildingDayApartments: number };
 type AuditRow = { seq: number; at: string; actor: string; event: string; detail: Record<string, unknown> };
+type MailStatus = { own: { email: string; name: string; imapHost: string; smtpHost: string; setAt: string; setBy: string } | null; reads: string | null; sends: string | null };
+type MailForm = { email: string; name: string; password: string; user: string; imapHost: string; imapPort: string; smtpHost: string; smtpPort: string };
+const emptyMail: MailForm = { email: "", name: "", password: "", user: "", imapHost: "", imapPort: "", smtpHost: "", smtpPort: "" };
 type Report = { id: string; title: string; createdBy: string; createdAt: string };
 type WorkOrder = { id: string; status: string; urgency: string; address: string; borough: string; kind: string; title: string; createdAt: string; decidedBy: string | null; assignedName?: string | null };
 type Os = keyof Install;
@@ -90,6 +93,10 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const [openChat, setOpenChat] = useState<string | null>(null);
   const [reply, setReply] = useState("");
   const [reports, setReports] = useState<Report[]>([]);
+  const [mail, setMail] = useState<MailStatus | null>(null);
+  const [mailForm, setMailForm] = useState<MailForm>(emptyMail);
+  const [mailNote, setMailNote] = useState("");
+  const [mailBusy, setMailBusy] = useState(false);
   const fail = (title: string) => (err: any) => toast({ variant: "destructive", title, description: err?.data?.error || err?.message });
 
   async function load() {
@@ -102,10 +109,30 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       ]);
       setChats(c);
       setReports(await api<Report[]>(`${base}/reports`).catch(() => [] as Report[]));
+      setMail(await api<MailStatus>(`${base}/mailbox`).catch(() => null));
       setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setSched((x) => x ?? o.schedule ?? null); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
     } catch (err: any) { setLoadError(err?.data?.error || err?.message || "Could not load the Command Center"); }
   }
   useEffect(() => { void load(); const t = setInterval(() => void load(), 15_000); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** Fill in the mail servers for the address's provider. */
+  async function mailPreset(email: string) {
+    if (!email.includes("@")) return;
+    try {
+      const p = await api<{ imapHost?: string; imapPort?: number; smtpHost?: string; smtpPort?: number; note?: string }>(`${base}/mailbox/preset?email=${encodeURIComponent(email)}`);
+      setMailForm((f) => ({ ...f, imapHost: p.imapHost ?? "", imapPort: p.imapPort ? String(p.imapPort) : "", smtpHost: p.smtpHost ?? "", smtpPort: p.smtpPort ? String(p.smtpPort) : "" }));
+      setMailNote(p.note ?? "");
+    } catch { /* keep what's typed */ }
+  }
+  async function connectMail() {
+    setMailBusy(true);
+    try { setMail(await api<MailStatus>(`${base}/mailbox`, json("PUT", mailForm))); setMailForm(emptyMail); setMailNote(""); toast({ title: "Mailbox connected" }); }
+    catch (err) { fail("Could not connect the mailbox")(err); }
+    finally { setMailBusy(false); }
+  }
+  async function disconnectMail() {
+    try { setMail(await api<MailStatus>(`${base}/mailbox`, { method: "DELETE" })); } catch (err) { fail("Could not disconnect")(err); }
+  }
 
   /** Open a report in a new tab, laid out to print. */
   async function openReport(r: Report) {
@@ -415,6 +442,44 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           {!chats.length && <p className="text-sm text-slate-500">No resident messages yet.</p>}
         </div>
       </section>
+
+      {mail && (
+        <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <h2 className="text-base font-semibold text-slate-950">Email</h2>
+              <p className="text-xs text-slate-500">The Command Center reads the inbox and sends email (with a saved report or a scope attached) when you ask. Sending always asks for Face ID first unless you turn that off under Actions. {platform ? "FIAREP uses FIAREP's Outlook (the Outlook connection in Replit)." : "Connect your organization's mailbox with its address and an app password. Gmail, Yahoo, iCloud and most hosting companies work this way; Outlook.com and Microsoft 365 mailboxes can't be connected with a password."}</p>
+              <p className="mt-2 text-sm text-slate-700">Reads: <b>{mail.reads ?? "nothing connected"}</b> · Sends from: <b>{mail.sends ?? "nothing connected"}</b></p>
+            </div>
+            {!platform && (
+              <label className="flex items-center gap-3 rounded-lg border border-slate-200 px-3 py-2 text-sm">
+                <span className="font-semibold text-slate-900">Send from FIAREP's Outlook when no mailbox is connected</span>
+                <Switch checked={data.switches.mailFallback !== false} onCheckedChange={(v) => void saveSwitches({ mailFallback: v })} />
+              </label>
+            )}
+          </div>
+          {mail.own ? (
+            <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-slate-50 px-3 py-2 text-sm">
+              <span className="font-medium text-slate-900">{mail.own.name ? `${mail.own.name} · ` : ""}{mail.own.email}</span>
+              <span className="text-xs text-slate-500">{mail.own.imapHost} / {mail.own.smtpHost} · connected by {mail.own.setBy} {when(mail.own.setAt)}</span>
+              <Button size="sm" variant="outline" className="ml-auto" onClick={() => void disconnectMail()}>Disconnect</Button>
+            </div>
+          ) : (
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              <label className="flex flex-col text-xs text-slate-600">Email address<input value={mailForm.email} onChange={(e) => setMailForm({ ...mailForm, email: e.target.value })} onBlur={(e) => void mailPreset(e.target.value)} className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+              <label className="flex flex-col text-xs text-slate-600">Name on emails<input value={mailForm.name} onChange={(e) => setMailForm({ ...mailForm, name: e.target.value })} placeholder="Company name" className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+              <label className="flex flex-col text-xs text-slate-600">App password<input type="password" autoComplete="new-password" value={mailForm.password} onChange={(e) => setMailForm({ ...mailForm, password: e.target.value })} className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+              <label className="flex flex-col text-xs text-slate-600">Incoming (IMAP) server<input value={mailForm.imapHost} onChange={(e) => setMailForm({ ...mailForm, imapHost: e.target.value })} className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+              <label className="flex flex-col text-xs text-slate-600">Port<input value={mailForm.imapPort} onChange={(e) => setMailForm({ ...mailForm, imapPort: e.target.value })} placeholder="993" className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+              <label className="flex flex-col text-xs text-slate-600">Sign-in name (if not the address)<input value={mailForm.user} onChange={(e) => setMailForm({ ...mailForm, user: e.target.value })} className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+              <label className="flex flex-col text-xs text-slate-600">Outgoing (SMTP) server<input value={mailForm.smtpHost} onChange={(e) => setMailForm({ ...mailForm, smtpHost: e.target.value })} className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+              <label className="flex flex-col text-xs text-slate-600">Port<input value={mailForm.smtpPort} onChange={(e) => setMailForm({ ...mailForm, smtpPort: e.target.value })} placeholder="465" className="mt-1 rounded-md border border-slate-300 px-2 py-1 text-sm" /></label>
+              <div className="flex items-end"><Button size="sm" disabled={mailBusy || !mailForm.email || !mailForm.password} onClick={() => void connectMail()}>{mailBusy ? "Checking…" : "Connect mailbox"}</Button></div>
+              {mailNote && <p className="text-xs text-amber-800 sm:col-span-3">{mailNote}</p>}
+            </div>
+          )}
+        </section>
+      )}
 
       {sched && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

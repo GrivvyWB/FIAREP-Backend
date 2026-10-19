@@ -30,6 +30,7 @@ import { checkKey, geminiKeyStatus, KEY_ENV, keyStatus, saveKey, type KeyName } 
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
 import { relayUrl, syncRelayDevices } from "../lib/command/relay";
 import { getReport, listReports } from "../lib/command/scopes";
+import { connectMailbox, disconnectMailbox, mailStatus, presetFor } from "../lib/command/mail";
 
 const router: IRouter = Router();
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -422,6 +423,7 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     provider: b["provider"] === "gemini" || b["provider"] === "claude" ? b["provider"] : before.provider,
     residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
     autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
+    mailFallback: typeof b["mailFallback"] === "boolean" ? b["mailFallback"] : before.mailFallback,
     geminiModel: typeof b["geminiModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["geminiModel"].trim()) ? b["geminiModel"].trim() : before.geminiModel,
     caps: before.caps ?? {},
   };
@@ -566,6 +568,7 @@ router.put("/v1/org/command/switches", ...org, async (req, res) => {
     model: before.model, provider: before.provider, geminiModel: before.geminiModel, // the engine and model are FIAREP's choice (Platform Control)
     residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
     autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
+    mailFallback: typeof b["mailFallback"] === "boolean" ? b["mailFallback"] : before.mailFallback,
   };
   await saveSwitches(next, tenantId);
   await commandAuditLog({ tenantId, actor: by(res), event: "switches.changed", detail: { before, after: next } });
@@ -665,6 +668,25 @@ for (const prefix of ["/v1/platform/command", "/v1/org/command"]) {
     const next = await staffWrites(row, who, { text: str(b["text"], 2000) || undefined, takeOver: b["takeOver"] === true, giveBack: b["giveBack"] === true });
     await commandAuditLog({ tenantId, actor: who, event: "resident-chat.staff", detail: { complaint: row.state["complaintNo"], replied: !!str(b["text"], 10), takeOver: b["takeOver"] === true, giveBack: b["giveBack"] === true } });
     res.json({ ok: true, human: next.state["chatHuman"] === true });
+  });
+  // Email: this organization's mailbox (connect with address + app password).
+  router.get(`${prefix}/mailbox`, ...guard, async (req, res) => {
+    res.setHeader("Cache-Control", "no-store");
+    res.json(await mailStatus((await chatScope(req, res))!));
+  });
+  router.get(`${prefix}/mailbox/preset`, ...guard, async (req, res) => { res.json(presetFor(str(req.query["email"], 200))); });
+  router.put(`${prefix}/mailbox`, ...guard, async (req, res) => {
+    const tenantId = (await chatScope(req, res))!;
+    const who = prefix.startsWith("/v1/platform") ? ownerName(res) : by(res);
+    const b = (req.body ?? {}) as Record<string, unknown>;
+    const r = await connectMailbox(tenantId, { email: str(b["email"], 200), name: str(b["name"], 120), user: str(b["user"], 200), imapHost: str(b["imapHost"], 200), imapPort: Number(b["imapPort"]) || undefined, smtpHost: str(b["smtpHost"], 200), smtpPort: Number(b["smtpPort"]) || undefined, password: typeof b["password"] === "string" ? b["password"] : "" }, who);
+    if ("error" in r) { res.status(400).json(r); return; }
+    res.json(await mailStatus(tenantId));
+  });
+  router.delete(`${prefix}/mailbox`, ...guard, async (req, res) => {
+    const tenantId = (await chatScope(req, res))!;
+    await disconnectMailbox(tenantId, prefix.startsWith("/v1/platform") ? ownerName(res) : by(res));
+    res.json(await mailStatus(tenantId));
   });
   // Reports the Command Center wrote (write_report).
   router.get(`${prefix}/reports`, ...guard, async (req, res) => {

@@ -21,6 +21,8 @@ export type CommandSwitches = {
   residentChat: boolean;
   /** Draft a work order (with Smart Repair instructions) from every resident complaint photo. On unless switched off. */
   autoWorkOrders: boolean;
+  /** A client with no mailbox of its own sends Command Center email from FIAREP's Outlook. */
+  mailFallback: boolean;
   /** Platform row only: monthly Claude spending cap per client, in US dollars (absent = no cap). */
   caps?: Record<string, number>;
 };
@@ -47,6 +49,7 @@ export async function getSwitches(tenantId: string = PLATFORM_TENANT): Promise<C
     provider: v.provider === "gemini" ? "gemini" : "claude",
     residentChat: v.residentChat !== false,
     autoWorkOrders: v.autoWorkOrders !== false,
+    mailFallback: v.mailFallback !== false,
     geminiModel: typeof v.geminiModel === "string" && v.geminiModel.trim() ? v.geminiModel.trim() : DEFAULT_GEMINI_MODEL,
     ...(tenantId === PLATFORM_TENANT ? { caps } : {}),
   };
@@ -87,6 +90,7 @@ export async function effectiveSwitches(tenantId: string): Promise<CommandSwitch
     provider: platform.provider,
     residentChat: platform.residentChat && own.residentChat,
     autoWorkOrders: platform.autoWorkOrders && own.autoWorkOrders,
+    mailFallback: platform.mailFallback && own.mailFallback,
     geminiModel: platform.geminiModel,
     moduleOn: on,
     platformEnabled: platform.enabled,

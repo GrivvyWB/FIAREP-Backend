@@ -12,16 +12,16 @@ export type KeyName = "gemini" | "googleMaps";
 export const KEY_ENV: Record<KeyName, string> = { gemini: "GEMINI_API_KEY", googleMaps: "GOOGLE_MAPS_API_KEY" };
 const KEY = "command-center-keys";
 const TENANT = "default";
-type Sealed = { iv: string; tag: string; data: string; last4: string; setAt: string; setBy: string };
+export type Sealed = { iv: string; tag: string; data: string; last4: string; setAt: string; setBy: string };
 
 const aesKey = () => createHash("sha256").update(`fiarep-command-keys:${process.env["SESSION_SECRET"] ?? ""}`).digest();
-function seal(text: string): Pick<Sealed, "iv" | "tag" | "data"> {
+export function seal(text: string): Pick<Sealed, "iv" | "tag" | "data"> {
   const iv = randomBytes(12);
   const c = createCipheriv("aes-256-gcm", aesKey(), iv);
   const data = Buffer.concat([c.update(text, "utf8"), c.final()]);
   return { iv: iv.toString("base64"), tag: c.getAuthTag().toString("base64"), data: data.toString("base64") };
 }
-function open(s: Sealed): string | null {
+export function open(s: Sealed): string | null {
   try {
     const d = createDecipheriv("aes-256-gcm", aesKey(), Buffer.from(s.iv, "base64"));
     d.setAuthTag(Buffer.from(s.tag, "base64"));
