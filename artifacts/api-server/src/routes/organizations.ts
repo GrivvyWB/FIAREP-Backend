@@ -5,7 +5,7 @@ import { db, entityRecords, organizationProperties, organizations, staffAccounts
 import { requirePlatformOwner } from "../middlewares/auth";
 import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
-import { endPilot, expirePilots, getPilotPrices, purchasePilot, savePilotPrices, startPilot } from "../lib/pilot";
+import { endPilot, expirePilots, getPilotPrices, markPilotRefunded, purchasePilot, savePilotPrices, setPilotPaid, startPilot } from "../lib/pilot";
 import { ensureResidentCode, newResidentCode, withResidentCode } from "../lib/residentRouting";
 import {
   getTimeClockConfig,
@@ -594,6 +594,8 @@ router.post("/v1/platform/organizations/:id/pilot", async (req, res) => {
     ? await startPilot(id, Number(b["days"]), (b["modules"] && typeof b["modules"] === "object" ? b["modules"] : {}) as Record<string, boolean>, owner.name)
     : b["action"] === "purchase" ? await purchasePilot(id, owner.name)
     : b["action"] === "end" ? await endPilot(id, owner.name)
+    : b["action"] === "paid" ? await setPilotPaid(id, b["amount"], owner.name)
+    : b["action"] === "refunded" ? await markPilotRefunded(id, owner.name)
     : { error: "Unknown pilot action" };
   if ("error" in out) { res.status(400).json(out); return; }
   res.json(out);

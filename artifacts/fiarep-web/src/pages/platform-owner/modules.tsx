@@ -285,7 +285,7 @@ function allFeaturesOn(): Record<string, boolean> {
   for (const k of ["residentPhotoAiViolationReader", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "fiarepMessaging"]) on[k] = true;
   return on;
 }
-type PilotInfo = { price?: number | null; days?: number; startedAt?: string; endsAt?: string; status?: "running" | "purchased" | "ended"; endedAt?: string; endedBy?: string; added?: string[] };
+type PilotInfo = { price?: number | null; paid?: number; refundPercent?: number; credit?: number | null; refundDue?: number | null; refundedAt?: string | null; refundedBy?: string | null; days?: number; startedAt?: string; endsAt?: string; status?: "running" | "purchased" | "ended"; endedAt?: string; endedBy?: string; added?: string[] };
 
 export default function OwnerModules() {
   const { data: organizations = [], isLoading, error } = useListOrganizations();
@@ -327,6 +327,7 @@ export default function OwnerModules() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [pilotBusy, setPilotBusy] = useState(false);
   const [pilotPrices, setPilotPrices] = useState<Record<string, number | null>>({});
+  const [paidDraft, setPaidDraft] = useState<string | null>(null);
   const [priceDraft, setPriceDraft] = useState<Record<string, string> | null>(null);
   useEffect(() => { void customFetch<Record<string, number | null>>("/api/v1/platform/pilot-prices").then(setPilotPrices).catch(() => undefined); }, []);
 
@@ -525,7 +526,7 @@ export default function OwnerModules() {
   const savePilotPrices = async () => {
     if (!priceDraft) return;
     try {
-      const body = Object.fromEntries(Object.entries(priceDraft).map(([k, v]) => [k, v.trim() === "" ? null : Number(v)]));
+      const body = Object.fromEntries(Object.entries(priceDraft).filter(([k, v]) => !(k === "refundPercent" && v.trim() === "")).map(([k, v]) => [k, v.trim() === "" ? null : Number(v)]));
       setPilotPrices(await customFetch<Record<string, number | null>>("/api/v1/platform/pilot-prices", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }));
       setPriceDraft(null);
       toast({ title: "Pilot prices saved" });
@@ -633,8 +634,16 @@ export default function OwnerModules() {
                     <h2 className="font-semibold text-slate-950">Pilot program</h2>
                     <p className="text-xs text-slate-500">Every feature on for the length of the pilot. When it ends: if they buy, mark it purchased and everything stays on; if they don't, the features the pilot added shut off and they go back to exactly what they had before the pilot.</p>
                     {p?.status === "running" && <p className="mt-2 text-sm text-slate-800"><b>{length(p.days)} pilot running</b>{typeof p.price === "number" ? <> · <b>{money(p.price)}</b></> : " · no price set"} · started {day(p.startedAt)} · ends <b>{day(p.endsAt)}</b> ({left} day{left === 1 ? "" : "s"} left) · {p.added?.length ?? 0} features added for the pilot</p>}
-                    {p?.status === "purchased" && <p className="mt-2 text-sm text-emerald-800"><b>Purchased</b> after the {length(p.days)}{typeof p.price === "number" ? ` (${money(p.price)})` : ""} pilot ({day(p.endedAt)}) — every feature stays on.</p>}
-                    {p?.status === "ended" && <p className="mt-2 text-sm text-slate-700"><b>{length(p.days)} pilot ended</b> {day(p.endedAt)}{p.endedBy ? ` (${p.endedBy})` : ""} — back to the features they had before.</p>}
+                    {p?.status === "purchased" && <p className="mt-2 text-sm text-emerald-800"><b>Purchased</b> after the {length(p.days)}{typeof p.price === "number" ? ` (${money(p.price)})` : ""} pilot ({day(p.endedAt)}) — every feature stays on. <b>Credit toward their contract: {money(p.credit ?? 0) || "$0"}</b>{p.refundedAt && p.refundDue ? ` (paid ${money(p.paid ?? 0)}, less ${money(p.refundDue)} already sent back)` : ""}.</p>}
+                    {p?.status === "ended" && <p className="mt-2 text-sm text-slate-700"><b>{length(p.days)} pilot ended</b> {day(p.endedAt)}{p.endedBy ? ` (${p.endedBy})` : ""} — back to the features they had before. <b>{p.refundPercent ?? 20}% back to them: {money(p.refundDue ?? 0) || "$0"}</b>{p.refundedAt ? <span className="text-emerald-700"> · sent {day(p.refundedAt)}{p.refundedBy ? ` (${p.refundedBy})` : ""}</span> : <span className="text-amber-700"> · not sent yet</span>}</p>}
+                    {(p?.status === "running" || (p?.status === "ended" && !p.refundedAt)) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-slate-800">
+                        <span>Paid toward the pilot: $</span>
+                        <input inputMode="decimal" value={paidDraft ?? String(p.paid ?? p.price ?? 0)} onChange={(e) => setPaidDraft(e.target.value.replace(/[^\d.]/g, ""))} className="w-28 rounded-md border border-slate-300 px-2 py-1 text-sm" />
+                        {paidDraft !== null && <Button type="button" size="sm" disabled={pilotBusy} onClick={() => { void pilotAction({ action: "paid", amount: Number(paidDraft || 0) }, "Payment recorded").then(() => setPaidDraft(null)); }}>Save</Button>}
+                        {p.status === "running" && <span className="text-xs text-slate-500">If they buy: {money(p.paid ?? p.price ?? 0) || "$0"} comes off their contract. If they don't: {p.refundPercent ?? 20}% back = {money(Math.round((p.paid ?? p.price ?? 0) * (p.refundPercent ?? 20)) / 100) || "$0"}.</span>}
+                      </div>
+                    )}
                   </div>
                   <div className="flex flex-wrap gap-2">
                     {p?.status === "running" ? (
@@ -647,6 +656,7 @@ export default function OwnerModules() {
                         {[60, 90, 365].map((d) => (
                           <Button key={d} type="button" variant="outline" disabled={pilotBusy} onClick={() => void pilotAction({ action: "start", days: d, modules: allFeaturesOn() }, `${length(d)} pilot started — every feature on`)}>{d === 365 ? "1-year pilot" : `${d}-day pilot`}{typeof pilotPrices[String(d)] === "number" ? ` · ${money(pilotPrices[String(d)])}` : ""}</Button>
                         ))}
+                        {p?.status === "ended" && !p.refundedAt && (p.refundDue ?? 0) > 0 && <Button type="button" variant="outline" disabled={pilotBusy} onClick={() => void pilotAction({ action: "refunded" }, "Refund marked sent")}>Refund sent</Button>}
                         {p?.status === "ended" && <Button type="button" disabled={pilotBusy} onClick={() => void pilotAction({ action: "purchase" }, "Purchased — the pilot's features are back on")}>They purchased — turn everything back on</Button>}
                       </>
                     )}
@@ -663,8 +673,15 @@ export default function OwnerModules() {
                       </span>
                     </label>
                   ))}
+                  <label className="flex flex-col text-xs text-slate-600">Back if they don't buy
+                    <span className="mt-1 flex items-center gap-1">
+                      <input inputMode="decimal" value={priceDraft?.refundPercent ?? String(pilotPrices["refundPercent"] ?? 20)}
+                        onChange={(e) => { const base: Record<string, string> = { "60": String(pilotPrices["60"] ?? ""), "90": String(pilotPrices["90"] ?? ""), "365": String(pilotPrices["365"] ?? ""), ...(priceDraft ?? {}) }; setPriceDraft({ ...base, refundPercent: e.target.value.replace(/[^\d.]/g, "") }); }}
+                        className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm" /><span className="text-slate-500">%</span>
+                    </span>
+                  </label>
                   {priceDraft && <Button type="button" size="sm" onClick={() => void savePilotPrices()}>Save prices</Button>}
-                  <span className="text-xs text-slate-500">The price of the option picked is kept with that client's pilot.</span>
+                  <span className="text-xs text-slate-500">The price of the option picked is kept with that client's pilot. What they pay toward the pilot is a credit toward their contract if they buy; if they don't, this percent of it goes back to them.</span>
                 </div>
               </section>
             );
