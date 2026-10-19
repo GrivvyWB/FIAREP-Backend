@@ -273,6 +273,20 @@ function configuredModules(organization: OrganizationWithUsage): Record<string, 
   }, {});
 }
 
+/** Every feature switched on, for a pilot (read-only locks and FIAREP's own locked forms folder are left as they are). */
+function allFeaturesOn(): Record<string, boolean> {
+  const on: Record<string, boolean> = {};
+  for (const m of MODULES) if (m.id !== "company-forms") on[m.id] = true;
+  for (const t of PROJECT_TOOLS) on[t.id] = true;
+  for (const trade of PROJECT_TRADES) for (const t of PROJECT_TOOLS) on[projToolKey(trade.key, t.id)] = true;
+  for (const trade of MEASUREMENT_TRADES) for (const m of MEASUREMENT_MATERIALS) on[measurementKey(trade.key, m.key)] = true;
+  for (const trade of LOOKUP_TRADES) on[`lookup.${trade.key}`] = true;
+  for (const group of APP_TABS) for (const tab of group.tabs) on[appTabKey(group.id, tab)] = true;
+  for (const k of ["residentPhotoAiViolationReader", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "fiarepMessaging"]) on[k] = true;
+  return on;
+}
+type PilotInfo = { days?: number; startedAt?: string; endsAt?: string; status?: "running" | "purchased" | "ended"; endedAt?: string; endedBy?: string; added?: string[] };
+
 export default function OwnerModules() {
   const { data: organizations = [], isLoading, error } = useListOrganizations();
   const updateOrganization = useUpdateOrganization();
@@ -311,6 +325,7 @@ export default function OwnerModules() {
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [pilotBusy, setPilotBusy] = useState(false);
 
   const selectableOrganizations = useMemo(
     () => organizations,
@@ -491,6 +506,19 @@ export default function OwnerModules() {
     }
   };
 
+  const pilotAction = async (body: Record<string, unknown>, done: string) => {
+    if (!organization || pilotBusy) return;
+    if (dirty) { toast({ variant: "destructive", title: "Save your changes first" }); return; }
+    setPilotBusy(true);
+    try {
+      await customFetch(`/api/v1/platform/organizations/${organization.id}/pilot`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      await queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+      toast({ title: done });
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Pilot not changed", description: e?.data?.error || e?.message });
+    } finally { setPilotBusy(false); }
+  };
+
   const save = async () => {
     if (!organization) return;
     try {
@@ -578,6 +606,41 @@ export default function OwnerModules() {
             <Metric label="Company status" value={organization.status} />
             <Metric label="Development limit" value={organization.propertyLimit === null ? "Unlimited" : String(organization.propertyLimit)} />
           </div>
+
+          {!isFiarep && (() => {
+            const p = ((organization.features as Record<string, unknown> | undefined)?.["pilot"] ?? null) as PilotInfo | null;
+            const day = (iso?: string) => iso ? new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "";
+            const left = p?.status === "running" && p.endsAt ? Math.max(0, Math.ceil((new Date(p.endsAt).getTime() - Date.now()) / 86_400_000)) : 0;
+            const length = (d?: number) => d === 365 ? "1-year" : `${d}-day`;
+            return (
+              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="min-w-0 flex-1">
+                    <h2 className="font-semibold text-slate-950">Pilot program</h2>
+                    <p className="text-xs text-slate-500">Every feature on for the length of the pilot. When it ends: if they buy, mark it purchased and everything stays on; if they don't, the features the pilot added shut off and they go back to exactly what they had before the pilot.</p>
+                    {p?.status === "running" && <p className="mt-2 text-sm text-slate-800"><b>{length(p.days)} pilot running</b> · started {day(p.startedAt)} · ends <b>{day(p.endsAt)}</b> ({left} day{left === 1 ? "" : "s"} left) · {p.added?.length ?? 0} features added for the pilot</p>}
+                    {p?.status === "purchased" && <p className="mt-2 text-sm text-emerald-800"><b>Purchased</b> after the {length(p.days)} pilot ({day(p.endedAt)}) — every feature stays on.</p>}
+                    {p?.status === "ended" && <p className="mt-2 text-sm text-slate-700"><b>{length(p.days)} pilot ended</b> {day(p.endedAt)}{p.endedBy ? ` (${p.endedBy})` : ""} — back to the features they had before.</p>}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {p?.status === "running" ? (
+                      <>
+                        <Button type="button" disabled={pilotBusy} onClick={() => void pilotAction({ action: "purchase" }, "Purchased — every feature stays on")}>They purchased — keep everything</Button>
+                        <Button type="button" variant="outline" disabled={pilotBusy} onClick={() => void pilotAction({ action: "end" }, "Pilot ended — back to their features from before")}>End pilot now (not purchased)</Button>
+                      </>
+                    ) : (
+                      <>
+                        {[60, 90, 365].map((d) => (
+                          <Button key={d} type="button" variant="outline" disabled={pilotBusy} onClick={() => void pilotAction({ action: "start", days: d, modules: allFeaturesOn() }, `${length(d)} pilot started — every feature on`)}>{d === 365 ? "1-year pilot" : `${d}-day pilot`}</Button>
+                        ))}
+                        {p?.status === "ended" && <Button type="button" disabled={pilotBusy} onClick={() => void pilotAction({ action: "purchase" }, "Purchased — the pilot's features are back on")}>They purchased — turn everything back on</Button>}
+                      </>
+                    )}
+                  </div>
+                </div>
+              </section>
+            );
+          })()}
 
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">

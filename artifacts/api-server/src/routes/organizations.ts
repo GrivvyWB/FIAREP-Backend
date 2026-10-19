@@ -5,6 +5,7 @@ import { db, entityRecords, organizationProperties, organizations, staffAccounts
 import { requirePlatformOwner } from "../middlewares/auth";
 import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
+import { endPilot, expirePilots, purchasePilot, startPilot } from "../lib/pilot";
 import { ensureResidentCode, newResidentCode, withResidentCode } from "../lib/residentRouting";
 import {
   getTimeClockConfig,
@@ -314,6 +315,7 @@ function publicOrganization(org: typeof organizations.$inferSelect) {
 
 router.get("/v1/platform/organizations", async (_req, res) => {
   await evaluateLicense("default");
+  await expirePilots().catch(() => 0);
   const rows = await db.select().from(organizations);
   for (const org of rows) {
     if (org.id === "default") continue;
@@ -571,6 +573,21 @@ router.post("/v1/platform/organizations/:id/resident-code", async (req, res) => 
   const owner = res.locals["platformOwner"] as { name: string };
   await platformAudit(owner.name, "organization.resident-code", id, before, org);
   res.json({ code, created: true });
+});
+
+// Pilot program: 60 days, 90 days or 1 year with every feature on (Platform -> Modules).
+router.post("/v1/platform/organizations/:id/pilot", async (req, res) => {
+  const id = String(req.params.id);
+  const owner = res.locals["platformOwner"] as { name: string };
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  await expirePilots().catch(() => 0);
+  const out = b["action"] === "start"
+    ? await startPilot(id, Number(b["days"]), (b["modules"] && typeof b["modules"] === "object" ? b["modules"] : {}) as Record<string, boolean>, owner.name)
+    : b["action"] === "purchase" ? await purchasePilot(id, owner.name)
+    : b["action"] === "end" ? await endPilot(id, owner.name)
+    : { error: "Unknown pilot action" };
+  if ("error" in out) { res.status(400).json(out); return; }
+  res.json(out);
 });
 
 router.patch("/v1/platform/organizations/:id/deletion-policy", async (req, res) => {
