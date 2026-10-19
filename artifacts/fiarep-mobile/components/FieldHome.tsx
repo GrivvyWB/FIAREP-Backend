@@ -88,9 +88,9 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections,
     <View style={{ flex: 1, backgroundColor: BG }}>
       <ScrollView contentContainerStyle={{ paddingBottom: tabs.length ? 96 : 32 }} showsVerticalScrollIndicator={false}>
         <View style={st.banner}>
-          <LinearGradient colors={['#0B2E8A', '#0A1E55', '#070B16']} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={StyleSheet.absoluteFill} />
-          <Image source={HEADER_IMG} resizeMode="cover" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: width * 0.5, opacity: 0.95 }} />
-          <LinearGradient colors={['#0B2E8A', '#0B2E8A00']} start={{ x: 0.45, y: 0 }} end={{ x: 0.75, y: 0 }} style={StyleSheet.absoluteFill} />
+          <LinearGradient colors={['#06204F', '#03102A', '#03101F']} start={{ x: 0, y: 0 }} end={{ x: 0.9, y: 1 }} style={StyleSheet.absoluteFill} />
+          <Image source={HEADER_IMG} resizeMode="cover" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: width * 0.55, opacity: 1 }} />
+          <LinearGradient colors={['#03102A', '#03102A00']} start={{ x: 0.45, y: 0 }} end={{ x: 0.56, y: 0 }} style={StyleSheet.absoluteFill} />
           <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: pad, paddingTop: topGap ? (Platform.OS === 'ios' ? 56 : 28) : 18, paddingBottom: 22 }}>
             <MaterialCommunityIcons name={bannerIcon as never} size={60} color="#3B9BFF" style={{ textShadowColor: '#3B9BFF', textShadowRadius: 14 }} />
             <View style={{ width: 2, height: 56, backgroundColor: '#5EB3FF88', marginHorizontal: 14, borderRadius: 1 }} />
@@ -108,10 +108,9 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections,
             <SectionHead title="MY WORK" color={heroColor} onViewAll={hero?.onPress} />
             {hero && (
               <Pressable onPress={hero.onPress} style={({ pressed }) => [st.jobsCard, { opacity: pressed ? 0.85 : 1 }]}>
-                <LinearGradient colors={['#0E3FA8', '#0A2C7E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-                <ImageBackground source={JOBS_IMG} resizeMode="cover" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '46%' }} imageStyle={{ opacity: 0.85 }}>
-                  <LinearGradient colors={['#0E3FA8', '#0E3FA800']} start={{ x: 0, y: 0 }} end={{ x: 0.6, y: 0 }} style={StyleSheet.absoluteFill} />
-                </ImageBackground>
+                <LinearGradient colors={['#163B8A', '#0E2A68']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                <Image source={JOBS_IMG} resizeMode="cover" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: '60%', height: '100%', opacity: 1 }} />
+                <LinearGradient colors={['#123274', '#12327400']} start={{ x: 0.38, y: 0 }} end={{ x: 0.58, y: 0 }} style={StyleSheet.absoluteFill} />
                 <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16 }}>
                   <Glow color="#1E6FFF" size={78}><Icon lib={tileArt(hero.label).lib} name={tileArt(hero.label).icon} size={38} color="#fff" /></Glow>
                   <View style={{ marginLeft: 16, flex: 1 }}>
@@ -190,7 +189,7 @@ function Tab({ icon, label, active, onPress }: { icon: string; label: string; ac
 }
 
 const st = StyleSheet.create({
-  banner: { overflow: 'hidden', backgroundColor: '#0B2E8A' },
+  banner: { overflow: 'hidden', backgroundColor: '#03102A' },
   bannerTitle: { color: '#fff', fontSize: 34, fontWeight: '800', letterSpacing: 0.3 },
   bannerSub: { color: '#CFE3FF', fontSize: 15, marginTop: 2 },
   jobsCard: { borderRadius: 18, overflow: 'hidden', borderWidth: 1.5, borderColor: '#3B9BFF', shadowColor: '#1E6FFF', shadowOpacity: 0.7, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 8 },
