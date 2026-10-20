@@ -29,7 +29,7 @@ export default function Settings() {
   const canReadRates = canReadSharedDefaultRates(staff);
   const isHumanResources = staff?.role === "human_resources";
 
-  // Your language: the Command Center speaks it, forms show it next to the English.
+  // Your language: the Command Center speaks it. Forms stay in English (US forms).
   const [langs, setLangs] = useState<Array<{ code: string; name: string; native: string }>>([]);
   const [lang, setLang] = useState("");
   const [langSaving, setLangSaving] = useState(false);
@@ -141,7 +141,7 @@ export default function Settings() {
                   <option value="" disabled>Pick your language…</option>
                   {langs.map((l) => <option key={l.code} value={l.code}>{l.native === l.name ? l.name : `${l.native} — ${l.name}`}</option>)}
                 </select>
-                <p className="text-xs text-muted-foreground">The Command Center talks to you in this language, and forms show each line in it next to the English. What you fill in and print stays the City's English form.</p>
+                <p className="text-xs text-muted-foreground">The Command Center talks to you in this language. Forms stay the City's US forms, in English and US format; a form can rewrite in English what you typed in your language.</p>
               </div>
             </details>
           )}

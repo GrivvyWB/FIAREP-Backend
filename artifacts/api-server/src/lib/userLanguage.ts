@@ -1,7 +1,7 @@
 // A person's own language (Settings → Language). The Command Center speaks it on
-// a client's account (FIAREP's own stays English); Company Forms show each line
-// in it as a reading aid, while what is filled in and printed stays the City's
-// English form. Same record the Command Center's set_language writes.
+// a client's account (FIAREP's own stays English). US forms stay in English and US
+// format; what someone typed in their language can be rewritten in English.
+// Same record the Command Center's set_language writes.
 import { and, eq } from "drizzle-orm";
 import { db, settings } from "@workspace/db";
 import { translateList } from "./translator";
@@ -44,30 +44,6 @@ export async function saveLanguage(tenantId: string, staffId: string, code: stri
   await db.insert(settings).values({ tenantId, key: key(staffId), value, createdAt: now, updatedAt: now })
     .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value, updatedAt: now } });
   return { language: lang.name, code: lang.code };
-}
-
-/** A form's own lines in the person's language (cached per form and language, so each is translated once). */
-export async function formLines(formId: string, language: string, lines: string[]): Promise<Record<string, string> | { error: string }> {
-  const apiKey = process.env["OPENAI_API_KEY"];
-  if (!apiKey) return { error: "Translation is not set up (AI key)." };
-  const clean = [...new Set(lines.map((l) => String(l).trim()).filter(Boolean))].slice(0, 400);
-  const k = `form-lines:${formId}:${language}`.slice(0, 200);
-  const [row] = await db.select().from(settings).where(and(eq(settings.tenantId, "default"), eq(settings.key, k))).limit(1);
-  const cached = (row?.value as Record<string, string> | undefined) ?? {};
-  const missing = clean.filter((l) => !(l in cached));
-  if (missing.length) {
-    const out: Record<string, string> = { ...cached };
-    for (let i = 0; i < missing.length; i += 80) {
-      const part = missing.slice(i, i + 80);
-      const tr = await translateList(part, language, apiKey, "These are the labels and headings of a New York City housing form, shown to the reader next to the English so they understand it.");
-      part.forEach((l, j) => { out[l] = tr[j]!; });
-    }
-    const now = new Date();
-    await db.insert(settings).values({ tenantId: "default", key: k, value: out, createdAt: now, updatedAt: now })
-      .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value: out, updatedAt: now } });
-    return Object.fromEntries(clean.map((l) => [l, out[l]!]));
-  }
-  return Object.fromEntries(clean.map((l) => [l, cached[l]!]));
 }
 
 /** What someone typed in their own language, in English for the City's form. Only lines that are not already English. */

@@ -34,20 +34,10 @@ export default function CompanyForms() {
 
   const def = useMemo(() => COMPLIANCE_FORMS.find((f) => f.id === formId) || null, [formId]);
 
-  // ── Reading the form in your own language (Settings → Language). Labels only: the form itself stays English. ──
+  // ── Someone whose language is not English (Settings → Language) can have what they typed rewritten in English: US forms are filled in English. ──
   const [myLang, setMyLang] = useState<{ code: string; language: string } | null>(null);
-  const [tr, setTr] = useState<Record<string, string> | null>(null);
   const [trBusy, setTrBusy] = useState(false);
   useEffect(() => { void customFetch<{ current: { code: string; language: string } | null }>("/api/v1/me/language", { responseType: "json" } as never).then((r) => setMyLang(r.current && r.current.code !== "en" ? r.current : null)).catch(() => undefined); }, []);
-  useEffect(() => { setTr(null); }, [formId]);
-  async function showInMyLanguage(f: FormDef) {
-    if (tr) { setTr(null); return; }
-    const lines = [f.title, f.subtitle, ...f.sections.flatMap((s) => [s.title, s.note || "", ...(s.fields || []).map((x) => x.label), ...(s.checks || []).map((x) => x.label), ...(s.table?.columns || []).map((c) => c.label)])].filter(Boolean);
-    setTrBusy(true);
-    try { const r = await customFetch<{ lines: Record<string, string> }>("/api/v1/company-forms/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ formId: f.id, lines }), responseType: "json" } as never); setTr(r.lines); }
-    catch (err: any) { toast({ variant: "destructive", title: "Could not translate", description: err?.data?.error || err?.message }); }
-    finally { setTrBusy(false); }
-  }
   async function answersToEnglish() {
     if (!editing) return;
     setTrBusy(true);
@@ -274,7 +264,6 @@ export default function CompanyForms() {
           <div>
             <h1 className="text-2xl font-bold">{def.title}</h1>
             <p className="text-sm text-muted-foreground">{def.subtitle}</p>
-            {tr && <p className="text-sm italic text-[#185FA5]">{tr[def.title]} — {tr[def.subtitle]}</p>}
             <div className={`mt-3 rounded-lg border p-3 text-sm ${askBuilding && !building ? "border-amber-400 bg-amber-50" : "bg-card"}`}>
               {building ? (
                 <p><span className="font-semibold">Building:</span> {building.name ? `${building.name} — ` : ""}{building.full}{building.registrationId ? <span className="text-muted-foreground"> · HPD registration {building.registrationId}</span> : null}</p>
@@ -317,14 +306,13 @@ export default function CompanyForms() {
             )}
           </div>
           <div className="flex flex-wrap gap-2">
-            {myLang && <Button variant="outline" disabled={trBusy} onClick={() => void showInMyLanguage(def)}>{trBusy ? "…" : tr ? "English only" : `Read in ${myLang.language}`}</Button>}
-            {myLang && tr && <Button variant="outline" disabled={trBusy} onClick={() => void answersToEnglish()}>Write my answers in English</Button>}
+            {myLang && <Button variant="outline" disabled={trBusy} onClick={() => void answersToEnglish()}>{trBusy ? "Writing…" : "Write my answers in English"}</Button>}
             {FILLABLE.has(def.pdf) && <Button onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button>}
             <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
             <Button onClick={() => void save()} disabled={busy}><Save className="mr-1 h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
           </div>
         </div>
-        {def.sections.map((s) => <SectionEditor key={s.title} section={s} values={editing.values} set={set} tr={tr} />)}
+        {def.sections.map((s) => <SectionEditor key={s.title} section={s} values={editing.values} set={set} />)}
         <div className="flex justify-end gap-2 pb-8">
           {FILLABLE.has(def.pdf) && <Button onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button>}
           <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
@@ -384,26 +372,21 @@ export default function CompanyForms() {
   );
 }
 
-// Your-language line under an English one (reading aid; never printed).
-const Tr = ({ tr, text }: { tr?: Record<string, string> | null; text: string }) => (tr?.[text] ? <span className="block text-[11px] italic text-[#185FA5]">{tr[text]}</span> : null);
-
-function SectionEditor({ section, values, set, tr }: { section: Section; values: Record<string, unknown>; set: (k: string, v: unknown) => void; tr?: Record<string, string> | null }) {
+function SectionEditor({ section, values, set }: { section: Section; values: Record<string, unknown>; set: (k: string, v: unknown) => void }) {
   return (
     <section className="rounded-lg border bg-card p-4">
       <h2 className="font-semibold">{section.title}</h2>
-      <Tr tr={tr} text={section.title} />
       {section.note && <p className="mt-1 text-xs text-muted-foreground">{section.note}</p>}
-      {section.note && <Tr tr={tr} text={section.note} />}
       {section.checks && (
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
           {section.checks.map((c) => (
-            <label key={c.key} className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={values[c.key] === true} onChange={(e) => set(c.key, e.target.checked)} /><span>{c.label}<Tr tr={tr} text={c.label} /></span></label>
+            <label key={c.key} className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={values[c.key] === true} onChange={(e) => set(c.key, e.target.checked)} />{c.label}</label>
           ))}
         </div>
       )}
       {section.fields && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {section.fields.map((f) => <FieldEditor key={f.key} field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} tr={tr} />)}
+          {section.fields.map((f) => <FieldEditor key={f.key} field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} />)}
         </div>
       )}
       {section.table && <TableEditor table={section.table} rows={(values[section.table.key] as Record<string, unknown>[]) || []} onChange={(rows) => set(section.table!.key, rows)} />}
@@ -411,14 +394,14 @@ function SectionEditor({ section, values, set, tr }: { section: Section; values:
   );
 }
 
-function FieldEditor({ field, value, onChange, tr }: { field: Field; value: unknown; onChange: (v: unknown) => void; tr?: Record<string, string> | null }) {
+function FieldEditor({ field, value, onChange }: { field: Field; value: unknown; onChange: (v: unknown) => void }) {
   const wrap = field.full || field.type === "textarea" ? "sm:col-span-2" : "";
   if (field.type === "checkbox") {
-    return <label className={`flex items-center gap-2 text-sm ${wrap}`}><input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={value === true} onChange={(e) => onChange(e.target.checked)} /><span>{field.label}<Tr tr={tr} text={field.label} /></span></label>;
+    return <label className={`flex items-center gap-2 text-sm ${wrap}`}><input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={value === true} onChange={(e) => onChange(e.target.checked)} />{field.label}</label>;
   }
   return (
     <label className={`block ${wrap}`}>
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{field.label}<Tr tr={tr} text={field.label} /></span>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{field.label}</span>
       {field.type === "textarea" ? <Textarea className="min-h-[80px]" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />
         : field.type === "select" ? (
           <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>
@@ -453,8 +436,12 @@ function TableEditor({ table, rows, onChange }: { table: NonNullable<Section["ta
   );
 }
 
+/** US format on US forms: 2026-10-20 → 10/20/2026. */
+const usDate = (x: unknown) => { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(x ?? "").trim()); return m ? `${m[2]}/${m[3]}/${m[1]}` : String(x ?? ""); };
+
 function printHtml(def: FormDef, values: Record<string, unknown>, org: string): string {
-  const v = (k: string) => esc(values[k]);
+  const dateKeys = new Set(def.sections.flatMap((s) => (s.fields || []).filter((f) => f.type === "date").map((f) => f.key)));
+  const v = (k: string) => esc(dateKeys.has(k) ? usDate(values[k]) : values[k]);
   const field = (f: Field) => f.type === "checkbox"
     ? `<div class="chk">${values[f.key] === true ? "☑" : "☐"} ${esc(f.label)}</div>`
     : `<div class="f${f.full || f.type === "textarea" ? " full" : ""}"><div class="l">${esc(f.label)}</div><div class="v">${f.type === "textarea" ? v(f.key).replaceAll("\n", "<br>") : v(f.key)}&nbsp;</div></div>`;
@@ -462,7 +449,7 @@ function printHtml(def: FormDef, values: Record<string, unknown>, org: string): 
     const checks = s.checks ? `<div class="checks">${s.checks.map((c) => `<span>${values[c.key] === true ? "☑" : "☐"} ${esc(c.label)}</span>`).join("")}</div>` : "";
     const fields = s.fields ? `<div class="grid">${s.fields.map(field).join("")}</div>` : "";
     const rows = s.table ? ((values[s.table.key] as Record<string, unknown>[]) || []) : [];
-    const table = s.table ? `<table><tr>${s.table.columns.map((c) => `<th>${esc(c.label)}</th>`).join("")}</tr>${(rows.length ? rows : Array.from({ length: s.table.rows }, (): Record<string, unknown> => ({}))).map((r) => `<tr>${s.table!.columns.map((c) => `<td>${esc(r[c.key])}&nbsp;</td>`).join("")}</tr>`).join("")}</table>` : "";
+    const table = s.table ? `<table><tr>${s.table.columns.map((c) => `<th>${esc(c.label)}</th>`).join("")}</tr>${(rows.length ? rows : Array.from({ length: s.table.rows }, (): Record<string, unknown> => ({}))).map((r) => `<tr>${s.table!.columns.map((c) => `<td>${esc(c.type === "date" ? usDate(r[c.key]) : r[c.key])}&nbsp;</td>`).join("")}</tr>`).join("")}</table>` : "";
     return `<section><h2>${esc(s.title)}</h2>${s.note ? `<p class="note">${esc(s.note)}</p>` : ""}${checks}${fields}${table}</section>`;
   }).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(def.title)}</title><style>
@@ -475,6 +462,6 @@ function printHtml(def: FormDef, values: Record<string, unknown>, org: string): 
     table{width:100%;border-collapse:collapse;margin-top:4px}th,td{border:1px solid #999;padding:4px 6px;text-align:left;font-size:11px}th{background:#eee;font-size:10px}
     footer{margin-top:20px;font-size:9px;color:#777;text-align:center}
   </style></head><body>
-  <header><div><h1>${esc(def.title)}</h1><div class="sub">${esc(def.subtitle)}</div></div><div class="org">${esc(org)}<br><span class="sub">${new Date().toLocaleDateString()}</span></div></header>
+  <header><div><h1>${esc(def.title)}</h1><div class="sub">${esc(def.subtitle)}</div></div><div class="org">${esc(org)}<br><span class="sub">${new Date().toLocaleDateString("en-US")}</span></div></header>
   ${sections}<footer>Powered by FIAREP · fiarep.com</footer></body></html>`;
 }
