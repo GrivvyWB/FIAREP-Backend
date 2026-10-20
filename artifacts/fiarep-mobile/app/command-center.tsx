@@ -4,6 +4,7 @@ import { useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AudioModule, RecordingPresets, createAudioPlayer, setAudioModeAsync, useAudioRecorder, type AudioPlayer } from 'expo-audio';
 import { customFetch } from '@workspace/api-client-react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ui, ACCENT } from '../lib/ui';
 import { getCurrentActor } from '../lib/store';
 import {
@@ -80,12 +81,44 @@ export default function CommandCenter() {
     return () => clearInterval(t);
   }, [device?.status, refresh]));
   useEffect(() => () => { playerRef.current?.remove(); }, []);
-  // Each time the Command Center opens it greets the person by name, out loud when replies are spoken.
+  // Each time the Command Center opens it greets the person by name, out loud, at once: the greeting
+  // and its recording are kept on the phone, so nothing waits for fiarep.com. A new greeting (another
+  // name or language) is recorded once when fiarep.com sends it, and played then if it hasn't been yet.
+  const GREET_TEXT = 'cmd.greeting.text';
+  const greetFile = `${FileSystem.documentDirectory}cmd-greeting.mp3`;
   const greeted = useRef(false);
+  const [savedGreeting, setSavedGreeting] = useState('');
+  async function playGreetingFile() {
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+    playerRef.current?.remove();
+    const player = createAudioPlayer({ uri: greetFile }); playerRef.current = player; player.play();
+  }
   useFocusEffect(useCallback(() => {
-    if (device?.status === 'active' && device.greeting && !greeted.current) { greeted.current = true; void speak(device.greeting); }
+    (async () => {
+      try {
+        const text = (await AsyncStorage.getItem(GREET_TEXT)) || '';
+        setSavedGreeting(text);
+        if (!text || greeted.current || !speakReplies) return;
+        if ((await FileSystem.getInfoAsync(greetFile)).exists) { greeted.current = true; await playGreetingFile(); }
+      } catch { /* the greeting is on screen either way */ }
+    })();
     return () => { greeted.current = false; };
-  }, [device?.status, device?.greeting])); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [])); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    const text = device?.status === 'active' ? device.greeting : '';
+    if (!text) return;
+    (async () => {
+      try {
+        const stored = (await AsyncStorage.getItem(GREET_TEXT)) || '';
+        const haveFile = (await FileSystem.getInfoAsync(greetFile)).exists;
+        if (stored === text && haveFile) return;
+        const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: text.slice(0, 600) });
+        await FileSystem.writeAsStringAsync(greetFile, audioBase64, { encoding: 'base64' as never });
+        await AsyncStorage.setItem(GREET_TEXT, text); setSavedGreeting(text);
+        if (!greeted.current && speakReplies) { greeted.current = true; await playGreetingFile(); }
+      } catch { /* try again next time it opens */ }
+    })();
+  }, [device?.status, device?.greeting]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function setUp() {
     setBusy('Setting up this phone…');
@@ -189,7 +222,7 @@ export default function CommandCenter() {
   if (!support.ok) {
     return <View style={ui.wrap}><Text style={ui.cardTitle}>Command Center</Text><Text style={ui.label}>{support.reason}</Text></View>;
   }
-  if (device === undefined) return <View style={[ui.wrap, { alignItems: 'center' }]}><ActivityIndicator /></View>;
+  if (device === undefined) return <View style={[ui.wrap, { alignItems: 'center' }]}>{!!savedGreeting && <Text style={{ fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 8, alignSelf: 'stretch' }}>{savedGreeting}</Text>}<ActivityIndicator /></View>;
   if (!device || device.status === 'revoked') {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
@@ -308,7 +341,7 @@ export default function CommandCenter() {
           );
         })}
 
-        {!!device.greeting && <Text style={{ fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 4 }}>{device.greeting}</Text>}
+        {!!(device.greeting || savedGreeting) && <Text style={{ fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 4 }}>{device.greeting || savedGreeting}</Text>}
         {runs.length === 0 && <Text style={ui.empty}>{device.platform === false ? 'Ask anything — “Check every building we manage”, “Any urgent violations?”, “What’s in the Documents folder on the office PC?”.' : 'Ask anything — “Check every building we manage”, “Is FIAREP up?”, “Git status on my Mac”.'}</Text>}
         {runs.map((r) => (
           <View key={r.id} style={ui.card}>
