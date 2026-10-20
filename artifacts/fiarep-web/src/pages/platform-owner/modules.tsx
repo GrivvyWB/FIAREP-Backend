@@ -273,6 +273,17 @@ function configuredModules(organization: OrganizationWithUsage): Record<string, 
   }, {});
 }
 
+/** A new company starts with everything off: every module, app tab, HPD / DOB lookup trade and
+ *  FIAREP add-on is saved as off, and the platform owner switches on what the client gets. */
+export function newCompanyModules(): Record<string, boolean> {
+  const off: Record<string, boolean> = {};
+  for (const m of MODULES) off[m.id] = false;
+  for (const group of APP_TABS) for (const tab of group.tabs) off[appTabKey(group.id, tab)] = false;
+  for (const trade of LOOKUP_TRADES) off[`lookup.${trade.key}`] = false;
+  for (const k of ["residentPhotoAiViolationReader", "communitySupervisorReview", "fiarepComplaintRouting", "fiarepMessaging", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "requireBaseline", "smartRepairEmailCopy"]) off[k] = false;
+  return off;
+}
+
 /** Every feature switched on, for a pilot (read-only locks and FIAREP's own locked forms folder are left as they are). */
 function allFeaturesOn(): Record<string, boolean> {
   const on: Record<string, boolean> = {};
@@ -698,7 +709,13 @@ export default function OwnerModules() {
             <div className="divide-y divide-slate-100">
               {APP_TABS.map((group) => (
                 <div key={group.screen} className="px-5 py-3">
-                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.screen}</p>
+                  <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{group.screen}</p>
+                    <div className="flex gap-1">
+                      <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setAppTabs((c) => ({ ...c, ...Object.fromEntries(group.tabs.map((tab) => [appTabKey(group.id, tab), true])) })); setDirty(true); }}>All on</Button>
+                      <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setAppTabs((c) => ({ ...c, ...Object.fromEntries(group.tabs.map((tab) => [appTabKey(group.id, tab), false])) })); setDirty(true); }}>All off</Button>
+                    </div>
+                  </div>
                   <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
                     {group.tabs.map((tab) => {
                       const key = appTabKey(group.id, tab);
@@ -743,7 +760,15 @@ export default function OwnerModules() {
                   <tbody>
                     {MEASUREMENT_TRADES.map((t) => (
                       <tr key={t.key} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
-                        <td className="whitespace-nowrap px-4 py-2 font-medium text-slate-800">{t.label}</td>
+                        <td className="whitespace-nowrap px-4 py-2 font-medium text-slate-800">
+                          <div className="flex items-center justify-between gap-3">
+                            <span>{t.label}</span>
+                            <span className="flex gap-1">
+                              <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px]" aria-label={`${t.label}: all on`} onClick={() => { setMeasurementAccess((c) => ({ ...c, ...Object.fromEntries(MEASUREMENT_MATERIALS.map((m) => [measurementKey(t.key, m.key), true])) })); setDirty(true); }}>All on</Button>
+                              <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px]" aria-label={`${t.label}: all off`} onClick={() => { setMeasurementAccess((c) => ({ ...c, ...Object.fromEntries(MEASUREMENT_MATERIALS.map((m) => [measurementKey(t.key, m.key), false])) })); setDirty(true); }}>All off</Button>
+                            </span>
+                          </div>
+                        </td>
                         {MEASUREMENT_MATERIALS.map((m) => {
                           const key = measurementKey(t.key, m.key);
                           return (
@@ -809,7 +834,15 @@ export default function OwnerModules() {
                   <tbody>
                     {PROJECT_TRADES.map((tr) => (
                       <tr key={tr.key} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50">
-                        <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-4 py-2 font-medium text-slate-800">{tr.label}</td>
+                        <td className="sticky left-0 z-10 whitespace-nowrap bg-white px-4 py-2 font-medium text-slate-800">
+                          <div className="flex items-center justify-between gap-3">
+                            <span>{tr.label}</span>
+                            <span className="flex gap-1">
+                              <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px]" aria-label={`${tr.label}: all on`} onClick={() => { setProjToolAccess((c) => ({ ...c, ...Object.fromEntries(PROJECT_TOOLS.map((t) => [projToolKey(tr.key, t.id), true])) })); setDirty(true); }}>All on</Button>
+                              <Button type="button" variant="outline" size="sm" className="h-6 px-2 text-[11px]" aria-label={`${tr.label}: all off`} onClick={() => { setProjToolAccess((c) => ({ ...c, ...Object.fromEntries(PROJECT_TOOLS.map((t) => [projToolKey(tr.key, t.id), false])) })); setDirty(true); }}>All off</Button>
+                            </span>
+                          </div>
+                        </td>
                         {PROJECT_TOOLS.map((t) => {
                           const key = projToolKey(tr.key, t.id);
                           return (

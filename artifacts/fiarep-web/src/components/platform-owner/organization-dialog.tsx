@@ -303,9 +303,12 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
         });
         toast({ title: "Organization updated successfully." });
       } else {
+        // A new company starts with everything off; switch on what it gets in Modules.
+        const { newCompanyModules } = await import("@/pages/platform-owner/modules");
         const result = await createMutation.mutateAsync({
           data: {
             ...payload,
+            features: { ...payload.features, modules: newCompanyModules() },
             directorName: values.directorName!.trim(),
           },
         });
