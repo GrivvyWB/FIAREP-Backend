@@ -236,11 +236,11 @@ export function DofLookupPanel({ onResult, onCounts, canSubmit, quoted, persistK
               {showAll && (
                 <div className="mt-2 max-h-72 overflow-auto rounded-lg border border-slate-800">
                   <table className="w-full text-xs">
-                    <thead className="sticky top-0 bg-slate-900 text-left text-slate-400"><tr><th className="px-2 py-1">Ticket</th><th className="px-2 py-1">Agency</th><th className="px-2 py-1">Charge</th><th className="px-2 py-1">Status</th><th className="px-2 py-1 text-right">Balance</th></tr></thead>
+                    <thead className="sticky top-0 bg-slate-900 text-left text-slate-400"><tr><th className="px-2 py-1">Ticket</th><th className="px-2 py-1">Agency</th><th className="px-2 py-1">Charge</th><th className="px-2 py-1">Status</th><th className="px-2 py-1 text-right">Balance</th><th className="px-2 py-1"></th></tr></thead>
                     <tbody>
                       {data.oath.items.map((i) => (
                         <tr key={i.ticket} className="border-t border-slate-800 text-slate-300">
-                          <td className="px-2 py-1 font-mono">{i.ticket}</td><td className="px-2 py-1">{i.agency}</td><td className="px-2 py-1">{i.charge}</td><td className="px-2 py-1">{i.complianceStatus || i.hearingStatus}</td><td className="px-2 py-1 text-right font-semibold">{money(i.balance)}</td>
+                          <td className="px-2 py-1 font-mono">{i.ticket}</td><td className="px-2 py-1">{i.agency}</td><td className="px-2 py-1">{i.charge}</td><td className="px-2 py-1">{i.complianceStatus || i.hearingStatus}</td><td className="px-2 py-1 text-right font-semibold">{money(i.balance)}</td><td className="px-2 py-1">{/buildings/i.test(i.agency) && <a href={`/company-forms?oath=${encodeURIComponent(i.ticket)}`} className="whitespace-nowrap text-amber-300 underline">Fill AEU2</a>}</td>
                         </tr>
                       ))}
                     </tbody>

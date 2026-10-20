@@ -8,6 +8,7 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizations } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { canFill, fillForm } from "../lib/formFill";
+import { buildingByAddress, clientBuildings, formValuesFor, oathSummons } from "../lib/formPrefill";
 
 export const COMPANY_FORMS: Array<{ file: string; title: string; group: string; description: string }> = [
   { file: "dob-certificate-of-correction-aeu2.pdf", title: "DOB Certificate of Correction (AEU2)", group: "Violations", description: "Affidavit required for every open DOB / OATH summons — who corrected it, when, cure or stipulation request." },
@@ -122,6 +123,34 @@ router.post("/v1/company-forms/fill/:file", requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Could not fill the form" });
   }
+});
+
+// ── Fill a form with its building: "Which building?" on the form, and "Fill AEU2" from an OATH summons ──
+router.get("/v1/company-forms/buildings", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await clientBuildings(actor.tenantId));
+});
+router.get("/v1/company-forms/prefill/building", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  try {
+    const b = await buildingByAddress(actor.tenantId, String(req.query["address"] || ""));
+    if ("error" in b) { res.status(404).json(b); return; }
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ building: b, values: formValuesFor(String(req.query["form"] || ""), b) });
+  } catch (err) { res.status(502).json({ error: err instanceof Error ? err.message : "Could not reach the City's records" }); }
+});
+router.get("/v1/company-forms/prefill/oath/:ticket", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  try {
+    const r = await oathSummons(actor.tenantId, String(req.params["ticket"] || ""));
+    if ("error" in r) { res.status(404).json(r); return; }
+    res.setHeader("Cache-Control", "no-store");
+    res.json({ ...r, values: formValuesFor(String(req.query["form"] || "certificate-of-correction"), r.building, r.summons) });
+  } catch (err) { res.status(502).json({ error: err instanceof Error ? err.message : "Could not reach OATH" }); }
 });
 
 router.get("/v1/company-forms/:file", requireAuth, async (req, res) => {

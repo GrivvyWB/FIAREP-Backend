@@ -8,6 +8,12 @@ import { useAuth } from "@/hooks/use-auth";
 import { ArrowLeft, Download, FileText, Lock, Plus, Printer, Save, Trash2 } from "lucide-react";
 import { COMPLIANCE_FORMS, MILESTONES, entryLabel, prefillFromHpd, affidavitPlan, type HpdPrefill, type FormDef, type Field, type Section } from "@/lib/compliance-forms";
 
+type FormBuilding = { street: string; borough: string; zip: string; county: string; full: string; bbl: string; registrationId: string; owner: string; agent: string; name: string };
+type ClientBuilding = { id: string; address: string; name: string; bbl: string };
+const REMEMBER = "fiarep.forms.building";
+const remembered = () => { try { return localStorage.getItem(REMEMBER) || ""; } catch { return ""; } };
+const remember = (a: string) => { try { localStorage.setItem(REMEMBER, a); } catch { /* private window */ } };
+const isBlank = (v: unknown) => v == null || (typeof v === "string" && !v.trim());
 type Entry = { id: string; formId: string; values: Record<string, unknown>; label: string; createdBy: string; updatedBy: string; createdAt: string; updatedAt: string };
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 const esc = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
@@ -28,6 +34,45 @@ export default function CompanyForms() {
 
   const def = useMemo(() => COMPLIANCE_FORMS.find((f) => f.id === formId) || null, [formId]);
 
+  // ── The building the form is for: picked once, remembered, filled into every form ──
+  const [buildings, setBuildings] = useState<ClientBuilding[]>([]);
+  const [building, setBuilding] = useState<FormBuilding | null>(null);
+  const [bldAddr, setBldAddr] = useState("");
+  const [bldBusy, setBldBusy] = useState(false);
+  const [askBuilding, setAskBuilding] = useState(false);
+  const [summonsNo, setSummonsNo] = useState("");
+  useEffect(() => { void customFetch<ClientBuilding[]>("/api/v1/company-forms/buildings", { responseType: "json" } as never).then(setBuildings).catch(() => undefined); }, []);
+  /** Fill the open form from a building. `overwrite`: the person picked it, so its address replaces what is there; otherwise only empty blanks are filled. */
+  async function applyBuilding(fid: string, address: string, overwrite: boolean) {
+    if (!address.trim()) return;
+    setBldBusy(true);
+    try {
+      const r = await customFetch<{ building: FormBuilding; values: Record<string, unknown> }>(`/api/v1/company-forms/prefill/building?form=${encodeURIComponent(fid)}&address=${encodeURIComponent(address)}`, { responseType: "json" } as never);
+      setBuilding(r.building); setAskBuilding(false); setBldAddr(""); remember(address);
+      setEditing((e) => {
+        if (!e) return e;
+        const next = { ...e.values };
+        for (const [k, v] of Object.entries(r.values)) if (overwrite || isBlank(next[k])) next[k] = v;
+        return { ...e, values: next };
+      });
+    } catch (err: any) {
+      setAskBuilding(true);
+      toast({ variant: "destructive", title: "Could not find that building", description: err?.data?.error || err?.message || "Check the address." });
+    } finally { setBldBusy(false); }
+  }
+  /** AEU2 from an OATH summons: the summons number, where it was written, borough / ZIP and county. */
+  async function fillFromSummons(ticket: string) {
+    const t = ticket.trim(); if (!t) return;
+    setBldBusy(true);
+    try {
+      const r = await customFetch<{ building: FormBuilding; values: Record<string, unknown> }>(`/api/v1/company-forms/prefill/oath/${encodeURIComponent(t)}?form=certificate-of-correction`, { responseType: "json" } as never);
+      setBuilding(r.building); setAskBuilding(false); setSummonsNo(""); remember(r.building.full);
+      setEditing((e) => (e ? { ...e, values: { ...e.values, ...r.values } } : e));
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Could not fill from the summons", description: err?.data?.error || err?.message || "Check the number." });
+    } finally { setBldBusy(false); }
+  }
+
   async function reload() {
     try {
       setEntries(await customFetch<Entry[]>("/api/v1/company-forms/records", { responseType: "json" } as never));
@@ -35,6 +80,13 @@ export default function CompanyForms() {
     } catch (err: any) { setLocked(err?.data?.error || err?.message || "Company forms are not available."); }
   }
   useEffect(() => { void reload(); }, []);
+  // Opened from the Command Center: /company-forms?entry=<id> opens the form it filled.
+  const [wantEntry] = useState(() => new URLSearchParams(window.location.search).get("entry") || "");
+  useEffect(() => {
+    if (!wantEntry) return;
+    const e = entries.find((x) => x.id === wantEntry);
+    if (e) { setFormId(e.formId); setEditing({ id: e.id, values: e.values }); window.history.replaceState(null, "", "/company-forms"); }
+  }, [entries, wantEntry]);
 
   // Opened from a violation ("Fill affidavit"): /company-forms?hpd=<violation number>.
   // HPD's record of that violation picks the right affidavit (AF-6 / AF-7 / AF-8)
@@ -68,9 +120,15 @@ export default function CompanyForms() {
   useEffect(() => {
     const q = new URLSearchParams(window.location.search);
     const wanted = q.get("form") || ""; const id = q.get("hpd") || "";
-    if (!wanted && !id) return;
+    if (!wanted && !id && !q.get("oath")) return;
     (async () => {
-      if (!id) { const f = COMPLIANCE_FORMS.find((x) => x.id === wanted); if (f) startNew(f); return; }
+      const oath = q.get("oath") || ""; const addr = q.get("address") || "";
+      if (oath) {
+        const f = COMPLIANCE_FORMS.find((x) => x.id === "certificate-of-correction");
+        if (f) { setFormId(f.id); setEditing({ id: "", values: {} }); await fillFromSummons(oath); }
+        window.history.replaceState(null, "", "/company-forms"); return;
+      }
+      if (!id) { const f = COMPLIANCE_FORMS.find((x) => x.id === wanted); if (f) startNew(f, addr || undefined); window.history.replaceState(null, "", "/company-forms"); return; }
       try {
         const ids = id.split(",").map(s => s.trim()).filter(Boolean);
         // Read every violation, not just the first. Each one carries its own
@@ -110,10 +168,13 @@ export default function CompanyForms() {
     })();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  function startNew(f: FormDef) {
+  function startNew(f: FormDef, address?: string) {
     const values: Record<string, unknown> = {};
     if (f.id === "violation-timeline") values["milestones"] = MILESTONES.map((m) => ({ milestone: m }));
-    setFormId(f.id); setEditing({ id: "", values });
+    setFormId(f.id); setEditing({ id: "", values }); setBuilding(null);
+    // The building being worked on fills the form; with none yet, the form asks which one.
+    const use = address || remembered();
+    if (use) void applyBuilding(f.id, use, true); else setAskBuilding(true);
   }
 
   async function save() {
@@ -187,6 +248,32 @@ export default function CompanyForms() {
           <div>
             <h1 className="text-2xl font-bold">{def.title}</h1>
             <p className="text-sm text-muted-foreground">{def.subtitle}</p>
+            <div className={`mt-3 rounded-lg border p-3 text-sm ${askBuilding && !building ? "border-amber-400 bg-amber-50" : "bg-card"}`}>
+              {building ? (
+                <p><span className="font-semibold">Building:</span> {building.name ? `${building.name} — ` : ""}{building.full}{building.registrationId ? <span className="text-muted-foreground"> · HPD registration {building.registrationId}</span> : null}</p>
+              ) : (
+                <p className="font-semibold">{askBuilding ? "Which building is this form for?" : "Building"}</p>
+              )}
+              <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void applyBuilding(def.id, bldAddr, true); }}>
+                {buildings.length > 0 && (
+                  <select className="h-8 max-w-[18rem] rounded-md border bg-background px-2 text-sm" value="" onChange={(e) => { if (e.target.value) void applyBuilding(def.id, e.target.value, true); }} aria-label="Your buildings">
+                    <option value="">{building ? "Change to one of your buildings…" : "Pick one of your buildings…"}</option>
+                    {buildings.map((b) => <option key={b.id} value={b.address}>{b.name ? `${b.name} — ${b.address}` : b.address}</option>)}
+                  </select>
+                )}
+                <Input value={bldAddr} onChange={(e) => setBldAddr(e.target.value)} placeholder={buildings.length ? "or type any address" : "Type the building's address"} className="h-8 w-64" />
+                <Button type="submit" size="sm" className="h-8" disabled={bldBusy || !bldAddr.trim()}>{bldBusy ? "Filling…" : building ? "Use this address" : "Fill the form"}</Button>
+              </form>
+              <p className="mt-1 text-xs text-muted-foreground">The address, borough, ZIP, county, HPD registration and owner fill in from the City's records. Check them before you sign.</p>
+            </div>
+            {def.id === "certificate-of-correction" && (
+              <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void fillFromSummons(summonsNo); }}>
+                <label className="text-xs font-semibold text-slate-700">Fill from OATH summons #</label>
+                <Input value={summonsNo} onChange={(e) => setSummonsNo(e.target.value)} placeholder="Summons / ticket number" className="h-8 w-48" />
+                <Button type="submit" size="sm" className="h-8" disabled={bldBusy || !summonsNo.trim()}>{bldBusy ? "Filling…" : "Fill"}</Button>
+                <span className="text-xs text-muted-foreground">or press Fill AEU2 on the summons in the building lookup</span>
+              </form>
+            )}
             {AFFIDAVITS.has(def.id) && (
               <form className="mt-2 flex flex-wrap items-center gap-2" onSubmit={(e) => { e.preventDefault(); void fillFromNumber(); }}>
                 <label className="text-xs font-semibold text-slate-700">Fill from violation #</label>
@@ -309,7 +396,7 @@ function FieldEditor({ field, value, onChange }: { field: Field; value: unknown;
 }
 
 function TableEditor({ table, rows, onChange }: { table: NonNullable<Section["table"]>; rows: Record<string, unknown>[]; onChange: (rows: Record<string, unknown>[]) => void }) {
-  const list = rows.length ? rows : Array.from({ length: table.rows }, () => ({}));
+  const list = rows.length ? rows : Array.from({ length: table.rows }, (): Record<string, unknown> => ({}));
   const setCell = (i: number, k: string, v: string) => onChange(list.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
   return (
     <div className="mt-3 overflow-x-auto">
@@ -341,7 +428,7 @@ function printHtml(def: FormDef, values: Record<string, unknown>, org: string): 
     const checks = s.checks ? `<div class="checks">${s.checks.map((c) => `<span>${values[c.key] === true ? "☑" : "☐"} ${esc(c.label)}</span>`).join("")}</div>` : "";
     const fields = s.fields ? `<div class="grid">${s.fields.map(field).join("")}</div>` : "";
     const rows = s.table ? ((values[s.table.key] as Record<string, unknown>[]) || []) : [];
-    const table = s.table ? `<table><tr>${s.table.columns.map((c) => `<th>${esc(c.label)}</th>`).join("")}</tr>${(rows.length ? rows : Array.from({ length: s.table.rows }, () => ({}))).map((r) => `<tr>${s.table!.columns.map((c) => `<td>${esc(r[c.key])}&nbsp;</td>`).join("")}</tr>`).join("")}</table>` : "";
+    const table = s.table ? `<table><tr>${s.table.columns.map((c) => `<th>${esc(c.label)}</th>`).join("")}</tr>${(rows.length ? rows : Array.from({ length: s.table.rows }, (): Record<string, unknown> => ({}))).map((r) => `<tr>${s.table!.columns.map((c) => `<td>${esc(r[c.key])}&nbsp;</td>`).join("")}</tr>`).join("")}</table>` : "";
     return `<section><h2>${esc(s.title)}</h2>${s.note ? `<p class="note">${esc(s.note)}</p>` : ""}${checks}${fields}${table}</section>`;
   }).join("");
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(def.title)}</title><style>

@@ -27,6 +27,7 @@ import { attachmentFor, findContacts, mailStatus, readEmail, readInbox, resolveR
 import { createScope, listContractors, listReports, listScopes, saveReport, sendScope, findScope } from "./scopes";
 import { createContract, quotePlans, type ContractRequest } from "./sales";
 import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
+import { commandFillForm } from "./forms";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -503,6 +504,15 @@ export const ACTIONS: ActionDef[] = [
     schema: { type: "object", properties: {}, additionalProperties: false },
     run: async (_p, ctx) => ({ reports: await listReports(ctx.tenantId, 30) }),
     describe: () => "Saved reports",
+  },
+  // ── Company Forms ───────────────────────────────────────────────────────
+  {
+    name: "fill_form", label: "Fill in a company form", risk: "write", confirmDefault: false, target: "server",
+    description: "Fill a Company Form for a building and save it on the Company Forms page: the address the way the form asks for it, borough, ZIP, county, HPD registration number and owner, from the City's records. For a DOB OATH summons, give summons and it fills the AEU2 (Certificate of Correction) from that summons. Forms: AEU2 certificate of correction, violation correction timeline, vermin treatment request, vermin complaint & compliance, vermin treatment log, vermin tenant acknowledgment, lead paint disclosure, lead remediation tracking, lead hazard work log, AF-6, AF-7, AF-8, CIV 194, mold assessment, mold remediation, tenant notice. If the building isn't given, ask which address.",
+    schema: { type: "object", properties: { form: { type: "string" }, address: { type: "string" }, summons: { type: "string" }, apartment: { type: "string" } }, required: ["form"], additionalProperties: false },
+    run: async (p, ctx) => commandFillForm(ctx.tenantId, { form: str(p["form"], 120), address: str(p["address"], 200) || undefined, summons: str(p["summons"], 40) || undefined, apartment: str(p["apartment"], 20) || undefined }, { id: ctx.staffId, name: ctx.actorName }),
+    describe: (p) => `Fill ${str(p["form"], 60)}${str(p["summons"]) ? ` for summons ${str(p["summons"], 30)}` : str(p["address"]) ? ` for ${str(p["address"], 80)}` : ""}`,
+    spoken: (r) => { const x = r as { form?: string; saved?: string; error?: string }; return x.error ?? `${x.form} filled for ${x.saved}. It's on Company Forms to check and sign.`; },
   },
   // ── Client access (FIAREP's own Command Center) ──────────────────────────
   {
