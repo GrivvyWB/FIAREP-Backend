@@ -94,7 +94,7 @@ const BRIEF_STEPS = [
   { icon: Check, title: "See Everything", body: "Repair photos, compliance records, registrations, ownership details, and service agreements are stored in one place, giving you a complete view of your property's progress." },
 ];
 const BRIEF_COSTS = [
-  { figure: "$1,000", text: "per dwelling unit in HPD fees once a building is in the Alternative Enforcement Program — $500 every six months, capped at $1,000 per unit" },
+  { figure: "", text: "If a property enters AEP and is not discharged after the initial four-month program, a $500 per-unit AEP - City fee will apply. If the property remains in AEP six months later without discharge, the same fee will be charged again." },
   { figure: "$250 – $1,000", text: "HPD fee for every dismissal request after the certification period passes; $200 per complaint inspection, $100 per re-inspection" },
   { figure: "24 hours", text: "to correct most Class C violations; 30 days for Class B; 90 for Class A — then civil penalties in Housing Court" },
 ];
@@ -120,8 +120,8 @@ function ViolationsBrief() {
         <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#B45309] dark:text-[#E0A526]">What a violation costs you if nobody is watching</p>
         <div className="mt-3 space-y-4">
           {BRIEF_COSTS.map((c) => (
-            <div key={c.figure}>
-              <p className="font-serif text-2xl font-bold leading-none">{c.figure}</p>
+            <div key={c.text}>
+              {c.figure && <p className="font-serif text-2xl font-bold leading-none">{c.figure}</p>}
               <p className="mt-1 text-sm leading-snug">{c.text}</p>
             </div>
           ))}
