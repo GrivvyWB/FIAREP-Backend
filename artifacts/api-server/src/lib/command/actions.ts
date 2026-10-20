@@ -26,6 +26,7 @@ import { notifyResident } from "../residentNotify";
 import { attachmentFor, findContacts, mailStatus, readEmail, readInbox, resolveRecipients, saveContact, sendEmail } from "./mail";
 import { createScope, listContractors, listReports, listScopes, saveReport, sendScope, findScope } from "./scopes";
 import { createContract, quotePlans, type ContractRequest } from "./sales";
+import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -502,6 +503,25 @@ export const ACTIONS: ActionDef[] = [
     schema: { type: "object", properties: {}, additionalProperties: false },
     run: async (_p, ctx) => ({ reports: await listReports(ctx.tenantId, 30) }),
     describe: () => "Saved reports",
+  },
+  // ── Client access (FIAREP's own Command Center) ──────────────────────────
+  {
+    name: "client_alerts_status", label: "A client's violation alerts access", risk: "read", confirmDefault: false, target: "server", platformOnly: true,
+    description: "Whether a client has the Violation Alerts page and/or the Complaint Command strip switched on, and how many of its buildings are on the watch list.",
+    schema: { type: "object", properties: { client: { type: "string" } }, required: ["client"], additionalProperties: false },
+    run: async (p) => clientAlertsStatus(str(p["client"], 120)),
+    describe: (p) => `Alerts access for ${str(p["client"], 80)}`,
+  },
+  {
+    name: "set_client_alerts", label: "Turn a client's violation alerts on or off", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
+    description: "Give a client permission to see its violation alerts, or take it away: page = the Violation Alerts page in their menu, command = the red strip on their Borough Director's Complaint Command. Same switches as Platform Control → Modules. Only when asked. If they have no watched buildings, say the buildings still need adding on Platform → Alerts.",
+    schema: { type: "object", properties: { client: { type: "string" }, page: { type: "boolean" }, command: { type: "boolean" } }, required: ["client"], additionalProperties: false },
+    run: async (p, ctx) => setClientAlerts(str(p["client"], 120), { page: typeof p["page"] === "boolean" ? p["page"] : undefined, command: typeof p["command"] === "boolean" ? p["command"] : undefined }, ctx.actorName),
+    describe: (p) => {
+      const part = (v: unknown, what: string) => (typeof v === "boolean" ? `${what} ${v ? "on" : "off"}` : "");
+      return `${str(p["client"], 80)}: ${[part(p["page"], "Alerts page"), part(p["command"], "Complaint Command strip")].filter(Boolean).join(", ") || "no change"}`;
+    },
+    spoken: (r) => { const x = r as { client?: string; alertsPage?: boolean; complaintCommandStrip?: boolean; watchedBuildings?: number; error?: string }; return x.error ?? `${x.client}: Alerts page ${x.alertsPage ? "on" : "off"}, Complaint Command strip ${x.complaintCommandStrip ? "on" : "off"}${x.watchedBuildings ? "" : " — no buildings on their watch list yet"}.`; },
   },
   // ── Sales: plan prices and contracts (FIAREP's own Command Center) ─────
   {
