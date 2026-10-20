@@ -32,6 +32,7 @@ import { relayUrl, syncRelayDevices } from "../lib/command/relay";
 import { getReport, listReports } from "../lib/command/scopes";
 import { connectMailbox, disconnectMailbox, mailStatus, presetFor } from "../lib/command/mail";
 import { loadFile, MAX_FILE_BYTES, saveFile } from "../lib/command/files";
+import { getLanguage, greetingFor } from "../lib/command/language";
 
 const router: IRouter = Router();
 const str = (v: unknown, max = 300) => (typeof v === "string" ? v.trim().slice(0, max) : "");
@@ -114,8 +115,10 @@ router.get("/v1/command/devices/:id/status", ...phone, async (req, res) => {
   const [d] = await db.select().from(commandDevices).where(eq(commandDevices.id, String(req.params["id"]))).limit(1);
   if (!d || d.staffId !== actorFrom(res).id) { res.status(404).json({ error: "Unknown device" }); return; }
   // What the Command Center says when it opens, to the person by name.
-  const greeting = `Hey ${callName(d.staffName || actorFrom(res).name, isPlatform(d.tenantId))}, how are you doing? How can I help you today?`;
-  res.json({ id: d.id, status: d.status, name: d.name, approveWhere: approveWhere(d.tenantId), platform: isPlatform(d.tenantId), greeting });
+  // In their language; on a client's first use it asks which language they want. languageCode: what the phone listens for ("" = any).
+  const lang = await getLanguage(d.tenantId, d.staffId);
+  const greeting = greetingFor(lang, callName(d.staffName || actorFrom(res).name, isPlatform(d.tenantId)));
+  res.json({ id: d.id, status: d.status, name: d.name, approveWhere: approveWhere(d.tenantId), platform: isPlatform(d.tenantId), greeting, language: lang?.language ?? null, languageCode: lang?.code ?? "" });
 });
 
 router.post("/v1/command/runs", ...phone, requireCommandDevice, async (req, res) => {

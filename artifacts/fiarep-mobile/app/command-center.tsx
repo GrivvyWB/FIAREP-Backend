@@ -118,6 +118,8 @@ export default function CommandCenter() {
       setRuns((rs) => [run, ...rs.filter((r) => r.id !== run.id)]);
       setPending((p) => [...p, ...run.actions.filter((a) => a.status === 'proposed' && !p.some((x) => x.id === a.id))]);
       void speak(run.reply || '');
+      // A new language: listen for it and greet in it from now on.
+      if (run.actions.some((a) => a.action === 'set_language' && a.status === 'done')) void loadDevice();
     } catch (e) { Alert.alert('Command failed', errText(e)); }
     finally { setBusy(''); }
   }
@@ -137,7 +139,7 @@ export default function CommandCenter() {
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       if (!recorder.uri) throw new Error('No recording');
       const audio = await FileSystem.readAsStringAsync(recorder.uri, { encoding: 'base64' as never });
-      const { text: heard } = await post<{ text: string }>('/api/ai/transcribe', { audio, mimeType: 'audio/mp4', language: 'en' });
+      const { text: heard } = await post<{ text: string }>('/api/ai/transcribe', { audio, mimeType: 'audio/mp4', language: device?.languageCode ?? 'en' });
       if (!heard?.trim()) { Alert.alert('Nothing heard', 'Try again a little closer.'); setBusy(''); return; }
       await send(heard);
     } catch (e) { Alert.alert('Could not hear that', errText(e)); setBusy(''); }

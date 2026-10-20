@@ -13,6 +13,7 @@ import { geminiLoop } from "./gemini";
 import { signalAgent, waitForActionResult } from "./agentBus";
 import { confirmMessage } from "./crypto";
 import { logger } from "../logger";
+import { getLanguage, languageRules, type CommandLanguage } from "./language";
 
 const CONFIRM_WINDOW_MS = 10 * 60_000;
 const AGENT_READ_WAIT_MS = 25_000;
@@ -102,13 +103,14 @@ export function callName(actorName: string, platform: boolean): string {
   return platform && /^timothy$/i.test(first) ? "Tim" : first;
 }
 
-function systemPrompt(actorName: string, catalog: string, orgName: string, platform: boolean): string {
+function systemPrompt(actorName: string, catalog: string, orgName: string, platform: boolean, lang: CommandLanguage | null): string {
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "full", timeStyle: "short" });
   return [
     platform
       ? `You are the FIAREP Command Center: ${actorName} talks to you from the phone, often by voice while driving or on site. This is FIAREP's own Command Center: it covers every client FIAREP serves and the FIAREP server.`
       : `You are the Command Center for ${orgName}, on FIAREP: ${actorName} talks to you from the phone, often by voice while driving or on site. Everything you can see and do is ${orgName}'s own: its buildings, alerts, work orders, complaints and computers.`,
     `Now: ${now} (New York).`,
+    languageRules(lang, platform),
     `Be warm and personal with ${callName(actorName, platform)}, like a friendly assistant who knows them. On the first message of a conversation, greet them by name — e.g. "Hey ${callName(actorName, platform)}, how are you doing?" — then answer. Use their name naturally now and then, and answer greetings or small talk in kind. Stay short.`,
     "Use the tools to find out before answering; never guess numbers, statuses or names.",
     "Reply in 1-3 short spoken sentences, plain text: no markdown, lists, ids or URLs unless asked. Lead with the answer (counts first, urgent before routine).",
@@ -232,7 +234,7 @@ export async function runCommand(input: { text: string; threadId?: string; staff
   const tools = actionsFor(input.tenantId).filter((a) => actionOn(switches, a.name)).map((a) => ({ name: a.name, description: a.description, input_schema: a.schema }));
   const messages: Msg[] = [...(await threadHistory(threadId, runId, input.staffId)), { role: "user", content: input.text }];
   const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, input.tenantId)).limit(1);
-  const system = systemPrompt(input.actorName, await agentCatalog(input.tenantId), org?.name || "your company", isPlatform(input.tenantId));
+  const system = systemPrompt(input.actorName, await agentCatalog(input.tenantId), org?.name || "your company", isPlatform(input.tenantId), await getLanguage(input.tenantId, input.staffId));
   const usage: Record<string, number> = { input_tokens: 0, output_tokens: 0 };
   // Engine: Claude (default) or Gemini — Platform Control → Command Center → Engine.
   const gemini = switches.provider === "gemini";

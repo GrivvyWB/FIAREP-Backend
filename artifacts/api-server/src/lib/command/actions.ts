@@ -28,6 +28,7 @@ import { createScope, listContractors, listReports, listScopes, saveReport, send
 import { createContract, quotePlans, type ContractRequest } from "./sales";
 import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
 import { commandFillForm } from "./forms";
+import { setLanguage } from "./language";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -43,6 +44,8 @@ export type ActionDef = {
   target: "server" | "agent";
   /** The FIAREP server itself: only on FIAREP's own Command Center, never a client's. */
   platformOnly?: boolean;
+  /** Only on a client's Command Center, never FIAREP's own. */
+  clientOnly?: boolean;
   schema: Record<string, unknown>;
   /** Server actions only. */
   run?: (params: Record<string, unknown>, ctx: ActionContext) => Promise<unknown>;
@@ -505,6 +508,14 @@ export const ACTIONS: ActionDef[] = [
     run: async (_p, ctx) => ({ reports: await listReports(ctx.tenantId, 30) }),
     describe: () => "Saved reports",
   },
+  // ── Language (a client's Command Center) ────────────────────────────────
+  {
+    name: "set_language", label: "Set my language", risk: "write", confirmDefault: false, target: "server", clientOnly: true,
+    description: "Save the language this person wants the Command Center to speak (when they pick one the first time, or ask to change it). code: its ISO 639-1 code (ko, zh, ru, es, fr, ht, bn, ar, pl, pt…). greeting: \"Hey {name}, how are you doing? How can I help you today?\" written in that language, keeping {name} where the name goes.",
+    schema: { type: "object", properties: { language: { type: "string" }, code: { type: "string" }, greeting: { type: "string" } }, required: ["language", "code", "greeting"], additionalProperties: false },
+    run: async (p, ctx) => setLanguage(ctx.tenantId, ctx.staffId, { language: str(p["language"], 40), code: str(p["code"], 8), greeting: str(p["greeting"], 200) }),
+    describe: (p) => `Speak ${str(p["language"], 40)}`,
+  },
   // ── Company Forms ───────────────────────────────────────────────────────
   {
     name: "fill_form", label: "Fill in a company form", risk: "write", confirmDefault: false, target: "server",
@@ -656,7 +667,7 @@ export const ACTIONS: ActionDef[] = [
 
 export const ACTION_MAP = new Map(ACTIONS.map((a) => [a.name, a]));
 /** The actions one organization's Command Center has. */
-export const actionsFor = (tenantId: string) => ACTIONS.filter((a) => isPlatform(tenantId) || !a.platformOnly);
+export const actionsFor = (tenantId: string) => ACTIONS.filter((a) => (isPlatform(tenantId) || !a.platformOnly) && !(isPlatform(tenantId) && a.clientOnly));
 
 /** Which online agent a desktop_* action goes to, and is the request allowed by that agent's config? */
 export async function resolveAgent(action: ActionDef, params: Record<string, unknown>, tenantId: string): Promise<{ agentId: string; taskConfirm: boolean } | { error: string }> {
