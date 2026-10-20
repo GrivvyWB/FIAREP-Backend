@@ -177,6 +177,28 @@ export const BUTTON_GUIDE: ButtonGuide[] = [
     buttons: [{ name: "New project", does: "Starts a project; add rooms and measurements inside it." }],
   },
   {
+    module: "company-forms", page: "Company Forms — filling in a form for a building",
+    purpose: "Every form fills in its building for you from the City's records, so the address is written the way the City wants it. You pick the building once; the forms after that use the same one until you change it.",
+    buttons: [
+      { name: "Fill in", does: "Opens a new form. If you were already working on a building, its address is filled in right away. If not, the form asks: \"Which building is this form for?\"" },
+      { name: "Pick one of your buildings", does: "The list of your company's buildings. Pick one and the form fills in the address, borough, ZIP, county, HPD registration number, owner and managing agent wherever the form asks for them." },
+      { name: "Type any address → Fill the form / Use this address", does: "For a building that is not on your list: type the house number and street, with the borough if you know it (for example \"1386 Ogden Avenue, Bronx\"), then press the button. To switch buildings, do the same — the address on the form is replaced." },
+      { name: "Fill from OATH summons # (AEU2)", does: "On the DOB Certificate of Correction: type the summons (ticket) number and press Fill. The summons number, the address it was written at, borough / ZIP and the notary county fill in. Or press Fill AEU2 next to the summons in the building lookup." },
+      { name: "Fill from violation #", does: "On an HPD affidavit (AF-6, AF-7, AF-8, lead, mold): type the HPD violation number and the right affidavit fills in from that violation — violation number, apartment, address, county and registration." },
+      { name: "Before you sign", does: "Read every filled-in line against the notice in your hand. Fill in the apartment, names and dates the City's records do not have, then Save. Nothing is sent anywhere until you send it." },
+    ],
+  },
+  {
+    module: "command-center", page: "Command Center — having it fill a form",
+    purpose: "Ask the Command Center on your phone to fill a form; it saves the form on Company Forms filled in, and gives you an Open button to check it and sign.",
+    buttons: [
+      { name: "Say the form and the building", does: "For example: \"Fill a lead paint disclosure for 1386 Ogden Avenue, Bronx, apartment 3B\" or \"Fill the AF-6 for 1386 Ogden Avenue\". Give the house number and street, and the borough if you can." },
+      { name: "For an OATH summons", does: "Say the summons number: \"Fill the AEU2 for summons 035551995X\". The address comes from the summons itself." },
+      { name: "If you leave the building out", does: "It asks you which address to use. Answer with the address and it fills the form." },
+      { name: "Open", does: "Opens the filled-in form on the website. Check it, add what the City's records do not have (names, dates, apartment), and Save." },
+    ],
+  },
+  {
     module: "settings", page: "Settings",
     purpose: "Your profile, shared default rates (CPMs and management) and sign out.",
     buttons: [
