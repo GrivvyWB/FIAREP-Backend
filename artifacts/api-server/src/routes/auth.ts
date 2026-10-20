@@ -122,8 +122,10 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     sql`lower(${staffAccounts.name}) = lower(${name.trim()})`,
     eq(staffAccounts.status, "approved"),
   ];
+  // A client's staff sign in under their organization: its ID is typed the first time
+  // on a device (the device then remembers it). Without one, only FIAREP's own staff match.
   const tenantId = typeof organizationId === "string" && organizationId.trim() ? organizationId.trim() : null;
-  if (tenantId) conditions.push(eq(staffAccounts.tenantId, tenantId));
+  conditions.push(tenantId ? sql`upper(${staffAccounts.tenantId}) = upper(${tenantId})` : eq(staffAccounts.tenantId, "default"));
   if (typeof role === "string") conditions.push(eq(staffAccounts.role, role));
   const candidates = await db
     .select()
@@ -141,6 +143,15 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     );
   });
   if (matches.length !== 1) {
+    if (!tenantId) {
+      // Right name and code, but a client's staff member with no organization ID: say what is missing.
+      const elsewhere = await db.select({ code: staffAccounts.code }).from(staffAccounts)
+        .where(and(sql`lower(${staffAccounts.name}) = lower(${name.trim()})`, eq(staffAccounts.status, "approved"), sql`${staffAccounts.tenantId} <> 'default'`)).limit(20);
+      if (elsewhere.some((x) => x.code.trim().toUpperCase() === normalizedCode)) {
+        res.status(401).json({ error: "Type your organization's ID — it is needed the first time on this device.", needsOrganization: true });
+        return;
+      }
+    }
     res.status(401).json({ error: "Invalid staff name or code" });
     return;
   }

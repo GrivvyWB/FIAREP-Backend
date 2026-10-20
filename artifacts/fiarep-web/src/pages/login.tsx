@@ -28,6 +28,8 @@ const loginSchema = z.object({
   organizationId: z.string().optional(),
 });
 
+const ORG_KEY = "fiarep.organizationId";
+
 export default function Login() {
   const [location, setLocation] = useLocation();
   const { login, isAuthenticated } = useAuth();
@@ -47,7 +49,8 @@ export default function Login() {
     defaultValues: {
       name: "",
       code: "",
-      organizationId: "",
+      // This computer remembers its organization after the first sign-in with it.
+      organizationId: (() => { try { return localStorage.getItem(ORG_KEY) || ""; } catch { return ""; } })(),
     },
   });
 
@@ -59,6 +62,8 @@ export default function Login() {
     try {
       setIsSubmitting(true);
       const result = await login(values.name, values.code, values.organizationId?.trim() || undefined);
+      const org = values.organizationId?.trim();
+      if (org) { try { localStorage.setItem(ORG_KEY, org); } catch { /* private window */ } }
       if (result.status === "procurement-verification") {
         sessionStorage.setItem("fiarep_procurement_verification_pending", JSON.stringify({
           challengeCode: result.challengeCode,
@@ -75,7 +80,7 @@ export default function Login() {
       toast({
         variant: "destructive",
         title: "Login Failed",
-        description: err?.message || "Invalid credentials. Please try again.",
+        description: err?.data?.error || err?.message || "Invalid credentials. Please try again.",
       });
     } finally {
       setIsSubmitting(false);

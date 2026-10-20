@@ -2001,7 +2001,8 @@ export async function verifyStaffLogin(name: string, code: string, role?: StaffR
       typeof error === 'object' &&
       error !== null &&
       'status' in error &&
-      (error as { status?: unknown }).status === 401
+      (error as { status?: unknown }).status === 401 &&
+      !(error as { data?: { needsOrganization?: unknown } }).data?.needsOrganization
     ) {
       return false;
     }

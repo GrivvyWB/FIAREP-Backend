@@ -52,6 +52,8 @@ function Screen({ children }: { children: React.ReactNode }) {
   );
 }
 
+// The organization this phone signs in under: typed once (by the director or owner), then remembered for everyone on it.
+const BOUND_ORG_KEY = 'fiarep_bound_org';
 const LAST_LOGIN_KEY = 'fiarep.staff.lastLogin';
 
 function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel: () => void }) {
@@ -60,6 +62,9 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
   const [ready, setReady] = useState(false);
+  const [org, setOrg] = useState('');
+  const [boundOrg, setBoundOrg] = useState('');
+  useEffect(() => { SecureStore.getItemAsync(BOUND_ORG_KEY).then((v) => setBoundOrg(v || '')).catch(() => undefined); }, []);
 
   // The phone remembers the last name and code that signed in (in the
   // keychain), so after a sign-out it is one tap to get back in.
@@ -81,8 +86,10 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
   async function doLogin() {
     setMsg(''); setBusy(true);
     try {
-      const ok = await verifyStaffLogin(name.trim(), normCode(code));
+      const useOrg = (boundOrg || org).trim();
+      const ok = await verifyStaffLogin(name.trim(), normCode(code), undefined, undefined, useOrg || undefined);
       if (ok) {
+        if (useOrg && !boundOrg) { await SecureStore.setItemAsync(BOUND_ORG_KEY, useOrg.toUpperCase(), { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined); setBoundOrg(useOrg.toUpperCase()); }
         await SecureStore.setItemAsync(LAST_LOGIN_KEY, JSON.stringify({ name: name.trim(), code: normCode(code) }),
           { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined);
         const actor = await restoreServerSession();
@@ -100,7 +107,7 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
           const ok = await requireWorkerLocation();
           if (!ok) { setMsg('FIAREP needs your location to sign in — set Location to "Always" for FIAREP in your phone settings, then try again.'); return; }
         }
-        await setRememberedStaff(modeRole, name.trim()).catch(() => undefined);
+        await setRememberedStaff(modeRole as Parameters<typeof setRememberedStaff>[0], name.trim()).catch(() => undefined);
         await syncAllEntities().catch(() => undefined);
         props.onUnlock(modeRole);
       }
@@ -112,7 +119,9 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
       const status = typeof error === 'object' && error !== null && 'status' in error
         ? (error as { status?: unknown }).status
         : undefined;
-      if (status === 403) setMsg('Organization license is not active.');
+      const needsOrg = typeof error === 'object' && error !== null && (error as { data?: { needsOrganization?: unknown } }).data?.needsOrganization === true;
+      if (needsOrg) setMsg("Type your organization's ID — it is needed the first time on this phone.");
+      else if (status === 403) setMsg('Organization license is not active.');
       else if (status === 401) setMsg('No approved account matches that name and code.');
       else if (typeof status === 'number') setMsg(`The server refused the sign-in (${status}). Try again.`);
       else setMsg('Could not reach the FIAREP backend. Try again.');
@@ -152,6 +161,17 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
             secureTextEntry
           />
       </>
+
+      {boundOrg ? (
+        <Pressable onPress={() => { void SecureStore.deleteItemAsync(BOUND_ORG_KEY).catch(() => undefined); setBoundOrg(''); }} style={{ paddingVertical: 4 }}>
+          <Text style={{ textAlign: 'center', color: '#666', fontSize: 13 }}>Organization {boundOrg} · change</Text>
+        </Pressable>
+      ) : (
+        <>
+          <Text style={ui.label}>Organization ID</Text>
+          <TextInput style={ui.input} value={org} onChangeText={setOrg} placeholder="First time on this phone (FIAREP staff: leave blank)" autoCapitalize="characters" autoCorrect={false} />
+        </>
+      )}
 
       {!!msg && <Text style={{ color: '#c00', textAlign: 'center' }}>{msg}</Text>}
 
