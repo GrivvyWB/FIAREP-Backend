@@ -6,7 +6,7 @@ import {
   ClipboardCheck, Wrench, 
   UserCog, ShoppingCart, Target, Briefcase, ArrowRight, Home,
   CheckCircle2, Blocks, HardHat,
-  ShieldCheck, AlertTriangle, Zap
+  ShieldCheck, AlertTriangle, Zap, Search, PenLine, Check
 } from 'lucide-react';
 
 const fadeIn: Variants = {
@@ -81,6 +81,52 @@ function FiarepWording() {
         <Link href="/join" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-3 text-sm font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all whitespace-nowrap" data-testid="link-hero-pilot">
           Start Your 90-Day Pilot <ArrowRight className="ml-2 h-4 w-4" />
         </Link>
+      </div>
+      <ViolationsBrief />
+    </div>
+  );
+}
+
+// "Every violation on your building" — the front page sheet (Front.pdf), under Start Your 90-Day Pilot.
+const BRIEF_STEPS = [
+  { icon: Search, title: "See it", body: "Type an address. In seconds: what the building owes the City, every open OATH summons, HPD emergency-repair charges, property tax, HPD Class A / B / C and DOB violations — and the Notice of Violation text, word for word." },
+  { icon: PenLine, title: "Clear it", body: "Violations are grouped into repair jobs — one repair clears every repeat in that apartment. Violations written for the wrong place are flagged and a dismissal request is drafted. We cure, certify and expedite." },
+  { icon: Check, title: "Prove it", body: "Certificates of correction, photos, the HPD registration on file, the owners and agents behind it, and a signed service agreement that lists every rate. Nothing is estimated; everything is sourced." },
+];
+const BRIEF_COSTS = [
+  { figure: "$1,000", text: "per dwelling unit in HPD fees once a building is in the Alternative Enforcement Program — $500 every six months, capped at $1,000 per unit" },
+  { figure: "$250 – $1,000", text: "HPD fee for every dismissal request after the certification period passes; $200 per complaint inspection, $100 per re-inspection" },
+  { figure: "24 hours", text: "to correct most Class C violations; 30 days for Class B; 90 for Class A — then civil penalties in Housing Court" },
+];
+
+function ViolationsBrief() {
+  return (
+    <div className="space-y-6" data-testid="section-violations-brief">
+      <div className="rounded-xl bg-[#0B1F3A] p-5 text-white shadow-sm">
+        <p className="font-serif text-xl font-bold tracking-wide">FIAREP</p>
+        <p className="mt-1 text-[10px] font-semibold uppercase leading-snug tracking-[0.12em] text-[#E0A526]">Field Infrastructure, Asset, Reporting and Evaluation Performance</p>
+        <h3 className="mt-4 font-serif text-2xl font-bold leading-tight [text-wrap:balance]">Every violation on your building — before the Notice reaches your desk.</h3>
+        <p className="mt-3 text-sm leading-relaxed text-slate-200">NYC HPD, DOB, OATH and 311 records on your buildings, read every 30 minutes, turned into repair jobs, cured, certified and documented — by one company, for one price per unit.</p>
+      </div>
+      {BRIEF_STEPS.map((step) => (
+        <div key={step.title} className="border-t-4 border-[#E0A526] pt-3">
+          <h4 className="flex items-center gap-2 whitespace-nowrap text-base font-bold text-foreground">
+            <step.icon className="h-4 w-4 shrink-0" aria-hidden="true" /> {step.title}
+          </h4>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{step.body}</p>
+        </div>
+      ))}
+      <div className="rounded-xl border border-[#E0A526]/50 bg-[#FFF8E6] p-4 text-slate-900 dark:bg-[#2A2110] dark:text-amber-50">
+        <p className="text-xs font-bold uppercase tracking-[0.1em] text-[#B45309] dark:text-[#E0A526]">What a violation costs you if nobody is watching</p>
+        <div className="mt-3 space-y-4">
+          {BRIEF_COSTS.map((c) => (
+            <div key={c.figure}>
+              <p className="font-serif text-2xl font-bold leading-none">{c.figure}</p>
+              <p className="mt-1 text-sm leading-snug">{c.text}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-[11px] leading-snug text-[#8A5A12] dark:text-amber-200/80">Source: NYC HPD, Alternative Enforcement Program and Clear Violations pages, nyc.gov/hpd.</p>
       </div>
     </div>
   );
