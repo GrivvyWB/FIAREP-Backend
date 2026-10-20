@@ -34,6 +34,32 @@ export default function CompanyForms() {
 
   const def = useMemo(() => COMPLIANCE_FORMS.find((f) => f.id === formId) || null, [formId]);
 
+  // ── Reading the form in your own language (Settings → Language). Labels only: the form itself stays English. ──
+  const [myLang, setMyLang] = useState<{ code: string; language: string } | null>(null);
+  const [tr, setTr] = useState<Record<string, string> | null>(null);
+  const [trBusy, setTrBusy] = useState(false);
+  useEffect(() => { void customFetch<{ current: { code: string; language: string } | null }>("/api/v1/me/language", { responseType: "json" } as never).then((r) => setMyLang(r.current && r.current.code !== "en" ? r.current : null)).catch(() => undefined); }, []);
+  useEffect(() => { setTr(null); }, [formId]);
+  async function showInMyLanguage(f: FormDef) {
+    if (tr) { setTr(null); return; }
+    const lines = [f.title, f.subtitle, ...f.sections.flatMap((s) => [s.title, s.note || "", ...(s.fields || []).map((x) => x.label), ...(s.checks || []).map((x) => x.label), ...(s.table?.columns || []).map((c) => c.label)])].filter(Boolean);
+    setTrBusy(true);
+    try { const r = await customFetch<{ lines: Record<string, string> }>("/api/v1/company-forms/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ formId: f.id, lines }), responseType: "json" } as never); setTr(r.lines); }
+    catch (err: any) { toast({ variant: "destructive", title: "Could not translate", description: err?.data?.error || err?.message }); }
+    finally { setTrBusy(false); }
+  }
+  async function answersToEnglish() {
+    if (!editing) return;
+    setTrBusy(true);
+    try {
+      const r = await customFetch<{ values: Record<string, unknown> }>("/api/v1/company-forms/translate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values: editing.values }), responseType: "json" } as never);
+      const n = Object.keys(r.values).length;
+      setEditing((e) => (e ? { ...e, values: { ...e.values, ...r.values } } : e));
+      toast({ title: n ? `${n} answer${n === 1 ? "" : "s"} written in English` : "Every answer is already in English" });
+    } catch (err: any) { toast({ variant: "destructive", title: "Could not translate", description: err?.data?.error || err?.message }); }
+    finally { setTrBusy(false); }
+  }
+
   // ── The building the form is for: picked once, remembered, filled into every form ──
   const [buildings, setBuildings] = useState<ClientBuilding[]>([]);
   const [building, setBuilding] = useState<FormBuilding | null>(null);
@@ -248,6 +274,7 @@ export default function CompanyForms() {
           <div>
             <h1 className="text-2xl font-bold">{def.title}</h1>
             <p className="text-sm text-muted-foreground">{def.subtitle}</p>
+            {tr && <p className="text-sm italic text-[#185FA5]">{tr[def.title]} — {tr[def.subtitle]}</p>}
             <div className={`mt-3 rounded-lg border p-3 text-sm ${askBuilding && !building ? "border-amber-400 bg-amber-50" : "bg-card"}`}>
               {building ? (
                 <p><span className="font-semibold">Building:</span> {building.name ? `${building.name} — ` : ""}{building.full}{building.registrationId ? <span className="text-muted-foreground"> · HPD registration {building.registrationId}</span> : null}</p>
@@ -289,13 +316,15 @@ export default function CompanyForms() {
               </div>
             )}
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {myLang && <Button variant="outline" disabled={trBusy} onClick={() => void showInMyLanguage(def)}>{trBusy ? "…" : tr ? "English only" : `Read in ${myLang.language}`}</Button>}
+            {myLang && tr && <Button variant="outline" disabled={trBusy} onClick={() => void answersToEnglish()}>Write my answers in English</Button>}
             {FILLABLE.has(def.pdf) && <Button onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button>}
             <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
             <Button onClick={() => void save()} disabled={busy}><Save className="mr-1 h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
           </div>
         </div>
-        {def.sections.map((s) => <SectionEditor key={s.title} section={s} values={editing.values} set={set} />)}
+        {def.sections.map((s) => <SectionEditor key={s.title} section={s} values={editing.values} set={set} tr={tr} />)}
         <div className="flex justify-end gap-2 pb-8">
           {FILLABLE.has(def.pdf) && <Button onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button>}
           <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
@@ -355,21 +384,26 @@ export default function CompanyForms() {
   );
 }
 
-function SectionEditor({ section, values, set }: { section: Section; values: Record<string, unknown>; set: (k: string, v: unknown) => void }) {
+// Your-language line under an English one (reading aid; never printed).
+const Tr = ({ tr, text }: { tr?: Record<string, string> | null; text: string }) => (tr?.[text] ? <span className="block text-[11px] italic text-[#185FA5]">{tr[text]}</span> : null);
+
+function SectionEditor({ section, values, set, tr }: { section: Section; values: Record<string, unknown>; set: (k: string, v: unknown) => void; tr?: Record<string, string> | null }) {
   return (
     <section className="rounded-lg border bg-card p-4">
       <h2 className="font-semibold">{section.title}</h2>
+      <Tr tr={tr} text={section.title} />
       {section.note && <p className="mt-1 text-xs text-muted-foreground">{section.note}</p>}
+      {section.note && <Tr tr={tr} text={section.note} />}
       {section.checks && (
         <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
           {section.checks.map((c) => (
-            <label key={c.key} className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={values[c.key] === true} onChange={(e) => set(c.key, e.target.checked)} />{c.label}</label>
+            <label key={c.key} className="flex items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={values[c.key] === true} onChange={(e) => set(c.key, e.target.checked)} /><span>{c.label}<Tr tr={tr} text={c.label} /></span></label>
           ))}
         </div>
       )}
       {section.fields && (
         <div className="mt-3 grid gap-3 sm:grid-cols-2">
-          {section.fields.map((f) => <FieldEditor key={f.key} field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} />)}
+          {section.fields.map((f) => <FieldEditor key={f.key} field={f} value={values[f.key]} onChange={(v) => set(f.key, v)} tr={tr} />)}
         </div>
       )}
       {section.table && <TableEditor table={section.table} rows={(values[section.table.key] as Record<string, unknown>[]) || []} onChange={(rows) => set(section.table!.key, rows)} />}
@@ -377,14 +411,14 @@ function SectionEditor({ section, values, set }: { section: Section; values: Rec
   );
 }
 
-function FieldEditor({ field, value, onChange }: { field: Field; value: unknown; onChange: (v: unknown) => void }) {
+function FieldEditor({ field, value, onChange, tr }: { field: Field; value: unknown; onChange: (v: unknown) => void; tr?: Record<string, string> | null }) {
   const wrap = field.full || field.type === "textarea" ? "sm:col-span-2" : "";
   if (field.type === "checkbox") {
-    return <label className={`flex items-center gap-2 text-sm ${wrap}`}><input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={value === true} onChange={(e) => onChange(e.target.checked)} />{field.label}</label>;
+    return <label className={`flex items-center gap-2 text-sm ${wrap}`}><input type="checkbox" className="h-4 w-4 accent-[#185FA5]" checked={value === true} onChange={(e) => onChange(e.target.checked)} /><span>{field.label}<Tr tr={tr} text={field.label} /></span></label>;
   }
   return (
     <label className={`block ${wrap}`}>
-      <span className="mb-1 block text-xs font-medium text-muted-foreground">{field.label}</span>
+      <span className="mb-1 block text-xs font-medium text-muted-foreground">{field.label}<Tr tr={tr} text={field.label} /></span>
       {field.type === "textarea" ? <Textarea className="min-h-[80px]" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)} />
         : field.type === "select" ? (
           <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={String(value ?? "")} onChange={(e) => onChange(e.target.value)}>

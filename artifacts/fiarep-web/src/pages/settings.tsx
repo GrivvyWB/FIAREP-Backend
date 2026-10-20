@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { User, LogOut, Shield, Calculator, ChevronDown, CircleHelp } from "lucide-react";
+import { User, LogOut, Shield, Calculator, ChevronDown, CircleHelp, Languages } from "lucide-react";
+import { customFetch } from "@workspace/api-client-react";
 import { BUTTON_GUIDE } from "@/lib/button-guide";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +28,23 @@ export default function Settings() {
   const canEditRates = staff?.position === "Borough Director" || (!ratesLocked && (staff?.role === "administrator" || staff?.role === "management"));
   const canReadRates = canReadSharedDefaultRates(staff);
   const isHumanResources = staff?.role === "human_resources";
+
+  // Your language: the Command Center speaks it, forms show it next to the English.
+  const [langs, setLangs] = useState<Array<{ code: string; name: string; native: string }>>([]);
+  const [lang, setLang] = useState("");
+  const [langSaving, setLangSaving] = useState(false);
+  useEffect(() => {
+    void customFetch<{ current: { code: string } | null; languages: Array<{ code: string; name: string; native: string }> }>("/api/v1/me/language", { responseType: "json" } as never)
+      .then((r) => { setLangs(r.languages); setLang(r.current?.code || ""); }).catch(() => undefined);
+  }, []);
+  async function saveLang(code: string) {
+    setLang(code); setLangSaving(true);
+    try {
+      const r = await customFetch<{ language: string }>("/api/v1/me/language", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }), responseType: "json" } as never);
+      toast({ title: `Language: ${r.language}` });
+    } catch (err: any) { toast({ variant: "destructive", title: "Could not save", description: err?.data?.error || err?.message }); }
+    finally { setLangSaving(false); }
+  }
 
   useEffect(() => {
     if (isHumanResources || !canReadRates) {
@@ -111,6 +129,22 @@ export default function Settings() {
               </div>
             </div>
           </div>
+
+          {langs.length > 0 && (
+            <details className="group bg-secondary/50 rounded-xl border border-border" data-testid="section-language">
+              <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold">
+                <span className="flex items-center gap-2"><Languages className="h-4 w-4" /> Language{lang ? <span className="font-normal text-muted-foreground">· {langs.find((l) => l.code === lang)?.name}</span> : null}</span>
+                <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+              </summary>
+              <div className="border-t border-border px-4 py-3 space-y-2">
+                <select className="h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 text-sm" value={lang} disabled={langSaving} onChange={(e) => void saveLang(e.target.value)} aria-label="Your language">
+                  <option value="" disabled>Pick your language…</option>
+                  {langs.map((l) => <option key={l.code} value={l.code}>{l.native === l.name ? l.name : `${l.native} — ${l.name}`}</option>)}
+                </select>
+                <p className="text-xs text-muted-foreground">The Command Center talks to you in this language, and forms show each line in it next to the English. What you fill in and print stays the City's English form.</p>
+              </div>
+            </details>
+          )}
 
           {!isHumanResources && canReadRates && <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">

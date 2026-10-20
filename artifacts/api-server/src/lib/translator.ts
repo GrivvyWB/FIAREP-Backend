@@ -71,6 +71,28 @@ export async function translateText(
   };
 }
 
+/** Many short lines at once (form labels, a form's answers), same order out as in. */
+export async function translateList(lines: string[], targetLanguage: string, apiKey: string, purpose: string, fetchImpl: FetchLike = fetch): Promise<string[]> {
+  if (!lines.length) return [];
+  const response = await withTimeout(60_000, (signal) => fetchImpl("https://api.openai.com/v1/chat/completions", {
+    method: "POST", signal,
+    headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: "gpt-5-mini",
+      messages: [
+        { role: "system", content: `Translate each item into ${targetLanguage}. ${purpose} Keep names, addresses, apartment numbers, violation and summons numbers, dates, amounts, form codes (AEU2, AF-6, HPD, DOB, OATH) and legal citations exactly. Return the same number of items, in the same order. No commentary.` },
+        { role: "user", content: JSON.stringify(lines) },
+      ],
+      response_format: { type: "json_schema", json_schema: { name: "translations", strict: true, schema: { type: "object", additionalProperties: false, required: ["items"], properties: { items: { type: "array", items: { type: "string" } } } } } },
+    }),
+  }));
+  if (!response.ok) throw new Error(`OpenAI translate failed (${response.status})`);
+  const payload = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
+  const items = (JSON.parse(payload.choices?.[0]?.message?.content || "{}") as { items?: unknown }).items;
+  if (!Array.isArray(items) || items.length !== lines.length) throw new Error("The translation came back incomplete");
+  return items.map(String);
+}
+
 /** Speech → text. `audioBase64` is the recording (webm/opus, mp4/aac, wav…). */
 export async function transcribeAudio(
   audioBase64: string,

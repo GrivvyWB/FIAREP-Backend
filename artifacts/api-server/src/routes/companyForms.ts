@@ -9,6 +9,7 @@ import { db, entityRecords, organizations } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { canFill, fillForm } from "../lib/formFill";
 import { buildingByAddress, clientBuildings, formValuesFor, oathSummons } from "../lib/formPrefill";
+import { answersToEnglish, formLines, LANGUAGES, saveLanguage, savedLanguage } from "../lib/userLanguage";
 
 export const COMPANY_FORMS: Array<{ file: string; title: string; group: string; description: string }> = [
   { file: "dob-certificate-of-correction-aeu2.pdf", title: "DOB Certificate of Correction (AEU2)", group: "Violations", description: "Affidavit required for every open DOB / OATH summons — who corrected it, when, cure or stipulation request." },
@@ -123,6 +124,33 @@ router.post("/v1/company-forms/fill/:file", requireAuth, async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : "Could not fill the form" });
   }
+});
+
+// ── Your language (Settings → Language): the Command Center speaks it; forms show it beside the English ──
+router.get("/v1/me/language", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ current: await savedLanguage(actor.tenantId, actor.id), languages: LANGUAGES });
+});
+router.put("/v1/me/language", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  const r = await saveLanguage(actor.tenantId, actor.id, String((req.body as { code?: unknown } | undefined)?.code ?? ""));
+  if ("error" in r) { res.status(400).json(r); return; }
+  res.json(r);
+});
+router.post("/v1/company-forms/translate", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (!(await unlocked(actor.tenantId))) { res.status(403).json({ error: "Company forms are not available to this organization" }); return; }
+  const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+  const lang = await savedLanguage(actor.tenantId, actor.id);
+  if (!lang || lang.code === "en") { res.status(400).json({ error: "Pick your language in Settings first." }); return; }
+  try {
+    if (b["values"] && typeof b["values"] === "object") { const r = await answersToEnglish(b["values"] as Record<string, unknown>); if ("error" in r) { res.status(503).json(r); return; } res.json({ values: r }); return; }
+    const lines = Array.isArray(b["lines"]) ? (b["lines"] as unknown[]).map(String) : [];
+    const r = await formLines(String(b["formId"] || "form").slice(0, 60), lang.language, lines);
+    if ("error" in r) { res.status(503).json(r); return; }
+    res.json({ language: lang.language, lines: r });
+  } catch (err) { res.status(502).json({ error: err instanceof Error ? err.message : "Translation failed" }); }
 });
 
 // ── Fill a form with its building: "Which building?" on the form, and "Fill AEU2" from an OATH summons ──
