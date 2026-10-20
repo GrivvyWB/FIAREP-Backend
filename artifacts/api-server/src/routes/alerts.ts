@@ -11,7 +11,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { db, entityRecords, organizations } from "@workspace/db";
+import { db, entityRecords, organizations, settings } from "@workspace/db";
 import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { platformAudit } from "../lib/audit";
 
@@ -108,9 +108,17 @@ export async function checkAllWatched(organizationId?: string): Promise<{ checke
   } finally { running.delete(key); }
   return out;
 }
-// Background sweep: first pass a minute after start, then every 30 minutes.
-setTimeout(() => { void checkAllWatched(); }, 60_000);
-setInterval(() => { void checkAllWatched(); }, CHECK_EVERY_MS);
+// Automatic checks can be switched off in Platform Control → Alerts (e.g. while testing,
+// before there are clients). "Check now" still works when they are off.
+const AUTO_KEY = "alerts-auto-check";
+export async function autoCheckOn(): Promise<boolean> {
+  const [row] = await db.select().from(settings).where(and(eq(settings.tenantId, "default"), eq(settings.key, AUTO_KEY))).limit(1);
+  return (row?.value as { on?: unknown } | undefined)?.on !== false;
+}
+async function scheduledCheck() { if (await autoCheckOn().catch(() => true)) await checkAllWatched(); }
+// Background sweep: first pass a minute after start, then every 30 minutes — when switched on.
+setTimeout(() => { void scheduledCheck().catch(() => undefined); }, 60_000);
+setInterval(() => { void scheduledCheck().catch(() => undefined); }, CHECK_EVERY_MS);
 
 const router: IRouter = Router();
 router.use("/v1/platform/alerts", requirePlatformOwner);
@@ -126,6 +134,16 @@ router.get("/v1/platform/alerts", async (_req, res) => {
   res.json(rows.map((r) => alertView(r as never)));
 });
 router.post("/v1/platform/alerts/check", async (_req, res) => { res.json(await checkAllWatched()); });
+router.get("/v1/platform/alerts/auto", async (_req, res) => { res.json({ on: await autoCheckOn() }); });
+router.put("/v1/platform/alerts/auto", async (req, res) => {
+  const on = (req.body as { on?: unknown } | undefined)?.on;
+  if (typeof on !== "boolean") { res.status(400).json({ error: "on must be true or false" }); return; }
+  const before = await autoCheckOn(); const now = new Date();
+  await db.insert(settings).values({ tenantId: "default", key: AUTO_KEY, value: { on }, createdAt: now, updatedAt: now })
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value: { on }, updatedAt: now } });
+  await platformAudit((res.locals["platformOwner"] as { name: string } | undefined)?.name ?? "platform owner", "alerts.auto_check", "default", { on: before }, { on });
+  res.json({ on });
+});
 router.post("/v1/platform/alerts/:id/seen", async (req, res) => {
   const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, String(req.params["id"])), eq(entityRecords.entity, ALERT))).limit(1);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type Alert = { id: string; watchId: string; kind: string; key: string; date: string; address: string; borough: string; company: string; bbl: string; bin: string; title: string; detail: string; seen: boolean; foundAt: string };
@@ -20,6 +21,7 @@ export default function OwnerAlerts() {
   const [watch, setWatch] = useState<Watch[]>([]);
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
+  const [auto, setAuto] = useState<boolean | null>(null);
   const [filter, setFilter] = useState<"unseen" | "all">("unseen");
   const [add, setAdd] = useState({ address: "", borough: "", company: "", bbl: "", bin: "", organizationId: "" });
   const [orgs, setOrgs] = useState<Org[]>([]);
@@ -32,10 +34,17 @@ export default function OwnerAlerts() {
         customFetch<Org[]>("/api/v1/platform/organizations", { responseType: "json" } as never).catch(() => [] as Org[]),
       ]);
       setAlerts(a); setWatch(w); setOrgs(o.filter((x) => x.id !== "default"));
+      customFetch<{ on: boolean }>("/api/v1/platform/alerts/auto", { responseType: "json" } as never).then((r) => setAuto(r.on)).catch(() => undefined);
     } catch (err: any) { toast({ variant: "destructive", title: "Could not load alerts", description: err?.data?.error || err?.message }); }
     finally { setLoading(false); }
   }
   useEffect(() => { void load(); const t = setInterval(() => void load(), 60_000); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function saveAuto(on: boolean) {
+    setAuto(on);
+    try { const r = await customFetch<{ on: boolean }>("/api/v1/platform/alerts/auto", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ on }), responseType: "json" } as never); setAuto(r.on); toast({ title: r.on ? "Automatic checks on" : "Automatic checks off", description: r.on ? "Every watched building is checked every 30 minutes." : "Nothing is pulled until you switch it back on. Check now still works." }); }
+    catch (err: any) { setAuto(!on); toast({ variant: "destructive", title: "Could not save", description: err?.data?.error || err?.message }); }
+  }
 
   async function checkNow() {
     setChecking(true);
@@ -84,6 +93,10 @@ export default function OwnerAlerts() {
             <button type="button" onClick={() => setFilter("unseen")} className={`rounded-md px-3 py-1 ${filter === "unseen" ? "bg-rose-600 text-white" : "text-slate-600 hover:bg-slate-100"}`}>New ({unseen.length})</button>
             <button type="button" onClick={() => setFilter("all")} className={`rounded-md px-3 py-1 ${filter === "all" ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-100"}`}>All ({alerts.length})</button>
           </div>
+          <label className="flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-sm text-slate-700">
+            <Switch checked={auto === true} disabled={auto === null} onCheckedChange={(v) => void saveAuto(v)} />
+            Automatic checks {auto === null ? "" : auto ? "on" : "off"}
+          </label>
           <Button size="sm" variant="outline" onClick={() => void checkNow()} disabled={checking}>{checking ? "Checking…" : "Check now"}</Button>
           {unseen.length > 0 && <Button size="sm" variant="outline" onClick={() => void seenAll()}>Mark all seen</Button>}
         </div>
