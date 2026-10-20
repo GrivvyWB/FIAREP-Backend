@@ -97,7 +97,7 @@ type Block = { type: string; [k: string]: unknown };
 type Msg = { role: "user" | "assistant"; content: string | Block[] };
 
 /** What to call the person: their first name (FIAREP's owner goes by Tim). */
-function callName(actorName: string, platform: boolean): string {
+export function callName(actorName: string, platform: boolean): string {
   const first = actorName.trim().split(/\s+/)[0] || "there";
   return platform && /^timothy$/i.test(first) ? "Tim" : first;
 }

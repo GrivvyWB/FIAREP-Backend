@@ -80,6 +80,12 @@ export default function CommandCenter() {
     return () => clearInterval(t);
   }, [device?.status, refresh]));
   useEffect(() => () => { playerRef.current?.remove(); }, []);
+  // Each time the Command Center opens it greets the person by name, out loud when replies are spoken.
+  const greeted = useRef(false);
+  useFocusEffect(useCallback(() => {
+    if (device?.status === 'active' && device.greeting && !greeted.current) { greeted.current = true; void speak(device.greeting); }
+    return () => { greeted.current = false; };
+  }, [device?.status, device?.greeting])); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function setUp() {
     setBusy('Setting up this phone…');
@@ -300,6 +306,7 @@ export default function CommandCenter() {
           );
         })}
 
+        {!!device.greeting && <Text style={{ fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 4 }}>{device.greeting}</Text>}
         {runs.length === 0 && <Text style={ui.empty}>{device.platform === false ? 'Ask anything — “Check every building we manage”, “Any urgent violations?”, “What’s in the Documents folder on the office PC?”.' : 'Ask anything — “Check every building we manage”, “Is FIAREP up?”, “Git status on my Mac”.'}</Text>}
         {runs.map((r) => (
           <View key={r.id} style={ui.card}>

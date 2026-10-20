@@ -21,7 +21,7 @@ import { isEd25519Key, requestMessage, sha256hex, verifyEd25519 } from "../lib/c
 import { commandAuditLog, recentAudit, verifyAuditChain } from "../lib/command/audit";
 import { ACTIONS, actionsFor, isPlatform } from "../lib/command/actions";
 import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
-import { capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
+import { callName, capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
 import { bookingView, getSchedule, saveSchedule, staffBookings } from "../lib/command/scheduling";
 import { recentConversations, residentAiOn, residentComplaint, residentView, residentWrites, staffWrites } from "../lib/command/residentChat";
@@ -113,7 +113,9 @@ router.post("/v1/command/devices/enroll", ...phone, async (req, res) => {
 router.get("/v1/command/devices/:id/status", ...phone, async (req, res) => {
   const [d] = await db.select().from(commandDevices).where(eq(commandDevices.id, String(req.params["id"]))).limit(1);
   if (!d || d.staffId !== actorFrom(res).id) { res.status(404).json({ error: "Unknown device" }); return; }
-  res.json({ id: d.id, status: d.status, name: d.name, approveWhere: approveWhere(d.tenantId), platform: isPlatform(d.tenantId) });
+  // What the Command Center says when it opens, to the person by name.
+  const greeting = `Hey ${callName(d.staffName || actorFrom(res).name, isPlatform(d.tenantId))}, how are you doing? How can I help you today?`;
+  res.json({ id: d.id, status: d.status, name: d.name, approveWhere: approveWhere(d.tenantId), platform: isPlatform(d.tenantId), greeting });
 });
 
 router.post("/v1/command/runs", ...phone, requireCommandDevice, async (req, res) => {
