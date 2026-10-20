@@ -126,7 +126,6 @@ function ViolationsBrief() {
             </div>
           ))}
         </div>
-        <p className="mt-4 text-[11px] leading-snug text-[#8A5A12] dark:text-amber-200/80">Source: NYC HPD, Alternative Enforcement Program and Clear Violations pages, nyc.gov/hpd.</p>
       </div>
     </div>
   );
