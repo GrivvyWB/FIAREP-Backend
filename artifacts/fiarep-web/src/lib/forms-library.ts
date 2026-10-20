@@ -76,7 +76,7 @@ export const FORM_GROUPS: FormGroup[] = [
   },
   {
     title: "6. HPD Alternative Enforcement Program (AEP)",
-    intro: "Buildings in AEP: $500 per unit every six months after four months without discharge, capped at $1,000 per unit; $200 per complaint inspection; $100 per re-inspection. Dismissal requests go to the AEP office, not the borough.",
+    intro: "If a property enters AEP and is not discharged after the initial four-month program, a $500 per-unit AEP - City fee will apply. If the property remains in AEP six months later without discharge, the same fee will be charged again. $200 per complaint inspection; $100 per re-inspection. Dismissal requests go to the AEP office, not the borough.",
     items: [
       { name: "HPD — Alternative Enforcement Program", use: "Rules, fees, discharge criteria, yearly building lists.", url: "https://www.nyc.gov/site/hpd/services-and-information/alternative-enforcement-program-aep.page", kind: "guide", fiarep: "AEP registry" },
       { name: "AEP Rules (PDF)", use: "The full rule text.", url: "https://www.nyc.gov/assets/hpd/downloads/pdfs/services/AEP-Rules.pdf", kind: "guide" },
