@@ -141,7 +141,7 @@ export default function Settings() {
                   <option value="" disabled>Pick your language…</option>
                   {langs.map((l) => <option key={l.code} value={l.code}>{l.native === l.name ? l.name : `${l.native} — ${l.name}`}</option>)}
                 </select>
-                <p className="text-xs text-muted-foreground">The Command Center talks to you in this language. Forms stay the City's US forms, in English and US format; a form can rewrite in English what you typed in your language.</p>
+                <p className="text-xs text-muted-foreground">The Command Center talks to you in this language.</p>
               </div>
             </details>
           )}
