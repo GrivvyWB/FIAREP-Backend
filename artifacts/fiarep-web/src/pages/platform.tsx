@@ -106,7 +106,7 @@ function ViolationsBrief() {
         <p className="font-serif text-xl font-bold tracking-wide">FIAREP</p>
         <p className="mt-1 text-[10px] font-semibold uppercase leading-snug tracking-[0.12em] text-[#E0A526]">Field Infrastructure, Asset, Reporting and Evaluation Performance</p>
         <h3 className="mt-4 font-serif text-2xl font-bold leading-tight [text-wrap:balance]">Every violation on your building — before the Notice reaches your desk.</h3>
-        <p className="mt-3 text-sm leading-relaxed text-slate-200">NYC HPD, DOB, OATH and 311 records on your buildings, read every 30 minutes, turned into repair jobs, cured, certified and documented. One system. One process. One source of truth.</p>
+        <p className="mt-3 text-sm leading-relaxed text-slate-200">NYC HPD, DOB, OATH and 311 records on your buildings, read every 30 minutes, turned into repair jobs, cured, certified and documented. One system. One process. One source of truth. Every task, document, and update connected under one roof.</p>
       </div>
       {BRIEF_STEPS.map((step) => (
         <div key={step.title} className="border-t-4 border-[#E0A526] pt-3">
