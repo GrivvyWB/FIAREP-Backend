@@ -90,8 +90,8 @@ function FiarepWording() {
 // "Every violation on your building" — the front page sheet (Front.pdf), under Start Your 90-Day Pilot.
 const BRIEF_STEPS = [
   { icon: Search, title: "See it", body: "Type an address. In seconds: what the building owes the City, every open OATH summons, HPD emergency-repair charges, property tax, HPD Class A / B / C and DOB violations — and the Notice of Violation text, word for word." },
-  { icon: PenLine, title: "Clear it", body: "Violations are grouped into repair jobs — one repair clears every repeat in that apartment. Violations written for the wrong place are flagged and a dismissal request is drafted. We cure, certify and expedite." },
-  { icon: Check, title: "Prove it", body: "Certificates of correction, photos, the HPD registration on file, the owners and agents behind it, and a signed service agreement that lists every rate. Nothing is estimated; everything is sourced." },
+  { icon: PenLine, title: "Action It", body: "Every violation is reviewed, mapped to its location, and converted into a repair workflow. Teams know what needs to be fixed, where to find it, and how to move the property toward compliance." },
+  { icon: Check, title: "See Everything", body: "Repair photos, compliance records, registrations, ownership details, and service agreements are stored in one place, giving you a complete view of your property's progress." },
 ];
 const BRIEF_COSTS = [
   { figure: "$1,000", text: "per dwelling unit in HPD fees once a building is in the Alternative Enforcement Program — $500 every six months, capped at $1,000 per unit" },
