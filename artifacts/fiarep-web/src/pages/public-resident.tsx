@@ -24,6 +24,7 @@ import { customFetch } from '@workspace/api-client-react';
 import { useLocation } from 'wouter';
 import { clearStoredPersona, getStoredPersona, lockPersona } from '@/lib/access-policy';
 import { ResidentChat, rememberResidentToken } from '@/components/resident-chat';
+import { ResidentDesk } from '@/components/resident-desk';
 
 const reportSchema = z.object({
   development: z.string().min(1, 'Development is required'),
@@ -45,7 +46,7 @@ const lookupSchema = z.object({
 });
 
 export default function PublicResident() {
-  const [view, setView] = useState<'options' | 'submit' | 'lookup'>('options');
+  const [view, setView] = useState<'options' | 'submit' | 'lookup' | 'desk'>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('desk') ? 'desk' : 'options'));
   const [lookupData, setLookupData] = useState<{ complaintNo: string } | null>(null);
   const [photo, setPhoto] = useState<File | null>(null);
   const [isUploadingPhoto, setIsUploadingPhoto] = useState(false);
@@ -297,6 +298,13 @@ export default function PublicResident() {
                 </CardContent>
               </Card>
             )}
+            <Card className="transition-colors shadow-md border-[#185FA5]/50 hover:border-primary cursor-pointer" onClick={() => setView('desk')} data-testid="card-resident-desk">
+              <CardHeader>
+                <CardTitle>{savedCode?.organizationName || 'Talk to us'}</CardTitle>
+                <CardDescription>Report a repair, check on a complaint, or set up a visit.</CardDescription>
+              </CardHeader>
+            </Card>
+
             <Card className={`transition-colors shadow-md ${savedCode ? 'hover:border-primary cursor-pointer' : 'opacity-60'}`} onClick={() => { if (savedCode) setView('submit'); }}>
               <CardHeader>
                 <CardTitle>Submit a Report</CardTitle>
@@ -330,6 +338,16 @@ export default function PublicResident() {
               </CardContent>
             </Card>
           </div>
+        )}
+
+        {view === 'desk' && (
+          <Card className="shadow-md">
+            <CardHeader>
+              <CardTitle>{savedCode?.organizationName || 'Talk to us'}</CardTitle>
+              <CardDescription>Tell us what's going on — we'll take it from there.</CardDescription>
+            </CardHeader>
+            <CardContent><ResidentDesk companyCode={savedCode?.code} /></CardContent>
+          </Card>
         )}
 
         {view === 'submit' && (

@@ -88,6 +88,11 @@ export default function ResidentHome() {
         </View>
       )}
 
+      <Pressable style={ui.btn} onPress={() => router.push('/resident-desk')}>
+        <Text style={ui.btnText}>{saved?.organizationName || 'Talk to us'}</Text>
+      </Pressable>
+      <Text style={{ fontSize: 12, color: '#666', textAlign: 'center', marginTop: -4, marginBottom: 8 }}>Report a repair, check on a complaint, or set up a visit.</Text>
+
       <Pressable style={[ui.btn, !saved && ui.btnMuted]} disabled={!saved} onPress={() => router.push('/resident')}>
         <Text style={ui.btnText}>Report an Issue</Text>
       </Pressable>

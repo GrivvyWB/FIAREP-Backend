@@ -25,6 +25,7 @@ import { callName, capProblem, confirmMessageFor, executeAction, publicAction, r
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
 import { bookingView, getSchedule, saveSchedule, staffBookings } from "../lib/command/scheduling";
 import { recentConversations, residentAiOn, residentComplaint, residentView, residentWrites, staffWrites } from "../lib/command/residentChat";
+import { deskView, deskWrites, loadDesk, startDesk } from "../lib/command/residentDesk";
 import { entityRecords } from "@workspace/db";
 import { checkClientKey, checkKey, clientKeyStatus, geminiKeyStatus, KEY_ENV, keyFor, keyStatus, saveClientKey, saveKey, type ClientKeyName, type KeyName } from "../lib/command/keys";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
@@ -715,6 +716,26 @@ router.post("/v1/public/resident-reports/:complaintNo/messages", rateLimit("resi
   const aiOn = await residentAiOn(row.tenantId);
   if (!aiOn && !(Array.isArray(row.state["chat"]) && (row.state["chat"] as unknown[]).length)) { res.status(403).json({ error: "Messages aren't available for this complaint." }); return; }
   res.json(residentView(await residentWrites(row, text), aiOn));
+});
+
+// ── Resident line (lib/command/residentDesk.ts): residents with no code write to the Command Center ──
+router.post("/v1/public/resident-desk", rateLimit("resident-desk-start", 10), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await startDesk(str((req.body as Record<string, unknown> | undefined)?.["companyCode"], 12)));
+});
+const deskAuth = (req: Request) => loadDesk(str(req.params["id"], 60), str(req.header("x-desk-token"), 200));
+router.get("/v1/public/resident-desk/:id", rateLimit("resident-desk-read", 120), async (req, res) => {
+  const d = await deskAuth(req);
+  if (!d) { res.status(404).json({ error: "Conversation not found" }); return; }
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await deskView(d));
+});
+router.post("/v1/public/resident-desk/:id/messages", rateLimit("resident-desk", 20), async (req, res) => {
+  const d = await deskAuth(req);
+  if (!d) { res.status(404).json({ error: "Conversation not found" }); return; }
+  const text = str((req.body as Record<string, unknown> | undefined)?.["text"], 2000);
+  if (!text) { res.status(400).json({ error: "Write a message." }); return; }
+  res.json(await deskWrites(d, text));
 });
 
 // Staff: conversations on the Command Center page (FIAREP's own, or a client's).

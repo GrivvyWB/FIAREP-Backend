@@ -42,7 +42,7 @@ export default function Messages() {
     ((staff.tenantId || "default") === "default" || organizationModules["fiarepMessaging"] !== false);
 
   // Every page has the code box: a code someone handed you opens a conversation with whoever made it.
-  const codeBox = (width: string) => <div className={`mx-auto ${width} px-4 pb-6 sm:px-6`}><div className="rounded-lg border bg-card p-4"><PublicMessage embedded senderName={staff?.name || ""} /></div></div>;
+  const codeBox = (width: string) => <div className={`mx-auto ${width} px-4 pb-6 sm:px-6`}><div className="rounded-lg border bg-card p-4"><PublicMessage embedded senderName={staff?.name || ""} deskLink={false} /></div></div>;
   if (mine) return <><CoordinatorMessages unit={unit} admin={admin} toast={toast} />{codeBox("max-w-3xl")}</>;
   if (clientSide) return <><ClientMessages unit={unit} toast={toast} />{codeBox("max-w-2xl")}<CoordinatorMessages unit={unit} admin={false} toast={toast} member /></>;
   // Every other member (CPM, inspector, technician, worker…): their own conversation with FIAREP.

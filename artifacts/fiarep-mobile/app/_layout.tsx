@@ -558,6 +558,7 @@ function ResidentStack() {
   return (
     <Stack initialRouteName="resident-home">
       <Stack.Screen name="resident-home" options={{ title: 'Resident Services', headerBackVisible: false }} />
+      <Stack.Screen name="resident-desk" options={{ title: '' }} />
       <Stack.Screen name="resident" options={{ title: 'Report an Issue' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
     </Stack>

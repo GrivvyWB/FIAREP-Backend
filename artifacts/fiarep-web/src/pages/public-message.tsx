@@ -21,9 +21,11 @@ const post = <T,>(url: string, body: unknown) => customFetch<T>(url, {
   method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body), responseType: "json",
 } as never);
 
-export default function PublicMessage({ embedded = false, senderName = "" }: { embedded?: boolean; senderName?: string } = {}) {
+export default function PublicMessage({ embedded = false, senderName = "", deskLink = true }: { embedded?: boolean; senderName?: string; deskLink?: boolean } = {}) {
   const [code, setCode] = useState(() => { try { return localStorage.getItem(KEY) || ""; } catch { return ""; } });
   const [view, setView] = useState<View | null>(null);
+  // The resident's management company (saved on the resident page), else a plain invitation.
+  const deskName = (() => { try { return String(JSON.parse(localStorage.getItem("fiarep_resident_code") || "null")?.organizationName || "") || "Talk to us"; } catch { return "Talk to us"; } })();
   const [name, setName] = useState("");
   const [body, setBody] = useState("");
   const [error, setError] = useState("");
@@ -85,6 +87,9 @@ export default function PublicMessage({ embedded = false, senderName = "" }: { e
       </div>
       )}
 
+      {!view && deskLink && (
+        <p className="text-center text-sm"><a href="/resident?desk" className="font-medium text-[#185FA5] underline">{deskName}</a></p>
+      )}
       {!view && (
         <div className="space-y-3 rounded-lg border bg-card p-4">
           <Input

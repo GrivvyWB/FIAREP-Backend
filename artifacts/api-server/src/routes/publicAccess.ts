@@ -1,6 +1,7 @@
 import { autoSendComplaintToFiarep } from "../lib/fiarepDispatch";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
+import { logger } from "../lib/logger";
 import { and, desc, eq, sql, gt, isNull } from "drizzle-orm";
 import {
   db,
@@ -124,8 +125,10 @@ router.get("/v1/public/resident-buildings", async (req, res) => {
   res.json({ organizationName: org.name, buildings: rows.map((r) => ({ id: r.id, development: r.development || org.name, address: r.address })) });
 });
 
-router.post("/v1/public/resident-reports", async (req, res) => {
-  const input = req.body && typeof req.body === "object" ? req.body : {};
+/** File a resident complaint (the website, the app, and the Command Center's resident desk all come here). */
+export async function submitResidentReport(rawInput: unknown): Promise<{ status: number; body: Record<string, unknown> }> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const input: any = rawInput && typeof rawInput === "object" ? rawInput : {};
   const rawState = input.state && typeof input.state === "object" ? input.state : {};
   const address = String(rawState.address ?? "").trim();
   const requestedDevelopment = String(rawState.development ?? "").trim();
@@ -134,12 +137,10 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   const location = String(rawState.location ?? "Apartment/Unit").trim();
   const unit = String(rawState.unit ?? "").trim();
   if (!requestedDevelopment || !description || !address) {
-    res.status(400).json({ error: "Development, building address, and complaint description are required" });
-    return;
+    return { status: 400, body: { error: "Development, building address, and complaint description are required" } };
   }
   if (location === "Apartment/Unit" && !unit) {
-    res.status(400).json({ error: "Apartment or unit is required for an apartment issue" });
-    return;
+    return { status: 400, body: { error: "Apartment or unit is required for an apartment issue" } };
   }
   const properties = address
     ? await db.select().from(organizationProperties).where(and(
@@ -168,7 +169,7 @@ router.post("/v1/public/resident-reports", async (req, res) => {
     try {
       nychaAddress = await lookupNychaResidentialAddress(address);
     } catch (error) {
-      req.log.warn(
+      logger.warn(
         { error: error instanceof Error ? error.message : String(error) },
         "NYCHA address lookup failed",
       );
@@ -180,22 +181,19 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   if (!property && !catalogAddress && !nychaAddress) {
     // Private buildings: only addresses Platform Control enrolled for the resident's company count.
     const codeOrg = await organizationForResidentCode(String(rawState.companyCode ?? ""));
-    res.status(400).json({ error: codeOrg
+    return { status: 400, body: { error: codeOrg
       ? `This building isn't enrolled with FIAREP under ${codeOrg.name}. Pick one of the buildings in the list, or ask your management office to enroll it.`
-      : "Select a valid building address for this development" });
-    return;
+      : "Select a valid building address for this development" } };
   }
   const resolvedDevelopment = property?.development ?? catalogAddress?.development ?? nychaAddress?.development;
   if (resolvedDevelopment && normalize(resolvedDevelopment) !== normalize(requestedDevelopment)) {
-    res.status(400).json({ error: "The selected building address does not belong to this development" });
-    return;
+    return { status: 400, body: { error: "The selected building address does not belong to this development" } };
   }
   // A building address is not a development. Without this, a resident who
   // types the address into the Development box creates a one-building
   // "development" on the complaint dashboard.
   if (!resolvedDevelopment && normalize(requestedDevelopment) === normalizedAddress) {
-    res.status(400).json({ error: "Enter the development this building belongs to, not the building address" });
-    return;
+    return { status: 400, body: { error: "Enter the development this building belongs to, not the building address" } };
   }
   const reportAddress = property?.displayAddress ?? catalogAddress?.address ?? address;
   const reportDevelopment =
@@ -214,8 +212,7 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       companyCode: String(rawState.companyCode ?? ""),
     });
     if (!resolved.ok) {
-      res.status(resolved.status).json({ error: resolved.error, needsCompanyCode: resolved.needsCompanyCode === true });
-      return;
+      return { status: resolved.status, body: { error: resolved.error, needsCompanyCode: resolved.needsCompanyCode === true } };
     }
     tenantId = resolved.tenantId;
   }
@@ -269,7 +266,7 @@ router.post("/v1/public/resident-reports", async (req, res) => {
       : [];
     return { row, createdNotifications };
   }).catch(() => null);
-  if (!created) { res.status(503).json({ error: "Could not issue a complaint code" }); return; }
+  if (!created) return { status: 503, body: { error: "Could not issue a complaint code" } };
   for (const notification of created.createdNotifications) {
     void deliverPushNotification(notification).catch(() => undefined);
   }
@@ -278,7 +275,12 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   // ones - so if this client pays for FIAREP to handle their residents, the
   // complaint reaches FIAREP's crew now, without anyone forwarding it.
   await autoSendComplaintToFiarep(tenantId, created.row!);
-  res.status(201).json({ ...record(created.row!), statusToken: residentToken });
+  return { status: 201, body: { ...record(created.row!), statusToken: residentToken } };
+}
+
+router.post("/v1/public/resident-reports", async (req, res) => {
+  const out = await submitResidentReport(req.body);
+  res.status(out.status).json(out.body);
 });
 
 router.get("/v1/public/resident-reports/:complaintNo", async (req, res) => {
@@ -527,7 +529,7 @@ async function releasedScope(trackingId: string) {
 
 router.get("/v1/public/vendor-scopes/:trackingId", async (req, res) => {
   const vendorName = normalize(req.query["vendorName"]);
-  const scope = await releasedScope(req.params["trackingId"]!);
+  const scope = await releasedScope(String(req.params["trackingId"]));
   if (!vendorName || !scope) { res.status(404).json({ error: "Released scope not found" }); return; }
   if (["awarded", "eligible-awarded"].includes(normalize(scope.state["status"])) && normalize(scope.state["vendor"]) !== vendorName) {
     res.status(404).json({ error: "Released scope not found" }); return;
@@ -540,7 +542,7 @@ router.get("/v1/public/vendor-scopes/:trackingId", async (req, res) => {
 // Open the CPM's attached scope file (PDF, drawings…) with the vendor code.
 router.post("/v1/public/vendor-scopes/:trackingId/scope-file", async (req, res) => {
   const vendorName = normalize(req.body?.vendorName);
-  const scope = await releasedScope(req.params["trackingId"]!);
+  const scope = await releasedScope(String(req.params["trackingId"]));
   if (!vendorName || !scope) { res.status(404).json({ error: "Released scope not found" }); return; }
   if (["awarded", "eligible-awarded", "closed"].includes(normalize(scope.state["status"])) && normalize(scope.state["vendor"]) !== vendorName) {
     res.status(404).json({ error: "Released scope not found" }); return;
@@ -701,7 +703,7 @@ router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async 
 router.post("/v1/public/vendor-scopes/:trackingId/bids", async (req, res) => {
   const vendorName = String(req.body?.vendorName ?? "").trim();
   const amount = Number(req.body?.amount);
-  const scope = await releasedScope(req.params["trackingId"]!);
+  const scope = await releasedScope(String(req.params["trackingId"]));
   if (!scope || normalize(scope.state["status"]) !== "bidding" || !vendorName || !Number.isFinite(amount) || amount <= 0) {
     res.status(400).json({ error: "A released scope, vendor name, and positive amount are required" }); return;
   }
@@ -736,7 +738,7 @@ router.post("/v1/public/vendor-scopes/:trackingId/progress", rateLimit("vendor-p
   const vendorName = String(req.body?.vendorName ?? "").trim();
   const step = String(req.body?.step ?? "").trim();
   const note = String(req.body?.note ?? "").trim().slice(0, 2000);
-  const scope = await releasedScope(req.params["trackingId"]!);
+  const scope = await releasedScope(String(req.params["trackingId"]));
   if (!scope || !vendorName || !["start", "complete"].includes(step) ||
       normalize(scope.state["status"]) !== "awarded" ||
       normalize(scope.state["vendor"]) !== normalize(vendorName)) {
@@ -813,7 +815,7 @@ async function vendorChangeOrders(scopeId: string, tenantId: string, vendorName:
 
 router.get("/v1/public/vendor-scopes/:trackingId/change-orders", async (req, res) => {
   const vendorName = String(req.query["vendorName"] ?? "").trim();
-  const scope = await releasedScope(req.params["trackingId"]!);
+  const scope = await releasedScope(String(req.params["trackingId"]));
   if (!scope || !vendorName || normalize(scope.state["vendor"]) !== normalize(vendorName)) {
     res.status(404).json({ error: "Only the awarded vendor can see these" }); return;
   }
@@ -847,7 +849,7 @@ router.post("/v1/public/vendor-scopes/:trackingId/change-orders", rateLimit("ven
   }).filter((p) => /^data:image\/(jpeg|png|webp);base64,/.test(p.dataUrl) && p.dataUrl.length <= VENDOR_CO_PHOTO_CHARS).slice(0, VENDOR_CO_PHOTO_MAX);
   const photos = photoItems.map((p) => p.dataUrl);
   const photoStamps = photoItems.map((p) => ({ capturedAt: p.stamp.capturedAt || "", lat: p.stamp.lat, lng: p.stamp.lng, accuracy: p.stamp.accuracy }));
-  const scope = await releasedScope(req.params["trackingId"]!);
+  const scope = await releasedScope(String(req.params["trackingId"]));
   if (!scope || !vendorName || normalize(scope.state["status"]) !== "awarded" ||
       normalize(scope.state["vendor"]) !== normalize(vendorName)) {
     res.status(404).json({ error: "Only the awarded vendor can raise a change work order on this job" }); return;
