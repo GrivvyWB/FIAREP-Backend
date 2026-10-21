@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync, statS
 import os from "node:os";
 import path from "node:path";
 
-const VERSION = "1.2.0";
+const VERSION = "1.2.1";
 const WIN = process.platform === "win32";
 const args = process.argv.slice(2);
 const argValue = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
@@ -244,10 +244,13 @@ async function api(cfg, p, body, timeoutMs = 40_000) {
 async function poll(cfg, wait) {
   const tasks = Object.entries(cfg.tasks).map(([name, t]) => ({ name, description: t.description, confirm: t.confirm, params: t.params }));
   const { jobs } = await api(cfg, "/v1/command/agent/heartbeat", { wait, info: { host: os.hostname(), platform: process.platform, version: VERSION, pinnedKeys: cfg.trustedConfirmKeys.length }, tasks, folders: cfg.folders, apps: cfg.apps });
-  await Promise.all((jobs || []).map(async (job) => {
+  // Jobs run alongside the heartbeat: a long one (sending a big file) must not make the
+  // computer look offline (the server counts it offline after 90 s without a heartbeat).
+  const work = (jobs || []).map(async (job) => {
     const r = await handle(cfg, job);
     try { await api(cfg, `/v1/command/agent/jobs/${encodeURIComponent(job.id)}/result`, r, 20_000); } catch (e) { log(`could not report ${job.id}: ${e.message}`); }
-  }));
+  });
+  if (!wait) await Promise.all(work);
   return (jobs || []).length;
 }
 
@@ -383,7 +386,7 @@ async function main() {
       }
       log(`API unreachable: ${e.message}; retrying in ${backoff / 1000}s`);
       await new Promise((r) => setTimeout(r, backoff));
-      backoff = Math.min(backoff * 2, 60_000);
+      backoff = Math.min(backoff * 2, 15_000); // short: a long wait here makes the computer look offline
     }
   }
 }
