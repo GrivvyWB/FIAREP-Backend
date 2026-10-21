@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Wrench } from "lucide-react";
 import { customFetch } from "@workspace/api-client-react";
+import { useLocation } from "wouter";
 
 // Smart Repair on the website: the photo and repair directions members saved on
 // their phones (kept on the account when Platform Control → Modules → "Smart Repair
@@ -17,6 +18,9 @@ export default function SmartRepairs() {
   const [open, setOpen] = useState<string | null>(null);
   const [q, setQ] = useState("");
   useEffect(() => { customFetch<{ on: boolean; items: Item[] }>("/api/v1/smart-repairs/all", { responseType: "json" } as never).then(setData).catch((e: any) => setError(e?.data?.error || e?.message || "Could not load")); }, []);
+  const [, setLocation] = useLocation();
+  // Not switched on for this company: the page isn't there.
+  useEffect(() => { if (data && !data.on) setLocation("/dashboard"); }, [data, setLocation]);
   const items = (data?.items || []).filter((it) => !q.trim() || `${it.data.address} ${it.data.apt} ${it.data.ticket?.issueFound} ${it.by}`.toLowerCase().includes(q.trim().toLowerCase()));
   return (
     <div className="space-y-5 p-6">
@@ -28,7 +32,6 @@ export default function SmartRepairs() {
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search address, apartment, issue, member" className="h-9 w-72 rounded-md border border-slate-300 px-3 text-sm" />
       </div>
       {error && <p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</p>}
-      {data && !data.on && <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Smart Repairs are kept only on the phone that took them. To see them here, turn on <b>Smart Repair on all their phones</b> in Platform Control → Modules for this company. Each phone sends its repairs the next time Smart Repair is opened.</p>}
       {data?.on && !items.length && <p className="text-sm text-slate-500">No Smart Repairs yet.</p>}
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
         {items.map((it) => {
