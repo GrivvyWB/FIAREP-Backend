@@ -1099,6 +1099,11 @@ router.post("/v1/:entity", async (req, res, next) => {
       rawState["reviewStatus"] = "submitted";
     }
   }
+  // A work order made in the field (Smart Repair) for a building with no development
+  // on record: the building's address stands in, so it isn't refused and stuck on the phone.
+  if (!development && entity === "resident-reports" && typeof rawState["address"] === "string" && rawState["address"].trim()) {
+    development = rawState["address"].trim().slice(0, 200);
+  }
   if (!development && !companyWide && !isBoroughDirector(actor) && !isHrEntity(entity)) {
     res.status(403).json({ error: "A development is required for scoped records" });
     return;
