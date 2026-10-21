@@ -122,6 +122,8 @@ export async function lookupNychaResidentialAddress(address: string) {
 function normalizeDobDate(value: unknown): string | null {
   const raw = text(value);
   if (!raw) return null;
+  // DOB sends YYYYMMDD (e.g. 20000825); older rows may be MMDDYYYY.
+  if (/^(19|20)\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])$/.test(raw)) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6)}`;
   if (/^\d{8}$/.test(raw)) {
     const month = raw.slice(0, 2);
     const day = raw.slice(2, 4);
@@ -131,7 +133,7 @@ function normalizeDobDate(value: unknown): string | null {
   return raw;
 }
 
-export async function lookupNycPropertyData(address: string, limit: number) {
+export async function lookupNycPropertyData(address: string, limit: number, opts: { openTotals?: boolean } = {}) {
   const feature = await geocodeNycAddress(address);
   if (!feature?.properties) return null;
 
@@ -171,6 +173,27 @@ export async function lookupNycPropertyData(address: string, limit: number) {
   ]);
   if (settled.every((result) => result.status === "rejected")) {
     throw new Error("NYC violation services are temporarily unavailable");
+  }
+  // Every open item, not only the newest `limit` rows (older ones can still be open).
+  let openTotals: { hpdByClass: Record<string, number>; hpd: number; dob: number; openComplaints: number; complaintsLastYear: number } | null = null;
+  if (opts.openTotals) {
+    const counted = (dataset: string, w: string, group?: string) => {
+      const params = new URLSearchParams({ "$select": group ? `${group},count(*)` : "count(*)", "$where": w });
+      if (group) params.set("$group", group);
+      return fetchJson(`${SOCRATA_BASE}/${dataset}.json?${params}`) as Promise<Array<Record<string, string>>>;
+    };
+    const yearAgo = new Date(Date.now() - 365 * 86_400_000).toISOString().slice(0, 10);
+    const [byClass, dobOpen, compOpen, compYear] = await Promise.allSettled([
+      counted(HPD_VIOLATIONS, `${where} AND violationstatus='Open'`, "class"),
+      counted(DOB_VIOLATIONS, `${dobWhere} AND disposition_date IS NULL`),
+      counted(HPD_COMPLAINTS, `${complaintWhere} AND complaint_status='OPEN'`),
+      counted(HPD_COMPLAINTS, `${complaintWhere} AND received_date >= '${yearAgo}'`),
+    ]);
+    const n = (r: PromiseSettledResult<Array<Record<string, string>>>) => (r.status === "fulfilled" ? Number(r.value?.[0]?.["count"] ?? 0) : null);
+    const hpdByClass: Record<string, number> = {};
+    if (byClass.status === "fulfilled") for (const row of byClass.value) hpdByClass[row["class"] || "?"] = Number(row["count"] ?? 0);
+    if ([byClass, dobOpen, compOpen, compYear].some((r) => r.status === "rejected")) warnings.push("Some open counts could not be loaded.");
+    openTotals = { hpdByClass, hpd: Object.values(hpdByClass).reduce((a, b) => a + b, 0), dob: n(dobOpen) ?? 0, openComplaints: n(compOpen) ?? 0, complaintsLastYear: n(compYear) ?? 0 };
   }
   const names = ["HPD violations", "DOB violations", "HPD complaints"];
   settled.forEach((result, index) => {
@@ -247,6 +270,7 @@ export async function lookupNycPropertyData(address: string, limit: number) {
     dobViolations,
     hpdComplaints,
     warnings,
+    openTotals,
     retrievedAt: new Date().toISOString(),
   };
 }

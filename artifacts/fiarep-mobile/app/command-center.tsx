@@ -134,7 +134,7 @@ export default function CommandCenter() {
   async function speak(line: string) {
     if (!speakReplies || !line) return;
     try {
-      const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: line.slice(0, 600) });
+      const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: line.slice(0, 2000) });
       const uri = `${FileSystem.cacheDirectory}cmd-${Date.now()}.mp3`;
       await FileSystem.writeAsStringAsync(uri, audioBase64, { encoding: 'base64' as never });
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
@@ -153,7 +153,7 @@ export default function CommandCenter() {
       void speak(run.reply || '');
       // A new language: listen for it and greet in it from now on.
       if (run.actions.some((a) => a.action === 'set_language' && a.status === 'done')) void loadDevice();
-    } catch (e) { Alert.alert('Command failed', errText(e)); }
+    } catch (e) { void speak(`I couldn't get that. ${errText(e)}`); Alert.alert('Command failed', errText(e)); }
     finally { setBusy(''); }
   }
 
