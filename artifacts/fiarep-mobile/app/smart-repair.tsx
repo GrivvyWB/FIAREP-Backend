@@ -12,7 +12,7 @@ import { ResidentSignOffSheet, signOffLabel, type ResidentSignOff } from '../com
 import RemotePhoto from '../components/RemotePhoto';
 import RepairReferenceImage from '../components/RepairReferenceImage';
 import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, syncSavedRepairs, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
-import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor, signOffForServer } from '../lib/store';
+import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor, signOffForServer, uploadDoorVideo } from '../lib/store';
 import { ui } from '../lib/ui';
 
 const NAVY = '#0B2A4A';
@@ -215,6 +215,7 @@ export default function SmartRepair() {
   }
   const [signFor, setSignFor] = useState<{ ev: PhotoEvidence; result: RepairVerification } | null>(null);
   const [signOpen, setSignOpen] = useState(false);
+  const [retrySignOff, setRetrySignOff] = useState<ResidentSignOff | null>(null);
   async function finishVerified(ev: PhotoEvidence, result: RepairVerification | null, signOff?: ResidentSignOff) {
     if (!jobId) return;
     try {
@@ -223,6 +224,10 @@ export default function SmartRepair() {
       const noteText = 'After-repair photo (Smart Repair)'
         + (result ? '\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ') + '\n' + (result.compliant ? '✅ Repair appears compliant' : '⚠ Needs another look') + (result.summary ? ' — ' + result.summary : '') : '');
       // Marked complete only when the after photo shows the repair done.
+      if (signOff && signOff.status !== 'signed' && !signOff.video.objectPath) {
+        try { signOff = { ...signOff, video: { ...signOff.video, objectPath: await uploadDoorVideo(jobId, signOff.video) } }; }
+        catch (e: any) { setSignFor({ ev, result: result as RepairVerification }); setRetrySignOff(signOff); Alert.alert('Video not sent', `${e?.message || e}\n\nCheck the connection, then tap Send sign-off again — the video is kept on this phone.`); return; }
+      }
       const evidence = signOff && signOff.status !== 'signed' ? [ev, signOff.photo] : [ev];
       await addResidentUpdate(jobId, result?.compliant ? 'resolved' : ((r?.status || 'in_progress') as any), noteText, a.name || 'FIAREP', evidence, ev.geo, signOff);
       if (signOff && ticket) await persist({ ticket, after: ev.uri, check: result, signOff: signOffForServer(signOff) } as never);
@@ -428,7 +433,7 @@ export default function SmartRepair() {
 
         {!!saved && <Text style={{ padding: 12, borderRadius: 10, backgroundColor: '#dcfce7', color: '#166534', fontWeight: '700' }}>{saved}</Text>}
         {!!signFor && !signOpen && (
-          <Pressable style={ui.btn} onPress={() => setSignOpen(true)}><Text style={ui.btnText}>Resident sign-off</Text></Pressable>
+          <Pressable style={ui.btn} onPress={() => { if (retrySignOff && signFor) { const so = retrySignOff, f = signFor; setRetrySignOff(null); setSignFor(null); void finishVerified(f.ev, f.result, so); } else setSignOpen(true); }}><Text style={ui.btnText}>{retrySignOff ? 'Send sign-off again' : 'Resident sign-off'}</Text></Pressable>
         )}
         <View style={{ height: 20 }} />
       </ScrollView>

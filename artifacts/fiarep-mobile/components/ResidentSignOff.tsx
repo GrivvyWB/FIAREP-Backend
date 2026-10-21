@@ -1,9 +1,12 @@
 // The resident signs on the member's phone that the job inside their home is
-// done. If the resident isn't home or won't sign, the member picks why and
-// takes a photo instead; the office is told.
+// done. If the resident isn't home or won't sign, the member picks why, records
+// up to a minute of video at the door (knocking, what the resident says) and
+// takes a photo; the office is told.
 import { useRef, useState } from 'react';
 import { Alert, Modal, PanResponder, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system/legacy';
 import { takePhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import RemotePhoto from './RemotePhoto';
 import { ui, ACCENT } from '../lib/ui';
@@ -11,7 +14,24 @@ import { ui, ACCENT } from '../lib/ui';
 export type SignOffSignature = { d: string; w: number; h: number };
 export type ResidentSignOff =
   | { status: 'signed'; name: string; signature: SignOffSignature; at: string }
-  | { status: 'not_home' | 'refused'; note: string; at: string; photo: PhotoEvidence };
+  | { status: 'not_home' | 'refused'; note: string; at: string; photo: PhotoEvidence; video: DoorVideo };
+/** Up to a minute at the door. objectPath is set once it's uploaded. */
+export type DoorVideo = { uri: string; seconds: number; contentType: string; objectPath?: string };
+
+/** Record up to 60 seconds of video (sound included), kept in the app's folder until it's uploaded. */
+async function recordDoorVideo(): Promise<DoorVideo | null> {
+  const cam = await ImagePicker.requestCameraPermissionsAsync();
+  if (!cam.granted) throw new Error('Allow the camera for FIAREP in Settings.');
+  const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['videos'], videoMaxDuration: 60, videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium, allowsEditing: false });
+  const a = res.canceled ? null : res.assets?.[0];
+  if (!a?.uri) return null;
+  const ext = (a.uri.split('.').pop() || 'mov').toLowerCase();
+  const dir = FileSystem.documentDirectory + 'photos/';
+  try { await FileSystem.makeDirectoryAsync(dir, { intermediates: true }); } catch {}
+  const dest = dir + 'door-' + Date.now().toString(36) + '.' + ext;
+  await FileSystem.copyAsync({ from: a.uri, to: dest });
+  return { uri: dest, seconds: Math.round((a.duration || 0) / 1000), contentType: ext === 'mp4' ? 'video/mp4' : 'video/quicktime' };
+}
 
 export const signOffLabel = (s: ResidentSignOff | null | undefined): string =>
   !s ? '' : s.status === 'signed' ? `Signed by resident: ${s.name}` : s.status === 'not_home' ? 'Resident not home — not signed' : 'Resident refused to sign';
@@ -71,15 +91,17 @@ export function ResidentSignOffSheet({ visible, jobLine, onDone, onCancel }: {
   const [sig, setSig] = useState<SignOffSignature | null>(null);
   const [note, setNote] = useState('');
   const [photo, setPhoto] = useState<PhotoEvidence | null>(null);
-  const reset = () => { setMode('sign'); setName(''); setSig(null); setNote(''); setPhoto(null); };
+  const [video, setVideo] = useState<DoorVideo | null>(null);
+  const reset = () => { setMode('sign'); setName(''); setSig(null); setNote(''); setPhoto(null); setVideo(null); };
   const finish = () => {
     const at = new Date().toISOString();
     if (mode === 'sign') {
       if (!name.trim() || !sig) { Alert.alert('Signature needed', "Type the resident's name and have them sign."); return; }
       onDone({ status: 'signed', name: name.trim(), signature: sig, at });
     } else {
+      if (!video) { Alert.alert('Video needed', mode === 'refused' ? 'Record a short video at the door showing the resident would not sign.' : 'Record a short video of you knocking at the door.'); return; }
       if (!photo) { Alert.alert('Photo needed', 'Take a photo (the door or the finished work) before finishing without a signature.'); return; }
-      onDone({ status: mode, note: note.trim(), at, photo });
+      onDone({ status: mode, note: note.trim(), at, photo, video });
     }
     reset();
   };
@@ -105,7 +127,10 @@ export function ResidentSignOffSheet({ visible, jobLine, onDone, onCancel }: {
           </>
         ) : (
           <>
-            <Text style={{ color: '#0f172a' }}>{mode === 'not_home' ? 'Nobody was home to sign.' : 'The resident would not sign.'} Take a photo of the door or the finished work. The office is told.</Text>
+            <Text style={{ color: '#0f172a' }}>{mode === 'not_home' ? 'Nobody was home to sign. Record yourself knocking at the door (up to 1 minute).' : "The resident would not sign. Record up to 1 minute at the door — what the resident says, or that they won't let you in."} Then take a photo. The office is told.</Text>
+            <Pressable style={ui.btnOutline} onPress={async () => { try { const v = await recordDoorVideo(); if (v) setVideo(v); } catch (e: any) { Alert.alert('Video', String(e?.message ?? e)); } }}>
+              <Text style={ui.btnOutlineText}>{video ? `Video recorded (${Math.floor(video.seconds / 60)}:${String(video.seconds % 60).padStart(2, '0')}) — record again` : 'Record video (up to 1 min)'}</Text>
+            </Pressable>
             {photo && <RemotePhoto localUri={photo.uri} style={{ width: 120, height: 120, borderRadius: 8, backgroundColor: '#eee' }} />}
             <Pressable style={ui.btnOutline} onPress={async () => { try { const p = await takePhotoWithGeo(); if (p) setPhoto(p); } catch (e: any) { Alert.alert('Camera', String(e?.message ?? e)); } }}>
               <Text style={ui.btnOutlineText}>{photo ? 'Retake photo' : 'Take photo'}</Text>

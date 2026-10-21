@@ -557,7 +557,7 @@ export type ResidentReport = {
   location?: string;
   createdBy?: 'resident' | 'management';
   unit: string;
-  residentSignOff?: { status: 'signed' | 'not_home' | 'refused'; name?: string; signature?: { d: string; w: number; h: number }; note?: string; at: string };
+  residentSignOff?: { status: 'signed' | 'not_home' | 'refused'; name?: string; signature?: { d: string; w: number; h: number }; note?: string; at: string; video?: { objectPath: string; seconds: number; contentType: string } };
   address: string;
   description: string;
   photos: string[];
@@ -1044,7 +1044,21 @@ export async function rejectResidentWork(id: string, reason: string): Promise<vo
 export function signOffForServer(s: import('../components/ResidentSignOff').ResidentSignOff) {
   return s.status === 'signed'
     ? { status: s.status, name: s.name, signature: s.signature, at: s.at }
-    : { status: s.status, note: s.note || undefined, at: s.at, photoAt: s.photo.capturedAt };
+    : { status: s.status, note: s.note || undefined, at: s.at, photoAt: s.photo.capturedAt,
+        video: s.video?.objectPath ? { objectPath: s.video.objectPath, seconds: s.video.seconds, contentType: s.video.contentType } : undefined };
+}
+
+/** The door video goes up before the job closes (it's the proof when there is no signature). */
+export async function uploadDoorVideo(reportId: string, video: import('../components/ResidentSignOff').DoorVideo): Promise<string> {
+  const FileSystem = await import('expo-file-system/legacy');
+  const { requestFileUploadUrl } = await import('@workspace/api-client-react');
+  const info = await FileSystem.getInfoAsync(video.uri);
+  if (!info.exists || !('size' in info) || !info.size) throw new Error('The video file is missing — record it again.');
+  const name = video.uri.split('/').pop() || 'door.mov';
+  const requested = await requestFileUploadUrl({ kind: 'inspection-evidence', name, size: info.size, contentType: video.contentType, entity: 'resident-reports', recordId: reportId });
+  const up = await FileSystem.uploadAsync(requested.uploadUrl, video.uri, { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, mimeType: video.contentType });
+  if (up.status < 200 || up.status >= 300) throw new Error(`Video upload failed (${up.status}).`);
+  return requested.file.objectPath;
 }
 
 export async function addResidentUpdate(

@@ -1,11 +1,11 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import PhraseHelper from '../components/PhraseHelper';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
-import { useCallback, useEffect, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Linking } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAppMode } from './_layout';
-import { addResidentUpdate, approveResidentWork, rejectResidentWork, assessReportPhotos, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls, findComplaintScope } from '../lib/store';
+import { uploadDoorVideo, addResidentUpdate, approveResidentWork, rejectResidentWork, assessReportPhotos, getResidentReport, type ResidentReport, getCurrentPosition, getCurrentActor, listResidentReportPhotoUrls, findComplaintScope } from '../lib/store';
 import { takePhotoWithGeo, pickPhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import { captureGeo } from '../lib/geo';
 import RemotePhoto from '../components/RemotePhoto';
@@ -183,12 +183,19 @@ export default function ReportDetail() {
 
   // Work inside an apartment: the resident signs on this phone first (or the member says why not, with a photo).
   const [signing, setSigning] = useState(false);
+  const pendingSignOff = useRef<ResidentSignOff | null>(null); // a sign-off whose video didn't upload yet
   const insideHome = !!r && (r.location === 'Apartment/Unit' || !!String(r.unit || '').trim());
   const completeWork = async (signOff?: ResidentSignOff) => {
     if (!r || !actorId || completionPhotos.length === 0) return;
+    if (insideHome && !signOff && pendingSignOff.current) signOff = pendingSignOff.current;
     if (insideHome && !signOff) { setSigning(true); return; }
     setCompletionBusy(true);
     try {
+      if (signOff && signOff.status !== 'signed' && !signOff.video.objectPath) {
+        try { signOff = { ...signOff, video: { ...signOff.video, objectPath: await uploadDoorVideo(r.id, signOff.video) } }; }
+        catch (e) { setCompletionBusy(false); Alert.alert('Video not sent', `${e instanceof Error ? e.message : String(e)}\n\nCheck the connection and tap Complete again — the video is kept on this phone.`); pendingSignOff.current = signOff; return; }
+      }
+      pendingSignOff.current = null;
       const photos = signOff && signOff.status !== 'signed' ? [...completionPhotos, signOff.photo] : completionPhotos;
       const delivery = await addResidentUpdate(
         r.id,
@@ -361,6 +368,12 @@ export default function ReportDetail() {
             <Text style={{ fontWeight: '700', fontSize: 13 }}>{signOffLabel(r.residentSignOff as ResidentSignOff)} · {fmt(r.residentSignOff.at)}</Text>
             {r.residentSignOff.signature && <SignatureView signature={r.residentSignOff.signature} />}
             {!!r.residentSignOff.note && <Text style={{ color: '#334155' }}>{r.residentSignOff.note}</Text>}
+            {!!r.residentSignOff.video?.objectPath && (
+              <Pressable style={ui.btnOutline} onPress={async () => {
+                try { const d = await requestFileDownloadUrl({ objectPath: r.residentSignOff!.video!.objectPath }); await Linking.openURL(d.downloadUrl); }
+                catch (e: any) { Alert.alert('Video', e?.message ?? 'Could not open the video.'); }
+              }}><Text style={ui.btnOutlineText}>Play door video ({Math.floor((r.residentSignOff.video.seconds || 0) / 60)}:{String((r.residentSignOff.video.seconds || 0) % 60).padStart(2, '0')})</Text></Pressable>
+            )}
           </View>
         )}
         {(mode === 'management' || mode === 'administrator') && !readOnly && (r as any).reviewStatus === 'done' && (

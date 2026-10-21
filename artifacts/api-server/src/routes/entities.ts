@@ -3,6 +3,7 @@ import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
 import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
+import { isSafeTenantObjectPath } from "../lib/fileStorage";
 import { deliverPushNotification } from "../lib/push";
 import { sendComplaintToFiarep, mirrorFiarepProgress, mirrorClientDecision, fiarepRoutingEnabled } from "../lib/fiarepDispatch";
 import {
@@ -408,7 +409,7 @@ function scopeSourceRef(sourceEntity: string, state: Record<string, unknown>) {
 }
 
 /** A resident sign-off as the member's phone sends it, kept to what it should hold. */
-export function cleanResidentSignOff(value: unknown): Record<string, unknown> | null {
+export function cleanResidentSignOff(value: unknown, tenantId: string): Record<string, unknown> | null {
   const v = stateOf(value);
   if (!v) return null;
   const status = String(v["status"] ?? "");
@@ -421,7 +422,10 @@ export function cleanResidentSignOff(value: unknown): Record<string, unknown> | 
     return { status, name, at, signature: { d, w: Math.min(Math.max(Number(sig?.["w"]) || 300, 1), 4000), h: Math.min(Math.max(Number(sig?.["h"]) || 180, 1), 4000) } };
   }
   if (status === "not_home" || status === "refused") {
-    return { status, at, note: String(v["note"] ?? "").trim().slice(0, 1000) || undefined, photoAt: typeof v["photoAt"] === "string" ? v["photoAt"].slice(0, 40) : undefined };
+    const video = stateOf(v["video"]);
+    const objectPath = typeof video?.["objectPath"] === "string" ? video["objectPath"] : "";
+    return { status, at, note: String(v["note"] ?? "").trim().slice(0, 1000) || undefined, photoAt: typeof v["photoAt"] === "string" ? v["photoAt"].slice(0, 40) : undefined,
+      video: objectPath && isSafeTenantObjectPath(tenantId, objectPath) ? { objectPath, seconds: Math.min(Math.max(Math.round(Number(video?.["seconds"]) || 0), 0), 600), contentType: String(video?.["contentType"] ?? "video/quicktime").slice(0, 40) } : undefined };
   }
   return null;
 }
@@ -2917,7 +2921,7 @@ router.post(
   }
   // The resident's sign-off on a job inside their home (signed on the member's phone, or why not).
   if ("residentSignOff" in body) {
-    const clean = cleanResidentSignOff(body["residentSignOff"]);
+    const clean = cleanResidentSignOff(body["residentSignOff"], actor.tenantId);
     if (clean) body["residentSignOff"] = clean; else delete body["residentSignOff"];
   }
   if (entity === "building-violations" && action === "complete") {
@@ -3720,7 +3724,7 @@ router.post(
     const why = signOff["status"] === "refused" ? "Resident refused to sign" : "Resident not home to sign";
     const where = [String(updated.state["complaintNo"] ?? ""), String(updated.state["address"] ?? ""), updated.state["unit"] ? `apt ${String(updated.state["unit"])}` : ""].filter(Boolean).join(" · ");
     for (const m of office) if (m.id !== actor.id && ["administrator", "management"].includes(String(m.role))) {
-      await notify(actor, m.id, `${why}: job finished by ${actor.name}`, [where, String(signOff["note"] ?? "")].filter(Boolean).join(" — "), updated.id).catch(() => undefined);
+      await notify(actor, m.id, `${why}: job finished by ${actor.name}`, [where, String(signOff["note"] ?? ""), signOff["video"] ? "door video attached" : ""].filter(Boolean).join(" — "), updated.id).catch(() => undefined);
     }
   }
   // Once the CPM Supervisor has acted on a scope, the "waiting for your
