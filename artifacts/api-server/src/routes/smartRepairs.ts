@@ -85,4 +85,22 @@ router.delete("/v1/smart-repairs/:id", async (_req, res) => {
   res.status(204).end();
 });
 
+// The website's Smart Repair page: the office sees everyone's in the company; others see their own.
+router.get("/v1/smart-repairs/all", async (_req, res) => {
+  const actor = actorFrom(res);
+  res.setHeader("Cache-Control", "no-store");
+  if (!(await smartRepairSyncOn(actor.tenantId))) { res.json({ on: false, items: [] }); return; }
+  await table();
+  const office = ["administrator", "management"].includes(String(actor.role));
+  const rows = (await db.execute(sql`select r.id, r.staff_id, r.data, r.photo, r.after, r.updated_at, s.name as staff_name from smart_repairs r
+    left join staff_accounts s on s.id = r.staff_id
+    where r.tenant_id = ${actor.tenantId} and r.deleted = false ${office ? sql`` : sql`and r.staff_id = ${actor.id}`} order by r.updated_at desc limit 300`) as unknown as { rows: Array<Row & { staff_id: string; staff_name: string | null }> }).rows;
+  const items = await Promise.all(rows.map(async (r) => ({
+    id: r.id, by: r.staff_name ?? "", data: r.data, updatedAt: new Date(r.updated_at).toISOString(),
+    photoUrl: r.photo ? await smartRepairPhotos.downloadUrl(r.photo).catch(() => null) : null,
+    afterUrl: r.after ? await smartRepairPhotos.downloadUrl(r.after).catch(() => null) : null,
+  })));
+  res.json({ on: true, items });
+});
+
 export default router;
