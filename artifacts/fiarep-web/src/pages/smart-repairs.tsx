@@ -41,11 +41,13 @@ export default function SmartRepairs() {
                   <p className="font-semibold text-slate-950">{t.issueFound || "Repair"}</p>
                   <p className="text-sm text-slate-600">{[it.data.address, it.data.apt ? `Apt ${it.data.apt}` : "", it.data.room].filter(Boolean).join(" · ")}</p>
                   <p className="text-xs text-slate-500">{when(it.data.at)}{it.by ? ` · ${it.by}` : ""}</p>
+                  {it.data.check && !it.data.check.compliant && it.data.check.summary && <p className="mt-1 rounded border border-amber-200 bg-amber-50 px-2 py-1 text-xs text-amber-900"><b>Why it wasn't cleared:</b> {it.data.check.summary}</p>}
                   <div className="mt-1 flex flex-wrap gap-1 text-[11px] font-semibold">
                     {t.priority && <span className={`rounded-full px-2 py-0.5 ${t.priority === "High" ? "bg-rose-100 text-rose-800" : t.priority === "Medium" ? "bg-amber-100 text-amber-900" : "bg-slate-100 text-slate-700"}`}>{t.priority}</span>}
                     {t.trade && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-700">{t.trade}</span>}
                     {it.data.jobId && <span className="rounded-full bg-blue-100 px-2 py-0.5 text-blue-800">Work order created</span>}
                     {it.data.check?.compliant && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">Repair verified</span>}
+                    {it.data.check && !it.data.check.compliant && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-amber-900">Not cleared</span>}
                     {it.data.signOff?.status === "signed" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-emerald-800">Resident signed</span>}
                   </div>
                 </div>

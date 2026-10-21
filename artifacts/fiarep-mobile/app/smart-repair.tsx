@@ -206,7 +206,11 @@ export default function SmartRepair() {
         const before = photo ? await photoBase64(photo) : null;
         const afterB64 = await photoBase64(ev.uri);
         if (before && afterB64) result = await requestVerification(before, afterB64, ticket?.issueFound || '');
-      } catch (e: any) { Alert.alert('Verification', String(e?.message || e)); }
+        else result = { before: [], after: [], compliant: false, summary: before ? 'The after photo could not be read — take it again.' : 'The before photo is not on this phone, so the repair could not be compared.' };
+      } catch (e: any) {
+        // Kept (not just a pop-up): the member, the saved repair and management all see why it wasn't cleared.
+        result = { before: [], after: [], compliant: false, summary: `Could not verify the after photo: ${String(e?.message || e)}` };
+      }
       setCheck(result); setChecking(false);
       if (ticket) await persist({ ticket, after: ev.uri, check: result });
       // Repair inside an apartment: the resident signs on this phone before the job closes.
@@ -223,7 +227,7 @@ export default function SmartRepair() {
       const a = await getCurrentActor();
       const r = await getResidentReport(jobId);
       const noteText = 'After-repair photo (Smart Repair)'
-        + (result ? '\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ') + '\n' + (result.compliant ? '✅ Repair appears compliant' : '⚠ Needs another look') + (result.summary ? ' — ' + result.summary : '') : '');
+        + (result ? '\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ') + '\n' + (result.compliant ? '✅ Repair appears compliant' : '⚠ Not cleared — needs another look') + (result.summary ? ' — ' + result.summary : '') : '');
       // Marked complete only when the after photo shows the repair done.
       if (signOff && signOff.status !== 'signed' && !signOff.video.objectPath) {
         try { signOff = { ...signOff, video: { ...signOff.video, objectPath: await uploadDoorVideo(jobId, signOff.video) } }; }
@@ -273,7 +277,7 @@ export default function SmartRepair() {
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontWeight: '700' }} numberOfLines={1}>{it.ticket.issueFound}</Text>
                     <Text style={ui.listSub} numberOfLines={1}>{when(new Date(it.at))}{it.address ? ' · ' + it.address : ''}</Text>
-                    <Text style={[ui.listSub, { color: it.check?.compliant ? '#166534' : it.ordered ? BLUE : '#64748b' }]}>{it.check?.compliant ? 'Repaired — verified' : it.ordered ? 'Work order created' : 'Ready for repair'}</Text>
+                    <Text style={[ui.listSub, { color: it.check?.compliant ? '#166534' : it.check ? '#b45309' : it.ordered ? BLUE : '#64748b' }]} numberOfLines={2}>{it.check?.compliant ? 'Repaired — verified' : it.check ? `Not cleared — ${it.check.summary || 'needs another look'}` : it.ordered ? 'Work order created' : 'Ready for repair'}</Text>
                   </View>
                 </Pressable>
                 <Pressable onPress={() => confirmDelete(it.id)} hitSlop={8} style={{ paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6, borderWidth: 1, borderColor: '#dc2626' }}>
@@ -409,7 +413,14 @@ export default function SmartRepair() {
                   {check.before.map((x, i) => <Text key={'b' + i} style={{ fontSize: 13 }}>•  {x}</Text>)}
                   <Text style={{ fontWeight: '700', marginTop: 4 }}>After</Text>
                   {check.after.map((x, i) => <Text key={'a' + i} style={{ fontSize: 13 }}>•  {x}</Text>)}
-                  <Text style={{ marginTop: 6, fontWeight: '800', color: check.compliant ? '#166534' : '#b45309' }}>{check.compliant ? '✅ Repair appears compliant' : '⚠ Needs another look'}</Text>
+                  <Text style={{ marginTop: 6, fontWeight: '800', color: check.compliant ? '#166534' : '#b45309' }}>{check.compliant ? '✅ Repair appears compliant' : '⚠ Not cleared — needs another look'}</Text>
+                  {!check.compliant && !!check.summary && (
+                    <View style={{ marginTop: 6, padding: 10, borderRadius: 8, backgroundColor: '#fffbeb', borderWidth: 1, borderColor: '#fcd34d' }}>
+                      <Text style={{ fontWeight: '700', color: '#92400e' }}>Why it wasn't cleared</Text>
+                      <Text style={{ color: '#78350f' }}>{check.summary}</Text>
+                      <Text style={{ color: '#92400e', fontSize: 12, marginTop: 4 }}>Saved on the work order for management. Take a clearer after photo to try again.</Text>
+                    </View>
+                  )}
                 </View>
               )}
               <Pressable style={[ui.btnOutline, !jobId && { opacity: 0.6 }]} onPress={verify}><Text style={ui.btnOutlineText}>Upload after-repair photo for verification</Text></Pressable>
