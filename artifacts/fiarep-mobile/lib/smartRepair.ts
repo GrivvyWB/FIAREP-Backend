@@ -196,6 +196,8 @@ export async function requestDrawings(t: SmartTicket): Promise<SmartDrawings> {
 export type SavedRepair = {
   id: string; at: string; photo: string | null; heading: number | null; address: string; apt: string; room: string; note: string;
   reportId?: string; ticket: SmartTicket; jobId?: string | null; ordered?: boolean; after?: string | null; check?: RepairVerification | null;
+  // Smart Repair on all their phones (Platform Control): what this phone last sent to / got from the account.
+  rev?: string; dirty?: boolean; synced?: boolean; upPhoto?: string | null; upAfter?: string | null;
 };
 const SAVED_KEY = 'smart_repairs';
 
@@ -213,7 +215,85 @@ async function writeSaved(list: SavedRepair[]): Promise<void> {
 }
 export async function saveRepair(item: SavedRepair): Promise<void> {
   const list = await listSavedRepairs();
-  await writeSaved([item, ...list.filter((x) => x.id !== item.id)]);
+  const before = list.find((x) => x.id === item.id);
+  const next: SavedRepair = { ...item, synced: before?.synced, upPhoto: before?.upPhoto, upAfter: before?.upAfter, rev: Math.random().toString(36).slice(2, 10), dirty: true };
+  await writeSaved([next, ...list.filter((x) => x.id !== item.id)]);
+  void syncSavedRepairs().catch(() => undefined);
+}
+
+// ── Smart Repair on all their phones ──────────────────────────────────────
+// Only when Platform Control has it on for the company; otherwise nothing leaves the phone.
+const BOOKKEEPING = ['photo', 'after', 'dirty', 'synced', 'upPhoto', 'upAfter'] as const;
+async function srApi(method: string, path: string, body?: unknown): Promise<Response | null> {
+  const domain = process.env.EXPO_PUBLIC_DOMAIN;
+  const token = await getAccessToken();
+  if (!domain || !token) return null;
+  return fetch(`https://${domain}/api/v1/smart-repairs${path}`, {
+    method, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+const localUri = (p: string) => (p.startsWith('file:') || p.startsWith('/') ? p : FileSystem.documentDirectory + p);
+async function uploadSrPhoto(id: string, which: 'before' | 'after', stored: string): Promise<boolean> {
+  const res = await srApi('POST', `/${encodeURIComponent(id)}/photo`, { which });
+  if (!res?.ok) return false;
+  const { uploadUrl } = await res.json();
+  const up = await FileSystem.uploadAsync(uploadUrl, localUri(stored), { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, mimeType: 'image/jpeg' });
+  return up.status >= 200 && up.status < 300;
+}
+async function pushOne(it: SavedRepair): Promise<SavedRepair | null> {
+  const data: Record<string, unknown> = { ...it };
+  for (const k of BOOKKEEPING) delete data[k];
+  const res = await srApi('PUT', `/${encodeURIComponent(it.id)}`, { data });
+  if (!res?.ok) return null;
+  let upPhoto = it.upPhoto ?? null, upAfter = it.upAfter ?? null;
+  if (it.photo && it.photo !== upPhoto && await uploadSrPhoto(it.id, 'before', it.photo).catch(() => false)) upPhoto = it.photo;
+  if (it.after && it.after !== upAfter && await uploadSrPhoto(it.id, 'after', it.after).catch(() => false)) upAfter = it.after;
+  return { ...it, synced: true, dirty: false, upPhoto, upAfter };
+}
+let syncing: Promise<boolean> | null = null;
+/** Sends this phone's new repairs to the account and brings in the ones made on other phones. True when the list changed. */
+export function syncSavedRepairs(): Promise<boolean> {
+  return (syncing ??= (async () => {
+    try {
+      const res = await srApi('GET', '');
+      if (!res?.ok) return false;
+      const remote = await res.json() as { on: boolean; items: Array<{ id: string; data: SavedRepair; photoUrl: string | null; afterUrl: string | null }> };
+      if (!remote.on) return false;
+      const snapshot = await listSavedRepairs();
+      const snapIds = new Set(snapshot.map((x) => x.id));
+      const byId = new Map(remote.items.map((r) => [r.id, r]));
+      // Deleted on another phone.
+      const gone = new Set(snapshot.filter((x) => x.synced && !x.dirty && !byId.has(x.id)).map((x) => x.id));
+      // Made or changed on another phone.
+      const incoming = new Map<string, SavedRepair>();
+      for (const r of remote.items) {
+        const mine = snapshot.find((x) => x.id === r.id);
+        if (mine && (mine.dirty || mine.rev === r.data?.rev)) continue;
+        const photo = r.photoUrl ? await saveRemotePhoto(r.photoUrl) : mine?.photo ?? null;
+        const after = r.afterUrl ? await saveRemotePhoto(r.afterUrl) : mine?.after ?? null;
+        incoming.set(r.id, { ...r.data, id: r.id, photo, after, synced: true, dirty: false, upPhoto: photo, upAfter: after });
+      }
+      // Made or changed on this phone.
+      const pushed = new Map<string, SavedRepair>();
+      for (const it of snapshot.filter((x) => x.dirty || !x.synced)) {
+        const done = await pushOne(it).catch(() => null);
+        if (done) pushed.set(it.id, done);
+      }
+      // Apply onto the list as it is NOW (the person may have saved or deleted meanwhile).
+      const current = await listSavedRepairs();
+      const curIds = new Set(current.map((x) => x.id));
+      let list = current
+        .filter((x) => !(gone.has(x.id) && !x.dirty))
+        .map((x) => (pushed.get(x.id)?.rev === x.rev ? pushed.get(x.id)! : !x.dirty && incoming.has(x.id) ? incoming.get(x.id)! : x));
+      for (const [id, item] of incoming) if (!curIds.has(id) && !snapIds.has(id)) list.push(item);
+      const changed = gone.size > 0 || incoming.size > 0;
+      list.sort((a, b) => String(b.at).localeCompare(String(a.at)));
+      await writeSaved(list);
+      return changed;
+    } catch { return false; }
+    finally { syncing = null; }
+  })());
 }
 /** Delete a saved repair and its photos. A photo that went onto a work order stays — the job still uses it. */
 export async function deleteSavedRepair(id: string): Promise<void> {
@@ -221,6 +301,7 @@ export async function deleteSavedRepair(id: string): Promise<void> {
   const item = list.find((x) => x.id === id);
   await writeSaved(list.filter((x) => x.id !== id));
   if (!item) return;
+  if (item.synced) void srApi('DELETE', `/${encodeURIComponent(id)}`).catch(() => undefined);
   const drop = async (p?: string | null) => {
     if (!p || !p.startsWith('photos/')) return;
     try { await FileSystem.deleteAsync(FileSystem.documentDirectory + p, { idempotent: true }); } catch {}

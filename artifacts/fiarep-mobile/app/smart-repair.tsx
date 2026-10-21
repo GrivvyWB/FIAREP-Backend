@@ -10,7 +10,7 @@ import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { takePhoto, pickPhoto, photoBase64, takePhotoWithGeo } from '../lib/photos';
 import RemotePhoto from '../components/RemotePhoto';
 import RepairReferenceImage from '../components/RepairReferenceImage';
-import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
+import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, syncSavedRepairs, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
 import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor } from '../lib/store';
 import { ui } from '../lib/ui';
 
@@ -102,7 +102,7 @@ export default function SmartRepair() {
   // Every photo and its repair directions are kept on the phone until deleted.
   const [savedId, setSavedId] = useState<string | null>(null);
   const [savedList, setSavedList] = useState<SavedRepair[]>([]);
-  const refreshSaved = () => { void listSavedRepairs().then(setSavedList); };
+  const refreshSaved = () => { void listSavedRepairs().then(setSavedList); void syncSavedRepairs().then((changed) => { if (changed) void listSavedRepairs().then(setSavedList); }); };
   useEffect(() => { refreshSaved(); }, []);
   const persist = async (over: Partial<SavedRepair> & { ticket: SmartTicket }, id = savedId) => {
     const item: SavedRepair = {
@@ -125,7 +125,7 @@ export default function SmartRepair() {
     setJobId(reportId ? String(reportId) : null); setHeading(null); setTakenAt(null);
   }
   function confirmDelete(id: string, then?: () => void) {
-    Alert.alert('Delete this repair?', 'The photo and its repair directions are removed from this phone. A work order already created stays in the jobs list.', [
+    Alert.alert('Delete this repair?', 'The photo and its repair directions are deleted. A work order already created stays in the jobs list.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Delete', style: 'destructive', onPress: async () => { await deleteSavedRepair(id); refreshSaved(); then?.(); } },
     ]);

@@ -222,4 +222,16 @@ export const smartRepairArt = {
   },
 };
 
+/** Smart Repair photos kept on a person's account (Platform Control → "Smart Repair on all their phones"). */
+export const smartRepairPhotos = {
+  path(tenantId: string, staffId: string, repairId: string, which: "before" | "after"): string {
+    return `${privateObjectDir()}/tenants/${safeSegment(tenantId)}/smart-repair-photo/${safeSegment(staffId)}/${safeSegment(repairId)}-${which}.jpg`;
+  },
+  uploadUrl(full: string): Promise<string> { return signObjectUrl(full, "PUT", UPLOAD_TTL_SECONDS); },
+  downloadUrl(full: string): Promise<string> { return signObjectUrl(full, "GET", 60 * 60); },
+  async remove(full: string): Promise<void> {
+    try { const res = await fetch(await signObjectUrl(full, "DELETE" as SignedMethod, 60), { method: "DELETE", signal: AbortSignal.timeout(15_000) }); await res.body?.cancel().catch(() => undefined); } catch { /* left in storage */ }
+  },
+};
+
 export const fileStorage = new ReplitFileStorage();

@@ -8,6 +8,7 @@ import systemRouter from "./system";
 import entityRouter from "./entities";
 import fileRouter from "./files";
 import aiRouter from "./ai";
+import smartRepairsRouter from "./smartRepairs";
 import propertyRouter from "./property";
 import publicAccessRouter from "./publicAccess";
 import organizationsRouter from "./organizations";
@@ -66,6 +67,7 @@ router.use(hrRouter);
 router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);
+router.use(smartRepairsRouter);
 router.use(timeClockRouter);
 
 export default router;

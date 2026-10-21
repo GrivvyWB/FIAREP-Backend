@@ -280,7 +280,7 @@ export function newCompanyModules(): Record<string, boolean> {
   for (const m of MODULES) off[m.id] = false;
   for (const group of APP_TABS) for (const tab of group.tabs) off[appTabKey(group.id, tab)] = false;
   for (const trade of LOOKUP_TRADES) off[`lookup.${trade.key}`] = false;
-  for (const k of ["residentPhotoAiViolationReader", "communitySupervisorReview", "fiarepComplaintRouting", "fiarepMessaging", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "requireBaseline", "smartRepairEmailCopy"]) off[k] = false;
+  for (const k of ["residentPhotoAiViolationReader", "communitySupervisorReview", "fiarepComplaintRouting", "fiarepMessaging", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "requireBaseline", "smartRepairEmailCopy", "smartRepairSync"]) off[k] = false;
   return off;
 }
 
@@ -332,6 +332,7 @@ export default function OwnerModules() {
   // Read-only locks: each one OFF unless switched on (features.modules["lock.<key>"]).
   const [locks, setLocks] = useState<Record<string, boolean>>({});
   const [smartRepairEmailCopy, setSmartRepairEmailCopy] = useState(false);
+  const [smartRepairSync, setSmartRepairSync] = useState(false);
   const [smartRepairEmailTo, setSmartRepairEmailTo] = useState("");
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -411,6 +412,7 @@ export default function OwnerModules() {
     setOutOfNetworkOn(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).outOfNetwork === true));
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
+    setSmartRepairSync(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairSync === true));
     setSmartRepairEmailTo(typeof organization.features?.smartRepairEmailTo === "string" ? String(organization.features.smartRepairEmailTo) : "");
     setDirty(false);
   }, [organization]);
@@ -478,6 +480,7 @@ export default function OwnerModules() {
   const toggleOutOfNetwork = (enabled: boolean) => { setOutOfNetworkOn(enabled); setDirty(true); };
   const toggleSmartRepairToMgmt = (enabled: boolean) => { setSmartRepairToMgmt(enabled); setDirty(true); };
   const toggleSmartRepairEmailCopy = (enabled: boolean) => { setSmartRepairEmailCopy(enabled); setDirty(true); };
+  const toggleSmartRepairSync = (enabled: boolean) => { setSmartRepairSync(enabled); setDirty(true); };
   const toggleMessagingOpen = (enabled: boolean) => {
     setMessagingOpen(enabled);
     setDirty(true);
@@ -552,7 +555,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -1003,6 +1006,29 @@ export default function OwnerModules() {
                     checked={smartRepairOn}
                     onCheckedChange={toggleSmartRepair}
                     aria-label={`${smartRepairOn ? "Disable" : "Enable"} Smart Repair Instructions`}
+                  />
+                </div>
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
+                  smartRepairSync ? "" : "opacity-60"
+                }`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+                    smartRepairSync ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                  }`}>
+                    <Wrench className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">Smart Repair on all their phones</p>
+                    <p className="text-xs text-slate-500">On: each person's Smart Repair photos and directions are saved to their account and show on every phone or iPad they sign in to. Off: they stay on the phone that took them</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
+                    smartRepairSync ? "text-emerald-700" : "text-slate-400"
+                  }`}>
+                    {smartRepairSync ? "Enabled" : "Disabled"}
+                  </span>
+                  <Switch
+                    checked={smartRepairSync}
+                    onCheckedChange={toggleSmartRepairSync}
+                    aria-label={`${smartRepairSync ? "Disable" : "Enable"} Smart Repair on all their phones`}
                   />
                 </div>
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
