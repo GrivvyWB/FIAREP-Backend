@@ -18,7 +18,7 @@
         "EXPO_PUBLIC_DOMAIN": "fiarep.com"
       },
       "ios": {
-        "image": "latest"
+        "image": "sdk-57"
       },
       "channel": "production"
     }
