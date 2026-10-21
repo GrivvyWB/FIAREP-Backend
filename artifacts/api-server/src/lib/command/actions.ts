@@ -13,6 +13,8 @@ import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, entityRecords, organizations } from "@workspace/db";
 import { checkAllWatched } from "../../routes/alerts";
 import { lookupNycPropertyData } from "../nycProperty";
+import { activeMoldAt, buildingSummaries, syncMoldFromHpd } from "../mold";
+import { moldLine } from "../moldWorkOrders";
 import { commandAgents, commandWorkOrders, type AgentTask } from "./tables";
 import { onlineAgents, ONLINE_WINDOW_MS } from "./agentBus";
 import { recentAudit } from "./audit";
@@ -119,9 +121,12 @@ async function draftWorkOrders(alertIds: string[], urgentOnly: boolean, ctx: Act
     : new Set<string>();
   const fresh = items.filter((a) => !existing.has(a.id));
   for (const a of fresh) {
+    // An apartment with active mold: the mold is a priority item on the work order.
+    const apt = /\bApt\.?\s*#?\s*([\w-]+)/i.exec(`${a.title} ${a.detail}`)?.[1] ?? "";
+    const mold = apt ? await activeMoldAt(ctx.tenantId, [a.address, a.borough].filter(Boolean).join(", "), apt).catch(() => []) : [];
     await db.insert(commandWorkOrders).values({
       id: randomUUID(), tenantId: ctx.tenantId, alertId: a.id, alertKey: a.key, address: a.address, borough: a.borough, company: a.company, bbl: a.bbl,
-      kind: a.kind, title: a.title, detail: a.detail, urgency: a.urgency, status: "draft", runId: ctx.runId,
+      kind: a.kind, title: a.title, detail: mold.length ? `PRIORITY — ${moldLine(mold)}\n${a.detail}` : a.detail, urgency: mold.length ? "urgent" : a.urgency, status: "draft", runId: ctx.runId,
     }).onConflictDoNothing();
   }
   return { drafted: fresh.length, alreadyDrafted: items.length - fresh.length, urgent: fresh.filter((a) => a.urgency === "urgent").length };
@@ -186,6 +191,20 @@ export const ACTIONS: ActionDef[] = [
         openDob: r.dobViolations.filter((v) => v.status === "Open").slice(0, 10).map((v) => ({ type: v.type, description: v.description.slice(0, 160), date: v.issueDate })) };
     },
     describe: (p) => `Look up ${str(p["address"])}`,
+  },
+  {
+    name: "mold_status", label: "Mold compliance (active mold violations)", risk: "read", confirmDefault: false, target: "server",
+    description: "Mold compliance by building: original mold violations, resolved (Mold Removed), active remaining, percent remaining / completed, whether an inspection is recommended (60% or less remaining), apartments awaiting remediation and certification deadlines (Class B past its date risks Class C on reinspection). Optionally one building (part of its address); refresh pulls HPD first.",
+    schema: { type: "object", properties: { address: { type: "string" }, refresh: { type: "boolean" } }, additionalProperties: false },
+    run: async (p, ctx) => {
+      if (p["refresh"] === true) await syncMoldFromHpd(ctx.tenantId).catch(() => undefined);
+      const q = str(p["address"], 120).toUpperCase();
+      const list = (await buildingSummaries(ctx.tenantId)).filter((b) => !q || b.address.toUpperCase().includes(q));
+      if (!list.length) return { buildings: [], note: q ? "No mold violations on record for that building." : "No mold violations on record." };
+      return { buildings: list.slice(0, 20).map((b) => ({ address: b.address, original: b.original, resolved: b.removed, active: b.active, percentRemaining: b.percentRemaining, percentCompleted: b.percentCompleted, inspectionRecommended: b.inspectionRecommended,
+        awaiting: b.awaiting.slice(0, 15).map((c) => `${c.apartment}${c.class ? ` (Class ${c.class})` : ""}`), deadlines: b.deadlines.slice(0, 10).map((d) => ({ apartment: d.apartment, class: d.class, certifyBy: d.certifyBy, daysLeft: d.daysLeft, classCRisk: d.escalationRisk })) })) };
+    },
+    describe: (p) => `Mold compliance${str(p["address"]) ? ` at ${str(p["address"])}` : ""}`,
   },
   {
     name: "complaint_feed", label: "Resident complaints", risk: "read", confirmDefault: false, target: "server",
@@ -438,7 +457,8 @@ export const ACTIONS: ActionDef[] = [
         const [rep] = await db.select().from(entityRecords).where(eq(entityRecords.id, reportId)).limit(1);
         if (rep) await notifyResident(rep, "Visit scheduled", `Someone from maintenance is scheduled for ${nyLabel(b.startAt)}.`).catch(() => undefined);
       }
-      await notify(commandActor(ctx), pick.m.id, `New job: ${w.urgency === "urgent" ? "URGENT — " : ""}${w.title}`, `${nyLabel(b.startAt)} at ${address}${apartments.length ? ` (${apartments.join(", ")})` : ""} · ${w.kind}`, b.id).catch(() => undefined);
+      const mold = apartments.length ? await activeMoldAt(ctx.tenantId, address, apartments[0]!).catch(() => []) : [];
+      await notify(commandActor(ctx), pick.m.id, `New job: ${w.urgency === "urgent" ? "URGENT — " : ""}${w.title}`, `${nyLabel(b.startAt)} at ${address}${apartments.length ? ` (${apartments.join(", ")})` : ""} · ${w.kind}${mold.length ? ` · ${moldLine(mold)}` : ""}`, b.id).catch(() => undefined);
       return { assigned: pick.m.name, booked: bookingView(b), driveFromPreviousJob: pick.slot.travelDetail, workOrder: { id: w.id, address, title: w.title } };
     },
     describe: (p) => `Assign work order ${str(p["workOrderId"], 12)}… to ${str(p["member"]) || `the first free ${str(p["trade"]) || "member"}`}`,

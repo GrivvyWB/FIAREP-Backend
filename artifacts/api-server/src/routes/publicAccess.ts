@@ -2,6 +2,7 @@ import { autoSendComplaintToFiarep } from "../lib/fiarepDispatch";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { logger } from "../lib/logger";
+import { attachMoldToComplaint } from "../lib/moldWorkOrders";
 import { and, desc, eq, sql, gt, isNull } from "drizzle-orm";
 import {
   db,
@@ -275,6 +276,7 @@ export async function submitResidentReport(rawInput: unknown): Promise<{ status:
   // ones - so if this client pays for FIAREP to handle their residents, the
   // complaint reaches FIAREP's crew now, without anyone forwarding it.
   await autoSendComplaintToFiarep(tenantId, created.row!);
+  void attachMoldToComplaint(created.row!.id, null).catch(() => undefined);
   return { status: 201, body: { ...record(created.row!), statusToken: residentToken } };
 }
 

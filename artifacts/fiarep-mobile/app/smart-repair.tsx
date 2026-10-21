@@ -9,6 +9,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { takePhoto, pickPhoto, photoBase64, takePhotoWithGeo, type PhotoEvidence } from '../lib/photos';
 import { ResidentSignOffSheet, signOffLabel, type ResidentSignOff } from '../components/ResidentSignOff';
+import MoldPanel from '../components/MoldPanel';
 import RemotePhoto from '../components/RemotePhoto';
 import RepairReferenceImage from '../components/RepairReferenceImage';
 import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, syncSavedRepairs, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
@@ -306,6 +307,7 @@ export default function SmartRepair() {
             </View>
             <View style={{ alignItems: 'center' }}><CompassRose heading={heading} /></View>
           </View>
+          <MoldPanel address={address} apartment={apt} reportId={jobId} canRemove />
           {ticket ? (
             <View style={{ gap: 2 }}>
               {kv('Room', ticket.room || room)}

@@ -901,6 +901,12 @@ export default function Reports() {
                       )}
                     </div>
                   )}
+                  {!!state.moldAlert && typeof state.moldAlert === "object" && (
+                    <div className="rounded-md border-2 border-red-700 bg-red-50 p-3 text-sm text-red-900" data-testid="mold-priority">
+                      <p className="font-bold">PRIORITY — Active mold in apt {String(state.unit ?? "")}</p>
+                      <p>{String((state.moldAlert as { text?: string }).text ?? "")}</p>
+                    </div>
+                  )}
                   <ResidentSignOffView value={state.residentSignOff} />
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canActOn(selected) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canReview(selected) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
                   {canActOn(selected) && currentStatus === "submitted" && <SendAsViolationPanel report={selected} staff={staff as never} />}

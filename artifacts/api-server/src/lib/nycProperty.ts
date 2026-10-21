@@ -1,6 +1,6 @@
 type JsonRecord = Record<string, unknown>;
 
-const GEOSEARCH_URL = "https://geosearch.planninglabs.nyc/v2/search";
+const GEOSEARCH_URL = process.env["FIAREP_GEOSEARCH_URL"] || "https://geosearch.planninglabs.nyc/v2/search"; // override: tests
 const SOCRATA_BASE = "https://data.cityofnewyork.us/resource";
 const HPD_VIOLATIONS = "wvxf-dwi5";
 const DOB_VIOLATIONS = "3h2n-5cm9";

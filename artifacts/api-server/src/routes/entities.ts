@@ -4,6 +4,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import { isSafeTenantObjectPath } from "../lib/fileStorage";
+import { attachMoldToComplaint } from "../lib/moldWorkOrders";
 import { deliverPushNotification } from "../lib/push";
 import { sendComplaintToFiarep, mirrorFiarepProgress, mirrorClientDecision, fiarepRoutingEnabled } from "../lib/fiarepDispatch";
 import {
@@ -1521,6 +1522,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     if (entity === "leave-requests") await alertFiarepAdmins(actor, "Time off to approve", who, id);
     if (entity === "change-orders") await alertFiarepAdmins(actor, "Change work order to approve", [who, String(persistedCreatedState["reportRef"] || "")].filter(Boolean).join(" · "), id);
   }
+  if (entity === "resident-reports" && created) void attachMoldToComplaint(created.id, actor).catch(() => undefined);
   res.status(201).json(outward(actor, created!));
 });
 
@@ -3716,6 +3718,8 @@ router.post(
     const msg = residentMessageForAction(action, updated.state, actor.name);
     if (msg) void notifyResident(updated, msg.title, msg.body);
   }
+  // A job in an apartment with active mold: priority item + tell whoever is assigned.
+  if (entity === "resident-reports" && ["assign", "dispatch", "start", "accept"].includes(action)) void attachMoldToComplaint(updated.id, actor).catch(() => undefined);
   // Finished inside a home without the resident's signature: the office is told.
   const signOff = stateOf(updated.state["residentSignOff"]);
   if ((action === "complete" || action === "resolve") && signOff && signOff["status"] !== "signed" && "residentSignOff" in body) {

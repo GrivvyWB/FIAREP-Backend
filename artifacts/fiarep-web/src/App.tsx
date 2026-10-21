@@ -50,6 +50,7 @@ import CommunityCoordinators from '@/pages/community';
 import Translator from '@/pages/translator';
 import PropertyLookup from '@/pages/property-lookup';
 import ViolationAlerts from '@/pages/violation-alerts';
+import MoldCompliance from '@/pages/mold-compliance';
 import ClientCommandCenter from '@/pages/command-center';
 import CompanyForms from '@/pages/company-forms';
 
@@ -286,6 +287,7 @@ function AppRouter() {
           <Route path="/translator" component={TranslatorRoute} />
           <Route path="/property-lookup" component={PropertyLookupRoute} />
           <Route path="/violation-alerts" component={ViolationAlertsRoute} />
+          <Route path="/mold-compliance" component={MoldCompliance} />
           <Route path="/command-center" component={CommandCenterRoute} />
           <Route path="/company-forms" component={CompanyFormsRoute} />
           <Route path="/platform" component={Platform} />

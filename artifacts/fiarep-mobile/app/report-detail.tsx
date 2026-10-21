@@ -13,6 +13,7 @@ import PhotoViewer from '../components/PhotoViewer';
 import ComplaintReceipts from '../components/ComplaintReceipts';
 import QuotePanel, { quoteOf } from '../components/QuotePanel';
 import { ResidentSignOffSheet, SignatureView, signOffLabel, type ResidentSignOff } from '../components/ResidentSignOff';
+import MoldPanel from '../components/MoldPanel';
 import { ui, ACCENT } from '../lib/ui';
 import { useRawModules } from '../lib/module-access';
 import { wasPrompted, markPrompted } from '../lib/smartRepair';
@@ -274,6 +275,7 @@ export default function ReportDetail() {
         </View>
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
       </View>
+      {!!String(r.unit || '').trim() && <MoldPanel address={r.address || ''} apartment={String(r.unit)} reportId={r.id} canRemove={isMine && !readOnly && ['assigned', 'in_progress'].includes(r.status)} />}
       <ComplaintReceipts entity="resident-reports" reportId={r.id} readOnly={readOnly} canSendEta={['management', 'administrator', 'worker', 'inspector', 'emergency'].includes(mode ?? '')} />
       {/* The materials FIAREP wants to buy, and the client's answer - the same
           panel they have on the website, so it can be approved from the phone. */}
