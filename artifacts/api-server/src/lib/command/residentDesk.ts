@@ -28,6 +28,7 @@ export type DeskMessage = { id: string; from: "resident" | "office"; text: strin
 type Desk = { id: string; token_hash: string; tenant_id: string | null; company_code: string | null; company_name: string | null; complaint_id: string | null; complaint_no: string | null; seed_id: string | null; messages: DeskMessage[] };
 
 let ready: Promise<unknown> | null = null;
+export const ensureResidentDeskTable = () => table();
 const table = () => (ready ??= db.execute(sql`create table if not exists resident_desk_chats (
   id text primary key, token_hash text not null, tenant_id text, company_code text, company_name text,
   complaint_id text, complaint_no text, seed_id text, messages jsonb not null default '[]',

@@ -15,6 +15,7 @@ router.use("/v1/smart-repairs", requireAuth);
 type Row = { id: string; data: unknown; photo: string | null; after: string | null; updated_at: Date };
 const rowsOf = (r: unknown) => (r as { rows: Row[] }).rows;
 let ready: Promise<unknown> | null = null;
+export const ensureSmartRepairsTable = () => table();
 const table = () => (ready ??= db.execute(sql`create table if not exists smart_repairs (
   tenant_id text not null, staff_id text not null, id text not null, data jsonb not null,
   photo text, after text, deleted boolean not null default false, updated_at timestamptz not null default now(),

@@ -11,6 +11,9 @@ import { ensureBookingTable } from "./lib/command/scheduling";
 import { expireStaleProposals } from "./lib/command/engine";
 import { expirePilots } from "./lib/pilot";
 import { syncRelayDevices } from "./lib/command/relay";
+import { ensureFilesTable } from "./lib/command/files";
+import { ensureSmartRepairsTable } from "./routes/smartRepairs";
+import { ensureResidentDeskTable } from "./lib/command/residentDesk";
 
 const rawPort = process.env["PORT"];
 
@@ -33,6 +36,9 @@ await ensureFiarepAdministrators();
 await ensureSampleClient().catch((err) => console.error("Sample client not made:", err));
 await ensureCommandTables();
 await ensureBookingTable();
+// Tables otherwise made on first use: made at start, so the development database
+// has them too (Replit's Publish compares the two and offers to drop what's missing).
+await Promise.all([ensureFilesTable(), ensureSmartRepairsTable(), ensureResidentDeskTable()]).catch((err) => console.error("Table setup:", err));
 void syncRelayDevices();
 setInterval(() => { void expireStaleProposals().catch(() => undefined); }, 60_000).unref();
 // Pilot programs past their end date go back to the features they had before (unless purchased).
