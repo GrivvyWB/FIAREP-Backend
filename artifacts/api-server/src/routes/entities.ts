@@ -407,6 +407,25 @@ function scopeSourceRef(sourceEntity: string, state: Record<string, unknown>) {
   };
 }
 
+/** A resident sign-off as the member's phone sends it, kept to what it should hold. */
+export function cleanResidentSignOff(value: unknown): Record<string, unknown> | null {
+  const v = stateOf(value);
+  if (!v) return null;
+  const status = String(v["status"] ?? "");
+  const at = typeof v["at"] === "string" && !Number.isNaN(Date.parse(v["at"])) ? v["at"] : new Date().toISOString();
+  if (status === "signed") {
+    const sig = stateOf(v["signature"]);
+    const d = typeof sig?.["d"] === "string" ? sig["d"] : "";
+    const name = String(v["name"] ?? "").trim().slice(0, 120);
+    if (!name || !d || d.length > 200_000 || !/^[ML0-9 .-]+$/.test(d)) return null;
+    return { status, name, at, signature: { d, w: Math.min(Math.max(Number(sig?.["w"]) || 300, 1), 4000), h: Math.min(Math.max(Number(sig?.["h"]) || 180, 1), 4000) } };
+  }
+  if (status === "not_home" || status === "refused") {
+    return { status, at, note: String(v["note"] ?? "").trim().slice(0, 1000) || undefined, photoAt: typeof v["photoAt"] === "string" ? v["photoAt"].slice(0, 40) : undefined };
+  }
+  return null;
+}
+
 /** Inside FIAREP, every request goes to the administrators (Timothy Winn,
  *  Emily Winn) — whoever else would be told as well. */
 async function alertFiarepAdmins(actor: Actor, message: string, detail: string | undefined, recordId: string): Promise<void> {
@@ -2446,6 +2465,7 @@ router.post(
     res.status(403).json({ error: "An employee may not approve their own departure" });
     return;
   }
+  let sentToHr: Record<string, unknown> | null = null;
   if (entity === "leave-requests" && action === "send-to-hr") {
     if (String(current.state["status"] || "Pending") !== "Pending") {
       res.status(409).json({ error: "This leave request has already been decided" });
@@ -2461,11 +2481,9 @@ router.post(
       res.status(403).json({ error: "Only this employee's management may send the request to HR" });
       return;
     }
-    state["sentToHrAt"] = new Date().toISOString();
-    state["sentToHrById"] = actor.id;
-    state["sentToHrByName"] = actor.name;
-    state["sentToHrByPosition"] = actor.position;
-    if (typeof body["note"] === "string" && body["note"].trim()) state["sentToHrNote"] = body["note"].trim().slice(0, 1000);
+    // Written onto the record once it is built below (it doesn't exist yet here).
+    sentToHr = { sentToHrAt: new Date().toISOString(), sentToHrById: actor.id, sentToHrByName: actor.name, sentToHrByPosition: actor.position,
+      ...(typeof body["note"] === "string" && body["note"].trim() ? { sentToHrNote: body["note"].trim().slice(0, 1000) } : {}) };
   }
   if (entity === "leave-requests" && (action === "approve" || action === "deny")) {
     // Whoever decides first completes it.
@@ -2897,6 +2915,11 @@ router.post(
     }
     body["development"] = development;
   }
+  // The resident's sign-off on a job inside their home (signed on the member's phone, or why not).
+  if ("residentSignOff" in body) {
+    const clean = cleanResidentSignOff(body["residentSignOff"]);
+    if (clean) body["residentSignOff"] = clean; else delete body["residentSignOff"];
+  }
   if (entity === "building-violations" && action === "complete") {
     const remoteFiles = Array.isArray(current.state["remoteFiles"])
       ? current.state["remoteFiles"]
@@ -2956,6 +2979,7 @@ router.post(
     ...(action === "clear" ? { clearedByMgmt: true } : {}),
     [`${action.replaceAll("-", "_")}At`]: now.toISOString(),
   };
+  if (sentToHr) Object.assign(state, sentToHr);
   // Money released to the awarded vendor: server-kept list of payments.
   const paymentsSoFar = (Array.isArray(current.state["payments"]) ? current.state["payments"] : [])
     .filter((p): p is Record<string, unknown> => !!p && typeof p === "object");
@@ -3687,6 +3711,17 @@ router.post(
   if (entity === "resident-reports") {
     const msg = residentMessageForAction(action, updated.state, actor.name);
     if (msg) void notifyResident(updated, msg.title, msg.body);
+  }
+  // Finished inside a home without the resident's signature: the office is told.
+  const signOff = stateOf(updated.state["residentSignOff"]);
+  if ((action === "complete" || action === "resolve") && signOff && signOff["status"] !== "signed" && "residentSignOff" in body) {
+    const office = await db.select({ id: staffAccounts.id, role: staffAccounts.role }).from(staffAccounts)
+      .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved")));
+    const why = signOff["status"] === "refused" ? "Resident refused to sign" : "Resident not home to sign";
+    const where = [String(updated.state["complaintNo"] ?? ""), String(updated.state["address"] ?? ""), updated.state["unit"] ? `apt ${String(updated.state["unit"])}` : ""].filter(Boolean).join(" · ");
+    for (const m of office) if (m.id !== actor.id && ["administrator", "management"].includes(String(m.role))) {
+      await notify(actor, m.id, `${why}: job finished by ${actor.name}`, [where, String(signOff["note"] ?? "")].filter(Boolean).join(" — "), updated.id).catch(() => undefined);
+    }
   }
   // Once the CPM Supervisor has acted on a scope, the "waiting for your
   // review" alert is done — take it out of the inbox.

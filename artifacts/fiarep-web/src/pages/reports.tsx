@@ -217,6 +217,25 @@ function statusLabel(status: unknown) {
   return String(status || "submitted").replaceAll("_", " ");
 }
 
+/** The resident's sign-off from the member's phone: their signature, or why there is none. */
+function ResidentSignOffView({ value }: { value: unknown }) {
+  const v = value && typeof value === "object" ? (value as { status?: string; name?: string; note?: string; at?: string; signature?: { d?: string; w?: number; h?: number } }) : null;
+  if (!v?.status) return null;
+  const signed = v.status === "signed";
+  const label = signed ? `Signed by resident: ${v.name ?? ""}` : v.status === "refused" ? "Resident refused to sign" : "Resident not home — not signed";
+  return (
+    <div className={`rounded-md border p-3 text-sm ${signed ? "border-emerald-200 bg-emerald-50" : "border-amber-200 bg-amber-50"}`}>
+      <p className="font-semibold">{label}{v.at ? ` · ${new Date(v.at).toLocaleString("en-US")}` : ""}</p>
+      {signed && v.signature?.d && (
+        <svg viewBox={`0 0 ${v.signature.w || 300} ${v.signature.h || 180}`} className="mt-2 h-24 w-full max-w-sm rounded border border-border bg-white" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Resident signature">
+          <path d={v.signature.d} stroke="#0f172a" strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+      {v.note && <p className="mt-1 text-muted-foreground">{v.note}</p>}
+    </div>
+  );
+}
+
 export default function Reports() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -637,7 +656,7 @@ export default function Reports() {
                  {canActOn(report) && currentStatus === "resolved" && <Button size="sm" variant="outline" onClick={() => perform(report, "clear")} disabled={action.isPending}><X className="h-3.5 w-3.5 mr-1" />Clear</Button>}
                  {canReview(report) && ["done", "resolved"].includes(currentStatus) && <Button size="sm" onClick={() => perform(report, "approve-work")} disabled={action.isPending}>Approve Work</Button>}
                 <Button size="sm" variant="ghost" onClick={() => openReport(report, "details")}>View details</Button>
-                {deletionPolicy?.enabled && (deletionPolicy.canDelete || ((deletionPolicy as any).canDeleteOwn && [report.createdBy, state.assignedStaffId, state.assignedByStaffId, state.directedToStaffId].map((v) => String(v || "")).includes(actor?.id || ""))) && <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingReportId(report.id); setIsDeleteDialogOpen(true); }} title="Delete report"><Trash2 className="h-3.5 w-3.5" /></Button>}
+                {deletionPolicy?.enabled && (deletionPolicy.canDelete || ((deletionPolicy as any).canDeleteOwn && [(report as { createdBy?: string }).createdBy, state.assignedStaffId, state.assignedByStaffId, state.directedToStaffId].map((v) => String(v || "")).includes(actor?.id || ""))) && <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive hover:bg-destructive/10" onClick={() => { setDeletingReportId(report.id); setIsDeleteDialogOpen(true); }} title="Delete report"><Trash2 className="h-3.5 w-3.5" /></Button>}
               </div>
             </div>;
           })}</div>}
@@ -876,6 +895,7 @@ export default function Reports() {
                       )}
                     </div>
                   )}
+                  <ResidentSignOffView value={state.residentSignOff} />
                   <div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "assigned" && <Button onClick={() => startWithLocation(selected)} disabled={action.isPending}>Start work</Button>}{!canHandleComplaints && actor?.role !== "administrator" && currentStatus === "in_progress" && <Button onClick={() => completeWithPhoto(selected)} disabled={action.isPending || requestUpload.isPending || !completionPhoto || !completionNote.trim()}>Complete</Button>}{canActOn(selected) && currentStatus === "resolved" && <Button variant="outline" onClick={() => perform(selected, "clear")} disabled={action.isPending}>Clear report</Button>}{canReview(selected) && ["done", "resolved"].includes(currentStatus) && <Button onClick={() => perform(selected, "approve-work")} disabled={action.isPending}>Approve Work</Button>}</div>
                   {canActOn(selected) && currentStatus === "submitted" && <SendAsViolationPanel report={selected} staff={staff as never} />}
                   {canReview(selected) && currentStatus === "done" && <div className="border-t border-border pt-4 space-y-2"><p className="text-sm font-semibold">Send back to worker</p><Textarea value={sendBackNote} onChange={(event) => setSendBackNote(event.target.value)} placeholder="What needs fixing? (sent to the worker)" /><Button variant="outline" onClick={() => { perform(selected, "reject-work", { note: sendBackNote.trim() }); setSendBackNote(""); }} disabled={action.isPending || sendBackNote.trim().length < 3}>Send back with note</Button></div>}

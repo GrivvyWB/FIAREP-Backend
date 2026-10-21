@@ -12,6 +12,7 @@ import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import ComplaintReceipts from '../components/ComplaintReceipts';
 import QuotePanel, { quoteOf } from '../components/QuotePanel';
+import { ResidentSignOffSheet, SignatureView, signOffLabel, type ResidentSignOff } from '../components/ResidentSignOff';
 import { ui, ACCENT } from '../lib/ui';
 import { useRawModules } from '../lib/module-access';
 import { wasPrompted, markPrompted } from '../lib/smartRepair';
@@ -180,17 +181,23 @@ export default function ReportDetail() {
     }
   };
 
-  const completeWork = async () => {
+  // Work inside an apartment: the resident signs on this phone first (or the member says why not, with a photo).
+  const [signing, setSigning] = useState(false);
+  const insideHome = !!r && (r.location === 'Apartment/Unit' || !!String(r.unit || '').trim());
+  const completeWork = async (signOff?: ResidentSignOff) => {
     if (!r || !actorId || completionPhotos.length === 0) return;
+    if (insideHome && !signOff) { setSigning(true); return; }
     setCompletionBusy(true);
     try {
+      const photos = signOff && signOff.status !== 'signed' ? [...completionPhotos, signOff.photo] : completionPhotos;
       const delivery = await addResidentUpdate(
         r.id,
         'resolved',
         completionNote,
         actorName,
-        completionPhotos,
+        photos,
         await captureGeo(),
+        signOff,
       );
       setCompletionNote('');
       setCompletionPhotos([]);
@@ -260,7 +267,7 @@ export default function ReportDetail() {
         </View>
         <Text style={ui.listSub}>Submitted {fmt(r.createdAt)}</Text>
       </View>
-      <ComplaintReceipts entity="resident-reports" reportId={r.id} readOnly={readOnly} canSendEta={['management', 'administrator', 'worker', 'inspector', 'emergency'].includes(mode)} />
+      <ComplaintReceipts entity="resident-reports" reportId={r.id} readOnly={readOnly} canSendEta={['management', 'administrator', 'worker', 'inspector', 'emergency'].includes(mode ?? '')} />
       {/* The materials FIAREP wants to buy, and the client's answer - the same
           panel they have on the website, so it can be approved from the phone. */}
       {(() => {
@@ -349,6 +356,13 @@ export default function ReportDetail() {
             </View>
           );
         })()}
+        {!!r.residentSignOff && (
+          <View style={{ marginTop: 12, borderWidth: 1, borderColor: r.residentSignOff.status === 'signed' ? '#bbf7d0' : '#fde68a', backgroundColor: r.residentSignOff.status === 'signed' ? '#f0fdf4' : '#fffbeb', borderRadius: 8, padding: 10, gap: 6 }}>
+            <Text style={{ fontWeight: '700', fontSize: 13 }}>{signOffLabel(r.residentSignOff as ResidentSignOff)} · {fmt(r.residentSignOff.at)}</Text>
+            {r.residentSignOff.signature && <SignatureView signature={r.residentSignOff.signature} />}
+            {!!r.residentSignOff.note && <Text style={{ color: '#334155' }}>{r.residentSignOff.note}</Text>}
+          </View>
+        )}
         {(mode === 'management' || mode === 'administrator') && !readOnly && (r as any).reviewStatus === 'done' && (
           <View style={{ marginTop: 12, borderWidth: 1, borderColor: '#e0d3b0', backgroundColor: '#fbf6e9', borderRadius: 8, padding: 10, gap: 8 }}>
             <Text style={{ fontWeight: '700', fontSize: 13 }}>Worker marked this complete — review the photo &amp; notes</Text>
@@ -501,10 +515,16 @@ export default function ReportDetail() {
             <Pressable
               style={[ui.btn, (completionBusy || completionPhotos.length === 0 || !completionNote.trim()) && { opacity: 0.45 }]}
               disabled={completionBusy || completionPhotos.length === 0 || !completionNote.trim()}
-              onPress={completeWork}
+              onPress={() => void completeWork()}
             >
-              <Text style={ui.btnText}>Complete</Text>
+              <Text style={ui.btnText}>{insideHome ? 'Complete — resident signs' : 'Complete'}</Text>
             </Pressable>
+            <ResidentSignOffSheet
+              visible={signing}
+              jobLine={`#${r.complaintNo || ''} · ${r.address || ''}${r.unit ? ` apt ${r.unit}` : ''} — ${String(r.description || '').slice(0, 120)}`}
+              onCancel={() => setSigning(false)}
+              onDone={(s) => { setSigning(false); void completeWork(s); }}
+            />
           </View>
         )}
       </View>

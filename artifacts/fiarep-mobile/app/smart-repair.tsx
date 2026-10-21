@@ -7,11 +7,12 @@ import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator,
 import { useLocalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
-import { takePhoto, pickPhoto, photoBase64, takePhotoWithGeo } from '../lib/photos';
+import { takePhoto, pickPhoto, photoBase64, takePhotoWithGeo, type PhotoEvidence } from '../lib/photos';
+import { ResidentSignOffSheet, signOffLabel, type ResidentSignOff } from '../components/ResidentSignOff';
 import RemotePhoto from '../components/RemotePhoto';
 import RepairReferenceImage from '../components/RepairReferenceImage';
 import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, syncSavedRepairs, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
-import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor } from '../lib/store';
+import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor, signOffForServer } from '../lib/store';
 import { ui } from '../lib/ui';
 
 const NAVY = '#0B2A4A';
@@ -207,17 +208,30 @@ export default function SmartRepair() {
       } catch (e: any) { Alert.alert('Verification', String(e?.message || e)); }
       setCheck(result); setChecking(false);
       if (ticket) await persist({ ticket, after: ev.uri, check: result });
+      // Repair inside an apartment: the resident signs on this phone before the job closes.
+      if (result?.compliant && apt.trim()) { setSignFor({ ev, result }); setSignOpen(true); return; }
+      await finishVerified(ev, result);
+    } catch (e: any) { setChecking(false); Alert.alert('After-repair photo', String(e?.message || e)); }
+  }
+  const [signFor, setSignFor] = useState<{ ev: PhotoEvidence; result: RepairVerification } | null>(null);
+  const [signOpen, setSignOpen] = useState(false);
+  async function finishVerified(ev: PhotoEvidence, result: RepairVerification | null, signOff?: ResidentSignOff) {
+    if (!jobId) return;
+    try {
       const a = await getCurrentActor();
       const r = await getResidentReport(jobId);
       const noteText = 'After-repair photo (Smart Repair)'
         + (result ? '\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ') + '\n' + (result.compliant ? '✅ Repair appears compliant' : '⚠ Needs another look') + (result.summary ? ' — ' + result.summary : '') : '');
       // Marked complete only when the after photo shows the repair done.
-      await addResidentUpdate(jobId, result?.compliant ? 'resolved' : ((r?.status || 'in_progress') as any), noteText, a.name || 'FIAREP', [ev], ev.geo);
+      const evidence = signOff && signOff.status !== 'signed' ? [ev, signOff.photo] : [ev];
+      await addResidentUpdate(jobId, result?.compliant ? 'resolved' : ((r?.status || 'in_progress') as any), noteText, a.name || 'FIAREP', evidence, ev.geo, signOff);
+      if (signOff && ticket) await persist({ ticket, after: ev.uri, check: result, signOff: signOffForServer(signOff) } as never);
       let sent = '';
       if (result?.compliant && ticket) {
         // Once complete it goes to management (and an emailed copy) per Platform Control.
         const summary = ticketText(ticket, fromComplaint) + '\n\nFIAREP SUMMARY CARD\n' + summaryCard(ticket, area, 'Repaired — verified')
-          + '\n\nCOMPLETION VERIFICATION\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ');
+          + '\n\nCOMPLETION VERIFICATION\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ')
+          + (signOff ? '\n\nRESIDENT SIGN-OFF\n' + signOffLabel(signOff) + (signOff.status !== 'signed' && signOff.note ? ' — ' + signOff.note : '') + ' · ' + new Date(signOff.at).toLocaleString('en-US') : '');
         const out = await reportRepairComplete({ jobId, issue: ticket.issueFound, address: [address.trim(), area].filter(Boolean).join(', '), summary });
         sent = [out.notified ? 'sent to management' : '', out.emailed ? 'emailed a copy' : ''].filter(Boolean).join(' and ');
       }
@@ -413,6 +427,9 @@ export default function SmartRepair() {
         )}
 
         {!!saved && <Text style={{ padding: 12, borderRadius: 10, backgroundColor: '#dcfce7', color: '#166534', fontWeight: '700' }}>{saved}</Text>}
+        {!!signFor && !signOpen && (
+          <Pressable style={ui.btn} onPress={() => setSignOpen(true)}><Text style={ui.btnText}>Resident sign-off</Text></Pressable>
+        )}
         <View style={{ height: 20 }} />
       </ScrollView>
 
@@ -428,6 +445,12 @@ export default function SmartRepair() {
           );
         })}
       </View>
+      <ResidentSignOffSheet
+        visible={signOpen && !!signFor}
+        jobLine={`${[address.trim(), apt.trim() ? `apt ${apt.trim()}` : ''].filter(Boolean).join(' · ')} — ${ticket?.issueFound || 'Repair'}`}
+        onCancel={() => { setSignOpen(false); setSaved('Repair verified. The job closes once the resident signs (or you mark why they could not).'); }}
+        onDone={(so) => { const f = signFor; setSignOpen(false); setSignFor(null); if (f) void finishVerified(f.ev, f.result, so); }}
+      />
     </KeyboardAvoidingView>
   );
 }

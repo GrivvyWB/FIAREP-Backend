@@ -197,6 +197,7 @@ export type SavedRepair = {
   id: string; at: string; photo: string | null; heading: number | null; address: string; apt: string; room: string; note: string;
   reportId?: string; ticket: SmartTicket; jobId?: string | null; ordered?: boolean; after?: string | null; check?: RepairVerification | null;
   // Smart Repair on all their phones (Platform Control): what this phone last sent to / got from the account.
+  signOff?: ReturnType<typeof import('./store').signOffForServer>;
   rev?: string; dirty?: boolean; synced?: boolean; upPhoto?: string | null; upAfter?: string | null;
 };
 const SAVED_KEY = 'smart_repairs';

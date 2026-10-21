@@ -557,6 +557,7 @@ export type ResidentReport = {
   location?: string;
   createdBy?: 'resident' | 'management';
   unit: string;
+  residentSignOff?: { status: 'signed' | 'not_home' | 'refused'; name?: string; signature?: { d: string; w: number; h: number }; note?: string; at: string };
   address: string;
   description: string;
   photos: string[];
@@ -1039,6 +1040,13 @@ export async function rejectResidentWork(id: string, reason: string): Promise<vo
   await performEntityAction('resident-reports', id, 'reject-work', { note: text });
 }
 
+/** What goes on the record: the signature (or why there is none). A no-signature photo travels as a completion photo. */
+export function signOffForServer(s: import('../components/ResidentSignOff').ResidentSignOff) {
+  return s.status === 'signed'
+    ? { status: s.status, name: s.name, signature: s.signature, at: s.at }
+    : { status: s.status, note: s.note || undefined, at: s.at, photoAt: s.photo.capturedAt };
+}
+
 export async function addResidentUpdate(
   id: string,
   status: ResidentReport['status'],
@@ -1046,6 +1054,7 @@ export async function addResidentUpdate(
   by: string,
   photoEvidence: import('./photos').PhotoEvidence[] = [],
   geo?: import('./geo').GeoStamp,
+  signOff?: import('../components/ResidentSignOff').ResidentSignOff,
 ): Promise<'sent' | 'pending'> {
   const d = await db();
   const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM resident_reports WHERE id = ?', id);
@@ -1066,6 +1075,7 @@ export async function addResidentUpdate(
       completionPhotoEvidence: [...(r.completionPhotoEvidence || []), ...photoEvidence],
       completedAt: now,
       completionNote: note.trim() || undefined,
+      ...(signOff ? { residentSignOff: signOffForServer(signOff) } : {}),
     } : {}),
     updates: [...r.updates, update],
     ...(isArrival ? { arrivalAt: now, arrivalGeo: geo } : {}),
@@ -1089,6 +1099,7 @@ export async function addResidentUpdate(
         completionGeo: geo,
         completionNote: note.trim() || undefined,
         photoEvidence: photoEvidence.map(({ capturedAt, geo: photoGeo }) => ({ capturedAt, geo: photoGeo })),
+        ...(signOff ? { residentSignOff: signOffForServer(signOff) } : {}),
       },
     };
     queuedState = { ...next, _pendingWorkflowActions: [...((r as any)._pendingWorkflowActions || []), pending] };
