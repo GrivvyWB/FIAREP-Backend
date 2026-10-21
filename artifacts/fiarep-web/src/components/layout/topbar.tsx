@@ -1,3 +1,4 @@
+import { isFiarepAdministrator } from "@/lib/access-policy";
 import { Bell, ChevronDown, MoreHorizontal } from "lucide-react";
 import { getListNotificationsQueryKey, useListNotifications } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
@@ -71,7 +72,7 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
             </div>
             <div className="hidden md:block leading-tight text-left">
               <b className="text-[13.5px] font-bold block">{staff?.name || "User"}</b>
-              <span className="text-[11.5px] text-muted-foreground block">{staff?.position || String(staff?.role || "Staff").replace(/_/g, " ")}</span>
+              <span className="text-[11.5px] text-muted-foreground block">{isFiarepAdministrator(staff) ? "Administrator" : staff?.position || String(staff?.role || "Staff").replace(/_/g, " ")}</span>
             </div>
             <ChevronDown className="w-4 h-4 text-muted-foreground hidden md:block" />
           </DropdownMenuTrigger>
