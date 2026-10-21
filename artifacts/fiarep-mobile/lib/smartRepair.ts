@@ -252,6 +252,11 @@ async function pushOne(it: SavedRepair): Promise<SavedRepair | null> {
   if (it.after && it.after !== upAfter && await uploadSrPhoto(it.id, 'after', it.after).catch(() => false)) upAfter = it.after;
   return { ...it, synced: true, dirty: false, upPhoto, upAfter };
 }
+/** Administrators: every member's Smart Repairs in the company. */
+export type TeamRepair = { id: string; by: string; data: SavedRepair; photoUrl: string | null; afterUrl: string | null; updatedAt: string };
+export async function listTeamRepairs(): Promise<TeamRepair[]> {
+  try { const res = await srApi('GET', '/team'); if (!res?.ok) return []; return ((await res.json()).items || []) as TeamRepair[]; } catch { return []; }
+}
 let syncing: Promise<boolean> | null = null;
 /** Sends this phone's new repairs to the account and brings in the ones made on other phones. True when the list changed. */
 export function syncSavedRepairs(): Promise<boolean> {
@@ -260,7 +265,15 @@ export function syncSavedRepairs(): Promise<boolean> {
       const res = await srApi('GET', '');
       if (!res?.ok) return false;
       const remote = await res.json() as { on: boolean; items: Array<{ id: string; data: SavedRepair; photoUrl: string | null; afterUrl: string | null }> };
-      if (!remote.on) return false;
+      if (!remote.on) {
+        // Switch off: this phone still sends its new repairs (the administrators always get them),
+        // but doesn't bring in or remove anything from other phones.
+        const mine = await listSavedRepairs();
+        const pushedOff = new Map<string, SavedRepair>();
+        for (const it of mine.filter((x) => x.dirty || !x.synced)) { const done = await pushOne(it).catch(() => null); if (done) pushedOff.set(it.id, done); }
+        if (pushedOff.size) { const cur = await listSavedRepairs(); await writeSaved(cur.map((x) => (pushedOff.get(x.id)?.rev === x.rev ? pushedOff.get(x.id)! : x))); }
+        return false;
+      }
       const snapshot = await listSavedRepairs();
       const snapIds = new Set(snapshot.map((x) => x.id));
       const byId = new Map(remote.items.map((r) => [r.id, r]));

@@ -12,7 +12,7 @@ import { ResidentSignOffSheet, signOffLabel, type ResidentSignOff } from '../com
 import MoldPanel from '../components/MoldPanel';
 import RemotePhoto from '../components/RemotePhoto';
 import RepairReferenceImage from '../components/RepairReferenceImage';
-import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, syncSavedRepairs, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
+import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, syncSavedRepairs, listTeamRepairs, type TeamRepair, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
 import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor, signOffForServer, uploadDoorVideo } from '../lib/store';
 import { ui } from '../lib/ui';
 
@@ -104,6 +104,17 @@ export default function SmartRepair() {
   // Every photo and its repair directions are kept on the phone until deleted.
   const [savedId, setSavedId] = useState<string | null>(null);
   const [savedList, setSavedList] = useState<SavedRepair[]>([]);
+  // Administrators: every member's Smart Repairs, always.
+  const [team, setTeam] = useState<TeamRepair[]>([]);
+  useEffect(() => { void (async () => {
+    const a = await getCurrentActor().catch(() => null);
+    if (a?.role !== 'administrator') return;
+    setTeam(await listTeamRepairs());
+  })(); }, []);
+  async function openTeam(it: TeamRepair) {
+    const local = it.photoUrl ? await saveRemotePhoto(it.photoUrl) : null;
+    openSaved({ ...it.data, id: 'team-' + it.id, photo: local, after: null });
+  }
   const refreshSaved = () => { void listSavedRepairs().then(setSavedList); void syncSavedRepairs().then((changed) => { if (changed) void listSavedRepairs().then(setSavedList); }); };
   useEffect(() => { refreshSaved(); }, []);
   const persist = async (over: Partial<SavedRepair> & { ticket: SmartTicket }, id = savedId) => {
@@ -285,6 +296,25 @@ export default function SmartRepair() {
                 </Pressable>
               </View>
             ))}
+          </View>
+        )}
+
+        {!fromComplaint && !ticket && !photo && team.length > 0 && (
+          <View style={{ backgroundColor: '#fff', borderRadius: 10, borderWidth: 1, borderColor: '#dbe3ee', overflow: 'hidden' }}>
+            <View style={{ backgroundColor: '#1e3a8a', paddingHorizontal: 12, paddingVertical: 7 }}><Text style={{ color: '#fff', fontWeight: '800', fontSize: 13 }}>FROM YOUR TEAM ({team.length})</Text></View>
+            {team.map((it) => {
+              const d = it.data || ({} as SavedRepair);
+              return (
+                <Pressable key={it.id} onPress={() => void openTeam(it)} style={{ flexDirection: 'row', gap: 10, alignItems: 'center', padding: 10, borderTopWidth: 1, borderTopColor: '#eef2f7' }}>
+                  {it.photoUrl ? <Image source={{ uri: it.photoUrl }} style={{ width: 54, height: 54, borderRadius: 6, backgroundColor: '#111' }} /> : <View style={{ width: 54, height: 54, borderRadius: 6, backgroundColor: '#e2e8f0' }} />}
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontWeight: '700' }} numberOfLines={1}>{d.ticket?.issueFound || 'Repair'}</Text>
+                    <Text style={ui.listSub} numberOfLines={1}>{it.by}{d.at ? ' · ' + when(new Date(d.at)) : ''}{d.address ? ' · ' + d.address : ''}</Text>
+                    <Text style={[ui.listSub, { color: d.check?.compliant ? '#166534' : d.check ? '#b45309' : d.ordered ? BLUE : '#64748b' }]} numberOfLines={2}>{d.check?.compliant ? 'Repaired — verified' : d.check ? `Not cleared — ${d.check.summary || 'needs another look'}` : d.ordered ? 'Work order created' : 'Ready for repair'}</Text>
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         )}
 
