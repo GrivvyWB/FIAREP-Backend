@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/use-auth";
-import { User, LogOut, Shield, Calculator, ChevronDown, CircleHelp, Languages } from "lucide-react";
+import { User, LogOut, Shield, Calculator, ChevronDown, CircleHelp, Languages, Shapes } from "lucide-react";
 import { customFetch } from "@workspace/api-client-react";
 import { BUTTON_GUIDE } from "@/lib/button-guide";
+import { FEATURE_GUIDE } from "@/lib/feature-guide";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -201,6 +202,32 @@ export default function Settings() {
               </div>
             </details>
           </div>}
+        </div>
+
+        <div className="p-6 border-t border-border space-y-4" data-testid="section-icon-guide">
+          <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+            <Shapes className="w-4 h-4" /> What each icon means
+          </h3>
+          <p className="text-xs text-muted-foreground">Each feature your company has: what it is, how to get to it and how it opens.</p>
+          <div className="space-y-2">
+            {FEATURE_GUIDE.filter((f) => f.show(staff, organizationModules)).map((f) => {
+              const Icon = f.icon;
+              return (
+                <details key={f.name} className="group bg-secondary/50 rounded-xl border border-border">
+                  <summary className="flex cursor-pointer list-none items-center gap-3 p-4 text-sm font-semibold">
+                    <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-white border border-border"><Icon className="h-4 w-4" /></span>
+                    <span className="flex-1">{f.name}</span>
+                    <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <dl className="border-t border-border px-4 py-3 space-y-2 text-sm">
+                    <div><dt className="font-semibold">What it is</dt><dd className="text-muted-foreground">{f.what}</dd></div>
+                    <div><dt className="font-semibold">How to get there</dt><dd className="text-muted-foreground">{f.where}</dd></div>
+                    <div><dt className="font-semibold">How it opens</dt><dd className="text-muted-foreground">{f.opens}</dd></div>
+                  </dl>
+                </details>
+              );
+            })}
+          </div>
         </div>
 
         <div className="p-6 border-t border-border space-y-4" data-testid="section-button-guide">
