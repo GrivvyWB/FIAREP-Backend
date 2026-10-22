@@ -88,6 +88,8 @@ const LOOKUP_TRADES: Array<{ key: string; label: string }> = [
 export function lookupTradeFor(position: string, role: string): string {
   const p = (position || '').trim().toLowerCase();
   const r = (role || '').trim().toLowerCase();
+  // An administrator answers to the Administrator switch, whatever the title.
+  if (r === 'administrator') return 'administrator';
   if (r === 'community_coordinator' || p.includes('community coordinator') || p.includes('fiarep services')) return 'community';
   if (p.includes('cpm supervisor') || p.includes('cpm-supervisor')) return 'cpm-supervisor';
   if (p === 'cpm' || p.includes('cpm')) return 'cpm';

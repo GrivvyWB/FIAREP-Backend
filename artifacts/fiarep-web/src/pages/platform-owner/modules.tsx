@@ -362,6 +362,8 @@ export default function OwnerModules() {
   const [settingsShown, setSettingsShown] = useState<Record<string, boolean>>({});
   // Website menu: one switch per item in the client's left side panel (unset = normal rules).
   const [menuSwitches, setMenuSwitches] = useState<Record<string, boolean>>({});
+  // The company's administrators, so the Website menu shows what they actually see.
+  const [orgAdmins, setOrgAdmins] = useState<Array<{ role: string; position: string; tenantId: string }>>([]);
   const [smartRepairEmailTo, setSmartRepairEmailTo] = useState("");
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -442,6 +444,9 @@ export default function OwnerModules() {
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
     setSmartRepairSync(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairSync === true));
+    void customFetch<Array<{ role: string; position: string; status?: string }>>(`/api/v1/platform/organizations/${encodeURIComponent(organization.id)}/staff`, { responseType: "json" } as never)
+      .then((rows) => setOrgAdmins((Array.isArray(rows) ? rows : []).filter((r) => r.role === "administrator" && (r.status ?? "approved") === "approved").map((r) => ({ role: r.role, position: r.position || "", tenantId: organization.id }))))
+      .catch(() => setOrgAdmins([]));
     setMenuSwitches(Object.fromEntries(MENU_ITEMS.map((m) => [menuKey(m.href), (configured as Record<string, unknown> | undefined)?.[menuKey(m.href)]]).filter((e): e is [string, boolean] => typeof e[1] === "boolean")));
     setSettingsShown(Object.fromEntries(SETTINGS_SECTIONS.map((x) => [x.key, !(configured && typeof configured === "object" && (configured as Record<string, unknown>)[x.key] === false)])));
     setHrExtras(Object.fromEntries(HR_EXTRAS.map((x) => [`hr.${x.key}`, Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>)[`hr.${x.key}`] === true)])));
@@ -779,7 +784,8 @@ export default function OwnerModules() {
             // What an administrator of this company sees in the menu right now, unless a switch here says otherwise.
             const adminStaff = { role: "administrator", position: "Administrator", tenantId: organization.id } as never;
             const effective = { ...((organization.features?.modules || {}) as Record<string, boolean>), ...modules };
-            const shown = (m: (typeof MENU_ITEMS)[number]) => { const v = menuSwitches[menuKey(m.href)]; return typeof v === "boolean" ? v : hasModuleAccess(adminStaff, m.module, effective); };
+            // Unset: on only when every administrator of the company sees it now (an administrator titled Borough Director included).
+            const shown = (m: (typeof MENU_ITEMS)[number]) => { const v = menuSwitches[menuKey(m.href)]; if (typeof v === "boolean") return v; const people = orgAdmins.length ? orgAdmins : [adminStaff]; return people.every((s) => hasModuleAccess(s as never, m.module, effective)); };
             return (
               <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
                 <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
