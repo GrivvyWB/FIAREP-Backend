@@ -74,6 +74,7 @@ export function menuOverride(modules: Record<string, boolean> | null | undefined
 /** Buttons on pages, each with its own switch in Platform Control → Module Management → Website menu. */
 export const PAGE_BUTTONS = [
   { key: "button.trade-request", name: "Trade Request button (Violations / NYC Property Lookup, Reports)" },
+  { key: "button.efile", name: "E-file button (Company Forms — forms the City takes online)" },
 ] as const;
 /** The person's switch, then the company's, then the normal rule. */
 export function buttonShown(modules: Record<string, boolean> | null | undefined, key: string, staffId: string | null | undefined, normal: boolean): boolean {

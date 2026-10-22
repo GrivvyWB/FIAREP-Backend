@@ -5,7 +5,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { ArrowLeft, Download, FileText, Lock, Plus, Printer, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Copy, Download, ExternalLink, FileText, Lock, Plus, Printer, Save, Send, Trash2 } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { EFILE } from "@/lib/efile";
+import { buttonShown } from "@/lib/website-menu";
 import { COMPLIANCE_FORMS, MILESTONES, entryLabel, prefillFromHpd, affidavitPlan, type HpdPrefill, type FormDef, type Field, type Section } from "@/lib/compliance-forms";
 
 type FormBuilding = { street: string; borough: string; zip: string; county: string; full: string; bbl: string; registrationId: string; owner: string; agent: string; name: string };
@@ -25,7 +28,9 @@ const esc = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll(
  */
 export default function CompanyForms() {
   const { toast } = useToast();
-  const { organizationName } = useAuth();
+  const { organizationName, staff, organizationModules } = useAuth();
+  const [efOpen, setEfOpen] = useState(false);
+  const [efConf, setEfConf] = useState("");
   const [locked, setLocked] = useState("");
   const [entries, setEntries] = useState<Entry[]>([]);
   const [formId, setFormId] = useState("");
@@ -193,13 +198,14 @@ export default function CompanyForms() {
     if (use) void applyBuilding(f.id, use, true); else setAskBuilding(true);
   }
 
-  async function save() {
+  async function save(extra?: Record<string, unknown>) {
     if (!def || !editing) return;
     setBusy(true);
+    const values = extra ? { ...editing.values, ...extra } : editing.values;
     try {
       const r = await customFetch<Entry>("/api/v1/company-forms/records", {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
-        body: JSON.stringify({ id: editing.id || undefined, formId: def.id, values: editing.values, label: entryLabel(def, editing.values) }),
+        body: JSON.stringify({ id: editing.id || undefined, formId: def.id, values, label: entryLabel(def, values) }),
       } as never);
       setEditing({ id: r.id, values: r.values });
       toast({ title: "Saved", description: `${def.title} — ${r.label}` });
@@ -257,8 +263,45 @@ export default function CompanyForms() {
   // ── Editor ──
   if (def && editing) {
     const set = (k: string, v: unknown) => setEditing((e) => (e ? { ...e, values: { ...e.values, [k]: v } } : e));
+    // E-file: only forms the City takes online; its own switch (Platform Control → Website menu → Buttons on pages).
+    const target = EFILE[def.id];
+    const efile = !!target && buttonShown(organizationModules, "button.efile", staff?.id, true);
+    const labelOf = (k: string) => def.sections.flatMap((s) => [...(s.fields || []), ...(s.checks || [])]).find((f) => f.key === k)?.label || k;
+    const answers = target ? target.keys.map((k) => ({ k, label: labelOf(k), value: String(editing.values[k] ?? "").trim() })) : [];
+    const copy = (v: string) => { void navigator.clipboard?.writeText(v).then(() => toast({ title: "Copied", description: v.slice(0, 80) })).catch(() => undefined); };
     return (
       <div className="mx-auto max-w-4xl space-y-4">
+        {target && (
+          <Dialog open={efOpen} onOpenChange={setEfOpen}>
+            <DialogContent className="max-h-[92vh] max-w-2xl overflow-y-auto">
+              <DialogHeader><DialogTitle>E-file with {target.site}</DialogTitle></DialogHeader>
+              <div className="space-y-4 text-sm">
+                <ol className="list-decimal space-y-1 pl-5">{target.steps.map((st) => <li key={st}>{st}</li>)}</ol>
+                {target.note && <p className="rounded-md border border-amber-200 bg-amber-50 p-2 text-amber-900">{target.note}</p>}
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild><a href={target.url} target="_blank" rel="noopener"><ExternalLink className="mr-1 h-4 w-4" />Open {target.site}</a></Button>
+                  {FILLABLE.has(def.pdf) ? <Button variant="outline" onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button> : <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />PDF of this form</Button>}
+                  <Button asChild variant="ghost"><a href={target.guide} target="_blank" rel="noopener">{target.agency} guide</a></Button>
+                </div>
+                <div className="divide-y rounded-md border">
+                  {answers.map((a) => (
+                    <div key={a.k} className="flex items-center gap-2 px-3 py-2">
+                      <div className="min-w-0 flex-1"><p className="text-xs text-muted-foreground">{a.label}</p><p className={a.value ? "font-medium" : "italic text-muted-foreground"}>{a.value || "Not filled in"}</p></div>
+                      {a.value && <Button size="sm" variant="ghost" onClick={() => copy(a.value)} aria-label={`Copy ${a.label}`}><Copy className="h-4 w-4" /></Button>}
+                    </div>
+                  ))}
+                </div>
+                <div className="space-y-2 rounded-md border bg-muted/40 p-3">
+                  <p className="font-semibold">After it is filed</p>
+                  <Input value={efConf} onChange={(e) => setEfConf(e.target.value)} placeholder={`${target.agency} confirmation number`} />
+                  <Button disabled={busy} onClick={() => { const v = { efiledOn: new Date().toISOString().slice(0, 10), efiledBy: staff?.name || "", efiledConfirmation: efConf.trim(), efiledWith: target.site }; set("efiledOn", v.efiledOn); set("efiledBy", v.efiledBy); set("efiledConfirmation", v.efiledConfirmation); set("efiledWith", v.efiledWith); void save(v).then(() => setEfOpen(false)); }}>
+                    <Save className="mr-1 h-4 w-4" />Mark as e-filed
+                  </Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
+        )}
         <button type="button" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground" onClick={() => setEditing(null)}><ArrowLeft className="h-4 w-4" /> All {def.group.toLowerCase()} forms</button>
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -309,13 +352,16 @@ export default function CompanyForms() {
             {myLang && <Button variant="outline" disabled={trBusy} onClick={() => void answersToEnglish()}>{trBusy ? "Writing…" : "Write my answers in English"}</Button>}
             {FILLABLE.has(def.pdf) && <Button onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button>}
             <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
+            {efile && <Button variant="outline" className="border-emerald-600 text-emerald-700" onClick={() => { setEfConf(String(editing.values["efiledConfirmation"] ?? "")); setEfOpen(true); }}><Send className="mr-1 h-4 w-4" />{editing.values["efiledOn"] ? "E-filed" : "E-file"}</Button>}
             <Button onClick={() => void save()} disabled={busy}><Save className="mr-1 h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
           </div>
         </div>
+        {editing.values["efiledOn"] ? <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">E-filed with {EFILE[def.id]?.site || "the City"} on {String(editing.values["efiledOn"])}{editing.values["efiledBy"] ? ` by ${String(editing.values["efiledBy"])}` : ""}{editing.values["efiledConfirmation"] ? ` · Confirmation ${String(editing.values["efiledConfirmation"])}` : ""}</p> : null}
         {def.sections.map((s) => <SectionEditor key={s.title} section={s} values={editing.values} set={set} />)}
         <div className="flex justify-end gap-2 pb-8">
           {FILLABLE.has(def.pdf) && <Button onClick={() => void filledPdf()}><FileText className="mr-1 h-4 w-4" />Filled PDF form</Button>}
           <Button variant="outline" onClick={print}><Printer className="mr-1 h-4 w-4" />Print / PDF</Button>
+          {efile && <Button variant="outline" className="border-emerald-600 text-emerald-700" onClick={() => { setEfConf(String(editing.values["efiledConfirmation"] ?? "")); setEfOpen(true); }}><Send className="mr-1 h-4 w-4" />{editing.values["efiledOn"] ? "E-filed" : "E-file"}</Button>}
           <Button onClick={() => void save()} disabled={busy}><Save className="mr-1 h-4 w-4" />{busy ? "Saving…" : "Save"}</Button>
         </div>
       </div>
@@ -355,6 +401,7 @@ export default function CompanyForms() {
                         <li key={e.id} className="flex items-center gap-2 px-3 py-2">
                           <button type="button" className="min-w-0 flex-1 text-left hover:underline" onClick={() => { setFormId(f.id); setEditing({ id: e.id, values: e.values }); }}>
                             <span className="font-medium">{e.label || "Untitled"}</span>
+                            {e.values?.["efiledOn"] ? <span className="ml-2 rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-800">E-filed</span> : null}
                             <span className="ml-2 text-xs text-muted-foreground">{when(e.updatedAt)}{e.updatedBy ? ` · ${e.updatedBy}` : ""}</span>
                           </button>
                           <Button size="sm" variant="ghost" className="text-muted-foreground hover:text-red-600" onClick={() => void remove(e)} aria-label="Delete"><Trash2 className="h-4 w-4" /></Button>
