@@ -6,6 +6,8 @@ import { ensureFiarepServiceTitles } from "./lib/fiarepServices";
 import { ensureFiarepAdministrators } from "./lib/fiarepAdmins";
 import { ensureSampleClient } from "./lib/sampleClient";
 import { loadHrPositions } from "./lib/hrPositions";
+import { sql } from "drizzle-orm";
+import { db } from "@workspace/db";
 import { startPushReceiptWorker } from "./lib/push";
 import { ensureCommandTables } from "./lib/command/tables";
 import { ensureBookingTable } from "./lib/command/scheduling";
@@ -38,6 +40,8 @@ await ensureFiarepServiceTitles();
 await ensureFiarepAdministrators();
 await ensureSampleClient().catch((err) => console.error("Sample client not made:", err));
 await loadHrPositions().catch((err) => console.error("HR job titles not loaded:", err));
+// Workers titled Technician sign in to the Technician home (inspector account).
+await db.execute(sql`update staff_accounts set role = 'inspector', updated_at = now() where role = 'worker' and position ilike '%technician%'`).catch((err) => console.error("Technician accounts not updated:", err));
 await ensureCommandTables();
 await ensureBookingTable();
 // Tables otherwise made on first use: made at start, so the development database

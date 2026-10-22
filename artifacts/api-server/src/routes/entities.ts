@@ -1833,6 +1833,8 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
           lastName,
           name: [firstName, lastName].filter(Boolean).join(" ") || linkedStaff.name,
           position: linkedPosition || linkedStaff.position,
+          // A worker whose title becomes Technician gets the technician home (inspector account).
+          ...(linkedStaff.role === "worker" && /technician/i.test(linkedPosition || "") ? { role: "inspector" } : {}),
           developments: linkedDevelopments ??
             (updatedDevelopment ? [updatedDevelopment] : linkedStaff.developments),
           updatedAt: now,

@@ -339,8 +339,9 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
     const email = String(record.state["email"] || "").trim();
     const position = String(record.state["position"] || "").trim();
     let role = String(record.state["role"] || "").trim();
-    // Technician (picked in HR): signs in to the technician home, which is the inspector account.
-    if (role === "technician") role = "inspector";
+    // Technician (picked in HR as the role, or as the job title): signs in to the
+    // technician home, which is the inspector account.
+    if (role === "technician" || (role === "worker" && /technician/i.test(String(record.state["position"] || "")))) role = "inspector";
     const maintenanceAssignment = req.body?.maintenanceAssignment === "truck"
       ? "truck"
       : req.body?.maintenanceAssignment === "regular"
