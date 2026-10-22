@@ -702,6 +702,8 @@ function staffAssignmentRecordAllowed(
       normalizeAssignment(row.state).assignedStaffId === actor.id;
   }
   if (!STAFF_ASSIGNMENT_SCOPED_ENTITIES.has(row.entity)) return true;
+  // The person who wrote a change work order keeps it (to follow approve / decline).
+  if (row.entity === "change-orders" && row.createdBy === actor.id) return true;
   if (
     row.entity === "building-violations" &&
     actor.role === "inspector" &&

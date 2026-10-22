@@ -24,7 +24,8 @@ export default function CpmChangeOrder() {
 
   useFocusEffect(useCallback(() => {
     getCurrentPosition().then((position) => {
-       const allowed = position.trim().toLowerCase() === 'cpm';
+       // CPMs and Technicians (they work as CPMs).
+       const allowed = position.trim().toLowerCase() === 'cpm' || position.toLowerCase().includes('technician');
       if (!allowed) router.replace(mode === 'management' ? '/management-home' : '/cpm-home');
       setAuthorized(allowed);
     }).catch(() => router.replace(mode === 'management' ? '/management-home' : '/cpm-home'));

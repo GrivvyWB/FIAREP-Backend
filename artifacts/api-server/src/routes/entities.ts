@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
-import { db, entityRecords, notifications, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
+import { db, entityRecords, notifications, organizationProperties, organizations, publicAccessCodes, staffAccounts } from "@workspace/db";
 import { audit, auditInTransaction, notify } from "../lib/audit";
 import { isSafeTenantObjectPath } from "../lib/fileStorage";
 import { attachMoldToComplaint } from "../lib/moldWorkOrders";
@@ -1103,6 +1103,16 @@ router.post("/v1/:entity", async (req, res, next) => {
   // on record: the building's address stands in, so it isn't refused and stuck on the phone.
   if (!development && entity === "resident-reports" && typeof rawState["address"] === "string" && rawState["address"].trim()) {
     development = rawState["address"].trim().slice(0, 200);
+  }
+  // A change work order from the phone carries the job address, not a development:
+  // the building's development stands in (or its address), so it reaches the office.
+  if (!development && entity === "change-orders") {
+    const addr = String(rawState["reportRef"] || rawState["address"] || "").trim();
+    if (addr) {
+      const [prop] = await db.select({ development: organizationProperties.development }).from(organizationProperties)
+        .where(and(eq(organizationProperties.organizationId, actor.tenantId), sql`lower(${organizationProperties.displayAddress}) = lower(${addr})`)).limit(1);
+      development = (prop?.development || "").trim() || addr.slice(0, 200);
+    }
   }
   if (!development && !companyWide && !isBoroughDirector(actor) && !isHrEntity(entity)) {
     res.status(403).json({ error: "A development is required for scoped records" });

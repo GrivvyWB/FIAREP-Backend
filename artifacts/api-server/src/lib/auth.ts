@@ -112,7 +112,14 @@ export function licenseAllows(
 function fieldTitle(position: string): "CPM" | "Inspector" | null {
   if (sameTitle(position, "CPM")) return "CPM";
   if (sameTitle(position, "Inspector")) return "Inspector";
+  // A Technician works as a CPM (change work orders, scopes, HUD inspections ...).
+  if (/technician/i.test(position)) return "CPM";
   return null;
+}
+
+/** The title to show: a Technician keeps "Technician" (the app opens the Technician home from it). */
+export function shownPosition(staff: StaffAccount, effective: Actor): string {
+  return /technician/i.test(staff.position) ? staff.position : effective.position;
 }
 
 // Community Coordinator titles are their own unit whatever role the account

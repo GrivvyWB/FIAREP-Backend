@@ -32,7 +32,7 @@ import { allocateStaffCode, allocateTruckStaffCode } from "../lib/staffCodes";
 import { emailStaffAccessCode } from "../lib/staffEmail";
 import { addConfiguredDevelopmentName, getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { actorFrom, requireAuth } from "../middlewares/auth";
-import { actorFromStaff } from "../lib/auth";
+import { actorFromStaff, shownPosition } from "../lib/auth";
 
 const router: IRouter = Router();
 const CODE_EMAIL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
@@ -110,7 +110,7 @@ function safe(
       actor?.role === "human_resources" || actor?.role === "administrator",
     ),
     role: effective.role,
-    position: effective.position,
+    position: shownPosition(staff, effective),
   };
   const permissions = actor
     ? {

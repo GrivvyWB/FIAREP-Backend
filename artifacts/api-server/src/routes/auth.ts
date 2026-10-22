@@ -16,6 +16,7 @@ import {
   verifyProcurementChallenge,
   issueWebHandoff,
   actorFromStaff,
+  shownPosition,
 } from "../lib/auth";
 import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
@@ -32,7 +33,7 @@ function publicStaff(staff: typeof staffAccounts.$inferSelect) {
   // so send that role — otherwise the person lands on the plain worker home
   // without HUD Inspections, Log Violations, scope writing, etc.
   const effective = actorFromStaff(staff);
-  return { ...safe, role: effective.role, position: effective.position };
+  return { ...safe, role: effective.role, position: shownPosition(staff, effective) };
 }
 
 router.post("/v1/auth/bootstrap", async (req, res) => {
