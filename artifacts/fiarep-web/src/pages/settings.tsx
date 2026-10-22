@@ -3,6 +3,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { User, LogOut, Shield, Calculator, ChevronDown, CircleHelp, Languages } from "lucide-react";
 import { customFetch } from "@workspace/api-client-react";
 import { BUTTON_GUIDE } from "@/lib/button-guide";
+import { settingShown } from "@/lib/settings-sections";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
@@ -114,7 +115,7 @@ export default function Settings() {
         </div>
         
         <div className="p-6 space-y-8">
-          <div className="space-y-4">
+          {settingShown(organizationModules, "settings.profile") && <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <User className="w-4 h-4" /> Profile Details
             </h3>
@@ -128,9 +129,9 @@ export default function Settings() {
                 <div className="font-semibold capitalize">{staff?.status || "Active"}</div>
               </div>
             </div>
-          </div>
+          </div>}
 
-          {langs.length > 0 && (
+          {langs.length > 0 && settingShown(organizationModules, "settings.language") && (
             <details className="group bg-secondary/50 rounded-xl border border-border" data-testid="section-language">
               <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold">
                 <span className="flex items-center gap-2"><Languages className="h-4 w-4" /> Language{lang ? <span className="font-normal text-muted-foreground">· {langs.find((l) => l.code === lang)?.name}</span> : null}</span>
@@ -146,7 +147,7 @@ export default function Settings() {
             </details>
           )}
 
-          {!isHumanResources && canReadRates && <div className="space-y-4">
+          {!isHumanResources && canReadRates && settingShown(organizationModules, "settings.defaultRates") && <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Calculator className="w-4 h-4" /> Shared Default Rates
             </h3>
@@ -185,7 +186,7 @@ export default function Settings() {
             )}
           </div>}
 
-          {!isHumanResources && canReadRates && <div className="space-y-4">
+          {!isHumanResources && canReadRates && settingShown(organizationModules, "settings.access") && <div className="space-y-4">
             <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
               <Shield className="w-4 h-4" /> Access & Security
             </h3>
@@ -203,13 +204,13 @@ export default function Settings() {
           </div>}
         </div>
 
-        <div className="p-6 border-t border-border space-y-4" data-testid="section-button-guide">
+        {settingShown(organizationModules, "settings.buttonGuide") && <div className="p-6 border-t border-border space-y-4" data-testid="section-button-guide">
           <h3 className="text-sm font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
             <CircleHelp className="w-4 h-4" /> What the buttons do
           </h3>
           <p className="text-xs text-muted-foreground">A plain-words guide to each page you have and what pressing each button does.</p>
           <div className="space-y-2">
-            {BUTTON_GUIDE.filter((g) => hasModuleAccess(staff, g.module, organizationModules)).map((g) => (
+            {BUTTON_GUIDE.filter((g) => hasModuleAccess(staff, g.module, organizationModules) && settingShown(organizationModules, `settings.guide.${g.module}`)).map((g) => (
               <details key={g.module} className="group bg-secondary/50 rounded-xl border border-border">
                 <summary className="flex cursor-pointer list-none items-center justify-between p-4 text-sm font-semibold">
                   {g.page}
@@ -229,7 +230,7 @@ export default function Settings() {
               </details>
             ))}
           </div>
-        </div>
+        </div>}
 
         <div className="p-6 bg-muted/30 border-t border-border flex justify-between items-center">
           <div>
