@@ -117,9 +117,9 @@ export default function WorkerHome() {
       tiles: [
         ...(on('Inbox') ? [{ label: 'Inbox', onPress: () => router.push('/notifications') }] : []),
         ...(on('Messages') && messagingOpen === true && (msgTenant === 'default' || rawModules['fiarepMessaging'] !== false) ? [{ label: 'Messages', onPress: () => router.push('/client-messages?member=1') }] : []),
-        ...(!isTradeWorker ? [{ label: 'Check Report Status', onPress: () => router.push('/resident-lookup') }] : []),
-        ...(modules['property-lookup'] ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
-        ...(modules['translator'] ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
+        ...(!isTradeWorker && on('Check Report Status') ? [{ label: 'Check Report Status', onPress: () => router.push('/resident-lookup') }] : []),
+        ...(modules['property-lookup'] && on('Check HPD / DOB') ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
+        ...(modules['translator'] && on('Translator') ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
         { label: 'Sign out', onPress: onSignOut },
       ],
     },

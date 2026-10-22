@@ -247,7 +247,7 @@ export function moduleForRoute(path: string): ModuleId | null {
 // control panel (features.modules["apptab.<slug>"] === false hides it).
 // Keyed PER SCREEN ("apptab.<screen>.<slug>") so switching Attendance off on
 // the worker screen leaves it on for management, and vice versa.
-export type AppTabScreen = 'management' | 'admin' | 'cpm' | 'tech' | 'worker';
+export type AppTabScreen = 'management' | 'admin' | 'cpm' | 'tech' | 'worker' | 'community';
 export const appTabKey = (screen: AppTabScreen, label: string): string =>
   'apptab.' + screen + '.' + label.replace(/\s*\(\d+\)\s*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 

@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, RefreshControl, Alert } f
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { clearAppMode, getCurrentActor, getSessionIdentity, isFiarepAdministrator, logout } from '../lib/store';
 import { useAppMode } from './_layout';
-import { useModuleAccess, useRawModules } from '../lib/module-access';
+import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
 import { ui } from '../lib/ui';
 import MessagesBar from '../components/MessagesBar';
 import { useMessagingOpen } from '../lib/fiarep-messaging';
@@ -19,6 +19,9 @@ export default function CommunityHome() {
   const navigation = useNavigation();
   const { refresh } = useAppMode();
   const modules = useModuleAccess();
+  const tabsRaw = useRawModules();
+  // Every button here has a switch in Platform Control → App tabs → Community Coordinator home.
+  const on = (label: string) => tileEnabled('community', label, tabsRaw);
   // Supervisor review is on unless the platform owner switched it off for this
   // organization (Platform Control -> Module Management).
   const reviewOn = useRawModules()['communitySupervisorReview'] !== false;
@@ -119,7 +122,7 @@ export default function CommunityHome() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
       keyboardShouldPersistTaps="handled"
     >
-      {fiarep && messagingOpen === true && !admin && (
+      {fiarep && messagingOpen === true && !admin && on('Messages') && (
         <MessagesBar sub="People you gave a code to, and client companies" onPress={() => router.push('/fiarep-messages')} />
       )}
       <Text style={{ fontSize: 24, fontWeight: '600', textAlign: 'center' }}>{admin ? unit.plural : supervisor ? unit.supervisor : unit.unit}</Text>
@@ -141,12 +144,12 @@ export default function CommunityHome() {
 
       {!supervisor && (
         <>
-          <Pressable style={ui.btn} onPress={() => router.push('/community-resident')}>
+          {on('+ Log a resident') && <Pressable style={ui.btn} onPress={() => router.push('/community-resident')}>
             <Text style={ui.btnText}>+ Log a resident</Text>
-          </Pressable>
-          <Pressable style={ui.btnOutline} onPress={() => router.push('/community-building')}>
+          </Pressable>}
+          {on('+ Add building / owner') && <Pressable style={ui.btnOutline} onPress={() => router.push('/community-building')}>
             <Text style={ui.btnOutlineText}>+ Add building / owner</Text>
-          </Pressable>
+          </Pressable>}
         </>
       )}
 
@@ -226,15 +229,15 @@ export default function CommunityHome() {
         );
       })}
 
-      {modules['property-lookup'] && <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/inspector-violations?lookup=1')}>
+      {modules['property-lookup'] && on('Check HPD / DOB') && <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/inspector-violations?lookup=1')}>
         <Text style={ui.btnOutlineText}>🏢 Check HPD / DOB</Text>
       </Pressable>}
-      {modules['translator'] && <Pressable style={ui.btnOutline} onPress={() => router.push('/translator')}>
+      {modules['translator'] && on('Translator') && <Pressable style={ui.btnOutline} onPress={() => router.push('/translator')}>
         <Text style={ui.btnOutlineText}>🌐 Translator</Text>
       </Pressable>}
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
+      {on('Inbox') && <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>
         <Text style={ui.btnOutlineText}>Inbox</Text>
-      </Pressable>
+      </Pressable>}
       <Pressable style={ui.btnOutline} onPress={() => router.push('/settings')}>
         <Text style={ui.btnOutlineText}>Settings</Text>
       </Pressable>

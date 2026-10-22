@@ -90,6 +90,8 @@ export default function ManagementHome() {
   const renderHome = (title: string, secs: HomeSection[], extraSystem: { label: string; onPress: () => void }[] = []) => {
     const strip = (tiles: { label: string; onPress: () => void }[]) => tiles.filter((t) => t.label !== 'Attendance');
     const all = secs.map((sec) => ({ ...sec, tiles: strip(sec.tiles) }));
+    // Every button has its switch (Platform Control → App tabs), the lookup / translator ones too.
+    extraSystem = extraSystem.filter((t) => tileEnabled('management', t.label, rawModules));
     const hasAttendance = secs.some((sec) => sec.tiles.some((t) => t.label === 'Attendance'));
     const system = all.find((sec) => sec.heading === 'System');
     if (system) system.tiles = [...system.tiles.filter((t) => t.label !== 'Sign out'), ...extraSystem, ...system.tiles.filter((t) => t.label === 'Sign out')];

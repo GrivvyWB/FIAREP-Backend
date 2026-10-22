@@ -178,6 +178,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
     "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
     "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In",
+    "Manage All Requests", "Inbox", "Check HPD / DOB", "Translator",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
     "Manage All Requests", "Resident Reports", "Send Violation", "Assign a Job", "Staff Member Jobs", "Add Job for Mgmt", "Projects / Inspections",
@@ -187,18 +188,25 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
     "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order",
     "Request Time Off", "Inbox", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In",
+    "Check HPD / DOB", "Translator", "Command Center",
   ] },
   { id: "cpm", screen: "CPM / Inspector home", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
     "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Messages", "Smart Repair", "Building Baseline", "Building Check-In",
+    "Check HPD / DOB", "Translator",
   ] },
   // FIAREP's technicians have their own switches, separate from CPM / Inspector.
   { id: "tech", screen: "Technician home (FIAREP technicians sign in here)", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
     "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Messages", "Smart Repair", "Building Baseline", "Building Check-In",
+    "Check HPD / DOB", "Translator",
   ] },
   { id: "worker", screen: "Worker home", tabs: [
     "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off", "Smart Repair", "Building Check-In", "Messages",
+    "Check Report Status", "Check HPD / DOB", "Translator",
+  ] },
+  { id: "community", screen: "Community Coordinator home", tabs: [
+    "+ Log a resident", "+ Add building / owner", "Inbox", "Messages", "Check HPD / DOB", "Translator",
   ] },
 ];
 // Keyed per screen so the same label on two screens has two switches.
