@@ -107,12 +107,25 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
   if (staff && !isProcurementDesk(staff) && !["vendor", "resident"].includes(String(staff.role))) navItems.splice(1, 0, { name: "Time clock", href: "/time-clock", icon: Clock, module: "dashboard" as const });
   // Platform Control → Module Management → Website menu: off hides an item for everyone;
   // on shows it to the company's administrators even where another setting would hide it.
-  const admin = staff?.role === "administrator";
-  const menuItems: { name: string; href: string; icon: typeof Clock; module: typeof navItems[number]["module"] }[] = navItems.filter((item) => menuOverride(organizationModules, item.href) !== false);
-  if (admin) for (const m of MENU_ITEMS) if (!m.quick && menuOverride(organizationModules, m.href) === true && !menuItems.some((i) => i.href === m.href)) menuItems.push({ name: m.name, href: m.href, icon: m.icon, module: m.module as never });
+  const byTitle = organizationModules["access.byTitle"] === true;
+  const ov = (href: string) => menuOverride(organizationModules, href, staff?.id);
+  type MenuRow = { name: string; href: string; icon: typeof Clock; module: typeof navItems[number]["module"] };
+  // Switches decide (Platform Control): every item is there for everyone unless a switch
+  // turns it off for the company or for this person. (Title rules only with "access.byTitle".)
+  const extraGate = (href: string) =>
+    href === "/smart-repairs" ? organizationModules["smartRepairSync"] === true
+    : href === "/messages" ? (staff?.tenantId || "default") === "default" || organizationModules["fiarepMessaging"] !== false
+    : href === "/quick-quote" ? (staff?.tenantId || "default") === "default"
+    : href === "/complaint-dashboard" ? !baselineWaiting
+    : true;
+  const menuItems: MenuRow[] = byTitle
+    ? navItems.filter((item) => ov(item.href) !== false)
+    : MENU_ITEMS.filter((m) => !m.quick && (ov(m.href) === true || (ov(m.href) !== false && extraGate(m.href) && hasModuleAccess(staff, m.module, organizationModules))))
+        .map((m) => ({ name: m.href === "/community" ? communityUnitPlural(staff?.tenantId) : m.name, href: m.href, icon: m.icon, module: m.module as never }));
+  if (byTitle) for (const m of MENU_ITEMS) if (!m.quick && ov(m.href) === true && !menuItems.some((i) => i.href === m.href)) menuItems.push({ name: m.name, href: m.href, icon: m.icon, module: m.module as never });
   const order = (href: string) => { const i = MENU_ITEMS.findIndex((m) => m.href === href); return i < 0 ? 999 : i; };
   menuItems.sort((a, b) => order(a.href) - order(b.href));
-  const quickShown = (href: string, module: Parameters<typeof hasModuleAccess>[1]) => menuOverride(organizationModules, href) === false ? false : (admin && menuOverride(organizationModules, href) === true) || hasModuleAccess(staff, module, organizationModules);
+  const quickShown = (href: string, module: Parameters<typeof hasModuleAccess>[1]) => ov(href) === false ? false : ov(href) === true || hasModuleAccess(staff, module, organizationModules);
 
   return (
     <>

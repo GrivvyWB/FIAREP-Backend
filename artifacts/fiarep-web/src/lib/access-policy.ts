@@ -182,6 +182,13 @@ export function hasModuleAccess(
   // Opt-in modules are OFF until the platform owner enables them for the
   // organization (Platform -> Module Management). Keeps parity with mobile.
   if (OPT_IN_MODULES.has(module) && organizationModules?.[module] !== true) return false;
+  // Switches decide, not titles: every page is open to everyone in the company unless a
+  // switch in Platform Control turns it off (for the company or for one person).
+  // The old title-based rules stay below, used only if "access.byTitle" is switched on.
+  if (organizationModules?.["access.byTitle"] !== true) {
+    const personOff = staff.id ? organizationModules?.[`p.${staff.id}.module.${module}`] === false : false;
+    return !personOff;
+  }
   // Community Coordinators: their own section, alerts and settings — nothing else,
   // and nobody else gets their section.
   if (module === "community") return isCommunityCoordinator(staff) || isFiarepAdministrator(staff);

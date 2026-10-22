@@ -40,7 +40,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { SETTINGS_SECTIONS } from "@/lib/settings-sections";
-import { MENU_ITEMS, menuKey } from "@/lib/website-menu";
+import { MENU_ITEMS, menuKey, personKey } from "@/lib/website-menu";
 import { hasModuleAccess } from "@/lib/access-policy";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
 import { LOOKUP_TRADES, communitySupervisorTitle, communityUnit } from "@/lib/access-policy";
@@ -322,6 +322,11 @@ function allFeaturesOn(): Record<string, boolean> {
 }
 type PilotInfo = { price?: number | null; paid?: number; refundPercent?: number; credit?: number | null; refundDue?: number | null; refundedAt?: string | null; refundedBy?: string | null; days?: number; startedAt?: string; endsAt?: string; status?: "running" | "purchased" | "ended"; endedAt?: string; endedBy?: string; added?: string[] };
 
+/** Every section here is a drop-down: press its title to open it. Buttons and switches in a title don't open or close it. */
+function keepButtonsOpen(e: React.MouseEvent) {
+  if ((e.target as HTMLElement).closest("button, input, select, label, [role=switch]")) e.preventDefault();
+}
+
 export default function OwnerModules() {
   const { data: organizations = [], isLoading, error } = useListOrganizations();
   const updateOrganization = useUpdateOrganization();
@@ -363,7 +368,10 @@ export default function OwnerModules() {
   // Website menu: one switch per item in the client's left side panel (unset = normal rules).
   const [menuSwitches, setMenuSwitches] = useState<Record<string, boolean>>({});
   // The company's administrators, so the Website menu shows what they actually see.
-  const [orgAdmins, setOrgAdmins] = useState<Array<{ role: string; position: string; tenantId: string }>>([]);
+  const [orgStaff, setOrgStaff] = useState<Array<{ id: string; name: string; role: string; position: string; tenantId: string }>>([]);
+  const orgAdmins = useMemo(() => orgStaff.filter((r) => r.role === "administrator"), [orgStaff]);
+  // Website menu: "" = everyone in the company; a staff id = that one person's switches.
+  const [menuWho, setMenuWho] = useState("");
   const [smartRepairEmailTo, setSmartRepairEmailTo] = useState("");
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -444,10 +452,12 @@ export default function OwnerModules() {
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
     setSmartRepairSync(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairSync === true));
-    void customFetch<Array<{ role: string; position: string; status?: string }>>(`/api/v1/platform/organizations/${encodeURIComponent(organization.id)}/staff`, { responseType: "json" } as never)
-      .then((rows) => setOrgAdmins((Array.isArray(rows) ? rows : []).filter((r) => r.role === "administrator" && (r.status ?? "approved") === "approved").map((r) => ({ role: r.role, position: r.position || "", tenantId: organization.id }))))
-      .catch(() => setOrgAdmins([]));
-    setMenuSwitches(Object.fromEntries(MENU_ITEMS.map((m) => [menuKey(m.href), (configured as Record<string, unknown> | undefined)?.[menuKey(m.href)]]).filter((e): e is [string, boolean] => typeof e[1] === "boolean")));
+    setMenuWho("");
+    void customFetch<Array<{ id: string; name: string; role: string; position: string; status?: string }>>(`/api/v1/platform/organizations/${encodeURIComponent(organization.id)}/staff`, { responseType: "json" } as never)
+      .then((rows) => setOrgStaff((Array.isArray(rows) ? rows : []).filter((r) => (r.status ?? "approved") === "approved").map((r) => ({ id: r.id, name: r.name || "", role: r.role, position: r.position || "", tenantId: organization.id }))))
+      .catch(() => setOrgStaff([]));
+    // The company's menu switches, and each person's (p.<staff id>.menu.<item>).
+    setMenuSwitches(Object.fromEntries(Object.entries((configured as Record<string, unknown> | undefined) || {}).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("menu.") || /^p\.[^.]+\.menu\./.test(k))) as Array<[string, boolean]>));
     setSettingsShown(Object.fromEntries(SETTINGS_SECTIONS.map((x) => [x.key, !(configured && typeof configured === "object" && (configured as Record<string, unknown>)[x.key] === false)])));
     setHrExtras(Object.fromEntries(HR_EXTRAS.map((x) => [`hr.${x.key}`, Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>)[`hr.${x.key}`] === true)])));
     setSmartRepairEmailTo(typeof organization.features?.smartRepairEmailTo === "string" ? String(organization.features.smartRepairEmailTo) : "");
@@ -622,7 +632,8 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            // Kept as saved: the title-rules switch and person switches this page does not edit here.
+            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.menu\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -721,10 +732,10 @@ export default function OwnerModules() {
             const length = (d?: number) => d === 365 ? "1-year" : `${d}-day`;
             const money = (n?: number | null) => typeof n === "number" ? `$${n.toLocaleString("en-US", { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}` : "";
             return (
-              <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-                <div className="flex flex-wrap items-start justify-between gap-4">
+              <details className="group rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+                <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex flex-wrap items-start justify-between gap-4">
                   <div className="min-w-0 flex-1">
-                    <h2 className="font-semibold text-slate-950">Pilot program</h2>
+                    <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>Pilot program</h2>
                     <p className="text-xs text-slate-500">Every feature on for the length of the pilot. When it ends: if they buy, mark it purchased and everything stays on; if they don't, the features the pilot added shut off and they go back to exactly what they had before the pilot.</p>
                     {p?.status === "running" && <p className="mt-2 text-sm text-slate-800"><b>{length(p.days)} pilot running</b>{typeof p.price === "number" ? <> · <b>{money(p.price)}</b></> : " · no price set"} · started {day(p.startedAt)} · ends <b>{day(p.endsAt)}</b> ({left} day{left === 1 ? "" : "s"} left) · {p.added?.length ?? 0} features added for the pilot</p>}
                     {p?.status === "purchased" && <p className="mt-2 text-sm text-emerald-800"><b>Purchased</b> after the {length(p.days)}{typeof p.price === "number" ? ` (${money(p.price)})` : ""} pilot ({day(p.endedAt)}) — every feature stays on. <b>Credit toward their contract: {money(p.credit ?? 0) || "$0"}</b>{p.refundedAt && p.refundDue ? ` (paid ${money(p.paid ?? 0)}, less ${money(p.refundDue)} already sent back)` : ""}.</p>}
@@ -754,7 +765,7 @@ export default function OwnerModules() {
                       </>
                     )}
                   </div>
-                </div>
+                </summary>
                 <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-slate-100 pt-3">
                   <span className="text-xs font-semibold text-slate-700">Pilot prices (every client)</span>
                   {(["60", "90", "365"] as const).map((k) => (
@@ -776,7 +787,7 @@ export default function OwnerModules() {
                   {priceDraft && <Button type="button" size="sm" onClick={() => void savePilotPrices()}>Save prices</Button>}
                   <span className="text-xs text-slate-500">The price of the option picked is kept with that client's pilot. What they pay toward the pilot is a credit toward their contract if they buy; if they don't, this percent of it goes back to them.</span>
                 </div>
-              </section>
+              </details>
             );
           })()}
 
@@ -785,19 +796,39 @@ export default function OwnerModules() {
             const adminStaff = { role: "administrator", position: "Administrator", tenantId: organization.id } as never;
             const effective = { ...((organization.features?.modules || {}) as Record<string, boolean>), ...modules };
             // Unset: on only when every administrator of the company sees it now (an administrator titled Borough Director included).
-            const shown = (m: (typeof MENU_ITEMS)[number]) => { const v = menuSwitches[menuKey(m.href)]; if (typeof v === "boolean") return v; const people = orgAdmins.length ? orgAdmins : [adminStaff]; return people.every((s) => hasModuleAccess(s as never, m.module, effective)); };
+            const person = menuWho ? orgStaff.find((s) => s.id === menuWho) : undefined;
+            const keyFor = (m: (typeof MENU_ITEMS)[number]) => (person ? personKey(person.id, menuKey(m.href)) : menuKey(m.href));
+            // Everyone: the company's switch, else what the administrators see now.
+            // One person: their own switch, else the company's, else what they see now.
+            const shown = (m: (typeof MENU_ITEMS)[number]) => {
+              if (person) { const pv = menuSwitches[keyFor(m)]; if (typeof pv === "boolean") return pv; }
+              const v = menuSwitches[menuKey(m.href)]; if (typeof v === "boolean") return v;
+              const people = person ? [person] : orgAdmins.length ? orgAdmins : [adminStaff];
+              return people.every((s) => hasModuleAccess(s as never, m.module, effective));
+            };
+            const setAll = (v: boolean) => { setMenuSwitches((cur) => ({ ...cur, ...Object.fromEntries(MENU_ITEMS.map((m) => [keyFor(m), v])) })); setDirty(true); };
+            const ownCount = person ? MENU_ITEMS.filter((m) => typeof menuSwitches[keyFor(m)] === "boolean").length : 0;
             return (
-              <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+              <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                   <div>
-                    <h2 className="font-semibold text-slate-950">Website menu (left side panel)</h2>
-                    <p className="text-xs text-slate-500">Every item in {isFiarep ? "FIAREP's" : "this client's"} left side panel on the website, by the name it shows. Off: nobody in the company sees it. On: the administrators see it, even where another setting would hide it.</p>
+                    <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>Website menu (left side panel)</h2>
+                    <p className="text-xs text-slate-500">Every item in {isFiarep ? "FIAREP's" : "this client's"} left side panel on the website, by the name it shows. Everything is on for everyone until you switch it off. Pick Everyone or one person below: a person's own switches win over Everyone.</p>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{MENU_ITEMS.filter((m) => !shown(m)).length} off</span>
-                    <Button type="button" variant="outline" size="sm" onClick={() => { setMenuSwitches(Object.fromEntries(MENU_ITEMS.map((m) => [menuKey(m.href), true]))); setDirty(true); }}>All on</Button>
-                    <Button type="button" variant="outline" size="sm" onClick={() => { setMenuSwitches(Object.fromEntries(MENU_ITEMS.map((m) => [menuKey(m.href), false]))); setDirty(true); }}>All off</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setAll(true)}>All on</Button>
+                    <Button type="button" variant="outline" size="sm" onClick={() => setAll(false)}>All off</Button>
                   </div>
+                </summary>
+                <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3">
+                  <label htmlFor="menu-who" className="text-sm font-semibold text-slate-700">Switches for</label>
+                  <select id="menu-who" value={menuWho} onChange={(e) => setMenuWho(e.target.value)} className="min-w-[16rem] rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm">
+                    <option value="">Everyone in the company</option>
+                    {orgStaff.map((s) => <option key={s.id} value={s.id}>{s.name}{s.position ? ` — ${s.position}` : ` — ${s.role}`}</option>)}
+                  </select>
+                  {person && <span className="text-xs text-slate-500">{ownCount ? `${ownCount} set for ${person.name}` : `Same as Everyone until you switch one`}</span>}
+                  {person && ownCount > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => { setMenuSwitches((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => !k.startsWith(`p.${person.id}.menu.`)))); setDirty(true); }}>Back to Everyone</Button>}
                 </div>
                 <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0">
                   {MENU_ITEMS.map((m) => {
@@ -807,19 +838,19 @@ export default function OwnerModules() {
                       <div key={m.href} className={`flex items-center gap-3 px-5 py-2.5 ${on ? "" : "opacity-60"}`}>
                         <Icon className="h-4 w-4 shrink-0 text-slate-500" />
                         <p className={`flex-1 text-sm text-slate-900 ${on ? "" : "line-through"}`}>{m.name}</p>
-                        <Switch checked={on} onCheckedChange={(v) => { setMenuSwitches((cur) => ({ ...cur, [menuKey(m.href)]: v })); setDirty(true); }} aria-label={`${on ? "Hide" : "Show"} ${m.name}`} />
+                        <Switch checked={on} onCheckedChange={(v) => { setMenuSwitches((cur) => ({ ...cur, [keyFor(m)]: v })); setDirty(true); }} aria-label={`${on ? "Hide" : "Show"} ${m.name}`} />
                       </div>
                     );
                   })}
                 </div>
-              </section>
+              </details>
             );
           })()}
 
-          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+          <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
               <div>
-                <h2 className="font-semibold text-slate-950">Settings page</h2>
+                <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>Settings page</h2>
                 <p className="text-xs text-slate-500">What {isFiarep ? "FIAREP's" : "this client's"} Settings page on the website shows. Switch off what does not go with {isFiarep ? "FIAREP" : "this client"}.</p>
               </div>
               <div className="flex items-center gap-2">
@@ -827,7 +858,7 @@ export default function OwnerModules() {
                 <Button type="button" variant="outline" size="sm" onClick={() => { setSettingsShown(Object.fromEntries(SETTINGS_SECTIONS.map((x) => [x.key, true]))); setDirty(true); }}>All on</Button>
                 <Button type="button" variant="outline" size="sm" onClick={() => { setSettingsShown(Object.fromEntries(SETTINGS_SECTIONS.map((x) => [x.key, false]))); setDirty(true); }}>All off</Button>
               </div>
-            </div>
+            </summary>
             <div className="divide-y divide-slate-100">
               {SETTINGS_SECTIONS.map((x) => {
                 const on = settingsShown[x.key] !== false;
@@ -840,14 +871,14 @@ export default function OwnerModules() {
                 );
               })}
             </div>
-          </section>
+          </details>
 
           {!isFiarep && (
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-5 py-4">
-                <h2 className="font-semibold text-slate-950">HR</h2>
+            <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden border-b border-slate-200 px-5 py-4">
+                <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>HR</h2>
                 <p className="text-xs text-slate-500">Extra functions for this client's HR person, on top of HR Workspace, Team and Leave. Off until you switch it on.</p>
-              </div>
+              </summary>
               {HR_EXTRAS.map((x) => {
                 const k = `hr.${x.key}`;
                 const on = hrExtras[k] === true;
@@ -865,17 +896,17 @@ export default function OwnerModules() {
                   </div>
                 );
               })}
-            </section>
+            </details>
           )}
 
-          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <h2 className="font-semibold text-slate-950">App tabs</h2>
+                <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>App tabs</h2>
                 <p className="text-xs text-slate-500">{isFiarep ? "Switch off any tab on the app's home screens for FIAREP's own crew. Off here means nobody at FIAREP sees it in the app." : "Switch off any tab on the app's home screens for this client. Off here means nobody in the organization sees it in the app."}</p>
               </div>
               <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{Object.values(appTabs).filter((v) => v === false).length} off</span>
-            </div>
+            </summary>
             <div className="divide-y divide-slate-100">
               {APP_TABS.map((group) => (
                 <div key={group.screen} className="px-5 py-3">
@@ -909,14 +940,14 @@ export default function OwnerModules() {
                 </div>
               ))}
             </div>
-          </section>
+          </details>
 
           {modules["measurement"] === true && (
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-5 py-4">
-                <h2 className="font-semibold text-slate-950">Measurement access by trade</h2>
+            <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden border-b border-slate-200 px-5 py-4">
+                <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>Measurement access by trade</h2>
                 <p className="text-xs text-slate-500">Turn on each material a trade may measure. Each worker sees only the materials switched on for their trade.</p>
-              </div>
+              </summary>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -958,20 +989,20 @@ export default function OwnerModules() {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </details>
           )}
           {modules["property-lookup"] !== false && (
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+            <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between border-b border-slate-200 px-5 py-4">
                 <div>
-                  <h2 className="font-semibold text-slate-950">HPD / DOB Lookup by trade</h2>
+                  <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>HPD / DOB Lookup by trade</h2>
                   <p className="text-xs text-slate-500">Who gets the "Check HPD / DOB" button (app) and the HPD / DOB Lookup page (website). A person's title decides their trade. Everything is on until you switch it off.</p>
                 </div>
                 <div className="flex gap-2">
                   <Button variant="outline" size="sm" onClick={() => { setLookupAccess(Object.fromEntries(LOOKUP_TRADES.map((t) => [`lookup.${t.key}`, true]))); setDirty(true); }}>All on</Button>
                   <Button variant="outline" size="sm" onClick={() => { setLookupAccess(Object.fromEntries(LOOKUP_TRADES.map((t) => [`lookup.${t.key}`, false]))); setDirty(true); }}>All off</Button>
                 </div>
-              </div>
+              </summary>
               <div className="grid gap-x-6 gap-y-2 px-5 py-4 sm:grid-cols-2 lg:grid-cols-3">
                 {LOOKUP_TRADES.map((t) => {
                   const key = `lookup.${t.key}`;
@@ -983,14 +1014,14 @@ export default function OwnerModules() {
                   );
                 })}
               </div>
-            </section>
+            </details>
           )}
           {modules["projects"] === true && (
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="border-b border-slate-200 px-5 py-4">
-                <h2 className="font-semibold text-slate-950">Project tool access by trade</h2>
+            <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden border-b border-slate-200 px-5 py-4">
+                <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>Project tool access by trade</h2>
                 <p className="text-xs text-slate-500">{`Assign each construction-PM tool to the trades that should have it. A worker sees a tool only when it is both enabled for ${isFiarep ? "FIAREP" : "the client"} (above) and checked here for their trade.`}</p>
-              </div>
+              </summary>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -1026,13 +1057,13 @@ export default function OwnerModules() {
                   </tbody>
                 </table>
               </div>
-            </section>
+            </details>
           )}
           <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1.45fr)_minmax(330px,0.75fr)]">
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <div className="flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
+            <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between gap-3 border-b border-slate-200 px-5 py-4">
                 <div>
-                  <h2 className="font-semibold text-slate-950">Enabled Modules</h2>
+                  <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>Enabled Modules</h2>
                   {isFiarep && (
                     <p className="text-xs text-slate-500">FIAREP runs the whole job — manager, general contractor, inspector, CPM. Everything is here; switch off what the crew does not need.</p>
                   )}
@@ -1045,7 +1076,7 @@ export default function OwnerModules() {
                     {enabledModules.length} ENABLED
                   </span>
                 </div>
-              </div>
+              </summary>
               <div>
                 {MODULES.map((module) => {
                   const Icon = module.icon;
@@ -1466,7 +1497,7 @@ export default function OwnerModules() {
                   );
                 })}
               </div>
-            </section>
+            </details>
 
             <section className="sticky top-32 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
               <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
@@ -1498,10 +1529,10 @@ export default function OwnerModules() {
             </section>
           </div>
 
-          <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+          <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
-                <h2 className="font-semibold text-slate-950">Project Tools</h2>
+                <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>Project Tools</h2>
                 <p className="mt-0.5 text-xs text-slate-500">
                   {`Turn on exactly the construction-PM tools ${isFiarep ? "FIAREP's own crew gets" : "this client gets"}. Each is independent and off until you enable it. Requires the Projects module.`}
                 </p>
@@ -1509,7 +1540,7 @@ export default function OwnerModules() {
               <span className="rounded bg-blue-50 px-2 py-1 text-[10px] font-bold tracking-wider text-[#185FA5]">
                 {PROJECT_TOOLS.filter((tool) => projectTools[tool.id]).length} ENABLED
               </span>
-            </div>
+            </summary>
             <div>
               {PROJECT_TOOLS.map((tool) => {
                 const enabled = projectTools[tool.id] === true;
@@ -1542,7 +1573,7 @@ export default function OwnerModules() {
                 );
               })}
             </div>
-          </section>
+          </details>
           <OrganizationDialog
             open={settingsOpen}
             onOpenChange={setSettingsOpen}

@@ -310,8 +310,8 @@ function ModuleRoute({ module, children }: { module: StaffModule; children: Reac
   const { staff, organizationModules } = useAuth();
   const [location] = useLocation();
   // Website menu switches (Platform Control): off closes the page for everyone; on opens it for administrators.
-  const override = menuOverride(organizationModules, location);
-  const allowed = override === false ? false : (override === true && staff?.role === "administrator") || hasModuleAccess(staff, module, organizationModules);
+  const override = menuOverride(organizationModules, location, staff?.id);
+  const allowed = override === false ? false : override === true || hasModuleAccess(staff, module, organizationModules);
   useEffect(() => {
     if (!allowed) setLocation(staff?.role === "procurement" ? "/procurement" : String(staff?.role) === "community_coordinator" ? "/community" : "/dashboard");
   }, [allowed, setLocation, staff?.role]);

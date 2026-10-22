@@ -7,9 +7,9 @@ import {
 import type { StaffModule } from "./access-policy";
 
 // The website's left side panel, item by item, each with its own switch in
-// Platform Control → Module Management → Website menu. Unset: the normal rules.
-// Off: nobody in the company sees it. On: the company's administrators see it
-// (and can open it) even where another setting would hide it.
+// Platform Control → Module Management → Website menu, for the whole company or one
+// person. Unset: on. Off: hidden (and the page closed). On: shown, even where another
+// setting would hide it. A person's own switch wins over the company's.
 export type MenuItem = { href: string; name: string; icon: LucideIcon; module: StaffModule; quick?: boolean };
 export const MENU_ITEMS: MenuItem[] = [
   { href: "/dashboard", name: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
@@ -62,8 +62,11 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: "/reports/upload", name: "Quick Action → Upload Report", icon: Upload, module: "report-upload", quick: true },
 ];
 export const menuKey = (href: string) => "menu." + href.replace(/^\//, "").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
-/** true: switched on (administrators see it), false: switched off (nobody sees it), undefined: normal rules. */
-export function menuOverride(modules: Record<string, boolean> | null | undefined, href: string): boolean | undefined {
+/** One person's switch for a menu item (Platform Control → Module Management → pick the person). */
+export const personKey = (staffId: string, key: string) => `p.${staffId}.${key}`;
+/** The person's own switch first, then the company's; undefined: normal rules (on). */
+export function menuOverride(modules: Record<string, boolean> | null | undefined, href: string, staffId?: string | null): boolean | undefined {
+  if (staffId) { const pv = modules?.[personKey(staffId, menuKey(href))]; if (typeof pv === "boolean") return pv; }
   const v = modules?.[menuKey(href)];
   return typeof v === "boolean" ? v : undefined;
 }
