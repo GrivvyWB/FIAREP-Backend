@@ -2027,7 +2027,8 @@ export async function verifyStaffLogin(name: string, code: string, role?: StaffR
       error !== null &&
       'status' in error &&
       (error as { status?: unknown }).status === 401 &&
-      !(error as { data?: { needsOrganization?: unknown } }).data?.needsOrganization
+      !(error as { data?: { needsOrganization?: unknown } }).data?.needsOrganization &&
+      !(error as { data?: { wrongOrganization?: unknown } }).data?.wrongOrganization
     ) {
       return false;
     }

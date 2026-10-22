@@ -64,7 +64,11 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
   const [ready, setReady] = useState(false);
   const [org, setOrg] = useState('');
   const [boundOrg, setBoundOrg] = useState('');
-  useEffect(() => { SecureStore.getItemAsync(BOUND_ORG_KEY).then((v) => setBoundOrg(v || '')).catch(() => undefined); }, []);
+  useEffect(() => { SecureStore.getItemAsync(BOUND_ORG_KEY).then((v) => {
+    // FIAREP's own ("default") isn't an organization a phone is set to: forget it.
+    if ((v || '').toLowerCase() === 'default') { void SecureStore.deleteItemAsync(BOUND_ORG_KEY).catch(() => undefined); setBoundOrg(''); }
+    else setBoundOrg(v || '');
+  }).catch(() => undefined); }, []);
 
   // The phone remembers the last name and code that signed in (in the
   // keychain), so after a sign-out it is one tap to get back in.
@@ -89,7 +93,7 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
       const useOrg = (boundOrg || org).trim();
       const ok = await verifyStaffLogin(name.trim(), normCode(code), undefined, undefined, useOrg || undefined);
       if (ok) {
-        if (useOrg && !boundOrg) { await SecureStore.setItemAsync(BOUND_ORG_KEY, useOrg.toUpperCase(), { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined); setBoundOrg(useOrg.toUpperCase()); }
+        if (useOrg && !boundOrg && useOrg.toLowerCase() !== 'default') { await SecureStore.setItemAsync(BOUND_ORG_KEY, useOrg.toUpperCase(), { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined); setBoundOrg(useOrg.toUpperCase()); }
         await SecureStore.setItemAsync(LAST_LOGIN_KEY, JSON.stringify({ name: name.trim(), code: normCode(code) }),
           { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined);
         const actor = await restoreServerSession();
@@ -120,7 +124,9 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
         ? (error as { status?: unknown }).status
         : undefined;
       const needsOrg = typeof error === 'object' && error !== null && (error as { data?: { needsOrganization?: unknown } }).data?.needsOrganization === true;
+      const wrongOrg = typeof error === 'object' && error !== null && (error as { data?: { wrongOrganization?: unknown; error?: unknown } }).data?.wrongOrganization === true;
       if (needsOrg) setMsg("Type your organization's ID — it is needed the first time on this phone.");
+      else if (wrongOrg) setMsg(String((error as { data?: { error?: unknown } }).data?.error || 'Wrong organization — tap change.'));
       else if (status === 403) setMsg('Organization license is not active.');
       else if (status === 401) setMsg('No approved account matches that name and code.');
       else if (typeof status === 'number') setMsg(`The server refused the sign-in (${status}). Try again.`);

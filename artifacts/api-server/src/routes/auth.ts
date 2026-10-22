@@ -152,6 +152,15 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
         return;
       }
     }
+    if (tenantId) {
+      // Right name and code, but under another organization than the one this device remembers.
+      const others = await db.select({ code: staffAccounts.code, tenantId: staffAccounts.tenantId }).from(staffAccounts)
+        .where(and(sql`lower(${staffAccounts.name}) = lower(${name.trim()})`, eq(staffAccounts.status, "approved"), sql`upper(${staffAccounts.tenantId}) <> upper(${tenantId})`)).limit(20);
+      if (others.some((x) => x.code.trim().toUpperCase() === normalizedCode)) {
+        res.status(401).json({ error: `That name and code belong to a different organization than ${tenantId.toUpperCase()}. Tap "change" and type the right Organization ID.`, wrongOrganization: true });
+        return;
+      }
+    }
     res.status(401).json({ error: "Invalid staff name or code" });
     return;
   }
