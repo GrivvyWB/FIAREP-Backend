@@ -421,11 +421,11 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
       <DialogContent className="sm:max-w-2xl max-h-[90vh] overflow-y-auto bg-white border-slate-200">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-slate-900">
-            {isEditing ? "Edit Organization" : "Register Organization"}
+            {isEditing ? `Edit Organization${organization?.name ? ` — ${organization.name}` : ""}` : "Register Organization"}
           </DialogTitle>
           <DialogDescription className="text-slate-500">
             {isEditing 
-              ? "Update platform licensing and limits for this organization." 
+              ? `Update platform licensing and limits for ${organization?.name ? `${organization.name} (${organization.id})` : "this organization"}.` 
               : "Provision a new tenant environment and initial administrator."}
           </DialogDescription>
         </DialogHeader>
@@ -674,13 +674,13 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                 {isEditing && organization && (
                   <div className="mb-3 space-y-3">
                     <DofBulkAdd organizationId={organization.id} defaultOwner={organization.name} onAdded={refreshProperties} />
-                    <BuildingSwitchList organizationId={organization.id} buildings={propertyRows.map((p) => ({ id: p.id, displayAddress: p.displayAddress, units: p.units ?? null, active: p.active }))} onChanged={refreshProperties} />
+                    <BuildingSwitchList organizationId={organization.id} clientName={organization.name} buildings={propertyRows.map((p) => ({ id: p.id, displayAddress: p.displayAddress, units: p.units ?? null, active: p.active }))} onChanged={refreshProperties} />
                   </div>
                 )}
                 <Collapsible open={developmentsOpen} onOpenChange={setDevelopmentsOpen}>
                   <CollapsibleTrigger asChild>
                     <Button type="button" variant="ghost" className="h-auto w-full justify-between rounded-none border-b border-slate-100 px-0 pb-2 pt-0 hover:bg-transparent">
-                      <span className="font-semibold text-slate-900">Developments</span>
+                      <span className="font-semibold text-slate-900">Developments{organization?.name ? ` — ${organization.name}` : ""}</span>
                       <span className="flex items-center gap-2 text-sm font-semibold text-slate-700">
                         {configuredDevelopments.length}
                         <ChevronDown className={`h-4 w-4 transition-transform ${developmentsOpen ? "rotate-180" : ""}`} />

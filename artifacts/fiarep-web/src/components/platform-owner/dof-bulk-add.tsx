@@ -103,7 +103,7 @@ export function DofBulkAdd({ organizationId, defaultOwner, onAdded }: { organiza
 
 /** Every building on a client, with an on / off switch and a search box. */
 export type SwitchBuilding = { id: string; displayAddress: string; units: number | null; active: boolean };
-export function BuildingSwitchList({ organizationId, buildings, onChanged }: { organizationId: string; buildings: SwitchBuilding[]; onChanged: () => void | Promise<void> }) {
+export function BuildingSwitchList({ organizationId, buildings, onChanged, clientName = "" }: { organizationId: string; buildings: SwitchBuilding[]; onChanged: () => void | Promise<void>; clientName?: string }) {
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const [busyId, setBusyId] = useState("");
@@ -142,7 +142,7 @@ export function BuildingSwitchList({ organizationId, buildings, onChanged }: { o
   return (
     <div className="space-y-2 rounded-lg border border-slate-200 bg-white p-4">
       <button type="button" onClick={() => setOpen((o) => !o)} aria-expanded={open} className="flex w-full items-center justify-between gap-2 text-left">
-        <span className="text-sm font-semibold text-slate-900">All buildings</span>
+        <span className="text-sm font-semibold text-slate-900">All buildings{clientName ? ` — ${clientName}` : ""}</span>
         <span className="flex items-center gap-2 text-xs text-slate-500">
           {buildings.length.toLocaleString()} · {onCount.toLocaleString()} on
           <ChevronDown className={`h-4 w-4 transition-transform ${open ? "rotate-180" : ""}`} />
@@ -160,6 +160,7 @@ export function BuildingSwitchList({ organizationId, buildings, onChanged }: { o
           <div key={b.id} className="flex items-center justify-between gap-3 py-1.5 text-sm">
             <span className={b.active ? "text-slate-800" : "text-slate-400"}>
               {b.displayAddress}
+              {clientName && <span className="block text-xs font-normal text-slate-500">{clientName}</span>}
               {b.units ? <span className="ml-2 text-xs text-slate-500">{b.units.toLocaleString()} units</span> : null}
             </span>
             <span className="flex shrink-0 items-center gap-2 text-xs text-slate-500">
