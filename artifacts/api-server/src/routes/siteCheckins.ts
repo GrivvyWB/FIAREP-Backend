@@ -299,7 +299,7 @@ router.get("/v1/site-checkins/mine", async (_req, res) => {
 /** The platform: every check-in at this organization's buildings (FIAREP: all), for a date range. */
 router.get("/v1/site-checkins", async (req, res) => {
   const a = actorFrom(res);
-  if (!isManager(a.role)) { res.status(403).json({ error: "For management." }); return; }
+  if (!isManager(a.role) && !a.hrExtras?.includes("siteCheckins")) { res.status(403).json({ error: "For management." }); return; }
   const from = str(req.query["from"], 10), to = str(req.query["to"], 10);
   // ?archive=1: every closed (checked-out) check-in - the client's archive.
   const archive = req.query["archive"] === "1";
@@ -320,7 +320,7 @@ router.get("/v1/site-checkins", async (req, res) => {
  *  scheduled walk-through, against the building — the only time a vendor is located. */
 router.get("/v1/site-checkins/vendors", async (req, res) => {
   const a = actorFrom(res);
-  if (!isManager(a.role)) { res.status(403).json({ error: "For management." }); return; }
+  if (!isManager(a.role) && !a.hrExtras?.includes("siteCheckins")) { res.status(403).json({ error: "For management." }); return; }
   const from = str(req.query["from"], 10), to = str(req.query["to"], 10);
   const rows = await db.select().from(entityRecords).where(a.tenantId === FIAREP_TENANT
     ? and(eq(entityRecords.entity, "procurement"), eq(entityRecords.deleted, false))

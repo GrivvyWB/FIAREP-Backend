@@ -277,6 +277,13 @@ function configuredModules(organization: OrganizationWithUsage): Record<string, 
   }, {});
 }
 
+/** HR: extra functions the client's HR person gets on top of HR Workspace, Team and Leave. Off until switched on. */
+const HR_EXTRAS = [
+  { key: "siteCheckins", name: "Site Check-Ins", description: "Where and when each member checked in at a building, and when they left and came back" },
+  { key: "calendar", name: "Calendar", description: "The company calendar" },
+  { key: "reports", name: "Reports / Complaints", description: "Every resident complaint in the company, and the Complaint Dashboard — to read" },
+] as const;
+
 /** A new company starts with everything off: every module, app tab, HPD / DOB lookup trade and
  *  FIAREP add-on is saved as off, and the platform owner switches on what the client gets. */
 export function newCompanyModules(): Record<string, boolean> {
@@ -285,6 +292,7 @@ export function newCompanyModules(): Record<string, boolean> {
   for (const group of APP_TABS) for (const tab of group.tabs) off[appTabKey(group.id, tab)] = false;
   for (const trade of LOOKUP_TRADES) off[`lookup.${trade.key}`] = false;
   for (const k of ["residentPhotoAiViolationReader", "communitySupervisorReview", "fiarepComplaintRouting", "fiarepMessaging", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "requireBaseline", "smartRepairEmailCopy", "smartRepairSync"]) off[k] = false;
+  for (const x of HR_EXTRAS) off[`hr.${x.key}`] = false;
   return off;
 }
 
@@ -337,6 +345,7 @@ export default function OwnerModules() {
   const [locks, setLocks] = useState<Record<string, boolean>>({});
   const [smartRepairEmailCopy, setSmartRepairEmailCopy] = useState(false);
   const [smartRepairSync, setSmartRepairSync] = useState(false);
+  const [hrExtras, setHrExtras] = useState<Record<string, boolean>>({});
   const [smartRepairEmailTo, setSmartRepairEmailTo] = useState("");
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -417,6 +426,7 @@ export default function OwnerModules() {
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
     setSmartRepairSync(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairSync === true));
+    setHrExtras(Object.fromEntries(HR_EXTRAS.map((x) => [`hr.${x.key}`, Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>)[`hr.${x.key}`] === true)])));
     setSmartRepairEmailTo(typeof organization.features?.smartRepairEmailTo === "string" ? String(organization.features.smartRepairEmailTo) : "");
     setDirty(false);
   }, [organization]);
@@ -589,7 +599,7 @@ export default function OwnerModules() {
         data: {
           features: {
             ...organization.features,
-            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -746,6 +756,32 @@ export default function OwnerModules() {
               </section>
             );
           })()}
+
+          {!isFiarep && (
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+              <div className="border-b border-slate-200 px-5 py-4">
+                <h2 className="font-semibold text-slate-950">HR</h2>
+                <p className="text-xs text-slate-500">Extra functions for this client's HR person, on top of HR Workspace, Team and Leave. Off until you switch it on.</p>
+              </div>
+              {HR_EXTRAS.map((x) => {
+                const k = `hr.${x.key}`;
+                const on = hrExtras[k] === true;
+                return (
+                  <div key={k} className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 first:border-t-0 transition-colors hover:bg-slate-50 ${on ? "" : "opacity-60"}`}>
+                    <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${on ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"}`}>
+                      <UsersRound className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900">{x.name}</p>
+                      <p className="text-xs text-slate-500">{x.description}</p>
+                    </div>
+                    <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${on ? "text-emerald-700" : "text-slate-400"}`}>{on ? "Enabled" : "Disabled"}</span>
+                    <Switch checked={on} onCheckedChange={(v) => { setHrExtras((cur) => ({ ...cur, [k]: v })); setDirty(true); }} aria-label={`${on ? "Disable" : "Enable"} HR ${x.name}`} />
+                  </div>
+                );
+              })}
+            </section>
+          )}
 
           <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">

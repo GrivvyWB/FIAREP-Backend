@@ -25,6 +25,8 @@ export type Actor = {
   sessionVersion: number;
   /** Read-only locks switched off for this person's organization (Platform Control). */
   locksOff?: string[];
+  /** HR person's extra functions switched on in Platform Control → Modules → HR (siteCheckins, calendar, reports). */
+  hrExtras?: string[];
 };
 
 export type PlatformOwner = { name: string; sessionId: string; typ: "platform_owner"; iat: number; exp: number };

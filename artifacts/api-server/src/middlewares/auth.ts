@@ -1,5 +1,14 @@
 import type { NextFunction, Request, Response } from "express";
+import { eq } from "drizzle-orm";
+import { db, organizations } from "@workspace/db";
 import { loadCurrentActor, verifyAccessToken, verifyPlatformOwnerToken, loadPlatformOwnerSession, type Actor } from "../lib/auth";
+
+/** HR extras: functions the client's HR person gets on top of HR, switched on per client. */
+async function hrExtrasFor(tenantId: string): Promise<string[]> {
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  const modules = ((org?.features as Record<string, unknown> | null)?.["modules"] ?? {}) as Record<string, unknown>;
+  return ["siteCheckins", "calendar", "reports"].filter((k) => modules[`hr.${k}`] === true);
+}
 
 export type AuthenticatedLocals = {
   actor: Actor;
@@ -22,6 +31,7 @@ export async function requireAuth(
       res.status(401).json({ error: "Session is no longer valid" });
       return;
     }
+    if (current.actor.role === "human_resources") current.actor.hrExtras = await hrExtrasFor(current.actor.tenantId);
     res.locals["actor"] = current.actor;
     res.locals["staff"] = current.staff;
     next();

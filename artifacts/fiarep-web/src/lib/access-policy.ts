@@ -194,6 +194,13 @@ export function hasModuleAccess(
   // the menu) until the platform owner switches it on for the client.
   if (module === "command-center") return staff.role === "administrator" && (staff.tenantId || "default") !== "default";
   // Site check-ins: where each member checked in and when they left and came back — for management.
+  // HR extras: switched on per client in Platform Control → Modules → HR.
+  if (staff.role === "human_resources") {
+    const hrOn = (k: string) => organizationModules?.[`hr.${k}`] === true;
+    if (module === "site-checkins" && hrOn("siteCheckins")) return true;
+    if (module === "calendar" && hrOn("calendar")) return true;
+    if ((module === "reports" || module === "complaint-dashboard") && hrOn("reports")) return true;
+  }
   if (module === "site-checkins") return staff.role === "administrator" || staff.role === "management";
   // Audit Log: the organization's administrators (the server allows only them).
   if (module === "audit-log") return staff.role === "administrator";

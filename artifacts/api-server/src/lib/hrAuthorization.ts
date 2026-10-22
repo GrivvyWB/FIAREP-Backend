@@ -153,6 +153,8 @@ async function complaintVisibility(
   // Residents, administrators and field staff viewing violations keep the
   // existing rules.
   if (actor.role === "administrator" || actor.role === "resident") return null;
+  // HR with Reports switched on (Platform Control → Modules → HR): every complaint in the company, to read.
+  if (actor.role === "human_resources" && row.entity === "resident-reports" && actor.hrExtras?.includes("reports")) return !row.deleted;
   if (row.entity === "building-violations" && actor.role !== "management") return null;
   // The Supervisor Inspector reviews and routes violations (existing rules).
   if (row.entity === "building-violations" && isViolationAuthority(actor)) return null;
