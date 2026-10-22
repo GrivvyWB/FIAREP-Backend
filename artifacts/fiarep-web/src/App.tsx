@@ -280,6 +280,7 @@ function AppRouter() {
           <Route path="/settings" component={SettingsRoute} />
           <Route path="/shared-data" component={SharedDataRoute} />
           <Route path="/complaint-dashboard" component={ComplaintDashboardRoute} />
+          {/* The menu item is switched in Platform Control; the page stays reachable from the "baseline waiting" notice. */}
           <Route path="/baseline-report/:id">{() => <BaselinePage />}</Route>
           <Route path="/baseline-report">{() => <BaselinePage />}</Route>
           <Route path="/community" component={CommunityRoute} />
@@ -288,7 +289,7 @@ function AppRouter() {
           <Route path="/translator" component={TranslatorRoute} />
           <Route path="/property-lookup" component={PropertyLookupRoute} />
           <Route path="/violation-alerts" component={ViolationAlertsRoute} />
-          <Route path="/mold-compliance" component={MoldCompliance} />
+          <Route path="/mold-compliance">{() => <ModuleRoute module="mold-compliance"><MoldCompliance /></ModuleRoute>}</Route>
           <Route path="/smart-repairs" component={SmartRepairs} />
           <Route path="/command-center" component={CommandCenterRoute} />
           <Route path="/company-forms" component={CompanyFormsRoute} />

@@ -45,7 +45,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
       ? [{ name: "Quick Quote", href: "/quick-quote", icon: Zap, module: "dashboard" as const }] : []),
     ...(baselineWaiting ? [] : [{ name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const }]),
     // The onboarding walk-through and its baseline report, for every building.
-    { name: "Building Baseline", href: "/baseline-report", icon: ClipboardCheck, module: "dashboard" as const },
+    { name: "Building Baseline", href: "/baseline-report", icon: ClipboardCheck, module: "baseline-report" as const },
     { name: communityUnitPlural(staff?.tenantId), href: "/community", icon: UsersRound, module: "community" as const },
     { name: "Site Check-Ins", href: "/site-checkins", icon: MapPin, module: "site-checkins" as const },
     { name: "Translator", href: "/translator", icon: Languages, module: "translator" as const },
@@ -54,7 +54,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     // Smart Repair on the website: only once FIAREP switches it on for the company (Platform Control → Modules).
     ...(organizationModules["smartRepairSync"] === true ? [{ name: "Smart Repair", href: "/smart-repairs", icon: Wrench, module: "dashboard" as const }] : []),
     // Mold Compliance: for the office (administrators and management).
-    ...(["administrator", "management"].includes(String(staff?.role)) ? [{ name: "Mold Compliance", href: "/mold-compliance", icon: Droplets, module: "dashboard" as const }] : []),
+    ...(["administrator", "management"].includes(String(staff?.role)) ? [{ name: "Mold Compliance", href: "/mold-compliance", icon: Droplets, module: "mold-compliance" as const }] : []),
     { name: "Command Center", href: "/command-center", icon: Mic, module: "command-center" as const },
     { name: "Company Forms", href: "/company-forms", icon: Lock, module: "company-forms" as const },
     { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },

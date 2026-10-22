@@ -9,7 +9,7 @@ export type StaffModule =
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
    | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections"
-   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log" | "command-center";
+   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log" | "command-center" | "baseline-report" | "mold-compliance";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -20,7 +20,8 @@ const isElevatorTitle = (position: string | null | undefined) =>
   sameTitle(position, "Elevator Service") || supervisedTradeForPosition(position) === "Elevator Service";
 // Modules that are OFF until the platform owner enables them (none today;
 // the per-tool Project switches are handled in Module Management).
-const OPT_IN_MODULES = new Set<StaffModule>(["company-forms", "violation-alerts", "violation-alerts-command", "command-center"]);
+// Menu pages that only appear once FIAREP switches them on in Platform Control → Modules.
+const OPT_IN_MODULES = new Set<StaffModule>(["company-forms", "violation-alerts", "violation-alerts-command", "command-center", "baseline-report", "mold-compliance", "inspection-approvals"]);
 const CPM_ONLY_MODULES = new Set<StaffModule>([
   "estimates",
   "repairs",
@@ -196,6 +197,9 @@ export function hasModuleAccess(
   if (module === "site-checkins") return staff.role === "administrator" || staff.role === "management";
   // Audit Log: the organization's administrators (the server allows only them).
   if (module === "audit-log") return staff.role === "administrator";
+  // Switched on in Platform Control → Modules (opt-in above): who then sees them.
+  if (module === "baseline-report") return !["vendor", "resident", "procurement"].includes(String(staff.role));
+  if (module === "mold-compliance") return staff.role === "administrator" || staff.role === "management";
   // The live translator: every signed-in staff member who talks to residents.
   if (module === "translator") return !["vendor", "resident", "procurement"].includes(String(staff.role));
   // HPD / DOB lookup (read-only): staff who work a building, unless the
