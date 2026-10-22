@@ -132,7 +132,7 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
     .from(staffAccounts)
     .where(and(...conditions))
     .limit(20);
-  const matches = candidates.filter((staff) => {
+  let matches = candidates.filter((staff) => {
     const issuedCode = staff.code.trim().toUpperCase();
     if (issuedCode === normalizedCode) return true;
     return (
@@ -142,6 +142,14 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
       issuedCode.endsWith(`-${normalizedCode}`)
     );
   });
+  // FIAREP's own staff sign in whatever is in the Organization ID box (a client's ID left in it from before).
+  if (matches.length !== 1 && tenantId && tenantId.toLowerCase() !== "default") {
+    const own = (await db.select().from(staffAccounts).where(and(
+      sql`lower(${staffAccounts.name}) = lower(${name.trim()})`, eq(staffAccounts.status, "approved"), eq(staffAccounts.tenantId, "default"),
+      ...(typeof role === "string" ? [eq(staffAccounts.role, role)] : []),
+    )).limit(20)).filter((s) => s.code.trim().toUpperCase() === normalizedCode);
+    if (own.length === 1) matches = own;
+  }
   if (matches.length !== 1) {
     if (!tenantId) {
       // Right name and code, but a client's staff member with no organization ID: say what is missing.

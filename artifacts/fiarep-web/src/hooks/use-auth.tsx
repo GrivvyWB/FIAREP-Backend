@@ -10,7 +10,7 @@ interface AuthContextType {
   organizationName: string;
   isLoading: boolean;
   login: (name: string, code: string, organizationId?: string) => Promise<
-    { status: "authenticated" } |
+    { status: "authenticated"; tenantId?: string } |
     { status: "procurement-verification"; challengeCode: string; challengeToken: string }
   >;
   procurementLogin: (name: string, code: string, challengeCode: string, challengeToken: string) => Promise<void>;
@@ -187,7 +187,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     code: string,
     organizationId?: string,
   ): Promise<
-    { status: "authenticated" } |
+    { status: "authenticated"; tenantId?: string } |
     { status: "procurement-verification"; challengeCode: string; challengeToken: string }
   > => {
     const response = await fetch("/api/v1/auth/login", {
@@ -211,7 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     queryClient.clear();
     setStaff(payload.staff);
     await loadOrganizationConfig(payload.accessToken);
-    return { status: "authenticated" };
+    return { status: "authenticated", tenantId: payload.staff?.tenantId };
   };
 
   const procurementLogin = async (name: string, code: string, challengeCode: string, challengeToken: string) => {

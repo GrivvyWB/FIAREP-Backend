@@ -63,7 +63,9 @@ export default function Login() {
       setIsSubmitting(true);
       const result = await login(values.name, values.code, values.organizationId?.trim() || undefined);
       const org = values.organizationId?.trim();
-      if (org) { try { localStorage.setItem(ORG_KEY, org); } catch { /* private window */ } }
+      // Remember a client's organization; FIAREP's own staff don't keep one.
+      const tenant = result.status === "authenticated" ? result.tenantId : undefined;
+      try { if (org && tenant !== "default") localStorage.setItem(ORG_KEY, org); else if (tenant === "default") localStorage.removeItem(ORG_KEY); } catch { /* private window */ }
       if (result.status === "procurement-verification") {
         sessionStorage.setItem("fiarep_procurement_verification_pending", JSON.stringify({
           challengeCode: result.challengeCode,
