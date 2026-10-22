@@ -2,6 +2,7 @@ import { isCpmSupervisorTitle } from "@/lib/titles";
 import { useBaselineWaiting } from "@/components/baseline-waiting";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
+import { MENU_ITEMS, menuOverride } from "@/lib/website-menu";
 import { communityUnitPlural, hasModuleAccess, isCommunityCoordinator, isFiarepAdministrator, isProcurementDesk } from "@/lib/access-policy";
 import { 
   LayoutDashboard, 
@@ -104,6 +105,14 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
   ].filter((item) => hasModuleAccess(staff, item.module, organizationModules));
   // Time clock: every staff member who can punch (not vendors, residents or the procurement desk). The page says if the clock is off.
   if (staff && !isProcurementDesk(staff) && !["vendor", "resident"].includes(String(staff.role))) navItems.splice(1, 0, { name: "Time clock", href: "/time-clock", icon: Clock, module: "dashboard" as const });
+  // Platform Control → Module Management → Website menu: off hides an item for everyone;
+  // on shows it to the company's administrators even where another setting would hide it.
+  const admin = staff?.role === "administrator";
+  const menuItems: { name: string; href: string; icon: typeof Clock; module: typeof navItems[number]["module"] }[] = navItems.filter((item) => menuOverride(organizationModules, item.href) !== false);
+  if (admin) for (const m of MENU_ITEMS) if (!m.quick && menuOverride(organizationModules, m.href) === true && !menuItems.some((i) => i.href === m.href)) menuItems.push({ name: m.name, href: m.href, icon: m.icon, module: m.module as never });
+  const order = (href: string) => { const i = MENU_ITEMS.findIndex((m) => m.href === href); return i < 0 ? 999 : i; };
+  menuItems.sort((a, b) => order(a.href) - order(b.href));
+  const quickShown = (href: string, module: Parameters<typeof hasModuleAccess>[1]) => menuOverride(organizationModules, href) === false ? false : (admin && menuOverride(organizationModules, href) === true) || hasModuleAccess(staff, module, organizationModules);
 
   return (
     <>
@@ -130,7 +139,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
         </div>
 
         <nav className="p-[14px_12px] flex-1 overflow-y-auto overflow-x-hidden space-y-[3px]">
-          {navItems.map((item) => {
+          {menuItems.map((item) => {
             const isActive = location === item.href;
             const Icon = item.icon;
             return (
@@ -154,13 +163,13 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
 
         <div className="m-[8px_16px_18px] p-[16px] bg-[#12161d] border border-sidebar-border rounded-xl shrink-0">
           <h4 className="text-[11px] tracking-[.6px] text-[#8b94a1] mb-3 font-semibold uppercase">QUICK ACTION</h4>
-          {hasModuleAccess(staff, "inspection-create", organizationModules) && <Link href="/inspections/new" onClick={closeOnMobile}>
+          {quickShown("/inspections/new", "inspection-create") && <Link href="/inspections/new" onClick={closeOnMobile}>
             <div className="w-full border-none cursor-pointer p-[11px] rounded-[9px] text-[13.5px] font-semibold flex items-center justify-center gap-2 mb-2 bg-primary text-sidebar hover:bg-[#F5B301] transition-colors">
               <Plus className="w-4 h-4" />
               New Inspection
             </div>
           </Link>}
-          {hasModuleAccess(staff, "report-upload", organizationModules) && <Link href="/reports/upload" onClick={closeOnMobile}>
+          {quickShown("/reports/upload", "report-upload") && <Link href="/reports/upload" onClick={closeOnMobile}>
             <div className="w-full border border-[#2a323e] cursor-pointer p-[11px] rounded-[9px] text-[13.5px] font-semibold flex items-center justify-center gap-2 bg-transparent text-[#cfd6df] hover:bg-[#1a212b] transition-colors">
               <Upload className="w-4 h-4" />
               Upload Report

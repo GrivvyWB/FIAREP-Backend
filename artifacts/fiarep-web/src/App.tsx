@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect } from 'react';
+import { menuOverride } from "@/lib/website-menu";
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
@@ -307,7 +308,10 @@ function AppRouter() {
 function ModuleRoute({ module, children }: { module: StaffModule; children: ReactNode }) {
   const [, setLocation] = useLocation();
   const { staff, organizationModules } = useAuth();
-  const allowed = hasModuleAccess(staff, module, organizationModules);
+  const [location] = useLocation();
+  // Website menu switches (Platform Control): off closes the page for everyone; on opens it for administrators.
+  const override = menuOverride(organizationModules, location);
+  const allowed = override === false ? false : (override === true && staff?.role === "administrator") || hasModuleAccess(staff, module, organizationModules);
   useEffect(() => {
     if (!allowed) setLocation(staff?.role === "procurement" ? "/procurement" : String(staff?.role) === "community_coordinator" ? "/community" : "/dashboard");
   }, [allowed, setLocation, staff?.role]);
