@@ -101,6 +101,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "baseline-report", name: "Building Baseline (menu page)", description: "The onboarding walk-through and its baseline report for every building. OFF until you switch it on for the company", icon: ClipboardCheck },
   { id: "mold-compliance", name: "Mold Compliance (menu page)", description: "Active mold violations per building, % completed / remaining, Inspection Recommended at 60%, certification deadlines — for administrators and management. OFF until you switch it on for the company", icon: AlertTriangle },
   { id: "inspection-approvals", name: "Inspection Approvals (menu page)", description: "Supervisors approve inspections. OFF until you switch it on for the company", icon: ClipboardCheck },
+  { id: "cover-site", name: "Cover a site", description: "A supervisor working at one of the company's own buildings that isn't theirs confirms its 2-digit code and can act there for 24 hours (website and app). Lists the company's own buildings. OFF until you switch it on for the company", icon: Building2 },
   { id: "violation-alerts", name: "Violation Alerts (menu page)", description: "New 311 complaints, HPD / DOB violations and OATH summonses on the client's watched buildings, checked every 30 minutes, as a page in their menu. OFF for every client; switch on per client, then assign their buildings on Platform -> Alerts", icon: AlertTriangle },
   { id: "command-center", name: "Command Center", description: "The client's own Command Center: its administrators talk to their buildings, alerts, work orders and their own computers (Windows, Mac or Linux) from the phone, with Face ID approvals. Only that client's data, never the FIAREP server. Usage runs on FIAREP's key (usage and caps: Platform -> Command Center). OFF for every client — they don't see it until you switch it on for them", icon: Users },
   { id: "violation-alerts-command", name: "Violation Alerts — Upper Management Complaint Command", description: "The same alerts as a red strip at the top of the Borough Director's Complaint Command, with its own on / off switch for the director. Separate from the menu page; OFF for every client", icon: AlertTriangle },
@@ -266,7 +267,7 @@ function configuredModules(organization: OrganizationWithUsage): Record<string, 
 
   // These modules are opt-in: they read as OFF until explicitly enabled for
   // the client, so the switch reflects the true default.
-  const OPT_IN = new Set<string>(["measurement", "company-forms", "violation-alerts", "violation-alerts-command", "command-center", "baseline-report", "mold-compliance", "inspection-approvals"]);
+  const OPT_IN = new Set<string>(["measurement", "company-forms", "violation-alerts", "violation-alerts-command", "command-center", "baseline-report", "mold-compliance", "inspection-approvals", "cover-site"]);
   return MODULES.reduce<Record<string, boolean>>((result, module) => {
     const value = saved[module.id];
     result[module.id] = typeof value === "boolean"

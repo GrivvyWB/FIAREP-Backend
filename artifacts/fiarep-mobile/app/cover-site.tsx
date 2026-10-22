@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert } from 'react-native';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { DEVELOPMENT_NAMES } from '../lib/developments.seed';
-import { getDevelopmentCoverageCode, unlockCoverage, listActiveCoverage } from '../lib/store';
+import { getDevelopmentCoverageCode, unlockCoverage, listActiveCoverage, getCoverageSites } from '../lib/store';
 import { ACCENT } from '../lib/ui';
 
 function CoverSiteScreen() {
@@ -18,9 +18,13 @@ function CoverSiteScreen() {
 
   const loadActive = useCallback(() => { listActiveCoverage().then(setActive).catch(() => {}); }, []);
   useFocusEffect(useCallback(() => { loadActive(); }, [loadActive]));
+  // A client's own buildings; FIAREP keeps the NYCHA list.
+  const [sites, setSites] = useState<{ nycha: boolean; names: string[] }>({ nycha: false, names: [] });
+  useFocusEffect(useCallback(() => { getCoverageSites().then((s) => setSites({ nycha: s.nycha, names: s.sites.map((x) => x.name) })).catch(() => undefined); }, []));
+  const siteNames = sites.nycha ? DEVELOPMENT_NAMES : sites.names;
 
   const suggestions = query.trim().length >= 2 && !development
-    ? DEVELOPMENT_NAMES.filter((n) => n.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8)
+    ? siteNames.filter((n) => n.toLowerCase().includes(query.trim().toLowerCase())).slice(0, 8)
     : [];
 
   async function pick(name: string) {

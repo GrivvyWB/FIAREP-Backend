@@ -14,7 +14,9 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onMenuClick: () => void }) {
-  const { staff, logout } = useAuth();
+  const { staff, logout, organizationModules } = useAuth();
+  // Cover a site: a client only has it once it is switched on in Platform Control.
+  const coverSiteOn = (staff?.tenantId || "default") === "default" || organizationModules["cover-site"] === true;
   const { data: notifications } = useListNotifications({
     query: {
       queryKey: getListNotificationsQueryKey(),
@@ -55,7 +57,7 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
       </div>
       
       <div className="flex items-center gap-5 md:gap-[22px]">
-        {isCoverageEligible(staff) && <CoverSiteButton />}
+        {isCoverageEligible(staff) && coverSiteOn && <CoverSiteButton />}
         <Link href="/notifications" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"} onClick={requestDesktopAlerts} className={`relative text-muted-foreground cursor-pointer hover:text-foreground transition-colors block ${ringing ? "notification-bell-ring" : unreadCount > 0 ? "notification-bell-unread" : ""}`}>
           <Bell className={`w-[22px] h-[22px] ${unreadCount > 0 ? "text-[#b77900]" : ""}`} />
           {unreadCount > 0 && (

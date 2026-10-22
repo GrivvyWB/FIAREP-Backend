@@ -1371,6 +1371,13 @@ export async function unlockCoverage(development: string, code: string): Promise
   return r.json();
 }
 
+/** The sites Cover a site lists: the client's own buildings; FIAREP keeps the NYCHA list (nycha: true). */
+export async function getCoverageSites(): Promise<{ on: boolean; nycha: boolean; sites: { name: string; address: string }[] }> {
+  const r = await coverageFetch('/api/v1/coverage/sites');
+  const j = r.ok ? await r.json().catch(() => null) : null;
+  return { on: j?.on === true, nycha: j?.nycha === true, sites: Array.isArray(j?.sites) ? j.sites : [] };
+}
+
 /** The signed-in supervisor's active coverage unlocks. */
 export async function listActiveCoverage(): Promise<{ development: string; expiresAt: string }[]> {
   const r = await coverageFetch('/api/v1/coverage/active');

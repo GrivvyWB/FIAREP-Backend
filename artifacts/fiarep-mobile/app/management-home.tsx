@@ -52,7 +52,8 @@ export default function ManagementHome() {
   });
   const _pos = (position || '').trim().toLowerCase();
   const isSup = _pos.includes('supervisor') || _pos === 'superintendent';
-  const coverageEligible = _pos.includes('supervisor') || _pos.startsWith('superintendent');
+  // Cover a site: a client only has it once it is switched on in Platform Control.
+  const coverageEligible = (_pos.includes('supervisor') || _pos.startsWith('superintendent')) && (tenantId === 'default' || rawModules['cover-site'] === true);
   // Elevated roles see every module. Regular supervisors are restricted.
   const isElevated = mode === 'administrator'
     || _pos === 'regional director' || _pos === 'borough director' || _pos === 'superintendent'

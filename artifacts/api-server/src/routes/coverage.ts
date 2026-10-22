@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
-import { db, entityRecords } from "@workspace/db";
+import { and, eq } from "drizzle-orm";
+import { db, entityRecords, organizationProperties, organizations } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { isCoverageEligible } from "../lib/domain";
 import { APP_READ_ONLY_MESSAGE, isAppReadOnlyActor, isMobileAppRequest } from "../lib/appReadOnly";
@@ -16,22 +17,64 @@ import {
 const router: IRouter = Router();
 router.use("/v1/coverage", requireAuth);
 
+const FIAREP_TENANT = "default";
+const NOT_ON = "Cover a site is not switched on for your company.";
+const normSite = (v: string) => v.trim().replace(/\s+/g, " ").toLowerCase();
+
+/** Cover a site is OFF for a client until it is switched on in Platform Control. FIAREP keeps it. */
+async function coverSiteOn(tenantId: string): Promise<boolean> {
+  if (tenantId === FIAREP_TENANT) return true;
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  const modules = (org?.features as { modules?: Record<string, unknown> } | null)?.modules;
+  return !!modules && modules["cover-site"] === true;
+}
+
+/** A client's own buildings (not NYCHA developments): the development name when the building has one, otherwise its address. */
+async function clientSites(tenantId: string): Promise<{ name: string; address: string }[]> {
+  const rows = await db.select({ address: organizationProperties.displayAddress, development: organizationProperties.development })
+    .from(organizationProperties)
+    .where(and(eq(organizationProperties.organizationId, tenantId), eq(organizationProperties.active, true)));
+  const seen = new Map<string, { name: string; address: string }>();
+  for (const r of rows) {
+    const name = (r.development || "").trim() || r.address;
+    if (!seen.has(normSite(name))) seen.set(normSite(name), { name, address: r.address });
+  }
+  return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The sites the picker lists: the client's own buildings; FIAREP keeps the NYCHA list (nycha: true). */
+router.get("/v1/coverage/sites", async (_req, res) => {
+  const actor = actorFrom(res);
+  if (!isCoverageEligible(actor) || !(await coverSiteOn(actor.tenantId))) { res.json({ on: false, nycha: false, sites: [] }); return; }
+  if (actor.tenantId === FIAREP_TENANT) { res.json({ on: true, nycha: true, sites: [] }); return; }
+  res.json({ on: true, nycha: false, sites: await clientSites(actor.tenantId) });
+});
+
+/** For a client the site must be one of its own buildings. */
+async function siteAllowed(tenantId: string, development: string): Promise<boolean> {
+  if (tenantId === FIAREP_TENANT) return true;
+  const target = normSite(development);
+  return (await clientSites(tenantId)).some((s) => normSite(s.name) === target || normSite(s.address) === target);
+}
+
 // Look up a development's 2-digit code so the picker can populate it.
-router.get("/v1/coverage/development-code", (req, res) => {
+router.get("/v1/coverage/development-code", async (req, res) => {
   const actor = actorFrom(res);
   if (!isCoverageEligible(actor)) {
     res.status(403).json({ error: "You are not eligible for site coverage." });
     return;
   }
+  if (!(await coverSiteOn(actor.tenantId))) { res.status(403).json({ error: NOT_ON }); return; }
   const development = typeof req.query.development === "string" ? req.query.development.trim() : "";
   if (!development) { res.status(400).json({ error: "development is required" }); return; }
+  if (!(await siteAllowed(actor.tenantId, development))) { res.status(400).json({ error: "That is not one of your company's buildings." }); return; }
   res.json({ development, code: developmentCoverageCode(development) });
 });
 
 // The signed-in supervisor's active coverage unlocks.
 router.get("/v1/coverage/active", async (_req, res) => {
   const actor = actorFrom(res);
-  if (!isCoverageEligible(actor)) { res.json([]); return; }
+  if (!isCoverageEligible(actor) || !(await coverSiteOn(actor.tenantId))) { res.json([]); return; }
   res.json(await listActiveCoverage(actor));
 });
 
@@ -50,6 +93,8 @@ router.post("/v1/coverage/unlock", async (req, res) => {
   const development = typeof body.development === "string" ? body.development.trim() : "";
   const code = typeof body.code === "string" ? body.code.trim() : "";
   if (!development) { res.status(400).json({ error: "development is required" }); return; }
+  if (!(await coverSiteOn(actor.tenantId))) { res.status(403).json({ error: NOT_ON }); return; }
+  if (!(await siteAllowed(actor.tenantId, development))) { res.status(400).json({ error: "That is not one of your company's buildings." }); return; }
   if (isHomeDevelopment(actor, development)) {
     res.status(400).json({ error: "That development is already part of your assignment." });
     return;

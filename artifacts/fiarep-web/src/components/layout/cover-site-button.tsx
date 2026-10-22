@@ -43,7 +43,18 @@ function formatExpiry(iso: string): string {
  */
 export function CoverSiteButton() {
   const { toast } = useToast();
-  const { data: developmentOptions = [] } = useListNychaDevelopments();
+  // The sites to pick from: a client's own buildings; FIAREP keeps the NYCHA list.
+  const [sites, setSites] = useState<{ nycha: boolean; sites: { name: string; address: string }[] }>({ nycha: false, sites: [] });
+  useEffect(() => {
+    fetch("/api/v1/coverage/sites", { headers: authHeaders() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => { if (j) setSites({ nycha: j.nycha === true, sites: Array.isArray(j.sites) ? j.sites : [] }); })
+      .catch(() => undefined);
+  }, []);
+  const { data: nychaOptions = [] } = useListNychaDevelopments({ query: { enabled: sites.nycha } as any });
+  const developmentOptions = sites.nycha
+    ? nychaOptions.map((d) => ({ key: d.id, value: d.name, label: undefined as string | undefined }))
+    : sites.sites.map((s) => ({ key: s.name, value: s.name, label: s.address !== s.name ? s.address : undefined }));
   const [open, setOpen] = useState(false);
   const [development, setDevelopment] = useState("");
   const [expectedCode, setExpectedCode] = useState("");
@@ -160,7 +171,7 @@ export function CoverSiteButton() {
             />
             <datalist id="cover-dev-options">
               {developmentOptions.map((d) => (
-                <option key={d.id} value={d.name} />
+                <option key={d.key} value={d.value}>{d.label}</option>
               ))}
             </datalist>
           </div>
