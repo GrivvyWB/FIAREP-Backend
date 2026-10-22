@@ -6,6 +6,7 @@ import { requirePlatformOwner } from "../middlewares/auth";
 import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
 import { endPilot, expirePilots, getPilotPrices, markPilotRefunded, purchasePilot, savePilotPrices, setPilotPaid, startPilot } from "../lib/pilot";
+import { applySetupTemplate, getSetupTemplate, saveSetupTemplate } from "../lib/setupTemplate";
 import { ensureResidentCode, newResidentCode, withResidentCode } from "../lib/residentRouting";
 import {
   getTimeClockConfig,
@@ -573,6 +574,27 @@ router.post("/v1/platform/organizations/:id/resident-code", async (req, res) => 
   const owner = res.locals["platformOwner"] as { name: string };
   await platformAudit(owner.name, "organization.resident-code", id, before, org);
   res.json({ code, created: true });
+});
+
+// Small-client setup: save one client's Platform Control switches, apply them to a new client in one press.
+router.get("/v1/platform/setup-template", requirePlatformOwner, async (_req, res) => {
+  const t = await getSetupTemplate();
+  res.json(t ? { fromId: t.fromId, fromName: t.fromName, savedAt: t.savedAt, savedBy: t.savedBy, switches: Object.keys(t.modules).length } : null);
+});
+router.post("/v1/platform/organizations/:id/save-as-setup", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const out = await saveSetupTemplate(String(req.params.id), owner.name);
+  if ("error" in out) { res.status(out.status).json({ error: out.error }); return; }
+  await platformAudit(owner.name, "setup_template.saved", out.fromId, null, { switches: Object.keys(out.modules).length });
+  res.json({ fromId: out.fromId, fromName: out.fromName, savedAt: out.savedAt, savedBy: out.savedBy, switches: Object.keys(out.modules).length });
+});
+router.post("/v1/platform/organizations/:id/apply-setup", async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const id = String(req.params.id);
+  const out = await applySetupTemplate(id);
+  if ("error" in out) { res.status(out.status).json({ error: out.error }); return; }
+  await platformAudit(owner.name, "setup_template.applied", id, out.before, out.after);
+  res.json({ applied: true, switches: out.switches });
 });
 
 // The price of each pilot option (60 days, 90 days, 1 year).

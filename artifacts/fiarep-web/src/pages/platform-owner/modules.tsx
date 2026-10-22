@@ -551,6 +551,36 @@ export default function OwnerModules() {
     } catch (e: any) { toast({ variant: "destructive", title: "Prices not saved", description: e?.data?.error || e?.message }); }
   };
 
+  // Small-client setup: one press sets every switch on a new client the way a saved client has them.
+  const [setupInfo, setSetupInfo] = useState<{ fromName: string; savedAt: string; switches: number } | null>(null);
+  const [setupBusy, setSetupBusy] = useState<"" | "save" | "apply">("");
+  useEffect(() => {
+    void customFetch<{ fromName: string; savedAt: string; switches: number } | null>("/api/v1/platform/setup-template", { responseType: "json" } as never).then(setSetupInfo).catch(() => undefined);
+  }, []);
+  const saveAsSetup = async () => {
+    if (!organization) return;
+    if (dirty) { toast({ variant: "destructive", title: "Press Save Changes first", description: "The setup is saved from what is saved on this client." }); return; }
+    if (!window.confirm(`Save every switch on ${organization.name} as the small-client setup?`)) return;
+    setSetupBusy("save");
+    try {
+      setSetupInfo(await customFetch<{ fromName: string; savedAt: string; switches: number }>(`/api/v1/platform/organizations/${encodeURIComponent(organization.id)}/save-as-setup`, { method: "POST", responseType: "json" } as never));
+      toast({ title: "Small-client setup saved", description: `From ${organization.name}.` });
+    } catch (e: any) { toast({ variant: "destructive", title: "Not saved", description: e?.data?.error || e?.message }); }
+    finally { setSetupBusy(""); }
+  };
+  const applySetup = async () => {
+    if (!organization || !setupInfo) return;
+    if (!window.confirm(`Set every switch on ${organization.name} the way ${setupInfo.fromName} has them?${dirty ? " Your unsaved changes on this page are dropped." : ""}`)) return;
+    setSetupBusy("apply");
+    try {
+      await customFetch(`/api/v1/platform/organizations/${encodeURIComponent(organization.id)}/apply-setup`, { method: "POST", responseType: "json" } as never);
+      await queryClient.invalidateQueries({ queryKey: getListOrganizationsQueryKey() });
+      setDirty(false);
+      toast({ title: "Small-client setup applied", description: `${organization.name} now has the same switches as ${setupInfo.fromName}.` });
+    } catch (e: any) { toast({ variant: "destructive", title: "Not applied", description: e?.data?.error || e?.message }); }
+    finally { setSetupBusy(""); }
+  };
+
   const save = async () => {
     if (!organization) return;
     try {
@@ -632,6 +662,18 @@ export default function OwnerModules() {
         </div>
       ) : (
         <>
+          {!isFiarep && (
+            <div className="flex flex-col gap-3 rounded-xl border border-[#185FA5]/30 bg-blue-50/60 p-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-900">Small-client setup</p>
+                <p className="text-xs text-slate-600">{setupInfo ? <>Saved from <b>{setupInfo.fromName}</b> · {setupInfo.switches.toLocaleString()} switches · {new Date(setupInfo.savedAt).toLocaleDateString([], { month: "short", day: "numeric", year: "numeric" })}</> : "Not saved yet. Open the client set up the way you like and press Save this client as the setup."}</p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Button type="button" disabled={!setupInfo || setupBusy !== ""} onClick={() => void applySetup()} className="bg-[#185FA5] text-white hover:bg-[#124d87]">{setupBusy === "apply" ? "Applying…" : "Apply small-client setup"}</Button>
+                <Button type="button" variant="outline" disabled={setupBusy !== ""} onClick={() => void saveAsSetup()}>{setupBusy === "save" ? "Saving…" : "Save this client as the setup"}</Button>
+              </div>
+            </div>
+          )}
           <div className="grid overflow-hidden rounded-xl border border-slate-200 bg-white sm:grid-cols-2 lg:grid-cols-4">
             <Metric label="Active modules" value={`${enabledModules.length} of ${MODULES.length}`} />
             <Metric label="Navigation items" value={String(enabledModules.length + 2)} />
