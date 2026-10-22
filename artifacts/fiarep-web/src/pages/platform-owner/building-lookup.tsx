@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearch } from "wouter";
-import { customFetch } from "@workspace/api-client-react";
+import { customFetch, useListOrganizations } from "@workspace/api-client-react";
 import { DofLookupPanel, type DofLookup } from "@/components/dof-lookup";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -63,7 +63,7 @@ export default function OwnerBuildingLookup() {
     setLogLoading(true);
     customFetch<ViolationLog>(`/api/v1/platform/aep/violations/${bbl}?bin=${encodeURIComponent(bin)}`, { responseType: "json" } as never)
       .then((r) => { if (alive) setLog(r); })
-      .catch(() => { if (alive) setLog({ hpd: [], dob: [], retrievedAt: new Date().toISOString() }); })
+      .catch(() => { if (alive) setLog({ hpd: [], dob: [], duplicates: [], jobs: 0, flagged: 0, building: { floors: 0, units: 0 }, retrievedAt: new Date().toISOString() }); })
       .finally(() => { if (alive) setLogLoading(false); });
     return () => { alive = false; };
   }, [bbl, bin]);
@@ -135,6 +135,29 @@ export default function OwnerBuildingLookup() {
       .finally(() => { if (alive) setPortfolioLoading(false); });
     return () => { alive = false; };
   }, [info?.registrationId]);
+  // Add every building in the list to one client, whatever owner name is on each.
+  const { data: clientOrgs } = useListOrganizations();
+  const [addTo, setAddTo] = useState("");
+  const [adding, setAdding] = useState(false);
+  const [addResult, setAddResult] = useState("");
+  async function addPortfolioToClient() {
+    if (!portfolio || !addTo) return;
+    setAdding(true); setAddResult("");
+    try {
+      const r = await customFetch<{ added: number; on: number; off: number; skipped: number; stoppedAtPropertyLimit: boolean; propertyLimit: number | null; licensedUnits: number | null }>(`/api/v1/platform/organizations/${encodeURIComponent(addTo)}/properties/bulk`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
+        body: JSON.stringify({ buildings: portfolio.rows.map((r) => ({ displayAddress: `${r.address}, ${r.borough} ${r.zip}`.trim(), bbl: r.bbl, units: Math.max(0, Math.round(Number(r.units) || 0)) })) }),
+      } as never);
+      const name = clientOrgs?.find((o) => o.id === addTo)?.name || addTo;
+      const parts = [`Added ${r.added.toLocaleString()} building${r.added === 1 ? "" : "s"} to ${name} — ${r.on.toLocaleString()} on the plan`];
+      if (r.off > 0) parts.push(`${r.off.toLocaleString()} switched off because they go past the ${r.licensedUnits?.toLocaleString()} licensed units`);
+      if (r.skipped > 0) parts.push(`${r.skipped.toLocaleString()} skipped (already registered, or on the same tax lot as one added)`);
+      if (r.stoppedAtPropertyLimit) parts.push(`stopped at the property limit of ${r.propertyLimit}`);
+      setAddResult(parts.join(" · ") + ".");
+      toast({ title: `Added to ${name}` });
+    } catch (err: any) { toast({ variant: "destructive", title: "Could not add the buildings", description: err?.data?.error || err?.message }); }
+    finally { setAdding(false); }
+  }
   function openPortfolio(r: PortfolioRow) {
     const p = new URLSearchParams({ address: `${r.address}, ${r.borough} ${r.zip}`.trim() });
     if (r.aep) { p.set("units", String(r.aep.units)); p.set("bbl", r.bbl); p.set("bin", r.bin); p.set("buildingId", r.aep.buildingId); p.set("aepStart", r.aep.aepStart || ""); p.set("round", r.aep.round); p.set("violationsAtStart", String(r.aep.violationsAtStart)); p.set("status", r.aep.status); p.set("dischargeDate", r.aep.dischargeDate || ""); }
@@ -206,6 +229,14 @@ export default function OwnerBuildingLookup() {
                       <option key={r.registrationId} value={i}>{r.address}, {r.borough} {r.zip}{r.units ? ` · ${r.units} units` : ""} · {r.hpdA + r.hpdB + r.hpdC} open HPD ({r.hpdB} B · {r.hpdC} C){r.aep?.status === "AEP Active" ? " · IN AEP" : ""} · {r.via[0] || ""}</option>
                     ))}
                   </select>
+                  <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                    <select value={addTo} onChange={(e) => { setAddTo(e.target.value); setAddResult(""); }} className="h-10 w-full max-w-sm rounded-md border border-slate-300 bg-white px-2 text-sm text-slate-900">
+                      <option value="">Add all to a client…</option>
+                      {(clientOrgs || []).filter((o) => o.id !== "default").sort((a, b) => a.name.localeCompare(b.name)).map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+                    </select>
+                    <Button type="button" disabled={!addTo || adding} onClick={() => void addPortfolioToClient()}>{adding ? "Adding…" : `Add all ${portfolio.rows.length} buildings`}</Button>
+                  </div>
+                  {addResult && <p className="mt-2 text-xs text-emerald-700">{addResult}</p>}
                 </>
               )}
             </div>
