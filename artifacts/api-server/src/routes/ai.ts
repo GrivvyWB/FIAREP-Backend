@@ -199,8 +199,11 @@ router.post("/ai/smart-repair/complete", requireAuth, async (req, res) => {
   const s = (k: string, n: number) => (typeof b[k] === "string" ? (b[k] as string).slice(0, n) : "");
   const jobId = s("jobId", 80), issue = s("issue", 200) || "Repair", address = s("address", 300), summary = s("summary", 8000);
   let notified = false, emailed = false;
+  const doneLine = [address, `Verified by ${actor.name}`].filter(Boolean).join(" · ");
+  // The administrators always get the finished repair; management too while its switch is on.
+  await notify(actor, "administrator", `Smart Repair complete: ${issue}`, doneLine, jobId || undefined).then(() => { notified = true; }).catch(() => undefined);
   if (modules["smartRepairToManagement"] !== false) {
-    await notify(actor, "management", `Smart Repair complete: ${issue}`, [address, `Verified by ${actor.name}`].filter(Boolean).join(" · "), jobId || undefined).catch(() => undefined);
+    await notify(actor, "management", `Smart Repair complete: ${issue}`, doneLine, jobId || undefined).catch(() => undefined);
     notified = true;
   }
   const to = typeof features["smartRepairEmailTo"] === "string" ? (features["smartRepairEmailTo"] as string).trim() : "";
