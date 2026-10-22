@@ -50,9 +50,11 @@ const categories = [
   ["hr-approvals", "Company approvals"],
 ] as const;
 
-const employeePositions = Object.values(StaffPosition).filter(
-  (position) => position !== "Other" && position !== "Borough Director",
-);
+const employeePositions: string[] = [
+  ...Object.values(StaffPosition).filter((position) => position !== "Other" && position !== "Borough Director"),
+  // Technician: opens the Technician home in the app (TECHNICIAN HOME switches).
+  "Technician",
+];
 
 type Category = typeof categories[number][0];
 type Draft = {

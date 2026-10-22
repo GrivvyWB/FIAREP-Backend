@@ -172,6 +172,7 @@ export const STAFF_POSITIONS = [
   "Community Coordinator Supervisor",
   "FIAREP Services",
   "FIAREP Services Supervisor",
+  "Technician",
 ] as const;
 
 /**

@@ -99,8 +99,11 @@ export default function CpmHome() {
   // FIAREP's own crew see all of it. Nothing on this screen is hidden by
   // judgement: Module Management is the only off switch, and tileEnabled()
   // below has the last word on every tile.
-  const isCpmRole = normalizedPosition.includes('cpm') || isTechnician;
-  const isInspectorRole = normalizedPosition.includes('inspector') || isTechnician;
+  // A client's Technician (title contains "technician") gets the Technician home too,
+  // with the TECHNICIAN HOME switches. FIAREP-only tiles (quotes) stay FIAREP's crew.
+  const isTechHome = isTechnician || normalizedPosition.includes('technician');
+  const isCpmRole = normalizedPosition.includes('cpm') || isTechHome;
+  const isInspectorRole = normalizedPosition.includes('inspector') || isTechHome;
 
   async function onSignOut() {
     await logout();
@@ -115,7 +118,7 @@ export default function CpmHome() {
       tiles: [
         { label: jobCount > 0 ? 'My Jobs (' + jobCount + ')' : 'My Jobs', onPress: () => router.push('/my-jobs'), tone: 'solid' as Tone },
         // FIAREP's own technicians always get the punch clock here, whatever Module Management says.
-        ...(isTechnician ? [{ label: 'Time Clock', onPress: () => router.push('/attendance'), tone: 'solid' as Tone }] : []),
+        ...(isTechHome ? [{ label: 'Time Clock', onPress: () => router.push('/attendance'), tone: 'solid' as Tone }] : []),
       ],
     },
     {
@@ -143,7 +146,7 @@ export default function CpmHome() {
         ...(isInspectorRole ? [{ label: 'Create Report', onPress: () => router.push('/create-report'), tone: 'outline' as Tone }] : []),
         ...(isInspectorRole && hasAnyMeasurementAccess(position, rawModules) ? [{ label: 'Measurement', onPress: () => router.push('/measurement'), tone: 'outline' as Tone }, { label: 'Saved Measurements', onPress: () => router.push('/saved-measurements'), tone: 'outline' as Tone }] : []),
         { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'outline' as Tone },
-        ...(isTechnician ? [] : [{ label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone }]),
+        ...(isTechHome ? [] : [{ label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'outline' as Tone }]),
       ],
     },
     ...(isCpmRole ? [{
@@ -168,12 +171,12 @@ export default function CpmHome() {
     },
   ];
 
-  const roleTitle = isTechnician ? 'Technician' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition.includes('cpm') ? 'CPM' : normalizedPosition.includes('inspector') ? 'Inspector' : 'Tech';
+  const roleTitle = isTechHome ? 'Technician' : isCpmSupervisor ? 'CPM Supervisor' : normalizedPosition.includes('cpm') ? 'CPM' : normalizedPosition.includes('inspector') ? 'Inspector' : 'Tech';
 
   // Same gates as always; the look is FieldHome's. My Jobs is the hero card,
   // Attendance / Time Clock is the clock card, the rest are tiles.
   // FIAREP's technicians answer to their own switches, not CPM / Inspector's.
-  const enabled = (label: string) => tileEnabled(isTechnician ? 'tech' : 'cpm', label, rawModules);
+  const enabled = (label: string) => tileEnabled(isTechHome ? 'tech' : 'cpm', label, rawModules);
   const homeSections = sections
     .filter((sec) => sec.heading !== 'My Work')
     .map((sec) => ({ heading: sec.heading, tiles: sec.tiles.filter((t) => enabled(t.label) && t.label !== 'Attendance').map((t) => ({ label: t.label, onPress: t.onPress })) }));
@@ -181,7 +184,7 @@ export default function CpmHome() {
   // The clock card honours its own switch: Time Clock for FIAREP's crew,
   // Attendance for everyone else. Neither is forced on any more.
   // A technician's Attendance and Time Clock are the one clock card: either switch off hides it.
-  const showClock = isTechnician ? enabled('Time Clock') && enabled('Attendance') : enabled('Attendance');
+  const showClock = isTechHome ? enabled('Time Clock') && enabled('Attendance') : enabled('Attendance');
   const tabs = [
     ...(showJobs ? [{ label: 'My Work', icon: 'clipboard-outline', onPress: () => router.push('/my-jobs') }] : []),
     ...(enabled('Inbox') ? [{ label: 'Inbox', icon: 'mail-outline', onPress: () => router.push('/notifications') }] : []),
@@ -193,7 +196,7 @@ export default function CpmHome() {
       title={roleTitle}
       banner={unread > 0 ? <AlertBanner count={unread} /> : null}
       hero={showJobs ? { label: 'My Jobs', onPress: () => router.push('/my-jobs'), badge: jobCount } : undefined}
-      clock={showClock ? { onPress: () => router.push('/attendance'), clockedIn, label: isTechnician ? 'Time Clock' : 'Attendance' } : undefined}
+      clock={showClock ? { onPress: () => router.push('/attendance'), clockedIn, label: isTechHome ? 'Time Clock' : 'Attendance' } : undefined}
       sections={homeSections}
       tabs={tabs}
     />
