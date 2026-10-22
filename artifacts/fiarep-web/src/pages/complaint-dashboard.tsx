@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ViolationAlertsStrip } from "@/components/violation-alerts-strip";
+import { FieldVisitsStrip } from "@/components/field-visits-strip";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
   DEVELOPMENT_ROTATION_MS,
@@ -446,6 +447,8 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
       <div className="px-4 md:px-6 space-y-4">
         {/* Violation alerts (opt-in per organization; director's own on/off switch) */}
         {!allClients && <ViolationAlertsStrip />}
+        {/* Where members actually went (door visits), by building */}
+        {!allClients && <FieldVisitsStrip />}
         {/* 7 Summary Panels */}
         <div className="overflow-x-auto pb-1">
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 lg:grid-cols-7 lg:min-w-[980px]">

@@ -80,7 +80,7 @@ router.post("/v1/door-visits/:id/send", async (req, res) => {
   const title = `Door visit — ${OUTCOMES[outcome]}: ${a.name}`;
   const when = new Date(String(next["at"])).toLocaleString("en-US", { timeZone: "America/New_York" });
   const detail = [where, when, next["record"] ? `Record ${next["record"]}` : "", next["video"] ? "Video at the door" : "", next["note"]].filter(Boolean).join(" · ");
-  for (const role of ["administrator", "management"]) await notify(a, role, title, detail).catch(() => undefined);
+  for (const role of ["administrator", "management"]) await notify(a, role, title, detail, row.id).catch(() => undefined);
   // Email: to the address typed on the phone, or the company's address on file when "Email the office" is on.
   let emailed = false;
   const [org] = await db.select({ name: organizations.name, features: organizations.features }).from(organizations).where(eq(organizations.id, a.tenantId)).limit(1);

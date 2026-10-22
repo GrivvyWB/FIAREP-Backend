@@ -575,7 +575,27 @@ async function requireOrgCommand(_req: Request, res: Response, next: NextFunctio
 const org = [requireAuth, requireOrgCommand];
 const by = (res: Response) => actorFrom(res).name;
 
-router.get("/v1/org/command", ...org, async (req, res) => {
+// A client's Command Center setup is FIAREP's: Platform Control → Command Center → Set up
+// (/v1/platform/command/client/:tenant/…). The client gets the services only: on its own
+// website it sees what the Command Center prepared, and the setup routes refuse it.
+const CLIENT = "/v1/platform/command/client/:tenant";
+async function asClient(req: Request, res: Response, next: NextFunction) {
+  const tenant = String(req.params["tenant"] ?? "");
+  if (!tenant || isPlatform(tenant)) { res.status(404).json({ error: "Unknown client" }); return; }
+  const [o] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, tenant)).limit(1);
+  if (!o) { res.status(404).json({ error: "Unknown client" }); return; }
+  res.locals["actor"] = { id: "platform-owner", tenantId: tenant, name: ownerName(res), role: "administrator", position: "FIAREP", developments: [], sessionVersion: 0 };
+  res.locals["clientScope"] = true;
+  next();
+}
+const SETUP_IS_FIAREPS = "FIAREP sets up your Command Center. Ask FIAREP to change this.";
+type Handler = (req: Request, res: Response) => unknown;
+function orgAndClient(method: "get" | "put" | "post" | "delete", sub: string, handler: Handler, setup = false) {
+  router[method](`/v1/org/command${sub}`, ...org, setup ? ((_req: Request, res: Response) => { res.status(403).json({ error: SETUP_IS_FIAREPS }); }) : handler);
+  router[method](`${CLIENT}${sub}`, asClient, handler);
+}
+
+orgAndClient("get", "", async (req, res) => {
   const tenantId = actorFrom(res).tenantId;
   const [own, effective, platform, devices, agents, usage, chain, auditRows] = await Promise.all([
     getSwitches(tenantId), effectiveSwitches(tenantId), getSwitches(PLATFORM_TENANT),
@@ -601,7 +621,7 @@ router.get("/v1/org/command", ...org, async (req, res) => {
   });
 });
 
-router.put("/v1/org/command/switches", ...org, async (req, res) => {
+orgAndClient("put", "/switches", async (req, res) => {
   const tenantId = actorFrom(res).tenantId;
   const b = (req.body ?? {}) as Record<string, unknown>;
   const before = await getSwitches(tenantId);
@@ -619,11 +639,11 @@ router.put("/v1/org/command/switches", ...org, async (req, res) => {
   await saveSwitches(next, tenantId);
   await commandAuditLog({ tenantId, actor: by(res), event: "switches.changed", detail: { before, after: next } });
   res.json(next);
-});
+}, true);
 
 // A client that pays for its own AI adds its keys here (checked with the provider, stored encrypted).
 const CLIENT_KEY_PATHS: Record<string, ClientKeyName> = { anthropic: "anthropic", gemini: "gemini", openai: "openai", maps: "googleMaps" };
-router.put("/v1/org/command/own-keys/:which", ...org, async (req, res) => {
+orgAndClient("put", "/own-keys/:which", async (req, res) => {
   const tenantId = actorFrom(res).tenantId;
   const name = CLIENT_KEY_PATHS[String(req.params["which"])];
   if (!name) { res.status(404).json({ error: "Unknown key" }); return; }
@@ -635,54 +655,54 @@ router.put("/v1/org/command/own-keys/:which", ...org, async (req, res) => {
   await saveClientKey(tenantId, name, key, by(res));
   await commandAuditLog({ tenantId, actor: by(res), event: "own-key.set", detail: { key: name, last4: key.slice(-4) } });
   res.json((await clientKeyStatus(tenantId))[name]);
-});
-router.delete("/v1/org/command/own-keys/:which", ...org, async (req, res) => {
+}, true);
+orgAndClient("delete", "/own-keys/:which", async (req, res) => {
   const tenantId = actorFrom(res).tenantId;
   const name = CLIENT_KEY_PATHS[String(req.params["which"])];
   if (!name) { res.status(404).json({ error: "Unknown key" }); return; }
   await saveClientKey(tenantId, name, null, by(res));
   await commandAuditLog({ tenantId, actor: by(res), event: "own-key.removed", detail: { key: name } });
   res.json((await clientKeyStatus(tenantId))[name]);
-});
+}, true);
 
-router.post("/v1/org/command/devices/:id/:decision", ...org, async (req, res) => {
+orgAndClient("post", "/devices/:id/:decision", async (req, res) => {
   const decision = String(req.params["decision"]);
   if (decision !== "approve" && decision !== "revoke") { res.status(404).json({ error: "Not found" }); return; }
   const out = await decideDevice(actorFrom(res).tenantId, String(req.params["id"]), decision, by(res));
   if (!out) { res.status(404).json({ error: decision === "approve" ? "No phone waiting with that id" : "Unknown phone" }); return; }
   res.json(out);
-});
+}, true);
 
-router.post("/v1/org/command/agents", ...org, async (req, res) => {
+orgAndClient("post", "/agents", async (req, res) => {
   const out = await createAgent(req, actorFrom(res).tenantId, by(res));
   if ("error" in out) { res.status(400).json(out); return; }
   res.status(201).json(out);
-});
+}, true);
 
-router.post("/v1/org/command/agents/:id/revoke", ...org, async (req, res) => {
+orgAndClient("post", "/agents/:id/revoke", async (req, res) => {
   const out = await revokeAgent(actorFrom(res).tenantId, String(req.params["id"]), by(res));
   if (!out) { res.status(404).json({ error: "Unknown computer" }); return; }
   res.json(out);
-});
+}, true);
 
-router.delete("/v1/org/command/agents/:id", ...org, async (req, res) => {
+orgAndClient("delete", "/agents/:id", async (req, res) => {
   const out = await removeAgent(actorFrom(res).tenantId, String(req.params["id"]), by(res));
   if (!out) { res.status(404).json({ error: "Only a revoked computer can be removed" }); return; }
   res.json(out);
-});
+}, true);
 
-router.put("/v1/org/command/schedule", ...org, async (req, res) => {
+orgAndClient("put", "/schedule", async (req, res) => {
   const tenantId = actorFrom(res).tenantId;
   const next = await saveSchedule(tenantId, (req.body ?? {}) as Record<string, unknown>);
   await commandAuditLog({ tenantId, actor: by(res), event: "schedule.changed", detail: next });
   res.json(next);
-});
+}, true);
 
-router.get("/v1/org/command/audit", ...org, async (req, res) => {
+orgAndClient("get", "/audit", async (req, res) => {
   res.json({ rows: await recentAudit(Number(req.query["limit"]) || 200, actorFrom(res).tenantId) });
 });
 
-router.get("/v1/org/command/work-orders", ...org, async (req, res) => {
+orgAndClient("get", "/work-orders", async (req, res) => {
   const status = str(req.query["status"], 20) || "any";
   res.json(await db.select().from(commandWorkOrders).where(workOrdersWhere(actorFrom(res).tenantId, status)).orderBy(desc(commandWorkOrders.createdAt)).limit(500));
 });
@@ -740,11 +760,14 @@ router.post("/v1/public/resident-desk/:id/messages", rateLimit("resident-desk", 
 
 // Staff: conversations on the Command Center page (FIAREP's own, or a client's).
 async function chatScope(req: Request, res: Response): Promise<string | null> {
+  if (res.locals["clientScope"] === true) return actorFrom(res).tenantId;
   if (req.path.startsWith("/v1/platform/")) return PLATFORM_TENANT;
   return actorFrom(res).tenantId;
 }
-for (const prefix of ["/v1/platform/command", "/v1/org/command"]) {
-  const guard = prefix.startsWith("/v1/platform") ? [] : org;
+for (const prefix of ["/v1/platform/command", "/v1/org/command", CLIENT]) {
+  const guard = prefix === CLIENT ? [asClient] : prefix.startsWith("/v1/platform") ? [] : org;
+  // The client's own website: mailbox setup is FIAREP's (Platform Control → Set up).
+  const setupGuard = prefix === "/v1/org/command" ? [(_req: Request, res: Response) => { res.status(403).json({ error: SETUP_IS_FIAREPS }); }] : [];
   router.get(`${prefix}/resident-chats`, ...guard, async (req, res) => {
     res.setHeader("Cache-Control", "no-store");
     res.json(await recentConversations((await chatScope(req, res))!));
@@ -765,7 +788,7 @@ for (const prefix of ["/v1/platform/command", "/v1/org/command"]) {
     res.json(await mailStatus((await chatScope(req, res))!));
   });
   router.get(`${prefix}/mailbox/preset`, ...guard, async (req, res) => { res.json(presetFor(str(req.query["email"], 200))); });
-  router.put(`${prefix}/mailbox`, ...guard, async (req, res) => {
+  router.put(`${prefix}/mailbox`, ...guard, ...setupGuard, async (req, res) => {
     const tenantId = (await chatScope(req, res))!;
     const who = prefix.startsWith("/v1/platform") ? ownerName(res) : by(res);
     const b = (req.body ?? {}) as Record<string, unknown>;
@@ -773,7 +796,7 @@ for (const prefix of ["/v1/platform/command", "/v1/org/command"]) {
     if ("error" in r) { res.status(400).json(r); return; }
     res.json(await mailStatus(tenantId));
   });
-  router.delete(`${prefix}/mailbox`, ...guard, async (req, res) => {
+  router.delete(`${prefix}/mailbox`, ...guard, ...setupGuard, async (req, res) => {
     const tenantId = (await chatScope(req, res))!;
     await disconnectMailbox(tenantId, prefix.startsWith("/v1/platform") ? ownerName(res) : by(res));
     res.json(await mailStatus(tenantId));

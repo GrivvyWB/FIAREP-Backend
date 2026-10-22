@@ -1,4 +1,5 @@
 import { requestFileDownloadUrl } from "@workspace/api-client-react";
+import { DoorVideo } from "@/components/door-video";
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle, sameTitle } from "@/lib/titles";
 import { AttachedMeasurements } from "@/components/attached-measurements";
 import {
@@ -220,7 +221,8 @@ function statusLabel(status: unknown) {
 
 /** The resident's sign-off from the member's phone: their signature, or why there is none. */
 function ResidentSignOffView({ value }: { value: unknown }) {
-  const v = value && typeof value === "object" ? (value as { status?: string; name?: string; note?: string; at?: string; signature?: { d?: string; w?: number; h?: number }; video?: { objectPath?: string; seconds?: number } }) : null;
+  const v = value && typeof value === "object" ? (value as { status?: string; name?: string; note?: string; at?: string; signature?: { d?: string; w?: number; h?: number }; video?: { objectPath?: string; seconds?: number; contentType?: string } }) : null;
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
   if (!v?.status) return null;
   const signed = v.status === "signed";
   const label = signed ? `Signed by resident: ${v.name ?? ""}` : v.status === "refused" ? "Resident refused to sign" : "Resident not home — not signed";
@@ -235,9 +237,10 @@ function ResidentSignOffView({ value }: { value: unknown }) {
       {v.note && <p className="mt-1 text-muted-foreground">{v.note}</p>}
       {v.video?.objectPath && (
         <button type="button" className="mt-2 text-sm font-medium text-[#185FA5] underline" onClick={async () => {
-          try { const d = await requestFileDownloadUrl({ objectPath: v.video!.objectPath! }); window.open(d.downloadUrl, "_blank", "noopener"); } catch { window.alert("Could not open the video."); }
+          try { const d = await requestFileDownloadUrl({ objectPath: v.video!.objectPath! }); setVideoUrl(d.downloadUrl); } catch { window.alert("Could not open the video."); }
         }}>Play door video ({Math.floor((v.video.seconds || 0) / 60)}:{String((v.video.seconds || 0) % 60).padStart(2, "0")})</button>
       )}
+      {videoUrl && <div className="mt-2"><DoorVideo url={videoUrl} contentType={v.video?.contentType} /></div>}
     </div>
   );
 }

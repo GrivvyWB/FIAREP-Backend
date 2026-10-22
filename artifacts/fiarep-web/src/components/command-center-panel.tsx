@@ -78,10 +78,13 @@ function InstallLines({ lines, onCopy }: { lines: Install; onCopy: (text: string
 /** The Command Center control panel. "platform": Platform Control → Command
  *  Center (FIAREP's own, plus every client's on/off, usage and cap). "org": a
  *  client's own page in its menu (its phones, computers, switches, audit). */
-export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
+export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "platform" | "org" | "client"; tenantId?: string; tenantName?: string }) {
   const { toast } = useToast();
-  const base = scope === "platform" ? "/v1/platform/command" : "/v1/org/command";
+  // platform: FIAREP's own. client: a client's setup, run by FIAREP from Platform Control.
+  // org: what a client sees on its own website — the services only, no setup or switches.
+  const base = scope === "platform" ? "/v1/platform/command" : scope === "client" ? `/v1/platform/command/client/${encodeURIComponent(tenantId || "")}` : "/v1/org/command";
   const platform = scope === "platform";
+  const servicesOnly = scope === "org";
   const [data, setData] = useState<Overview | null>(null);
   const [loadError, setLoadError] = useState("");
   const [audit, setAudit] = useState<AuditRow[]>([]);
@@ -223,14 +226,16 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h1 className="text-2xl font-bold text-slate-950">Command Center</h1>
-          <p className="text-sm text-slate-500">{platform
+          <h1 className="text-2xl font-bold text-slate-950">{scope === "client" ? `Command Center · ${tenantName || tenantId}` : "Command Center"}</h1>
+          <p className="text-sm text-slate-500">{servicesOnly
+            ? "Your assistant: ask it from the FIAREP app (press Command Center and talk or type) and it gives you the information — your buildings, complaints, work orders, schedules and reports. What it prepared for you is below. FIAREP sets it up for your company."
+            : platform
             ? "Talk to FIAREP and your computer from the phone. Reads answer right away; anything that changes something can wait for Face ID on the phone. Every step is written to a tamper-evident audit trail. Each client has its own Command Center (Clients, below)."
             : "Talk to your buildings, work orders and computers from your phone. Questions answer right away; anything that changes something waits for your Face ID on the phone. Everything is limited to your company, and every step is written to a tamper-evident audit trail."}</p>
         </div>
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <span className="text-sm font-semibold text-slate-900">Command Center {data.switches.enabled && !offByFiarep ? "ON" : "OFF"}</span>
-          <Switch checked={data.switches.enabled} disabled={offByFiarep} onCheckedChange={(v) => void saveSwitches({ enabled: v })} />
+          {!servicesOnly && <Switch checked={data.switches.enabled} disabled={offByFiarep} onCheckedChange={(v) => void saveSwitches({ enabled: v })} />}
         </label>
       </div>
 
@@ -255,14 +260,14 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       {platform && data.clients && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Clients</h2>
-          <p className="text-xs text-slate-500">Every client starts with the Command Center <b>off</b> — it isn't in their menu or app and they don't see it. Switch it on here (or Platform → Modules) when a client asks for it. Once on, the client has its own Command Center: its administrators set up their phones in the app and approve them, add their computers (Windows, Mac or Linux) and switch actions on fiarep.com → Command Center. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Usage runs on FIAREP's {gemini ? "Gemini" : "Claude"} key; this month's cost per client is below ({activeModel}: {priceText(activeModel)}). A cap stops that client's commands for the rest of the month once reached. "AI paid by: Client" means that client adds its own keys on its Command Center page (Claude or Gemini for commands and resident messages, OpenAI for reading resident photos, Google Maps for drive times) and pays those companies directly; FIAREP's keys are never used for them and no cap applies.</p>
+          <p className="text-xs text-slate-500">Every client starts with the Command Center <b>off</b> — it isn't in their menu or app and they don't see it. Switch it on here (or Platform → Modules) when a client asks for it. Once on, the client gets the Command Center's services (ask from the app, work orders, reports, resident messages). Its setup — approving its phones, its computers (Windows, Mac or Linux), actions, email, scheduling and the audit trail — is here: press Set up next to the client. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Usage runs on FIAREP's {gemini ? "Gemini" : "Claude"} key; this month's cost per client is below ({activeModel}: {priceText(activeModel)}). A cap stops that client's commands for the rest of the month once reached. "AI paid by: Client" means that client's own keys are added under Set up (Claude or Gemini for commands and resident messages, OpenAI for reading resident photos, Google Maps for drive times) and pays those companies directly; FIAREP's keys are never used for them and no cap applies.</p>
           <div className="mt-3 overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Client</th><th className="py-1 pr-3">On</th><th className="py-1 pr-3">This month</th><th className="py-1 pr-3">AI paid by</th><th className="py-1 pr-3">Monthly cap</th><th className="py-1 pr-3">Phones</th><th className="py-1">Computers</th></tr></thead>
             <tbody>{data.clients.map((c) => {
               const capText = caps[c.id] ?? (c.cap === null ? "" : String(c.cap));
               return (
                 <tr key={c.id} className={`border-t border-slate-100 ${c.on ? "" : "opacity-50"}`}>
-                  <td className="py-1.5 pr-3 font-medium text-slate-900">{c.name}{c.status !== "active" ? <span className="block text-xs font-normal text-slate-500">{c.status}</span> : null}</td>
+                  <td className="py-1.5 pr-3 font-medium text-slate-900">{c.name}{c.status !== "active" ? <span className="block text-xs font-normal text-slate-500">{c.status}</span> : null}<a href={`/platform-owner/command-center?client=${encodeURIComponent(c.id)}&name=${encodeURIComponent(c.name)}`} className="block text-xs font-semibold text-[#185FA5] underline">Set up</a></td>
                   <td className="py-1.5 pr-3"><Switch checked={c.on} onCheckedChange={(v) => void saveClient(c, { on: v })} /></td>
                   <td className="py-1.5 pr-3 text-xs text-slate-700">{c.usage ? <>{money(c.usage.costUsd)} · {c.usage.runs} cmd{c.usage.unpricedRuns ? ` (${c.usage.unpricedRuns} not priced)` : ""}<span className="block text-slate-500">{(c.usage.inputTokens / 1000).toFixed(0)}k in / {(c.usage.outputTokens / 1000).toFixed(0)}k out tokens</span></> : <span className="text-slate-400">—</span>}</td>
                   <td className="py-1.5 pr-3">
@@ -288,6 +293,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         </section>
       )}
 
+      {!servicesOnly && (
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">Phones</h2>
         <p className="text-xs text-slate-500">{platform
@@ -317,6 +323,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         )}
         {data.devices.length === 0 && <p className="mt-3 text-sm text-slate-500">No phones yet.</p>}
       </section>
+      )}
 
       {platform && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -330,6 +337,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         </section>
       )}
 
+      {!servicesOnly && (
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">Computers</h2>
         <p className="text-xs text-slate-500">Windows PCs, Macs and Linux computers. The agent only calls out to FIAREP; nothing connects to the computer. It can only read the folders, open the apps and run the tasks listed in its own settings file on that computer, and with your phones' Face ID keys pinned there, anything that changes something needs your Face ID — checked on the computer itself.</p>
@@ -369,7 +377,9 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </details>
         )}
       </section>
+      )}
 
+      {!servicesOnly && (
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">Actions</h2>
         <p className="text-xs text-slate-500">The complete list of what {platform ? "the" : "your"} Command Center can do. Switch any of them off. “Face ID” makes it wait for approval on the phone before it runs. Tasks on a computer also follow their own <code>confirm</code> setting in its settings file.{platform ? " Switching an action off here switches it off for every client too; FIAREP-server actions are never on a client's." : ""}</p>
@@ -415,6 +425,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </div>
         )}
       </section>
+      )}
 
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -422,7 +433,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
             <h2 className="text-base font-semibold text-slate-950">Resident messages</h2>
             <p className="text-xs text-slate-500">Residents can write about their complaint in the FIAREP app or on the website (from the phone or browser they filed it on). The Command Center answers for the office — status, open times, booking the visit on the crew's calendar — as "{"<company>"} Maintenance". It doesn't announce that it's automated, but if a resident asks whether they're talking to a person, it says it's the office's automated assistant and offers a staff member. Emergencies and anything it can't do go to staff. Reply here yourself at any time; replying takes the conversation over until you give it back. With "Work orders from resident photos" on, Smart Repair reads each complaint photo and drafts a work order with the repair instructions (trade, tools, parts, steps) for the supervisors; assigning it books the member and tells the resident the visit time.</p>
           </div>
-          <div className="flex flex-col gap-2">
+          {!servicesOnly && (<div className="flex flex-col gap-2">
             <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm">
               <span className="font-semibold text-slate-900">Answer residents</span>
               <Switch checked={data.switches.residentChat !== false} onCheckedChange={(v) => void saveSwitches({ residentChat: v })} />
@@ -431,7 +442,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
               <span className="font-semibold text-slate-900">Work orders from resident photos</span>
               <Switch checked={data.switches.autoWorkOrders !== false} onCheckedChange={(v) => void saveSwitches({ autoWorkOrders: v })} />
             </label>
-          </div>
+          </div>)}
         </div>
         <div className="mt-3 space-y-2">
           {chats.map((c) => (
@@ -467,7 +478,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         </div>
       </section>
 
-      {!platform && data.paysOwn && data.ownKeys && (
+      {!platform && !servicesOnly && data.paysOwn && data.ownKeys && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Your AI keys</h2>
           <p className="text-xs text-slate-500">Your organization pays for its own AI: the Command Center uses these keys and the companies bill you directly. Each key is checked with the company before it's saved, and stored encrypted. FIAREP's keys are never used for you.</p>
@@ -502,7 +513,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         </section>
       )}
 
-      {mail && (
+      {mail && !servicesOnly && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
@@ -540,7 +551,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         </section>
       )}
 
-      {sched && (
+      {sched && !servicesOnly && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Scheduling</h2>
           <p className="text-xs text-slate-500">When the Command Center books a member for a job it puts it on the calendar with a start and end time. A member already booked can't be booked again for that time; the next job in another building starts after the drive there{platform ? " (Google Maps with traffic)" : ""}. Jobs in the same building can follow each other with no drive. When a member has this many apartments in one building that day, it becomes a building day: no other building that day. New York time.</p>
@@ -587,6 +598,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         {!reports.length && <p className="mt-2 text-sm text-slate-500">None yet. Ask the Command Center for a report (for example "write a report on this week's complaints").</p>}
       </details>
 
+      {!servicesOnly && (
       <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <summary className="cursor-pointer text-base font-semibold text-slate-950">
           Audit trail ({platform ? data.audit.rows : audit.length} entries) ·{" "}
@@ -603,6 +615,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </tbody>
         </table></div>
       </details>
+      )}
     </div>
   );
 }

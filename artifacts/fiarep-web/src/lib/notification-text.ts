@@ -61,6 +61,13 @@ export function notificationTitle(message: string | null | undefined): string {
  * person actually has is used, so an alert always opens somewhere useful
  * (a CPM Supervisor's inspection alert opens Scope Review, not a page they
  * are bounced off). Falls back to the Inbox. */
+/** A notification with no record attached still opens its page: Door Visits, Smart Repair. */
+export function notificationPageHref(message: string, modules?: OrganizationModules | null): string | null {
+  if (/^door visit/i.test(message || "")) return "/door-visits";
+  if (/^smart repair/i.test(message || "")) return modules?.["smartRepairSync"] === true ? "/smart-repairs" : null;
+  return null;
+}
+
 export function notificationHref(
   message: string,
   reportId: string,
@@ -71,7 +78,11 @@ export function notificationHref(
   const inspector = opts?.inspector ?? (opts?.staff?.role === "inspector" && opts?.staff?.position === "Inspector");
   type Candidate = { module: StaffModule; href: string };
   let candidates: Candidate[];
-  if (/change work order|^change orders /i.test(m)) {
+  if (/^door visit/i.test(m)) {
+    candidates = [{ module: "door-visits", href: `/door-visits?id=${id}` }];
+  } else if (/^smart repair/i.test(m)) {
+    candidates = [{ module: "reports", href: `/reports?id=${id}` }, { module: "complaint-dashboard", href: `/reports?id=${id}` }];
+  } else if (/change work order|^change orders /i.test(m)) {
     candidates = [{ module: "change-orders", href: "/change-orders" }];
   } else if (/^Measurement added to inspection/i.test(m) || /inspection logged|awaiting review|approved inspection|^inspection |^building violations|violation/i.test(m)) {
     // Inspections / violations: the inspector's own copy, the approver's

@@ -1,4 +1,4 @@
-import { notificationHref, notificationTitle } from "@/lib/notification-text";
+import { notificationHref, notificationPageHref, notificationTitle } from "@/lib/notification-text";
 import { customFetch, useListNotifications, useMarkNotificationRead } from "@workspace/api-client-react";
 import { getListNotificationsQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -188,6 +188,15 @@ export default function Notifications() {
                       >
                         {content}
                         <ExternalLink className="w-4 h-4 shrink-0 mt-1 text-muted-foreground" aria-label="View report" />
+                      </Link>
+                    ) : notificationPageHref(notification.message, organizationModules) ? (
+                      <Link
+                        href={notificationPageHref(notification.message, organizationModules)!}
+                        className="flex min-w-0 flex-1 items-start gap-4 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        onClick={() => { if (!notification.read) void handleMarkRead(notification.id); }}
+                      >
+                        {content}
+                        <ExternalLink className="w-4 h-4 shrink-0 mt-1 text-muted-foreground" aria-label="Open" />
                       </Link>
                     ) : (
                       <div className="flex min-w-0 flex-1 items-start gap-4">{content}</div>

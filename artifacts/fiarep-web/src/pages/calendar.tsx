@@ -1,6 +1,6 @@
 import { sameTitle, supervisedTradeForPosition } from "@/lib/titles";
 import { useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, ClipboardCheck, FolderKanban, Loader2, Plane, Wrench, FileSearch, UserRoundCheck } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ArrowRight, CalendarDays, ClipboardCheck, FolderKanban, Loader2, Plane, Wrench, FileSearch, UserRoundCheck, DoorOpen, MapPin } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
 import { customFetch } from "@workspace/api-client-react";
 import { Link } from "wouter";
@@ -10,8 +10,8 @@ import type { Staff } from "@workspace/api-client-react";
 
 type RecordItem = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt?: string; updatedAt?: string };
 type CalendarItem = RecordItem & { category: Category; label: string; href: string; start: Date; end: Date };
-type Category = "Projects" | "Inspections" | "Resident reports" | "Emergency jobs" | "Elevator jobs" | "Leave requests" | "Booked jobs";
-const categories: Category[] = ["Projects", "Inspections", "Resident reports", "Emergency jobs", "Elevator jobs", "Leave requests", "Booked jobs"];
+type Category = "Projects" | "Inspections" | "Resident reports" | "Emergency jobs" | "Elevator jobs" | "Leave requests" | "Booked jobs" | "Door visits" | "Building check-ins";
+const categories: Category[] = ["Projects", "Inspections", "Resident reports", "Emergency jobs", "Elevator jobs", "Leave requests", "Booked jobs", "Door visits", "Building check-ins"];
 const meta: Record<Category, { entity: string; href: string; icon: typeof FolderKanban; color: string }> = {
   Projects: { entity: "projects", href: "/projects", icon: FolderKanban, color: "bg-[#dce7f1] text-[#526b80]" },
   Inspections: { entity: "inspections", href: "/inspections", icon: ClipboardCheck, color: "bg-[#fff5d6] text-[#b17d00]" },
@@ -21,6 +21,9 @@ const meta: Record<Category, { entity: string; href: string; icon: typeof Folder
   "Leave requests": { entity: "leave-requests", href: "/leave", icon: Plane, color: "bg-[#e4e8f7] text-[#5265a0]" },
   // Members booked for jobs by the Command Center (start and end time; one job at a time per member).
   "Booked jobs": { entity: "staff-bookings", href: "/calendar", icon: UserRoundCheck, color: "bg-[#fdebd3] text-[#9a5b12]" },
+  // Where members actually went: door visits and building check-ins (time-stamped by the server).
+  "Door visits": { entity: "door-visits", href: "/door-visits", icon: DoorOpen, color: "bg-[#e0f2fe] text-[#0c4a6e]" },
+  "Building check-ins": { entity: "site-checkins", href: "/site-checkins", icon: MapPin, color: "bg-[#ecfccb] text-[#3f6212]" },
 };
 type Booking = { id: string; member: string; title: string; address: string; apartments: string[]; wholeDay: boolean; start: string; end: string; travelMinutes: number; drive: string | null; length: string; travelSource: string; development: string | null };
 const timeOf = (d: Date) => d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
@@ -110,6 +113,18 @@ export default function Calendar() {
     queryFn: () => customFetch<Booking[]>(`/api/v1/staff-bookings?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`, { responseType: "json" } as never),
     enabled: !!staff, refetchInterval: 30_000, staleTime: 10_000,
   });
+  // Door visits (the office sees everyone's; a member their own) and building check-ins (office).
+  const office = staff?.role === "administrator" || staff?.role === "management";
+  const doorVisits = useQuery({
+    queryKey: ["door-visits"],
+    queryFn: () => customFetch<Array<{ id: string; at: string; address: string; staffName: string; outcomeLabel: string; floor?: string; unit?: string }>>("/api/v1/door-visits", { responseType: "json" } as never),
+    enabled: !!staff, refetchInterval: 60_000, staleTime: 20_000,
+  });
+  const checkins = useQuery({
+    queryKey: ["site-checkins", range.from.slice(0, 10), range.to.slice(0, 10)],
+    queryFn: () => customFetch<Array<{ id: string; staffName: string; building?: { address?: string }; checkedInAt: string; checkedOutAt?: string | null }>>(`/api/v1/site-checkins?from=${range.from.slice(0, 10)}&to=${range.to.slice(0, 10)}`, { responseType: "json" } as never),
+    enabled: office, refetchInterval: 60_000, staleTime: 20_000,
+  });
   const sources = [
     { query: projects, enabled: canReadCalendarEntity(staff, "projects") },
     { query: inspections, enabled: canReadCalendarEntity(staff, "inspections") },
@@ -118,11 +133,18 @@ export default function Calendar() {
     { query: elevators, enabled: canReadCalendarEntity(staff, "elevator-jobs") },
     { query: leave, enabled: canReadCalendarEntity(staff, "leave-requests") },
     { query: bookings, enabled: !!staff },
+    { query: doorVisits, enabled: !!staff },
+    { query: checkins, enabled: office },
   ] as const;
   const queries = sources.map(({ query }) => query);
   const records = useMemo(() => ([projects, inspections, reports, emergencies, elevators, leave] as const).flatMap((query, i) =>
     ((query.data || []) as RecordItem[]).map((record) => normalize(record, categories[i]))
-  ).filter((item): item is CalendarItem => Boolean(item)).concat((bookings.data || []).map(bookingItem)), [projects.data, inspections.data, reports.data, emergencies.data, elevators.data, leave.data, bookings.data]);
+  ).filter((item): item is CalendarItem => Boolean(item)).concat((bookings.data || []).map(bookingItem))
+    .concat((doorVisits.data || []).map((v): CalendarItem => ({ id: v.id, development: v.address, category: "Door visits", href: `/door-visits?id=${encodeURIComponent(v.id)}`, start: new Date(v.at), end: new Date(v.at),
+      label: `${new Date(v.at).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · ${v.staffName} · ${v.outcomeLabel} · ${[v.address, v.floor ? `Fl ${v.floor}` : "", v.unit ? `Apt ${v.unit}` : ""].filter(Boolean).join(" ")}` })))
+    .concat((Array.isArray(checkins.data) ? checkins.data : []).map((c): CalendarItem => ({ id: c.id, development: c.building?.address || null, category: "Building check-ins", href: "/site-checkins", start: new Date(c.checkedInAt), end: new Date(c.checkedOutAt || c.checkedInAt),
+      label: `${new Date(c.checkedInAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })} · ${c.staffName} · checked in at ${c.building?.address || "a building"}` }))),
+    [projects.data, inspections.data, reports.data, emergencies.data, elevators.data, leave.data, bookings.data, doorVisits.data, checkins.data]);
   const visible = filter === "All" ? records : records.filter((item) => item.category === filter);
   const first = new Date(cursor.getFullYear(), cursor.getMonth(), 1);
   const gridStart = new Date(first); gridStart.setDate(1 - first.getDay());
