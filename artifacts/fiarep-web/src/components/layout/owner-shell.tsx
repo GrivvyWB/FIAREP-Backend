@@ -87,6 +87,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
             Module Management
           </Link>
           <Link
+            href="/platform-owner/hr"
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/hr"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <UsersRound className="h-4 w-4" />
+            HR
+          </Link>
+          <Link
             href="/platform-owner/join-requests"
             className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
               location === "/platform-owner/join-requests"

@@ -14,9 +14,15 @@ import { emailStaffAccessCode } from "../lib/staffEmail";
 import { audit } from "../lib/audit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { actorFrom, requireAuth } from "../middlewares/auth";
+import { loadHrPositions } from "../lib/hrPositions";
 
 const router: IRouter = Router();
 router.use("/v1/hr", requireAuth);
+
+// The HR form's job titles: the built-in list plus the ones added in Platform Control → HR.
+router.get("/v1/hr/positions", async (_req, res) => {
+  res.json({ added: await loadHrPositions() });
+});
 const CODE_WINDOW_MS = 24 * 60 * 60 * 1000;
 const CODE_EMAIL_COOLDOWN_MS = 24 * 60 * 60 * 1000;
 
@@ -333,6 +339,8 @@ router.post("/v1/hr/employee-records/:id/complete", async (req, res): Promise<vo
     const email = String(record.state["email"] || "").trim();
     const position = String(record.state["position"] || "").trim();
     let role = String(record.state["role"] || "").trim();
+    // Technician (picked in HR): signs in to the technician home, which is the inspector account.
+    if (role === "technician") role = "inspector";
     const maintenanceAssignment = req.body?.maintenanceAssignment === "truck"
       ? "truck"
       : req.body?.maintenanceAssignment === "regular"

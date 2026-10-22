@@ -1140,7 +1140,7 @@ router.post("/v1/:entity", async (req, res, next) => {
     const role = String(rawState["role"] || "").trim();
     const position = String(rawState["position"] || "").trim();
     if (!firstName || !lastName || !email.includes("@") ||
-        !canIssueStaffAccountRole(role) ||
+        !(canIssueStaffAccountRole(role) || role === "technician") ||
         !isAcceptedStaffPosition(position)) {
       res.status(400).json({ error: "First name, last name, email, role, and position are required" });
       return;

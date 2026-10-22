@@ -179,9 +179,15 @@ export const STAFF_POSITIONS = [
  * ("<Trade> Supervisor" / "Supervisor <Trade>"), so a new supervisor title
  * needs no code change. Access for it follows the title (see titles.ts).
  */
+// Job titles added in Platform Control → HR (loaded at start and whenever they change).
+const extraPositions = new Set<string>();
+export function setExtraPositions(titles: string[]): void {
+  extraPositions.clear();
+  for (const t of titles) if (t.trim()) extraPositions.add(t.trim());
+}
 export function isAcceptedStaffPosition(position: string): boolean {
   const title = position.trim();
-  return (STAFF_POSITIONS as readonly string[]).includes(title) ||
+  return (STAFF_POSITIONS as readonly string[]).includes(title) || extraPositions.has(title) ||
     (isSupervisorTitle(title) && title.length <= 80);
 }
 

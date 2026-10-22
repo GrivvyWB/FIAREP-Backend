@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { customFetch } from "@workspace/api-client-react";
 import { communityUnit } from "@/lib/access-policy";
 import { useForm } from "react-hook-form";
 import { format } from "date-fns";
@@ -175,6 +176,12 @@ function errorMessage(error: unknown) {
 }
 
 export default function HRWorkspace() {
+  // Job titles added in Platform Control → HR, with their descriptions.
+  const [addedPositions, setAddedPositions] = useState<{ title: string; description: string }[]>([]);
+  useEffect(() => {
+    void customFetch<{ added: { title: string; description: string }[] }>("/api/v1/hr/positions", { responseType: "json" } as never)
+      .then((r) => setAddedPositions(Array.isArray(r?.added) ? r.added : [])).catch(() => undefined);
+  }, []);
   const { staff: actor } = useAuth();
   const queryClient = useQueryClient();
   const workspace = useGetHrWorkspace({
@@ -941,11 +948,13 @@ export default function HRWorkspace() {
                       <option value="management">Management</option>
                       <option value="worker">Worker</option>
                       <option value="inspector">Inspector</option>
+                      <option value="technician">Technician</option>
                       <option value="procurement">Procurement</option>
                       <option value="emergency">Emergency</option>
                       <option value="community_coordinator">{communityUnit(actor?.tenantId)}</option>
                     </select>
                   ) : sectionField.key === "position" ? (
+                    <>
                     <select
                       id="hr-field-position"
                       className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
@@ -964,7 +973,14 @@ export default function HRWorkspace() {
                       {employeePositions.map((position) => (
                         <option key={position} value={position}>{position}</option>
                       ))}
+                      {addedPositions.filter((p) => !(employeePositions as string[]).includes(p.title)).map((p) => (
+                        <option key={`added-${p.title}`} value={p.title}>{p.title}</option>
+                      ))}
                     </select>
+                    {addedPositions.find((p) => p.title === sectionValues.position)?.description ? (
+                      <p className="text-xs text-muted-foreground">{addedPositions.find((p) => p.title === sectionValues.position)?.description}</p>
+                    ) : null}
+                    </>
                   ) : <Input
                     id={`hr-field-${sectionField.key}`}
                     type={sectionField.type || "text"}

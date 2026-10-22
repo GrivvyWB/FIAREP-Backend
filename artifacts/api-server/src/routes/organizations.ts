@@ -6,6 +6,7 @@ import { requirePlatformOwner } from "../middlewares/auth";
 import { effectiveLicenseStatus, evaluateLicense } from "../lib/auth";
 import { platformAudit } from "../lib/audit";
 import { endPilot, expirePilots, getPilotPrices, markPilotRefunded, purchasePilot, savePilotPrices, setPilotPaid, startPilot } from "../lib/pilot";
+import { loadHrPositions, saveHrPositions } from "../lib/hrPositions";
 import { applySetupTemplate, getSetupTemplate, saveSetupTemplate } from "../lib/setupTemplate";
 import { ensureResidentCode, newResidentCode, withResidentCode } from "../lib/residentRouting";
 import {
@@ -574,6 +575,16 @@ router.post("/v1/platform/organizations/:id/resident-code", async (req, res) => 
   const owner = res.locals["platformOwner"] as { name: string };
   await platformAudit(owner.name, "organization.resident-code", id, before, org);
   res.json({ code, created: true });
+});
+
+// Platform Control → HR: job titles added for every company's HR form.
+router.get("/v1/platform/hr-positions", requirePlatformOwner, async (_req, res) => { res.json(await loadHrPositions()); });
+router.put("/v1/platform/hr-positions", requirePlatformOwner, async (req, res) => {
+  const owner = res.locals["platformOwner"] as { name: string };
+  const out = await saveHrPositions((req.body as { list?: unknown } | undefined)?.list);
+  if ("error" in out) { res.status(400).json(out); return; }
+  await platformAudit(owner.name, "hr_positions.saved", "default", null, { count: out.length });
+  res.json(out);
 });
 
 // Small-client setup: save one client's Platform Control switches, apply them to a new client in one press.

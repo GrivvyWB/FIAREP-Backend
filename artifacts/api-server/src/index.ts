@@ -5,6 +5,7 @@ import { ensureNotificationReadsTable } from "./lib/notificationReads";
 import { ensureFiarepServiceTitles } from "./lib/fiarepServices";
 import { ensureFiarepAdministrators } from "./lib/fiarepAdmins";
 import { ensureSampleClient } from "./lib/sampleClient";
+import { loadHrPositions } from "./lib/hrPositions";
 import { startPushReceiptWorker } from "./lib/push";
 import { ensureCommandTables } from "./lib/command/tables";
 import { ensureBookingTable } from "./lib/command/scheduling";
@@ -36,6 +37,7 @@ await ensureNotificationReadsTable();
 await ensureFiarepServiceTitles();
 await ensureFiarepAdministrators();
 await ensureSampleClient().catch((err) => console.error("Sample client not made:", err));
+await loadHrPositions().catch((err) => console.error("HR job titles not loaded:", err));
 await ensureCommandTables();
 await ensureBookingTable();
 // Tables otherwise made on first use: made at start, so the development database
