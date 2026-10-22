@@ -6,6 +6,7 @@ import { Link } from "wouter";
 import { useAuth } from "@/hooks/use-auth";
 import { violationKind } from "@/lib/compliance-forms";
 import { canApproveWork } from "@/lib/access-policy";
+import { buttonShown } from "@/lib/website-menu";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { getLookupNycPropertyQueryKey, useLookupNycProperty, getListEntityRecordsQueryKey, useListEntityRecords, useCreateEntityRecord, useListStaff, getListStaffQueryKey } from "@workspace/api-client-react";
@@ -157,7 +158,7 @@ export default function Violations() {
             <h1 className="text-2xl font-bold tracking-tight">NYC Property Lookup</h1>
             <p className="text-muted-foreground text-sm">Query official NYC property records and live violations.</p>
           </div>
-          {canApproveWork(staff) && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
+          {buttonShown(organizationModules, "button.trade-request", staff?.id, canApproveWork(staff)) && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
         </div>
 
         <Card className="border-border shadow-sm">

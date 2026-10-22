@@ -34,6 +34,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
+import { buttonShown } from "@/lib/website-menu";
 import { assignableOperationalStaff, groupStaffByTradeSections } from "@/lib/staff-assignment";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { PhotoLightbox } from "@/components/photo-lightbox";
@@ -615,7 +616,7 @@ export default function Reports() {
         </div>
         <div className="flex flex-wrap gap-2">
           {(actor?.role === "management" || actor?.role === "administrator") && actor?.position !== "Borough Director" && !isProcurement && <CreateReportButton />}
-          {canHandleComplaints && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
+          {buttonShown(organizationModules, "button.trade-request", actor?.id, canHandleComplaints) && <Button asChild variant="outline"><Link href="/trade-requests"><Send className="mr-2 h-4 w-4" />Trade Request</Link></Button>}
         </div>
       </div>
       <div className="bg-card rounded-[14px] shadow-sm border border-border">

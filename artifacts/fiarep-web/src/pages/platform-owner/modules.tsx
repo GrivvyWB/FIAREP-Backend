@@ -40,7 +40,7 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { SETTINGS_SECTIONS } from "@/lib/settings-sections";
-import { MENU_ITEMS, menuKey, personKey } from "@/lib/website-menu";
+import { MENU_ITEMS, PAGE_BUTTONS, menuKey, personKey } from "@/lib/website-menu";
 import { hasModuleAccess } from "@/lib/access-policy";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
 import { LOOKUP_TRADES, communitySupervisorTitle, communityUnit } from "@/lib/access-policy";
@@ -457,7 +457,7 @@ export default function OwnerModules() {
       .then((rows) => setOrgStaff((Array.isArray(rows) ? rows : []).filter((r) => (r.status ?? "approved") === "approved").map((r) => ({ id: r.id, name: r.name || "", role: r.role, position: r.position || "", tenantId: organization.id }))))
       .catch(() => setOrgStaff([]));
     // The company's menu switches, and each person's (p.<staff id>.menu.<item>).
-    setMenuSwitches(Object.fromEntries(Object.entries((configured as Record<string, unknown> | undefined) || {}).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("menu.") || /^p\.[^.]+\.menu\./.test(k))) as Array<[string, boolean]>));
+    setMenuSwitches(Object.fromEntries(Object.entries((configured as Record<string, unknown> | undefined) || {}).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("menu.") || k.startsWith("button.") || /^p\.[^.]+\.(menu|button)\./.test(k))) as Array<[string, boolean]>));
     setSettingsShown(Object.fromEntries(SETTINGS_SECTIONS.map((x) => [x.key, !(configured && typeof configured === "object" && (configured as Record<string, unknown>)[x.key] === false)])));
     setHrExtras(Object.fromEntries(HR_EXTRAS.map((x) => [`hr.${x.key}`, Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>)[`hr.${x.key}`] === true)])));
     setSmartRepairEmailTo(typeof organization.features?.smartRepairEmailTo === "string" ? String(organization.features.smartRepairEmailTo) : "");
@@ -633,7 +633,7 @@ export default function OwnerModules() {
           features: {
             ...organization.features,
             // Kept as saved: the title-rules switch and person switches this page does not edit here.
-            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.menu\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -806,7 +806,7 @@ export default function OwnerModules() {
               const people = person ? [person] : orgAdmins.length ? orgAdmins : [adminStaff];
               return people.every((s) => hasModuleAccess(s as never, m.module, effective));
             };
-            const setAll = (v: boolean) => { setMenuSwitches((cur) => ({ ...cur, ...Object.fromEntries(MENU_ITEMS.map((m) => [keyFor(m), v])) })); setDirty(true); };
+            const setAll = (v: boolean) => { setMenuSwitches((cur) => ({ ...cur, ...Object.fromEntries(MENU_ITEMS.map((m) => [keyFor(m), v])), ...Object.fromEntries(PAGE_BUTTONS.map((pb) => [person ? personKey(person.id, pb.key) : pb.key, v])) })); setDirty(true); };
             const ownCount = person ? MENU_ITEMS.filter((m) => typeof menuSwitches[keyFor(m)] === "boolean").length : 0;
             return (
               <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -828,7 +828,7 @@ export default function OwnerModules() {
                     {orgStaff.map((s) => <option key={s.id} value={s.id}>{s.name}{s.position ? ` — ${s.position}` : ` — ${s.role}`}</option>)}
                   </select>
                   {person && <span className="text-xs text-slate-500">{ownCount ? `${ownCount} set for ${person.name}` : `Same as Everyone until you switch one`}</span>}
-                  {person && ownCount > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => { setMenuSwitches((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => !k.startsWith(`p.${person.id}.menu.`)))); setDirty(true); }}>Back to Everyone</Button>}
+                  {person && ownCount > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => { setMenuSwitches((cur) => Object.fromEntries(Object.entries(cur).filter(([k]) => !k.startsWith(`p.${person.id}.menu.`) && !k.startsWith(`p.${person.id}.button.`)))); setDirty(true); }}>Back to Everyone</Button>}
                 </div>
                 <div className="grid grid-cols-1 divide-y divide-slate-100 sm:grid-cols-2 sm:divide-y-0">
                   {MENU_ITEMS.map((m) => {
@@ -843,6 +843,18 @@ export default function OwnerModules() {
                     );
                   })}
                 </div>
+                <p className="border-t border-slate-100 bg-slate-50 px-5 py-2 text-xs font-semibold uppercase tracking-wide text-slate-500">Buttons on pages</p>
+                {PAGE_BUTTONS.map((pb) => {
+                  const k = person ? personKey(person.id, pb.key) : pb.key;
+                  const pv = person ? menuSwitches[k] : undefined;
+                  const on = typeof pv === "boolean" ? pv : menuSwitches[pb.key] !== false;
+                  return (
+                    <div key={pb.key} className={`flex items-center gap-3 px-5 py-2.5 ${on ? "" : "opacity-60"}`}>
+                      <p className={`flex-1 text-sm text-slate-900 ${on ? "" : "line-through"}`}>{pb.name}</p>
+                      <Switch checked={on} onCheckedChange={(v) => { setMenuSwitches((cur) => ({ ...cur, [k]: v })); setDirty(true); }} aria-label={`${on ? "Hide" : "Show"} ${pb.name}`} />
+                    </div>
+                  );
+                })}
               </details>
             );
           })()}

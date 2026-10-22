@@ -70,3 +70,14 @@ export function menuOverride(modules: Record<string, boolean> | null | undefined
   const v = modules?.[menuKey(href)];
   return typeof v === "boolean" ? v : undefined;
 }
+
+/** Buttons on pages, each with its own switch in Platform Control → Module Management → Website menu. */
+export const PAGE_BUTTONS = [
+  { key: "button.trade-request", name: "Trade Request button (Violations / NYC Property Lookup, Reports)" },
+] as const;
+/** The person's switch, then the company's, then the normal rule. */
+export function buttonShown(modules: Record<string, boolean> | null | undefined, key: string, staffId: string | null | undefined, normal: boolean): boolean {
+  if (staffId) { const pv = modules?.[personKey(staffId, key)]; if (typeof pv === "boolean") return pv; }
+  const v = modules?.[key];
+  return typeof v === "boolean" ? v : normal;
+}
