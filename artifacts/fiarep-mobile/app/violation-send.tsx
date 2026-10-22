@@ -285,19 +285,19 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
           ))}
         </View>
       )}
-      <Text style={ui.label}>Development</Text>
+      <Text style={ui.label}>Development / building</Text>
       <Pressable
         testID="violation-send-development"
         style={[ui.input, { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }, !!development && { borderColor: ACCENT, borderWidth: 2 }]}
         onPress={() => setDevOpen((open) => !open)}
       >
-        <Text style={{ color: development ? ACCENT : '#999', fontWeight: '600', flex: 1 }}>{development || 'Select development'}</Text>
+        <Text style={{ color: development ? ACCENT : '#999', fontWeight: '600', flex: 1 }}>{development || 'Select development or building'}</Text>
         <Text style={{ color: '#666', fontSize: 14 }}>{devOpen ? '▲' : '▼'}</Text>
       </Pressable>
       {devOpen && (
         <View style={{ borderWidth: 1, borderColor: '#ddd', borderRadius: 8, padding: 8, marginBottom: 8, gap: 6 }}>
           {assignedDevelopments.length > 8 && (
-            <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments..." autoCorrect={false} />
+            <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments or buildings..." autoCorrect={false} />
           )}
           <ScrollView style={{ maxHeight: 280 }} nestedScrollEnabled keyboardShouldPersistTaps="handled">
             {devFiltered.map((d) => (

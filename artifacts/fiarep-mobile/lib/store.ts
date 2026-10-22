@@ -1133,8 +1133,17 @@ export async function addResidentUpdate(
 }
 
 
+// The places a job can be: the company's developments and its regular buildings (addresses),
+// loaded with the company's settings (see refreshModuleConfig). NYCHA's list is added for
+// FIAREP's crew and for a company with no buildings on file.
+let siteNames: string[] | null = null;
+let siteNycha = true;
+export function setSiteNames(sites: string[], nycha: boolean): void { siteNames = sites; siteNycha = nycha; }
 export function listDevelopmentNames(): string[] {
-  return DEVELOPMENT_NAMES;
+  const own = siteNames ?? [];
+  if (!siteNycha) return own;
+  const seen = new Set(own.map((s) => s.toLowerCase()));
+  return [...own, ...DEVELOPMENT_NAMES.filter((n) => !seen.has(n.toLowerCase()))];
 }
 
 export async function setReportDevelopment(id: string, name: string): Promise<void> {
@@ -3125,9 +3134,10 @@ export async function createProcurementRequest(
   } catch {
     assignedDevelopments = [];
   }
-  const development = projectId.trim() ? undefined : assignedDevelopments[0]?.trim();
+  // A regular building (no development on the account): its address stands in.
+  const development = projectId.trim() ? undefined : (assignedDevelopments[0]?.trim() || address.trim() || undefined);
   if (!projectId.trim() && !development) {
-    throw new Error('An assigned development is required to create a scope.');
+    throw new Error('Enter the building address for this scope.');
   }
   const r: ProcurementRequest = {
     id: uid(),

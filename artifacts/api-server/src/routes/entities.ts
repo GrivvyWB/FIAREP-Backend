@@ -1104,10 +1104,10 @@ router.post("/v1/:entity", async (req, res, next) => {
   if (!development && entity === "resident-reports" && typeof rawState["address"] === "string" && rawState["address"].trim()) {
     development = rawState["address"].trim().slice(0, 200);
   }
-  // A change work order from the phone carries the job address, not a development:
-  // the building's development stands in (or its address), so it reaches the office.
-  if (!development && entity === "change-orders") {
-    const addr = String(rawState["reportRef"] || rawState["address"] || "").trim();
+  // Developments and regular buildings both work: a record that carries an address but
+  // no development takes the building's development, or the address itself.
+  if (!development && !companyWide && !isHrEntity(entity)) {
+    const addr = String(rawState["address"] || rawState["reportRef"] || rawState["propertyAddress"] || rawState["buildingAddress"] || rawState["location"] || "").trim();
     if (addr) {
       const [prop] = await db.select({ development: organizationProperties.development }).from(organizationProperties)
         .where(and(eq(organizationProperties.organizationId, actor.tenantId), sql`lower(${organizationProperties.displayAddress}) = lower(${addr})`)).limit(1);
@@ -2924,15 +2924,18 @@ router.post(
     const assignedDevelopments = actor.developments
       .map((development) => development.trim())
       .filter(Boolean);
+    const stateAddress = typeof current.state["address"] === "string" ? current.state["address"].trim() : "";
     const development = current.development?.trim() ||
       stateDevelopment ||
       requestedDevelopment ||
+      stateAddress ||
       (assignedDevelopments.length === 1 ? assignedDevelopments[0]! : "");
     if (!development) {
       res.status(400).json({ error: "Development is required to complete a complaint" });
       return;
     }
-    if (!entityDevelopmentAllowed(actor, entity, development)) {
+    const assignedToMe = normalizeAssignment(current.state).assignedStaffId === actor.id || current.state["completedByStaffId"] === actor.id;
+    if (!assignedToMe && !entityDevelopmentAllowed(actor, entity, development)) {
       res.status(403).json({ error: "Select a development assigned to your account" });
       return;
     }

@@ -10,9 +10,30 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 import { geocodeNycPoint, reverseGeocodeNyc } from "../lib/nycProperty";
 import { fileStorage } from "../lib/fileStorage";
 import { readDoorNumber } from "../lib/smartRepair";
+import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 
 const router: IRouter = Router();
 router.use("/v1/site-checkins", requireAuth);
+router.use("/v1/sites", requireAuth);
+
+/** Every place a job can be: the company's developments and its regular buildings (by address).
+ *  nycha: also offer the NYCHA development list (FIAREP's crew, or a company with no buildings on file). */
+router.get("/v1/sites", async (_req, res) => {
+  const a = actorFrom(res);
+  const fiarep = a.tenantId === FIAREP_TENANT;
+  const props = await db.select({ address: organizationProperties.displayAddress, development: organizationProperties.development })
+    .from(organizationProperties)
+    .where(fiarep ? eq(organizationProperties.active, true) : and(eq(organizationProperties.organizationId, a.tenantId), eq(organizationProperties.active, true)));
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, a.tenantId)).limit(1);
+  const configured = getConfiguredDevelopmentNames(org?.features) ?? [];
+  const seen = new Set<string>(); const sites: string[] = [];
+  const add = (v: string | null | undefined) => { const t = (v || "").trim(); if (t && !seen.has(t.toLowerCase())) { seen.add(t.toLowerCase()); sites.push(t); } };
+  for (const d of [...configured].sort((x, y) => x.localeCompare(y))) add(d);
+  for (const p of [...props].sort((x, y) => (x.development || "").localeCompare(y.development || ""))) add(p.development);
+  for (const p of [...props].sort((x, y) => x.address.localeCompare(y.address))) add(p.address);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ sites, nycha: fiarep || sites.length === 0 });
+});
 
 export const SITE_CHECKIN_ENTITY = "site-checkins";
 const FIAREP_TENANT = "default";

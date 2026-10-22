@@ -7,7 +7,7 @@ import { customFetch } from '@workspace/api-client-react';
 import { computeMeasurement, MATERIAL_LABELS, type MaterialKind } from '../lib/measurements';
 import { isARMeasureSupported, measureArea, scanOpening } from '../modules/ar-measure/src';
 import * as FileSystem from 'expo-file-system/legacy';
-import { getCurrentActor, getSessionIdentity } from '../lib/store';
+import { getCurrentActor, getSessionIdentity, listDevelopmentNames } from '../lib/store';
 import { useRawModules } from '../lib/module-access';
 import { allowedMaterialsForTrade, tradeKeyForPosition } from '../lib/measurement-access';
 import { catalogForTrade } from '../lib/trade-catalogs';
@@ -38,7 +38,8 @@ export default function Measurement() {
     getSessionIdentity().then((si: any) => {
       setPosition(String(si?.position || ''));
       const d: string[] = Array.isArray(si?.developments) ? si.developments : [];
-      setDevs(d);
+      // No development on the account (regular buildings): pick from the company's buildings.
+      setDevs(d.length ? d : listDevelopmentNames());
       if (d.length) setDevelopment(d[0]);
     }).catch(() => {});
   }, []);
@@ -166,7 +167,7 @@ export default function Measurement() {
 
   const saveMeasurement = async () => {
     const dev = development.trim();
-    if (!dev) { Alert.alert('Development needed', 'Pick a development to save this measurement to.'); return; }
+    if (!dev) { Alert.alert('Building needed', 'Pick the development or building to save this measurement to.'); return; }
     if (!result.areaSqFt) { Alert.alert('Nothing to save', 'Enter the dimensions first.'); return; }
     setSaving(true);
     try {
@@ -198,7 +199,7 @@ export default function Measurement() {
   const setQty = (item: string, qty: number) => { setSavedList(false); setSelected((c) => { const n = { ...c }; if (qty <= 0) delete n[item]; else n[item] = qty; return n; }); };
   const saveMaterialList = async () => {
     const dev = development.trim();
-    if (!dev) { Alert.alert('Development needed', 'Pick a development to save this list to.'); return; }
+    if (!dev) { Alert.alert('Building needed', 'Pick the development or building to save this list to.'); return; }
     if (!selectedCount) { Alert.alert('Nothing selected', 'Pick some materials first.'); return; }
     setSavingList(true);
     try {

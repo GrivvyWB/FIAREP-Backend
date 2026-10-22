@@ -150,10 +150,20 @@ export function CreateReportButton() {
   const [development, setDevelopment] = useState("");
   const [address, setAddress] = useState("");
   const [description, setDescription] = useState("");
+  // Developments and regular buildings: the company's own sites first (NYCHA's list too when it applies).
+  const sitesQuery = useQuery({
+    queryKey: ["sites"],
+    queryFn: () => customFetch<{ sites: string[]; nycha: boolean }>("/api/v1/sites", { responseType: "json" } as never),
+    enabled: open,
+  });
   const developments = useMemo(() => {
     const own = (actor?.developments || []).filter(Boolean);
-    return own.length ? own : [...NYCHA_DEVELOPMENT_NAMES];
-  }, [actor?.developments]);
+    if (own.length) return own;
+    const sites = sitesQuery.data?.sites || [];
+    const nycha = sitesQuery.data ? sitesQuery.data.nycha : true;
+    const seen = new Set(sites.map((s) => s.toLowerCase()));
+    return [...sites, ...(nycha ? NYCHA_DEVELOPMENT_NAMES.filter((n) => !seen.has(n.toLowerCase())) : [])];
+  }, [actor?.developments, sitesQuery.data]);
   const addresses = useSearchNychaAddresses(
     { development: development || undefined, limit: 50 },
     { query: { enabled: !!development } as never },
@@ -231,18 +241,20 @@ export function CreateReportButton() {
               {location === "Other" && <Input className="mt-2" value={otherLocation} onChange={(event) => setOtherLocation(event.target.value)} placeholder="Describe the location" />}
             </div>
             <div>
-              <p className="mb-1 text-sm font-medium">Development</p>
-              <select className={selectClass} value={development} onChange={(event) => { setDevelopment(event.target.value); setAddress(""); }}>
-                <option value="">Select development</option>
+              <p className="mb-1 text-sm font-medium">Development / building</p>
+              <select className={selectClass} value={development} onChange={(event) => { const v = event.target.value; setDevelopment(v); setAddress(/\d/.test(v) ? v : ""); }}>
+                <option value="">Select development or building</option>
                 {developments.map((item) => <option key={item} value={item}>{item}</option>)}
               </select>
             </div>
             <div>
               <p className="mb-1 text-sm font-medium">Building address</p>
-              <select className={selectClass} value={address} onChange={(event) => setAddress(event.target.value)} disabled={!development}>
-                <option value="">{development ? (addresses.isLoading ? "Loading addresses…" : "Select address") : "Select a development first"}</option>
-                {(addresses.data || []).map((item) => <option key={item.id} value={item.address}>{item.address}</option>)}
-              </select>
+              {/* A NYCHA development lists its addresses; a regular building's address is filled in (and can be typed). */}
+              <Input value={address} onChange={(event) => setAddress(event.target.value)} disabled={!development} list="report-addresses"
+                placeholder={development ? (addresses.isLoading ? "Loading addresses…" : "Building address") : "Select a development or building first"} />
+              <datalist id="report-addresses">
+                {(addresses.data || []).map((item) => <option key={item.id} value={item.address} />)}
+              </datalist>
             </div>
             <div>
               <p className="mb-1 text-sm font-medium">{location === "Apartment/Unit" ? "Unit / Apartment" : "Unit / Apartment (optional)"}</p>

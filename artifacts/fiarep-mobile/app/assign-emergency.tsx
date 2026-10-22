@@ -59,9 +59,9 @@ export default function AssignEmergency() {
         <Text style={{ color: operator ? '#000' : '#999' }}>{operator || 'Pick canonical emergency staff'}</Text>
       </Pressable>
 
-      <Text style={[ui.label, { marginTop: 12 }]}>Development</Text>
+      <Text style={[ui.label, { marginTop: 12 }]}>Development / building</Text>
       <Pressable style={ui.input} onPress={() => setDevPicker(true)}>
-        <Text style={{ color: development ? '#000' : '#999' }}>{development || 'Pick a development (optional)'}</Text>
+        <Text style={{ color: development ? '#000' : '#999' }}>{development || 'Pick a development or building (optional)'}</Text>
       </Pressable>
 
       <Text style={[ui.label, { marginTop: 12 }]}>Address</Text>
@@ -118,7 +118,7 @@ export default function AssignEmergency() {
       <Modal visible={devPicker} transparent animationType="slide" onRequestClose={() => setDevPicker(false)}>
         <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: '#0006' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 16, borderTopRightRadius: 16, maxHeight: '80%' }}>
-            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>Pick a development</Text>
+            <Text style={{ fontWeight: '700', fontSize: 16, padding: 16 }}>Pick a development or building</Text>
             <TextInput style={[ui.input, { marginHorizontal: 16, marginBottom: 8 }]} value={devQuery} onChangeText={setDevQuery} placeholder="Type to filter (e.g. G)" autoCapitalize="characters" />
             <ScrollView>
               <Pressable onPress={() => { setDevelopment(''); setDevPicker(false); }} style={{ paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: '#eee' }}><Text style={{ fontSize: 15, color: '#999' }}>None</Text></Pressable>

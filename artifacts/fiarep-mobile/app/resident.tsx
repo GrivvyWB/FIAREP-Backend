@@ -92,7 +92,7 @@ export default function ResidentScreen() {
 
   async function onSubmit() {
     if (!development.trim()) {
-      Alert.alert('Development required', 'Select your development.');
+      Alert.alert('Building required', 'Select your development or building.');
       return;
     }
     if (!address.trim()) {
@@ -169,7 +169,7 @@ export default function ResidentScreen() {
         autoCapitalize="characters"
       />
 
-      <Text style={styles.label}>Development</Text>
+      <Text style={styles.label}>Development / building</Text>
       <Pressable testID="resident-development" style={styles.input} onPress={() => setDevPickerOpen(true)}>
         <Text style={{ fontSize: 16, color: development ? '#111' : '#999' }}>{development || 'Select your development'}</Text>
       </Pressable>
@@ -258,10 +258,10 @@ export default function ResidentScreen() {
     <Modal visible={devPickerOpen} animationType="slide" onRequestClose={() => setDevPickerOpen(false)}>
       <View style={{ flex: 1, padding: 16, paddingTop: 60, gap: 10, backgroundColor: '#fff' }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ fontSize: 20, fontWeight: '700', color: '#111' }}>Select development</Text>
+          <Text style={{ fontSize: 20, fontWeight: '700', color: '#111' }}>Select development or building</Text>
           <Pressable onPress={() => setDevPickerOpen(false)}><Text style={{ color: '#0a7ea4', fontWeight: '600', fontSize: 16 }}>Close</Text></Pressable>
         </View>
-        <TextInput style={styles.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments..." placeholderTextColor="#999" autoFocus />
+        <TextInput style={styles.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments or buildings..." placeholderTextColor="#999" autoFocus />
         <FlatList
           data={devFiltered}
           keyExtractor={(n) => n}

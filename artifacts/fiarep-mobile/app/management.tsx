@@ -95,7 +95,7 @@ function DevPicker(props: {
     <Modal visible={props.visible} animationType="slide" onRequestClose={props.onClose}>
       <View style={{ flex: 1, padding: 16, gap: 10 }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={ui.h}>Select development</Text>
+          <Text style={ui.h}>Select development or building</Text>
           <Pressable onPress={props.onClose}><Text style={{ color: ACCENT, fontSize: 16 }}>Close</Text></Pressable>
         </View>
         <TextInput
@@ -386,7 +386,7 @@ export default function Management() {
       </View>
 
       <View>
-        <Text style={ui.label}>Development</Text>
+        <Text style={ui.label}>Development / building</Text>
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <Pressable style={[ui.input, { flex: 1 }]} onPress={() => setPicker({ mode: 'filter' })}>
             <Text>{filterDev === ALL ? 'All developments' : filterDev}</Text>
@@ -433,7 +433,7 @@ export default function Management() {
             </Text>
           </View>
           <View style={ui.line}>
-            <Text style={ui.lineK}>Development</Text>
+            <Text style={ui.lineK}>Development / building</Text>
             <Text style={ui.lineV}>{r.development || 'Untagged'}</Text>
           </View>
           <View style={ui.line}>
@@ -463,7 +463,7 @@ export default function Management() {
           <View style={{ marginTop: 6, gap: 8 }}>
             {canEdit(r) && !readOnly ? (
               <>
-                <Text style={ui.label}>Development</Text>
+                <Text style={ui.label}>Development / building</Text>
                 <Pressable style={ui.btnOutline} onPress={() => setPicker({ mode: 'tag', id: r.id })}>
                   <Text style={ui.btnOutlineText}>{r.development ? `Change (now: ${r.development})` : 'Set development'}</Text>
                 </Pressable>

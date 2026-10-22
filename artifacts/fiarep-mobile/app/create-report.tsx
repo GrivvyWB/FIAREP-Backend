@@ -77,9 +77,9 @@ function CreateReportScreen() {
       <Text style={ui.label}>Address (optional)</Text>
       <AddressInput value={address} onChangeText={setAddress} placeholder="e.g. 123 Main St" />
 
-      <Text style={ui.label}>Development</Text>
+      <Text style={ui.label}>Development / building</Text>
       <Pressable style={ui.input} onPress={() => setDevPickerOpen(true)}>
-        <Text style={{ color: development ? '#000' : '#999' }}>{development || 'Select development'}</Text>
+        <Text style={{ color: development ? '#000' : '#999' }}>{development || 'Select development or building'}</Text>
       </Pressable>
 
       <Text style={ui.label}>Description</Text>
@@ -110,10 +110,10 @@ function CreateReportScreen() {
       <Modal visible={devPickerOpen} animationType="slide" onRequestClose={() => setDevPickerOpen(false)}>
         <View style={{ flex: 1, padding: 16, paddingTop: 60, gap: 10 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={ui.h}>Select development</Text>
+            <Text style={ui.h}>Select development or building</Text>
             <Pressable onPress={() => setDevPickerOpen(false)}><Text style={{ color: ACCENT, fontWeight: '600', fontSize: 16 }}>Close</Text></Pressable>
           </View>
-          <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments..." autoFocus />
+          <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments or buildings..." autoFocus />
           <FlatList
             data={devFiltered}
             keyExtractor={(n) => n}

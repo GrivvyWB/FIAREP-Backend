@@ -282,9 +282,9 @@ export default function HudInspectionForm() {
       <Text style={ui.label}>Inspector name</Text>
       <TextInput style={ui.input} value={insp.inspectorName} onChangeText={(v) => patch({ inspectorName: v })} placeholder="Inspector" autoCapitalize="words" />
 
-      <Text style={ui.label}>Development</Text>
+      <Text style={ui.label}>Development / building</Text>
       <Pressable style={ui.input} onPress={() => { setDevQuery(''); setDevPickerOpen(true); }}>
-        <Text style={{ color: insp.development ? '#000' : '#999' }}>{insp.development || 'Select development'}</Text>
+        <Text style={{ color: insp.development ? '#000' : '#999' }}>{insp.development || 'Select development or building'}</Text>
       </Pressable>
 
       <Text style={ui.label}>Project (optional)</Text>
@@ -582,10 +582,10 @@ export default function HudInspectionForm() {
       <Modal visible={devPickerOpen} animationType="slide" onRequestClose={() => setDevPickerOpen(false)}>
         <View style={{ flex: 1, padding: 16, paddingTop: 60, gap: 10 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={ui.h}>Select development</Text>
+            <Text style={ui.h}>Select development or building</Text>
             <Pressable onPress={() => setDevPickerOpen(false)}><Text style={{ color: ACCENT, fontWeight: '700', fontSize: 16 }}>Close</Text></Pressable>
           </View>
-          <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments..." autoFocus />
+          <TextInput style={ui.input} value={devQuery} onChangeText={setDevQuery} placeholder="Search developments or buildings..." autoFocus />
           <FlatList
             data={devFiltered}
             keyExtractor={(n) => n}

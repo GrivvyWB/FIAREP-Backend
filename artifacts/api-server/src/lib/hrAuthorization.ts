@@ -1,5 +1,5 @@
 import { and, eq, inArray } from "drizzle-orm";
-import { db, entityRecords } from "@workspace/db";
+import { db, entityRecords, organizationProperties } from "@workspace/db";
 import type { Actor } from "./auth";
 import { activeCoverageDevelopments } from "./coverage";
 import {
@@ -81,6 +81,19 @@ const SENT_TO_FIELDS = [
   "cpmSupervisorId", "assignedCpmStaffId", "dispatchingSupervisorId", "handoffTargetId",
   "directedToStaffId",
 ];
+
+/** The development a building address belongs to (organization's buildings), cached a minute. */
+const addressDevCache = new Map<string, { at: number; map: Map<string, string> }>();
+async function developmentOfAddress(tenantId: string, address: string): Promise<string> {
+  let hit = addressDevCache.get(tenantId);
+  if (!hit || Date.now() - hit.at > 60_000) {
+    const rows = await db.select({ address: organizationProperties.displayAddress, development: organizationProperties.development })
+      .from(organizationProperties).where(eq(organizationProperties.organizationId, tenantId)).catch(() => []);
+    hit = { at: Date.now(), map: new Map(rows.filter((r) => r.development).map((r) => [normalizeDevelopment(r.address), normalizeDevelopment(r.development!)])) };
+    addressDevCache.set(tenantId, hit);
+  }
+  return hit.map.get(normalizeDevelopment(address)) || "";
+}
 
 const coverageCache = new Map<string, { at: number; developments: string[] }>();
 async function coveredDevelopments(actor: Actor): Promise<string[]> {
@@ -173,7 +186,14 @@ async function complaintVisibility(
   }
   const development = normalizeDevelopment(row.development || String(row.state["development"] || ""));
   if (!development) return false;
-  const home = actor.developments.some((d) => normalizeDevelopment(d) === development);
+  // Regular buildings: building management with no developments on the account
+  // looks after every building in the company; an address counts for the development it is in.
+  if (actor.developments.length === 0 && BUILDING_MANAGEMENT_TITLES.has(title)) return true;
+  let home = actor.developments.some((d) => normalizeDevelopment(d) === development);
+  if (!home && actor.developments.length > 0) {
+    const inDev = await developmentOfAddress(actor.tenantId, development);
+    home = !!inDev && actor.developments.some((d) => normalizeDevelopment(d) === inDev);
+  }
   if (home && BUILDING_MANAGEMENT_TITLES.has(title)) return true;
   // Supervisors / managers who entered this development's 2-digit code.
   if (actor.role === "management" || /supervisor|superintendent|manager/i.test(actor.position)) {

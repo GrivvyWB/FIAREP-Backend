@@ -2,7 +2,7 @@ import { isCpmSupervisorTitle, isInspectionSupervisorTitle } from './titles';
 import { useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 import { customFetch } from '@workspace/api-client-react';
-import { db, getSessionIdentity } from './store';
+import { db, getSessionIdentity, setSiteNames } from './store';
 
 export type ModuleId =
   | 'dashboard' | 'inspections' | 'inspection-create' | 'estimates' | 'repairs'
@@ -161,8 +161,20 @@ export async function loadModuleConfig(): Promise<ModuleConfig | null> {
     const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', key);
     cached = row?.value ? JSON.parse(row.value) as ModuleConfig : null;
     cachedOwner = key;
+    const sites = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'sites:' + key);
+    if (sites?.value) { const s = JSON.parse(sites.value) as { sites: string[]; nycha: boolean }; setSiteNames(s.sites || [], s.nycha !== false); }
   } catch { /* missing cache is intentionally enabled */ }
   return cached;
+}
+
+/** The company's developments and buildings for every "where" picker (developments and regular addresses). */
+async function refreshSites(key: string): Promise<void> {
+  try {
+    const s = await customFetch<{ sites: string[]; nycha: boolean }>('/api/v1/sites', { responseType: 'json' });
+    setSiteNames(Array.isArray(s?.sites) ? s.sites : [], s?.nycha !== false);
+    const d = await db();
+    await d.runAsync('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'sites:' + key, JSON.stringify(s));
+  } catch { /* offline: keep what was loaded */ }
 }
 
 /** Fetch the tenant policy after authentication and retain it for offline navigation. */
@@ -178,6 +190,7 @@ export async function refreshModuleConfig(): Promise<ModuleConfig | null> {
     );
     cached = config;
     cachedOwner = key;
+    await refreshSites(key);
     return config;
   } catch {
     return loadModuleConfig();

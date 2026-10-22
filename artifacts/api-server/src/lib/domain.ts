@@ -573,6 +573,8 @@ export function developmentAllowed(
     item.trim().toLowerCase()
   );
   if (actor.role === "management") {
+    // No developments on the account: a company of regular buildings — every building.
+    if (normalizedAssignments.length === 0) return true;
     return Boolean(
       normalizedDevelopment &&
       normalizedAssignments.includes(normalizedDevelopment)
