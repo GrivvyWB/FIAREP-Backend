@@ -6,6 +6,10 @@ import { DEFAULT_RATES, type Rates } from '../lib/takeoff';
 import { APP_BUTTON_GUIDE } from '../lib/buttonGuide';
 import { ui } from '../lib/ui';
 import { useAppMode } from './_layout';
+import { useRawModules } from '../lib/module-access';
+
+// Platform Control → Module Management → Settings page (App → …): on unless switched off.
+const guideKey = (title: string) => 'settings.app.guide.' + title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
 const FIELDS: { key: keyof Rates; label: string }[] = [
   { key: 'waste', label: 'Waste factor (e.g. 1.12)' },
@@ -18,6 +22,8 @@ const FIELDS: { key: keyof Rates; label: string }[] = [
 export default function Settings() {
   const router = useRouter();
   const { mode } = useAppMode();
+  const raw = useRawModules();
+  const shown = (key: string) => raw[key] !== false;
   const [r, setR] = useState<Rates>(DEFAULT_RATES);
   useEffect(() => { getGlobalRates().then(setR); }, []);
   const upd = (k: keyof Rates, v: string) => setR(prev => ({ ...prev, [k]: parseFloat(v) || 0 }));
@@ -25,11 +31,11 @@ export default function Settings() {
   const onSave = async () => { await setGlobalRates(r); Alert.alert('Saved', 'Default rates updated.'); router.back(); };
   const onReset = () => setR(DEFAULT_RATES);
 
-  const guide = (
+  const guide = !shown('settings.app.buttonGuide') ? null : (
     <View style={{ marginTop: 16 }}>
       <Text style={ui.h}>What the buttons do</Text>
       <Text style={{ color: '#666', fontSize: 13, marginBottom: 8 }}>A plain-words guide to the tiles and buttons you have.</Text>
-      {APP_BUTTON_GUIDE.filter((g) => (g.for as string[]).includes(String(mode || ''))).map((g) => (
+      {APP_BUTTON_GUIDE.filter((g) => (g.for as string[]).includes(String(mode || '')) && shown(guideKey(g.title))).map((g) => (
         <View key={g.title} style={[ui.card, { marginBottom: 8, padding: 12 }]}>
           <Text style={{ fontWeight: '700', fontSize: 15, marginBottom: 4 }}>{g.title}</Text>
           <Text style={{ color: '#444', fontSize: 14 }}>{g.does}</Text>
@@ -38,7 +44,7 @@ export default function Settings() {
     </View>
   );
 
-  if (mode !== 'administrator' && mode !== 'management') {
+  if ((mode !== 'administrator' && mode !== 'management') || !shown('settings.app.defaultRates')) {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
         {guide}
