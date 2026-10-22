@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog";
 import { Building2, Search, Plus, MoreHorizontal, AlertCircle, Edit2, Play, Pause, XCircle, RotateCcw, Users, Copy, X, ChevronDown, FolderOpen, KeyRound } from "lucide-react";
 import { OrganizationDialog } from "@/components/platform-owner/organization-dialog";
+import { isFiarepAdministrator } from "@/lib/access-policy";
 import { format, isValid } from "date-fns";
 
 export default function OwnerDashboard() {
@@ -501,7 +502,7 @@ export default function OwnerDashboard() {
               {!codeStaff.length && <p className="text-sm text-slate-500">No Administrator or Borough Director found for this organization.</p>}
               {codeStaff.map((person) => (
                 <div key={person.id} className="flex items-center justify-between gap-3 rounded-md border px-3 py-2">
-                  <span className="text-sm"><strong>{person.name}</strong> · {person.position} · <span className="text-slate-500">{person.role}</span></span>
+                  <span className="text-sm"><strong>{person.name}</strong> · {isFiarepAdministrator({ ...person, tenantId: codeOrg?.id } as any) ? "Administrator" : <>{person.position} · <span className="text-slate-500">{person.role}</span></>}</span>
                   <Button type="button" size="sm" disabled={!!codeBusy} onClick={() => void resetCode(person)}>{codeBusy === person.id ? "Resetting…" : "Reset code"}</Button>
                 </div>
               ))}
