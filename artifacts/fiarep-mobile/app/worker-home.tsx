@@ -99,6 +99,7 @@ export default function WorkerHome() {
         ...(modules['proj-new'] && canStartProject(position) && on('+ New Project') ? [{ label: '+ New Project', onPress: () => router.push('/?new=1') }] : []),
         ...(position === 'Elevator Service' && on('Elevator Jobs') ? [{ label: 'Elevator Jobs', onPress: () => router.push('/elevator-jobs') }] : []),
         ...(isEmergencyMaintenance && on('Emergency Units') ? [{ label: 'Emergency Units', onPress: () => router.push('/emergency-units') }] : []),
+        ...(on('Door Visit') ? [{ label: 'Door Visit', onPress: () => router.push('/door-visit') }] : []),
         ...(on('Building Check-In') ? [{ label: 'Building Check-In', onPress: () => router.push('/site-checkin') }] : []),
         ...(on('Smart Repair') ? [{ label: 'Smart Repair', onPress: () => router.push('/smart-repair') }] : []),
         ...(on('Change Work Order') ? [{ label: 'Change Work Order', onPress: () => router.push('/worker-change-order') }] : []),

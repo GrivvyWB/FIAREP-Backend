@@ -32,6 +32,7 @@ import Elevators from '@/pages/elevators';
 import Leave from '@/pages/leave';
 import TimeClock from '@/pages/time-clock';
 import SiteCheckins from '@/pages/site-checkins';
+import DoorVisits from '@/pages/door-visits';
 import AuditLog from '@/pages/audit-log';
 import Notifications from '@/pages/notifications';
 import Settings from '@/pages/settings';
@@ -276,6 +277,7 @@ function AppRouter() {
           <Route path="/leave" component={LeaveRoute} />
           <Route path="/time-clock" component={TimeClock} />
           <Route path="/site-checkins" component={SiteCheckinsRoute} />
+          <Route path="/door-visits" component={DoorVisitsRoute} />
           <Route path="/audit-log" component={AuditLogRoute} />
           <Route path="/notifications" component={NotificationsRoute} />
           <Route path="/settings" component={SettingsRoute} />
@@ -316,6 +318,7 @@ const DashboardRoute = () => <ModuleRoute module="dashboard"><Dashboard /></Modu
 const CommunityRoute = () => <ModuleRoute module="community"><CommunityCoordinators /></ModuleRoute>;
 const TranslatorRoute = () => <ModuleRoute module="translator"><Translator /></ModuleRoute>;
 const SiteCheckinsRoute = () => <ModuleRoute module="site-checkins"><SiteCheckins /></ModuleRoute>;
+const DoorVisitsRoute = () => <ModuleRoute module="door-visits"><DoorVisits /></ModuleRoute>;
 const AuditLogRoute = () => <ModuleRoute module="audit-log"><AuditLog /></ModuleRoute>;
 const PropertyLookupRoute = () => <ModuleRoute module="property-lookup"><PropertyLookup /></ModuleRoute>;
 const ViolationAlertsRoute = () => <ModuleRoute module="violation-alerts"><ViolationAlerts /></ModuleRoute>;

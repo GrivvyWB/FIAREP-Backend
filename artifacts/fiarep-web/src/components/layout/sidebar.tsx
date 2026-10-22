@@ -27,7 +27,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap, MapPin, History, Mic , Droplets } from "lucide-react";
+  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap, MapPin, History, Mic , Droplets, DoorOpen } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -48,6 +48,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Building Baseline", href: "/baseline-report", icon: ClipboardCheck, module: "baseline-report" as const },
     { name: communityUnitPlural(staff?.tenantId), href: "/community", icon: UsersRound, module: "community" as const },
     { name: "Site Check-Ins", href: "/site-checkins", icon: MapPin, module: "site-checkins" as const },
+    { name: "Door Visits", href: "/door-visits", icon: DoorOpen, module: "door-visits" as const },
     { name: "Translator", href: "/translator", icon: Languages, module: "translator" as const },
     { name: "HPD / DOB Lookup", href: "/property-lookup", icon: Building2, module: "property-lookup" as const },
     { name: "Violation Alerts", href: "/violation-alerts", icon: BellRing, module: "violation-alerts" as const },

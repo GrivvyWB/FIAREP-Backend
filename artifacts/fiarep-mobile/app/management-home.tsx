@@ -83,6 +83,7 @@ export default function ManagementHome() {
     { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
     { label: 'Request Time Off', onPress: () => router.push('/leave-request'), tone: 'tint' },
     { label: 'Attendance', onPress: () => router.push('/attendance'), tone: 'tint' },
+    { label: 'Door Visit', onPress: () => router.push('/door-visit'), tone: 'solid' },
   ];
 
   // Draw a set of tiles in the shared home look. Attendance is the clock
@@ -188,6 +189,7 @@ export default function ManagementHome() {
       color: '#C0392B',
       tiles: [
         ...(!restricted ? [{ label: 'Review Reports', onPress: () => router.push('/management'), tone: 'solid' as Tone }] : []),
+        { label: 'Door Visit', onPress: () => router.push('/door-visit'), tone: 'solid' as Tone },
         { label: 'Building Check-In', onPress: () => router.push('/site-checkin'), tone: 'tint' as Tone },
         { label: 'Smart Repair', onPress: () => router.push('/smart-repair'), tone: 'tint' as Tone },
         ...(!restricted ? [{ label: 'Priority Queue', onPress: () => router.push('/priority-queue'), tone: 'solid' as Tone }] : []),

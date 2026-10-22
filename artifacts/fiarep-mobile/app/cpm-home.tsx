@@ -139,6 +139,7 @@ export default function CpmHome() {
         ...(isTechnician ? [{ label: 'Past quotes', onPress: () => router.push('/quick-quote?past=1'), tone: 'outline' as Tone }] : []),
         ...(isInspectorRole ? [{ label: 'Log Violations', onPress: () => router.push('/inspector-violations'), tone: 'outline' as Tone }] : []),
         ...(isInspectorRole ? [{ label: 'FIAREP Vision (AI)', onPress: () => router.push('/fiarep-vision'), tone: 'outline' as Tone }] : []),
+        { label: 'Door Visit', onPress: () => router.push('/door-visit'), tone: 'solid' as Tone },
         { label: 'Building Check-In', onPress: () => router.push('/site-checkin'), tone: 'solid' as Tone },
         { label: 'Smart Repair', onPress: () => router.push('/smart-repair'), tone: 'solid' as Tone },
         ...(isInspectorRole ? [{ label: 'My Routes', onPress: () => router.push('/inspector-routes'), tone: 'outline' as Tone }] : []),

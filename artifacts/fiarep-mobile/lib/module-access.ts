@@ -269,6 +269,8 @@ export function tileEnabled(screen: AppTabScreen, label: string, raw: Record<str
   // FIAREP Smart Repair Instructions has a master switch over every screen's tile.
   if (label === 'Smart Repair' && map['smartRepair'] === false) return false;
   if (label === 'Priority Queue' && map['priorityEngine'] === false) return false;
+  // Door Visits module (Platform Control → Modules) is the master switch over every screen's Door Visit button.
+  if (label === 'Door Visit' && map['door-visits'] === false) return false;
   const value = map[appTabKey(screen, label)];
   // Technician switches not saved yet fall back to the CPM / Inspector ones
   // they were split from, so a technician's home does not change on its own.

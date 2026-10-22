@@ -9,7 +9,7 @@ export type StaffModule =
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
    | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections"
-   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log" | "command-center" | "baseline-report" | "mold-compliance" | "cover-site";
+   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log" | "command-center" | "baseline-report" | "mold-compliance" | "cover-site" | "door-visits";
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -194,6 +194,8 @@ export function hasModuleAccess(
   // the menu) until the platform owner switches it on for the client.
   if (module === "command-center") return staff.role === "administrator" && (staff.tenantId || "default") !== "default";
   // Site check-ins: where each member checked in and when they left and came back — for management.
+  // Door Visits (recorded at residents' doors from the app): for the office.
+  if (module === "door-visits") return staff.role === "administrator" || staff.role === "management";
   // HR extras: switched on per client in Platform Control → Modules → HR.
   if (staff.role === "human_resources") {
     const hrOn = (k: string) => organizationModules?.[`hr.${k}`] === true;

@@ -19,7 +19,7 @@ export type ResidentSignOff =
 export type DoorVideo = { uri: string; seconds: number; contentType: string; objectPath?: string };
 
 /** Record up to 60 seconds of video (sound included), kept in the app's folder until it's uploaded. */
-async function recordDoorVideo(): Promise<DoorVideo | null> {
+export async function recordDoorVideo(): Promise<DoorVideo | null> {
   const cam = await ImagePicker.requestCameraPermissionsAsync();
   if (!cam.granted) throw new Error('Allow the camera for FIAREP in Settings.');
   const res = await ImagePicker.launchCameraAsync({ mediaTypes: ['videos'], videoMaxDuration: 60, videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium, allowsEditing: false });

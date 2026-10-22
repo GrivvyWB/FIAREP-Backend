@@ -324,6 +324,7 @@ function AdministratorStack() {
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision', headerBackTitle: 'Back' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="door-visit" options={{ title: 'Door Visit', headerBackTitle: 'Back' }} />
       <Stack.Screen name="priority-queue" options={{ title: 'Priority Queue', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline-assess" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
@@ -366,6 +367,7 @@ function InspectorStack() {
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="door-visit" options={{ title: 'Door Visit', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline-assess" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
       <Stack.Screen name="cpm-change-order" options={{ title: 'Change Work Order' }} />
@@ -433,6 +435,7 @@ function ManagementStack() {
       <Stack.Screen name="management" options={{ title: 'Resident Reports' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="door-visit" options={{ title: 'Door Visit', headerBackTitle: 'Back' }} />
       <Stack.Screen name="priority-queue" options={{ title: 'Priority Queue', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
       <Stack.Screen name="baseline-assess" options={{ title: 'Building Baseline', headerBackTitle: 'Back' }} />
@@ -495,6 +498,7 @@ function WorkerStack() {
       <Stack.Screen name="worker-change-order" options={{ title: 'Change Work Order' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
       <Stack.Screen name="site-checkin" options={{ title: 'Building Check-In', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="door-visit" options={{ title: 'Door Visit', headerBackTitle: 'Back' }} />
       <Stack.Screen name="leave-request" options={{ title: 'Request Time Off' }} />
       <Stack.Screen name="project/elevator" options={{ title: 'Elevator Services' }} />
       <Stack.Screen name="worker" options={{ title: 'Worker Jobs' }} />

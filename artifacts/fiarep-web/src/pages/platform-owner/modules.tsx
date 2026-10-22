@@ -97,6 +97,7 @@ const MODULES: ModuleDefinition[] = [
   { id: "company-forms", name: "Company Forms (locked folder)", description: "FIAREP's own compliance forms — DOB certificate of correction, vermin, lead, tenant notices. OFF for every client; switch on only for FIAREP's organization", icon: AlertTriangle },
   { id: "property-lookup", name: "HPD / DOB Lookup", description: "Look up a building's HPD and DOB violations by address (website and app) — pick the trades below", icon: AlertTriangle },
   { id: "audit-log", name: "Audit Log", description: "Who did what, and when — on the website, for administrators", icon: FileBarChart },
+  { id: "door-visits", name: "Door Visits", description: "The Door Visit button on the app's home screens (location, time, direction, floor, door, 1-minute video, access or not, sent to management) and the Door Visits page for the office", icon: Building2 },
   { id: "site-checkins", name: "Site Check-Ins", description: "Where each member checked in (the building tapped vs. where the phone was) and when they left and came back", icon: Building2 },
   { id: "translator", name: "Translator", description: "Voice-to-voice interpreter for talking with residents (website and app)", icon: Users },
   { id: "baseline-report", name: "Building Baseline (menu page)", description: "The onboarding walk-through and its baseline report for every building. OFF until you switch it on for the company", icon: ClipboardCheck },
@@ -177,7 +178,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "Review Reports", "Send Violation", "Assign a Job", "In-house assignments", "Staff Member Jobs", "Cover a Site", "Create Report", "+ New Project",
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
     "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
-    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In",
+    "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In", "Door Visit",
     "Manage All Requests", "Inbox", "Check HPD / DOB", "Translator",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
@@ -187,22 +188,22 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     // FIAREP's administrators (Timothy Winn, Emily Winn) also get the technician's tools.
     "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
     "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order",
-    "Request Time Off", "Inbox", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In",
+    "Request Time Off", "Inbox", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In", "Door Visit",
     "Check HPD / DOB", "Translator", "Command Center",
   ] },
   { id: "cpm", screen: "CPM / Inspector home", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Messages", "Smart Repair", "Building Baseline", "Building Check-In",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Messages", "Smart Repair", "Building Baseline", "Building Check-In", "Door Visit",
     "Check HPD / DOB", "Translator",
   ] },
   // FIAREP's technicians have their own switches, separate from CPM / Inspector.
   { id: "tech", screen: "Technician home (FIAREP technicians sign in here)", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",
-    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Messages", "Smart Repair", "Building Baseline", "Building Check-In",
+    "Measurement", "Saved Measurements", "Submit Scope", "Change Work Order", "Request Time Off", "Attendance", "Time Clock", "Past quotes", "Inbox", "Messages", "Smart Repair", "Building Baseline", "Building Check-In", "Door Visit",
     "Check HPD / DOB", "Translator",
   ] },
   { id: "worker", screen: "Worker home", tabs: [
-    "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off", "Smart Repair", "Building Check-In", "Messages",
+    "My Jobs", "+ New Project", "Elevator Jobs", "Measurement", "Saved Measurements", "Inbox", "Emergency Units", "Attendance", "Change Work Order", "Request Time Off", "Smart Repair", "Building Check-In", "Door Visit", "Messages",
     "Check Report Status", "Check HPD / DOB", "Translator",
   ] },
   { id: "community", screen: "Community Coordinator home", tabs: [
