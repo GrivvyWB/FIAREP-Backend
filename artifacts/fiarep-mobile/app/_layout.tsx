@@ -90,10 +90,10 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
   async function doLogin() {
     setMsg(''); setBusy(true);
     try {
-      const useOrg = (boundOrg || org).trim();
+      const useOrg = (org.trim() || boundOrg).trim();
       const ok = await verifyStaffLogin(name.trim(), normCode(code), undefined, undefined, useOrg || undefined);
       if (ok) {
-        if (useOrg && !boundOrg && useOrg.toLowerCase() !== 'default') { await SecureStore.setItemAsync(BOUND_ORG_KEY, useOrg.toUpperCase(), { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined); setBoundOrg(useOrg.toUpperCase()); }
+        if (org.trim() && org.trim().toLowerCase() !== 'default' && org.trim().toUpperCase() !== boundOrg) { await SecureStore.setItemAsync(BOUND_ORG_KEY, useOrg.toUpperCase(), { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined); setBoundOrg(useOrg.toUpperCase()); }
         await SecureStore.setItemAsync(LAST_LOGIN_KEY, JSON.stringify({ name: name.trim(), code: normCode(code) }),
           { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY }).catch(() => undefined);
         const actor = await restoreServerSession();
@@ -168,16 +168,9 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
           />
       </>
 
-      {boundOrg ? (
-        <Pressable onPress={() => { void SecureStore.deleteItemAsync(BOUND_ORG_KEY).catch(() => undefined); setBoundOrg(''); }} style={{ paddingVertical: 4 }}>
-          <Text style={{ textAlign: 'center', color: '#666', fontSize: 13 }}>Organization {boundOrg} · change</Text>
-        </Pressable>
-      ) : (
-        <>
-          <Text style={ui.label}>Organization ID</Text>
-          <TextInput style={ui.input} value={org} onChangeText={setOrg} placeholder="First time on this phone (FIAREP staff: leave blank)" autoCapitalize="characters" autoCorrect={false} />
-        </>
-      )}
+      {/* Always here. Typed once on a phone; after that it can stay blank (the phone remembers it). */}
+      <Text style={ui.label}>Organization ID</Text>
+      <TextInput style={ui.input} value={org} onChangeText={setOrg} placeholder="First time on this phone (FIAREP staff: leave blank)" autoCapitalize="characters" autoCorrect={false} />
 
       {!!msg && <Text style={{ color: '#c00', textAlign: 'center' }}>{msg}</Text>}
 

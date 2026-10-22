@@ -157,7 +157,7 @@ router.post("/v1/auth/login", rateLimit("owner-login", 12), async (req, res) => 
       const others = await db.select({ code: staffAccounts.code, tenantId: staffAccounts.tenantId }).from(staffAccounts)
         .where(and(sql`lower(${staffAccounts.name}) = lower(${name.trim()})`, eq(staffAccounts.status, "approved"), sql`upper(${staffAccounts.tenantId}) <> upper(${tenantId})`)).limit(20);
       if (others.some((x) => x.code.trim().toUpperCase() === normalizedCode)) {
-        res.status(401).json({ error: `That name and code belong to a different organization than ${tenantId.toUpperCase()}. Tap "change" and type the right Organization ID.`, wrongOrganization: true });
+        res.status(401).json({ error: "That name and code belong to a different organization. Type your Organization ID in the box.", wrongOrganization: true });
         return;
       }
     }
