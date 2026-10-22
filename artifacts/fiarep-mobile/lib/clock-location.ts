@@ -118,7 +118,9 @@ TaskManager.defineTask(CLOCK_LOCATION_TASK, async ({ data, error }: { data?: { l
 /** Start the background location task if it is not running. Returns true if it already was. */
 export async function ensureLocationTracking(): Promise<boolean> {
   if (await Location.hasStartedLocationUpdatesAsync(CLOCK_LOCATION_TASK).catch(() => false)) return true;
-  await Location.startLocationUpdatesAsync(CLOCK_LOCATION_TASK, {
+  // An app build without background location (before build 41) cannot watch in the background:
+  // the check-in itself still goes through, with the location taken right now.
+  await backgroundUpdates(CLOCK_LOCATION_TASK, {
     accuracy: Location.Accuracy.Balanced,
     distanceInterval: 50,
     deferredUpdatesInterval: 60_000,
@@ -128,6 +130,12 @@ export async function ensureLocationTracking(): Promise<boolean> {
     foregroundService: { notificationTitle: 'FIAREP check-in', notificationBody: 'Checked in at a building — recording when you leave and come back.', notificationColor: '#0B2A4A' },
   });
   return false;
+}
+
+/** Start background updates; a build without background location skips it instead of failing. */
+async function backgroundUpdates(task: string, options: Location.LocationTaskOptions): Promise<boolean> {
+  try { await Location.startLocationUpdatesAsync(task, options); return true; }
+  catch (e) { console.warn('Background location unavailable in this build', e); return false; }
 }
 /** Stop the background location task. */
 export async function stopLocationTracking(): Promise<void> {
@@ -157,7 +165,7 @@ export async function startClockTracking(first: Fix | null): Promise<boolean> {
     await setSiteTrackingOnly(false);
     await writeAnchor(first ? { latitude: first.latitude, longitude: first.longitude, since: now, reported: false, stopId: null, key: `stop-${now}-${Math.random().toString(36).slice(2)}` } : null);
     if (await Location.hasStartedLocationUpdatesAsync(CLOCK_LOCATION_TASK)) return true;
-    await Location.startLocationUpdatesAsync(CLOCK_LOCATION_TASK, {
+    await backgroundUpdates(CLOCK_LOCATION_TASK, {
       accuracy: Location.Accuracy.Balanced,
       distanceInterval: 100,            // a fix only after ~100 m of movement — nothing while parked
       deferredUpdatesInterval: 60_000,
