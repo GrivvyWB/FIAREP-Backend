@@ -100,7 +100,7 @@ export default function SiteCheckinScreen() {
   useFocusEffect(useCallback(() => { void load(); }, [load]));
 
   const active = mine.find((c) => c.id === activeId && !c.checkedOutAt) || null;
-  // Buildings already checked out today: done until tomorrow.
+  // Buildings checked out earlier today (they can be checked in again).
   const todayKey = new Date().toDateString();
   const doneToday = useMemo(() => new Set(mine.filter((c) => !!c.checkedOutAt && new Date(c.checkedInAt).toDateString() === todayKey).map((c) => c.building.address.trim().toLowerCase())), [mine, todayKey]);
   const matches = useMemo(() => {
@@ -171,11 +171,11 @@ export default function SiteCheckinScreen() {
 
   function out() {
     Alert.alert(
-      'Are you completely finished at this building for today?',
-      `${active?.building.address || ''}\n\nChecking out logs this building out for today — you cannot check back in here until tomorrow.\n\nGoing to the store or a supply run? Do not check out. Your trip is recorded and you are still checked in when you come back.`,
+      'Check out of this building?',
+      `${active?.building.address || ''}\n\nYou can check in again any time — here or at another building.\n\nGoing to the store or a supply run? Do not check out. Your trip is recorded and you are still checked in when you come back.`,
       [
       { text: 'No, I am coming back', style: 'cancel' },
-      { text: 'Yes, done for today', style: 'destructive', onPress: () => void (async () => {
+      { text: 'Yes, check out', style: 'destructive', onPress: () => void (async () => {
         setBusy('Checking out…');
         try { await checkOut(); setActiveId(null); await load(); }
         catch (e: any) { Alert.alert('Check out', e?.data?.error || e?.message || 'Try again.'); }
@@ -189,7 +189,7 @@ export default function SiteCheckinScreen() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}>
       <View style={{ backgroundColor: NAVY, borderRadius: 10, padding: 14 }}>
         <Text style={{ color: '#fff', fontSize: 18, fontWeight: '800' }}>Building Check-In</Text>
-        <Text style={{ color: '#cbd5e1', fontSize: 12, marginTop: 2 }}>Tap the building you are at. Your phone's location and the time are recorded, and so is every time you leave and come back. Check in once; check out once, when you are done for the day.</Text>
+        <Text style={{ color: '#cbd5e1', fontSize: 12, marginTop: 2 }}>Tap the building you are at. Your phone's location and the time are recorded, and so is every time you leave and come back. Check out when you leave; you can check in again at any building, the same one too.</Text>
       </View>
 
       {!!busy && <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}><ActivityIndicator /><Text style={ui.listSub}>{busy}</Text></View>}
@@ -258,7 +258,7 @@ export default function SiteCheckinScreen() {
               {notesOpen && active.notes!.slice().reverse().map((n) => <NoteLine key={n.id} n={n} />)}
             </>
           )}
-          <Pressable style={[ui.btn, { backgroundColor: '#b91c1c', marginTop: 10 }]} disabled={!!busy} onPress={out}><Text style={{ color: '#fff', fontWeight: '700' }}>Done for today — check out</Text></Pressable>
+          <Pressable style={[ui.btn, { backgroundColor: '#b91c1c', marginTop: 10 }]} disabled={!!busy} onPress={out}><Text style={{ color: '#fff', fontWeight: '700' }}>Check out of this building</Text></Pressable>
         </View>
       ) : (
         <View style={[ui.card, { gap: 6 }]}>
@@ -267,10 +267,10 @@ export default function SiteCheckinScreen() {
           {matches.map((b) => {
             const done = doneToday.has(b.address.trim().toLowerCase());
             return (
-              <Pressable key={b.id} onPress={() => confirm(b)} disabled={!!busy || done} style={{ paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#eef2f7', opacity: done ? 0.5 : 1 }}>
+              <Pressable key={b.id} onPress={() => confirm(b)} disabled={!!busy} style={{ paddingVertical: 10, borderTopWidth: 1, borderTopColor: '#eef2f7' }}>
                 <Text style={{ fontWeight: '600' }}>{b.address}</Text>
                 {!!b.development && b.development !== b.address && <Text style={ui.listSub}>{b.development}</Text>}
-                {done && <Text style={{ fontSize: 12, color: '#166534', fontWeight: '700' }}>✓ Finished for today</Text>}
+                {done && <Text style={{ fontSize: 12, color: '#166534', fontWeight: '700' }}>✓ Checked out earlier today — tap to check in again</Text>}
               </Pressable>
             );
           })}

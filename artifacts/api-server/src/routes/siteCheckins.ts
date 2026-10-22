@@ -142,24 +142,13 @@ router.post("/v1/site-checkins", async (req, res) => {
   const building = fromCity && fromPhone && metersBetween(fromCity, fromPhone) > 20_000 ? fromPhone : (fromCity || fromPhone);
   const distanceM = building ? metersBetween(building, at) : null;
   const now = new Date();
-  // Check in once, check out once. While checked in somewhere (a supply run
-  // included) there is no new check-in; and a building checked out today stays
-  // checked out until tomorrow.
+  // While checked in somewhere (a supply run included) there is no new check-in.
+  // After checking out, any building can be checked in again — the same one too
+  // (back the same day for another resident).
   const mine = await db.select().from(entityRecords).where(and(eq(entityRecords.entity, SITE_CHECKIN_ENTITY), eq(entityRecords.deleted, false), sql`${entityRecords.state}->>'staffId' = ${a.id}`));
   const open = mine.find((o) => !o.state["checkedOutAt"]);
   if (open) {
     res.status(409).json({ error: `You are still checked in at ${String((open.state["building"] as { address?: string })?.address || "a building")}. Check out there only when you are done for the day.` });
-    return;
-  }
-  const nyDay = (d: Date) => d.toLocaleDateString("en-CA", { timeZone: "America/New_York" });
-  const sameBuilding = (o: typeof mine[number]) => {
-    const bld = (o.state["building"] ?? {}) as { propertyId?: string | null; address?: string };
-    return propertyId ? bld.propertyId === propertyId : String(bld.address || "").trim().toLowerCase() === address.trim().toLowerCase();
-  };
-  const doneToday = mine.find((o) => sameBuilding(o) && nyDay(new Date(String(o.state["checkedInAt"]))) === nyDay(now));
-  if (doneToday) {
-    const t = new Date(String(doneToday.state["checkedOutAt"])).toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" });
-    res.status(409).json({ error: `You finished this building for today (checked out at ${t}). You can check in here again tomorrow.` });
     return;
   }
   const state = {
