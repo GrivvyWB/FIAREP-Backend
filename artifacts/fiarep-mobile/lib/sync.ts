@@ -524,6 +524,23 @@ async function saveLastSync(v: LastSync) {
   } catch { /* best effort */ }
 }
 let lastMessages: number | undefined;
+/** Throw away this phone's changes fiarep.com refused (Inbox → Clear). */
+export async function clearRefusedChanges(): Promise<void> {
+  const d = await db();
+  const identity = await getSessionIdentity();
+  const owner = `${identity?.tenantId || 'default'}:${identity?.staffId || ''}`;
+  const rows = await d.getAllAsync<{ entity: string; id: string }>(`SELECT entity, id FROM sync_queue WHERE owner=? AND status='rejected'`, owner);
+  for (const r of rows) {
+    // The local copy goes too, or the phone would find it and try to send it again.
+    const mapping = TABLES.find((m) => m.entity === r.entity);
+    if (mapping) { try { await d.runAsync(`DELETE FROM ${mapping.table} WHERE ${mapping.key}=?`, r.id); } catch { /* table not on this phone */ } }
+    await d.runAsync(`DELETE FROM sync_queue WHERE owner=? AND entity=? AND id=?`, owner, r.entity, r.id);
+  }
+  lastRefused = undefined;
+  const prev = await getLastSync();
+  if (prev) await d.runAsync('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'last_sync', JSON.stringify({ ...prev, refused: undefined }));
+}
+
 /** When the phone last checked fiarep.com, and whether it worked. */
 export async function getLastSync(): Promise<LastSync | null> {
   try { const d = await db(); const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'last_sync'); return row ? JSON.parse(row.value) : null; } catch { return null; }

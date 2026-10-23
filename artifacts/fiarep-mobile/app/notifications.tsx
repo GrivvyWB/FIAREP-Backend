@@ -3,7 +3,7 @@ import { RefreshControl } from 'react-native';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getCurrentActor, listNotifications, markNotificationRead, findReportByRef, getResidentReport, outstandingPriorityFor, acknowledgePriorityViolation, getViolationLookup, getBuildingViolation, getCurrentPosition, deleteNotification, type Notification, type PriorityViolation, listElevatorJobsForMechanic } from '../lib/store';
-import { syncAllEntities, getLastSync, type LastSync } from '../lib/sync';
+import { syncAllEntities, getLastSync, clearRefusedChanges, type LastSync } from '../lib/sync';
 import { Alert } from 'react-native';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
@@ -237,7 +237,8 @@ export default function Notifications() {
       )}
       {lastSync?.refused && (
         <Text style={{ fontSize: 12, color: '#B4741A', marginBottom: 6 }}>
-          {lastSync.refused.n} change{lastSync.refused.n === 1 ? '' : 's'} made on this phone {lastSync.refused.n === 1 ? 'was' : 'were'} refused by fiarep.com ({lastSync.refused.entity}: {lastSync.refused.error}). Everything else still comes in.
+          {lastSync.refused.n} change{lastSync.refused.n === 1 ? '' : 's'} made on this phone {lastSync.refused.n === 1 ? 'was' : 'were'} refused by fiarep.com ({lastSync.refused.entity}: {lastSync.refused.error}). Everything else still comes in.{'  '}
+          <Text style={{ color: ACCENT, fontWeight: '700' }} onPress={() => Alert.alert('Clear refused changes?', 'They are removed from this phone. Nothing on fiarep.com changes.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Clear', style: 'destructive', onPress: () => { void clearRefusedChanges().then(getLastSync).then(setLastSync); } }])}>Clear</Text>
         </Text>
       )}
       {!!lastSync?.sendError && <Text style={{ fontSize: 12, color: '#B4741A', marginBottom: 6 }}>Changes from this phone wait to be sent: {lastSync.sendError}</Text>}
