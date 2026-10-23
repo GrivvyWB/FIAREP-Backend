@@ -235,6 +235,12 @@ export default function Notifications() {
           {lastSync.ok ? `Checked fiarep.com at ${new Date(lastSync.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${typeof lastSync.messages === 'number' ? ` · ${lastSync.messages} message${lastSync.messages === 1 ? '' : 's'} from the last day` : ''}` : `Could not check fiarep.com (${new Date(lastSync.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}): ${lastSync.error || 'no connection'}`}
         </Text>
       )}
+      {lastSync?.refused && (
+        <Text style={{ fontSize: 12, color: '#B4741A', marginBottom: 6 }}>
+          {lastSync.refused.n} change{lastSync.refused.n === 1 ? '' : 's'} made on this phone {lastSync.refused.n === 1 ? 'was' : 'were'} refused by fiarep.com ({lastSync.refused.entity}: {lastSync.refused.error}). Everything else still comes in.
+        </Text>
+      )}
+      {!!lastSync?.sendError && <Text style={{ fontSize: 12, color: '#B4741A', marginBottom: 6 }}>Changes from this phone wait to be sent: {lastSync.sendError}</Text>}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text style={ui.h}>Inbox</Text>
         <Pressable onPress={() => router.back()} style={{ padding: 8 }}>

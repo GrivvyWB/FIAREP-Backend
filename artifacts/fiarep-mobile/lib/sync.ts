@@ -407,6 +407,16 @@ async function pushQueue(d: any) {
         );
         continue;
       }
+      // Refused by fiarep.com for good (not a connection problem): set it aside and keep going,
+      // so one refused change never stops the phone from sending the rest and receiving everything.
+      const st = Number(error?.status);
+      if (st >= 400 && st < 500 && st !== 409 && st !== 401 && st !== 408 && st !== 429) {
+        await d.runAsync(
+          `UPDATE sync_queue SET status='rejected',error=? WHERE owner=? AND entity=? AND id=?`,
+          String(error?.data?.error || error?.message || `Refused (${st})`).slice(0, 300), row.owner, row.entity, row.id,
+        );
+        continue;
+      }
       const conflict = error?.status === 409 || /version|conflict/i.test(String(error?.message));
       await d.runAsync(
         `UPDATE sync_queue SET status=?,error=? WHERE owner=? AND entity=? AND id=?`,
@@ -503,12 +513,14 @@ async function applyRecord(d: any, record: any, owner: string) {
 // running together would each announce the same new notification.
 let syncInFlight: Promise<boolean> | null = null;
 
-export type LastSync = { ok: boolean; at: string; error?: string; messages?: number };
+export type LastSync = { ok: boolean; at: string; error?: string; messages?: number; sendError?: string; refused?: { n: number; entity: string; error: string } };
+let lastSendError: string | undefined;
+let lastRefused: { n: number; entity: string; error: string } | undefined;
 async function saveLastSync(v: LastSync) {
   try {
     const d = await db();
     const prev = await getLastSync();
-    await d.runAsync('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'last_sync', JSON.stringify({ ...v, messages: v.messages ?? lastMessages ?? prev?.messages }));
+    await d.runAsync('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'last_sync', JSON.stringify({ ...v, messages: v.messages ?? lastMessages ?? prev?.messages, sendError: lastSendError, refused: lastRefused }));
   } catch { /* best effort */ }
 }
 let lastMessages: number | undefined;
@@ -525,6 +537,7 @@ export async function syncAllEntities(options?: {
     if (!options?.refreshEntities?.length) return true;
   }
   // What happened last time, for the Inbox's "Last checked" line.
+  lastSendError = undefined;
   const run = syncAllEntitiesOnce(options).then(async (ok) => { await saveLastSync({ ok, at: new Date().toISOString() }); return ok; }, async (err) => {
     await saveLastSync({ ok: false, at: new Date().toISOString(), error: String((err as any)?.data?.error || (err as any)?.message || err).slice(0, 200) });
     throw err;
@@ -546,8 +559,14 @@ async function syncAllEntitiesOnce(options?: {
   const recordScope = `${scope}:record`;
   const notificationScope = `${scope}:notification`;
   const recordCursorsScope = `${scope}:records`;
-  await discoverQueue(d);
-  await pushQueue(d);
+  // Sending this phone's changes and receiving everything else are separate: a change that can't
+  // go yet (no connection, a refusal) never stops the Inbox and the rest from arriving.
+  try { await discoverQueue(d); await pushQueue(d); }
+  catch (err) { lastSendError = String((err as any)?.data?.error || (err as any)?.message || err).slice(0, 200); }
+  try {
+    const r = await d.getFirstAsync<{ n: number; entity: string; error: string }>(`SELECT COUNT(*) AS n, MAX(entity) AS entity, MAX(error) AS error FROM sync_queue WHERE owner=? AND status='rejected'`, owner);
+    lastRefused = r && r.n ? { n: r.n, entity: r.entity, error: r.error } : undefined;
+  } catch { lastRefused = undefined; }
   const [cursorRow, recordCursorRow, notificationCursorRow, recordCursorsRow] =
     await Promise.all([
       d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', scope),
