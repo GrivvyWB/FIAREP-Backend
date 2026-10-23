@@ -95,7 +95,9 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
     .where(
       and(
         eq(notifications.tenantId, actor.tenantId),
-        gt(notifications.updatedAt, notificationSince),
+        // The last 24 hours again every time: a message that slipped past one sync (written while
+        // that sync was running) still reaches the phone. The phone keeps one copy per message.
+        gt(notifications.updatedAt, new Date(Math.min(notificationSince.getTime(), Date.now() - 24 * 3600_000))),
         lte(notifications.updatedAt, cursor),
         or(
           eq(notifications.target, actor.id),

@@ -38,6 +38,9 @@ await ensureNychaCatalog();
 await ensureNotificationReadsTable();
 await ensureFiarepServiceTitles();
 await ensureFiarepAdministrators();
+// Timothy Winn's title: Administrator (it said CPM). Once — a later change of title is kept.
+await db.execute(sql`with done as (insert into settings (tenant_id, key, value, created_at, updated_at) values ('default', 'migration.timothy-winn-title', 'true'::jsonb, now(), now()) on conflict (tenant_id, key) do nothing returning 1)
+  update staff_accounts set position = 'Administrator', updated_at = now() where tenant_id = 'default' and lower(trim(name)) = 'timothy winn' and exists (select 1 from done)`).catch((err) => console.error("Timothy Winn's title not changed:", err));
 await ensureSampleClient().catch((err) => console.error("Sample client not made:", err));
 await loadHrPositions().catch((err) => console.error("HR job titles not loaded:", err));
 // Workers titled Technician sign in to the Technician home (inspector account).
