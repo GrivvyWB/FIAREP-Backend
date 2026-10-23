@@ -1,5 +1,6 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
+import { openWebsiteSignedIn } from '../lib/webHandoff';
 import FieldHome from '../components/FieldHome';
 import { useRouter, useNavigation } from 'expo-router';
 import { clearAppMode, logout } from '../lib/store';
@@ -174,7 +175,8 @@ export default function AdminHome() {
   const has = (label: string) => sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === label));
   const tabs = [
     ...(has('Manage All Requests') ? [{ label: 'Requests', icon: 'file-tray-full-outline', onPress: () => router.push('/manage-requests') }] : []),
-    ...(has('Resident Reports') ? [{ label: 'Reports', icon: 'document-text-outline', onPress: () => router.push('/management') }] : []),
+    // Bottom bar: Website (fiarep.com, already signed in) in place of Reports — Resident Reports is a tile above. Switch: App tabs → Website (bottom bar).
+    ...(tileEnabled('admin', 'Website (bottom bar)', rawModules) ? [{ label: 'Website', icon: 'globe-outline', onPress: () => { openWebsiteSignedIn().catch(() => undefined); } }] : []),
   ];
   return (
     <FieldHome

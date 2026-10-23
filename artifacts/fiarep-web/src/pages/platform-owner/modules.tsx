@@ -181,7 +181,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
     "Assign Emergency Unit", "Manage Trucks", "Emergency Activity", "Truck Scores", "Vendor Score", "Development Scores", "Building & Residential Scores",
     "Default rates", "Request Time Off", "Leave Calendar", "Attendance", "Message FIAREP", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In", "Door Visit",
-    "Manage All Requests", "Inbox", "Check HPD / DOB", "Translator",
+    "Manage All Requests", "Inbox", "Check HPD / DOB", "Translator", "Website (bottom bar)",
   ] },
   { id: "admin", screen: "Administrator home", tabs: [
     "Manage All Requests", "Resident Reports", "Send Violation", "Assign a Job", "Staff Member Jobs", "Add Job for Mgmt", "Projects / Inspections",
@@ -191,7 +191,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Log Violations", "FIAREP Vision (AI)",
     "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope", "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order",
     "Request Time Off", "Inbox", "Smart Repair", "Priority Queue", "Building Baseline", "Building Check-In", "Door Visit",
-    "Check HPD / DOB", "Translator", "Command Center",
+    "Check HPD / DOB", "Translator", "Command Center", "Website (bottom bar)",
   ] },
   { id: "cpm", screen: "CPM / Inspector home", tabs: [
     "My Jobs", "HUD Inspections", "Projects", "+ New Project", "Price Quote", "Quick Quote", "Log Violations", "FIAREP Vision (AI)", "My Routes", "My Inspections", "Create Report",

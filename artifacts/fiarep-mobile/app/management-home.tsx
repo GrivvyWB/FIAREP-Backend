@@ -1,5 +1,6 @@
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
+import { openWebsiteSignedIn } from '../lib/webHandoff';
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle, supervisedTradeForPosition } from '../lib/titles';
 import { View } from 'react-native';
 import FieldHome, { type HomeSection, type HomeTab } from '../components/FieldHome';
@@ -100,7 +101,8 @@ export default function ManagementHome() {
     const tabs: HomeTab[] = [
       ...(all.some((sec) => sec.tiles.some((t) => t.label.startsWith('Inbox'))) ? [{ label: 'Inbox', icon: 'mail-outline', onPress: () => router.push('/notifications') }] : []),
       ...(all.some((sec) => sec.tiles.some((t) => t.label.startsWith('Manage All Requests'))) ? [{ label: 'Requests', icon: 'file-tray-full-outline', onPress: () => router.push('/manage-requests') }] : []),
-      ...(all.some((sec) => sec.tiles.some((t) => t.label === 'Review Reports')) ? [{ label: 'Reports', icon: 'document-text-outline', onPress: () => router.push('/management') }] : []),
+      // Upper management: Website (fiarep.com, already signed in) in place of Reports — Review Reports is a tile above. Switch: App tabs → Website (bottom bar).
+      ...(!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor && tileEnabled('management', 'Website (bottom bar)', rawModules) ? [{ label: 'Website', icon: 'globe-outline', onPress: () => { openWebsiteSignedIn().catch(() => undefined); } }] : []),
       ...(all.some((sec) => sec.tiles.some((t) => t.label === 'Request Time Off')) ? [{ label: 'Time Off', icon: 'time-outline', onPress: () => router.push('/leave-request') }] : []),
     ].slice(0, 3);
     return (
