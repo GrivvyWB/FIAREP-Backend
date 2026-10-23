@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share, Linking, AppState } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share, Linking, AppState, Modal } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AudioModule, RecordingPresets, createAudioPlayer, setAudioModeAsync, useAudioRecorder, type AudioPlayer } from 'expo-audio';
@@ -82,6 +83,7 @@ export default function CommandCenter() {
   const [sayAs, setSayAs] = useState('');
   const [sayAsDraft, setSayAsDraft] = useState('');
   const [voiceOpen, setVoiceOpen] = useState(false);
+  const insets = useSafeAreaInsets();
   const [teach, setTeach] = useState<{ n: number; heard: string[] } | null>(null);
   useEffect(() => { void AsyncStorage.multiGet(['cc.wakeWords', 'cc.sayAs']).then((kv) => { const m = Object.fromEntries(kv); try { const w = JSON.parse(m['cc.wakeWords'] || '[]'); if (Array.isArray(w)) setTaught(w.filter((x) => typeof x === 'string')); } catch { /* none yet */ } setSayAs(m['cc.sayAs'] || ''); setSayAsDraft(m['cc.sayAs'] || ''); }).catch(() => undefined); }, []);
   const [recording, setRecording] = useState(false);
@@ -568,7 +570,7 @@ export default function CommandCenter() {
         </View>
       </ScrollView>
 
-      <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff', gap: 8 }}>
+      <View style={{ padding: 12, paddingBottom: 12 + insets.bottom, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff', gap: 8 }}>
         {phase !== 'off' && (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: phase === 'hearing' ? '#dc2626' : phase === 'waiting' ? '#16a34a' : phase === 'speaking' ? '#7c3aed' : '#185FA5' }} />
@@ -601,9 +603,18 @@ export default function CommandCenter() {
             <Switch value={wakeOn} onValueChange={(v) => { setWakeOn(v); void AsyncStorage.setItem('cc.wake', v ? '1' : '0'); }} />
           </View>
         )}
-        <Pressable onPress={() => setVoiceOpen((o) => !o)}><Text style={{ color: ACCENT, fontWeight: '600' }}>{voiceOpen ? '▾' : '▸'} Voice settings</Text></Pressable>
-        {voiceOpen && (
-          <View style={{ gap: 8 }}>
+        <Pressable onPress={() => setVoiceOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: ACCENT, borderRadius: 10, paddingVertical: 12, backgroundColor: '#eef4fb' }}>
+          <Text style={{ fontSize: 18 }}>⚙️</Text>
+          <Text style={{ color: ACCENT, fontWeight: '800', fontSize: 16 }}>Voice settings</Text>
+          <Text style={{ color: '#475569', fontSize: 13 }}>wake words · how FIAREP is said</Text>
+        </Pressable>
+        <Modal visible={voiceOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setVoiceOpen(false)}>
+          <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 + insets.bottom, gap: 12 }} keyboardShouldPersistTaps="handled">
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Text style={{ fontSize: 22, fontWeight: '800' }}>Voice settings</Text>
+              <Pressable onPress={() => { if (teach) stopListening(); setVoiceOpen(false); }} hitSlop={10}><Text style={{ color: ACCENT, fontWeight: '700', fontSize: 17 }}>Done</Text></Pressable>
+            </View>
+            <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 4 }}>Wake words</Text>
             {teach ? (
               <View style={{ backgroundColor: '#f1f5f9', borderRadius: 8, padding: 10, gap: 4 }}>
                 <Text style={{ fontWeight: '800', fontSize: 16 }}>Say “Hey FIAREP” the way you say it — {teach.n} of 5</Text>
@@ -625,14 +636,15 @@ export default function CommandCenter() {
                 ))}
               </View>
             )}
-            <Text style={ui.label}>How FIAREP is said (type it the way it sounds, e.g. Fee-uh-rep)</Text>
+            <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 12 }}>How FIAREP is said</Text>
+            <Text style={ui.label}>Type it the way it sounds (e.g. Fee-uh-rep), press Play, then Save.</Text>
             <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
               <TextInput style={[ui.input, { flex: 1 }]} value={sayAsDraft} onChangeText={setSayAsDraft} placeholder="FIAREP" autoCapitalize="none" autoCorrect={false} />
               <Pressable style={[ui.btnOutline, { paddingHorizontal: 12 }]} onPress={() => void playSayAs()}><Text style={ui.btnOutlineText}>▶ Play</Text></Pressable>
               <Pressable style={[ui.btn, { paddingHorizontal: 12 }, sayAsDraft.trim() === sayAs && ui.btnMuted]} disabled={sayAsDraft.trim() === sayAs} onPress={() => void saveSayAs(sayAsDraft)}><Text style={ui.btnText}>Save</Text></Pressable>
             </View>
-          </View>
-        )}
+          </ScrollView>
+        </Modal>
       </View>
     </View>
   );
