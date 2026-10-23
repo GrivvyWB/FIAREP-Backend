@@ -9,7 +9,10 @@ import { commandActions, commandRuns } from "./tables";
 import { commandAuditLog } from "./audit";
 import { actionOn, confirmOn, effectiveSwitches, getSwitches, PLATFORM_TENANT, type CommandSwitches } from "./switches";
 import { costMicroUsd, monthUsage } from "./usage";
+<<<<<<< ours
 import { geminiLoop } from "./gemini";
+=======
+>>>>>>> theirs
 import { signalAgent, waitForActionResult } from "./agentBus";
 import { confirmMessage } from "./crypto";
 import { logger } from "../logger";
@@ -97,6 +100,7 @@ export function confirmMessageFor(row: ActionRow): string {
 type Block = { type: string; [k: string]: unknown };
 type Msg = { role: "user" | "assistant"; content: string | Block[] };
 
+<<<<<<< ours
 /** What to call the person: their first name (FIAREP's owner goes by Tim). */
 export function callName(actorName: string, platform: boolean): string {
   const first = actorName.trim().split(/\s+/)[0] || "there";
@@ -104,6 +108,9 @@ export function callName(actorName: string, platform: boolean): string {
 }
 
 function systemPrompt(actorName: string, catalog: string, orgName: string, platform: boolean, lang: CommandLanguage | null): string {
+=======
+function systemPrompt(actorName: string, catalog: string, orgName: string, platform: boolean): string {
+>>>>>>> theirs
   const now = new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "full", timeStyle: "short" });
   return [
     platform
@@ -171,6 +178,7 @@ async function runTool(name: string, input: Record<string, unknown>, ctx: Action
   return { content: text.length > MAX_RESULT_CHARS ? `${text.slice(0, MAX_RESULT_CHARS)}… (truncated)` : text, isError: false };
 }
 
+<<<<<<< ours
 /** One conversation turn with whichever engine is on (Claude or Gemini), with a given set of tools.
  *  Used by the resident chat: its own tools and prompt, the organization's engine, usage and cap. */
 export async function modelTurn(opts: {
@@ -219,16 +227,26 @@ export async function capProblem(tenantId: string): Promise<string | null> {
   const platform = await getSwitches(PLATFORM_TENANT);
   if (platform.ownKeys?.[tenantId] === true) return null; // pays for its own AI: FIAREP's cap doesn't apply
   const cap = platform.caps?.[tenantId];
+=======
+/** A client over its monthly cap (Platform Control → Command Center → Clients) can't run commands until next month. */
+export async function capProblem(tenantId: string): Promise<string | null> {
+  if (isPlatform(tenantId)) return null;
+  const cap = (await getSwitches(PLATFORM_TENANT)).caps?.[tenantId];
+>>>>>>> theirs
   if (typeof cap !== "number") return null;
   const [used] = await monthUsage(tenantId);
   return used && used.costUsd >= cap ? `This month's Command Center limit ($${cap.toFixed(2)}) is used up. It resets on the 1st, or FIAREP can raise it.` : null;
 }
 
+<<<<<<< ours
 /** A quick question: short, and nothing to send, write, change or approve. Those go to the quick model. */
 const ACTING = /\b(send|email|e-mail|text|message|write|draft|create|add|assign|dispatch|schedule|book|delete|remove|cancel|approve|deny|deploy|republish|publish|restart|fix|update|change|set|make|build|fill|file|order|pay|compare|analy[sz]e|investigate|plan|summari[sz]e|report|translate|run)\b/i;
 export const isQuickCommand = (text: string) => text.trim().split(/\s+/).length <= 25 && !ACTING.test(text);
 
 export async function runCommand(input: { text: string; spoken?: boolean; threadId?: string; staffId: string; tenantId: string; deviceId: string; actorName: string }) {
+=======
+export async function runCommand(input: { text: string; threadId?: string; staffId: string; tenantId: string; deviceId: string; actorName: string }) {
+>>>>>>> theirs
   const switches = await effectiveSwitches(input.tenantId);
   const overCap = await capProblem(input.tenantId);
   if (overCap) throw Object.assign(new Error(overCap), { status: 402 });
@@ -240,9 +258,13 @@ export async function runCommand(input: { text: string; spoken?: boolean; thread
   const tools = actionsFor(input.tenantId).filter((a) => actionOn(switches, a.name)).map((a) => ({ name: a.name, description: a.description, input_schema: a.schema }));
   const messages: Msg[] = [...(await threadHistory(threadId, runId, input.staffId)), { role: "user", content: input.text }];
   const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, input.tenantId)).limit(1);
+<<<<<<< ours
   const system = systemPrompt(input.actorName, await agentCatalog(input.tenantId), org?.name || "your company", isPlatform(input.tenantId), await getLanguage(input.tenantId, input.staffId))
     // Hands-free: the reply is read out loud, so it is short.
     + (input.spoken ? "\n\nThis command was spoken hands-free and your reply is read out loud. Answer in one to three short sentences, plain words, no lists, tables or symbols, unless they ask for the detail." : "");
+=======
+  const system = systemPrompt(input.actorName, await agentCatalog(input.tenantId), org?.name || "your company", isPlatform(input.tenantId));
+>>>>>>> theirs
   const usage: Record<string, number> = { input_tokens: 0, output_tokens: 0 };
   // Engine: Claude (default) or Gemini — Platform Control → Command Center → Engine.
   const gemini = switches.provider === "gemini";
@@ -276,6 +298,7 @@ export async function runCommand(input: { text: string; spoken?: boolean; thread
       if (turn === MAX_TURNS - 1) reply = reply || "I ran out of steps on that one. Try asking a narrower question.";
     }
     if (!reply) reply = "Done.";
+<<<<<<< ours
     const cost = costMicroUsd(model, usage);
     if (cost !== null) usage["cost_usd_micro"] = cost;
     await db.update(commandRuns).set({ reply, status: "done", usage, updatedAt: new Date() }).where(eq(commandRuns.id, runId));
@@ -284,6 +307,16 @@ export async function runCommand(input: { text: string; spoken?: boolean; thread
     const message = err instanceof Error ? err.message : "Command failed";
     logger.error({ err, runId }, "Command run failed");
     const cost = costMicroUsd(model, usage);
+=======
+    const cost = costMicroUsd(switches.model, usage);
+    if (cost !== null) usage["cost_usd_micro"] = cost;
+    await db.update(commandRuns).set({ reply, status: "done", usage, updatedAt: new Date() }).where(eq(commandRuns.id, runId));
+    await commandAuditLog({ tenantId: input.tenantId, actor: "FIAREP Command Center", event: "reply", deviceId: input.deviceId, runId, detail: { reply, usage } });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Command failed";
+    logger.error({ err, runId }, "Command run failed");
+    const cost = costMicroUsd(switches.model, usage);
+>>>>>>> theirs
     if (cost !== null) usage["cost_usd_micro"] = cost;
     await db.update(commandRuns).set({ status: "failed", error: message, usage, updatedAt: new Date() }).where(eq(commandRuns.id, runId));
     await commandAuditLog({ tenantId: input.tenantId, actor: "FIAREP Command Center", event: "command.failed", deviceId: input.deviceId, runId, detail: { error: message } });

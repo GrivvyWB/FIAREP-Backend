@@ -1,8 +1,9 @@
 import { useCallback, useState } from 'react';
+import { RefreshControl } from 'react-native';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getCurrentActor, listNotifications, markNotificationRead, findReportByRef, getResidentReport, outstandingPriorityFor, acknowledgePriorityViolation, getViolationLookup, getBuildingViolation, getCurrentPosition, deleteNotification, type Notification, type PriorityViolation, listElevatorJobsForMechanic } from '../lib/store';
-import { syncAllEntities } from '../lib/sync';
+import { syncAllEntities, getLastSync, type LastSync } from '../lib/sync';
 import { Alert } from 'react-native';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
@@ -200,7 +201,15 @@ export default function Notifications() {
       }
     })();
   }, [mode]);
-  useFocusEffect(load);
+  // Opening the Inbox (or pulling down) asks fiarep.com for new messages first.
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastSync, setLastSync] = useState<LastSync | null>(null);
+  const fetchNew = useCallback(async () => {
+    await syncAllEntities().catch(() => undefined);
+    setLastSync(await getLastSync());
+    load();
+  }, [load]);
+  useFocusEffect(useCallback(() => { load(); void getLastSync().then(setLastSync); void fetchNew(); }, [load, fetchNew]));
 
   function daysSince(iso: string): number {
     try { return (Date.now() - new Date(iso).getTime()) / 86400000; } catch { return 0; }
@@ -220,7 +229,12 @@ export default function Notifications() {
   }
 
   return (
-    <ScrollView contentContainerStyle={ui.wrap}>
+    <ScrollView contentContainerStyle={ui.wrap} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={async () => { setRefreshing(true); await fetchNew(); setRefreshing(false); }} />}>
+      {lastSync && (
+        <Text style={{ fontSize: 12, color: lastSync.ok ? '#64748b' : '#C0392B', marginBottom: 6 }}>
+          {lastSync.ok ? `Checked fiarep.com at ${new Date(lastSync.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}${typeof lastSync.messages === 'number' ? ` · ${lastSync.messages} message${lastSync.messages === 1 ? '' : 's'} from the last day` : ''}` : `Could not check fiarep.com (${new Date(lastSync.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}): ${lastSync.error || 'no connection'}`}
+        </Text>
+      )}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
         <Text style={ui.h}>Inbox</Text>
         <Pressable onPress={() => router.back()} style={{ padding: 8 }}>

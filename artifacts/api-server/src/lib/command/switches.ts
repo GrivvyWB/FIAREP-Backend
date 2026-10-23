@@ -13,6 +13,7 @@ export type CommandSwitches = {
   confirm: Record<string, boolean>;
   /** The Claude model. */
   model: string;
+<<<<<<< ours
   /** Quick questions (short, nothing to send or change) go to this cheaper, faster Claude model. Platform row only. */
   quickModel?: string;
   /** Off: every command goes to the main model. On unless switched off. Platform row only. */
@@ -37,6 +38,13 @@ export const DEFAULT_MODEL = process.env["COMMAND_CENTER_MODEL"] || "claude-sonn
 export const DEFAULT_QUICK_MODEL = "claude-haiku-5-5";
 /** Google's "most intelligent Flash model; built for agents" (ai.google.dev/gemini-api/docs/models, Oct 18 2026). */
 export const DEFAULT_GEMINI_MODEL = process.env["GEMINI_MODEL"] || "gemini-3.8-flash";
+=======
+  /** Platform row only: monthly Claude spending cap per client, in US dollars (absent = no cap). */
+  caps?: Record<string, number>;
+};
+
+export const DEFAULT_MODEL = process.env["COMMAND_CENTER_MODEL"] || "claude-sonnet-5-5";
+>>>>>>> theirs
 export const PLATFORM_TENANT = "default";
 const KEY = "command-center";
 
@@ -53,12 +61,16 @@ export async function getSwitches(tenantId: string = PLATFORM_TENANT): Promise<C
     actions: v.actions && typeof v.actions === "object" ? v.actions : {},
     confirm: v.confirm && typeof v.confirm === "object" ? v.confirm : {},
     model: typeof v.model === "string" && v.model.trim() ? v.model.trim() : DEFAULT_MODEL,
+<<<<<<< ours
     provider: v.provider === "gemini" ? "gemini" : "claude",
     residentChat: v.residentChat !== false,
     autoWorkOrders: v.autoWorkOrders !== false,
     mailFallback: v.mailFallback !== false,
     geminiModel: typeof v.geminiModel === "string" && v.geminiModel.trim() ? v.geminiModel.trim() : DEFAULT_GEMINI_MODEL,
     ...(tenantId === PLATFORM_TENANT ? { quickOn: v.quickOn !== false, quickModel: typeof v.quickModel === "string" && v.quickModel.trim() ? v.quickModel.trim() : DEFAULT_QUICK_MODEL, caps, ownKeys: v.ownKeys && typeof v.ownKeys === "object" ? Object.fromEntries(Object.entries(v.ownKeys).filter(([, x]) => x === true)) : {} } : {}),
+=======
+    ...(tenantId === PLATFORM_TENANT ? { caps } : {}),
+>>>>>>> theirs
   };
   cache.set(tenantId, { at: Date.now(), value });
   return value;
@@ -72,12 +84,17 @@ export async function saveSwitches(next: CommandSwitches, tenantId: string = PLA
   return next;
 }
 
+<<<<<<< ours
 /** Platform -> Modules "command-center": OFF for every client until the platform owner switches it on for that client. */
+=======
+/** Platform -> Modules "command-center": on for every client unless switched off. */
+>>>>>>> theirs
 export async function moduleOn(tenantId: string): Promise<boolean> {
   if (tenantId === PLATFORM_TENANT) return true;
   const [org] = await db.select({ features: organizations.features, status: organizations.status }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
   if (!org || org.status !== "active") return false;
   const modules = org.features && typeof org.features === "object" ? (org.features as Record<string, unknown>)["modules"] : null;
+<<<<<<< ours
   return !!(modules && typeof modules === "object" && (modules as Record<string, unknown>)["command-center"] === true);
 }
 
@@ -87,6 +104,15 @@ export async function effectiveSwitches(tenantId: string): Promise<CommandSwitch
   if (tenantId === PLATFORM_TENANT) return { ...platform, moduleOn: true, platformEnabled: platform.enabled, paysOwn: false };
   // A client paying for its own AI picks its own engine (the one its key is for); otherwise FIAREP's choice applies.
   const paysOwn = platform.ownKeys?.[tenantId] === true;
+=======
+  return !(modules && typeof modules === "object" && (modules as Record<string, unknown>)["command-center"] === false);
+}
+
+/** What actually applies to one organization: Platform Control's switches on top of its own. */
+export async function effectiveSwitches(tenantId: string): Promise<CommandSwitches & { moduleOn: boolean; platformEnabled: boolean }> {
+  const platform = await getSwitches(PLATFORM_TENANT);
+  if (tenantId === PLATFORM_TENANT) return { ...platform, moduleOn: true, platformEnabled: platform.enabled };
+>>>>>>> theirs
   const own = await getSwitches(tenantId);
   const on = await moduleOn(tenantId);
   const actions: Record<string, boolean> = { ...own.actions };
@@ -96,6 +122,7 @@ export async function effectiveSwitches(tenantId: string): Promise<CommandSwitch
     actions,
     confirm: { ...platform.confirm, ...own.confirm },
     model: platform.model,
+<<<<<<< ours
     quickOn: platform.quickOn !== false,
     quickModel: platform.quickModel || DEFAULT_QUICK_MODEL,
     provider: paysOwn ? own.provider : platform.provider,
@@ -106,6 +133,10 @@ export async function effectiveSwitches(tenantId: string): Promise<CommandSwitch
     moduleOn: on,
     platformEnabled: platform.enabled,
     paysOwn,
+=======
+    moduleOn: on,
+    platformEnabled: platform.enabled,
+>>>>>>> theirs
   };
 }
 

@@ -503,6 +503,20 @@ async function applyRecord(d: any, record: any, owner: string) {
 // running together would each announce the same new notification.
 let syncInFlight: Promise<boolean> | null = null;
 
+export type LastSync = { ok: boolean; at: string; error?: string; messages?: number };
+async function saveLastSync(v: LastSync) {
+  try {
+    const d = await db();
+    const prev = await getLastSync();
+    await d.runAsync('INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value', 'last_sync', JSON.stringify({ ...v, messages: v.messages ?? lastMessages ?? prev?.messages }));
+  } catch { /* best effort */ }
+}
+let lastMessages: number | undefined;
+/** When the phone last checked fiarep.com, and whether it worked. */
+export async function getLastSync(): Promise<LastSync | null> {
+  try { const d = await db(); const row = await d.getFirstAsync<{ value: string }>('SELECT value FROM settings WHERE key=?', 'last_sync'); return row ? JSON.parse(row.value) : null; } catch { return null; }
+}
+
 export async function syncAllEntities(options?: {
   refreshEntities?: string[];
 }): Promise<boolean> {
@@ -510,7 +524,11 @@ export async function syncAllEntities(options?: {
     await syncInFlight.catch(() => false);
     if (!options?.refreshEntities?.length) return true;
   }
-  const run = syncAllEntitiesOnce(options);
+  // What happened last time, for the Inbox's "Last checked" line.
+  const run = syncAllEntitiesOnce(options).then(async (ok) => { await saveLastSync({ ok, at: new Date().toISOString() }); return ok; }, async (err) => {
+    await saveLastSync({ ok: false, at: new Date().toISOString(), error: String((err as any)?.data?.error || (err as any)?.message || err).slice(0, 200) });
+    throw err;
+  });
   syncInFlight = run;
   try { return await run; } finally { if (syncInFlight === run) syncInFlight = null; }
 }
@@ -558,6 +576,7 @@ async function syncAllEntitiesOnce(options?: {
     entities: TABLES.filter((item) => (ROLE_ENTITIES[identity?.role || actor.role] || ROLE_ENTITIES.worker).has(item.entity)).map((item) => item.entity).join(','),
   });
   const newNotifications: Array<{ message: string; detail?: string; reportId?: string }> = [];
+  lastMessages = (result.notifications || []).length;
   await d.withTransactionAsync(async () => {
     await ensureAllSyncTables(d);
     for (const record of result.records || []) {
@@ -571,7 +590,10 @@ async function syncAllEntitiesOnce(options?: {
           `UPDATE sync_queue SET status='conflict',error=? WHERE owner=? AND entity=? AND id=?`,
           'Remote update arrived while local changes were pending.', owner, record.entity, record.id,
         );
-      } else await applyRecord(d, record, owner);
+      } else {
+        // One record the phone can't store must not stop everything else (and the Inbox) from arriving.
+        try { await applyRecord(d, record, owner); } catch (err) { console.warn('sync: record not applied', record.entity, record.id, err); }
+      }
     }
     await d.execAsync('CREATE TABLE IF NOT EXISTS notifications (id TEXT PRIMARY KEY NOT NULL, state TEXT NOT NULL)');
     // Notifications the user removed on this device never come back, even if

@@ -18,7 +18,11 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, realpathSync, statS
 import os from "node:os";
 import path from "node:path";
 
+<<<<<<< ours
 const VERSION = "1.2.1";
+=======
+const VERSION = "1.1.0";
+>>>>>>> theirs
 const WIN = process.platform === "win32";
 const args = process.argv.slice(2);
 const argValue = (name) => { const i = args.indexOf(name); return i >= 0 ? args[i + 1] : undefined; };
@@ -142,6 +146,7 @@ function readFile(cfg, p) {
   return { path: real, size: st.size, truncated: st.size > buf.length, text: buf.toString("utf8") };
 }
 
+<<<<<<< ours
 // Send a file to the phone: uploaded to FIAREP, opened from a private 24-hour link.
 async function sendFile(cfg, p, jobId) {
   const real = insideAllowed(cfg, p);
@@ -157,6 +162,8 @@ async function sendFile(cfg, p, jobId) {
   return { name: data.name, size: data.size, url: data.url };
 }
 
+=======
+>>>>>>> theirs
 // Apps are named in the config. Mac: the app's name ("Microsoft Excel").
 // Windows: what you'd type in Start → Run ("excel", "winword", "outlook", "explorer", or a full path to an .exe).
 // Linux: the program's command ("libreoffice", "firefox").

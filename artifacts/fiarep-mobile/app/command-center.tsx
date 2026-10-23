@@ -578,8 +578,11 @@ export default function CommandCenter() {
           );
         })}
 
+<<<<<<< ours
         {(!quiet || showConvo) && <>
         {!!(device.greeting || savedGreeting) && <Text style={{ fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 4 }}>{device.greeting || savedGreeting}</Text>}
+=======
+>>>>>>> theirs
         {runs.length === 0 && <Text style={ui.empty}>{device.platform === false ? 'Ask anything — “Check every building we manage”, “Any urgent violations?”, “What’s in the Documents folder on the office PC?”.' : 'Ask anything — “Check every building we manage”, “Is FIAREP up?”, “Git status on my Mac”.'}</Text>}
         {runs.map((r) => (
           <View key={r.id} style={ui.card}>

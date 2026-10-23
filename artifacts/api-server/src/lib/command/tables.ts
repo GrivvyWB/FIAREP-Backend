@@ -176,6 +176,7 @@ export async function ensureCommandTables(): Promise<void> {
   await db.execute(sql`alter table command_actions add column if not exists tenant_id text not null default 'default'`);
   await db.execute(sql`alter table command_work_orders add column if not exists tenant_id text not null default 'default'`);
   await db.execute(sql`alter table command_audit add column if not exists tenant_id text`);
+<<<<<<< ours
   for (const col of ["assigned_staff_id", "assigned_name", "booking_id", "trade"]) await db.execute(sql`alter table command_work_orders add column if not exists ${sql.identifier(col)} text`);
   await db.execute(sql`create index if not exists command_runs_tenant_idx on command_runs (tenant_id, created_at)`);
   await db.execute(sql`create index if not exists command_devices_tenant_idx on command_devices (tenant_id)`);
@@ -184,4 +185,9 @@ export async function ensureCommandTables(): Promise<void> {
     id text primary key, tenant_id text not null, title text not null, body text not null,
     created_by text not null, run_id text, created_at timestamptz not null default now())`);
   await db.execute(sql`create index if not exists command_reports_tenant_idx on command_reports (tenant_id, created_at)`);
+=======
+  await db.execute(sql`create index if not exists command_runs_tenant_idx on command_runs (tenant_id, created_at)`);
+  await db.execute(sql`create index if not exists command_devices_tenant_idx on command_devices (tenant_id)`);
+  await db.execute(sql`create index if not exists command_audit_tenant_idx on command_audit (tenant_id, seq)`);
+>>>>>>> theirs
 }
