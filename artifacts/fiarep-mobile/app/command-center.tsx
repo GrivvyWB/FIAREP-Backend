@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share, Linking, AppState, Modal, Animated } from 'react-native';
 import VoiceOrb from '../components/VoiceOrb';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useFocusEffect } from 'expo-router';
+import { useFocusEffect, Stack } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AudioModule, RecordingPresets, createAudioPlayer, setAudioModeAsync, useAudioRecorder, type AudioPlayer } from 'expo-audio';
 import { customFetch } from '@workspace/api-client-react';
@@ -84,6 +84,9 @@ export default function CommandCenter() {
   const [sayAs, setSayAs] = useState('');
   const [sayAsDraft, setSayAsDraft] = useState('');
   const [voiceOpen, setVoiceOpen] = useState(false);
+  // Hands-free keeps the screen blank (only what needs you — an approval, a site down — shows). This turns the conversation back on.
+  const [showConvo, setShowConvo] = useState(false);
+  useEffect(() => { void AsyncStorage.getItem('cc.showConvo').then((v) => setShowConvo(v === '1')).catch(() => undefined); }, []);
   const insets = useSafeAreaInsets();
   const [teach, setTeach] = useState<{ n: number; heard: string[] } | null>(null);
   useEffect(() => { void AsyncStorage.multiGet(['cc.wakeWords', 'cc.sayAs']).then((kv) => { const m = Object.fromEntries(kv); try { const w = JSON.parse(m['cc.wakeWords'] || '[]'); if (Array.isArray(w)) setTaught(w.filter((x) => typeof x === 'string')); } catch { /* none yet */ } setSayAs(m['cc.sayAs'] || ''); setSayAsDraft(m['cc.sayAs'] || ''); }).catch(() => undefined); }, []);
@@ -233,8 +236,10 @@ export default function CommandCenter() {
   }
 
   // ── Hands-free / one-press listening ──
-  const [handsFree, setHandsFree] = useState(false);
-  const [wakeOn, setWakeOn] = useState(true);
+  // The Command Center screen is for talking to it: it listens as soon as it opens, no button and no wake words.
+  // Both can be changed in ⚙️ settings.
+  const [handsFree, setHandsFree] = useState(true);
+  const [wakeOn, setWakeOn] = useState(false);
   const [phase, setPhase] = useState<'off' | 'waiting' | 'hearing' | 'thinking' | 'speaking'>('off');
   const loopGen = useRef(0);          // bumps to stop the current listening loop
   const awakeUntil = useRef(0);
@@ -244,8 +249,8 @@ export default function CommandCenter() {
   const cancelPlay = useRef<null | (() => void)>(null);
   /** Stop the answer being said. */
   function hush() { stopSpeaking.current = true; playerRef.current?.pause(); cancelPlay.current?.(); }
-  const wakeRef = useRef(true); wakeRef.current = wakeOn;
-  useEffect(() => { void AsyncStorage.multiGet(['cc.handsFree', 'cc.wake']).then((kv) => { const m = Object.fromEntries(kv); if (m['cc.wake'] === '0') setWakeOn(false); if (m['cc.handsFree'] === '1') setHandsFree(true); }).catch(() => undefined); }, []);
+  const wakeRef = useRef(false); wakeRef.current = wakeOn;
+  useEffect(() => { void AsyncStorage.multiGet(['cc.handsFree2', 'cc.wake2']).then((kv) => { const m = Object.fromEntries(kv); if (m['cc.wake2'] === '1') setWakeOn(true); if (m['cc.handsFree2'] === '0') setHandsFree(false); }).catch(() => undefined); }, []);
 
   /** Records one thing said: starts when you talk, ends after a short pause. Returns the file, or null if stopped / nothing said. */
   async function hearOnce(gen: number): Promise<string | null> {
@@ -485,8 +490,21 @@ export default function CommandCenter() {
     </Pressable>
   );
 
+  // Hands-free: nothing on the screen. Talk; when you stop, it answers.
+  const quiet = handsFree;
+  const sw = (label: string, value: boolean, onChange: (v: boolean) => void, note?: string) => (
+    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+      <View style={{ flex: 1 }}><Text style={{ fontSize: 16 }}>{label}</Text>{!!note && <Text style={{ fontSize: 12, color: '#64748b' }}>{note}</Text>}</View>
+      <Switch value={value} onValueChange={onChange} />
+    </View>
+  );
   return (
     <View style={{ flex: 1 }}>
+      <Stack.Screen options={{ headerRight: () => (
+        <Pressable onPress={() => setVoiceOpen(true)} hitSlop={10} accessibilityLabel="Command Center settings" style={{ paddingHorizontal: 6 }}>
+          <Text style={{ fontSize: 22 }}>⚙️</Text>
+        </Pressable>
+      ) }} />
       <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
         {device.offline && (
           <View style={[ui.card, { borderColor: '#C0392B', backgroundColor: '#fdecea' }]}>
@@ -497,6 +515,7 @@ export default function CommandCenter() {
         {relayBase && (() => {
           const open = relay?.incidents.filter((i) => i.status === 'open') ?? [];
           const fixing = relay?.incidents.find((i) => i.status === 'approved' || i.status === 'running');
+          if (quiet && !open.length && !fixing) return null; // blank screen: only when a site is down
           const replitLink = (i?: RelayIncident) => i?.replitUrl ? (
             <Pressable style={[ui.btnOutline, { marginTop: 8 }]} onPress={() => void Linking.openURL(i.replitUrl!)}><Text style={ui.btnOutlineText}>Open Replit (republish from the phone)</Text></Pressable>
           ) : null;
@@ -559,6 +578,7 @@ export default function CommandCenter() {
           );
         })}
 
+        {(!quiet || showConvo) && <>
         {!!(device.greeting || savedGreeting) && <Text style={{ fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 4 }}>{device.greeting || savedGreeting}</Text>}
         {runs.length === 0 && <Text style={ui.empty}>{device.platform === false ? 'Ask anything — “Check every building we manage”, “Any urgent violations?”, “What’s in the Documents folder on the office PC?”.' : 'Ask anything — “Check every building we manage”, “Is FIAREP up?”, “Git status on my Mac”.'}</Text>}
         {runs.map((r) => (
@@ -572,84 +592,68 @@ export default function CommandCenter() {
           <Pressable onPress={() => { setThreadId(newThread()); Alert.alert('New conversation', 'Earlier commands won’t be used as context.'); }}><Text style={{ color: ACCENT }}>New conversation</Text></Pressable>
           <Pressable onPress={() => void shareKey()}><Text style={{ color: ACCENT }}>Share Face ID key (for your computers)</Text></Pressable>
         </View>
+        </>}
       </ScrollView>
 
-      <View style={{ padding: 12, paddingBottom: 12 + insets.bottom, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff', gap: 8 }}>
-        {phase !== 'off' && (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: phase === 'hearing' ? '#dc2626' : phase === 'waiting' ? '#16a34a' : phase === 'speaking' ? '#7c3aed' : '#185FA5' }} />
-            <Text style={{ fontWeight: '700' }}>{phase === 'waiting' ? (handsFree && wakeOn && Date.now() > awakeUntil.current ? 'Listening for “Hey FIAREP”' : 'Listening — just talk') : phase === 'hearing' ? 'Hearing you…' : phase === 'thinking' ? 'Got it — working…' : 'Answering…'}</Text>
-            {phase === 'thinking' && <ActivityIndicator />}
+      {!quiet && (
+        <View style={{ padding: 12, paddingBottom: 12 + insets.bottom, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff', gap: 8 }}>
+          <View style={{ alignItems: 'center', marginTop: -4, marginBottom: -8 }}>
+            <VoiceOrb
+              phase={phase === 'off' && recording ? 'waiting' : phase}
+              level={levelAnim}
+              size={76}
+              disabled={(!!busy || phase === 'thinking') && !recording}
+              onPress={() => { if (phase === 'speaking') { hush(); return; } if (recording) stopRecording(); else if (!handsFree) void startRecording(); }}
+            />
           </View>
-        )}
-        {!!busy && phase === 'off' && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text style={ui.label}>{busy}</Text></View>}
-        <View style={{ alignItems: 'center', marginTop: -4, marginBottom: -8 }}>
-          <VoiceOrb
-            phase={phase === 'off' && recording ? 'waiting' : phase}
-            level={levelAnim}
-            size={76}
-            disabled={(!!busy || phase === 'thinking') && !recording}
-            onPress={() => { if (phase === 'speaking') { hush(); return; } if (recording) stopRecording(); else if (!handsFree) void startRecording(); }}
-          />
+          <TextInput style={ui.input} value={text} onChangeText={setText} placeholder="Type a command" returnKeyType="send" onSubmitEditing={() => void send(text)} editable={!busy} />
         </View>
-        <TextInput style={ui.input} value={text} onChangeText={setText} placeholder="Type a command" returnKeyType="send" onSubmitEditing={() => void send(text)} editable={!busy} />
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={ui.label}>Say replies out loud</Text>
-          <Switch value={speakReplies} onValueChange={setSpeakReplies} />
-        </View>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={ui.label}>Hands-free (no button — just talk)</Text>
-          <Switch value={handsFree} onValueChange={(v) => { setHandsFree(v); void AsyncStorage.setItem('cc.handsFree', v ? '1' : '0'); if (!v) stopListening(); }} />
-        </View>
-        {handsFree && (
+      )}
+      <Modal visible={voiceOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setVoiceOpen(false)}>
+        <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 + insets.bottom, gap: 12 }} keyboardShouldPersistTaps="handled">
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={ui.label}>Only after “Hey FIAREP”</Text>
-            <Switch value={wakeOn} onValueChange={(v) => { setWakeOn(v); void AsyncStorage.setItem('cc.wake', v ? '1' : '0'); }} />
+            <Text style={{ fontSize: 22, fontWeight: '800' }}>Command Center settings</Text>
+            <Pressable onPress={() => { if (teach) stopListening(); setVoiceOpen(false); }} hitSlop={10}><Text style={{ color: ACCENT, fontWeight: '700', fontSize: 17 }}>Done</Text></Pressable>
           </View>
-        )}
-        <Pressable onPress={() => setVoiceOpen(true)} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, borderWidth: 1.5, borderColor: ACCENT, borderRadius: 10, paddingVertical: 12, backgroundColor: '#eef4fb' }}>
-          <Text style={{ fontSize: 18 }}>⚙️</Text>
-          <Text style={{ color: ACCENT, fontWeight: '800', fontSize: 16 }}>Voice settings</Text>
-          <Text style={{ color: '#475569', fontSize: 13 }}>wake words · how FIAREP is said</Text>
-        </Pressable>
-        <Modal visible={voiceOpen} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setVoiceOpen(false)}>
-          <ScrollView contentContainerStyle={{ padding: 18, paddingBottom: 40 + insets.bottom, gap: 12 }} keyboardShouldPersistTaps="handled">
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Text style={{ fontSize: 22, fontWeight: '800' }}>Voice settings</Text>
-              <Pressable onPress={() => { if (teach) stopListening(); setVoiceOpen(false); }} hitSlop={10}><Text style={{ color: ACCENT, fontWeight: '700', fontSize: 17 }}>Done</Text></Pressable>
+          <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 4 }}>Talking</Text>
+          {sw('Say replies out loud', speakReplies, setSpeakReplies)}
+          {sw('Hands-free', handsFree, (v) => { setHandsFree(v); void AsyncStorage.setItem('cc.handsFree2', v ? '1' : '0'); if (!v) stopListening(); }, 'On: the screen listens as soon as it opens — no buttons. Just talk; when you stop, it answers.')}
+          {handsFree && sw('Only after “Hey FIAREP” (not needed on this screen)', wakeOn, (v) => { setWakeOn(v); void AsyncStorage.setItem('cc.wake2', v ? '1' : '0'); })}
+          {handsFree && sw('Show the conversation on screen', showConvo, (v) => { setShowConvo(v); void AsyncStorage.setItem('cc.showConvo', v ? '1' : '0'); }, 'Off: the screen stays blank while you talk.')}
+          <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 12 }}>Wake words</Text>
+          {teach ? (
+            <View style={{ backgroundColor: '#f1f5f9', borderRadius: 8, padding: 10, gap: 4 }}>
+              <Text style={{ fontWeight: '800', fontSize: 16 }}>Say “Hey FIAREP” the way you say it — {teach.n} of 5</Text>
+              <Text style={ui.label}>Then stop and wait. It moves to the next one on its own.</Text>
+              {teach.heard.map((h, i) => <Text key={i} style={{ color: '#475569' }}>Heard: “{h}”</Text>)}
+              <Pressable onPress={() => stopListening()}><Text style={{ color: '#C0392B', fontWeight: '600' }}>Stop</Text></Pressable>
             </View>
-            <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 4 }}>Wake words</Text>
-            {teach ? (
-              <View style={{ backgroundColor: '#f1f5f9', borderRadius: 8, padding: 10, gap: 4 }}>
-                <Text style={{ fontWeight: '800', fontSize: 16 }}>Say “Hey FIAREP” the way you say it — {teach.n} of 5</Text>
-                <Text style={ui.label}>Then stop and wait. It moves to the next one on its own.</Text>
-                {teach.heard.map((h, i) => <Text key={i} style={{ color: '#475569' }}>Heard: “{h}”</Text>)}
-                <Pressable onPress={() => stopListening()}><Text style={{ color: '#C0392B', fontWeight: '600' }}>Stop</Text></Pressable>
-              </View>
-            ) : (
-              <Pressable style={ui.btnOutline} onPress={() => void teachWakeWords()}><Text style={ui.btnOutlineText}>Teach my wake words (say “Hey FIAREP” 5 times)</Text></Pressable>
-            )}
-            {taught.length > 0 && (
-              <View style={{ gap: 2 }}>
-                <Text style={ui.label}>These also wake it on this phone:</Text>
-                {taught.map((w) => (
-                  <View key={w} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text>“{w}”</Text>
-                    <Pressable onPress={() => void removeTaught(w)} hitSlop={8}><Text style={{ color: '#C0392B', fontSize: 16 }}>✕</Text></Pressable>
-                  </View>
-                ))}
-              </View>
-            )}
-            <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 12 }}>How FIAREP is said</Text>
-            <Text style={ui.label}>Type it the way it sounds (e.g. Fee-uh-rep), press Play, then Save.</Text>
-            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-              <TextInput style={[ui.input, { flex: 1 }]} value={sayAsDraft} onChangeText={setSayAsDraft} placeholder="FIAREP" autoCapitalize="none" autoCorrect={false} />
-              <Pressable style={[ui.btnOutline, { paddingHorizontal: 12 }]} onPress={() => void playSayAs()}><Text style={ui.btnOutlineText}>▶ Play</Text></Pressable>
-              <Pressable style={[ui.btn, { paddingHorizontal: 12 }, sayAsDraft.trim() === sayAs && ui.btnMuted]} disabled={sayAsDraft.trim() === sayAs} onPress={() => void saveSayAs(sayAsDraft)}><Text style={ui.btnText}>Save</Text></Pressable>
+          ) : (
+            <Pressable style={ui.btnOutline} onPress={() => void teachWakeWords()}><Text style={ui.btnOutlineText}>Teach my wake words (say “Hey FIAREP” 5 times)</Text></Pressable>
+          )}
+          {taught.length > 0 && (
+            <View style={{ gap: 2 }}>
+              <Text style={ui.label}>These also wake it on this phone:</Text>
+              {taught.map((w) => (
+                <View key={w} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text>“{w}”</Text>
+                  <Pressable onPress={() => void removeTaught(w)} hitSlop={8}><Text style={{ color: '#C0392B', fontSize: 16 }}>✕</Text></Pressable>
+                </View>
+              ))}
             </View>
-          </ScrollView>
-        </Modal>
-      </View>
+          )}
+          <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 12 }}>How FIAREP is said</Text>
+          <Text style={ui.label}>Type it the way it sounds (e.g. Fee-uh-rep), press Play, then Save.</Text>
+          <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+            <TextInput style={[ui.input, { flex: 1 }]} value={sayAsDraft} onChangeText={setSayAsDraft} placeholder="FIAREP" autoCapitalize="none" autoCorrect={false} />
+            <Pressable style={[ui.btnOutline, { paddingHorizontal: 12 }]} onPress={() => void playSayAs()}><Text style={ui.btnOutlineText}>▶ Play</Text></Pressable>
+            <Pressable style={[ui.btn, { paddingHorizontal: 12 }, sayAsDraft.trim() === sayAs && ui.btnMuted]} disabled={sayAsDraft.trim() === sayAs} onPress={() => void saveSayAs(sayAsDraft)}><Text style={ui.btnText}>Save</Text></Pressable>
+          </View>
+          <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 12 }}>Conversation</Text>
+          <Pressable style={ui.btnOutline} onPress={() => { setThreadId(newThread()); Alert.alert('New conversation', 'Earlier commands won’t be used as context.'); }}><Text style={ui.btnOutlineText}>New conversation</Text></Pressable>
+          <Pressable style={ui.btnOutline} onPress={() => void shareKey()}><Text style={ui.btnOutlineText}>Share Face ID key (for your computers)</Text></Pressable>
+        </ScrollView>
+      </Modal>
     </View>
   );
 }
