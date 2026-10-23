@@ -174,7 +174,8 @@ export default function AdminHome() {
   const hasAttendance = sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === 'Attendance'));
   const has = (label: string) => sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === label));
   const tabs = [
-    ...(has('Manage All Requests') ? [{ label: 'Requests', icon: 'file-tray-full-outline', onPress: () => router.push('/manage-requests') }] : []),
+    // Bottom bar: Site Check-Ins in place of Requests — Manage All Requests is a tile above. Switch: App tabs → Site Check-Ins (bottom bar).
+    ...(tileEnabled('admin', 'Site Check-Ins (bottom bar)', rawModules) ? [{ label: 'Check-Ins', icon: 'location-outline', onPress: () => router.push('/site-checkins') }] : []),
     // Bottom bar: Website (fiarep.com, already signed in) in place of Reports — Resident Reports is a tile above. Switch: App tabs → Website (bottom bar).
     ...(tileEnabled('admin', 'Website (bottom bar)', rawModules) ? [{ label: 'Website', icon: 'globe-outline', onPress: () => { openWebsiteSignedIn().catch(() => undefined); } }] : []),
   ];

@@ -100,7 +100,10 @@ export default function ManagementHome() {
     else all.push({ heading: 'System', tiles: [...extraSystem, { label: 'Sign out', onPress: onSignOut }] });
     const tabs: HomeTab[] = [
       ...(all.some((sec) => sec.tiles.some((t) => t.label.startsWith('Inbox'))) ? [{ label: 'Inbox', icon: 'mail-outline', onPress: () => router.push('/notifications') }] : []),
-      ...(all.some((sec) => sec.tiles.some((t) => t.label.startsWith('Manage All Requests'))) ? [{ label: 'Requests', icon: 'file-tray-full-outline', onPress: () => router.push('/manage-requests') }] : []),
+      ...(all.some((sec) => sec.tiles.some((t) => t.label.startsWith('Manage All Requests'))) && (restricted || supervisorInspector || cpmSupervisor || tradeSupervisor) ? [{ label: 'Requests', icon: 'file-tray-full-outline', onPress: () => router.push('/manage-requests') }] : []),
+      // Upper management: Site Check-Ins in place of Requests. Switch: App tabs → Site Check-Ins (bottom bar).
+      ...(!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor && tileEnabled('management', 'Site Check-Ins (bottom bar)', rawModules) ? [{ label: 'Check-Ins', icon: 'location-outline', onPress: () => router.push('/site-checkins') }] : []),
+      ...(all.some((sec) => sec.tiles.some((t) => t.label === 'Review Reports')) && (restricted || supervisorInspector || cpmSupervisor || tradeSupervisor) ? [{ label: 'Reports', icon: 'document-text-outline', onPress: () => router.push('/management') }] : []),
       // Upper management: Website (fiarep.com, already signed in) in place of Reports — Review Reports is a tile above. Switch: App tabs → Website (bottom bar).
       ...(!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor && tileEnabled('management', 'Website (bottom bar)', rawModules) ? [{ label: 'Website', icon: 'globe-outline', onPress: () => { openWebsiteSignedIn().catch(() => undefined); } }] : []),
       ...(all.some((sec) => sec.tiles.some((t) => t.label === 'Request Time Off')) ? [{ label: 'Time Off', icon: 'time-outline', onPress: () => router.push('/leave-request') }] : []),
