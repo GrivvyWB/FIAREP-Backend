@@ -127,7 +127,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const url = new URL(window.location.href);
         const handoff = new URLSearchParams(url.hash.replace(/^#/, "")).get("handoff");
         if (handoff) {
-          window.history.replaceState(null, "", url.pathname + url.search);
+          // fiarep.com/ is the landing page; from the app they go straight to their dashboard.
+          window.history.replaceState(null, "", (url.pathname === "/" ? "/dashboard" : url.pathname) + url.search);
           localStorage.removeItem("fiarep_access_token");
           localStorage.setItem("fiarep_refresh_token", handoff);
           localStorage.setItem("fiarep_persona", "staff");
