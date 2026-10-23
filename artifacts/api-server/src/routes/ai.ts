@@ -70,13 +70,13 @@ router.post("/ai/translate", requireAuth, async (req, res) => {
 
 router.post("/ai/transcribe", requireAuth, async (req, res) => {
   const apiKey = openAiKey(res); if (!apiKey) return;
-  const body = (req.body || {}) as { audio?: unknown; mimeType?: unknown; language?: unknown };
+  const body = (req.body || {}) as { audio?: unknown; mimeType?: unknown; language?: unknown; prompt?: unknown };
   const audio = typeof body.audio === "string" ? body.audio : "";
   const mimeType = typeof body.mimeType === "string" ? body.mimeType : "audio/webm";
   const language = typeof body.language === "string" ? body.language : "";
   if (!audio) { res.status(400).json({ error: "audio is required" }); return; }
   try {
-    res.json(await transcribeAudio(audio, mimeType, apiKey, language));
+    res.json(await transcribeAudio(audio, mimeType, apiKey, language, fetch, typeof body.prompt === "string" ? body.prompt : ""));
   } catch (error) {
     req.log.warn({ err: error }, "Transcription failed");
     res.status(503).json({ error: "Could not understand the recording — try again closer to the phone" });

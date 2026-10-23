@@ -20,7 +20,7 @@ import { commandActions, commandAgents, commandDevices, commandRuns, commandWork
 import { isEd25519Key, requestMessage, sha256hex, verifyEd25519 } from "../lib/command/crypto";
 import { commandAuditLog, recentAudit, verifyAuditChain } from "../lib/command/audit";
 import { ACTIONS, actionsFor, isPlatform } from "../lib/command/actions";
-import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
+import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL, DEFAULT_QUICK_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
 import { callName, capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
 import { bookingView, getSchedule, saveSchedule, staffBookings } from "../lib/command/scheduling";
@@ -128,7 +128,7 @@ router.post("/v1/command/runs", ...phone, requireCommandDevice, async (req, res)
   const text = str(b["text"], 2000);
   if (!text) { res.status(400).json({ error: "Say or type a command." }); return; }
   try {
-    res.json(await runCommand({ text, threadId: str(b["threadId"], 64) || undefined, staffId: actor.id, tenantId: actor.tenantId, deviceId: device(res).id, actorName: actor.name }));
+    res.json(await runCommand({ text, spoken: b["spoken"] === true, threadId: str(b["threadId"], 64) || undefined, staffId: actor.id, tenantId: actor.tenantId, deviceId: device(res).id, actorName: actor.name }));
   } catch (err) {
     const status = (err as { status?: number }).status ?? 502;
     res.status(status).json({ error: err instanceof Error ? err.message : "Command failed" });
@@ -421,7 +421,7 @@ router.get("/v1/platform/command", async (req, res) => {
   ]);
   const usageOf = new Map(usage.map((u) => [u.tenantId, u]));
   res.json({
-    switches, defaultModel: DEFAULT_MODEL, defaultGeminiModel: DEFAULT_GEMINI_MODEL, geminiKeyConfigured: gemKey.set, geminiKey: gemKey, mapsKey, schedule, prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
+    switches, defaultModel: DEFAULT_MODEL, defaultQuickModel: DEFAULT_QUICK_MODEL, defaultGeminiModel: DEFAULT_GEMINI_MODEL, geminiKeyConfigured: gemKey.set, geminiKey: gemKey, mapsKey, schedule, prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
     actions: actionMeta(PLATFORM_TENANT),
     devices: devices.map(deviceMeta),
     agents: agents.map(agentMeta),
@@ -455,6 +455,8 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
     mailFallback: typeof b["mailFallback"] === "boolean" ? b["mailFallback"] : before.mailFallback,
     geminiModel: typeof b["geminiModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["geminiModel"].trim()) ? b["geminiModel"].trim() : before.geminiModel,
+    quickOn: typeof b["quickOn"] === "boolean" ? b["quickOn"] : before.quickOn !== false,
+    quickModel: typeof b["quickModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["quickModel"].trim()) ? b["quickModel"].trim() : before.quickModel || DEFAULT_QUICK_MODEL,
     caps: before.caps ?? {},
     ownKeys: before.ownKeys ?? {},
   };

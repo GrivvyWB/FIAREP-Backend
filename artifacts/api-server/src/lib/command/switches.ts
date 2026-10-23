@@ -13,6 +13,10 @@ export type CommandSwitches = {
   confirm: Record<string, boolean>;
   /** The Claude model. */
   model: string;
+  /** Quick questions (short, nothing to send or change) go to this cheaper, faster Claude model. Platform row only. */
+  quickModel?: string;
+  /** Off: every command goes to the main model. On unless switched off. Platform row only. */
+  quickOn?: boolean;
   /** Which model reads the commands: "claude" (default) or "gemini". Platform row only; applies to every client. */
   provider: "claude" | "gemini";
   /** The Gemini model, used when provider is "gemini". */
@@ -30,6 +34,7 @@ export type CommandSwitches = {
 };
 
 export const DEFAULT_MODEL = process.env["COMMAND_CENTER_MODEL"] || "claude-sonnet-5-5";
+export const DEFAULT_QUICK_MODEL = "claude-haiku-5-5";
 /** Google's "most intelligent Flash model; built for agents" (ai.google.dev/gemini-api/docs/models, Oct 18 2026). */
 export const DEFAULT_GEMINI_MODEL = process.env["GEMINI_MODEL"] || "gemini-3.8-flash";
 export const PLATFORM_TENANT = "default";
@@ -53,7 +58,7 @@ export async function getSwitches(tenantId: string = PLATFORM_TENANT): Promise<C
     autoWorkOrders: v.autoWorkOrders !== false,
     mailFallback: v.mailFallback !== false,
     geminiModel: typeof v.geminiModel === "string" && v.geminiModel.trim() ? v.geminiModel.trim() : DEFAULT_GEMINI_MODEL,
-    ...(tenantId === PLATFORM_TENANT ? { caps, ownKeys: v.ownKeys && typeof v.ownKeys === "object" ? Object.fromEntries(Object.entries(v.ownKeys).filter(([, x]) => x === true)) : {} } : {}),
+    ...(tenantId === PLATFORM_TENANT ? { quickOn: v.quickOn !== false, quickModel: typeof v.quickModel === "string" && v.quickModel.trim() ? v.quickModel.trim() : DEFAULT_QUICK_MODEL, caps, ownKeys: v.ownKeys && typeof v.ownKeys === "object" ? Object.fromEntries(Object.entries(v.ownKeys).filter(([, x]) => x === true)) : {} } : {}),
   };
   cache.set(tenantId, { at: Date.now(), value });
   return value;
@@ -91,6 +96,8 @@ export async function effectiveSwitches(tenantId: string): Promise<CommandSwitch
     actions,
     confirm: { ...platform.confirm, ...own.confirm },
     model: platform.model,
+    quickOn: platform.quickOn !== false,
+    quickModel: platform.quickModel || DEFAULT_QUICK_MODEL,
     provider: paysOwn ? own.provider : platform.provider,
     residentChat: platform.residentChat && own.residentChat,
     autoWorkOrders: platform.autoWorkOrders && own.autoWorkOrders,

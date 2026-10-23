@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ActionMeta = { name: string; label: string; risk: "read" | "write"; confirmDefault: boolean; target: "server" | "agent" };
-type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; autoWorkOrders: boolean; mailFallback?: boolean; caps?: Record<string, number> };
+type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; quickOn?: boolean; quickModel?: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; autoWorkOrders: boolean; mailFallback?: boolean; caps?: Record<string, number> };
 type ChatMsg = { id: string; from: "resident" | "office" | "staff"; text: string; at: string; by?: string };
 type Conversation = { id: string; complaintNo: string; address: string; unit: string; description: string; human: boolean; handoff: { reason?: string; urgent?: boolean } | null; appointment: string | null; lastAt: string; waiting: boolean; messages: ChatMsg[] };
 type Device = { id: string; name: string; staffName: string; status: "pending" | "active" | "revoked"; confirmKey: string; createdAt: string; approvedAt: string | null; approvedBy: string | null; lastUsedAt: string | null };
@@ -20,7 +20,7 @@ type Overview = {
   paysOwn?: boolean; provider?: "claude" | "gemini"; models?: { claude: string; gemini: string };
   ownKeys?: Record<"anthropic" | "gemini" | "openai" | "googleMaps", { set: boolean; last4: string | null; setAt: string | null; setBy: string | null }> | null;
   // Platform Control only
-  defaultModel?: string; defaultGeminiModel?: string; geminiKeyConfigured?: boolean; geminiKey?: { set: boolean; source: "replit-secrets" | "terminal" | null; last4: string | null }; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
+  defaultModel?: string; defaultQuickModel?: string; defaultGeminiModel?: string; geminiKeyConfigured?: boolean; geminiKey?: { set: boolean; source: "replit-secrets" | "terminal" | null; last4: string | null }; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
   // A client's own only
   platformEnabled?: boolean; platformOff?: string[]; cap?: number | null; capProblem?: string | null;
 };
@@ -93,6 +93,7 @@ export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "pl
   const [newAgent, setNewAgent] = useState<{ name: string; token: string; install: Install } | null>(null);
   const [model, setModel] = useState("");
   const [geminiModel, setGeminiModel] = useState("");
+  const [quickModel, setQuickModel] = useState("");
   const [caps, setCaps] = useState<Record<string, string>>({});
   const [sched, setSched] = useState<Schedule | null>(null);
   const [chats, setChats] = useState<Conversation[]>([]);
@@ -118,7 +119,7 @@ export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "pl
       setChats(c);
       setReports(await api<Report[]>(`${base}/reports`).catch(() => [] as Report[]));
       setMail(await api<MailStatus>(`${base}/mailbox`).catch(() => null));
-      setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setSched((x) => x ?? o.schedule ?? null); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
+      setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setQuickModel((m) => m || o.switches.quickModel || o.defaultQuickModel || ""); setSched((x) => x ?? o.schedule ?? null); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
     } catch (err: any) { setLoadError(err?.data?.error || err?.message || "Could not load the Command Center"); }
   }
   useEffect(() => { void load(); const t = setInterval(() => void load(), 15_000); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -420,6 +421,13 @@ export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "pl
                 <Button size="sm" variant="outline" disabled={!geminiModel.trim() || geminiModel.trim() === data.switches.geminiModel} onClick={() => void saveSwitches({ geminiModel: geminiModel.trim() })}>Save</Button>
                 <span className="w-full text-xs text-slate-500">default {data.defaultGeminiModel} · {priceText(data.switches.geminiModel)} · key {data.geminiKey?.set ? `set ${data.geminiKey.source === "terminal" ? "from the Terminal" : "in Replit Secrets"} (…${data.geminiKey.last4})` : <b className="text-amber-800">not set — run set-gemini-key.sh in Terminal</b>}</span>
               </div>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-md bg-slate-50 p-2 text-sm">
+              <Switch checked={data.switches.quickOn !== false} onCheckedChange={(v) => void saveSwitches({ quickOn: v })} aria-label="Quick questions to the quick model" />
+              <span className="font-semibold text-slate-800">Quick questions go to</span>
+              <input value={quickModel} onChange={(e) => setQuickModel(e.target.value)} className="w-44 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
+              <Button size="sm" variant="outline" disabled={!quickModel.trim() || quickModel.trim() === data.switches.quickModel} onClick={() => void saveSwitches({ quickModel: quickModel.trim() })}>Save</Button>
+              <span className="w-full text-xs text-slate-500">Claude only. A command of 25 words or fewer that asks nothing to be sent, written, changed, approved or run ("Is FIAREP up?", "Any open violations at 1490 Southern?") goes to this model — faster and cheaper. Everything else goes to {data.switches.model}. {data.switches.quickModel ? priceText(data.switches.quickModel) : ""}</span>
             </div>
             {data.usage ? <p className="mt-2 text-xs text-slate-500">FIAREP's own this month: {money(data.usage.costUsd)}, {data.usage.runs} commands</p> : null}
           </div>

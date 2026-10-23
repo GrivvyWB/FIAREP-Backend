@@ -224,7 +224,11 @@ export async function capProblem(tenantId: string): Promise<string | null> {
   return used && used.costUsd >= cap ? `This month's Command Center limit ($${cap.toFixed(2)}) is used up. It resets on the 1st, or FIAREP can raise it.` : null;
 }
 
-export async function runCommand(input: { text: string; threadId?: string; staffId: string; tenantId: string; deviceId: string; actorName: string }) {
+/** A quick question: short, and nothing to send, write, change or approve. Those go to the quick model. */
+const ACTING = /\b(send|email|e-mail|text|message|write|draft|create|add|assign|dispatch|schedule|book|delete|remove|cancel|approve|deny|deploy|republish|publish|restart|fix|update|change|set|make|build|fill|file|order|pay|compare|analy[sz]e|investigate|plan|summari[sz]e|report|translate|run)\b/i;
+export const isQuickCommand = (text: string) => text.trim().split(/\s+/).length <= 25 && !ACTING.test(text);
+
+export async function runCommand(input: { text: string; spoken?: boolean; threadId?: string; staffId: string; tenantId: string; deviceId: string; actorName: string }) {
   const switches = await effectiveSwitches(input.tenantId);
   const overCap = await capProblem(input.tenantId);
   if (overCap) throw Object.assign(new Error(overCap), { status: 402 });
@@ -236,11 +240,15 @@ export async function runCommand(input: { text: string; threadId?: string; staff
   const tools = actionsFor(input.tenantId).filter((a) => actionOn(switches, a.name)).map((a) => ({ name: a.name, description: a.description, input_schema: a.schema }));
   const messages: Msg[] = [...(await threadHistory(threadId, runId, input.staffId)), { role: "user", content: input.text }];
   const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, input.tenantId)).limit(1);
-  const system = systemPrompt(input.actorName, await agentCatalog(input.tenantId), org?.name || "your company", isPlatform(input.tenantId), await getLanguage(input.tenantId, input.staffId));
+  const system = systemPrompt(input.actorName, await agentCatalog(input.tenantId), org?.name || "your company", isPlatform(input.tenantId), await getLanguage(input.tenantId, input.staffId))
+    // Hands-free: the reply is read out loud, so it is short.
+    + (input.spoken ? "\n\nThis command was spoken hands-free and your reply is read out loud. Answer in one to three short sentences, plain words, no lists, tables or symbols, unless they ask for the detail." : "");
   const usage: Record<string, number> = { input_tokens: 0, output_tokens: 0 };
   // Engine: Claude (default) or Gemini — Platform Control → Command Center → Engine.
   const gemini = switches.provider === "gemini";
-  const model = gemini ? switches.geminiModel : switches.model;
+  // Quick questions go to the quick model (Platform Control → Command Center → Engine); everything else to the main one.
+  const claudeModel = switches.quickOn !== false && switches.quickModel && isQuickCommand(input.text) ? switches.quickModel : switches.model;
+  const model = gemini ? switches.geminiModel : claudeModel;
   let reply = "";
   try {
     const apiKey = await engineKey(input.tenantId, gemini, switches.paysOwn);
@@ -252,7 +260,7 @@ export async function runCommand(input: { text: string; threadId?: string; staff
       });
     }
     else for (let turn = 0; turn < MAX_TURNS; turn += 1) {
-      const res = await callClaude(switches.model, system, tools, messages, apiKey);
+      const res = await callClaude(claudeModel, system, tools, messages, apiKey);
       for (const [k, v] of Object.entries(res.usage ?? {})) if (typeof v === "number") usage[k] = (usage[k] ?? 0) + v;
       const content = res.content ?? [];
       reply = content.filter((b) => b.type === "text").map((b) => String(b["text"] ?? "")).join("\n").trim() || reply;

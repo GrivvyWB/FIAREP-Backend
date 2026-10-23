@@ -100,6 +100,8 @@ export async function transcribeAudio(
   apiKey: string,
   languageHint = "",
   fetchImpl: FetchLike = fetch,
+  /** Words to expect (e.g. "Hey FIAREP"), so they are spelled right. */
+  prompt = "",
 ): Promise<{ text: string }> {
   const bytes = Buffer.from(audioBase64.replace(/^data:[^;]+;base64,/, ""), "base64");
   const ext = mimeType.includes("mp4") || mimeType.includes("m4a") ? "m4a"
@@ -110,6 +112,7 @@ export async function transcribeAudio(
   form.append("file", new Blob([bytes], { type: mimeType || "audio/webm" }), `speech.${ext}`);
   form.append("model", "gpt-4o-mini-transcribe");
   if (languageHint && languageHint !== "auto") form.append("language", languageHint);
+  if (prompt) form.append("prompt", prompt.slice(0, 300));
   const response = await withTimeout(60_000, (signal) => fetchImpl("https://api.openai.com/v1/audio/transcriptions", {
     method: "POST", signal, headers: { Authorization: `Bearer ${apiKey}` }, body: form,
   }));

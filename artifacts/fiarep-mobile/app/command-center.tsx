@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share, Linking } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share, Linking, AppState } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import { AudioModule, RecordingPresets, createAudioPlayer, setAudioModeAsync, useAudioRecorder, type AudioPlayer } from 'expo-audio';
@@ -21,6 +21,39 @@ async function post<T>(path: string, body: unknown): Promise<T> {
 }
 const errText = (e: any) => e?.data?.error || e?.message || 'Try again.';
 
+// ── Hands-free ──
+// The phone listens; when you start talking it records, and when you stop (a short pause) it
+// sends what you said, says the answer, then listens again. No button.
+// Wake words: with "Hey FIAREP" on, it only acts on what starts with "Hey FIAREP"; after it
+// answers, follow-ups for the next 20 seconds don't need the wake words.
+const WAKE = /^\s*(?:hey|hi|ok(?:ay)?|a)[\s,.!-]+(?:fiarep|fia[\s-]?rep|fi[\s-]?a[\s-]?rep|fire[\s-]?rep|fear[\s-]?rep|via[\s-]?rep|fiery[\s-]?p|ferrep|fi[\s-]?rep|fia[\s-]?r[\s-]?e[\s-]?p)\b[\s,.!?:-]*/i;
+const NOISE = /^\s*(?:thank you\.?|thanks for watching.*|you\.?|bye\.?|\.+|uh+\.?|um+\.?|hmm+\.?)\s*$/i;
+const FOLLOW_UP_MS = 20_000;
+const SILENCE_MS = 900;      // this long quiet after talking = done talking
+const MAX_TALK_MS = 30_000;  // one thing said is at most this long
+const IDLE_RESTART_MS = 25_000; // nothing said: start a fresh recording (keeps it small)
+const POLL_MS = 120;
+const PROMPT = 'Hey FIAREP. FIAREP, HPD, DOB, NYCHA, OATH, violation, complaint, work order, Command Center.';
+/** Keep the screen on while hands-free (the phone stops listening when it locks). */
+function keepAwake(on: boolean) {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const k = require('expo-keep-awake');
+    if (on) void k.activateKeepAwakeAsync?.('fiarep-hands-free'); else void k.deactivateKeepAwake?.('fiarep-hands-free');
+  } catch { /* not in this build: the screen may lock on its own */ }
+}
+/** Split a reply into pieces of a sentence or two, so the first one is spoken while the rest are made. */
+function speechChunks(text: string): string[] {
+  const parts = (text.replace(/\s+/g, ' ').match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [text]).map((x) => x.trim()).filter(Boolean);
+  if (parts.length <= 1) return parts;
+  // The first sentence alone (it starts playing soonest), the rest in pieces of up to ~220 characters.
+  const out = [parts[0]!];
+  let cur = '';
+  for (const p of parts.slice(1)) { if (cur && cur.length + p.length > 220) { out.push(cur); cur = p; } else cur = cur ? `${cur} ${p}` : p; }
+  if (cur) out.push(cur);
+  return out.slice(0, 12);
+}
+
 /** FIAREP Command Center: talk or type to FIAREP; reads answer right away,
  *  anything that changes something waits for your Face ID here. */
 export default function CommandCenter() {
@@ -34,7 +67,7 @@ export default function CommandCenter() {
   const [recording, setRecording] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [threadId, setThreadId] = useState(newThread);
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const playerRef = useRef<AudioPlayer | null>(null);
   // Backup relay: outage alerts and republish approvals that work when fiarep.com is down.
   const [relayBase, setRelayBase] = useState<string | null>(null);
@@ -131,52 +164,169 @@ export default function CommandCenter() {
     finally { setBusy(''); }
   }
 
-  async function speak(line: string) {
+  /** Says the reply; resolves when it has finished playing. The first sentence starts while the rest are still being made. */
+  async function speak(line: string): Promise<void> {
     if (!speakReplies || !line) return;
     try {
-      const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: line.slice(0, 2000) });
-      const uri = `${FileSystem.cacheDirectory}cmd-${Date.now()}.mp3`;
-      await FileSystem.writeAsStringAsync(uri, audioBase64, { encoding: 'base64' as never });
+      const pieces = speechChunks(line.slice(0, 2000));
+      const audio = pieces.map((t) => post<{ audioBase64: string }>('/api/ai/speak', { text: t }).catch(() => null));
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      playerRef.current?.remove();
-      const player = createAudioPlayer({ uri }); playerRef.current = player; player.play();
+      stopSpeaking.current = false;
+      for (let i = 0; i < audio.length; i += 1) {
+        const got = await audio[i];
+        if (!got?.audioBase64) continue;
+        const uri = `${FileSystem.cacheDirectory}cmd-${Date.now()}-${i}.mp3`;
+        await FileSystem.writeAsStringAsync(uri, got.audioBase64, { encoding: 'base64' as never });
+        playerRef.current?.remove();
+        const player = createAudioPlayer({ uri }); playerRef.current = player;
+        if (stopSpeaking.current) break;
+        await new Promise<void>((resolve) => {
+          const finish = () => { clearTimeout(done); sub.remove(); cancelPlay.current = null; resolve(); };
+          const done = setTimeout(finish, 60_000);
+          const sub = player.addListener('playbackStatusUpdate', (st) => { if (st.didJustFinish) finish(); });
+          cancelPlay.current = finish;
+          player.play();
+        });
+        if (stopSpeaking.current) break;
+      }
     } catch { /* the reply is on screen either way */ }
   }
 
-  async function send(command: string) {
+  async function send(command: string, spoken = false) {
     const t = command.trim(); if (!t) return;
     setText(''); setBusy('Working…');
+    let say = '';
     try {
-      const run = await commandFetch<CommandRun>('POST', '/v1/command/runs', { text: t, threadId });
+      const run = await commandFetch<CommandRun>('POST', '/v1/command/runs', { text: t, threadId, spoken });
       setRuns((rs) => [run, ...rs.filter((r) => r.id !== run.id)]);
       setPending((p) => [...p, ...run.actions.filter((a) => a.status === 'proposed' && !p.some((x) => x.id === a.id))]);
-      void speak(run.reply || '');
+      say = run.reply || '';
       // A new language: listen for it and greet in it from now on.
       if (run.actions.some((a) => a.action === 'set_language' && a.status === 'done')) void loadDevice();
-    } catch (e) { void speak(`I couldn't get that. ${errText(e)}`); Alert.alert('Command failed', errText(e)); }
+    } catch (e) { say = `I couldn't get that. ${errText(e)}`; if (!spoken) Alert.alert('Command failed', errText(e)); }
     finally { setBusy(''); }
+    if (spoken) { setPhase('speaking'); await speak(say); } else void speak(say);
   }
 
-  async function startRecording() {
-    try {
-      const perm = await AudioModule.requestRecordingPermissionsAsync();
-      if (!perm.granted) { Alert.alert('Microphone needed', 'Allow the microphone in Settings.'); return; }
+  // ── Hands-free / one-press listening ──
+  const [handsFree, setHandsFree] = useState(false);
+  const [wakeOn, setWakeOn] = useState(true);
+  const [phase, setPhase] = useState<'off' | 'waiting' | 'hearing' | 'thinking' | 'speaking'>('off');
+  const loopGen = useRef(0);          // bumps to stop the current listening loop
+  const awakeUntil = useRef(0);
+  const stopSpeaking = useRef(false);
+  const finishNow = useRef(false);
+  const cancelPlay = useRef<null | (() => void)>(null);
+  /** Stop the answer being said. */
+  function hush() { stopSpeaking.current = true; playerRef.current?.pause(); cancelPlay.current?.(); }
+  const wakeRef = useRef(true); wakeRef.current = wakeOn;
+  useEffect(() => { void AsyncStorage.multiGet(['cc.handsFree', 'cc.wake']).then((kv) => { const m = Object.fromEntries(kv); if (m['cc.wake'] === '0') setWakeOn(false); if (m['cc.handsFree'] === '1') setHandsFree(true); }).catch(() => undefined); }, []);
+
+  /** Records one thing said: starts when you talk, ends after a short pause. Returns the file, or null if stopped / nothing said. */
+  async function hearOnce(gen: number): Promise<string | null> {
+    const perm = await AudioModule.requestRecordingPermissionsAsync();
+    if (!perm.granted) { Alert.alert('Microphone needed', 'Allow the microphone in Settings.'); return null; }
+    for (;;) {
+      if (gen !== loopGen.current) return null;
       await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
-      await recorder.prepareToRecordAsync(); recorder.record(); setRecording(true);
-    } catch (e) { Alert.alert('Could not record', errText(e)); }
-  }
-  async function stopRecording() {
-    setRecording(false); setBusy('Listening…');
-    try {
-      await recorder.stop();
+      await recorder.prepareToRecordAsync(); recorder.record();
+      setRecording(true); setPhase('waiting');
+      const started = Date.now();
+      let floor: number | null = null; let loud = 0; let talkAt = 0; let quietSince = 0;
+      let outcome: 'said' | 'idle' | 'stopped' = 'idle';
+      finishNow.current = false;
+      while (gen === loopGen.current) {
+        await new Promise((r) => setTimeout(r, POLL_MS));
+        if (finishNow.current) { finishNow.current = false; outcome = 'said'; break; }
+        const st = recorder.getStatus();
+        const level = typeof st.metering === 'number' ? st.metering : -160;
+        if (floor === null) floor = level;
+        const threshold = Math.max(floor + 12, -48);
+        if (!talkAt) {
+          if (level > threshold) { loud += 1; if (loud >= 2) { talkAt = Date.now(); setPhase('hearing'); } }
+          else { loud = 0; floor = floor * 0.9 + level * 0.1; }
+          if (Date.now() - started > IDLE_RESTART_MS) { outcome = 'idle'; break; }
+        } else {
+          if (level < threshold - 3) { if (!quietSince) quietSince = Date.now(); if (Date.now() - quietSince >= SILENCE_MS) { outcome = 'said'; break; } }
+          else quietSince = 0;
+          if (Date.now() - talkAt > MAX_TALK_MS) { outcome = 'said'; break; }
+        }
+      }
+      if (gen !== loopGen.current) outcome = outcome === 'said' ? 'said' : 'stopped';
+      try { await recorder.stop(); } catch { /* already stopped */ }
+      setRecording(false);
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      if (!recorder.uri) throw new Error('No recording');
-      const audio = await FileSystem.readAsStringAsync(recorder.uri, { encoding: 'base64' as never });
-      const { text: heard } = await post<{ text: string }>('/api/ai/transcribe', { audio, mimeType: 'audio/mp4', language: device?.languageCode ?? 'en' });
-      if (!heard?.trim()) { Alert.alert('Nothing heard', 'Try again a little closer.'); setBusy(''); return; }
-      await send(heard);
-    } catch (e) { Alert.alert('Could not hear that', errText(e)); setBusy(''); }
+      if (outcome === 'said' && recorder.uri) return recorder.uri;
+      if (outcome === 'stopped') return null;
+      // idle: nothing said in a while — start a fresh recording and keep waiting
+    }
   }
+
+  async function transcribe(uri: string): Promise<string> {
+    const audio = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' as never });
+    const { text: heard } = await post<{ text: string }>('/api/ai/transcribe', { audio, mimeType: 'audio/mp4', language: device?.languageCode ?? 'en', prompt: PROMPT });
+    return (heard || '').trim();
+  }
+
+  /** What was heard: with wake words on, only acts on "Hey FIAREP …" (or a follow-up within 20 seconds). */
+  async function handleHeard(heard: string): Promise<void> {
+    if (!heard || NOISE.test(heard)) return;
+    let said = heard;
+    if (wakeRef.current && Date.now() > awakeUntil.current) {
+      const m = heard.match(WAKE);
+      if (!m) return; // not for FIAREP
+      said = heard.slice(m[0].length).trim();
+      if (!said) { awakeUntil.current = Date.now() + FOLLOW_UP_MS; setPhase('speaking'); await speak('Yes?'); awakeUntil.current = Date.now() + FOLLOW_UP_MS; return; }
+    }
+    setPhase('thinking');
+    await send(said, true);
+    awakeUntil.current = Date.now() + FOLLOW_UP_MS;
+  }
+
+  async function handsFreeLoop(gen: number) {
+    keepAwake(true);
+    // Let the greeting finish before listening (it would hear itself).
+    for (let i = 0; i < 40 && playerRef.current?.playing && gen === loopGen.current; i += 1) await new Promise((r) => setTimeout(r, 200));
+    try {
+      while (gen === loopGen.current) {
+        const uri = await hearOnce(gen);
+        if (!uri || gen !== loopGen.current) break;
+        setPhase('thinking');
+        let heard = '';
+        try { heard = await transcribe(uri); } catch { continue; }
+        if (gen !== loopGen.current) break;
+        await handleHeard(heard);
+      }
+    } finally { if (gen === loopGen.current) setPhase('off'); keepAwake(false); }
+  }
+
+  function stopListening() { loopGen.current += 1; hush(); setPhase('off'); setRecording(false); keepAwake(false); }
+  function startHandsFree() { loopGen.current += 1; setRecording(false); const gen = loopGen.current; void handsFreeLoop(gen); }
+
+  // Hands-free runs while this screen is open and the app is in front.
+  useFocusEffect(useCallback(() => {
+    if (!handsFree || device?.status !== 'active') return undefined;
+    startHandsFree();
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') startHandsFree(); else stopListening(); });
+    return () => { sub.remove(); stopListening(); };
+  }, [handsFree, device?.status])); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** One press: it listens, and sends when you stop talking. Press again to send early. */
+  async function startRecording() {
+    hush(); loopGen.current += 1;
+    const gen = loopGen.current;
+    try {
+      const uri = await hearOnce(gen);
+      if (!uri) { setPhase('off'); return; }
+      setPhase('thinking');
+      const heard = await transcribe(uri);
+      if (!heard || NOISE.test(heard)) { setPhase('off'); Alert.alert('Nothing heard', 'Try again a little closer.'); return; }
+      await send(heard, true);
+    } catch (e) { Alert.alert('Could not hear that', errText(e)); }
+    finally { if (gen === loopGen.current) setPhase('off'); }
+  }
+  /** Press while listening: done talking now. */
+  function stopRecording() { finishNow.current = true; }
 
   async function approve(a: CommandAction) {
     setBusy('Approving…');
@@ -357,12 +507,19 @@ export default function CommandCenter() {
       </ScrollView>
 
       <View style={{ padding: 12, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff', gap: 8 }}>
-        {!!busy && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text style={ui.label}>{busy}</Text></View>}
+        {phase !== 'off' && (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: phase === 'hearing' ? '#dc2626' : phase === 'waiting' ? '#16a34a' : phase === 'speaking' ? '#7c3aed' : '#185FA5' }} />
+            <Text style={{ fontWeight: '700' }}>{phase === 'waiting' ? (handsFree && wakeOn && Date.now() > awakeUntil.current ? 'Listening for “Hey FIAREP”' : 'Listening — just talk') : phase === 'hearing' ? 'Hearing you…' : phase === 'thinking' ? 'Got it — working…' : 'Answering…'}</Text>
+            {phase === 'thinking' && <ActivityIndicator />}
+          </View>
+        )}
+        {!!busy && phase === 'off' && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text style={ui.label}>{busy}</Text></View>}
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
           <TextInput style={[ui.input, { flex: 1 }]} value={text} onChangeText={setText} placeholder="Type a command" returnKeyType="send" onSubmitEditing={() => void send(text)} editable={!busy} />
           <Pressable
-            disabled={!!busy && !recording}
-            onPress={() => void (recording ? stopRecording() : startRecording())}
+            disabled={(!!busy || phase === 'thinking') && !recording}
+            onPress={() => { if (phase === 'speaking') { hush(); return; } if (recording) stopRecording(); else if (!handsFree) void startRecording(); }}
             style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: recording ? '#dc2626' : ACCENT, opacity: busy && !recording ? 0.5 : 1 }}
           >
             <Text style={{ fontSize: 24, color: '#fff' }}>{recording ? '⏹' : '🎙'}</Text>
@@ -372,6 +529,16 @@ export default function CommandCenter() {
           <Text style={ui.label}>Say replies out loud</Text>
           <Switch value={speakReplies} onValueChange={setSpeakReplies} />
         </View>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <Text style={ui.label}>Hands-free (no button — just talk)</Text>
+          <Switch value={handsFree} onValueChange={(v) => { setHandsFree(v); void AsyncStorage.setItem('cc.handsFree', v ? '1' : '0'); if (!v) stopListening(); }} />
+        </View>
+        {handsFree && (
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Text style={ui.label}>Only after “Hey FIAREP”</Text>
+            <Switch value={wakeOn} onValueChange={(v) => { setWakeOn(v); void AsyncStorage.setItem('cc.wake', v ? '1' : '0'); }} />
+          </View>
+        )}
       </View>
     </View>
   );
