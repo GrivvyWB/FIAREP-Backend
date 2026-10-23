@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share, Linking, AppState, Modal } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Switch, ActivityIndicator, Share, Linking, AppState, Modal, Animated } from 'react-native';
+import VoiceOrb from '../components/VoiceOrb';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -239,6 +240,7 @@ export default function CommandCenter() {
   const awakeUntil = useRef(0);
   const stopSpeaking = useRef(false);
   const finishNow = useRef(false);
+  const levelAnim = useRef(new Animated.Value(0)).current; // how loud you are, for the orb
   const cancelPlay = useRef<null | (() => void)>(null);
   /** Stop the answer being said. */
   function hush() { stopSpeaking.current = true; playerRef.current?.pause(); cancelPlay.current?.(); }
@@ -263,6 +265,7 @@ export default function CommandCenter() {
         if (finishNow.current) { finishNow.current = false; outcome = 'said'; break; }
         const st = recorder.getStatus();
         const level = typeof st.metering === 'number' ? st.metering : -160;
+        levelAnim.setValue(Math.max(0, Math.min(1, (level - (floor ?? level) - 4) / 28)));
         if (floor === null) floor = level;
         const threshold = Math.max(floor + 12, -48);
         if (!talkAt) {
@@ -277,6 +280,7 @@ export default function CommandCenter() {
       }
       if (gen !== loopGen.current) outcome = outcome === 'said' ? 'said' : 'stopped';
       try { await recorder.stop(); } catch { /* already stopped */ }
+      levelAnim.setValue(0);
       setRecording(false);
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       if (outcome === 'said' && recorder.uri) return recorder.uri;
@@ -579,16 +583,16 @@ export default function CommandCenter() {
           </View>
         )}
         {!!busy && phase === 'off' && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}><ActivityIndicator /><Text style={ui.label}>{busy}</Text></View>}
-        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          <TextInput style={[ui.input, { flex: 1 }]} value={text} onChangeText={setText} placeholder="Type a command" returnKeyType="send" onSubmitEditing={() => void send(text)} editable={!busy} />
-          <Pressable
+        <View style={{ alignItems: 'center', marginTop: -4, marginBottom: -8 }}>
+          <VoiceOrb
+            phase={phase === 'off' && recording ? 'waiting' : phase}
+            level={levelAnim}
+            size={76}
             disabled={(!!busy || phase === 'thinking') && !recording}
             onPress={() => { if (phase === 'speaking') { hush(); return; } if (recording) stopRecording(); else if (!handsFree) void startRecording(); }}
-            style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', backgroundColor: recording ? '#dc2626' : ACCENT, opacity: busy && !recording ? 0.5 : 1 }}
-          >
-            <Text style={{ fontSize: 24, color: '#fff' }}>{recording ? '⏹' : '🎙'}</Text>
-          </Pressable>
+          />
         </View>
+        <TextInput style={ui.input} value={text} onChangeText={setText} placeholder="Type a command" returnKeyType="send" onSubmitEditing={() => void send(text)} editable={!busy} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={ui.label}>Say replies out loud</Text>
           <Switch value={speakReplies} onValueChange={setSpeakReplies} />
