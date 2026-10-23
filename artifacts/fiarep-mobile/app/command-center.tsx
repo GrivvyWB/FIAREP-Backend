@@ -29,6 +29,18 @@ const errText = (e: any) => e?.data?.error || e?.message || 'Try again.';
 const WAKE = /^\s*(?:hey|hi|ok(?:ay)?|a)[\s,.!-]+(?:fiarep|fia[\s-]?rep|fi[\s-]?a[\s-]?rep|fire[\s-]?rep|fear[\s-]?rep|via[\s-]?rep|fiery[\s-]?p|ferrep|fi[\s-]?rep|fia[\s-]?r[\s-]?e[\s-]?p)\b[\s,.!?:-]*/i;
 const NOISE = /^\s*(?:thank you\.?|thanks for watching.*|you\.?|bye\.?|\.+|uh+\.?|um+\.?|hmm+\.?)\s*$/i;
 const FOLLOW_UP_MS = 20_000;
+/** Lower case, letters and numbers only: how heard words are compared with the ones taught. */
+const norm = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+/** The wake words at the start of what was heard: the built-in "Hey FIAREP" spellings, or one taught on this phone. Returns what was said after them, or null. */
+function afterWake(heard: string, taught: string[]): string | null {
+  const m = heard.match(WAKE);
+  if (m) return heard.slice(m[0].length).trim();
+  const h = norm(heard);
+  for (const w of [...taught].sort((a, b) => b.length - a.length)) if (w && (h === w || h.startsWith(`${w} `))) return h.slice(w.length).trim();
+  return null;
+}
+/** The name said the way you set it (Voice settings → How FIAREP is said). */
+const sayName = (text: string, sayAs: string) => (sayAs.trim() ? text.replace(/\bFIAREP\b/gi, sayAs.trim()) : text);
 const SILENCE_MS = 900;      // this long quiet after talking = done talking
 const MAX_TALK_MS = 30_000;  // one thing said is at most this long
 const IDLE_RESTART_MS = 25_000; // nothing said: start a fresh recording (keeps it small)
@@ -64,6 +76,14 @@ export default function CommandCenter() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState('');
   const [speakReplies, setSpeakReplies] = useState(true);
+  // Voice settings, kept on this phone: wake words taught in your own voice, and how the name is said.
+  const [taught, setTaught] = useState<string[]>([]);
+  const taughtRef = useRef<string[]>([]); taughtRef.current = taught;
+  const [sayAs, setSayAs] = useState('');
+  const [sayAsDraft, setSayAsDraft] = useState('');
+  const [voiceOpen, setVoiceOpen] = useState(false);
+  const [teach, setTeach] = useState<{ n: number; heard: string[] } | null>(null);
+  useEffect(() => { void AsyncStorage.multiGet(['cc.wakeWords', 'cc.sayAs']).then((kv) => { const m = Object.fromEntries(kv); try { const w = JSON.parse(m['cc.wakeWords'] || '[]'); if (Array.isArray(w)) setTaught(w.filter((x) => typeof x === 'string')); } catch { /* none yet */ } setSayAs(m['cc.sayAs'] || ''); setSayAsDraft(m['cc.sayAs'] || ''); }).catch(() => undefined); }, []);
   const [recording, setRecording] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const [threadId, setThreadId] = useState(newThread);
@@ -144,14 +164,15 @@ export default function CommandCenter() {
       try {
         const stored = (await AsyncStorage.getItem(GREET_TEXT)) || '';
         const haveFile = (await FileSystem.getInfoAsync(greetFile)).exists;
-        if (stored === text && haveFile) return;
-        const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: text.slice(0, 600) });
+        const said = (await AsyncStorage.getItem('cc.greeting.sayAs')) || '';
+        if (stored === text && haveFile && said === sayAs) return;
+        const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName(text, sayAs).slice(0, 600) });
         await FileSystem.writeAsStringAsync(greetFile, audioBase64, { encoding: 'base64' as never });
-        await AsyncStorage.setItem(GREET_TEXT, text); setSavedGreeting(text);
+        await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem('cc.greeting.sayAs', sayAs); setSavedGreeting(text);
         if (!greeted.current && speakReplies) { greeted.current = true; await playGreetingFile(); }
       } catch { /* try again next time it opens */ }
     })();
-  }, [device?.status, device?.greeting]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [device?.status, device?.greeting, sayAs]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function setUp() {
     setBusy('Setting up this phone…');
@@ -168,7 +189,7 @@ export default function CommandCenter() {
   async function speak(line: string): Promise<void> {
     if (!speakReplies || !line) return;
     try {
-      const pieces = speechChunks(line.slice(0, 2000));
+      const pieces = speechChunks(sayName(line, sayAs).slice(0, 2000));
       const audio = pieces.map((t) => post<{ audioBase64: string }>('/api/ai/speak', { text: t }).catch(() => null));
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       stopSpeaking.current = false;
@@ -273,9 +294,9 @@ export default function CommandCenter() {
     if (!heard || NOISE.test(heard)) return;
     let said = heard;
     if (wakeRef.current && Date.now() > awakeUntil.current) {
-      const m = heard.match(WAKE);
-      if (!m) return; // not for FIAREP
-      said = heard.slice(m[0].length).trim();
+      const rest = afterWake(heard, taughtRef.current);
+      if (rest === null) return; // not for FIAREP
+      said = rest;
       if (!said) { awakeUntil.current = Date.now() + FOLLOW_UP_MS; setPhase('speaking'); await speak('Yes?'); awakeUntil.current = Date.now() + FOLLOW_UP_MS; return; }
     }
     setPhase('thinking');
@@ -302,6 +323,47 @@ export default function CommandCenter() {
 
   function stopListening() { loopGen.current += 1; hush(); setPhase('off'); setRecording(false); keepAwake(false); }
   function startHandsFree() { loopGen.current += 1; setRecording(false); const gen = loopGen.current; void handsFreeLoop(gen); }
+
+  /** Teach my wake words: say "Hey FIAREP" 5 times; whatever the phone writes down for your voice wakes it from now on. */
+  async function teachWakeWords() {
+    stopListening();
+    const gen = loopGen.current;
+    const got: string[] = [];
+    try {
+      for (let n = 1; n <= 5 && gen === loopGen.current; n += 1) {
+        setTeach({ n, heard: [...got] });
+        const uri = await hearOnce(gen);
+        if (!uri) break;
+        setPhase('thinking');
+        const heard = norm(await transcribe(uri).catch(() => ''));
+        const words = heard.split(' ').slice(0, 4).join(' ');
+        if (words && !NOISE.test(words)) got.push(words);
+      }
+    } finally { setPhase('off'); setTeach(null); }
+    if (got.length) {
+      const next = [...new Set([...taughtRef.current, ...got])].slice(0, 30);
+      setTaught(next); await AsyncStorage.setItem('cc.wakeWords', JSON.stringify(next));
+      Alert.alert('Wake words saved', `Any of these now wakes it:\n\n${[...new Set(got)].map((w) => `“${w}”`).join('\n')}`);
+    }
+    if (handsFree) startHandsFree();
+  }
+  async function removeTaught(w: string) {
+    const next = taughtRef.current.filter((x) => x !== w);
+    setTaught(next); await AsyncStorage.setItem('cc.wakeWords', JSON.stringify(next));
+  }
+  async function saveSayAs(v: string) {
+    setSayAs(v.trim()); await AsyncStorage.setItem('cc.sayAs', v.trim());
+  }
+  async function playSayAs() {
+    try {
+      const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName('Hey, this is FIAREP.', sayAsDraft) });
+      const uri = `${FileSystem.cacheDirectory}cmd-sayas-${Date.now()}.mp3`;
+      await FileSystem.writeAsStringAsync(uri, audioBase64, { encoding: 'base64' as never });
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      playerRef.current?.remove();
+      const player = createAudioPlayer({ uri }); playerRef.current = player; player.play();
+    } catch (e) { Alert.alert('Could not play', errText(e)); }
+  }
 
   // Hands-free runs while this screen is open and the app is in front.
   useFocusEffect(useCallback(() => {
@@ -537,6 +599,38 @@ export default function CommandCenter() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={ui.label}>Only after “Hey FIAREP”</Text>
             <Switch value={wakeOn} onValueChange={(v) => { setWakeOn(v); void AsyncStorage.setItem('cc.wake', v ? '1' : '0'); }} />
+          </View>
+        )}
+        <Pressable onPress={() => setVoiceOpen((o) => !o)}><Text style={{ color: ACCENT, fontWeight: '600' }}>{voiceOpen ? '▾' : '▸'} Voice settings</Text></Pressable>
+        {voiceOpen && (
+          <View style={{ gap: 8 }}>
+            {teach ? (
+              <View style={{ backgroundColor: '#f1f5f9', borderRadius: 8, padding: 10, gap: 4 }}>
+                <Text style={{ fontWeight: '800', fontSize: 16 }}>Say “Hey FIAREP” the way you say it — {teach.n} of 5</Text>
+                <Text style={ui.label}>Then stop and wait. It moves to the next one on its own.</Text>
+                {teach.heard.map((h, i) => <Text key={i} style={{ color: '#475569' }}>Heard: “{h}”</Text>)}
+                <Pressable onPress={() => stopListening()}><Text style={{ color: '#C0392B', fontWeight: '600' }}>Stop</Text></Pressable>
+              </View>
+            ) : (
+              <Pressable style={ui.btnOutline} onPress={() => void teachWakeWords()}><Text style={ui.btnOutlineText}>Teach my wake words (say “Hey FIAREP” 5 times)</Text></Pressable>
+            )}
+            {taught.length > 0 && (
+              <View style={{ gap: 2 }}>
+                <Text style={ui.label}>These also wake it on this phone:</Text>
+                {taught.map((w) => (
+                  <View key={w} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text>“{w}”</Text>
+                    <Pressable onPress={() => void removeTaught(w)} hitSlop={8}><Text style={{ color: '#C0392B', fontSize: 16 }}>✕</Text></Pressable>
+                  </View>
+                ))}
+              </View>
+            )}
+            <Text style={ui.label}>How FIAREP is said (type it the way it sounds, e.g. Fee-uh-rep)</Text>
+            <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+              <TextInput style={[ui.input, { flex: 1 }]} value={sayAsDraft} onChangeText={setSayAsDraft} placeholder="FIAREP" autoCapitalize="none" autoCorrect={false} />
+              <Pressable style={[ui.btnOutline, { paddingHorizontal: 12 }]} onPress={() => void playSayAs()}><Text style={ui.btnOutlineText}>▶ Play</Text></Pressable>
+              <Pressable style={[ui.btn, { paddingHorizontal: 12 }, sayAsDraft.trim() === sayAs && ui.btnMuted]} disabled={sayAsDraft.trim() === sayAs} onPress={() => void saveSayAs(sayAsDraft)}><Text style={ui.btnText}>Save</Text></Pressable>
+            </View>
           </View>
         )}
       </View>
