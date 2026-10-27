@@ -23,6 +23,7 @@ import joinRouter from "./join";
 import workRequestsRouter from "./workRequests";
 import aepRouter from "./aep";
 import alertsRouter from "./alerts";
+import { heatRouter } from "../lib/heatDigest";
 import pricingRouter from "./pricing";
 import dischargeProgramRouter from "./dischargeProgram";
 import baselineRouter from "./baseline";
@@ -71,6 +72,7 @@ router.use(entityRouter);
 router.use(fileRouter);
 router.use(aiRouter);
 router.use(smartRepairsRouter);
+router.use(heatRouter);
 router.use(moldRouter);
 router.use(timeClockRouter);
 

@@ -18,6 +18,7 @@ import { ensureFilesTable } from "./lib/command/files";
 import { ensureSmartRepairsTable } from "./routes/smartRepairs";
 import { ensureResidentDeskTable } from "./lib/command/residentDesk";
 import { ensureMoldTables, moldSweep } from "./lib/mold";
+import { startHeatDigest } from "./lib/heatDigest";
 import { autoCheckOn } from "./routes/alerts";
 
 const rawPort = process.env["PORT"];
@@ -51,6 +52,8 @@ await ensureBookingTable();
 // has them too (Replit's Publish compares the two and offers to drop what's missing).
 await Promise.all([ensureFilesTable(), ensureSmartRepairsTable(), ensureResidentDeskTable(), ensureMoldTables()]).catch((err) => console.error("Table setup:", err));
 void syncRelayDevices();
+// Heat & hot water: one gathered alert per client (by building) to its Command Center phones, every 2 minutes.
+startHeatDigest();
 setInterval(() => { void expireStaleProposals().catch(() => undefined); }, 60_000).unref();
 // Pilot programs past their end date go back to the features they had before (unless purchased).
 void expirePilots().catch(() => undefined);

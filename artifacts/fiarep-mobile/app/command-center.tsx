@@ -243,7 +243,10 @@ export default function CommandCenter() {
   // Both can be changed in ⚙️ settings.
   const [handsFree, setHandsFree] = useState(true);
   const [wakeOn, setWakeOn] = useState(false);
+  useEffect(() => { handsFreeRef.current = handsFree; }, [handsFree]);
   const [phase, setPhase] = useState<'off' | 'waiting' | 'hearing' | 'thinking' | 'speaking'>('off');
+  const phaseRef = useRef(phase); phaseRef.current = phase;
+  const handsFreeRef = useRef(false);
   const loopGen = useRef(0);          // bumps to stop the current listening loop
   const awakeUntil = useRef(0);
   const stopSpeaking = useRef(false);
@@ -347,6 +350,39 @@ export default function CommandCenter() {
 
   function stopListening() { loopGen.current += 1; hush(); setPhase('off'); setRecording(false); keepAwake(false); }
   function startHandsFree() { loopGen.current += 1; setRecording(false); const gen = loopGen.current; void handsFreeLoop(gen); }
+
+  // ── Heat & hot water: urgent, held at the top until someone presses Got it ──
+  // One alert for everything (never one per apartment). It is said out loud once, and again only when more comes in.
+  type HeatItem = { key: string; building: string; apt: string; kind: string; source: string; what: string; at: string };
+  type HeatAlert = { id: string; items: HeatItem[]; sentence: string; counts: { buildings: number; apartments: number } } | null;
+  const [heat, setHeat] = useState<HeatAlert>(null);
+  const heatSaid = useRef('');
+  const loadHeat = useCallback(async () => {
+    try {
+      const h = await customFetch<HeatAlert>('/api/v1/heat-alert', { responseType: 'json' } as never);
+      setHeat(h);
+      const sig = h ? `${h.id}:${h.items.length}` : '';
+      if (h && sig !== heatSaid.current) {
+        heatSaid.current = sig;
+        // Say it now: stop listening for a moment, say it, then listen again.
+        const listening = phaseRef.current === 'waiting' || phaseRef.current === 'hearing';
+        if (listening) { loopGen.current += 1; setRecording(false); }
+        await speak(h.sentence);
+        if (listening && (handsFreeRef.current || device?.platform === false)) startHandsFree();
+      }
+    } catch { /* tried again shortly */ }
+  }, [device?.platform]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFocusEffect(useCallback(() => {
+    if (device?.status !== 'active') return undefined;
+    void loadHeat();
+    const t = setInterval(() => void loadHeat(), 20_000);
+    return () => clearInterval(t);
+  }, [device?.status, loadHeat]));
+  async function heatGotIt() {
+    if (!heat) return;
+    try { await customFetch(`/api/v1/heat-alert/${encodeURIComponent(heat.id)}/ack`, { method: 'POST', responseType: 'json' } as never); setHeat(null); }
+    catch (e) { Alert.alert('Not saved', errText(e)); }
+  }
 
   /** Teach my wake words: say "Hey FIAREP" 5 times; whatever the phone writes down for your voice wakes it from now on. */
   async function teachWakeWords() {
@@ -574,6 +610,23 @@ export default function CommandCenter() {
                 </View>
                 <Switch value={!!relay?.settings.autoFix} disabled={!relay || !!busy} onValueChange={(v) => void toggleAutoFix(v)} />
               </View>
+            </View>
+          );
+        })()}
+        {heat && (() => {
+          const by = new Map<string, HeatItem[]>();
+          for (const i of heat.items) by.set(i.building, [...(by.get(i.building) || []), i]);
+          return (
+            <View style={[ui.card, { borderColor: '#DC2626', borderWidth: 2, backgroundColor: '#FEF2F2', gap: 6 }]}>
+              <Text style={{ fontSize: 12, fontWeight: '900', color: '#DC2626', letterSpacing: 0.5 }}>🔥 URGENT · HEAT & HOT WATER</Text>
+              <Text style={{ fontSize: 18, fontWeight: '800', color: '#7F1D1D' }}>{heat.sentence}</Text>
+              {[...by.entries()].map(([b, list]) => (
+                <View key={b} style={{ borderTopWidth: 1, borderTopColor: '#FECACA', paddingTop: 6 }}>
+                  <Text style={{ fontWeight: '800', color: '#111' }}>{b}</Text>
+                  {list.map((i) => <Text key={i.key} style={{ color: '#7F1D1D', fontSize: 13 }}>• {i.kind === 'hot water' ? 'No hot water' : 'No heat'}{i.apt ? ` · Apt ${i.apt}` : ' · building'} · {i.source}</Text>)}
+                </View>
+              ))}
+              <Pressable style={[ui.btn, { backgroundColor: '#DC2626', marginTop: 4 }]} onPress={() => void heatGotIt()}><Text style={ui.btnText}>Got it</Text></Pressable>
             </View>
           );
         })()}
