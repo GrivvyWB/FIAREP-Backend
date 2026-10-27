@@ -29,6 +29,7 @@ import {
   updateDevelopmentPage,
 } from "@/lib/complaint-dashboard-rotation";
 
+type CityHeat = { id: string; kind: string; date: string; address: string; borough: string; company: string; title: string; detail: string; foundAt: string };
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number; tenantId?: string; clientName?: string };
 const NYC_MAP_URL = "https://www.openstreetmap.org/export/embed.html?bbox=-74.25909%2C40.477399%2C-73.700181%2C40.916178&layer=mapnik";
 
@@ -200,6 +201,13 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
     refetchInterval: 15_000,
     enabled: allClients,
   });
+  // Heat and hot water from the City (HPD, DOB, OATH/ECB) for the buildings FIAREP watches.
+  const cityHeatQuery = useQuery({
+    queryKey: ["heat-feed"],
+    queryFn: () => customFetch<CityHeat[]>("/api/v1/heat-feed", { responseType: "json" } as never),
+    refetchInterval: 60_000,
+  });
+  const cityHeat = cityHeatQuery.data || [];
   const [clientFilter, setClientFilter] = useState("all");
   const reports = ((allClients ? feedQuery.data : reportsQuery.data) || []) as Report[];
   const developmentCatalogQuery = useListNychaDevelopments({
@@ -388,6 +396,7 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
   // Heat & hot water: every open one, whatever the filters, newest first — handle now.
   const heatReports = reports.filter((r) => !isCorrected(statusOf(r)) && isHeatHotWater(r))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const heatTotal = heatReports.length + cityHeat.length;
   const activeReports = filteredReports
     .filter((r) => !isCorrected(statusOf(r)))
     .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
@@ -459,20 +468,39 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
 
       <div className="px-4 md:px-6 space-y-4">
         {/* HEAT & HOT WATER — high priority, handle now */}
-        <section className={`overflow-hidden rounded-xl border-2 ${heatReports.length ? "border-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.15)]" : "border-red-200"} bg-white`} data-testid="heat-hot-water">
-          <div className={`flex flex-wrap items-center gap-3 px-4 py-3 ${heatReports.length ? "bg-red-600" : "bg-red-50"}`}>
-            <span className={`relative flex h-9 w-9 items-center justify-center rounded-full ${heatReports.length ? "bg-white" : "bg-red-100"}`}>
-              {heatReports.length > 0 && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70" />}
+        <section className={`overflow-hidden rounded-xl border-2 ${heatTotal ? "border-red-600 shadow-[0_0_0_4px_rgba(220,38,38,0.15)]" : "border-red-200"} bg-white`} data-testid="heat-hot-water">
+          <div className={`flex flex-wrap items-center gap-3 px-4 py-3 ${heatTotal ? "bg-red-600" : "bg-red-50"}`}>
+            <span className={`relative flex h-9 w-9 items-center justify-center rounded-full ${heatTotal ? "bg-white" : "bg-red-100"}`}>
+              {heatTotal > 0 && <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-white/70" />}
               <Flame className="relative h-5 w-5 text-red-600" />
             </span>
             <div className="min-w-0 flex-1">
-              <h2 className={`text-base font-extrabold uppercase tracking-wide ${heatReports.length ? "text-white" : "text-red-700"}`}>Heat &amp; Hot Water — High Priority</h2>
-              <p className={`text-xs font-semibold ${heatReports.length ? "text-red-100" : "text-red-600"}`}>{heatReports.length ? "Handle now. Every open heat or hot water complaint, newest first." : "No open heat or hot water complaints."}</p>
+              <h2 className={`text-base font-extrabold uppercase tracking-wide ${heatTotal ? "text-white" : "text-red-700"}`}>Heat &amp; Hot Water — High Priority</h2>
+              <p className={`text-xs font-semibold ${heatTotal ? "text-red-100" : "text-red-600"}`}>{heatTotal ? "Handle now. Residents' complaints and the City's (HPD, DOB), newest first." : "No open heat or hot water complaints."}</p>
             </div>
-            {heatReports.length > 0 && <span className="rounded-full bg-white px-3 py-1 text-lg font-extrabold text-red-700">{heatReports.length}</span>}
+            {heatTotal > 0 && <span className="rounded-full bg-white px-3 py-1 text-lg font-extrabold text-red-700">{heatTotal}</span>}
           </div>
-          {heatReports.length > 0 && (
+          {heatTotal > 0 && (
             <div className="divide-y divide-red-100">
+              {cityHeat.slice(0, 20).map((c) => (
+                <div key={c.id} className="flex w-full items-start gap-3 bg-red-50/60 px-4 py-3" data-testid={`city-heat-${c.id}`}>
+                  <AlertOctagon className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-white">{/hot water/i.test(c.title + c.detail) && !/\bheat\b(?!\/)/i.test(c.title) ? "No hot water" : /boiler/i.test(c.title + c.detail) ? "Boiler" : "Heat / hot water"}</span>
+                      <span className="rounded border border-red-300 bg-white px-1.5 py-0.5 text-[10px] font-extrabold uppercase text-red-700">City · {c.kind}</span>
+                      <span className="text-sm font-bold text-slate-900">{c.address}</span>
+                      {allClients && c.company && <span className="text-xs font-semibold text-slate-500">{c.company}</span>}
+                    </div>
+                    <p className="line-clamp-1 text-xs font-semibold text-slate-800">{c.title}</p>
+                    <p className="line-clamp-1 text-xs text-slate-600">{c.detail}</p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-xs font-extrabold text-red-700">{c.date.length > 10 ? ago(now - new Date(c.date.replace(" ", "T")).getTime()) : c.date}</p>
+                    <p className="text-[10px] font-bold uppercase text-red-500">from the City</p>
+                  </div>
+                </div>
+              ))}
               {heatReports.slice(0, 20).map((r) => {
                 const st = r.state || {};
                 const hot = /hot water|water heater/i.test([st.category, st.title, st.description, st.issue].map((v) => (typeof v === "string" ? v : "")).join(" "));

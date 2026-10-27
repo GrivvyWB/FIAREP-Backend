@@ -207,6 +207,25 @@ router.get("/v1/violation-alerts", requireAuth, async (_req, res) => {
   res.json({ buildings: mine.map((r) => watchView(r as never)), alerts: rows.map((r) => alertView(r as never)).filter((a) => ids.has(a.watchId)) });
 });
 
+/** Heat and hot water straight from the City (HPD complaints and violations, DOB and OATH/ECB boiler and heat
+ *  violations) for the organization's buildings — FIAREP sees every client's. Last 30 days; an HPD complaint
+ *  the City has closed is left out. Shown at the top of the Complaint Dashboard. */
+const HEAT_CITY = /heat\/hot water|\bheat\b|\bheating\b|hot water|\bboiler/i;
+router.get("/v1/heat-feed", requireAuth, async (_req, res) => {
+  const actor = res.locals["actor"] as { tenantId: string };
+  const all = actor.tenantId === "default";
+  const watched = (await listWatch()).filter((r) => all || text(r.state["organizationId"]) === actor.tenantId);
+  const ids = new Set(watched.map((r) => r.id));
+  const since = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString().slice(0, 10);
+  const rows = ids.size ? await db.select().from(entityRecords).where(and(eq(entityRecords.entity, ALERT), eq(entityRecords.deleted, false))).orderBy(desc(entityRecords.createdAt)).limit(5000) : [];
+  const items = rows.map((r) => alertView(r as never))
+    .filter((a) => ids.has(a.watchId) && a.date.slice(0, 10) >= since && HEAT_CITY.test(`${a.title} ${a.detail}`))
+    .filter((a) => !(a.kind === "HPD complaint" && /·\s*CLOSE/i.test(a.detail)))
+    .sort((x, y) => y.date.localeCompare(x.date));
+  res.setHeader("Cache-Control", "no-store");
+  res.json(items.map((a) => ({ id: a.id, kind: a.kind, date: a.date, address: a.address, borough: a.borough, company: a.company, title: a.title, detail: a.detail, foundAt: a.foundAt })));
+});
+
 router.delete("/v1/platform/watch/:id", async (req, res) => {
   const owner = res.locals["platformOwner"] as { name: string };
   const id = String(req.params["id"]);
