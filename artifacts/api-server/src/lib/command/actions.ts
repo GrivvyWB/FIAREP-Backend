@@ -21,7 +21,6 @@ import { recentAudit } from "./audit";
 import { notify } from "../audit";
 import type { Actor } from "../auth";
 
-<<<<<<< ours
 import { bookingView, bookingsOn, createBooking, findMember, findSlot, hm, nyDate, nyLabel, nyTime, staffBookings, type Slot } from "./scheduling";
 import { staffAccounts } from "@workspace/db";
 import { residentPhotoToWorkOrder } from "./photoWorkOrder";
@@ -33,8 +32,6 @@ import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
 import { commandFillForm } from "./forms";
 import { setLanguage } from "./language";
 
-=======
->>>>>>> theirs
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
 export const isPlatform = (tenantId: string) => tenantId === "default";
@@ -49,11 +46,8 @@ export type ActionDef = {
   target: "server" | "agent";
   /** The FIAREP server itself: only on FIAREP's own Command Center, never a client's. */
   platformOnly?: boolean;
-<<<<<<< ours
   /** Only on a client's Command Center, never FIAREP's own. */
   clientOnly?: boolean;
-=======
->>>>>>> theirs
   schema: Record<string, unknown>;
   /** Server actions only. */
   run?: (params: Record<string, unknown>, ctx: ActionContext) => Promise<unknown>;
@@ -132,11 +126,7 @@ async function draftWorkOrders(alertIds: string[], urgentOnly: boolean, ctx: Act
     const mold = apt ? await activeMoldAt(ctx.tenantId, [a.address, a.borough].filter(Boolean).join(", "), apt).catch(() => []) : [];
     await db.insert(commandWorkOrders).values({
       id: randomUUID(), tenantId: ctx.tenantId, alertId: a.id, alertKey: a.key, address: a.address, borough: a.borough, company: a.company, bbl: a.bbl,
-<<<<<<< ours
       kind: a.kind, title: a.title, detail: mold.length ? `PRIORITY — ${moldLine(mold)}\n${a.detail}` : a.detail, urgency: mold.length ? "urgent" : a.urgency, status: "draft", runId: ctx.runId,
-=======
-      kind: a.kind, title: a.title, detail: a.detail, urgency: a.urgency, status: "draft", runId: ctx.runId,
->>>>>>> theirs
     }).onConflictDoNothing();
   }
   return { drafted: fresh.length, alreadyDrafted: items.length - fresh.length, urgent: fresh.filter((a) => a.urgency === "urgent").length };
@@ -144,7 +134,6 @@ async function draftWorkOrders(alertIds: string[], urgentOnly: boolean, ctx: Act
 
 const workOrdersOf = (tenantId: string) => isPlatform(tenantId) ? sql`true` : eq(commandWorkOrders.tenantId, tenantId);
 
-<<<<<<< ours
 /** "2026-10-20T09:00" / "2026-10-20 9:00" / "2026-10-20" → New York time. */
 function parseWhen(v: unknown): Date | undefined {
   const t = str(v, 40);
@@ -163,8 +152,6 @@ async function membersFor(tenantId: string, trade: string) {
 /** Who notifications from the Command Center come from, inside the organization. */
 const commandActor = (ctx: ActionContext): Actor => ({ id: ctx.staffId, tenantId: ctx.tenantId, name: ctx.actorName, role: "administrator", position: "", developments: [], sessionVersion: 0 });
 
-=======
->>>>>>> theirs
 const agentProp = { agent: { type: "string", description: "Agent name (the computer). Omit when only one agent is online." } };
 
 export const ACTIONS: ActionDef[] = [
@@ -206,7 +193,6 @@ export const ACTIONS: ActionDef[] = [
     describe: (p) => `Look up ${str(p["address"])}`,
   },
   {
-<<<<<<< ours
     name: "mold_status", label: "Mold compliance (active mold violations)", risk: "read", confirmDefault: false, target: "server",
     description: "Mold compliance by building: original mold violations, resolved (Mold Removed), active remaining, percent remaining / completed, whether an inspection is recommended (60% or less remaining), apartments awaiting remediation and certification deadlines (Class B past its date risks Class C on reinspection). Optionally one building (part of its address); refresh pulls HPD first.",
     schema: { type: "object", properties: { address: { type: "string" }, refresh: { type: "boolean" } }, additionalProperties: false },
@@ -221,8 +207,6 @@ export const ACTIONS: ActionDef[] = [
     describe: (p) => `Mold compliance${str(p["address"]) ? ` at ${str(p["address"])}` : ""}`,
   },
   {
-=======
->>>>>>> theirs
     name: "complaint_feed", label: "Resident complaints", risk: "read", confirmDefault: false, target: "server",
     description: "Most recent resident complaints with their status (on FIAREP's own Command Center: at every client FIAREP serves; on a client's: that client's).",
     schema: { type: "object", properties: { limit: { type: "integer", minimum: 1, maximum: 50 } }, additionalProperties: false },
@@ -240,19 +224,11 @@ export const ACTIONS: ActionDef[] = [
   {
     name: "list_work_orders", label: "List work orders", risk: "read", confirmDefault: false, target: "server",
     description: "List work orders prepared from violation alerts, by status (draft = waiting for approval).",
-<<<<<<< ours
     schema: { type: "object", properties: { status: { type: "string", enum: ["draft", "approved", "rejected", "assigned", "any"] } }, additionalProperties: false },
     run: async (p, ctx) => {
       const status = str(p["status"], 20) || "draft";
       const rows = await db.select().from(commandWorkOrders).where(and(workOrdersOf(ctx.tenantId), status === "any" ? sql`true` : eq(commandWorkOrders.status, status))).orderBy(desc(commandWorkOrders.createdAt)).limit(100);
       return rows.map((w) => ({ id: w.id, status: w.status, urgency: w.urgency, address: w.address, kind: w.kind, title: w.title, trade: w.trade ?? undefined, assignedTo: w.assignedName ?? undefined, createdAt: w.createdAt }));
-=======
-    schema: { type: "object", properties: { status: { type: "string", enum: ["draft", "approved", "rejected", "any"] } }, additionalProperties: false },
-    run: async (p, ctx) => {
-      const status = str(p["status"], 20) || "draft";
-      const rows = await db.select().from(commandWorkOrders).where(and(workOrdersOf(ctx.tenantId), status === "any" ? sql`true` : eq(commandWorkOrders.status, status))).orderBy(desc(commandWorkOrders.createdAt)).limit(100);
-      return rows.map((w) => ({ id: w.id, status: w.status, urgency: w.urgency, address: w.address, kind: w.kind, title: w.title, createdAt: w.createdAt }));
->>>>>>> theirs
     },
     describe: () => "List work orders",
   },
@@ -338,7 +314,6 @@ export const ACTIONS: ActionDef[] = [
     run: async (p, ctx) => (await recentAudit(num(p["limit"], 15, 1, 50), ctx.tenantId)).map((r) => ({ at: r.at, actor: r.actor, event: r.event, detail: r.detail })),
     describe: () => "Read audit trail",
   },
-<<<<<<< ours
   // ── Calendar: booking members for jobs ──────────────────────────────────
   {
     name: "staff_schedule", label: "A member's schedule", risk: "read", confirmDefault: false, target: "server",
@@ -666,8 +641,6 @@ export const ACTIONS: ActionDef[] = [
     },
     spoken: (r) => { const x = r as { to?: string[]; from?: string; error?: string }; return x.error ?? `Sent to ${x.to!.join(", ")} from ${x.from}.`; },
   },
-=======
->>>>>>> theirs
   // ── Desktop agent (Windows, Mac or Linux) ───────────────────────────────
   {
     name: "desktop_status", label: "Computer status", risk: "read", confirmDefault: false, target: "agent",
@@ -717,11 +690,7 @@ export const ACTIONS: ActionDef[] = [
 
 export const ACTION_MAP = new Map(ACTIONS.map((a) => [a.name, a]));
 /** The actions one organization's Command Center has. */
-<<<<<<< ours
 export const actionsFor = (tenantId: string) => ACTIONS.filter((a) => (isPlatform(tenantId) || !a.platformOnly) && !(isPlatform(tenantId) && a.clientOnly));
-=======
-export const actionsFor = (tenantId: string) => ACTIONS.filter((a) => isPlatform(tenantId) || !a.platformOnly);
->>>>>>> theirs
 
 /** Which online agent a desktop_* action goes to, and is the request allowed by that agent's config? */
 export async function resolveAgent(action: ActionDef, params: Record<string, unknown>, tenantId: string): Promise<{ agentId: string; taskConfirm: boolean } | { error: string }> {

@@ -740,6 +740,9 @@ router.delete("/v1/platform/organizations/:id", async (req, res): Promise<void> 
     for (const t of ["command_devices", "command_agents", "command_runs", "command_actions", "command_work_orders"]) {
       await tx.execute(sql`delete from ${sql.identifier(t)} where tenant_id = ${id}`);
     }
+    // Its buildings on FIAREP's watch list, and the alerts found on them (kept under FIAREP's own tenant).
+    await tx.execute(sql`delete from entity_records where entity = 'violation-alerts' and state->>'watchId' in (select id from entity_records where entity = 'watch-buildings' and state->>'organizationId' = ${id})`);
+    await tx.execute(sql`delete from entity_records where entity = 'watch-buildings' and state->>'organizationId' = ${id}`);
     await tx.delete(organizationProperties).where(eq(organizationProperties.organizationId, id));
     await tx.delete(staffAccounts).where(eq(staffAccounts.tenantId, id));
     await tx.delete(organizations).where(eq(organizations.id, id));

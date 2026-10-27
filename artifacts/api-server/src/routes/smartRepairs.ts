@@ -58,8 +58,8 @@ router.put("/v1/smart-repairs/:id", async (req, res) => {
   await table();
   const r = await db.execute(sql`insert into smart_repairs (tenant_id, staff_id, id, data, deleted, updated_at)
     values (${actor.tenantId}, ${actor.id}, ${id}, ${JSON.stringify(data)}::jsonb, false, now())
-    on conflict (tenant_id, staff_id, id) do update set data = excluded.data, deleted = false, member_deleted = false, updated_at = now() returning (xmax = 0) as inserted`);
-  if ((r as unknown as { rows: Array<{ inserted?: boolean }> }).rows[0]?.inserted) void tellAdministrators(actor, data as Record<string, unknown>).catch(() => undefined);
+    on conflict (tenant_id, staff_id, id) do update set data = excluded.data, deleted = false, member_deleted = false, updated_at = now()`);
+  // Nothing is sent on the before picture: the administrator and management get it once, when it is complete.
   res.json({ ok: true });
 });
 
@@ -89,17 +89,6 @@ router.delete("/v1/smart-repairs/:id", async (_req, res) => {
   res.status(204).end();
 });
 
-/** A new Smart Repair from a member: every administrator in the company hears about it. */
-async function tellAdministrators(actor: Actor, data: Record<string, unknown>) {
-  const admins = await db.select({ id: staffAccounts.id }).from(staffAccounts)
-    .where(and(eq(staffAccounts.tenantId, actor.tenantId), eq(staffAccounts.status, "approved"), eq(staffAccounts.role, "administrator")));
-  const t = (data["ticket"] ?? {}) as Record<string, unknown>;
-  const where = [data["address"], data["apt"] ? `apt ${String(data["apt"])}` : "", data["room"]].filter(Boolean).map(String).join(" · ");
-  for (const a of admins) if (a.id !== actor.id) {
-    await notify(actor, a.id, `Smart Repair from ${actor.name}: ${String(t["issueFound"] ?? "Repair").slice(0, 80)}`, [where, t["priority"] ? `Priority ${String(t["priority"])}` : ""].filter(Boolean).join(" — ")).catch(() => undefined);
-  }
-}
-
 // Administrators: every member's Smart Repairs, always (in the phone's Smart Repair, "From your team").
 router.get("/v1/smart-repairs/team", async (_req, res) => {
   const actor = actorFrom(res);
@@ -108,7 +97,7 @@ router.get("/v1/smart-repairs/team", async (_req, res) => {
   await table();
   const rows = (await db.execute(sql`select r.id, r.staff_id, r.data, r.photo, r.after, r.updated_at, s.name as staff_name from smart_repairs r
     left join staff_accounts s on s.id = r.staff_id
-    where r.tenant_id = ${actor.tenantId} and r.deleted = false and r.staff_id <> ${actor.id} order by r.updated_at desc limit 200`) as unknown as { rows: Array<Row & { staff_id: string; staff_name: string | null }> }).rows;
+    where r.tenant_id = ${actor.tenantId} and r.deleted = false and r.staff_id <> ${actor.id} and r.after is not null order by r.updated_at desc limit 200`) as unknown as { rows: Array<Row & { staff_id: string; staff_name: string | null }> }).rows;
   const items = await Promise.all(rows.map(async (r) => ({
     id: r.id, by: r.staff_name ?? "", data: r.data, updatedAt: new Date(r.updated_at).toISOString(),
     photoUrl: r.photo ? await smartRepairPhotos.downloadUrl(r.photo).catch(() => null) : null,
@@ -126,7 +115,7 @@ router.get("/v1/smart-repairs/all", async (_req, res) => {
   const office = ["administrator", "management"].includes(String(actor.role));
   const rows = (await db.execute(sql`select r.id, r.staff_id, r.data, r.photo, r.after, r.updated_at, s.name as staff_name from smart_repairs r
     left join staff_accounts s on s.id = r.staff_id
-    where r.tenant_id = ${actor.tenantId} and r.deleted = false ${office ? sql`` : sql`and r.staff_id = ${actor.id} and r.member_deleted = false`} order by r.updated_at desc limit 300`) as unknown as { rows: Array<Row & { staff_id: string; staff_name: string | null }> }).rows;
+    where r.tenant_id = ${actor.tenantId} and r.deleted = false ${office ? sql`and (r.staff_id = ${actor.id} or r.after is not null)` : sql`and r.staff_id = ${actor.id} and r.member_deleted = false`} order by r.updated_at desc limit 300`) as unknown as { rows: Array<Row & { staff_id: string; staff_name: string | null }> }).rows;
   const items = await Promise.all(rows.map(async (r) => ({
     id: r.id, by: r.staff_name ?? "", data: r.data, updatedAt: new Date(r.updated_at).toISOString(),
     photoUrl: r.photo ? await smartRepairPhotos.downloadUrl(r.photo).catch(() => null) : null,

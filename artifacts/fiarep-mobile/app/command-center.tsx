@@ -47,7 +47,10 @@ const SILENCE_MS = 900;      // this long quiet after talking = done talking
 const MAX_TALK_MS = 30_000;  // one thing said is at most this long
 const IDLE_RESTART_MS = 25_000; // nothing said: start a fresh recording (keeps it small)
 const POLL_MS = 120;
-const PROMPT = 'Hey FIAREP. FIAREP, HPD, DOB, NYCHA, OATH, violation, complaint, work order, Command Center.';
+// Only the name: a longer word list gets written back as if it were said when the room is quiet.
+const PROMPT = 'FIAREP';
+/** Heard only the name (or the old word list) with nothing asked: ignored. */
+const ONLY_NAME = (t: string) => /^(hey |hi |ok |okay )?(fiarep|fia rep|fire rep)?( hpd| dob| nycha| oath| violation| complaint| work order| command center)*$/.test(norm(t));
 /** Keep the screen on while hands-free (the phone stops listening when it locks). */
 function keepAwake(on: boolean) {
   try {
@@ -249,7 +252,9 @@ export default function CommandCenter() {
   const cancelPlay = useRef<null | (() => void)>(null);
   /** Stop the answer being said. */
   function hush() { stopSpeaking.current = true; playerRef.current?.pause(); cancelPlay.current?.(); }
-  const wakeRef = useRef(false); wakeRef.current = wakeOn;
+  const wakeRef = useRef(false); wakeRef.current = wakeOn && device?.platform !== false;
+  // A client's Command Center is always: talk (no button, no wake words), answers said out loud.
+  useEffect(() => { if (device?.platform === false) { setHandsFree(true); setWakeOn(false); setSpeakReplies(true); } }, [device?.platform]);
   useEffect(() => { void AsyncStorage.multiGet(['cc.handsFree2', 'cc.wake2']).then((kv) => { const m = Object.fromEntries(kv); if (m['cc.wake2'] === '1') setWakeOn(true); if (m['cc.handsFree2'] === '0') setHandsFree(false); }).catch(() => undefined); }, []);
 
   /** Records one thing said: starts when you talk, ends after a short pause. Returns the file, or null if stopped / nothing said. */
@@ -272,13 +277,20 @@ export default function CommandCenter() {
         const level = typeof st.metering === 'number' ? st.metering : -160;
         levelAnim.setValue(Math.max(0, Math.min(1, (level - (floor ?? level) - 4) / 28)));
         if (floor === null) floor = level;
-        const threshold = Math.max(floor + 12, -48);
+        const threshold = Math.max(floor + 15, -42);
         if (!talkAt) {
-          if (level > threshold) { loud += 1; if (loud >= 2) { talkAt = Date.now(); setPhase('hearing'); } }
+          if (level > threshold) { loud += 1; if (loud >= 3) { talkAt = Date.now() - 2 * POLL_MS; setPhase('hearing'); } }
           else { loud = 0; floor = floor * 0.9 + level * 0.1; }
           if (Date.now() - started > IDLE_RESTART_MS) { outcome = 'idle'; break; }
         } else {
-          if (level < threshold - 3) { if (!quietSince) quietSince = Date.now(); if (Date.now() - quietSince >= SILENCE_MS) { outcome = 'said'; break; } }
+          if (level < threshold - 3) {
+            if (!quietSince) quietSince = Date.now();
+            if (Date.now() - quietSince >= SILENCE_MS) {
+              // A bump or a cough (under 0.6 s of sound) is not talking: keep waiting.
+              if (quietSince - talkAt < 600) { talkAt = 0; quietSince = 0; loud = 0; setPhase('waiting'); continue; }
+              outcome = 'said'; break;
+            }
+          }
           else quietSince = 0;
           if (Date.now() - talkAt > MAX_TALK_MS) { outcome = 'said'; break; }
         }
@@ -303,6 +315,7 @@ export default function CommandCenter() {
   /** What was heard: with wake words on, only acts on "Hey FIAREP …" (or a follow-up within 20 seconds). */
   async function handleHeard(heard: string): Promise<void> {
     if (!heard || NOISE.test(heard)) return;
+    if (!wakeRef.current && ONLY_NAME(heard)) return;
     let said = heard;
     if (wakeRef.current && Date.now() > awakeUntil.current) {
       const rest = afterWake(heard, taughtRef.current);
@@ -378,11 +391,11 @@ export default function CommandCenter() {
 
   // Hands-free runs while this screen is open and the app is in front.
   useFocusEffect(useCallback(() => {
-    if (!handsFree || device?.status !== 'active') return undefined;
+    if (!(handsFree || device?.platform === false) || device?.status !== 'active') return undefined;
     startHandsFree();
     const sub = AppState.addEventListener('change', (st) => { if (st === 'active') startHandsFree(); else stopListening(); });
     return () => { sub.remove(); stopListening(); };
-  }, [handsFree, device?.status])); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [handsFree, device?.status, device?.platform])); // eslint-disable-line react-hooks/exhaustive-deps
 
   /** One press: it listens, and sends when you stop talking. Press again to send early. */
   async function startRecording() {
@@ -491,7 +504,9 @@ export default function CommandCenter() {
   );
 
   // Hands-free: nothing on the screen. Talk; when you stop, it answers.
-  const quiet = handsFree;
+  // A client's Command Center (FIAREP switches it on for them): the conversation on screen and talking — no settings.
+  const isClient = device.platform === false;
+  const quiet = handsFree && !isClient;
   const sw = (label: string, value: boolean, onChange: (v: boolean) => void, note?: string) => (
     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
       <View style={{ flex: 1 }}><Text style={{ fontSize: 16 }}>{label}</Text>{!!note && <Text style={{ fontSize: 12, color: '#64748b' }}>{note}</Text>}</View>
@@ -500,7 +515,7 @@ export default function CommandCenter() {
   );
   return (
     <View style={{ flex: 1 }}>
-      <Stack.Screen options={{ headerRight: () => (
+      <Stack.Screen options={{ headerRight: isClient ? () => null : () => (
         <Pressable onPress={() => setVoiceOpen(true)} hitSlop={10} accessibilityLabel="Command Center settings" style={{ paddingHorizontal: 6 }}>
           <Text style={{ fontSize: 22 }}>⚙️</Text>
         </Pressable>
@@ -578,11 +593,8 @@ export default function CommandCenter() {
           );
         })}
 
-<<<<<<< ours
         {(!quiet || showConvo) && <>
         {!!(device.greeting || savedGreeting) && <Text style={{ fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 4 }}>{device.greeting || savedGreeting}</Text>}
-=======
->>>>>>> theirs
         {runs.length === 0 && <Text style={ui.empty}>{device.platform === false ? 'Ask anything — “Check every building we manage”, “Any urgent violations?”, “What’s in the Documents folder on the office PC?”.' : 'Ask anything — “Check every building we manage”, “Is FIAREP up?”, “Git status on my Mac”.'}</Text>}
         {runs.map((r) => (
           <View key={r.id} style={ui.card}>
@@ -598,7 +610,7 @@ export default function CommandCenter() {
         </>}
       </ScrollView>
 
-      {!quiet && (
+      {!quiet && !isClient && (
         <View style={{ padding: 12, paddingBottom: 12 + insets.bottom, borderTopWidth: 1, borderTopColor: '#e0e0e0', backgroundColor: '#fff', gap: 8 }}>
           <View style={{ alignItems: 'center', marginTop: -4, marginBottom: -8 }}>
             <VoiceOrb

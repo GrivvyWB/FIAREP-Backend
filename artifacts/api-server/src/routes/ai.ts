@@ -198,6 +198,16 @@ router.post("/ai/smart-repair/complete", requireAuth, async (req, res) => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const s = (k: string, n: number) => (typeof b[k] === "string" ? (b[k] as string).slice(0, n) : "");
   const jobId = s("jobId", 80), issue = s("issue", 200) || "Repair", address = s("address", 300), summary = s("summary", 8000);
+  // The after picture did not clear the repair (blurry, or the repair isn't showing done): the administrator
+  // and management are told right away, without the picture, so they can send the member back.
+  if (b["cleared"] === false) {
+    const reason = s("reason", 500);
+    const title = `Smart Repair NOT cleared: ${issue}`;
+    const detail = [`${actor.name} must take the after picture again — it did not clear${reason ? ` (${reason})` : ""}. The complaint is not cleared yet.`, address].filter(Boolean).join(" · ");
+    for (const role of ["administrator", "management"]) await notify(actor, role, title, detail, jobId || undefined).catch(() => undefined);
+    res.json({ notified: true, emailed: false });
+    return;
+  }
   let notified = false, emailed = false;
   const doneLine = [address, `Verified by ${actor.name}`].filter(Boolean).join(" · ");
   // The administrators always get the finished repair; management too while its switch is on.

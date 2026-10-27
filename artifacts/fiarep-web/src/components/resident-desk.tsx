@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 // report a repair, check a complaint, set up the visit. This browser keeps the
 // conversation so they can come back to it.
 type Msg = { id: string; from: "you" | "office"; text: string; at: string };
-type View = { messages: Msg[]; complaintNo: string | null; company: string | null; appointment: { label: string } | null };
+type View = { messages: Msg[]; complaintNo: string | null; company: string | null; address?: string | null; appointment: { label: string } | null };
 const KEY = "fiarep_resident_desk";
 
-export function ResidentDesk({ companyCode }: { companyCode?: string }) {
+export function ResidentDesk({ companyCode, onBuilding }: { companyCode?: string; onBuilding?: (address: string) => void }) {
   const [desk, setDesk] = useState<{ id: string; token: string } | null>(() => { try { const v = JSON.parse(localStorage.getItem(KEY) || "null"); return v?.id && v?.token ? v : null; } catch { return null; } });
   const [view, setView] = useState<View | null>(null);
   const [text, setText] = useState("");
@@ -28,6 +28,7 @@ export function ResidentDesk({ companyCode }: { companyCode?: string }) {
   useEffect(() => { if (desk) void load(desk); else void start(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { if (!desk) return; const t = setInterval(() => void load(desk), 15_000); return () => clearInterval(t); }, [desk?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { end.current?.scrollIntoView({ block: "nearest" }); }, [view?.messages.length]);
+  useEffect(() => { if (view?.address) onBuilding?.(view.address); }, [view?.address]); // eslint-disable-line react-hooks/exhaustive-deps
   async function send() {
     const t = text.trim(); if (!t || !desk) return;
     setSending(true); setError("");

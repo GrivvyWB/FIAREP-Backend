@@ -6,7 +6,6 @@ import { and, eq, gte, sql } from "drizzle-orm";
 import { db } from "@workspace/db";
 import { commandRuns } from "./tables";
 
-<<<<<<< ours
 /** US dollars per million tokens, base input / output (Gemini output includes thinking tokens).
  *  A model not listed here records tokens only (no dollar figure, no cap check).
  *  Neither engine uses prompt caching here, so input is billed at the base rate.
@@ -43,27 +42,6 @@ export function costMicroUsd(model: string, usage: Record<string, number>, at = 
   const price = priceOn(model, at);
   if (!price) return null;
   return Math.round((usage["input_tokens"] ?? 0) * price.input + (usage["output_tokens"] ?? 0) * price.output);
-=======
-/** US dollars per million tokens, base input / output.
- *  Source: platform.claude.com/docs/en/about-claude/pricing (checked Oct 18, 2026).
- *  Haiku 5.5 is the price for prompts up to 100,000 tokens (Command Center prompts are far smaller).
- *  A model not listed here records tokens only (no dollar figure, no cap check).
- *  The Command Center doesn't use prompt caching, so input is billed at the base rate. */
-const SOURCE = "platform.claude.com/docs/en/about-claude/pricing, Oct 18 2026";
-export const MODEL_PRICES: Record<string, { input: number; output: number; source: string }> = {
-  "claude-fable-5-1": { input: 10, output: 50, source: SOURCE },
-  "claude-opus-5-5": { input: 4, output: 20, source: SOURCE },
-  "claude-sonnet-5-5": { input: 2, output: 10, source: SOURCE },
-  "claude-haiku-5-5": { input: 0.1, output: 0.5, source: `${SOURCE} (prompts up to 100,000 tokens)` },
-};
-
-/** Cost of one run in millionths of a dollar, or null when the model's price isn't known. */
-export function costMicroUsd(model: string, usage: Record<string, number>): number | null {
-  const price = MODEL_PRICES[model];
-  if (!price) return null;
-  const input = usage["input_tokens"] ?? 0;
-  return Math.round(input * price.input + (usage["output_tokens"] ?? 0) * price.output);
->>>>>>> theirs
 }
 
 /** First moment of this calendar month in New York. */

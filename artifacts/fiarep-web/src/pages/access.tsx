@@ -1,8 +1,8 @@
 import { Card, CardHeader, CardTitle } from '@/components/ui/card';
 import { Home, HardHat, Building2 } from 'lucide-react';
 import { Link, useLocation } from 'wouter';
-import { WebsiteFooter } from '@/components/layout/website-footer';
 
+// Enter Platform: residents, vendors and staff pick their door here, so no Connect / Join FIAREP footer.
 export default function Access() {
   const [, setLocation] = useLocation();
 
@@ -68,7 +68,6 @@ export default function Access() {
           </div>
         </div>
       </div>
-      <WebsiteFooter />
     </div>
   );
 }

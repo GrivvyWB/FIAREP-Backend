@@ -5,19 +5,14 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ActionMeta = { name: string; label: string; risk: "read" | "write"; confirmDefault: boolean; target: "server" | "agent" };
-<<<<<<< ours
 type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; quickOn?: boolean; quickModel?: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; autoWorkOrders: boolean; mailFallback?: boolean; caps?: Record<string, number> };
 type ChatMsg = { id: string; from: "resident" | "office" | "staff"; text: string; at: string; by?: string };
 type Conversation = { id: string; complaintNo: string; address: string; unit: string; description: string; human: boolean; handoff: { reason?: string; urgent?: boolean } | null; appointment: string | null; lastAt: string; waiting: boolean; messages: ChatMsg[] };
-=======
-type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; caps?: Record<string, number> };
->>>>>>> theirs
 type Device = { id: string; name: string; staffName: string; status: "pending" | "active" | "revoked"; confirmKey: string; createdAt: string; approvedAt: string | null; approvedBy: string | null; lastUsedAt: string | null };
 type AgentTask = { name: string; description: string; confirm: boolean; params: Record<string, { description: string; pattern: string }> };
 type Agent = { id: string; name: string; status: string; online: boolean; lastSeenAt: string | null; info: Record<string, unknown>; tasks: AgentTask[]; folders: string[]; apps: string[]; createdAt: string };
 type Install = { windows: string; mac: string; linux: string };
 type Usage = { runs: number; inputTokens: number; outputTokens: number; costUsd: number; unpricedRuns: number };
-<<<<<<< ours
 type Client = { id: string; name: string; status: string; on: boolean; cap: number | null; paysOwn?: boolean; usage: Usage | null; phones: { active: number; pending: number }; computers: { total: number; online: number } };
 type Overview = {
   switches: Switches; schedule?: Schedule; mapsKey?: { set: boolean; source?: string | null; last4?: string | null }; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; install: Install; usage: Usage | null; claudeKeyConfigured: boolean; audit: { ok: boolean; rows: number; brokenAt?: number | null };
@@ -36,18 +31,6 @@ type MailForm = { email: string; name: string; password: string; user: string; i
 const emptyMail: MailForm = { email: "", name: "", password: "", user: "", imapHost: "", imapPort: "", smtpHost: "", smtpPort: "" };
 type Report = { id: string; title: string; createdBy: string; createdAt: string };
 type WorkOrder = { id: string; status: string; urgency: string; address: string; borough: string; kind: string; title: string; createdAt: string; decidedBy: string | null; assignedName?: string | null };
-=======
-type Client = { id: string; name: string; status: string; on: boolean; cap: number | null; usage: Usage | null; phones: { active: number; pending: number }; computers: { total: number; online: number } };
-type Overview = {
-  switches: Switches; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; install: Install; usage: Usage | null; claudeKeyConfigured: boolean; audit: { ok: boolean; rows: number; brokenAt?: number | null };
-  // Platform Control only
-  defaultModel?: string; prices?: Record<string, { input: number; output: number; source: string }>; relay?: { url: string | null; serverTokenSet: boolean }; voiceKeyConfigured?: boolean; clients?: Client[];
-  // A client's own only
-  platformEnabled?: boolean; platformOff?: string[]; cap?: number | null; capProblem?: string | null;
-};
-type AuditRow = { seq: number; at: string; actor: string; event: string; detail: Record<string, unknown> };
-type WorkOrder = { id: string; status: string; urgency: string; address: string; borough: string; kind: string; title: string; createdAt: string; decidedBy: string | null };
->>>>>>> theirs
 type Os = keyof Install;
 
 const when = (iso: string | null) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never");
@@ -62,7 +45,6 @@ const OS_HOW: Record<Os, string> = {
 };
 const guessOs = (): Os => (/Windows/i.test(navigator.userAgent) ? "windows" : /Mac/i.test(navigator.userAgent) ? "mac" : "linux");
 
-<<<<<<< ours
 /** A length of time as hours + minutes (1 hr 30 min, not 90 min). Stored in minutes. */
 function DurationField({ label, value, onChange }: { label: string; value: number; onChange: (minutes: number) => void }) {
   const h = Math.floor(value / 60), m = value % 60;
@@ -77,8 +59,6 @@ function DurationField({ label, value, onChange }: { label: string; value: numbe
   );
 }
 
-=======
->>>>>>> theirs
 /** The install line per operating system, with a copy button. */
 function InstallLines({ lines, onCopy }: { lines: Install; onCopy: (text: string, what: string) => void }) {
   const [os, setOs] = useState<Os>(guessOs);
@@ -98,7 +78,6 @@ function InstallLines({ lines, onCopy }: { lines: Install; onCopy: (text: string
 /** The Command Center control panel. "platform": Platform Control → Command
  *  Center (FIAREP's own, plus every client's on/off, usage and cap). "org": a
  *  client's own page in its menu (its phones, computers, switches, audit). */
-<<<<<<< ours
 export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "platform" | "org" | "client"; tenantId?: string; tenantName?: string }) {
   const { toast } = useToast();
   // platform: FIAREP's own. client: a client's setup, run by FIAREP from Platform Control.
@@ -106,12 +85,6 @@ export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "pl
   const base = scope === "platform" ? "/v1/platform/command" : scope === "client" ? `/v1/platform/command/client/${encodeURIComponent(tenantId || "")}` : "/v1/org/command";
   const platform = scope === "platform";
   const servicesOnly = scope === "org";
-=======
-export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
-  const { toast } = useToast();
-  const base = scope === "platform" ? "/v1/platform/command" : "/v1/org/command";
-  const platform = scope === "platform";
->>>>>>> theirs
   const [data, setData] = useState<Overview | null>(null);
   const [loadError, setLoadError] = useState("");
   const [audit, setAudit] = useState<AuditRow[]>([]);
@@ -119,7 +92,6 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const [agentName, setAgentName] = useState("");
   const [newAgent, setNewAgent] = useState<{ name: string; token: string; install: Install } | null>(null);
   const [model, setModel] = useState("");
-<<<<<<< ours
   const [geminiModel, setGeminiModel] = useState("");
   const [quickModel, setQuickModel] = useState("");
   const [caps, setCaps] = useState<Record<string, string>>({});
@@ -134,14 +106,10 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const [mailBusy, setMailBusy] = useState(false);
   const [ownKey, setOwnKey] = useState<Record<string, string>>({});
   const [ownBusy, setOwnBusy] = useState("");
-=======
-  const [caps, setCaps] = useState<Record<string, string>>({});
->>>>>>> theirs
   const fail = (title: string) => (err: any) => toast({ variant: "destructive", title, description: err?.data?.error || err?.message });
 
   async function load() {
     try {
-<<<<<<< ours
       const [o, a, w, c] = await Promise.all([
         api<Overview>(base),
         api<{ rows: AuditRow[] }>(`${base}/audit?limit=200`),
@@ -152,19 +120,10 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       setReports(await api<Report[]>(`${base}/reports`).catch(() => [] as Report[]));
       setMail(await api<MailStatus>(`${base}/mailbox`).catch(() => null));
       setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setQuickModel((m) => m || o.switches.quickModel || o.defaultQuickModel || ""); setSched((x) => x ?? o.schedule ?? null); setGeminiModel((m) => m || o.switches.geminiModel || ""); setLoadError("");
-=======
-      const [o, a, w] = await Promise.all([
-        api<Overview>(base),
-        api<{ rows: AuditRow[] }>(`${base}/audit?limit=200`),
-        api<WorkOrder[]>(`${base}/work-orders`),
-      ]);
-      setData(o); setAudit(a.rows); setOrders(w); setModel((m) => m || o.switches.model); setLoadError("");
->>>>>>> theirs
     } catch (err: any) { setLoadError(err?.data?.error || err?.message || "Could not load the Command Center"); }
   }
   useEffect(() => { void load(); const t = setInterval(() => void load(), 15_000); return () => clearInterval(t); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-<<<<<<< ours
   /** A client paying for its own AI: save or remove one of its keys (checked with the provider first). */
   async function saveOwnKey(which: string) {
     setOwnBusy(which);
@@ -209,8 +168,6 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
     } catch (err) { w?.close(); fail("Could not open the report")(err); }
   }
 
-=======
->>>>>>> theirs
   async function saveSwitches(patch: Partial<Switches>) {
     if (!data) return;
     const next = { ...data.switches, ...patch };
@@ -234,18 +191,14 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
     if (!window.confirm(`Revoke ${a.name}? Its token stops working immediately.`)) return;
     try { await api(`${base}/agents/${encodeURIComponent(a.id)}/revoke`, { method: "POST" }); await load(); } catch (err) { fail("Could not revoke")(err); }
   }
-<<<<<<< ours
   async function removeAgent(a: Agent) {
     if (!window.confirm(`Remove ${a.name} from the list?`)) return;
     try { await api(`${base}/agents/${encodeURIComponent(a.id)}`, { method: "DELETE" }); await load(); } catch (err) { fail("Could not remove")(err); }
   }
-=======
->>>>>>> theirs
   async function syncRelay() {
     try { const r = await api<{ ok: boolean; error?: string }>("/v1/platform/command/relay/sync", { method: "POST" }); toast(r.ok ? { title: "Phones sent to the backup relay" } : { variant: "destructive", title: "Relay sync failed", description: r.error }); }
     catch (err) { fail("Relay sync failed")(err); }
   }
-<<<<<<< ours
   async function saveClient(c: Client, patch: { on?: boolean; cap?: number | null; paysOwn?: boolean }) {
     try { await api(`/v1/platform/command/clients/${encodeURIComponent(c.id)}`, json("PUT", patch)); await load(); toast({ title: `${c.name} saved` }); }
     catch (err) { fail("Could not save the client")(err); }
@@ -259,12 +212,6 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
     try { const r = await api<Schedule>(`${base}/schedule`, json("PUT", sched)); setSched(r); toast({ title: "Scheduling saved" }); await load(); }
     catch (err) { fail("Could not save scheduling")(err); }
   }
-=======
-  async function saveClient(c: Client, patch: { on?: boolean; cap?: number | null }) {
-    try { await api(`/v1/platform/command/clients/${encodeURIComponent(c.id)}`, json("PUT", patch)); await load(); toast({ title: `${c.name} saved` }); }
-    catch (err) { fail("Could not save the client")(err); }
-  }
->>>>>>> theirs
   const copy = (text: string, what: string) => { void navigator.clipboard.writeText(text); toast({ title: `${what} copied` }); };
 
   if (!data) return <p className="rounded-xl border border-slate-200 bg-white p-6 text-center text-sm text-slate-500">{loadError || "Loading…"}</p>;
@@ -272,52 +219,34 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
   const otherPhones = data.devices.filter((d) => d.status !== "pending");
   const drafts = orders.filter((o) => o.status === "draft");
   const offByFiarep = !platform && data.platformEnabled === false;
-<<<<<<< ours
   const gemini = data.switches.provider === "gemini";
   const activeModel = gemini ? data.switches.geminiModel : data.switches.model;
   const priceText = (m: string) => { const p = data.prices?.[m] as ({ input: number; output: number; source: string; until?: string; then?: { input: number; output: number } } | undefined); return p ? `$${p.input} in / $${p.output} out per million tokens${p.until && p.then ? ` through ${p.until}, then $${p.then.input} / $${p.then.output}` : ""} — ${p.source}` : "no price on file for this model: tokens are counted, no dollar figure"; };
-=======
->>>>>>> theirs
 
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-<<<<<<< ours
           <h1 className="text-2xl font-bold text-slate-950">{scope === "client" ? `Command Center · ${tenantName || tenantId}` : "Command Center"}</h1>
           <p className="text-sm text-slate-500">{servicesOnly
             ? "Your assistant: ask it from the FIAREP app (press Command Center and talk or type) and it gives you the information — your buildings, complaints, work orders, schedules and reports. What it prepared for you is below. FIAREP sets it up for your company."
             : platform
-=======
-          <h1 className="text-2xl font-bold text-slate-950">Command Center</h1>
-          <p className="text-sm text-slate-500">{platform
->>>>>>> theirs
             ? "Talk to FIAREP and your computer from the phone. Reads answer right away; anything that changes something can wait for Face ID on the phone. Every step is written to a tamper-evident audit trail. Each client has its own Command Center (Clients, below)."
             : "Talk to your buildings, work orders and computers from your phone. Questions answer right away; anything that changes something waits for your Face ID on the phone. Everything is limited to your company, and every step is written to a tamper-evident audit trail."}</p>
         </div>
         <label className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
           <span className="text-sm font-semibold text-slate-900">Command Center {data.switches.enabled && !offByFiarep ? "ON" : "OFF"}</span>
-<<<<<<< ours
           {!servicesOnly && <Switch checked={data.switches.enabled} disabled={offByFiarep} onCheckedChange={(v) => void saveSwitches({ enabled: v })} />}
-=======
-          <Switch checked={data.switches.enabled} disabled={offByFiarep} onCheckedChange={(v) => void saveSwitches({ enabled: v })} />
->>>>>>> theirs
         </label>
       </div>
 
       {offByFiarep && <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">FIAREP has the Command Center switched off right now.</div>}
       {data.capProblem && <div className="rounded-xl border border-rose-300 bg-rose-50 p-3 text-sm text-rose-900">{data.capProblem}</div>}
-<<<<<<< ours
       {((platform ? (gemini ? !data.geminiKeyConfigured : !data.claudeKeyConfigured) : !data.claudeKeyConfigured) || (platform && !data.voiceKeyConfigured)) && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
           {platform && !gemini && !data.claudeKeyConfigured && <p><b>ANTHROPIC_API_KEY</b> is not set on the API server — commands can't be understood until it is (Replit → Secrets).</p>}
           {platform && gemini && !data.geminiKeyConfigured && <p>No Gemini API key yet — with Gemini on, commands can't be understood until one is set (run <code>set-gemini-key.sh</code> in Terminal on the Mac).</p>}
           {!platform && !data.claudeKeyConfigured && <p>{data.paysOwn ? `Commands are not available yet — add your ${data.provider === "gemini" ? "Gemini" : "Claude"} key under "Your AI keys" below.` : "Commands are not available yet — FIAREP is finishing the setup."}</p>}
-=======
-      {(!data.claudeKeyConfigured || (platform && !data.voiceKeyConfigured)) && (
-        <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
-          {!data.claudeKeyConfigured && <p>{platform ? <><b>ANTHROPIC_API_KEY</b> is not set on the API server — commands can't be understood until it is (Replit → Secrets).</> : "Commands are not available yet — FIAREP is finishing the setup."}</p>}
->>>>>>> theirs
           {platform && !data.voiceKeyConfigured && <p><b>OPENAI_API_KEY</b> is not set — voice in/out won't work (typing still does).</p>}
         </div>
       )}
@@ -325,31 +254,20 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       {!platform && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">This month</h2>
-<<<<<<< ours
           <p className="mt-1 text-sm text-slate-700">{data.usage ? `${data.usage.runs} command${data.usage.runs === 1 ? "" : "s"}` : "No commands yet"}{data.paysOwn ? " · billed to your own keys" : ""}{!data.paysOwn && data.cap !== null && data.cap !== undefined ? ` · monthly limit ${money(data.cap)}${data.usage ? `, ${money(data.usage.costUsd)} used` : ""}` : ""}</p>
-=======
-          <p className="mt-1 text-sm text-slate-700">{data.usage ? `${data.usage.runs} command${data.usage.runs === 1 ? "" : "s"}` : "No commands yet"}{data.cap !== null && data.cap !== undefined ? ` · monthly limit ${money(data.cap)}${data.usage ? `, ${money(data.usage.costUsd)} used` : ""}` : ""}</p>
->>>>>>> theirs
         </section>
       )}
 
       {platform && data.clients && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
           <h2 className="text-base font-semibold text-slate-950">Clients</h2>
-<<<<<<< ours
           <p className="text-xs text-slate-500">Every client starts with the Command Center <b>off</b> — it isn't in their menu or app and they don't see it. Switch it on here (or Platform → Modules) when a client asks for it. Once on, the client gets the Command Center's services (ask from the app, work orders, reports, resident messages). Its setup — approving its phones, its computers (Windows, Mac or Linux), actions, email, scheduling and the audit trail — is here: press Set up next to the client. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Usage runs on FIAREP's {gemini ? "Gemini" : "Claude"} key; this month's cost per client is below ({activeModel}: {priceText(activeModel)}). A cap stops that client's commands for the rest of the month once reached. "AI paid by: Client" means that client's own keys are added under Set up (Claude or Gemini for commands and resident messages, OpenAI for reading resident photos, Google Maps for drive times) and pays those companies directly; FIAREP's keys are never used for them and no cap applies.</p>
           <div className="mt-3 overflow-x-auto"><table className="w-full text-sm">
             <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Client</th><th className="py-1 pr-3">On</th><th className="py-1 pr-3">This month</th><th className="py-1 pr-3">AI paid by</th><th className="py-1 pr-3">Monthly cap</th><th className="py-1 pr-3">Phones</th><th className="py-1">Computers</th></tr></thead>
-=======
-          <p className="text-xs text-slate-500">Every client has its own Command Center: its administrators set up their phones in the app and approve them, add their computers (Windows, Mac or Linux) and switch actions on fiarep.com → Command Center. It only ever sees that client's buildings, alerts, work orders, complaints and computers — never the FIAREP server. Claude usage runs on FIAREP's key; this month's cost per client is below{data.prices?.[data.switches.model] ? ` (${data.switches.model}: $${data.prices[data.switches.model]!.input} in / $${data.prices[data.switches.model]!.output} out per million tokens — ${data.prices[data.switches.model]!.source})` : ""}. A cap stops that client's commands for the rest of the month once reached.</p>
-          <div className="mt-3 overflow-x-auto"><table className="w-full text-sm">
-            <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-500"><th className="py-1 pr-3">Client</th><th className="py-1 pr-3">On</th><th className="py-1 pr-3">This month</th><th className="py-1 pr-3">Monthly cap</th><th className="py-1 pr-3">Phones</th><th className="py-1">Computers</th></tr></thead>
->>>>>>> theirs
             <tbody>{data.clients.map((c) => {
               const capText = caps[c.id] ?? (c.cap === null ? "" : String(c.cap));
               return (
                 <tr key={c.id} className={`border-t border-slate-100 ${c.on ? "" : "opacity-50"}`}>
-<<<<<<< ours
                   <td className="py-1.5 pr-3 font-medium text-slate-900">{c.name}{c.status !== "active" ? <span className="block text-xs font-normal text-slate-500">{c.status}</span> : null}<a href={`/platform-owner/command-center?client=${encodeURIComponent(c.id)}&name=${encodeURIComponent(c.name)}`} className="block text-xs font-semibold text-[#185FA5] underline">Set up</a></td>
                   <td className="py-1.5 pr-3"><Switch checked={c.on} onCheckedChange={(v) => void saveClient(c, { on: v })} /></td>
                   <td className="py-1.5 pr-3 text-xs text-slate-700">{c.usage ? <>{money(c.usage.costUsd)} · {c.usage.runs} cmd{c.usage.unpricedRuns ? ` (${c.usage.unpricedRuns} not priced)` : ""}<span className="block text-slate-500">{(c.usage.inputTokens / 1000).toFixed(0)}k in / {(c.usage.outputTokens / 1000).toFixed(0)}k out tokens</span></> : <span className="text-slate-400">—</span>}</td>
@@ -360,21 +278,11 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
                     </select>
                   </td>
                   <td className="py-1.5 pr-3">{c.paysOwn ? <span className="text-xs text-slate-400">their bill</span> : (
-=======
-                  <td className="py-1.5 pr-3 font-medium text-slate-900">{c.name}{c.status !== "active" ? <span className="block text-xs font-normal text-slate-500">{c.status}</span> : null}</td>
-                  <td className="py-1.5 pr-3"><Switch checked={c.on} onCheckedChange={(v) => void saveClient(c, { on: v })} /></td>
-                  <td className="py-1.5 pr-3 text-xs text-slate-700">{c.usage ? <>{money(c.usage.costUsd)} · {c.usage.runs} cmd{c.usage.unpricedRuns ? ` (${c.usage.unpricedRuns} not priced)` : ""}<span className="block text-slate-500">{(c.usage.inputTokens / 1000).toFixed(0)}k in / {(c.usage.outputTokens / 1000).toFixed(0)}k out tokens</span></> : <span className="text-slate-400">—</span>}</td>
-                  <td className="py-1.5 pr-3">
->>>>>>> theirs
                     <div className="flex items-center gap-1">
                       <span className="text-xs text-slate-500">$</span>
                       <input value={capText} onChange={(e) => setCaps({ ...caps, [c.id]: e.target.value.replace(/[^\d.]/g, "") })} placeholder="no cap" inputMode="decimal" className="w-20 rounded-md border border-slate-300 px-2 py-1 text-xs" />
                       {caps[c.id] !== undefined && caps[c.id] !== (c.cap === null ? "" : String(c.cap)) && <Button size="sm" variant="outline" onClick={() => { void saveClient(c, { cap: caps[c.id] === "" ? null : Number(caps[c.id]) }); setCaps(({ [c.id]: _, ...rest }) => rest); }}>Save</Button>}
-<<<<<<< ours
                     </div>)}
-=======
-                    </div>
->>>>>>> theirs
                   </td>
                   <td className="py-1.5 pr-3 text-xs text-slate-700">{c.phones.active}{c.phones.pending ? <span className="text-amber-700"> · {c.phones.pending} waiting</span> : null}</td>
                   <td className="py-1.5 text-xs text-slate-700">{c.computers.total ? `${c.computers.online}/${c.computers.total} online` : "—"}</td>
@@ -386,10 +294,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         </section>
       )}
 
-<<<<<<< ours
       {!servicesOnly && (
-=======
->>>>>>> theirs
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">Phones</h2>
         <p className="text-xs text-slate-500">{platform
@@ -419,10 +324,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         )}
         {data.devices.length === 0 && <p className="mt-3 text-sm text-slate-500">No phones yet.</p>}
       </section>
-<<<<<<< ours
       )}
-=======
->>>>>>> theirs
 
       {platform && (
         <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -436,10 +338,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
         </section>
       )}
 
-<<<<<<< ours
       {!servicesOnly && (
-=======
->>>>>>> theirs
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">Computers</h2>
         <p className="text-xs text-slate-500">Windows PCs, Macs and Linux computers. The agent only calls out to FIAREP; nothing connects to the computer. It can only read the folders, open the apps and run the tasks listed in its own settings file on that computer, and with your phones' Face ID keys pinned there, anything that changes something needs your Face ID — checked on the computer itself.</p>
@@ -462,10 +361,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
               <span className="font-semibold text-slate-950">{a.name}</span>
               <span className="text-xs text-slate-500">{a.status !== "active" ? "revoked" : a.online ? "online" : `offline · last seen ${when(a.lastSeenAt)}`}{typeof a.info["platform"] === "string" ? ` · ${({ win32: "Windows", darwin: "Mac", linux: "Linux" } as Record<string, string>)[a.info["platform"] as string] ?? a.info["platform"]}` : ""} · {a.tasks.length} task{a.tasks.length === 1 ? "" : "s"}{typeof a.info["pinnedKeys"] === "number" ? ` · ${a.info["pinnedKeys"]} pinned phone key(s)` : ""}</span>
               {a.status === "active" && <Button size="sm" variant="outline" className="ml-auto text-rose-700" onClick={(e) => { e.preventDefault(); void revokeAgent(a); }}>Revoke</Button>}
-<<<<<<< ours
               {a.status !== "active" && <Button size="sm" variant="outline" className="ml-auto text-slate-600" onClick={(e) => { e.preventDefault(); void removeAgent(a); }}>Remove</Button>}
-=======
->>>>>>> theirs
             </summary>
             <div className="mt-2 grid gap-2 text-xs text-slate-600 sm:grid-cols-3">
               <div><p className="font-semibold text-slate-800">Tasks</p>{a.tasks.map((t) => <p key={t.name}><code>{t.name}</code> — {t.description}{t.confirm ? " · Face ID" : ""}</p>)}{!a.tasks.length && <p>none</p>}</div>
@@ -482,13 +378,9 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </details>
         )}
       </section>
-<<<<<<< ours
       )}
 
       {!servicesOnly && (
-=======
-
->>>>>>> theirs
       <section className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <h2 className="text-base font-semibold text-slate-950">Actions</h2>
         <p className="text-xs text-slate-500">The complete list of what {platform ? "the" : "your"} Command Center can do. Switch any of them off. “Face ID” makes it wait for approval on the phone before it runs. Tasks on a computer also follow their own <code>confirm</code> setting in its settings file.{platform ? " Switching an action off here switches it off for every client too; FIAREP-server actions are never on a client's." : ""}</p>
@@ -505,7 +397,6 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </tbody>
         </table></div>
         {platform && (
-<<<<<<< ours
           <div className="mt-4 rounded-lg border border-slate-200 p-3">
             <p className="text-sm font-semibold text-slate-900">Engine — the model that reads each command</p>
             <p className="text-xs text-slate-500">Same actions, same Face ID approvals and audit trail either way; only the model that understands the command changes. Applies to FIAREP's own and every client's. Voice in / out stays on OpenAI.</p>
@@ -687,16 +578,6 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </div>
         </section>
       )}
-=======
-          <div className="mt-3 flex flex-wrap items-center gap-2 text-sm">
-            <span className="text-slate-600">Claude model</span>
-            <input value={model} onChange={(e) => setModel(e.target.value)} className="w-56 rounded-md border border-slate-300 px-2 py-1 font-mono text-xs" />
-            <Button size="sm" variant="outline" disabled={!model.trim() || model.trim() === data.switches.model} onClick={() => void saveSwitches({ model: model.trim() })}>Save</Button>
-            <span className="text-xs text-slate-500">default {data.defaultModel} · used by every client too{data.usage ? ` · FIAREP's own this month: ${money(data.usage.costUsd)}, ${data.usage.runs} commands` : ""}</span>
-          </div>
-        )}
-      </section>
->>>>>>> theirs
 
       <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <summary className="cursor-pointer text-base font-semibold text-slate-950">Work orders prepared by the Command Center ({drafts.length} waiting)</summary>
@@ -704,13 +585,8 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           <tbody>{orders.map((o) => (
             <tr key={o.id} className="border-t border-slate-100">
               <td className="py-1.5 pr-3"><span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${o.urgency === "urgent" ? "bg-rose-600 text-white" : "bg-slate-100 text-slate-700"}`}>{o.urgency}</span></td>
-<<<<<<< ours
               <td className="py-1.5 pr-3 font-medium text-slate-900">{[o.address, o.borough].filter(Boolean).join(", ")}<span className="block text-xs font-normal text-slate-500">{o.kind} · {o.title}</span></td>
               <td className="py-1.5 pr-3 text-xs text-slate-600">{o.status === "assigned" && o.assignedName ? `assigned to ${o.assignedName}` : o.status}{o.decidedBy ? ` · ${o.decidedBy}` : ""}</td>
-=======
-              <td className="py-1.5 pr-3 font-medium text-slate-900">{o.address}, {o.borough}<span className="block text-xs font-normal text-slate-500">{o.kind} · {o.title}</span></td>
-              <td className="py-1.5 pr-3 text-xs text-slate-600">{o.status}{o.decidedBy ? ` · ${o.decidedBy}` : ""}</td>
->>>>>>> theirs
               <td className="py-1.5 text-xs text-slate-500">{when(o.createdAt)}</td>
             </tr>))}
           </tbody>
@@ -719,7 +595,6 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
       </details>
 
       <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-<<<<<<< ours
         <summary className="cursor-pointer text-base font-semibold text-slate-950">Reports written by the Command Center ({reports.length})</summary>
         <div className="mt-3 divide-y divide-slate-100">{reports.map((r) => (
           <div key={r.id} className="flex items-center gap-3 py-1.5 text-sm">
@@ -733,8 +608,6 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
 
       {!servicesOnly && (
       <details className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-=======
->>>>>>> theirs
         <summary className="cursor-pointer text-base font-semibold text-slate-950">
           Audit trail ({platform ? data.audit.rows : audit.length} entries) ·{" "}
           {data.audit.ok ? <span className="text-emerald-700">chain intact</span> : <span className="text-rose-700">chain BROKEN{data.audit.brokenAt ? ` at entry #${data.audit.brokenAt}` : ""} — a row was edited or deleted</span>}
@@ -750,10 +623,7 @@ export function CommandCenterPanel({ scope }: { scope: "platform" | "org" }) {
           </tbody>
         </table></div>
       </details>
-<<<<<<< ours
       )}
-=======
->>>>>>> theirs
     </div>
   );
 }

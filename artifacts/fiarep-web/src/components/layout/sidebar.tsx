@@ -28,11 +28,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-<<<<<<< ours
   Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap, MapPin, History, Mic , Droplets, DoorOpen } from "lucide-react";
-=======
-  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap, MapPin, History, Mic } from "lucide-react";
->>>>>>> theirs
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -57,13 +53,10 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     { name: "Translator", href: "/translator", icon: Languages, module: "translator" as const },
     { name: "HPD / DOB Lookup", href: "/property-lookup", icon: Building2, module: "property-lookup" as const },
     { name: "Violation Alerts", href: "/violation-alerts", icon: BellRing, module: "violation-alerts" as const },
-<<<<<<< ours
     // Smart Repair on the website: only once FIAREP switches it on for the company (Platform Control → Modules).
     ...(organizationModules["smartRepairSync"] === true ? [{ name: "Smart Repair", href: "/smart-repairs", icon: Wrench, module: "dashboard" as const }] : []),
     // Mold Compliance: for the office (administrators and management).
     ...(["administrator", "management"].includes(String(staff?.role)) ? [{ name: "Mold Compliance", href: "/mold-compliance", icon: Droplets, module: "mold-compliance" as const }] : []),
-=======
->>>>>>> theirs
     { name: "Command Center", href: "/command-center", icon: Mic, module: "command-center" as const },
     { name: "Company Forms", href: "/company-forms", icon: Lock, module: "company-forms" as const },
     { name: "Inspections", href: "/inspections", icon: ClipboardCheck, module: "inspections" as const },

@@ -70,7 +70,7 @@ export async function deskView(d: Desk) {
   if (!row) return { messages: desk, complaintNo: d.complaint_no, company: d.company_name, appointment: null };
   const chat = residentView(row, true);
   const after = chat.messages.findIndex((m) => m.id === d.seed_id);
-  return { messages: [...desk, ...chat.messages.slice(after + 1)], complaintNo: d.complaint_no, company: d.company_name, appointment: chat.appointment };
+  return { messages: [...desk, ...chat.messages.slice(after + 1)], complaintNo: d.complaint_no, company: d.company_name, address: s(row.state["address"], 300) || null, appointment: chat.appointment };
 }
 
 const officeActor = (tenantId: string): Actor => ({ id: "command-center", tenantId, name: "Command Center", role: "administrator", position: "", developments: [], sessionVersion: 0 });

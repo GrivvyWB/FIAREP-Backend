@@ -9,11 +9,7 @@ export type StaffModule =
   | "scope-writing" | "emergency" | "change-orders" | "scores" | "elevators"
   | "leave" | "hr" | "notifications" | "settings" | "shared-data"
    | "hud-inspections" | "trade-requests" | "my-jobs" | "complaint-dashboard" | "inspection-approvals" | "my-inspections"
-<<<<<<< ours
    | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log" | "command-center" | "baseline-report" | "mold-compliance" | "cover-site" | "door-visits";
-=======
-   | "community" | "translator" | "property-lookup" | "company-forms" | "violation-alerts" | "violation-alerts-command" | "measurement" | "site-checkins" | "audit-log" | "command-center";
->>>>>>> theirs
 
 export type OrganizationModules = Record<string, boolean>;
 
@@ -203,13 +199,8 @@ export function hasModuleAccess(
   // watched buildings. Opt-in per client (Platform -> Modules); staff only.
   if (module === "violation-alerts" || module === "violation-alerts-command") return !["vendor", "resident", "procurement"].includes(String(staff.role));
   // Command Center: a client's administrators (approve phones, add computers,
-<<<<<<< ours
   // switch actions). FIAREP's own is in Platform Control. Opt-in: OFF (and not in
   // the menu) until the platform owner switches it on for the client.
-=======
-  // switch actions). FIAREP's own is in Platform Control. On unless the platform
-  // owner switches it off for the client (Platform -> Modules).
->>>>>>> theirs
   if (module === "command-center") return staff.role === "administrator" && (staff.tenantId || "default") !== "default";
   // Site check-ins: where each member checked in and when they left and came back — for management.
   // Door Visits (recorded at residents' doors from the app): for the office.

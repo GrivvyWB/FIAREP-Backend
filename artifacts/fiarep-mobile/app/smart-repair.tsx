@@ -249,14 +249,17 @@ export default function SmartRepair() {
       if (signOff && ticket) await persist({ ticket, after: ev.uri, check: result, signOff: signOffForServer(signOff) } as never);
       let sent = '';
       if (result?.compliant && ticket) {
-        // Once complete it goes to management (and an emailed copy) per Platform Control.
+        // Once complete it goes to the administrator and management (and an emailed copy) per Platform Control.
         const summary = ticketText(ticket, fromComplaint) + '\n\nFIAREP SUMMARY CARD\n' + summaryCard(ticket, area, 'Repaired — verified')
           + '\n\nCOMPLETION VERIFICATION\nBefore: ' + result.before.join('; ') + '\nAfter: ' + result.after.join('; ')
           + (signOff ? '\n\nRESIDENT SIGN-OFF\n' + signOffLabel(signOff) + (signOff.status !== 'signed' && signOff.note ? ' — ' + signOff.note : '') + ' · ' + new Date(signOff.at).toLocaleString('en-US') : '');
         const out = await reportRepairComplete({ jobId, issue: ticket.issueFound, address: [address.trim(), area].filter(Boolean).join(', '), summary });
-        sent = [out.notified ? 'sent to management' : '', out.emailed ? 'emailed a copy' : ''].filter(Boolean).join(' and ');
+        sent = [out.notified ? 'sent to the administrator and management' : '', out.emailed ? 'emailed a copy' : ''].filter(Boolean).join(' and ');
+      } else if (ticket) {
+        // Not cleared: the office is told (no picture) so the member is sent back even if they never look at the phone.
+        await reportRepairComplete({ jobId, issue: ticket.issueFound, address: [address.trim(), area].filter(Boolean).join(', '), summary: '', cleared: false, reason: result?.summary || '' });
       }
-      setSaved(result?.compliant ? 'Repair verified — the job is marked complete' + (sent ? ', ' + sent : '') + '.' : 'After-repair photo added. FIAREP could not confirm the repair from the photo, so the job stays open.');
+      setSaved(result?.compliant ? 'Repair verified — the job is marked complete' + (sent ? ', ' + sent : '') + '.' : 'After-repair photo added. FIAREP could not confirm the repair from the photo, so the job stays open — take the after picture again. The administrator and management were told.');
     } catch (e: any) { setChecking(false); Alert.alert('After-repair photo', String(e?.message || e)); }
   }
 

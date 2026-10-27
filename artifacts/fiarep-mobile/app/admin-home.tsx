@@ -160,15 +160,9 @@ export default function AdminHome() {
         ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
         ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
         // Command Center: FIAREP's own administrators (FIAREP + the Mac), and each
-<<<<<<< ours
         // client's administrators (their own buildings and computers) once the
         // platform owner has switched it on for the client — hidden until then.
         ...(fiarepAdmin || (tenant !== 'default' && rawModules['command-center'] === true) ? [{ label: '🎙 Command Center', onPress: () => router.push('/command-center'), tone: 'solid' as const }] : []),
-=======
-        // client's administrators (their own buildings and computers) unless the
-        // platform owner switched it off for the client (Platform -> Modules).
-        ...(fiarepAdmin || (tenant !== 'default' && rawModules['command-center'] !== false) ? [{ label: '🎙 Command Center', onPress: () => router.push('/command-center'), tone: 'solid' as const }] : []),
->>>>>>> theirs
         { label: 'Sign out', onPress: onSignOut, tone: 'tint' },
       ],
     },

@@ -325,7 +325,7 @@ export async function deleteSavedRepair(id: string): Promise<void> {
 }
 
 /** A verified repair goes to management (and an emailed copy) per Platform Control. */
-export async function reportRepairComplete(input: { jobId: string | null; issue: string; address: string; summary: string }): Promise<{ notified: boolean; emailed: boolean }> {
+export async function reportRepairComplete(input: { jobId: string | null; issue: string; address: string; summary: string; cleared?: boolean; reason?: string }): Promise<{ notified: boolean; emailed: boolean }> {
   const domain = process.env.EXPO_PUBLIC_DOMAIN;
   const token = await getAccessToken();
   if (!domain || !token) return { notified: false, emailed: false };

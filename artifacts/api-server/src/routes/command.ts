@@ -9,11 +9,7 @@ import { randomBytes, randomUUID } from "node:crypto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
-<<<<<<< ours
 import { and, asc, desc, eq, gte, inArray, isNull, lt, ne } from "drizzle-orm";
-=======
-import { and, asc, desc, eq, inArray, isNull, ne } from "drizzle-orm";
->>>>>>> theirs
 import { db, organizations, staffAccounts } from "@workspace/db";
 import { requireAuth, requirePlatformOwner, actorFrom } from "../middlewares/auth";
 import { isFiarepAdmin } from "../lib/fiarepAdminNames";
@@ -24,7 +20,6 @@ import { commandActions, commandAgents, commandDevices, commandRuns, commandWork
 import { isEd25519Key, requestMessage, sha256hex, verifyEd25519 } from "../lib/command/crypto";
 import { commandAuditLog, recentAudit, verifyAuditChain } from "../lib/command/audit";
 import { ACTIONS, actionsFor, isPlatform } from "../lib/command/actions";
-<<<<<<< ours
 import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_GEMINI_MODEL, DEFAULT_MODEL, DEFAULT_QUICK_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
 import { callName, capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
@@ -33,11 +28,6 @@ import { recentConversations, residentAiOn, residentComplaint, residentView, res
 import { deskView, deskWrites, loadDesk, startDesk } from "../lib/command/residentDesk";
 import { entityRecords } from "@workspace/db";
 import { checkClientKey, checkKey, clientKeyStatus, geminiKeyStatus, KEY_ENV, keyFor, keyStatus, saveClientKey, saveKey, type ClientKeyName, type KeyName } from "../lib/command/keys";
-=======
-import { effectiveSwitches, getSwitches, moduleOn, saveSwitches, DEFAULT_MODEL, PLATFORM_TENANT, type CommandSwitches } from "../lib/command/switches";
-import { capProblem, confirmMessageFor, executeAction, publicAction, runCommand, runView, type ActionRow } from "../lib/command/engine";
-import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
->>>>>>> theirs
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
 import { relayUrl, syncRelayDevices } from "../lib/command/relay";
 import { getReport, listReports } from "../lib/command/scopes";
@@ -52,13 +42,8 @@ type Device = typeof commandDevices.$inferSelect;
 type Agent = typeof commandAgents.$inferSelect;
 
 // ── Who has a Command Center ───────────────────────────────────────────────
-<<<<<<< ours
 // FIAREP's own: Timothy / Emily Winn. A client's: its administrators, once the
 // platform owner has switched it on for that client (off for every client until then).
-=======
-// FIAREP's own: Timothy / Emily Winn. A client's: its administrators, while
-// the client is active and Platform -> Modules "Command Center" is on.
->>>>>>> theirs
 async function commandAdminProblem(actor: { tenantId: string; role: string; name: string }): Promise<string | null> {
   if (isPlatform(actor.tenantId)) return isFiarepAdmin(actor) ? null : "The Command Center is for FIAREP's administrators.";
   if (actor.role !== "administrator") return "The Command Center is for your company's administrators.";
@@ -130,15 +115,11 @@ router.post("/v1/command/devices/enroll", ...phone, async (req, res) => {
 router.get("/v1/command/devices/:id/status", ...phone, async (req, res) => {
   const [d] = await db.select().from(commandDevices).where(eq(commandDevices.id, String(req.params["id"]))).limit(1);
   if (!d || d.staffId !== actorFrom(res).id) { res.status(404).json({ error: "Unknown device" }); return; }
-<<<<<<< ours
   // What the Command Center says when it opens, to the person by name.
   // In their language; on a client's first use it asks which language they want. languageCode: what the phone listens for ("" = any).
   const lang = await getLanguage(d.tenantId, d.staffId);
   const greeting = greetingFor(lang, callName(d.staffName || actorFrom(res).name, isPlatform(d.tenantId)));
   res.json({ id: d.id, status: d.status, name: d.name, approveWhere: approveWhere(d.tenantId), platform: isPlatform(d.tenantId), greeting, language: lang?.language ?? null, languageCode: lang?.code ?? "" });
-=======
-  res.json({ id: d.id, status: d.status, name: d.name, approveWhere: approveWhere(d.tenantId), platform: isPlatform(d.tenantId) });
->>>>>>> theirs
 });
 
 router.post("/v1/command/runs", ...phone, requireCommandDevice, async (req, res) => {
@@ -217,7 +198,6 @@ router.get("/v1/command/work-orders", ...phone, requireCommandDevice, async (req
 
 router.get("/v1/command/audit", ...phone, requireCommandDevice, async (req, res) => {
   res.json(await recentAudit(Number(req.query["limit"]) || 50, actorFrom(res).tenantId));
-<<<<<<< ours
 });
 
 // ── Agent files: the agent and its installers, for any computer ────────────
@@ -245,35 +225,6 @@ router.get("/v1/command/agent-files/:file", (req, res) => {
   res.send(readFileSync(file, "utf8"));
 });
 
-=======
-});
-
-// ── Agent files: the agent and its installers, for any computer ────────────
-// Served from the API so a client installs with one line from their control
-// panel. Nothing secret is in them; the token comes with the install line.
-const AGENT_FILES: Record<string, string> = {
-  "agent.mjs": "text/javascript; charset=utf-8",
-  "install.sh": "text/x-shellscript; charset=utf-8",
-  "install.ps1": "text/plain; charset=utf-8",
-};
-function agentFile(name: string): string | null {
-  for (const base of ["./agent-files/", "../agent-files/", "../../fiarep-agent/", "../../../fiarep-agent/"]) {
-    const file = fileURLToPath(new URL(base + name, import.meta.url));
-    if (existsSync(file)) return file;
-  }
-  return null;
-}
-router.get("/v1/command/agent-files/:file", (req, res) => {
-  const name = String(req.params["file"]);
-  const type = AGENT_FILES[name];
-  const file = type ? agentFile(name) : null;
-  if (!type || !file) { res.status(404).json({ error: "Not found" }); return; }
-  res.setHeader("Content-Type", type);
-  res.setHeader("Cache-Control", "no-store");
-  res.send(readFileSync(file, "utf8"));
-});
-
->>>>>>> theirs
 /** The API address as the browser reached it (fiarep.com/api in production). */
 function publicApiBase(req: Request): string {
   const host = String(req.get("x-forwarded-host") || req.get("host") || "fiarep.com").split(",")[0]!.trim();
@@ -380,7 +331,6 @@ router.post("/v1/command/agent/jobs/:id/result", requireAgent, async (req, res) 
   res.json({ ok: true });
 });
 
-<<<<<<< ours
 // A file the computer sends to the phone (desktop_send_file): the raw bytes come up here,
 // the phone opens them from the private link in the result (24 hours).
 router.post("/v1/command/agent/files", rateLimit("command-agent-files", 30), requireAgent, async (req, res) => {
@@ -404,8 +354,6 @@ router.get("/v1/command/files/:id", async (req, res) => {
   res.send(f.data);
 });
 
-=======
->>>>>>> theirs
 // ── Shared by Platform Control and each client's control panel ─────────────
 const actionMeta = (tenantId: string) => actionsFor(tenantId).map((a) => ({ name: a.name, label: a.label, risk: a.risk, confirmDefault: a.confirmDefault, target: a.target }));
 const deviceMeta = (d: Device) => ({ id: d.id, name: d.name, staffName: d.staffName, status: d.status, confirmKey: d.confirmKey, createdAt: d.createdAt, approvedAt: d.approvedAt, approvedBy: d.approvedBy, lastUsedAt: d.lastUsedAt });
@@ -444,7 +392,6 @@ async function revokeAgent(tenantId: string | null, id: string, by: string) {
   return { id: row.id, status: row.status };
 }
 
-<<<<<<< ours
 /** Take a revoked computer off the list (only once revoked; its audit entries stay). */
 async function removeAgent(tenantId: string | null, id: string, by: string) {
   const [row] = await db.delete(commandAgents)
@@ -454,18 +401,12 @@ async function removeAgent(tenantId: string | null, id: string, by: string) {
   return { id: row.id, removed: true };
 }
 
-=======
->>>>>>> theirs
 // ── Platform Control ───────────────────────────────────────────────────────
 router.use("/v1/platform/command", requirePlatformOwner);
 const ownerName = (res: Response) => (res.locals["platformOwner"] as { name: string }).name;
 
 router.get("/v1/platform/command", async (req, res) => {
-<<<<<<< ours
   const [switches, devices, agents, chain, orgs, usage, clientDevices, clientAgents, gemKey, mapsKey, schedule] = await Promise.all([
-=======
-  const [switches, devices, agents, chain, orgs, usage, clientDevices, clientAgents] = await Promise.all([
->>>>>>> theirs
     getSwitches(PLATFORM_TENANT),
     db.select().from(commandDevices).where(eq(commandDevices.tenantId, PLATFORM_TENANT)).orderBy(desc(commandDevices.createdAt)),
     db.select().from(commandAgents).where(eq(commandAgents.tenantId, PLATFORM_TENANT)).orderBy(desc(commandAgents.createdAt)),
@@ -474,7 +415,6 @@ router.get("/v1/platform/command", async (req, res) => {
     monthUsage(),
     db.select({ tenantId: commandDevices.tenantId, status: commandDevices.status }).from(commandDevices).where(ne(commandDevices.tenantId, PLATFORM_TENANT)),
     db.select().from(commandAgents).where(and(ne(commandAgents.tenantId, PLATFORM_TENANT), eq(commandAgents.status, "active"))),
-<<<<<<< ours
     geminiKeyStatus(),
     keyStatus("googleMaps"),
     getSchedule(PLATFORM_TENANT),
@@ -482,12 +422,6 @@ router.get("/v1/platform/command", async (req, res) => {
   const usageOf = new Map(usage.map((u) => [u.tenantId, u]));
   res.json({
     switches, defaultModel: DEFAULT_MODEL, defaultQuickModel: DEFAULT_QUICK_MODEL, defaultGeminiModel: DEFAULT_GEMINI_MODEL, geminiKeyConfigured: gemKey.set, geminiKey: gemKey, mapsKey, schedule, prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
-=======
-  ]);
-  const usageOf = new Map(usage.map((u) => [u.tenantId, u]));
-  res.json({
-    switches, defaultModel: DEFAULT_MODEL, prices: MODEL_PRICES, relay: { url: relayUrl(), serverTokenSet: Boolean(process.env["RELAY_SERVER_TOKEN"]) }, claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]), voiceKeyConfigured: Boolean(process.env["OPENAI_API_KEY"]),
->>>>>>> theirs
     actions: actionMeta(PLATFORM_TENANT),
     devices: devices.map(deviceMeta),
     agents: agents.map(agentMeta),
@@ -495,19 +429,11 @@ router.get("/v1/platform/command", async (req, res) => {
     usage: usageOf.get(PLATFORM_TENANT) ?? null,
     clients: orgs.map((o) => {
       const modules = o.features && typeof o.features === "object" ? (o.features as Record<string, unknown>)["modules"] : null;
-<<<<<<< ours
       const on = !!(modules && typeof modules === "object" && (modules as Record<string, unknown>)["command-center"] === true);
       const mine = clientDevices.filter((d) => d.tenantId === o.id);
       const comps = clientAgents.filter((a) => a.tenantId === o.id);
       return {
         id: o.id, name: o.name, status: o.status, on, cap: switches.caps?.[o.id] ?? null, usage: usageOf.get(o.id) ?? null, paysOwn: switches.ownKeys?.[o.id] === true,
-=======
-      const on = !(modules && typeof modules === "object" && (modules as Record<string, unknown>)["command-center"] === false);
-      const mine = clientDevices.filter((d) => d.tenantId === o.id);
-      const comps = clientAgents.filter((a) => a.tenantId === o.id);
-      return {
-        id: o.id, name: o.name, status: o.status, on, cap: switches.caps?.[o.id] ?? null, usage: usageOf.get(o.id) ?? null,
->>>>>>> theirs
         phones: { active: mine.filter((d) => d.status === "active").length, pending: mine.filter((d) => d.status === "pending").length },
         computers: { total: comps.length, online: comps.filter((a) => agentMeta(a).online).length },
       };
@@ -524,7 +450,6 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     actions: "actions" in b ? bools(b["actions"], PLATFORM_TENANT) : before.actions,
     confirm: "confirm" in b ? bools(b["confirm"], PLATFORM_TENANT) : before.confirm,
     model: typeof b["model"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["model"].trim()) ? b["model"].trim() : before.model,
-<<<<<<< ours
     provider: b["provider"] === "gemini" || b["provider"] === "claude" ? b["provider"] : before.provider,
     residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
     autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
@@ -534,9 +459,6 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     quickModel: typeof b["quickModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["quickModel"].trim()) ? b["quickModel"].trim() : before.quickModel || DEFAULT_QUICK_MODEL,
     caps: before.caps ?? {},
     ownKeys: before.ownKeys ?? {},
-=======
-    caps: before.caps ?? {},
->>>>>>> theirs
   };
   await saveSwitches(next, PLATFORM_TENANT);
   await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "switches.changed", detail: { before, after: next } });
@@ -566,7 +488,6 @@ router.put("/v1/platform/command/clients/:id", async (req, res) => {
     await saveSwitches({ ...sw, caps }, PLATFORM_TENANT);
     changes["cap"] = cap;
   }
-<<<<<<< ours
   if (typeof b["paysOwn"] === "boolean") {
     // Who pays for this client's AI: FIAREP (false) or the client with its own keys (true).
     const sw = await getSwitches(PLATFORM_TENANT);
@@ -575,8 +496,6 @@ router.put("/v1/platform/command/clients/:id", async (req, res) => {
     await saveSwitches({ ...sw, ownKeys }, PLATFORM_TENANT);
     changes["paysOwn"] = b["paysOwn"];
   }
-=======
->>>>>>> theirs
   await commandAuditLog({ tenantId: id, actor: `owner:${ownerName(res)}`, event: "client.changed", detail: { client: org.name, ...changes } });
   res.json({ id, ...changes });
 });
@@ -599,7 +518,6 @@ router.post("/v1/platform/command/agents/:id/revoke", async (req, res) => {
   const out = await revokeAgent(null, String(req.params["id"]), `owner:${ownerName(res)}`);
   if (!out) { res.status(404).json({ error: "Unknown agent" }); return; }
   res.json(out);
-<<<<<<< ours
 });
 
 /** Set (or clear, with null) an API key from the Terminal: set-gemini-key.sh (gemini), set-maps-key.sh (maps). Checked with Google first; stored encrypted. */
@@ -631,8 +549,6 @@ router.put("/v1/platform/command/schedule", async (req, res) => {
   const next = await saveSchedule(PLATFORM_TENANT, (req.body ?? {}) as Record<string, unknown>);
   await commandAuditLog({ actor: `owner:${ownerName(res)}`, event: "schedule.changed", detail: next });
   res.json(next);
-=======
->>>>>>> theirs
 });
 
 router.post("/v1/platform/command/relay/sync", async (_req, res) => {
@@ -646,85 +562,6 @@ router.get("/v1/platform/command/audit", async (req, res) => {
 router.get("/v1/platform/command/work-orders", async (req, res) => {
   const status = str(req.query["status"], 20) || "any";
   res.json(await db.select().from(commandWorkOrders).where(workOrdersWhere(PLATFORM_TENANT, status)).orderBy(desc(commandWorkOrders.createdAt)).limit(500));
-<<<<<<< ours
-=======
-});
-
-// ── A client's own control panel (fiarep.com → Command Center) ─────────────
-// Its administrators approve its phones, add its computers, switch its actions
-// and read its audit trail. FIAREP's own is Platform Control, above.
-async function requireOrgCommand(_req: Request, res: Response, next: NextFunction) {
-  const actor = actorFrom(res);
-  if (isPlatform(actor.tenantId)) { res.status(400).json({ error: "FIAREP's own Command Center is in Platform Control." }); return; }
-  const problem = await commandAdminProblem(actor);
-  if (problem) { res.status(403).json({ error: problem }); return; }
-  next();
-}
-const org = [requireAuth, requireOrgCommand];
-const by = (res: Response) => actorFrom(res).name;
-
-router.get("/v1/org/command", ...org, async (req, res) => {
-  const tenantId = actorFrom(res).tenantId;
-  const [own, effective, platform, devices, agents, usage, chain, auditRows] = await Promise.all([
-    getSwitches(tenantId), effectiveSwitches(tenantId), getSwitches(PLATFORM_TENANT),
-    db.select().from(commandDevices).where(eq(commandDevices.tenantId, tenantId)).orderBy(desc(commandDevices.createdAt)),
-    db.select().from(commandAgents).where(eq(commandAgents.tenantId, tenantId)).orderBy(desc(commandAgents.createdAt)),
-    monthUsage(tenantId), verifyAuditChain(), recentAudit(1000, tenantId),
-  ]);
-  res.json({
-    switches: own, platformEnabled: effective.platformEnabled,
-    platformOff: Object.entries(platform.actions).filter(([, v]) => v === false).map(([k]) => k),
-    actions: actionMeta(tenantId), devices: devices.map(deviceMeta), agents: agents.map(agentMeta),
-    install: installLines(publicApiBase(req), null, devices.filter((d) => d.status === "active").map((d) => d.confirmKey)),
-    usage: usage[0] ?? null, cap: platform.caps?.[tenantId] ?? null, capProblem: await capProblem(tenantId),
-    claudeKeyConfigured: Boolean(process.env["ANTHROPIC_API_KEY"]),
-    audit: { ok: chain.ok, rows: auditRows.length },
-  });
-});
-
-router.put("/v1/org/command/switches", ...org, async (req, res) => {
-  const tenantId = actorFrom(res).tenantId;
-  const b = (req.body ?? {}) as Record<string, unknown>;
-  const before = await getSwitches(tenantId);
-  const next: CommandSwitches = {
-    enabled: typeof b["enabled"] === "boolean" ? b["enabled"] : before.enabled,
-    actions: "actions" in b ? bools(b["actions"], tenantId) : before.actions,
-    confirm: "confirm" in b ? bools(b["confirm"], tenantId) : before.confirm,
-    model: before.model, // the Claude model is FIAREP's choice (Platform Control)
-  };
-  await saveSwitches(next, tenantId);
-  await commandAuditLog({ tenantId, actor: by(res), event: "switches.changed", detail: { before, after: next } });
-  res.json(next);
-});
-
-router.post("/v1/org/command/devices/:id/:decision", ...org, async (req, res) => {
-  const decision = String(req.params["decision"]);
-  if (decision !== "approve" && decision !== "revoke") { res.status(404).json({ error: "Not found" }); return; }
-  const out = await decideDevice(actorFrom(res).tenantId, String(req.params["id"]), decision, by(res));
-  if (!out) { res.status(404).json({ error: decision === "approve" ? "No phone waiting with that id" : "Unknown phone" }); return; }
-  res.json(out);
-});
-
-router.post("/v1/org/command/agents", ...org, async (req, res) => {
-  const out = await createAgent(req, actorFrom(res).tenantId, by(res));
-  if ("error" in out) { res.status(400).json(out); return; }
-  res.status(201).json(out);
-});
-
-router.post("/v1/org/command/agents/:id/revoke", ...org, async (req, res) => {
-  const out = await revokeAgent(actorFrom(res).tenantId, String(req.params["id"]), by(res));
-  if (!out) { res.status(404).json({ error: "Unknown computer" }); return; }
-  res.json(out);
-});
-
-router.get("/v1/org/command/audit", ...org, async (req, res) => {
-  res.json({ rows: await recentAudit(Number(req.query["limit"]) || 200, actorFrom(res).tenantId) });
-});
-
-router.get("/v1/org/command/work-orders", ...org, async (req, res) => {
-  const status = str(req.query["status"], 20) || "any";
-  res.json(await db.select().from(commandWorkOrders).where(workOrdersWhere(actorFrom(res).tenantId, status)).orderBy(desc(commandWorkOrders.createdAt)).limit(500));
->>>>>>> theirs
 });
 
 // ── A client's own control panel (fiarep.com → Command Center) ─────────────

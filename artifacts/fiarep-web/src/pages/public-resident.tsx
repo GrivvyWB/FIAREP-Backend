@@ -57,6 +57,9 @@ export default function PublicResident() {
     try { const v = JSON.parse(localStorage.getItem('fiarep_resident_code') || 'null'); return v && /^\d{6}$/.test(String(v.code || '')) ? { code: String(v.code), organizationName: String(v.organizationName || '') } : null; } catch { return null; }
   };
   const [savedCode, setSavedCode] = useState<{ code: string; organizationName: string } | null>(readSavedCode);
+  // The resident's building, once they've reported from this browser: it heads the page.
+  const [building, setBuilding] = useState(() => { try { return localStorage.getItem('fiarep_resident_building') || ''; } catch { return ''; } });
+  const keepBuilding = (address: string) => { const a = address.trim(); if (!a) return; try { localStorage.setItem('fiarep_resident_building', a); } catch { /* private mode */ } setBuilding(a); };
   const [codeEntry, setCodeEntry] = useState('');
   const [codeBusy, setCodeBusy] = useState(false);
   const [changingCode, setChangingCode] = useState(false);
@@ -217,6 +220,7 @@ export default function PublicResident() {
         }
         
         sessionStorage.setItem('fiarep_resident_complaint', returnedComplaintNo);
+        keepBuilding(String((res.state as any)?.address || values.address || ''));
         sessionStorage.setItem('fiarep_resident_token', res.statusToken);
         rememberResidentToken(returnedComplaintNo, res.statusToken);
         // Signed in: the website is now locked to this resident.
@@ -259,9 +263,11 @@ export default function PublicResident() {
              </button>
           )}
           <div className="flex justify-center mb-6">
-            <div className="font-bold text-3xl tracking-tight">
-              FIA<span className="text-[#F5B301]">REP</span> Resident
-            </div>
+            {(building || savedCode?.organizationName) && (
+              <div className="font-bold text-3xl tracking-tight text-center" data-testid="text-resident-building">
+                {building || savedCode?.organizationName}
+              </div>
+            )}
           </div>
           {locked && (
             <div className="flex justify-end -mt-4">
@@ -346,7 +352,7 @@ export default function PublicResident() {
               <CardTitle>{savedCode?.organizationName || 'Talk to us'}</CardTitle>
               <CardDescription>Tell us what's going on — we'll take it from there.</CardDescription>
             </CardHeader>
-            <CardContent><ResidentDesk companyCode={savedCode?.code} /></CardContent>
+            <CardContent><ResidentDesk companyCode={savedCode?.code} onBuilding={keepBuilding} /></CardContent>
           </Card>
         )}
 
