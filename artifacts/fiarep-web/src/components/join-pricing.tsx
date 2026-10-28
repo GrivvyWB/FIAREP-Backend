@@ -23,7 +23,8 @@ const AGENCIES = [
   { name: "OATH / ECB — hearings", lines: ["A missed summons defaults: Class 1 $12,500, up to $25,000 per summons, plus up to $1,000 per day uncorrected.", "We file motions to vacate default judgments and represent you at the hearing.", "$300 – $950 per hearing appearance."] },
 ];
 
-const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+// Whole dollars, or cents when the rate has them ($2.50 stays $2.50, not $3).
+const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: Number.isInteger(n) ? 0 : 2 }).format(n);
 
 export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean; pending: boolean; onUnlock: (code: string) => Promise<void> }) {
   const [code, setCode] = useState("");
