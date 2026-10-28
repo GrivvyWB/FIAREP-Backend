@@ -38,7 +38,7 @@ export const KIND_LABEL: Record<ContractKind, string> = {
   "agency-small": `Housing authority / agency — small portfolio (under ${PLAN.agencyMinUnits.toLocaleString()} units), flat monthly fee`,
 };
 
-const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
+const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: Number.isInteger(n) ? 0 : 2, maximumFractionDigits: Number.isInteger(n) ? 0 : 2 }).format(n);
 const esc = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const longDate = (iso: string) => (iso ? new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "____________");
 
@@ -51,12 +51,12 @@ export function monthlyFee(c: ContractInput): { monthly: number; basis: string; 
     // set in Platform Control prices nothing rather than borrowing another band's figures.
     if (b.planRate == null) return { monthly: 0, basis: `${c.units.toLocaleString()} units — the FIAREP plan rate for the ${b.label} band is not set yet (Platform Control → Pricing ladder)`, setup: 0 };
     const rate = b.planRate, min = b.planMin ?? 0;
-    return { monthly: Math.max(c.units * rate, min), basis: `${c.units.toLocaleString()} units × $${rate} (${b.label} units band; minimum ${money(min)})`, setup: 0 };
+    return { monthly: Math.max(c.units * rate, min), basis: `${c.units.toLocaleString()} units × ${money(rate)} (${b.label} units band; minimum ${money(min)})`, setup: 0 };
   }
   if (c.kind === "platform") {
-    if (b.platformRate == null) return { monthly: 0, basis: `${c.units.toLocaleString()} units — the platform rate for the ${b.label} band is not set yet (Platform Control → Pricing ladder)`, setup: PLAN.platform.setup };
+    if (b.platformRate == null) return { monthly: 0, basis: `${c.units.toLocaleString()} units — the platform rate for the ${b.label} band is not set yet (Platform Control → Pricing ladder)`, setup: c.termMonths >= 12 ? 0 : PLAN.platform.setup };
     const rate = b.platformRate, min = b.platformMin ?? 0;
-    return { monthly: Math.max(c.units * rate, min), basis: `${c.units.toLocaleString()} units × $${rate} (${b.label} units band; minimum ${money(min)})`, setup: PLAN.platform.setup };
+    return { monthly: Math.max(c.units * rate, min), basis: `${c.units.toLocaleString()} units × ${money(rate)} (${b.label} units band; minimum ${money(min)})`, setup: c.termMonths >= 12 ? 0 : PLAN.platform.setup };
   }
   const tier = c.kind === "agency-small" ? PLAN.agencySmall : PLAN.agencyMajor;
   return { monthly: c.flatFee, basis: `flat fee for ${c.units.toLocaleString()} units across ${c.buildings.length} development${c.buildings.length === 1 ? "" : "s"}; $${tier.perUnit} per unit, minimum ${money(tier.minimum)}`, setup: 0 };
@@ -96,12 +96,14 @@ export function buildContractHtml(c: ContractInput): string {
   const rows = c.scope.map((l) => `<tr><td>${esc(l.label)}</td><td class="r">${l.qty.toLocaleString()}</td><td>${esc(l.unit)}</td><td class="r">${money(l.price)}</td><td class="r">${money(l.qty * l.price)}</td></tr>`).join("");
   const bld = c.buildings.map((b) => `<tr><td>${esc(b.name)}</td><td>${esc(b.address)}</td><td class="r">${b.units.toLocaleString()}</td></tr>`).join("");
   const feeRows = FEES.map(([what, rate, detail]) => `<tr><td>${esc(what)}<div class="muted">${esc(detail)}</div></td><td class="r nowrap">${esc(rate)}</td></tr>`).join("");
+  // A year or longer: paid 12 months up front, Client pays 10 (2 months free).
+  const prepay = c.termMonths >= 12 && fee.monthly > 0 ? ` <b>Paid a year in advance:</b> if Client pays the first 12 months up front, Client pays 10 months' fees, ${money(fee.monthly * 10)} (2 months free).` : "";
   const planClause = c.kind === "work"
     ? `There is no monthly fee and no platform subscription under this Agreement. Client pays FIAREP for the work in Section 4 at the prices stated there — expediting at the Section 5 rates with no plan discount, repairs and professional work at the unit prices listed — totalling <b>${money(grandTotal(c))}</b>. Half is due on signing; the balance is invoiced as the work is completed and certified.`
     : c.kind === "fiarep"
-    ? `Client pays FIAREP a monthly service fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}). The fee covers the services in Section 2 and the work and appliances in Section 3A. Work beyond the included labor pool is billed at the Section 5 rates: HPD cures and OATH hearings at $400 instead of $600; every other rate as listed.${c.pilot ? ` <b>Pilot:</b> the first ${PLAN.fiarep.pilotDays} days are billed at half the monthly fee (${money(Math.round(fee.monthly / 2))}) and either party may end this Agreement during the pilot on written notice.` : ""}`
+    ? `Client pays FIAREP a monthly service fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}). The fee covers the services in Section 2 and the work and appliances in Section 3A. Work beyond the included labor pool is billed at the Section 5 rates: HPD cures and OATH hearings at $400 instead of $600; every other rate as listed.${prepay}${c.pilot ? ` <b>Pilot:</b> the first ${PLAN.fiarep.pilotDays} days are billed at half the monthly fee (${money(Math.round(fee.monthly / 2))}) and either party may end this Agreement during the pilot on written notice.` : ""}`
     : c.kind === "platform"
-      ? `Client pays FIAREP a monthly platform fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}) plus a one-time setup and staff-training fee of <b>${money(fee.setup)}</b>. Violation removal, expediting and hearings are available at the Section 5 rates: HPD cures at $400 per apartment, everything else as listed.`
+      ? `Client pays FIAREP a monthly platform fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)})${fee.setup ? ` plus a one-time setup and staff-training fee of <b>${money(fee.setup)}</b>` : `; the one-time setup and staff-training fee (${money(PLAN.platform.setup)}) is waived for this annual Agreement`}.${prepay} Violation removal, expediting and hearings are available at the Section 5 rates: HPD cures at $400 per apartment, everything else as listed.`
       : `Client pays FIAREP a flat monthly fee of <b>${money(fee.monthly)}</b> (${esc(fee.basis)}), covering the services in Section 2 for every development listed in Section 1. The fee covers the services in Section 2 and the work and appliances in Section 3A. Work beyond the included labor pool is billed at the Section 5 rates: HPD cures and OATH hearings at $400 instead of $600; every other rate as listed.`;
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(BRAND.name)} Service Agreement ${esc(c.number)}</title>
 <style>

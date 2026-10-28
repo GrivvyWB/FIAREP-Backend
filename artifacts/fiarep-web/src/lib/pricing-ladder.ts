@@ -31,7 +31,7 @@ export function bandHours(b: Band): number | null { return b.hoursPerUnit != nul
 export const bandLabel = (from: number, to: number) => `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")}`;
 // Appliances, parts, materials and delivery: bought on the client's approval, reimbursed at cost plus this handling charge.
 export const MATERIALS_HANDLING = 0.1;
-export const SETUP_FEE = 1500;          // one time, waived on any annual contract of 1,000+ units
+export const SETUP_FEE = 1500;          // one time, waived on any annual contract (12 months or longer)
 
 export function bandFor(units: number, bands: Band[] = BANDS): Band {
   return bands.find((b) => units >= b.from && units <= b.to) || (units < bands[0]!.from ? bands[0]! : bands[bands.length - 1]!);

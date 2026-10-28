@@ -27,7 +27,7 @@ export async function quotePlans(units: number) {
   const notSet = (what: string) => `The ${what} rate for the ${band.label} units band isn't set yet (Platform Control → Pricing ladder).`;
   const platform = band.platformRate == null ? { notSet: notSet("platform") } : {
     ratePerUnit: band.platformRate, minimum: band.platformMin ?? 0, monthly: money(Math.max(u * band.platformRate, band.platformMin ?? 0)),
-    setupFee: PLAN.platform.setup, setupNote: `Setup waived on an annual contract of 1,000+ units (setup fee $${SETUP_FEE}).`,
+    setupFee: PLAN.platform.setup, setupNote: `Setup ($${SETUP_FEE}) waived on any annual contract; pay a year up front and get 2 months free.`,
   };
   const hours = bandHours(band);
   const plan = band.planRate == null ? { notSet: notSet("FIAREP plan") } : {
