@@ -412,6 +412,41 @@ router.post("/v1/public/resident-reports/:complaintNo/photos/confirm", async (re
   res.status(201).json({ id: photo.id, contentType: photo.contentType });
 });
 
+// ── The resident line's photo (lib/command/residentDesk.ts): once the complaint is filed in the
+// chat, the resident takes a picture and it goes onto that complaint like any resident photo. ──
+export async function deskPhotoUpload(tenantId: string, reportId: string, body: Record<string, unknown>) {
+  const size = Number(body["size"]);
+  const name = String(body["name"] ?? "photo.jpg").trim().slice(0, 200) || "photo.jpg";
+  const raw = String(body["contentType"] ?? "").toLowerCase();
+  const contentType = residentPhotoTypes.has(raw) ? raw : "image/jpeg";
+  if (!Number.isInteger(size) || size <= 0 || size > MAX_RESIDENT_PHOTO_BYTES) return null;
+  const result = await fileStorage.createUpload(tenantId, `public-resident:${reportId}`, { kind: "resident-report-photo", name, size, contentType });
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  await db.insert(residentPhotoUploadGrants).values({ id: result.file.id, tenantId, reportId, objectPath: result.file.objectPath, name, contentType, size, expiresAt });
+  return { ...result, grantId: result.file.id, expiresAt };
+}
+export async function deskPhotoConfirm(tenantId: string, reportId: string, grantId: string, objectPath: string) {
+  if (!grantId || objectPath.includes("..")) return null;
+  const photo = await db.transaction(async (tx) => {
+    const now = new Date();
+    const [grant] = await tx.select().from(residentPhotoUploadGrants).where(and(
+      eq(residentPhotoUploadGrants.id, grantId), eq(residentPhotoUploadGrants.tenantId, tenantId), eq(residentPhotoUploadGrants.reportId, reportId),
+      eq(residentPhotoUploadGrants.objectPath, objectPath), gt(residentPhotoUploadGrants.expiresAt, now), isNull(residentPhotoUploadGrants.consumedAt),
+    )).limit(1);
+    if (!grant) return null;
+    const [claimed] = await tx.update(residentPhotoUploadGrants).set({ consumedAt: now, updatedAt: now })
+      .where(and(eq(residentPhotoUploadGrants.id, grant.id), isNull(residentPhotoUploadGrants.consumedAt))).returning();
+    if (!claimed) return null;
+    const [created] = await tx.insert(residentReportPhotos).values({ id: randomUUID(), tenantId: grant.tenantId, reportId: grant.reportId, objectPath: grant.objectPath, name: grant.name, size: grant.size, contentType: grant.contentType }).onConflictDoNothing().returning();
+    return created ?? null;
+  });
+  if (!photo) return null;
+  // The same as any resident photo: read for a violation code, and Smart Repair drafts the work order.
+  void classifyResidentPhotoAndSave(tenantId, photo.id);
+  void maybeAutoWorkOrder(tenantId, photo.reportId).catch(() => undefined);
+  return photo;
+}
+
 router.use("/v1/resident-report-photos", requireAuth);
 function canReadReport(actor: ReturnType<typeof actorFrom>, report: typeof entityRecords.$inferSelect): boolean {
   const role = actor.role.toLowerCase();

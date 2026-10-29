@@ -25,7 +25,8 @@ import { callName, capProblem, confirmMessageFor, executeAction, publicAction, r
 import { monthUsage, MODEL_PRICES } from "../lib/command/usage";
 import { bookingView, getSchedule, saveSchedule, staffBookings } from "../lib/command/scheduling";
 import { recentConversations, residentAiOn, residentComplaint, residentView, residentWrites, staffWrites } from "../lib/command/residentChat";
-import { deskView, deskWrites, loadDesk, startDesk } from "../lib/command/residentDesk";
+import { deskPhotoSent, deskView, deskWrites, loadDesk, startDesk } from "../lib/command/residentDesk";
+import { deskPhotoConfirm, deskPhotoUpload } from "./publicAccess";
 import { entityRecords } from "@workspace/db";
 import { checkClientKey, checkKey, clientKeyStatus, geminiKeyStatus, KEY_ENV, keyFor, keyStatus, saveClientKey, saveKey, type ClientKeyName, type KeyName } from "../lib/command/keys";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
@@ -758,6 +759,26 @@ router.post("/v1/public/resident-desk/:id/messages", rateLimit("resident-desk", 
   const text = str((req.body as Record<string, unknown> | undefined)?.["text"], 2000);
   if (!text) { res.status(400).json({ error: "Write a message." }); return; }
   res.json(await deskWrites(d, text));
+});
+
+// The resident's photo of the problem, onto the complaint filed in this conversation.
+router.post("/v1/public/resident-desk/:id/photo/upload-url", rateLimit("resident-desk-photo", 20), async (req, res) => {
+  const d = await deskAuth(req);
+  if (!d) { res.status(404).json({ error: "Conversation not found" }); return; }
+  if (!d.complaint_id || !d.tenant_id) { res.status(409).json({ error: "Tell us what's wrong first, then send the photo." }); return; }
+  try {
+    const up = await deskPhotoUpload(d.tenant_id, d.complaint_id, (req.body ?? {}) as Record<string, unknown>);
+    if (!up) { res.status(400).json({ error: "That photo is too large (10 MB at most)." }); return; }
+    res.json(up);
+  } catch { res.status(503).json({ error: "Photos can't be sent right now. Try again in a minute." }); }
+});
+router.post("/v1/public/resident-desk/:id/photo/confirm", rateLimit("resident-desk-photo", 20), async (req, res) => {
+  const d = await deskAuth(req);
+  if (!d || !d.complaint_id || !d.tenant_id) { res.status(404).json({ error: "Conversation not found" }); return; }
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const photo = await deskPhotoConfirm(d.tenant_id, d.complaint_id, str(b["grantId"], 80), str(b["objectPath"], 400));
+  if (!photo) { res.status(409).json({ error: "The photo didn't arrive. Try again." }); return; }
+  res.json(await deskPhotoSent(d));
 });
 
 // Staff: conversations on the Command Center page (FIAREP's own, or a client's).

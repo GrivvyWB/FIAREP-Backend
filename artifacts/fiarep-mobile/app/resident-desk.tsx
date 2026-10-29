@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, TextInput, View } from 'react-native';
+import * as FileSystem from 'expo-file-system/legacy';
+import { Ionicons } from '@expo/vector-icons';
+import { NO_TRANSLATE } from '../lib/screen-language';
+import { photoUri, pickPhoto, takePhoto } from '../lib/photos';
 import { Stack, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { customFetch } from '@workspace/api-client-react';
@@ -46,6 +50,34 @@ export default function ResidentDesk() {
     catch (e: any) { setError(e?.data?.error || 'Could not send. Try again.'); setText(t); }
     finally { setSending(false); }
   }
+  // The photo of the problem: once the complaint is filed, it goes onto it (Smart Repair reads it for the workers).
+  const [photoBusy, setPhotoBusy] = useState(false);
+  async function sendPhoto(source: 'camera' | 'library') {
+    if (!desk) return;
+    setError('');
+    let stored: string | null = null;
+    try { stored = source === 'camera' ? await takePhoto() : await pickPhoto(); } catch (e: any) { setError(e?.message || 'Could not open the camera.'); return; }
+    if (!stored) return;
+    setPhotoBusy(true);
+    try {
+      const uri = photoUri(stored);
+      const info = await FileSystem.getInfoAsync(uri);
+      const size = info.exists && 'size' in info ? info.size : 0;
+      const headers = { 'Content-Type': 'application/json', 'x-desk-token': desk.token };
+      const up = await customFetch<{ uploadUrl: string; grantId: string; file: { objectPath: string } }>(`/api/v1/public/resident-desk/${desk.id}/photo/upload-url`, { method: 'POST', responseType: 'json', headers, body: JSON.stringify({ name: stored.split('/').pop() || 'photo.jpg', size, contentType: 'image/jpeg' }) } as never);
+      const put = await FileSystem.uploadAsync(up.uploadUrl, uri, { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, mimeType: 'image/jpeg' });
+      if (put.status < 200 || put.status >= 300) throw new Error('The photo did not upload. Try again.');
+      setView(await customFetch<View_>(`/api/v1/public/resident-desk/${desk.id}/photo/confirm`, { method: 'POST', responseType: 'json', headers, body: JSON.stringify({ grantId: up.grantId, objectPath: up.file.objectPath }) } as never));
+    } catch (e: any) { setError(e?.data?.error || e?.message || 'Could not send the photo. Try again.'); }
+    finally { setPhotoBusy(false); }
+  }
+  function photoMenu() {
+    Alert.alert('Send a photo', 'A picture of the problem goes to management with your complaint.', [
+      { text: 'Take a photo', onPress: () => void sendPhoto('camera') },
+      { text: 'Choose a photo', onPress: () => void sendPhoto('library') },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
+  }
   async function newConversation() { await AsyncStorage.removeItem(KEY).catch(() => undefined); setDesk(null); setView(null); void start(); }
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={90}>
@@ -58,14 +90,20 @@ export default function ResidentDesk() {
           {view?.messages.map((m) => (
             <View key={m.id} style={{ alignItems: m.from === 'you' ? 'flex-end' : 'flex-start' }}>
               <View style={{ maxWidth: '85%', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: m.from === 'you' ? ACCENT : '#fff', borderWidth: m.from === 'you' ? 0 : 1, borderColor: '#e5e7eb' }}>
-                <Text style={{ color: m.from === 'you' ? '#fff' : '#111', fontSize: 15 }}>{m.text}</Text>
+                <Text nativeID={NO_TRANSLATE} style={{ color: m.from === 'you' ? '#fff' : '#111', fontSize: 15 }}>{m.text}</Text>
               </View>
             </View>
           ))}
           {sending && <Text style={{ color: '#666', fontSize: 12 }}>Writing…</Text>}
         </ScrollView>
         {!!error && <Text style={{ color: '#c00', fontSize: 12 }}>{error}</Text>}
-        <View style={{ flexDirection: 'row', gap: 8 }}>
+        <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+          {!!view?.complaintNo && (
+            <Pressable onPress={photoMenu} disabled={photoBusy} accessibilityRole="button" accessibilityLabel="Send a photo"
+              style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center', opacity: photoBusy ? 0.6 : 1 }}>
+              {photoBusy ? <ActivityIndicator color="#fff" /> : <Ionicons name="camera" size={24} color="#fff" />}
+            </Pressable>
+          )}
           <TextInput style={[ui.input, { flex: 1 }]} value={text} onChangeText={setText} placeholder="Write a message" editable={!sending && !!view} onSubmitEditing={() => void send()} returnKeyType="send" />
           <Pressable style={[ui.btn, { paddingHorizontal: 16 }, (!text.trim() || sending) && { opacity: 0.5 }]} disabled={!text.trim() || sending} onPress={() => void send()}><Text style={ui.btnText}>Send</Text></Pressable>
         </View>

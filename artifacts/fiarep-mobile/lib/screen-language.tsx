@@ -17,6 +17,8 @@ import { customFetch } from '@workspace/api-client-react';
 export type ScreenLanguage = { code: string; name: string; rtl: boolean };
 
 const KEY = 'fiarep.language';
+/** Put nativeID={NO_TRANSLATE} on a <Text> whose words are somebody's own (a chat message): it is never translated. */
+export const NO_TRANSLATE = 'notranslate';
 const DICT_KEY = (lang: string) => `fiarep.language.dict.${lang}`;
 
 let lang = 'en';
@@ -105,7 +107,8 @@ export function installScreenLanguage() {
     const BaseInput = rn['TextInput'] as unknown as React.ComponentType<Record<string, unknown>> & Record<string, unknown>;
     const TText = (props: Record<string, unknown>) => {
       useSyncExternalStore(subscribe, snapshot);
-      if (lang === 'en') return createElement(BaseText, props);
+      // nativeID="notranslate": people's own words (chat messages) stay exactly as written.
+      if (lang === 'en' || props['nativeID'] === NO_TRANSLATE) return createElement(BaseText, props);
       return createElement(BaseText, { ...props, children: trChildren(props['children']) as never });
     };
     const TInput = forwardRef((props: Record<string, unknown>, ref) => {
