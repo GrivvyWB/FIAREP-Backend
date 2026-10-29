@@ -34,6 +34,7 @@ import crewRouter from "./crew";
 import messagesRouter from "./messages";
 import quickQuoteRouter from "./quickQuote";
 import commandRouter from "./command";
+import publicLanguageRouter from "./publicLanguage";
 
 const router: IRouter = Router();
 
@@ -59,6 +60,8 @@ router.use(messagesRouter);
 router.use(quickQuoteRouter);
 // Before the staff routers: its public DOF lookup must not hit their requireAuth.
 router.use(propertyRouter);
+// Before the staff routers: each person's language and the residents' Translator need no sign-in.
+router.use(publicLanguageRouter);
 router.use(companyFormsRouter);
 router.use(nychaRouter);
 router.use(coverageRouter);
