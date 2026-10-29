@@ -24,6 +24,8 @@ import {
 import { researchOrganization } from "../lib/organizationResearch";
 import { dofBuildingsByOwner, lookupBuildingUnits } from "../lib/dofCharges";
 import { hasCityData, isUsCountry, normalizeAddress, regionValue } from "../lib/jurisdiction";
+import { COUNTRIES } from "../lib/countries";
+import { countryCode, countryOn } from "../lib/countrySwitches";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
@@ -129,6 +131,10 @@ router.post("/v1/platform/organizations/:organizationId/properties", async (req,
   try {
     const body = req.body as Record<string, unknown>;
     const input = propertyInput(body);
+    // Platform Control → Countries: a building only in a country FIAREP is switched on in.
+    const cc = countryCode(input.country);
+    if (!cc) { res.status(400).json({ error: `"${input.country}" isn't a country FIAREP knows. Type the country's name, e.g. Canada.` }); return; }
+    if (!(await countryOn(cc))) { res.status(403).json({ error: `${COUNTRIES[cc] || input.country} is off. Switch it on in Platform Control → Countries first.` }); return; }
     // The building's unit count comes from the City's record for the address
     // (DOF roll, else PLUTO). A typed "units" is accepted only when the City has
     // no figure, so a client cannot register a 166-unit building as 20 units.

@@ -10,6 +10,7 @@
 // No key and no bill for any of them. Each answer is kept for an hour so the same
 // address is not asked twice.
 import { stateCode, US_STATES } from "./jurisdiction";
+import { countrySwitches } from "./countrySwitches";
 
 const NYC_SEARCH = process.env["FIAREP_GEOSEARCH_URL"] || "https://geosearch.planninglabs.nyc/v2/search";
 const NYC_AUTOCOMPLETE = NYC_SEARCH.replace(/\/v2\/.*$/, "/v2/autocomplete");
@@ -154,7 +155,12 @@ function merge(lists: Place[][]): Place[] {
 }
 
 /** Address suggestions while somebody types, for any country. */
-export function suggestAddresses(q: string): Promise<Place[]> {
+export async function suggestAddresses(q: string): Promise<Place[]> {
+  // Only countries switched on in Platform Control → Countries.
+  const on = await countrySwitches().catch(() => ({ US: true } as Record<string, boolean>));
+  return (await suggestAll(q)).filter((p) => on[(p.countryCode || "US").toUpperCase()] === true);
+}
+function suggestAll(q: string): Promise<Place[]> {
   const text = q.trim().slice(0, 200);
   if (text.length < 3) return Promise.resolve([]);
   return cached(`suggest:${text.toLowerCase()}`, async () => {
@@ -167,7 +173,13 @@ export function suggestAddresses(q: string): Promise<Place[]> {
 }
 
 /** The best single match for an address, anywhere (null when nothing matches). */
-export function geocodePlace(address: string): Promise<Place | null> {
+export async function geocodePlace(address: string): Promise<Place | null> {
+  const p = await geocodeAny(address);
+  if (!p) return null;
+  const on = await countrySwitches().catch(() => ({ US: true } as Record<string, boolean>));
+  return on[(p.countryCode || "US").toUpperCase()] === true ? p : null;
+}
+function geocodeAny(address: string): Promise<Place | null> {
   const text = address.trim().slice(0, 200);
   if (text.length < 3) return Promise.resolve(null);
   return cached(`one:${text.toLowerCase()}`, async () => {

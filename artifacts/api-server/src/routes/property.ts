@@ -8,6 +8,8 @@ import { lookupNycPropertyData } from "../lib/nycProperty";
 import { lookupDofCharges } from "../lib/dofCharges";
 import { rateLimit } from "../lib/rateLimit";
 import { geocodePlace, suggestAddresses } from "../lib/geocode";
+import { COUNTRIES } from "../lib/countries";
+import { countrySwitches, setCountry } from "../lib/countrySwitches";
 import { CITY_SOURCES, citySwitches, lookupCityRecords, setCitySwitch, stateStatus, type CitySourceId } from "../lib/cityRecords";
 
 const router: IRouter = Router();
@@ -111,6 +113,18 @@ router.put("/v1/platform/city-records/:id", requirePlatformOwner, async (req, re
 router.post("/v1/platform/city-records/test", requirePlatformOwner, async (req, res): Promise<void> => {
   const address = String((req.body as { address?: unknown })?.address ?? "").trim().slice(0, 200);
   try { res.json(await lookupCityRecords(address)); } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "Lookup failed" }); }
+});
+
+// Platform Control → Countries: every country with its On / Off button.
+router.get("/v1/platform/countries", requirePlatformOwner, async (_req, res): Promise<void> => {
+  const on = await countrySwitches();
+  res.json(Object.entries(COUNTRIES).map(([code, name]) => ({ code, name, on: on[code] === true })).sort((a, b) => a.name.localeCompare(b.name)));
+});
+router.put("/v1/platform/countries/:code", requirePlatformOwner, async (req, res): Promise<void> => {
+  try {
+    const on = await setCountry(String(req.params["code"]), (req.body as { on?: unknown })?.on === true);
+    res.json(Object.entries(COUNTRIES).map(([code, name]) => ({ code, name, on: on[code] === true })).sort((a, b) => a.name.localeCompare(b.name)));
+  } catch (error) { res.status((error as { status?: number }).status || 500).json({ error: error instanceof Error ? error.message : "Could not save" }); }
 });
 
 export default router;
