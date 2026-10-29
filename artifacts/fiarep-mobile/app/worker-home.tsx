@@ -13,7 +13,7 @@ import {
   displayStaffPosition,
   listManpowerRequests,
 } from '../lib/store';
-import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
+import { useModuleAccess, useRawModules, tileEnabled, personTileOn } from '../lib/module-access';
 import { useMessagingOpen } from '../lib/fiarep-messaging';
 import { getSessionIdentity as getIdentityForMessages } from '../lib/store';
 import { hasAnyMeasurementAccess, tradeKeyForPosition } from '../lib/measurement-access';
@@ -120,7 +120,7 @@ export default function WorkerHome() {
         ...(on('Messages') && messagingOpen === true && (msgTenant === 'default' || rawModules['fiarepMessaging'] !== false) ? [{ label: 'Messages', onPress: () => router.push('/client-messages?member=1') }] : []),
         ...(!isTradeWorker && on('Check Report Status') ? [{ label: 'Check Report Status', onPress: () => router.push('/resident-lookup') }] : []),
         ...(modules['property-lookup'] && on('Check HPD / DOB') ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
-        ...(modules['translator'] && on('Translator') ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
+        ...((modules['translator'] || personTileOn('worker', 'Translator', rawModules)) && on('Translator') ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
         { label: 'Sign out', onPress: onSignOut },
       ],
     },

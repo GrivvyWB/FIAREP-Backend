@@ -16,7 +16,7 @@ import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
 import PhoneComplaintsToggle from '../components/PhoneComplaintsToggle';
 import { useBaselineWaiting, COMPLAINT_TILES } from '../lib/baseline';
 import BaselineWaitingBanner from '../components/BaselineWaitingBanner';
-import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
+import { useModuleAccess, moduleForTile, useRawModules, tileEnabled, personTileOn } from '../lib/module-access';
 import MessagesBar from '../components/MessagesBar';
 import { useMessagingOpen } from '../lib/fiarep-messaging';
 import { getSessionIdentity as getIdentityForMessages } from '../lib/store';
@@ -124,13 +124,13 @@ export default function ManagementHome() {
       { label: 'Inspection Approvals', onPress: () => router.push('/inspection-approvals'), tone: 'tint' as Tone },
       { label: 'In-house assignments', onPress: () => router.push('/in-house-assignments'), tone: 'tint' as Tone },
       ...personalTiles,
-    ].filter((t) => { if (!tileEnabled('management', t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; });
+    ].filter((t) => { if (!tileEnabled('management', t.label, rawModules)) return false; if (readOnly && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m] || personTileOn('management', t.label, rawModules); });
     return renderHome('Supervisor Inspector', [
       { heading: 'Inspections & Compliance', tiles: tiles.filter((t) => !t.label.startsWith('Inbox') && t.label !== 'Request Time Off' && t.label !== 'Attendance') },
       { heading: 'System', tiles: tiles.filter((t) => t.label.startsWith('Inbox') || t.label === 'Request Time Off' || t.label === 'Attendance') },
     ], [
       ...(modules['property-lookup'] ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
-      ...(modules['translator'] ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
+      ...(modules['translator'] || personTileOn('management', 'Translator', rawModules) ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
     ]);
   }
   if (cpmSupervisor || tradeSupervisor) {

@@ -211,7 +211,12 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
   { id: "community", screen: "Community Coordinator home", tabs: [
     "+ Log a resident", "+ Add building / owner", "Inbox", "Messages", "Check HPD / DOB", "Translator",
   ] },
+  // Residents and vendors use the app without a FIAREP sign-in: company switches only.
+  { id: "resident", screen: "Resident home (resident app)", tabs: ["Translator"] },
+  { id: "vendor", screen: "Vendor home", tabs: ["Translator"] },
 ];
+// Screens whose people have no staff account, so no per-person switches.
+const NO_PERSON_SCREENS = new Set(["resident", "vendor"]);
 // Keyed per screen so the same label on two screens has two switches.
 const appTabKey = (screen: string, label: string) =>
   "apptab." + screen + "." + label.replace(/\s*\(\d+\)\s*$/, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -226,6 +231,8 @@ function configuredAppTabs(organization: OrganizationWithUsage): Record<string, 
     const value = group.id === "tech" && saved[key] === undefined ? saved[appTabKey("cpm", tab)] : saved[key];
     result[key] = value !== false;
   }
+  // Each person's own switches (p.<staff id>.apptab.<screen>.<button>), as saved.
+  for (const [k, v] of Object.entries(saved)) if (/^p\.[^.]+\.apptab\./.test(k) && typeof v === "boolean") result[k] = v;
   return result;
 }
 
@@ -372,6 +379,8 @@ export default function OwnerModules() {
   const orgAdmins = useMemo(() => orgStaff.filter((r) => r.role === "administrator"), [orgStaff]);
   // Website menu: "" = everyone in the company; a staff id = that one person's switches.
   const [menuWho, setMenuWho] = useState("");
+  // App tabs: "" = everyone in the company; a staff id = that one person's switches.
+  const [appWho, setAppWho] = useState("");
   const [smartRepairEmailTo, setSmartRepairEmailTo] = useState("");
   const [deletionSaving, setDeletionSaving] = useState(false);
   const [dirty, setDirty] = useState(false);
@@ -633,7 +642,7 @@ export default function OwnerModules() {
           features: {
             ...organization.features,
             // Kept as saved: the title-rules switch and person switches this page does not edit here.
-            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button|apptab)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -911,31 +920,54 @@ export default function OwnerModules() {
             </details>
           )}
 
+          {(() => {
+            const person = appWho ? orgStaff.find((st) => st.id === appWho) : undefined;
+            const keyOf = (group: string, tab: string) => (person ? personKey(person.id, appTabKey(group, tab)) : appTabKey(group, tab));
+            // One person: their own switch, else the company's. Everyone: the company's.
+            const shownTab = (group: string, tab: string) => {
+              if (person) { const pv = appTabs[keyOf(group, tab)]; if (typeof pv === "boolean") return pv; }
+              return appTabs[appTabKey(group, tab)] !== false;
+            };
+            const groups = person ? APP_TABS.filter((g) => !NO_PERSON_SCREENS.has(g.id)) : APP_TABS;
+            const ownCount = person ? Object.keys(appTabs).filter((k) => k.startsWith(`p.${person.id}.apptab.`)).length : 0;
+            const companyOff = Object.entries(appTabs).filter(([k, v]) => !k.startsWith("p.") && v === false).length;
+            const setTabs = (entries: Array<[string, boolean]>) => { setAppTabs((c) => ({ ...c, ...Object.fromEntries(entries) })); setDirty(true); };
+            return (
           <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
             <summary onClick={keepButtonsOpen} className="cursor-pointer list-none [&::-webkit-details-marker]:hidden flex items-center justify-between border-b border-slate-200 px-5 py-4">
               <div>
                 <h2 className="font-semibold text-slate-950"><span className="mr-1.5 inline-block text-slate-400 transition-transform group-open:rotate-90">▸</span>App tabs</h2>
-                <p className="text-xs text-slate-500">{isFiarep ? "Switch off any tab on the app's home screens for FIAREP's own crew. Off here means nobody at FIAREP sees it in the app." : "Switch off any tab on the app's home screens for this client. Off here means nobody in the organization sees it in the app."}</p>
+                <p className="text-xs text-slate-500">{isFiarep ? "Every button on the app's home screens for FIAREP's own crew." : "Every button on the app's home screens for this client."} Pick Everyone or one person below. A person's own switch wins over Everyone and over the module switches, so you can turn any of their buttons on for them alone.</p>
               </div>
-              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{Object.values(appTabs).filter((v) => v === false).length} off</span>
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700">{person ? `${ownCount} set for ${person.name}` : `${companyOff} off`}</span>
             </summary>
+            <div className="flex flex-wrap items-center gap-3 border-b border-slate-100 bg-slate-50 px-5 py-3">
+              <label htmlFor="app-who" className="text-sm font-semibold text-slate-700">Switches for</label>
+              <select id="app-who" value={appWho} onChange={(e) => setAppWho(e.target.value)} className="min-w-[16rem] rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm">
+                <option value="">Everyone in the company</option>
+                {orgStaff.map((st) => <option key={st.id} value={st.id}>{st.name}{st.position ? ` — ${st.position}` : ` — ${st.role}`}</option>)}
+              </select>
+              {person && <span className="text-xs text-slate-500">{ownCount ? `${ownCount} set for ${person.name}` : "Same as Everyone until you switch one"}</span>}
+              {person && ownCount > 0 && <Button type="button" variant="ghost" size="sm" onClick={() => { setAppTabs((c) => Object.fromEntries(Object.entries(c).filter(([k]) => !k.startsWith(`p.${person.id}.apptab.`)))); setDirty(true); }}>Back to Everyone</Button>}
+            </div>
             <div className="divide-y divide-slate-100">
-              {APP_TABS.map((group) => (
+              {groups.map((group) => (
                 <div key={group.screen} className="px-5 py-3">
                   <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{group.screen}</p>
                     <div className="flex gap-1">
-                      <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setAppTabs((c) => ({ ...c, ...Object.fromEntries(group.tabs.map((tab) => [appTabKey(group.id, tab), true])) })); setDirty(true); }}>All on</Button>
-                      <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => { setAppTabs((c) => ({ ...c, ...Object.fromEntries(group.tabs.map((tab) => [appTabKey(group.id, tab), false])) })); setDirty(true); }}>All off</Button>
+                      <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setTabs(group.tabs.map((tab) => [keyOf(group.id, tab), true]))}>All on</Button>
+                      <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={() => setTabs(group.tabs.map((tab) => [keyOf(group.id, tab), false]))}>All off</Button>
                     </div>
                   </div>
                   <div className="grid gap-x-6 gap-y-1 sm:grid-cols-2 lg:grid-cols-3">
                     {group.tabs.map((tab) => {
-                      const key = appTabKey(group.id, tab);
-                      const on = appTabs[key] !== false;
+                      const key = keyOf(group.id, tab);
+                      const on = shownTab(group.id, tab);
+                      const own = person && typeof appTabs[key] === "boolean";
                       return (
                         <div key={key} className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-sm hover:bg-slate-50">
-                          <span className={on ? "text-slate-800" : "text-slate-400 line-through"}>{tab}</span>
+                          <span className={on ? "text-slate-800" : "text-slate-400 line-through"}>{tab}{own && <span className="ml-1.5 rounded bg-amber-100 px-1 text-[10px] font-semibold text-amber-800 no-underline">own</span>}</span>
                           <button
                             type="button"
                             role="switch"
@@ -953,6 +985,8 @@ export default function OwnerModules() {
               ))}
             </div>
           </details>
+            );
+          })()}
 
           {modules["measurement"] === true && (
             <details className="group overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">

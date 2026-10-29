@@ -119,6 +119,9 @@ void LOOKUP_TRADES;
 
 export function moduleEnabled(module: ModuleId, config: ModuleConfig | null = cached): boolean {
   const modulesMap = config?.features?.modules || {};
+  // A person's own module switch (p.<staff id>.module.<module>, as on the website) wins.
+  const own = cachedStaffId ? modulesMap[`p.${cachedStaffId}.module.${module}`] : undefined;
+  if (typeof own === 'boolean') return own;
   const value = modulesMap[module];
   // HPD / DOB lookup: the client switch, then the per-trade switch for this
   // person's title (Platform -> Modules -> "HPD / DOB Lookup by trade").
@@ -262,12 +265,24 @@ export function moduleForRoute(path: string): ModuleId | null {
 // control panel (features.modules["apptab.<slug>"] === false hides it).
 // Keyed PER SCREEN ("apptab.<screen>.<slug>") so switching Attendance off on
 // the worker screen leaves it on for management, and vice versa.
-export type AppTabScreen = 'management' | 'admin' | 'cpm' | 'tech' | 'worker' | 'community';
+export type AppTabScreen = 'management' | 'admin' | 'cpm' | 'tech' | 'worker' | 'community' | 'resident' | 'vendor';
 export const appTabKey = (screen: AppTabScreen, label: string): string =>
   'apptab.' + screen + '.' + label.replace(/\s*\(\d+\)\s*$/, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 
+/** This person's own switch for a home button (Platform Control → App tabs → pick the person): true, false, or unset. */
+export function personTile(screen: AppTabScreen, label: string, raw: Record<string, boolean> | null | undefined): boolean | undefined {
+  if (!cachedStaffId) return undefined;
+  const v = (raw || {})[`p.${cachedStaffId}.${appTabKey(screen, label)}`];
+  return typeof v === 'boolean' ? v : undefined;
+}
+/** A button this person's own switch turns on: shown even where the company's switch or module is off. */
+export const personTileOn = (screen: AppTabScreen, label: string, raw: Record<string, boolean> | null | undefined): boolean => personTile(screen, label, raw) === true;
+
 export function tileEnabled(screen: AppTabScreen, label: string, raw: Record<string, boolean> | null | undefined): boolean {
   const map = raw || {};
+  // A person's own switch wins over everything else.
+  const own = personTile(screen, label, map);
+  if (own !== undefined) return own;
   // FIAREP Smart Repair Instructions has a master switch over every screen's tile.
   if (label === 'Smart Repair' && map['smartRepair'] === false) return false;
   if (label === 'Priority Queue' && map['priorityEngine'] === false) return false;

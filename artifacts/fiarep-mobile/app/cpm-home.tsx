@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import { syncAllEntities } from '../lib/sync';
 import { clearAppMode, logout, unreadCount, getCurrentActor, getCurrentPosition, getSessionIdentity, listResidentReports, listRoutedInspectionsFor, listManpowerRequests } from '../lib/store';
 import { useAppMode } from './_layout';
-import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
+import { useModuleAccess, useRawModules, tileEnabled, personTileOn } from '../lib/module-access';
 import { useMessagingOpen } from '../lib/fiarep-messaging';
 import { hasAnyMeasurementAccess } from '../lib/measurement-access';
 import AlertBanner from '../components/AlertBanner';
@@ -166,7 +166,7 @@ export default function CpmHome() {
         { label: unread > 0 ? 'Inbox (' + unread + ')' : 'Inbox', onPress: () => router.push('/notifications'), tone: 'solid' },
         ...(messagingOpen === true && (isTechnician || rawModules['fiarepMessaging'] !== false) ? [{ label: 'Messages', onPress: () => router.push('/client-messages?member=1'), tone: 'outline' as const }] : []),
         ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
-        ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
+        ...(modules['translator'] || personTileOn(isTechHome ? 'tech' : 'cpm', 'Translator', rawModules) ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },

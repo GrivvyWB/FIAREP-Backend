@@ -568,6 +568,7 @@ function ResidentStack() {
       <Stack.Screen name="resident-desk" options={{ title: '' }} />
       <Stack.Screen name="resident" options={{ title: 'Report an Issue' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Report Status' }} />
+      <Stack.Screen name="translator" options={{ title: 'Translator' }} />
     </Stack>
   );
 }
@@ -578,6 +579,7 @@ function VendorStack() {
       <Stack.Screen name="vendor-home" options={{ title: 'Vendor', headerBackVisible: false }} />
       <Stack.Screen name="vendor-quote" options={{ title: 'Your Quote' }} />
       <Stack.Screen name="vendor-change-order" options={{ title: 'Change Work Order' }} />
+      <Stack.Screen name="translator" options={{ title: 'Translator' }} />
       <Stack.Screen name="resident-lookup" options={{ title: 'Check Status' }} />
       <Stack.Screen name="project/checklist" options={{ title: 'Renovation checklist' }} />
       <Stack.Screen name="project/project-scope" options={{ title: 'Scope of Work' }} />

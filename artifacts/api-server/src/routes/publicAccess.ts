@@ -530,6 +530,12 @@ async function releasedScope(trackingId: string) {
   return matches.length === 1 ? matches[0] : null;
 }
 
+/** The client a vendor's code belongs to (for the vendor's Translator button). */
+export async function tenantForVendorCode(trackingId: string): Promise<string | null> {
+  const scope = await releasedScope(trackingId).catch(() => null);
+  return scope?.tenantId ?? null;
+}
+
 router.get("/v1/public/vendor-scopes/:trackingId", async (req, res) => {
   const vendorName = normalize(req.query["vendorName"]);
   const scope = await releasedScope(String(req.params["trackingId"]));

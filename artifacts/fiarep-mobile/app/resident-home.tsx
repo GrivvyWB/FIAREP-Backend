@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Text, TextInput, Pressable, ScrollView, View, Alert } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ui } from '../lib/ui';
+import { customFetch } from '@workspace/api-client-react';
 import { findResidentCompany, getResidentCode, setResidentCode, type ResidentCode } from '../lib/store';
 
 /**
@@ -17,6 +18,12 @@ export default function ResidentHome() {
   const [changing, setChanging] = useState(false);
   const [choices, setChoices] = useState<ResidentCode[]>([]);
   useFocusEffect(useCallback(() => { void getResidentCode().then(setSaved); }, []));
+  // The company's switches (Platform Control): the Translator module and the Resident home's Translator button.
+  const [translatorOn, setTranslatorOn] = useState(false);
+  useFocusEffect(useCallback(() => {
+    if (!saved?.code) return;
+    void customFetch<{ on: boolean }>(`/api/v1/public/translator-switch?residentCode=${encodeURIComponent(saved.code)}`, { responseType: 'json' } as never).then((r) => setTranslatorOn(!!r?.on)).catch(() => setTranslatorOn(false));
+  }, [saved?.code]));
 
   async function keep(v: ResidentCode) {
     await setResidentCode(v);
@@ -100,6 +107,12 @@ export default function ResidentHome() {
       <Pressable style={ui.btnOutline} onPress={() => router.push('/resident-lookup')}>
         <Text style={ui.btnOutlineText}>Check Report Status</Text>
       </Pressable>
+
+      {saved && translatorOn && (
+        <Pressable style={ui.btnOutline} onPress={() => router.push('/translator?resident=1')}>
+          <Text style={ui.btnOutlineText}>Translator</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }

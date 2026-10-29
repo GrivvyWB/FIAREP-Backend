@@ -17,7 +17,7 @@ import UpperManagementMuteToggle from '../components/UpperManagementMuteToggle';
 import PhoneComplaintsToggle from '../components/PhoneComplaintsToggle';
 import { useBaselineWaiting, COMPLAINT_TILES } from '../lib/baseline';
 import BaselineWaitingBanner from '../components/BaselineWaitingBanner';
-import { useModuleAccess, moduleForTile, useRawModules, tileEnabled } from '../lib/module-access';
+import { useModuleAccess, moduleForTile, useRawModules, tileEnabled, personTileOn } from '../lib/module-access';
 
 type Tone = 'solid' | 'outline' | 'tint';
 type Tile = { label: string; onPress: () => void; tone: Tone };
@@ -158,7 +158,7 @@ export default function AdminHome() {
       color: '#4A5560',
       tiles: [
         ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
-        ...(modules['translator'] ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
+        ...(modules['translator'] || personTileOn('admin', 'Translator', rawModules) ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
         // Command Center: FIAREP's own administrators (FIAREP + the Mac), and each
         // client's administrators (their own buildings and computers) once the
         // platform owner has switched it on for the client — hidden until then.
@@ -169,7 +169,7 @@ export default function AdminHome() {
   ];
 
   // A client whose baseline is required but not done yet: complaint tools wait for it.
-  const keep = (t: Tile) => { if (baselineWaiting && COMPLAINT_TILES.has(t.label.replace(/\s*\(\d+\)\s*$/, ''))) return false; if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && !fiarepAdmin && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m]; };
+  const keep = (t: Tile) => { if (baselineWaiting && COMPLAINT_TILES.has(t.label.replace(/\s*\(\d+\)\s*$/, ''))) return false; if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && !fiarepAdmin && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m] || personTileOn('admin', t.label, rawModules); };
   const homeSections = sections.map((sec) => ({ heading: sec.heading, tiles: sec.tiles.filter(keep).filter((t) => t.label !== 'Attendance').map((t) => ({ label: t.label, onPress: t.onPress })) }));
   const hasAttendance = sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === 'Attendance'));
   const has = (label: string) => sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === label));

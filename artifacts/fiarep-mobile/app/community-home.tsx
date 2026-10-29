@@ -3,7 +3,7 @@ import { View, Text, TextInput, Pressable, ScrollView, RefreshControl, Alert } f
 import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { clearAppMode, getCurrentActor, getSessionIdentity, isFiarepAdministrator, logout } from '../lib/store';
 import { useAppMode } from './_layout';
-import { useModuleAccess, useRawModules, tileEnabled } from '../lib/module-access';
+import { useModuleAccess, useRawModules, tileEnabled, personTileOn } from '../lib/module-access';
 import { ui } from '../lib/ui';
 import MessagesBar from '../components/MessagesBar';
 import { useMessagingOpen } from '../lib/fiarep-messaging';
@@ -232,7 +232,7 @@ export default function CommunityHome() {
       {modules['property-lookup'] && on('Check HPD / DOB') && <Pressable style={[ui.btnOutline, { marginTop: 16 }]} onPress={() => router.push('/inspector-violations?lookup=1')}>
         <Text style={ui.btnOutlineText}>🏢 Check HPD / DOB</Text>
       </Pressable>}
-      {modules['translator'] && on('Translator') && <Pressable style={ui.btnOutline} onPress={() => router.push('/translator')}>
+      {(modules['translator'] || personTileOn('community', 'Translator', tabsRaw)) && on('Translator') && <Pressable style={ui.btnOutline} onPress={() => router.push('/translator')}>
         <Text style={ui.btnOutlineText}>🌐 Translator</Text>
       </Pressable>}
       {on('Inbox') && <Pressable style={ui.btnOutline} onPress={() => router.push('/notifications')}>

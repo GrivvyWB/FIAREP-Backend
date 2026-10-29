@@ -8,11 +8,20 @@ import { customFetch } from '@workspace/api-client-react';
 import { ui } from '../lib/ui';
 import { LANGUAGES, STAFF_LANGUAGE } from '../lib/languages';
 import { Chips } from '../lib/community-ui';
+import { useLocalSearchParams } from 'expo-router';
+import { getResidentCode } from '../lib/store';
 
 const ACCENT = '#F2C14E';
 type Turn = { who: 'resident' | 'me'; heard: string; said: string; from: string; to: string; audioUri?: string };
 
+// A resident (resident code) or a vendor (Procurement's code) has no FIAREP sign-in:
+// their Translator goes through the public route, which checks the company's switches.
+let publicAuth: { residentCode?: string; vendorCode?: string } | null = null;
 async function post<T>(path: string, body: unknown): Promise<T> {
+  if (publicAuth) {
+    const op = path.split('/').pop() || '';
+    return customFetch<T>(`/api/v1/public/translator/${op}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...(body as object), ...publicAuth }), responseType: 'json' } as never);
+  }
   return customFetch<T>(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), responseType: 'json' } as never);
 }
 
@@ -20,6 +29,13 @@ async function post<T>(path: string, body: unknown): Promise<T> {
  * phone, you read / hear it in English; you answer, the phone says it back in
  * their language through the speaker. Nothing is saved. */
 export default function Translator() {
+  const params = useLocalSearchParams<{ resident?: string; vendor?: string }>();
+  useEffect(() => {
+    if (params.vendor) publicAuth = { vendorCode: String(params.vendor) };
+    else if (params.resident) void getResidentCode().then((c) => { publicAuth = c?.code ? { residentCode: c.code } : null; });
+    else publicAuth = null;
+    return () => { publicAuth = null; };
+  }, [params.vendor, params.resident]);
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [residentLang, setResidentLang] = useState(LANGUAGES[0]!.name);
   const [customLang, setCustomLang] = useState('');

@@ -12,7 +12,7 @@ import {
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { captureGeo } from '../lib/geo';
-import type { VendorWalkthroughCheckIn } from '@workspace/api-client-react';
+import { customFetch, type VendorWalkthroughCheckIn } from '@workspace/api-client-react';
 
 const STATUS_LABEL: Record<ProcurementRequest['status'], string> = {
   draft: 'Draft',
@@ -47,6 +47,8 @@ export default function VendorHome() {
   const [walkthroughCheckIn, setWalkthroughCheckIn] = useState<VendorWalkthroughCheckIn | null>(null);
   const [changeOrders, setChangeOrders] = useState<VendorChangeOrderView[]>([]);
   const [outboxLeft, setOutboxLeft] = useState(0);
+  // The client's switches (Platform Control): the Translator module and the Vendor home's Translator button.
+  const [translatorOn, setTranslatorOn] = useState(false);
 
   // Push anything saved while there was no service, then refresh this job's
   // change work orders. Runs on open, when the job changes, and every minute
@@ -59,6 +61,10 @@ export default function VendorHome() {
     }
   }, [job?.trackingId, job?.vendor, bidName]);
   useFocusEffect(useCallback(() => { void syncChangeOrders(); }, [syncChangeOrders]));
+  useEffect(() => {
+    if (!job?.trackingId) { setTranslatorOn(false); return; }
+    void customFetch<{ on: boolean }>(`/api/v1/public/translator-switch?vendorCode=${encodeURIComponent(job.trackingId)}`, { responseType: 'json' } as never).then((r) => setTranslatorOn(!!r?.on)).catch(() => setTranslatorOn(false));
+  }, [job?.trackingId]);
   useEffect(() => {
     const t = setInterval(() => { void syncChangeOrders(); }, 60_000);
     return () => clearInterval(t);
@@ -205,6 +211,12 @@ export default function VendorHome() {
 
       {searched && !job && (
         <Text style={ui.empty}>No job found for that ID. Check the number procurement gave you.</Text>
+      )}
+
+      {job && translatorOn && (
+        <Pressable style={[ui.btnOutline, { marginTop: 12 }]} onPress={() => router.push(`/translator?vendor=${encodeURIComponent(job.trackingId)}`)}>
+          <Text style={ui.btnOutlineText}>Translator</Text>
+        </Pressable>
       )}
 
       {job && (
