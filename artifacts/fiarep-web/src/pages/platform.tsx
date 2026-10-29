@@ -1,3 +1,4 @@
+import { LanguagePicker } from "@/components/language-picker";
 import { motion, type Variants } from 'framer-motion';
 import { Link } from 'wouter';
 import { WebsiteFooter } from '@/components/layout/website-footer';
@@ -141,7 +142,7 @@ export default function Platform() {
       <header className="sticky top-0 z-20 w-full border-b border-border/60 bg-background/80 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-6 py-3 lg:px-8">
           <div className="min-w-0">
-            <div className="font-bold text-2xl tracking-tight leading-none">
+            <div translate="no" className="font-bold text-2xl tracking-tight leading-none">
               FIA<span className="text-[#F5B301]">REP</span>
             </div>
             <div className="mt-1 text-[11px] sm:text-xs font-medium text-muted-foreground leading-tight" data-testid="text-brand-tagline">
@@ -149,6 +150,7 @@ export default function Platform() {
             </div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
+            <LanguagePicker className="hidden sm:flex" />
             <Link href="/access" className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 sm:px-6 sm:py-3 text-sm sm:text-base font-bold text-primary-foreground shadow-lg hover:bg-primary/90 transition-all hover:scale-105 hover:shadow-primary/25" data-testid="link-platform-access">
               Enter Platform <ArrowRight className="ml-2 h-5 w-5" />
             </Link>

@@ -8,6 +8,7 @@ import React from 'react';
 import { View, Text, Pressable, ScrollView, Image, ImageBackground, StyleSheet, useWindowDimensions, Platform } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import LanguageButton from './LanguageButton';
 import { cleanLabel, iconFor, sectionColor, taglineFor, tileArt } from '../lib/home-catalog';
 
 export type HomeTile = { label: string; onPress: () => void; badge?: number };
@@ -101,6 +102,7 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections,
             <View style={{ flex: 1 }}>
               <Text style={[st.bannerTitle, title.length > 14 && { fontSize: 26 }]} numberOfLines={2}>{title}</Text>
               <Text style={st.bannerSub}>{sub}</Text>
+              <View style={{ marginTop: 8 }}><LanguageButton dark /></View>
             </View>
           </View>
         </View>

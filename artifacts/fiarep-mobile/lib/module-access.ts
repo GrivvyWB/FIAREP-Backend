@@ -10,7 +10,7 @@ export type ModuleId =
   | 'violations' | 'procurement' | 'scope-review' | 'scope-writing' | 'emergency'
   | 'change-orders' | 'scores' | 'elevators' | 'leave' | 'hr' | 'notifications'
   | 'settings' | 'shared-data' | 'hud-inspections' | 'trade-requests' | 'my-jobs'
-  | 'complaint-dashboard' | 'measurement' | 'translator' | 'property-lookup'
+  | 'complaint-dashboard' | 'measurement' | 'translator' | 'property-lookup' | 'app-language'
   // Per-tool, per-client construction-PM switches (all opt-in / OFF by default).
   | 'proj-new' | 'proj-room' | 'proj-rates' | 'proj-checklist' | 'proj-inspection'
   | 'proj-estimate' | 'proj-scope' | 'proj-intake' | 'proj-elevator'

@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { Text, TextInput, Pressable, ScrollView, View, Alert } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ui } from '../lib/ui';
+import LanguageButton from '../components/LanguageButton';
 import { customFetch } from '@workspace/api-client-react';
 import { findResidentCompany, getResidentCode, setResidentCode, type ResidentCode } from '../lib/store';
 
@@ -49,9 +50,10 @@ export default function ResidentHome() {
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center', marginBottom: 6 }}>
         Resident Services
       </Text>
-      <Text style={[ui.label, { textAlign: 'center', marginBottom: 24 }]}>
+      <Text style={[ui.label, { textAlign: 'center', marginBottom: 12 }]}>
         Report an issue or check the status of a report.
       </Text>
+      <View style={{ alignItems: 'center', marginBottom: 16 }}><LanguageButton /></View>
 
       {saved && !changing && (
         <View style={{ alignItems: 'center', marginBottom: 16 }}>

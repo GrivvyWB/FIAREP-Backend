@@ -4,6 +4,7 @@ import { useFocusEffect, useNavigation, useRouter } from 'expo-router';
 import { clearAppMode, getCurrentActor, getSessionIdentity, isFiarepAdministrator, logout } from '../lib/store';
 import { useAppMode } from './_layout';
 import { useModuleAccess, useRawModules, tileEnabled, personTileOn } from '../lib/module-access';
+import LanguageButton from '../components/LanguageButton';
 import { ui } from '../lib/ui';
 import MessagesBar from '../components/MessagesBar';
 import { useMessagingOpen } from '../lib/fiarep-messaging';
@@ -122,6 +123,7 @@ export default function CommunityHome() {
       refreshControl={<RefreshControl refreshing={loading} onRefresh={() => void load()} />}
       keyboardShouldPersistTaps="handled"
     >
+      <View style={{ alignItems: 'flex-end', marginBottom: 8 }}><LanguageButton /></View>
       {fiarep && messagingOpen === true && !admin && on('Messages') && (
         <MessagesBar sub="People you gave a code to, and client companies" onPress={() => router.push('/fiarep-messages')} />
       )}

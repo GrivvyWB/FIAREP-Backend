@@ -37,6 +37,7 @@ if (Number.isNaN(port) || port <= 0) {
 
 // Buildings in any country (an added column; harmless when it is already there).
 await db.execute(sql`alter table organization_properties add column if not exists country text`).catch((err) => console.error("Country column not added:", err));
+await import("./lib/uiTranslations").then((m) => m.ensureUiTranslationsTable()).catch((err) => console.error("Screen translations table:", err));
 await ensureNychaCatalog();
 await ensureNotificationReadsTable();
 await ensureFiarepServiceTitles();

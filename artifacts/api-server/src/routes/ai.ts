@@ -15,6 +15,7 @@ import { fileStorage } from "../lib/fileStorage";
 import { rateLimit } from "../lib/rateLimit";
 import { organizationForResidentCode } from "../lib/residentRouting";
 import { tenantForVendorCode } from "./publicAccess";
+import { NATIVE_NAMES, UI_LANGUAGES, dictionary, translateLines } from "../lib/uiTranslations";
 
 const router: IRouter = Router();
 
@@ -114,6 +115,23 @@ async function publicTranslatorAllowed(body: Record<string, unknown>): Promise<b
   const modules = ((org?.features as { modules?: Record<string, unknown> } | null)?.modules || {}) as Record<string, unknown>;
   return modules["translator"] !== false && modules[`apptab.${screen}.translator`] !== false;
 }
+
+// ── The app and website in each person's language (lib/uiTranslations.ts) ──
+router.get("/v1/public/i18n/languages", (_req, res) => {
+  res.json(Object.entries(UI_LANGUAGES).map(([code, l]) => ({ code, name: NATIVE_NAMES[code] && NATIVE_NAMES[code] !== l.name.split(" (")[0] ? `${NATIVE_NAMES[code]} — ${l.name}` : l.name, rtl: !!l.rtl })));
+});
+router.get("/v1/public/i18n/:lang", rateLimit("i18n-dictionary", 60), async (req, res) => {
+  const lang = String(req.params["lang"]);
+  if (!UI_LANGUAGES[lang]) { res.status(404).json({ error: "Unknown language" }); return; }
+  res.setHeader("Cache-Control", "no-cache");
+  res.json(lang === "en" ? {} : await dictionary(lang).catch(() => ({})));
+});
+router.post("/v1/public/i18n/:lang", rateLimit("i18n-translate", 30), async (req, res) => {
+  const lang = String(req.params["lang"]);
+  if (!UI_LANGUAGES[lang]) { res.status(404).json({ error: "Unknown language" }); return; }
+  const lines = Array.isArray((req.body as { lines?: unknown })?.lines) ? ((req.body as { lines: unknown[] }).lines.filter((l) => typeof l === "string") as string[]) : [];
+  res.json(await translateLines(lang, lines, process.env.OPENAI_API_KEY).catch(() => ({})));
+});
 
 router.get("/v1/public/translator-switch", rateLimit("public-translator-switch", 60), async (req, res) => {
   res.setHeader("Cache-Control", "no-store");

@@ -11,6 +11,7 @@ import {
   type ProcurementRequest,
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
+import LanguageButton from '../components/LanguageButton';
 import { captureGeo } from '../lib/geo';
 import { customFetch, type VendorWalkthroughCheckIn } from '@workspace/api-client-react';
 
@@ -184,6 +185,7 @@ export default function VendorHome() {
   return (
     <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }} keyboardVerticalOffset={90}>
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
+      <View style={{ alignItems: 'flex-end', marginBottom: 4 }}><LanguageButton /></View>
       <Text style={ui.h}>Your Assigned Work</Text>
 
       <Text style={ui.label}>Vendor name</Text>

@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useState } from "react";
+import { LanguagePicker } from "@/components/language-picker";
 import { customFetch } from "@workspace/api-client-react";
 import { useOwnerAuth } from "@/hooks/use-owner-auth";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2 text-xl font-bold tracking-tight cursor-pointer" onClick={() => setLocation("/platform-owner")}>
-              <span>FIA<span className="text-[#F5B301]">REP</span></span>
+              <span translate="no">FIA<span className="text-[#F5B301]">REP</span></span>
             </div>
             <div className="h-5 w-px bg-slate-700" />
             <div className="flex items-center gap-2 text-sm font-medium text-slate-300 bg-slate-800/50 px-3 py-1 rounded-full border border-slate-700/50">
@@ -33,6 +34,7 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           </div>
           
           <div className="flex items-center gap-4">
+            <LanguagePicker dark className="hidden md:flex" />
             <div className="text-sm text-slate-400">
               Authorized as <span className="font-semibold text-slate-200">{ownerName}</span>
             </div>

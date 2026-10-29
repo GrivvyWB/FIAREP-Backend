@@ -5,6 +5,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { requestDesktopAlerts, useNotificationAlerts } from "@/lib/use-notification-alerts";
 import { isCoverageEligible } from "@/lib/access-policy";
 import { CoverSiteButton } from "@/components/layout/cover-site-button";
+import { LanguagePicker } from "@/components/language-picker";
+import { useEffect } from "react";
+import { currentLanguage, setScreenLanguage } from "@/lib/screen-language";
 import { Link } from "wouter";
 import {
   DropdownMenu,
@@ -17,6 +20,10 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
   const { staff, logout, organizationModules } = useAuth();
   // Cover a site: a client only has it once it is switched on in Platform Control.
   const coverSiteOn = (staff?.tenantId || "default") === "default" || organizationModules["cover-site"] === true;
+  // Language (Platform Control → Modules → "Your language"): on unless switched off, for the company or this person.
+  const personLanguage = staff?.id ? organizationModules[`p.${staff.id}.module.app-language`] : undefined;
+  const languageOn = typeof personLanguage === "boolean" ? personLanguage : organizationModules["app-language"] !== false;
+  useEffect(() => { if (!languageOn && currentLanguage() !== "en") void setScreenLanguage("en"); }, [languageOn]);
   const { data: notifications } = useListNotifications({
     query: {
       queryKey: getListNotificationsQueryKey(),
@@ -48,7 +55,7 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
             <MoreHorizontal className="w-5 h-5" />
           </button>
         )}
-        <div className="text-[20px] font-extrabold tracking-[.3px] leading-tight">
+        <div translate="no" className="text-[20px] font-extrabold tracking-[.3px] leading-tight">
           FIA<span className="text-[#F5B301]">REP</span>
           <small className="block text-[10.5px] font-medium text-muted-foreground tracking-normal">
             Field Infrastructure, Asset Reporting &amp; Evaluation Performance
@@ -57,6 +64,7 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
       </div>
       
       <div className="flex items-center gap-5 md:gap-[22px]">
+        {languageOn && <LanguagePicker />}
         {isCoverageEligible(staff) && coverSiteOn && <CoverSiteButton />}
         <Link href="/notifications" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"} onClick={requestDesktopAlerts} className={`relative text-muted-foreground cursor-pointer hover:text-foreground transition-colors block ${ringing ? "notification-bell-ring" : unreadCount > 0 ? "notification-bell-unread" : ""}`}>
           <Bell className={`w-[22px] h-[22px] ${unreadCount > 0 ? "text-[#b77900]" : ""}`} />

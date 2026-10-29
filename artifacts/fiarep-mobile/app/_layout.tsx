@@ -1,3 +1,6 @@
+// Every screen in the language the person picked (swaps in the translating Text first).
+import { installScreenLanguage } from '../lib/screen-language';
+installScreenLanguage();
 // Registers the background location task for the time clock before any screen renders.
 import '../lib/clock-location';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
