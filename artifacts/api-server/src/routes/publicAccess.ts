@@ -29,6 +29,7 @@ import { classifyResidentPhotoAndSave } from "../lib/residentPhotoAutoClassify";
 import { maybeAutoWorkOrder } from "../lib/command/photoWorkOrder";
 import { rateLimit } from "../lib/rateLimit";
 import { distanceMeters, geocodeNycPoint, lookupNychaResidentialAddress } from "../lib/nycProperty";
+import { geocodePoint } from "../lib/geocode";
 import { UpdateResidentReportPhotoBody } from "@workspace/api-zod";
 import { audit } from "../lib/audit";
 import { verifyVendorChangeOrder, type PhotoStamp } from "../lib/vendorChangeOrderVerification";
@@ -592,7 +593,8 @@ router.post("/v1/public/vendor-scopes/:trackingId/walkthrough-check-ins", async 
     return Number.isFinite(la) && Number.isFinite(lo) && Math.abs(la) <= 90 && Math.abs(lo) <= 180 ? { latitude: la, longitude: lo } : null;
   })();
   const outsideNyc = /,\s*(?!NY\b)[A-Z]{2}(\s+\d{5})?\s*(,\s*USA)?\s*$/i.test(buildingAddress) || /\b(connecticut|new jersey|westchester)\b/i.test(buildingAddress);
-  const fromCity = outsideNyc ? null : await geocodeNycPoint(buildingAddress);
+  // Outside New York City: the Census Bureau / OpenStreetMap point for the address.
+  const fromCity = outsideNyc ? await geocodePoint(buildingAddress).catch(() => null) : await geocodeNycPoint(buildingAddress);
   const building = fromCity && fromPhone && distanceMeters(fromCity, fromPhone) > 20_000 ? fromPhone : (fromCity || fromPhone);
   const existing = await db.select().from(vendorWalkthroughCheckIns).where(eq(vendorWalkthroughCheckIns.id, id)).limit(1);
   if (existing[0]) {

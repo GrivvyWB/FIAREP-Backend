@@ -3,6 +3,7 @@ import { Router, type IRouter } from "express";
 import { and, desc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import { db, organizations, timeClockLocations, timeClockPunches } from "@workspace/db";
 import { reverseGeocodeNyc } from "../lib/nycProperty";
+import { reverseGeocode } from "../lib/geocode";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import {
   expectedDirection,
@@ -44,7 +45,7 @@ async function placeName(lat: number, lng: number, fromDevice: unknown): Promise
   const nyc = await reverseGeocodeNyc(lat, lng);
   if (nyc) return nyc;
   const given = typeof fromDevice === "string" ? fromDevice.trim().slice(0, 200) : "";
-  return given || null;
+  return given || (await reverseGeocode(lat, lng).catch(() => null)) || null;
 }
 
 router.get("/v1/time-clock/status", async (_req, res) => {

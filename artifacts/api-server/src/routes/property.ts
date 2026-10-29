@@ -7,6 +7,7 @@ import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { lookupNycPropertyData } from "../lib/nycProperty";
 import { lookupDofCharges } from "../lib/dofCharges";
 import { rateLimit } from "../lib/rateLimit";
+import { geocodePlace, suggestAddresses } from "../lib/geocode";
 
 const router: IRouter = Router();
 
@@ -33,7 +34,13 @@ router.get("/v1/property/nyc-lookup", requireAuth, async (req, res): Promise<voi
   try {
     const result = await lookupNycPropertyData(parsed.data.address, parsed.data.limit);
     if (!result) {
-      res.status(404).json({ error: "That address could not be matched to an NYC property." });
+      // Outside New York City the address is still found; only the City records are NYC-only.
+      const place = await geocodePlace(parsed.data.address).catch(() => null);
+      if (place && place.source !== "nyc") {
+        res.status(404).json({ error: `Found ${place.label}. City violation records (HPD / DOB) are connected for New York City only; everything else in FIAREP works at this address.`, place });
+        return;
+      }
+      res.status(404).json({ error: "That address could not be matched to a property." });
       return;
     }
     res.json(LookupNycPropertyResponse.parse(result));
@@ -54,82 +61,14 @@ router.get("/v1/property/nyc-lookup", requireAuth, async (req, res): Promise<voi
 // configuredDevelopments bookkeeping.
 // ═══════════════════════════════════════════════════════════════════
 
-const GEOSEARCH_AUTOCOMPLETE = "https://geosearch.planninglabs.nyc/v2/autocomplete";
-
-// Anywhere in the United States. New York City first, because its geocoder
-// carries the tax lot that gives us the City's own unit count; anything the
-// City does not know goes to the Census Bureau's national geocoder, so a
-// client in Philadelphia or Chicago can register their buildings the same way.
-const CENSUS_ONELINE = "https://geocoding.geo.census.gov/geocoder/locations/onelineaddress";
-
-type Suggestion = { address: string; borough: string; city: string; state: string; postalCode: string; label: string };
-
-async function nycSuggestions(q: string): Promise<Suggestion[]> {
-  const url = new URL(GEOSEARCH_AUTOCOMPLETE);
-  url.searchParams.set("text", q);
-  const response = await fetch(url.toString(), {
-    headers: { accept: "application/json", "user-agent": "FIAREP/1.0" },
-    signal: AbortSignal.timeout(6_000),
-  });
-  if (!response.ok) return [];
-  const data = (await response.json()) as { features?: Array<{ properties?: Record<string, unknown> }> };
-  return (data.features || [])
-    .filter((f) => f.properties?.["housenumber"] && f.properties?.["street"])
-    .slice(0, 8)
-    .map((f) => {
-      const p = f.properties!;
-      const borough = String(p["borough"] ?? "");
-      return {
-        address: `${p["housenumber"]} ${p["street"]}`,
-        borough,
-        city: borough || "New York",
-        state: "NY",
-        postalCode: String(p["postalcode"] ?? ""),
-        label: String(p["label"] ?? `${p["housenumber"]} ${p["street"]}`),
-      };
-    });
-}
-
-async function nationalSuggestions(q: string): Promise<Suggestion[]> {
-  const url = new URL(CENSUS_ONELINE);
-  url.searchParams.set("address", q);
-  url.searchParams.set("benchmark", "Public_AR_Current");
-  url.searchParams.set("format", "json");
-  const response = await fetch(url.toString(), {
-    headers: { accept: "application/json", "user-agent": "FIAREP/1.0" },
-    signal: AbortSignal.timeout(8_000),
-  });
-  if (!response.ok) return [];
-  const data = (await response.json()) as {
-    result?: { addressMatches?: Array<{ matchedAddress?: string; addressComponents?: Record<string, unknown> }> };
-  };
-  return (data.result?.addressMatches || []).slice(0, 8).map((m) => {
-    const c = m.addressComponents || {};
-    const number = String(c["fromAddress"] ?? "").trim();
-    const street = [c["preDirection"], c["streetName"], c["suffixType"], c["postDirection"]]
-      .map((v) => String(v ?? "").trim()).filter(Boolean).join(" ");
-    const city = String(c["city"] ?? "").trim();
-    const state = String(c["state"] ?? "").trim().toUpperCase();
-    return {
-      address: [number, street].filter(Boolean).join(" ") || String(m.matchedAddress ?? "").split(",")[0]!.trim(),
-      borough: "",
-      city,
-      state,
-      postalCode: String(c["zip"] ?? "").trim(),
-      label: String(m.matchedAddress ?? [number, street, city, state].filter(Boolean).join(", ")),
-    };
-  });
-}
-
+// Any address: New York City (the City's own geocoder, which carries the tax lot),
+// the rest of the United States (US Census Bureau), and other countries
+// (OpenStreetMap). See lib/geocode.ts.
 router.get("/v1/platform/properties/address-suggest", requirePlatformOwner, rateLimit("address-suggest", 60), async (req, res): Promise<void> => {
   const q = String(req.query["q"] ?? "").trim();
   if (q.length < 3) { res.json([]); return; }
-  let out: Suggestion[] = [];
-  try { out = await nycSuggestions(q); } catch { /* the City's geocoder is not the only one */ }
-  if (out.length === 0) {
-    try { out = await nationalSuggestions(q); } catch { /* nothing found; the address can still be typed in full */ }
-  }
-  res.json(out);
+  const places = await suggestAddresses(q).catch(() => []);
+  res.json(places.map((p) => ({ address: p.address, borough: p.borough, city: p.city, state: p.state, postalCode: p.postalCode, country: p.countryCode === "US" ? "" : p.country, label: p.label })));
 });
 
 export default router;

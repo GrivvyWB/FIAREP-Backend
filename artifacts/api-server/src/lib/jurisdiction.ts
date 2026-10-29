@@ -25,19 +25,40 @@ const NYC_CITIES = new Set([
 const clean = (v: unknown) => String(v ?? "").trim();
 const lower = (v: unknown) => clean(v).toLowerCase();
 
-/** Two-letter state, from whatever was typed ("ny", "N.Y.", "New York"). */
+/** Every US state, DC and the territories, by their two-letter code. */
+export const US_STATES: Record<string, string> = {
+  AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California", CO: "Colorado", CT: "Connecticut",
+  DE: "Delaware", DC: "District of Columbia", FL: "Florida", GA: "Georgia", HI: "Hawaii", ID: "Idaho", IL: "Illinois",
+  IN: "Indiana", IA: "Iowa", KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+  MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi", MO: "Missouri", MT: "Montana",
+  NE: "Nebraska", NV: "Nevada", NH: "New Hampshire", NJ: "New Jersey", NM: "New Mexico", NY: "New York",
+  NC: "North Carolina", ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
+  RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee", TX: "Texas", UT: "Utah",
+  VT: "Vermont", VA: "Virginia", WA: "Washington", WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  PR: "Puerto Rico", VI: "U.S. Virgin Islands", GU: "Guam", AS: "American Samoa", MP: "Northern Mariana Islands",
+};
+const STATE_BY_NAME: Record<string, string> = Object.fromEntries(
+  Object.entries(US_STATES).map(([code, name]) => [name.toLowerCase().replace(/[^a-z ]/g, ""), code]),
+);
+STATE_BY_NAME["washington dc"] = "DC"; STATE_BY_NAME["virgin islands"] = "VI";
+
+/** Two-letter US state, from whatever was typed ("pa", "P.A.", "Pennsylvania"). "" when it is not a US state. */
 export function stateCode(value: unknown): string {
-  const v = lower(value).replace(/[^a-z ]/g, "").trim();
+  const v = lower(value).replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim();
   if (!v) return "";
-  if (v.length === 2) return v.toUpperCase();
-  const names: Record<string, string> = {
-    "new york": "NY", "new jersey": "NJ", "connecticut": "CT", "pennsylvania": "PA",
-    "illinois": "IL", "massachusetts": "MA", "maryland": "MD", "virginia": "VA",
-    "california": "CA", "florida": "FL", "texas": "TX", "georgia": "GA",
-    "north carolina": "NC", "south carolina": "SC", "ohio": "OH", "michigan": "MI",
-    "rhode island": "RI", "delaware": "DE", "district of columbia": "DC",
-  };
-  return names[v] || "";
+  if (v.length === 2) return US_STATES[v.toUpperCase()] ? v.toUpperCase() : "";
+  return STATE_BY_NAME[v] || "";
+}
+
+/** True for the United States, said any common way (or not said at all). */
+export function isUsCountry(country: unknown): boolean {
+  const c = lower(country).replace(/[^a-z]/g, "");
+  return !c || ["us", "usa", "unitedstates", "unitedstatesofamerica", "america"].includes(c);
+}
+
+/** The region as stored: the two-letter state in the US, the region as named elsewhere ("Dubai", "Ontario"). */
+export function regionValue(state: unknown, country: unknown): string {
+  return isUsCountry(country) ? stateCode(state) : clean(state).slice(0, 80);
 }
 
 /** Cities whose own violation data FIAREP reads. New York City today. */
@@ -50,7 +71,11 @@ const CITY_DATA: Array<{ id: string; label: string; state: string; match: (city:
  * City: every building registered before the platform went multi-state is
  * there, and the NYC lookups are what they were registered for.
  */
-export function jurisdictionFor(city: unknown, state: unknown): Jurisdiction {
+export function jurisdictionFor(city: unknown, state: unknown, country?: unknown): Jurisdiction {
+  if (!isUsCountry(country)) {
+    const label = [clean(city), clean(state), clean(country)].filter(Boolean).join(", ");
+    return { id: "intl", label: label || "this address", state: clean(state), cityData: false };
+  }
   const st = stateCode(state);
   const ct = lower(city);
   if (!st && !ct) return { id: "nyc", label: "New York City", state: "NY", cityData: true };
@@ -62,18 +87,19 @@ export function jurisdictionFor(city: unknown, state: unknown): Jurisdiction {
 }
 
 /** True when the City's own records can be read for this address. */
-export const hasCityData = (city: unknown, state: unknown): boolean => jurisdictionFor(city, state).cityData;
+export const hasCityData = (city: unknown, state: unknown, country?: unknown): boolean => jurisdictionFor(city, state, country).cityData;
 
 /** What to tell somebody standing in front of an NYC-only tool. */
-export function cityDataNote(city: unknown, state: unknown): string {
-  const j = jurisdictionFor(city, state);
+export function cityDataNote(city: unknown, state: unknown, country?: unknown): string {
+  const j = jurisdictionFor(city, state, country);
   if (j.cityData) return "";
   return `HPD / DOB records and the 30-minute watch are New York City only. ${j.label} publishes its own, and FIAREP reads a city's records as each one is added. Everything else — jobs, photographs, the time clock, quotes, forms and scores — works here now.`;
 }
 
 /** The address as stored, so two "100 Main Street" in different cities are two buildings. */
-export function normalizeAddress(displayAddress: string, city?: unknown, state?: unknown): string {
+export function normalizeAddress(displayAddress: string, city?: unknown, state?: unknown, country?: unknown): string {
   const base = displayAddress.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!isUsCountry(country)) return [base, lower(city), lower(state), lower(country)].filter(Boolean).join(", ");
   const st = stateCode(state);
   // New York keeps the plain form it has always had, so nothing already
   // registered moves or collides with itself.

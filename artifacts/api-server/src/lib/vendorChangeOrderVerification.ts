@@ -10,7 +10,8 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { db, entityRecords, notifications } from "@workspace/db";
 import { deliverPushNotification } from "./push";
-import { distanceMeters, geocodeNycPoint } from "./nycProperty";
+import { distanceMeters } from "./nycProperty";
+import { geocodePoint } from "./geocode";
 
 export type PhotoStamp = { capturedAt?: string; lat?: number; lng?: number; accuracy?: number };
 
@@ -121,7 +122,7 @@ export async function verifyVendorChangeOrder(input: {
 }): Promise<void> {
   const checkedAt = new Date().toISOString();
   // 1. Location
-  const jobGeo = await geocodeNycPoint(input.address).catch(() => null);
+  const jobGeo = await geocodePoint(input.address).catch(() => null);
   const photoChecks = input.photos.map((_p, index) => {
     const stamp = input.stamps[index] || {};
     const hasGeo = typeof stamp.lat === "number" && typeof stamp.lng === "number" && Number.isFinite(stamp.lat) && Number.isFinite(stamp.lng);

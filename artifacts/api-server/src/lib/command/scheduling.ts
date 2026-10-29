@@ -13,7 +13,8 @@ import { boolean, integer, jsonb, pgTable, text, timestamp } from "drizzle-orm/p
 import { db, settings, staffAccounts } from "@workspace/db";
 import { keyFor } from "./keys";
 import { effectiveSwitches } from "./switches";
-import { distanceMeters, geocodeNycPoint } from "../nycProperty";
+import { distanceMeters } from "../nycProperty";
+import { geocodePoint } from "../geocode";
 
 const ts = (name: string) => timestamp(name, { withTimezone: true });
 export const staffBookings = pgTable("staff_bookings", {
@@ -161,7 +162,7 @@ export async function travelTime(from: string, to: string, departAt: Date, tenan
   }
   if (!t) {
     // No key or Google unreachable: straight-line distance × 1.4 for streets, at 12 mph city average, + 10 min to park.
-    const [a, b] = await Promise.all([geocodeNycPoint(from), geocodeNycPoint(to)]);
+    const [a, b] = await Promise.all([geocodePoint(from), geocodePoint(to)]);
     if (a && b) {
       const m = distanceMeters(a, b) * 1.4;
       const minutes = Math.ceil(m / 5.36 / 60) + 10;

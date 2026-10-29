@@ -12,6 +12,7 @@ import { actorFrom, requireAuth } from "../middlewares/auth";
 import { notify } from "../lib/audit";
 import { fileStorage } from "../lib/fileStorage";
 import { reverseGeocodeNyc } from "../lib/nycProperty";
+import { reverseGeocode } from "../lib/geocode";
 
 const router: IRouter = Router();
 router.use("/v1/door-visits", requireAuth);
@@ -39,7 +40,7 @@ router.post("/v1/door-visits", async (req, res) => {
     staffId: a.id, staffName: a.name, staffPosition: a.position,
     at: new Date().toISOString(),
     latitude: lat, longitude: lng, accuracy: num(b["accuracy"]),
-    address: str(b["address"], 200) || nyc || str(b["deviceAddress"], 200) || (lat !== null && lng !== null ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : ""),
+    address: str(b["address"], 200) || nyc || str(b["deviceAddress"], 200) || (lat !== null && lng !== null ? await reverseGeocode(lat, lng).catch(() => null) : null) || (lat !== null && lng !== null ? `${lat.toFixed(5)}, ${lng.toFixed(5)}` : ""),
     heading, facing: str(b["facing"], 20),
     floor: str(b["floor"], 20), unit: str(b["unit"], 40), door: str(b["door"], 200),
     record: str(b["record"], 80), outcome: "", note: "", video: null as null | { objectPath: string; contentType: string; seconds: number }, sentAt: null as string | null,

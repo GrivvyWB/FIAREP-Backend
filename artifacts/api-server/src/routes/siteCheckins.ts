@@ -8,6 +8,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { db, entityRecords, organizationProperties, organizations } from "@workspace/db";
 import { actorFrom, requireAuth } from "../middlewares/auth";
 import { geocodeNycPoint, reverseGeocodeNyc } from "../lib/nycProperty";
+import { geocodePoint, reverseGeocode } from "../lib/geocode";
 import { fileStorage } from "../lib/fileStorage";
 import { readDoorNumber } from "../lib/smartRepair";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
@@ -58,7 +59,7 @@ export function metersBetween(a: { latitude: number; longitude: number }, b: { l
 const str = (v: unknown, n = 300) => (typeof v === "string" ? v.trim().slice(0, n) : "");
 async function placeName(p: Point, fromDevice: unknown): Promise<string> {
   const nyc = await reverseGeocodeNyc(p.latitude, p.longitude).catch(() => null);
-  return nyc || str(fromDevice, 200) || `${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`;
+  return nyc || str(fromDevice, 200) || (await reverseGeocode(p.latitude, p.longitude).catch(() => null)) || `${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}`;
 }
 const isManager = (role: string) => role === "administrator" || role === "management";
 
@@ -136,7 +137,7 @@ router.post("/v1/site-checkins", async (req, res) => {
   if (!address) { res.status(400).json({ error: "Pick the building you are at." }); return; }
   // The building's own point: the City's map in New York, else the phone's map of the address.
   const fromPhone = pointOf(b["buildingLocation"]);
-  const fromCity = inNyc && !outOfNetwork ? await geocodeNycPoint(address).catch(() => null) : null;
+  const fromCity = outOfNetwork ? null : inNyc ? await geocodeNycPoint(address).catch(() => null) : await geocodePoint(address).catch(() => null);
   // A typed address outside the City can still match some NYC street by name: if the
   // City's point is miles from the phone's map of the same address, use the phone's.
   const building = fromCity && fromPhone && metersBetween(fromCity, fromPhone) > 20_000 ? fromPhone : (fromCity || fromPhone);

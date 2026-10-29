@@ -159,6 +159,8 @@ export const organizationProperties = pgTable(
     city: text("city"),
     state: text("state"),
     postalCode: text("postal_code"),
+    // Empty means the United States. Otherwise the country as named ("Canada", "United Arab Emirates").
+    country: text("country"),
     development: text("development"),
     // From the City's record for the address (DOF assessment roll / PLUTO) when the building was registered.
     units: integer("units"),

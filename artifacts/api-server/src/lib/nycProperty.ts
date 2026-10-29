@@ -1,3 +1,4 @@
+import { regionOf } from "./geocode";
 type JsonRecord = Record<string, unknown>;
 
 const GEOSEARCH_URL = process.env["FIAREP_GEOSEARCH_URL"] || "https://geosearch.planninglabs.nyc/v2/search"; // override: tests
@@ -46,6 +47,10 @@ function escapeSoql(value: string): string {
 }
 
 export async function geocodeNycAddress(address: string) {
+  // An address that names another state or country is not looked up in the City's
+  // geocoder, which would otherwise match a New York street of the same name.
+  const region = regionOf(address);
+  if (region === "us" || region === "intl") return null;
   const geoUrl = new URL(GEOSEARCH_URL);
   geoUrl.searchParams.set("text", `${address.trim()}, New York, NY`);
   geoUrl.searchParams.set("size", "5");

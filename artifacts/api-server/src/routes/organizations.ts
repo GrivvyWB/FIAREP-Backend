@@ -23,7 +23,7 @@ import {
 } from "../lib/organizationDevelopments";
 import { researchOrganization } from "../lib/organizationResearch";
 import { dofBuildingsByOwner, lookupBuildingUnits } from "../lib/dofCharges";
-import { hasCityData, normalizeAddress, stateCode } from "../lib/jurisdiction";
+import { hasCityData, isUsCountry, normalizeAddress, regionValue } from "../lib/jurisdiction";
 
 const router: IRouter = Router();
 router.use("/v1/platform/organizations", requirePlatformOwner);
@@ -84,9 +84,12 @@ function propertyInput(body: Record<string, unknown>) {
   // Where the building is. Nothing said means New York City, which is where
   // every building registered before the platform went multi-state is.
   const city = typeof body.city === "string" ? body.city.trim() || null : null;
-  const state = stateCode(body.state) || null;
+  // Any country. Nothing said means the United States.
+  const rawCountry = typeof body.country === "string" ? body.country.trim().slice(0, 80) : "";
+  const country = isUsCountry(rawCountry) ? null : rawCountry;
+  const state = regionValue(body.state, country) || null;
   const postalCode = typeof body.postalCode === "string" ? body.postalCode.trim() || null : null;
-  const normalizedAddress = normalizeAddress(displayAddress, city, state);
+  const normalizedAddress = normalizeAddress(displayAddress, city, state, country);
   if (normalizedAddress.length < 3) throw Object.assign(new Error("A valid displayAddress is required"), { status: 400 });
   return {
     displayAddress,
@@ -94,6 +97,7 @@ function propertyInput(body: Record<string, unknown>) {
     city,
     state,
     postalCode,
+    country,
     development: typeof body.development === "string" ? body.development.trim() || null : null,
     active: body.active !== false,
   };
@@ -131,7 +135,7 @@ router.post("/v1/platform/organizations/:organizationId/properties", async (req,
     let cityUnits = 0; let bbl: string | null = null; let unitsSource: string | null = null;
     // Only New York City has a tax roll we can read. Everywhere else the unit
     // count is typed in, which the needsUnits answer below asks for.
-    if (hasCityData(input.city, input.state)) {
+    if (hasCityData(input.city, input.state, input.country)) {
       try { const found = await lookupBuildingUnits(input.displayAddress); if (found) { cityUnits = found.units; bbl = found.bbl; unitsSource = found.source; if (found.displayAddress && !input.displayAddress.includes(",")) { input.displayAddress = found.displayAddress; input.normalizedAddress = normalizeAddress(found.displayAddress, input.city, input.state); } } } catch { /* City lookup unavailable: fall back to a typed figure */ }
     }
     const typedUnits = Number.isInteger(body["units"]) && (body["units"] as number) > 0 ? (body["units"] as number) : 0;
@@ -141,7 +145,7 @@ router.post("/v1/platform/organizations/:organizationId/properties", async (req,
     const sameLot = bbl ? await db.select({ id: organizationProperties.id }).from(organizationProperties).where(and(eq(organizationProperties.organizationId, organizationId), eq(organizationProperties.bbl, bbl))).limit(1) : [];
     if (sameLot.length > 0) units = 0;
     else if (units <= 0) {
-      const outside = !hasCityData(input.city, input.state);
+      const outside = !hasCityData(input.city, input.state, input.country);
       res.status(400).json({
         error: outside
           ? "Type the number of dwelling units to register this building — only New York City publishes a unit count we can read."
@@ -236,7 +240,7 @@ router.post("/v1/platform/organizations/:organizationId/properties/bulk", async 
         if (org.propertyLimit !== null && count >= org.propertyLimit) { stopped = true; break; }
         const active = !limited || b.units === 0 || onPlan + b.units <= (org.licensedUnits as number);
         if (active) onPlan += b.units; else off += 1;
-        rows.push({ id: randomUUID(), organizationId, displayAddress: b.displayAddress, normalizedAddress, city: null, state: null, postalCode: null, development: null, units: b.units, bbl: b.bbl, active });
+        rows.push({ id: randomUUID(), organizationId, displayAddress: b.displayAddress, normalizedAddress, city: null, state: null, postalCode: null, country: null, development: null, units: b.units, bbl: b.bbl, active });
         taken.add(normalizedAddress); if (b.bbl) lotsHere.add(b.bbl); count += 1;
       }
       for (let i = 0; i < rows.length; i += 500) await tx.insert(organizationProperties).values(rows.slice(i, i + 500)).onConflictDoNothing();

@@ -48,7 +48,7 @@ type Property = {
 const placeOf = (p: { city: string | null; state: string | null }) =>
   [p.city, p.state].filter(Boolean).join(", ") || "New York, NY";
 const isNyc = (p: { state: string | null }) => !p.state || p.state.toUpperCase() === "NY";
-type Suggestion = { address: string; borough: string; city?: string; state?: string; postalCode?: string; label: string };
+type Suggestion = { address: string; borough: string; city?: string; state?: string; postalCode?: string; country?: string; label: string };
 type PortfolioRow = {
   registrationId: string; buildingId: string; address: string; borough: string; zip: string;
   bbl: string; bin: string; units?: number; hpdA: number; hpdB: number; hpdC: number;
@@ -242,6 +242,9 @@ export default function OwnerProperties() {
   const [cityInput, setCityInput] = useState("");
   const [stateInput, setStateInput] = useState("");
   const [postalInput, setPostalInput] = useState("");
+  // Empty = United States. Any other country by name ("Canada", "United Arab Emirates").
+  const [countryInput, setCountryInput] = useState("");
+  const usAddress = !countryInput.trim() || /^(us|usa|united states( of america)?)$/i.test(countryInput.trim());
   const [needsUnits, setNeedsUnits] = useState(false);
   const [addError, setAddError] = useState("");
 
@@ -292,10 +295,11 @@ export default function OwnerProperties() {
         city: cityInput.trim() || null,
         state: stateInput.trim() || null,
         postalCode: postalInput.trim() || null,
+        country: countryInput.trim() || null,
         ...(Number.isFinite(typed) && typed > 0 ? { units: typed } : {}),
       });
       setAddressInput(""); setDevName(""); setUnitsInput(""); setNeedsUnits(false);
-      setCityInput(""); setStateInput(""); setPostalInput("");
+      setCityInput(""); setStateInput(""); setPostalInput(""); setCountryInput("");
       toast({ title: `Added to ${organization?.name ?? "the organization"}` });
       await reload();
     } catch (err: any) {
@@ -530,10 +534,10 @@ export default function OwnerProperties() {
                       <li
                         key={i}
                         className="cursor-pointer px-3 py-2 hover:bg-slate-50"
-                        onMouseDown={() => { setAddressInput(s.label); setCityInput(s.city || s.borough || ""); setStateInput(s.state || ""); setPostalInput(s.postalCode || ""); setSuggestions([]); setSuggestOpen(false); }}
+                        onMouseDown={() => { setAddressInput(s.label); setCityInput(s.city || s.borough || ""); setStateInput(s.state || ""); setPostalInput(s.postalCode || ""); setCountryInput(s.country || ""); setSuggestions([]); setSuggestOpen(false); }}
                       >
                         <span className="font-medium text-slate-900">{s.address}</span>
-                        <span className="ml-2 text-slate-500">{[s.city || s.borough, s.state].filter(Boolean).join(", ")}</span>
+                        <span className="ml-2 text-slate-500">{[s.city || s.borough, s.state, s.country].filter(Boolean).join(", ")}</span>
                       </li>
                     ))}
                   </ul>
@@ -548,11 +552,18 @@ export default function OwnerProperties() {
               />
               <Input
                 className="sm:w-20"
-                placeholder="State"
+                placeholder={usAddress ? "State" : "Region"}
                 value={stateInput}
-                onChange={(e) => setStateInput(e.target.value.toUpperCase().slice(0, 2))}
-                aria-label="State"
-                maxLength={2}
+                onChange={(e) => setStateInput(usAddress ? e.target.value.toUpperCase().slice(0, 2) : e.target.value.slice(0, 80))}
+                aria-label={usAddress ? "State" : "Region"}
+                maxLength={usAddress ? 2 : 80}
+              />
+              <Input
+                className="sm:w-36"
+                placeholder="Country (US if blank)"
+                value={countryInput}
+                onChange={(e) => setCountryInput(e.target.value.slice(0, 80))}
+                aria-label="Country"
               />
               <Input
                 className="sm:w-44"
