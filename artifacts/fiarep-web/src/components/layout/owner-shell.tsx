@@ -3,7 +3,7 @@ import { LanguagePicker } from "@/components/language-picker";
 import { customFetch } from "@workspace/api-client-react";
 import { useOwnerAuth } from "@/hooks/use-owner-auth";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LayoutDashboard, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer, HardHat, UsersRound, Mic } from "lucide-react";
+import { ClipboardCheck, BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LayoutDashboard, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer, HardHat, UsersRound, Mic, MapPinned } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function OwnerShell({ children }: { children: ReactNode }) {
@@ -142,6 +142,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           >
             <Search className="h-4 w-4" />
             Building lookup
+          </Link>
+          <Link
+            href="/platform-owner/city-records"
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/city-records"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <MapPinned className="h-4 w-4" />
+            City Records
           </Link>
           <Link
             href="/platform-owner/repair-prices"

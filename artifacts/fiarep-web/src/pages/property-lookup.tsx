@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { customFetch } from "@workspace/api-client-react";
+import { CityRecordsCard, type CityRecords } from "@/components/city-records-card";
 import { getLookupNycPropertyQueryKey, useLookupNycProperty, type NycPropertyLookup } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +27,15 @@ export default function PropertyLookup() {
     { query: { enabled: !!query, retry: false, queryKey: getLookupNycPropertyQueryKey({ address: query, limit: 100 }) } },
   );
   const d = data as NycPropertyLookup | undefined;
+  // Outside New York City: the city's own record, when that place is on in Platform Control → City Records.
+  const [city, setCity] = useState<CityRecords | null>(null);
+  const [cityNote, setCityNote] = useState("");
+  useEffect(() => {
+    setCity(null); setCityNote("");
+    if (!query || !isError) return;
+    void customFetch<CityRecords>(`/api/v1/property/city-records?address=${encodeURIComponent(query)}`, { responseType: "json" } as never)
+      .then(setCity).catch((e: any) => setCityNote(e?.data?.error || ""));
+  }, [query, isError]);
   const unitMatch = (apt?: string | null) => !!unit.trim() && String(apt || "").replace(/\s/g, "").toUpperCase() === unit.replace(/\s/g, "").toUpperCase();
   const sortUnitFirst = <T extends { apartment?: string | null }>(rows: T[]) => [...rows].sort((a, b) => Number(unitMatch(b.apartment)) - Number(unitMatch(a.apartment)));
 
@@ -40,7 +51,8 @@ export default function PropertyLookup() {
         <Button type="submit" disabled={!address.trim() || isLoading}>{isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="mr-1 h-4 w-4" />}Look up</Button>
       </form>
 
-      {isError && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{(error as any)?.message || "That address could not be matched to an NYC property."}</p>}
+      {isError && !city && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{cityNote || (error as any)?.message || "That address could not be matched to an NYC property."}</p>}
+      {city && <CityRecordsCard data={city} />}
       {d && (
         <>
           <div className="rounded-lg border bg-card p-4">

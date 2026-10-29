@@ -8,6 +8,7 @@ import { lookupNycPropertyData } from "../lib/nycProperty";
 import { lookupDofCharges } from "../lib/dofCharges";
 import { rateLimit } from "../lib/rateLimit";
 import { geocodePlace, suggestAddresses } from "../lib/geocode";
+import { CITY_SOURCES, citySwitches, lookupCityRecords, setCitySwitch, type CitySourceId } from "../lib/cityRecords";
 
 const router: IRouter = Router();
 
@@ -69,6 +70,40 @@ router.get("/v1/platform/properties/address-suggest", requirePlatformOwner, rate
   if (q.length < 3) { res.json([]); return; }
   const places = await suggestAddresses(q).catch(() => []);
   res.json(places.map((p) => ({ address: p.address, borough: p.borough, city: p.city, state: p.state, postalCode: p.postalCode, country: p.countryCode === "US" ? "" : p.country, label: p.label })));
+});
+
+// ── City records outside New York City (lib/cityRecords.ts) ──
+// Any signed-in member: the city's record for an address, when that place is switched on.
+router.get("/v1/property/city-records", requireAuth, rateLimit("city-records", 60), async (req, res): Promise<void> => {
+  const address = String(req.query["address"] ?? "").trim().slice(0, 200);
+  res.setHeader("Cache-Control", "no-store");
+  if (address.length < 4) { res.status(400).json({ error: "Enter a building address." }); return; }
+  try {
+    const r = await lookupCityRecords(address);
+    if (!r) { res.status(404).json({ error: "No city records for that address. FIAREP reads New York City, and the places switched on in Platform Control → City Records (Connecticut, Philadelphia, Maryland, Washington DC, Chicago)." }); return; }
+    if ("off" in r) { res.status(404).json({ error: `${r.label} records are off. Switch them on in Platform Control → City Records.`, off: r.off }); return; }
+    res.json(r);
+  } catch (error) {
+    req.log.warn({ err: error }, "City records lookup failed");
+    res.status(502).json({ error: "The city's records service is not answering right now. Try again." });
+  }
+});
+
+// Platform Control → City Records: each place's On / Off button.
+router.get("/v1/platform/city-records", requirePlatformOwner, async (_req, res): Promise<void> => {
+  const on = await citySwitches();
+  res.json(CITY_SOURCES.map((x) => ({ ...x, on: on[x.id] })));
+});
+router.put("/v1/platform/city-records/:id", requirePlatformOwner, async (req, res): Promise<void> => {
+  const id = String(req.params["id"]) as CitySourceId;
+  if (!CITY_SOURCES.some((x) => x.id === id)) { res.status(404).json({ error: "Unknown place" }); return; }
+  await setCitySwitch(id, (req.body as { on?: unknown })?.on === true);
+  const on = await citySwitches();
+  res.json(CITY_SOURCES.map((x) => ({ ...x, on: on[x.id] })));
+});
+router.post("/v1/platform/city-records/test", requirePlatformOwner, async (req, res): Promise<void> => {
+  const address = String((req.body as { address?: unknown })?.address ?? "").trim().slice(0, 200);
+  try { res.json(await lookupCityRecords(address)); } catch (error) { res.status(502).json({ error: error instanceof Error ? error.message : "Lookup failed" }); }
 });
 
 export default router;

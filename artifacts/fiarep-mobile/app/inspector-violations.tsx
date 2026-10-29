@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
-import { lookupNycProperty, type NycPropertyLookup } from '@workspace/api-client-react';
+import { customFetch, lookupNycProperty, type NycPropertyLookup } from '@workspace/api-client-react';
+import CityRecordsView, { type CityRecords } from '../components/CityRecordsView';
 import {
   addBuildingViolation,
   listBuildingViolations,
@@ -60,6 +61,8 @@ export default function InspectorViolations() {
   );
   const [lookupLoading, setLookupLoading] = useState(false);
   const [lookupError, setLookupError] = useState<string>('');
+  // Outside New York City: the city's own record (Platform Control → City Records).
+  const [cityRecords, setCityRecords] = useState<CityRecords | null>(null);
   const canDelete = useDeletionPolicy();
 
   useFocusEffect(useCallback(() => {
@@ -85,11 +88,16 @@ export default function InspectorViolations() {
     setLookupLoading(true);
     setLookupError('');
     setLookupData(null);
+    setCityRecords(null);
     try {
       const res = await lookupNycProperty({ address: address.trim(), limit: 25 });
       setLookupData(res);
     } catch (err: any) {
-      setLookupError(err?.message || 'Lookup failed.');
+      try {
+        setCityRecords(await customFetch<CityRecords>(`/api/v1/property/city-records?address=${encodeURIComponent(address.trim())}`, { responseType: 'json' } as never));
+      } catch (cityErr: any) {
+        setLookupError(cityErr?.data?.error || err?.message || 'Lookup failed.');
+      }
     } finally {
       setLookupLoading(false);
     }
@@ -233,6 +241,7 @@ export default function InspectorViolations() {
         </Text>
       )}
       {!!lookupError && <Text style={{ color: '#c0392b', marginTop: 4, fontSize: 13 }}>{lookupError}</Text>}
+      {cityRecords && <CityRecordsView data={cityRecords} />}
       {lookupData && (
         <View style={[ui.card, { marginTop: 8, backgroundColor: '#f9f9f9', padding: 12 }]}>
           <Text style={[ui.cardTitle, { marginBottom: 6 }]}>Official NYC Records</Text>

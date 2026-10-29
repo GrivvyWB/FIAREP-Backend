@@ -74,6 +74,7 @@ import OwnerRepairPrices from '@/pages/platform-owner/repair-prices';
 import OwnerWorkRequests from '@/pages/platform-owner/work-requests';
 import OwnerAepRegistry from '@/pages/platform-owner/aep-registry';
 import OwnerBuildingLookup from '@/pages/platform-owner/building-lookup';
+import OwnerCityRecords from '@/pages/platform-owner/city-records';
 import OwnerPricing from '@/pages/platform-owner/pricing';
 import BaselinePage from '@/pages/baseline';
 import OwnerForms from '@/pages/platform-owner/forms';
@@ -423,6 +424,7 @@ function OwnerAppRouter() {
           <Route path="/platform-owner/work-requests" component={OwnerWorkRequests} />
           <Route path="/platform-owner/aep" component={OwnerAepRegistry} />
           <Route path="/platform-owner/building-lookup" component={OwnerBuildingLookup} />
+          <Route path="/platform-owner/city-records" component={OwnerCityRecords} />
           <Route path="/platform-owner/pricing" component={OwnerPricing} />
           <Route path="/platform-owner/baseline/:id">{() => <BaselinePage owner />}</Route>
           <Route path="/platform-owner/baseline">{() => <BaselinePage owner />}</Route>
