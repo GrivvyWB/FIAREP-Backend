@@ -16,16 +16,40 @@
 import { and, eq } from "drizzle-orm";
 import { db, settings } from "@workspace/db";
 import { geocodePlace } from "./geocode";
-import { stateCode } from "./jurisdiction";
+import { stateCode, US_STATES } from "./jurisdiction";
+import { STATE_CATALOG, lookupStateRecords } from "./stateRecords";
 
-export type CitySourceId = "ct" | "phl" | "md" | "dc" | "chi";
-export const CITY_SOURCES: Array<{ id: CitySourceId; label: string; covers: string; publisher: string; violations: boolean }> = [
+// Built-in readers by id; every other state is "st-<two letters>" from STATE_CATALOG.
+export type CitySourceId = string;
+export type CitySource = { id: CitySourceId; label: string; covers: string; publisher: string; violations: boolean };
+const BUILT_IN: CitySource[] = [
   { id: "ct", label: "Connecticut", covers: "Every town in Connecticut, Stamford included", publisher: "State of Connecticut — statewide parcel and assessor (CAMA) data, data.ct.gov", violations: false },
   { id: "phl", label: "Philadelphia", covers: "City of Philadelphia", publisher: "City of Philadelphia — Office of Property Assessment, and Licenses & Inspections code violations", violations: true },
   { id: "md", label: "Maryland", covers: "Every county in Maryland, Baltimore included", publisher: "State Department of Assessments and Taxation (SDAT) — MD iMAP parcel points", violations: false },
   { id: "dc", label: "Washington, DC", covers: "District of Columbia", publisher: "DC Office of Tax and Revenue — owner and assessment records, DC GIS", violations: false },
   { id: "chi", label: "Chicago", covers: "City of Chicago", publisher: "Cook County Assessor — parcel addresses, and City of Chicago building violations", violations: true },
 ];
+// States with a built-in reader above (the catalog entry for them is not used).
+const BUILT_IN_STATES = new Set(["CT", "MD", "DC"]);
+/** Every place FIAREP can read: the built-in ones, then each state with a free statewide service. */
+export const CITY_SOURCES: CitySource[] = [
+  ...BUILT_IN,
+  ...STATE_CATALOG.filter((e) => e.kind !== "none" && !BUILT_IN_STATES.has(e.state)).map((e) => ({ id: `st-${e.state.toLowerCase()}`, label: e.label, covers: `Every county in ${e.label}`, publisher: e.publisher, violations: false })),
+];
+
+/** What the page says about a typed state: its source if FIAREP can read it, else why not. */
+export function stateStatus(typed: string): { state: string; label: string; source: CitySource | null; note: string } | null {
+  const code = stateCode(typed) || (typed.trim().length === 2 ? typed.trim().toUpperCase() : "");
+  if (!code || !US_STATES[code]) return null;
+  const label = US_STATES[code]!;
+  if (code === "CT") return { state: code, label, source: BUILT_IN.find((x) => x.id === "ct")!, note: "" };
+  if (code === "MD") return { state: code, label, source: BUILT_IN.find((x) => x.id === "md")!, note: "" };
+  if (code === "DC") return { state: code, label, source: BUILT_IN.find((x) => x.id === "dc")!, note: "" };
+  const e = STATE_CATALOG.find((x) => x.state === code);
+  const extra = code === "PA" ? " Philadelphia has its own button below." : code === "IL" ? " Chicago has its own button below." : "";
+  if (!e || e.kind === "none") return { state: code, label, source: null, note: (e?.note || `${label} has no free statewide property service; its records are published county by county.`) + extra };
+  return { state: code, label, source: CITY_SOURCES.find((x) => x.id === `st-${code.toLowerCase()}`) || null, note: (e.note || "") + extra };
+}
 
 const KEY = "city-records";
 const PLATFORM = "default";
@@ -74,7 +98,8 @@ export function sourceFor(city: string, state: string): CitySourceId | null {
   if (st === "DC") return "dc";
   if (st === "PA" && ct === "philadelphia") return "phl";
   if (st === "IL" && ct === "chicago") return "chi";
-  return null;
+  const e = STATE_CATALOG.find((x) => x.state === st && x.kind !== "none");
+  return e ? `st-${st.toLowerCase()}` : null;
 }
 
 /** "1500 Market St" -> number 1500 and the main word of the street name (MARKET). */
@@ -153,7 +178,8 @@ export async function lookupCityRecords(address: string): Promise<CityRecordsRes
   else if (id === "phl") ({ records, violations } = await philadelphia(p.num, p.word));
   else if (id === "md") ({ records } = await maryland(p.num, p.word, city));
   else if (id === "dc") ({ records } = await washingtonDc(p.num, p.word));
-  else ({ records, violations } = await chicago(p.num, p.word));
+  else if (id === "chi") ({ records, violations } = await chicago(p.num, p.word));
+  else { const e = STATE_CATALOG.find((x) => `st-${x.state.toLowerCase()}` === id); if (e) records = await lookupStateRecords(e, p.num, p.word, city); }
   const open = (violations || []).filter((v) => /^(open|in violation|active|failed|non.?complied)/i.test(v.status)).length;
   return { source: { id, label: src.label, publisher: src.publisher }, matched: place.label, records, violations, openViolations: open, retrievedAt: new Date().toISOString() };
 }

@@ -8,7 +8,7 @@ import { lookupNycPropertyData } from "../lib/nycProperty";
 import { lookupDofCharges } from "../lib/dofCharges";
 import { rateLimit } from "../lib/rateLimit";
 import { geocodePlace, suggestAddresses } from "../lib/geocode";
-import { CITY_SOURCES, citySwitches, lookupCityRecords, setCitySwitch, type CitySourceId } from "../lib/cityRecords";
+import { CITY_SOURCES, citySwitches, lookupCityRecords, setCitySwitch, stateStatus, type CitySourceId } from "../lib/cityRecords";
 
 const router: IRouter = Router();
 
@@ -93,6 +93,13 @@ router.get("/v1/property/city-records", requireAuth, rateLimit("city-records", 6
 router.get("/v1/platform/city-records", requirePlatformOwner, async (_req, res): Promise<void> => {
   const on = await citySwitches();
   res.json(CITY_SOURCES.map((x) => ({ ...x, on: on[x.id] })));
+});
+// Type a state: is it ready to switch on, and if not, why not.
+router.get("/v1/platform/city-records/state/:state", requirePlatformOwner, async (req, res): Promise<void> => {
+  const st = stateStatus(String(req.params["state"]));
+  if (!st) { res.status(404).json({ error: "Type a US state, e.g. South Carolina or SC." }); return; }
+  const on = st.source ? (await citySwitches())[st.source.id] === true : false;
+  res.json({ ...st, on });
 });
 router.put("/v1/platform/city-records/:id", requirePlatformOwner, async (req, res): Promise<void> => {
   const id = String(req.params["id"]) as CitySourceId;
