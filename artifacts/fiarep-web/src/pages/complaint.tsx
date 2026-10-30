@@ -4,6 +4,9 @@ import { customFetch, type ViolationClassification } from "@workspace/api-client
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { Photos, SmartTicketBox } from "@/pages/reports";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
+import { useAuth } from "@/hooks/use-auth";
+import { hasModuleAccess } from "@/lib/access-policy";
+import { menuOverride } from "@/lib/website-menu";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string };
 
@@ -12,6 +15,10 @@ type Report = { id: string; development?: string | null; state?: Record<string, 
 export default function ComplaintPage() {
   const { id = "" } = useParams<{ id: string }>();
   const [report, setReport] = useState<Report | null>(null);
+  // The link to Resident Reports only when that page is open to this person (Platform Control switches).
+  const { staff, organizationModules } = useAuth();
+  const reportsOverride = menuOverride(organizationModules, "/reports", staff?.id);
+  const canOpenReports = reportsOverride === false ? false : reportsOverride === true || hasModuleAccess(staff, "reports", organizationModules);
   const [error, setError] = useState("");
   useEffect(() => {
     setReport(null); setError("");
@@ -46,7 +53,7 @@ export default function ComplaintPage() {
           </div>
           <SmartTicketBox state={state} />
           <FieldEvidenceDisplay state={state} reportId={report.id} photosLabel="After — completed work" />
-          <Link href={`/reports?id=${encodeURIComponent(report.id)}`} className="inline-block text-sm font-semibold text-[#185FA5] hover:underline">Assign or update it in Resident Reports</Link>
+          {canOpenReports && <Link href={`/reports?id=${encodeURIComponent(report.id)}`} className="inline-block text-sm font-semibold text-[#185FA5] hover:underline">Assign or update it in Resident Reports</Link>}
         </div>
       )}
     </div>
