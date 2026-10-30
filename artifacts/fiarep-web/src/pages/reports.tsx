@@ -26,7 +26,7 @@ import {
   MapPin, ScanLine, Search, Send, Trash2, UserRound, X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { Link } from "wouter";
+import { Link, useSearch } from "wouter";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
@@ -357,7 +357,6 @@ export default function Reports() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const completionPhotoInput = useRef<HTMLInputElement>(null);
   const [assigning, setAssigning] = useState<string | null>(null);
-  const deepLinkHandled = useRef(false);
 
   const reports = (reportsQuery.data || []) as Report[];
   // Every supervisor / manager in the organization (not only this person's
@@ -409,17 +408,20 @@ export default function Reports() {
       (development === "all" || report.development === development);
   });
 
+  // Opened from an alert, the dashboard or the Complaint Dashboard (?id=…): open that complaint.
+  // Waits for the list; if the complaint isn't in it (another development), it is fetched by itself.
+  const urlSearch = useSearch();
+  const deepLinkId = useRef("");
   useEffect(() => {
-    if (deepLinkHandled.current || reportsQuery.isLoading) return;
-    deepLinkHandled.current = true;
-    const reportId = new URLSearchParams(window.location.search).get("id");
-    if (!reportId) return;
+    const reportId = new URLSearchParams(urlSearch).get("id");
+    if (!reportId || deepLinkId.current === reportId || reportsQuery.isLoading) return;
     const report = reports.find((item) => item.id === reportId);
-    if (report) {
-      setDialogMode("details");
-      setSelected(report);
-    }
-  }, [reports, reportsQuery.isLoading]);
+    deepLinkId.current = reportId;
+    if (report) { setDialogMode("details"); setSelected(report); return; }
+    void customFetch<Report>(`/api/v1/resident-reports/${encodeURIComponent(reportId)}`, { responseType: "json" } as never)
+      .then((r) => { if (r?.id) { setDialogMode("details"); setSelected(r); } })
+      .catch(() => toast({ variant: "destructive", title: "That complaint couldn't be opened", description: "It may have been deleted, or it's at a development you can't see." }));
+  }, [urlSearch, reports, reportsQuery.isLoading]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const openReport = (report: Report, mode: "details" | "assign") => {
     setDialogMode(mode);
@@ -704,6 +706,26 @@ export default function Reports() {
                     }
                   />
                 </div>
+                {(() => {
+                  // Smart Repair: what the photo shows and how to fix it (from the resident's photo).
+                  const t = (state.smartTicket && typeof state.smartTicket === "object" ? state.smartTicket : null) as Record<string, unknown> | null;
+                  if (!t) return null;
+                  const list = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
+                  const steps = list(t.steps);
+                  return (
+                    <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-sm">
+                      <p className="font-semibold text-blue-900">Smart Repair{t.priority ? ` · ${String(t.priority)} priority` : ""}</p>
+                      {!!t.issueFound && <p><span className="text-muted-foreground">Found: </span>{String(t.issueFound)}</p>}
+                      {!!t.repairRequired && <p><span className="text-muted-foreground">Repair: </span>{String(t.repairRequired)}</p>}
+                      {!!t.exactArea && <p><span className="text-muted-foreground">Where: </span>{String(t.exactArea)}</p>}
+                      <p className="text-muted-foreground">{[t.trade ? `Trade: ${String(t.trade)}` : "", t.estimatedTime ? `Time: ${String(t.estimatedTime)}` : ""].filter(Boolean).join(" · ")}</p>
+                      {steps.length > 0 && <ol className="list-decimal space-y-0.5 pl-5">{steps.map((x, i) => <li key={i}>{x}</li>)}</ol>}
+                      {list(t.tools).length > 0 && <p><span className="text-muted-foreground">Tools: </span>{list(t.tools).join(", ")}</p>}
+                      {list(t.supplies).length > 0 && <p><span className="text-muted-foreground">Supplies: </span>{list(t.supplies).join(", ")}</p>}
+                      {list(t.fixtures).length > 0 && <p><span className="text-muted-foreground">Parts: </span>{list(t.fixtures).join(", ")}</p>}
+                    </div>
+                  );
+                })()}
                 <FieldEvidenceDisplay state={state} reportId={selected.id} photosLabel="After — completed work" />
                 {isCpmSup && (() => {
                   const complaintNo = String(state.complaintNo || "");

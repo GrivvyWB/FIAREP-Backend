@@ -1,3 +1,4 @@
+import { Link } from "wouter";
 import { useEffect, useMemo, useState } from "react";
 import {
   getListEntityRecordsQueryKey,
@@ -909,7 +910,7 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
                             const state = r.state || {};
                             const cat = categoryOf(r);
                             return (
-                              <div key={r.id} className="p-3 bg-white border border-slate-200 shadow-sm rounded-xl" data-testid={`complaint-${r.id}`}>
+                              <Link key={r.id} href={`/reports?id=${encodeURIComponent(r.id)}`} className="block p-3 bg-white border border-slate-200 shadow-sm rounded-xl hover:border-blue-300 transition-colors" data-testid={`complaint-${r.id}`}>
                                 <div className="flex justify-between items-start mb-2 gap-2">
                                   <h4 className="text-xs font-bold text-slate-900 leading-tight">{String(state.title || state.complaintNo || r.id.slice(0,8))}</h4>
                                   <span className="text-[9px] px-1.5 py-0.5 bg-red-50 border border-red-100 text-red-600 rounded uppercase font-bold shrink-0">{statusOf(r).replace("_", " ")}</span>
@@ -919,7 +920,7 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
                                   <span className="bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-slate-700">{cat}</span>
                                   <span className="flex items-center gap-1"><Clock className="w-3 h-3"/>{new Date(r.createdAt).toLocaleDateString()}</span>
                                 </div>
-                              </div>
+                              </Link>
                             )
                           })}
                         </div>
