@@ -7,7 +7,7 @@ import { requireAuth, requirePlatformOwner } from "../middlewares/auth";
 import { lookupNycPropertyData } from "../lib/nycProperty";
 import { lookupDofCharges } from "../lib/dofCharges";
 import { rateLimit } from "../lib/rateLimit";
-import { geocodePlace, suggestAddresses } from "../lib/geocode";
+import { geocodePlace, geocodePoint, suggestAddresses } from "../lib/geocode";
 import { COUNTRIES } from "../lib/countries";
 import { countrySwitches, setCountry } from "../lib/countrySwitches";
 import { CITY_SOURCES, citySwitches, lookupCityRecords, setCitySwitch, stateStatus, type CitySourceId } from "../lib/cityRecords";
@@ -72,6 +72,14 @@ router.get("/v1/platform/properties/address-suggest", requirePlatformOwner, rate
   if (q.length < 3) { res.json([]); return; }
   const places = await suggestAddresses(q).catch(() => []);
   res.json(places.map((p) => ({ address: p.address, borough: p.borough, city: p.city, state: p.state, postalCode: p.postalCode, country: p.countryCode === "US" ? "" : p.country, label: p.label })));
+});
+
+// The map pin for a building address (Complaint Dashboard map). Any address FIAREP can find.
+router.get("/v1/public/geocode", rateLimit("geocode-pin", 120), async (req, res): Promise<void> => {
+  const address = String(req.query["address"] ?? "").trim().slice(0, 200);
+  res.setHeader("Cache-Control", "private, max-age=3600");
+  if (address.length < 4) { res.json(null); return; }
+  res.json(await geocodePoint(address).catch(() => null));
 });
 
 // ── City records outside New York City (lib/cityRecords.ts) ──

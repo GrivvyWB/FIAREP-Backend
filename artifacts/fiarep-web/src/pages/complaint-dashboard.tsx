@@ -421,8 +421,16 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
     query: { enabled: Boolean(selectedDev && focusAddress), queryKey: getSearchNychaAddressesQueryKey(focusParams), staleTime: 30 * 60 * 1000 },
   });
   const focusPin = focusAddresses.find((a) => a.latitude != null && a.longitude != null) || null;
-  const mapLatitude = focusPin?.latitude ?? selectedCatalogDevelopment?.latitude ?? null;
-  const mapLongitude = focusPin?.longitude ?? selectedCatalogDevelopment?.longitude ?? null;
+  // A client's own building (not in the housing catalog): find the pin from its street address.
+  const needsLookup = Boolean(selectedDev && focusAddress && !focusPin && selectedCatalogDevelopment?.latitude == null);
+  const { data: addressPin, isLoading: pinLoading } = useQuery({
+    queryKey: ["map-pin", focusAddress],
+    queryFn: () => fetch(`/api/v1/public/geocode?address=${encodeURIComponent(focusAddress)}`).then((r) => (r.ok ? r.json() : null)) as Promise<{ latitude: number; longitude: number } | null>,
+    enabled: needsLookup,
+    staleTime: 60 * 60 * 1000,
+  });
+  const mapLatitude = focusPin?.latitude ?? selectedCatalogDevelopment?.latitude ?? addressPin?.latitude ?? null;
+  const mapLongitude = focusPin?.longitude ?? selectedCatalogDevelopment?.longitude ?? addressPin?.longitude ?? null;
   const mapAddress = focusPin?.address || focusAddress || selectedCatalogDevelopment?.address || "";
   const selectedHasCoordinates = mapLatitude != null && mapLongitude != null;
   const mapUrl = selectedHasCoordinates ? mapUrlFor(mapLatitude!, mapLongitude!) : NYC_MAP_URL;
@@ -695,7 +703,7 @@ export default function ComplaintDashboard({ source = "tenant" }: { source?: "te
 
             {/* Column 2: Interactive Map Surface */}
             <div className="flex-1 bg-white border border-slate-200 rounded-xl overflow-hidden relative shadow-sm min-h-[300px]">
-              {selectedDev && developmentCatalogQuery.isLoading ? (
+              {selectedDev && (developmentCatalogQuery.isLoading || (needsLookup && pinLoading)) ? (
                 <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
                   <Loader2 className="h-7 w-7 animate-spin text-blue-600" />
                 </div>
