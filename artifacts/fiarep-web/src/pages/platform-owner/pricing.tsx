@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { BANDS, EXAMPLES, SETUP_FEE, SOURCES, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING, PLAN_MIN_UNITS, bandHours, bandLabel, ladderFees, type Band } from "@/lib/pricing-ladder";
+import { BANDS, EXAMPLES, SOURCES, LABOR_SHARE, LOADED_HOURLY, MATERIALS_HANDLING, PLAN_MIN_UNITS, bandHours, bandLabel, ladderFees, type Band } from "@/lib/pricing-ladder";
 import { usePricing, savePricing } from "@/lib/pricing-overrides";
 import { DischargeChangeover } from "@/components/discharge-changeover";
 
@@ -79,7 +79,7 @@ export default function OwnerPricing() {
             ))}
           </tbody>
         </table>
-        <p className="px-3 py-2 text-xs text-slate-500">One-time setup {money(SETUP_FEE)} on the platform, waived on any annual contract of 1,000+ units. HPD cure $600 per apartment ($400 on plan or platform); DOB $1,500 first two, $1,000 after — no plan discount. Plan labor: {Math.round(LABOR_SHARE * 100)}% of the fee at {money(LOADED_HOURLY)}/hour loaded = the included hours per unit per year shown; appliances, parts, materials and delivery at cost + {Math.round(MATERIALS_HANDLING * 100)}%.</p>
+        <p className="px-3 py-2 text-xs text-slate-500">HPD cure $600 per apartment ($400 on plan or platform); DOB $1,500 first two, $1,000 after — no plan discount. Plan labor: {Math.round(LABOR_SHARE * 100)}% of the fee at {money(LOADED_HOURLY)}/hour loaded = the included hours per unit per year shown; appliances, parts, materials and delivery at cost + {Math.round(MATERIALS_HANDLING * 100)}%.</p>
       </div>
 
       <DischargeChangeover bands={bands} />

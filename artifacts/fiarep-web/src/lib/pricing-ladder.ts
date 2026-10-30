@@ -14,7 +14,7 @@ export type Band = { label: string; from: number; to: number; platformRate: numb
 export const BANDS: Band[] = [
   { label: "2–299", from: 2, to: 299, platformRate: null, platformMin: null, planRate: null, planMin: null, note: "Small owners." },
   { label: "300–999", from: 300, to: 999, platformRate: null, platformMin: null, planRate: null, planMin: null, note: "All work and appliances handled, labor pooled." },
-  { label: "1,000–9,999", from: 1000, to: 9999, platformRate: null, platformMin: null, planRate: null, planMin: null, note: "Setup fee waived on annual." },
+  { label: "1,000–9,999", from: 1000, to: 9999, platformRate: null, platformMin: null, planRate: null, planMin: null, note: "" },
   { label: "10,000–49,999", from: 10000, to: 49999, platformRate: null, platformMin: null, planRate: null, planMin: null, note: "Annual contract. FIAREP orders materials on the client's supplier account." },
   { label: "50,000–300,000", from: 50000, to: 300000, platformRate: null, platformMin: null, planRate: null, planMin: null, note: "NYCHA scale (~177,000 apartments). Work dispatched per building as task orders against the labor pool." },
 ];
@@ -31,7 +31,6 @@ export function bandHours(b: Band): number | null { return b.hoursPerUnit != nul
 export const bandLabel = (from: number, to: number) => `${from.toLocaleString("en-US")}–${to.toLocaleString("en-US")}`;
 // Appliances, parts, materials and delivery: bought on the client's approval, reimbursed at cost plus this handling charge.
 export const MATERIALS_HANDLING = 0.1;
-export const SETUP_FEE = 1500;          // one time, waived on any annual contract (12 months or longer)
 
 export function bandFor(units: number, bands: Band[] = BANDS): Band {
   return bands.find((b) => units >= b.from && units <= b.to) || (units < bands[0]!.from ? bands[0]! : bands[bands.length - 1]!);
@@ -58,7 +57,7 @@ export const EXAMPLES: { name: string; units: number; note: string }[] = [
 ];
 
 export const CURRENT_VS_PROPOSED: { plan: string; today: string; proposed: string; change: string }[] = [
-  { plan: "Platform (software)", today: "$4/unit, min $400/mo, $1,500 setup", proposed: "Rates and minimums by band, set in Platform Control", change: "Step down with volume" },
+  { plan: "Platform (software)", today: "$4/unit, min $400/mo", proposed: "Rates and minimums by band, set in Platform Control", change: "Step down with volume" },
   { plan: "FIAREP plan (full service)", today: "$20/unit, min $1,000/mo, 60-day pilot", proposed: "Every size, rates and minimums by band set in Platform Control; all repairs and appliances handled, labor pooled, materials at cost + 10%", change: "Step down with volume; keep the pilot" },
   { plan: "Agency small", today: "$15/unit, min $5,000/mo, needs 2,500+ units", proposed: "Folded into the 1,000–9,999 band at $12/unit, min $12,000", change: "One ladder instead of a separate agency tier" },
   { plan: "Agency major", today: "$10/unit, min $25,000/mo", proposed: "Same, for 10,000–49,999 units", change: "Unchanged" },
