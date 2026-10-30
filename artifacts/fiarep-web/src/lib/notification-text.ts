@@ -81,7 +81,7 @@ export function notificationHref(
   if (/^door visit/i.test(m)) {
     candidates = [{ module: "door-visits", href: `/door-visits?id=${id}` }];
   } else if (/^smart repair/i.test(m)) {
-    candidates = [{ module: "reports", href: `/reports?id=${id}` }, { module: "complaint-dashboard", href: `/reports?id=${id}` }];
+    candidates = [{ module: "complaint-dashboard", href: `/complaint/${id}` }, { module: "reports", href: `/complaint/${id}` }];
   } else if (/change work order|^change orders /i.test(m)) {
     candidates = [{ module: "change-orders", href: "/change-orders" }];
   } else if (/^Measurement added to inspection/i.test(m) || /inspection logged|awaiting review|approved inspection|^inspection |^building violations|violation/i.test(m)) {
@@ -104,7 +104,7 @@ export function notificationHref(
   } else if (/^Scope submitted|^Scope /i.test(m)) {
     candidates = [{ module: "scope-review", href: "/scope-review" }, { module: "scope-writing", href: "/scope-writing" }, { module: "procurement", href: "/procurement" }];
   } else {
-    candidates = [{ module: "reports", href: `/reports?id=${id}` }, { module: "my-jobs", href: "/my-jobs" }];
+    candidates = [{ module: "complaint-dashboard", href: `/complaint/${id}` }, { module: "reports", href: `/complaint/${id}` }, { module: "my-jobs", href: "/my-jobs" }];
   }
   // Without a staff record (older callers) keep the best page.
   if (!opts?.staff) return candidates[0]!.href;

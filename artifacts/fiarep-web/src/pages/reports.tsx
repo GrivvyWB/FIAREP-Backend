@@ -46,7 +46,29 @@ import { ComplaintReceipts } from "@/components/complaint-receipts";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string; updatedAt: string; version: number };
 
-function Photos({ reportId, savedScans }: {
+/** Smart Repair: what the resident's photo shows and how to fix it. */
+export function SmartTicketBox({ state }: { state: Record<string, unknown> }) {
+                  // Smart Repair: what the photo shows and how to fix it (from the resident's photo).
+                  const t = (state.smartTicket && typeof state.smartTicket === "object" ? state.smartTicket : null) as Record<string, unknown> | null;
+                  if (!t) return null;
+                  const list = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
+                  const steps = list(t.steps);
+                  return (
+                    <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-sm">
+                      <p className="font-semibold text-blue-900">Smart Repair{t.priority ? ` · ${String(t.priority)} priority` : ""}</p>
+                      {!!t.issueFound && <p><span className="text-muted-foreground">Found: </span>{String(t.issueFound)}</p>}
+                      {!!t.repairRequired && <p><span className="text-muted-foreground">Repair: </span>{String(t.repairRequired)}</p>}
+                      {!!t.exactArea && <p><span className="text-muted-foreground">Where: </span>{String(t.exactArea)}</p>}
+                      <p className="text-muted-foreground">{[t.trade ? `Trade: ${String(t.trade)}` : "", t.estimatedTime ? `Time: ${String(t.estimatedTime)}` : ""].filter(Boolean).join(" · ")}</p>
+                      {steps.length > 0 && <ol className="list-decimal space-y-0.5 pl-5">{steps.map((x, i) => <li key={i}>{x}</li>)}</ol>}
+                      {list(t.tools).length > 0 && <p><span className="text-muted-foreground">Tools: </span>{list(t.tools).join(", ")}</p>}
+                      {list(t.supplies).length > 0 && <p><span className="text-muted-foreground">Supplies: </span>{list(t.supplies).join(", ")}</p>}
+                      {list(t.fixtures).length > 0 && <p><span className="text-muted-foreground">Parts: </span>{list(t.fixtures).join(", ")}</p>}
+                    </div>
+                  );
+                }
+
+export function Photos({ reportId, savedScans }: {
   reportId: string;
   savedScans?: Record<string, ViolationClassification>;
 }) {
@@ -706,26 +728,7 @@ export default function Reports() {
                     }
                   />
                 </div>
-                {(() => {
-                  // Smart Repair: what the photo shows and how to fix it (from the resident's photo).
-                  const t = (state.smartTicket && typeof state.smartTicket === "object" ? state.smartTicket : null) as Record<string, unknown> | null;
-                  if (!t) return null;
-                  const list = (v: unknown) => (Array.isArray(v) ? v.map(String).filter(Boolean) : []);
-                  const steps = list(t.steps);
-                  return (
-                    <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50/60 p-4 text-sm">
-                      <p className="font-semibold text-blue-900">Smart Repair{t.priority ? ` · ${String(t.priority)} priority` : ""}</p>
-                      {!!t.issueFound && <p><span className="text-muted-foreground">Found: </span>{String(t.issueFound)}</p>}
-                      {!!t.repairRequired && <p><span className="text-muted-foreground">Repair: </span>{String(t.repairRequired)}</p>}
-                      {!!t.exactArea && <p><span className="text-muted-foreground">Where: </span>{String(t.exactArea)}</p>}
-                      <p className="text-muted-foreground">{[t.trade ? `Trade: ${String(t.trade)}` : "", t.estimatedTime ? `Time: ${String(t.estimatedTime)}` : ""].filter(Boolean).join(" · ")}</p>
-                      {steps.length > 0 && <ol className="list-decimal space-y-0.5 pl-5">{steps.map((x, i) => <li key={i}>{x}</li>)}</ol>}
-                      {list(t.tools).length > 0 && <p><span className="text-muted-foreground">Tools: </span>{list(t.tools).join(", ")}</p>}
-                      {list(t.supplies).length > 0 && <p><span className="text-muted-foreground">Supplies: </span>{list(t.supplies).join(", ")}</p>}
-                      {list(t.fixtures).length > 0 && <p><span className="text-muted-foreground">Parts: </span>{list(t.fixtures).join(", ")}</p>}
-                    </div>
-                  );
-                })()}
+                <SmartTicketBox state={state} />
                 <FieldEvidenceDisplay state={state} reportId={selected.id} photosLabel="After — completed work" />
                 {isCpmSup && (() => {
                   const complaintNo = String(state.complaintNo || "");

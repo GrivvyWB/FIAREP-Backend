@@ -50,6 +50,7 @@ import MyInspections from '@/pages/my-inspections';
 import ComplaintDashboard from '@/pages/complaint-dashboard';
 import CommunityCoordinators from '@/pages/community';
 import Translator from '@/pages/translator';
+import ComplaintPage from '@/pages/complaint';
 import PropertyLookup from '@/pages/property-lookup';
 import ViolationAlerts from '@/pages/violation-alerts';
 import MoldCompliance from '@/pages/mold-compliance';
@@ -260,6 +261,7 @@ function AppRouter() {
           <Route path="/repairs" component={RepairsRoute} />
           <Route path="/projects" component={ProjectsRoute} />
           <Route path="/reports" component={ReportsRoute} />
+          <Route path="/complaint/:id" component={ComplaintRoute} />
           <Route path="/measurements" component={MeasurementsRoute} />
           <Route path="/reports/upload" component={UploadReportRoute} />
           <Route path="/calendar" component={CalendarRoute} />
@@ -339,6 +341,14 @@ const EstimatesRoute = () => <ModuleRoute module="estimates"><Estimates /></Modu
 const RepairsRoute = () => <ModuleRoute module="repairs"><Repairs /></ModuleRoute>;
 const ProjectsRoute = () => <ModuleRoute module="projects"><Projects /></ModuleRoute>;
 const ReportsRoute = () => <ModuleRoute module="reports"><Reports /></ModuleRoute>;
+// One complaint: open to anyone who has the Complaint Dashboard or Resident Reports.
+function ComplaintRoute() {
+  const { staff, organizationModules } = useAuth();
+  const [, setLocation] = useLocation();
+  const allowed = hasModuleAccess(staff, "complaint-dashboard", organizationModules) || hasModuleAccess(staff, "reports", organizationModules) || hasModuleAccess(staff, "my-jobs", organizationModules);
+  useEffect(() => { if (staff && !allowed) setLocation("/dashboard"); }, [staff, allowed, setLocation]);
+  return allowed ? <ComplaintPage /> : null;
+}
 const MeasurementsRoute = () => <ModuleRoute module="measurement"><Measurements /></ModuleRoute>;
 const UploadReportRoute = () => <ModuleRoute module="report-upload"><UploadReport /></ModuleRoute>;
 const CalendarRoute = () => <ModuleRoute module="calendar"><Calendar /></ModuleRoute>;
