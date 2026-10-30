@@ -145,6 +145,16 @@ export async function setAutopayOn(id: string, on: boolean) {
   await db.update(entityRecords).set({ state: { ...(row.state as Record<string, unknown>), on }, updatedAt: new Date() }).where(eq(entityRecords.id, id));
   return { ok: true };
 }
+/** Delete a client's autopay: off the Billing list, and the card on file at Square is switched off so it can't be charged again. */
+export async function deleteAutopay(id: string) {
+  const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, id), eq(entityRecords.tenantId, TENANT), eq(entityRecords.entity, ENTITY), eq(entityRecords.deleted, false))).limit(1);
+  if (!row) return { error: "Not found" };
+  const a = row.state as unknown as Autopay;
+  if (a.cardId && squareReady()) await square(`/v2/cards/${encodeURIComponent(a.cardId)}/disable`, {}).catch(() => undefined);
+  await db.update(entityRecords).set({ state: { ...(row.state as Record<string, unknown>), on: false }, deleted: true, updatedAt: new Date() }).where(eq(entityRecords.id, id));
+  return { ok: true };
+}
+
 export async function enrolledFor(signingId: string) {
   const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, `autopay-${signingId}`), eq(entityRecords.tenantId, TENANT))).limit(1);
   const a = row?.state as unknown as Autopay | undefined;

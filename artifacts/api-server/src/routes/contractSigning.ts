@@ -3,7 +3,7 @@ import { Router, type IRouter } from "express";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
 import { clientSigns, ownerSignature, saveOwnerSignature, signedForAutopay, signingView } from "../lib/contracts/signing";
-import { autopayList, enroll, enrolledFor, setAutopayOn, squareConfig, squareReady } from "../lib/billing";
+import { autopayList, deleteAutopay, enroll, enrolledFor, setAutopayOn, squareConfig, squareReady } from "../lib/billing";
 import { notify } from "../lib/audit";
 import type { Actor } from "../lib/auth";
 
@@ -73,6 +73,12 @@ router.get("/v1/platform/billing", requirePlatformOwner, async (_req, res) => {
 });
 router.put("/v1/platform/billing/:id", requirePlatformOwner, async (req, res) => {
   const r = await setAutopayOn(s(req.params["id"], 80), (req.body as Record<string, unknown> | undefined)?.["on"] === true);
+  if ("error" in r) { res.status(404).json(r); return; }
+  res.json({ ready: squareReady(), sandbox: squareConfig().sandbox, clients: await autopayList() });
+});
+
+router.delete("/v1/platform/billing/:id", requirePlatformOwner, async (req, res) => {
+  const r = await deleteAutopay(s(req.params["id"], 80));
   if ("error" in r) { res.status(404).json(r); return; }
   res.json({ ready: squareReady(), sandbox: squareConfig().sandbox, clients: await autopayList() });
 });
