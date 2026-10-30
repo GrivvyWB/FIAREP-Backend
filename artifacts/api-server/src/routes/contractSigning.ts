@@ -46,7 +46,7 @@ router.post("/v1/platform/contracts/send", requirePlatformOwner, async (req, res
   const b = (req.body ?? {}) as Record<string, unknown>;
   const { clientContract } = await import("../lib/command/siteControl");
   const owner = res.locals["platformOwner"] as { name: string };
-  const r = await clientContract({ client: s(b["client"], 120), kind: s(b["kind"], 10) || undefined, email: s(b["email"], 200) || undefined, contact: s(b["contact"], 120) || undefined, monthly: Number(b["monthly"]) || undefined }, owner.name);
+  const r = await clientContract({ client: s(b["client"], 120), kind: s(b["kind"], 10) || undefined, email: s(b["email"], 200) || undefined, contact: s(b["contact"], 120) || undefined, monthly: Number(b["monthly"]) || undefined, units: Number(b["units"]) || undefined }, owner.name);
   if ("error" in r && !("signingLink" in r)) { res.status(400).json(r); return; }
   res.json(r);
 });

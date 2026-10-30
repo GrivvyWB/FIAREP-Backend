@@ -199,7 +199,7 @@ export async function addClientBuildings(tenantId: string, staffId: string, clie
 /** "Go ahead and create the contract": the client's agreement from what's on the company (units, the
  *  buildings added, who signs, their email), signed by FIAREP with the owner's saved signature, and
  *  sent to the client to agree and sign on their phone or computer. */
-type ContractAsk = { client: string; kind?: string; pilot?: boolean; email?: string; contact?: string; title?: string; termMonths?: number; monthly?: number };
+type ContractAsk = { client: string; kind?: string; pilot?: boolean; email?: string; contact?: string; title?: string; termMonths?: number; monthly?: number; units?: number };
 export async function contractForClient(tenantId: string, staffId: string, p: ContractAsk) {
   const staff = await fiarepAdministrator(tenantId, staffId);
   if (!staff) return NOT_ADMIN;
@@ -220,7 +220,7 @@ export async function clientContract(p: ContractAsk, by: string) {
   if (!email.includes("@")) return { error: `I need ${org.name}'s email to send the contract.` };
   const props = await db.select().from(organizationProperties).where(eq(organizationProperties.organizationId, org.id));
   const buildingUnits = props.reduce((n, b) => n + (b.units || 0), 0);
-  const units = org.licensedUnits ?? buildingUnits;
+  const units = (p.units && p.units > 0 ? Math.round(p.units) : 0) || org.licensedUnits || buildingUnits;
   if (!units) return { error: `How many units does ${org.name} have?` };
   const [director] = await db.select({ name: staffAccounts.name }).from(staffAccounts).where(and(eq(staffAccounts.tenantId, org.id), eq(staffAccounts.role, "administrator"))).limit(1);
   const contact = (p.contact || String(f["contactName"] ?? "") || director?.name || org.name).trim();
