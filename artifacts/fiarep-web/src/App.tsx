@@ -341,11 +341,15 @@ const EstimatesRoute = () => <ModuleRoute module="estimates"><Estimates /></Modu
 const RepairsRoute = () => <ModuleRoute module="repairs"><Repairs /></ModuleRoute>;
 const ProjectsRoute = () => <ModuleRoute module="projects"><Projects /></ModuleRoute>;
 const ReportsRoute = () => <ModuleRoute module="reports"><Reports /></ModuleRoute>;
-// One complaint: open to anyone who has the Complaint Dashboard or Resident Reports.
+// One complaint: only for people with the Complaint Dashboard or Resident Reports.
 function ComplaintRoute() {
   const { staff, organizationModules } = useAuth();
   const [, setLocation] = useLocation();
-  const allowed = hasModuleAccess(staff, "complaint-dashboard", organizationModules) || hasModuleAccess(staff, "reports", organizationModules) || hasModuleAccess(staff, "my-jobs", organizationModules);
+  // Only people you gave the Complaint Dashboard or Resident Reports to (company and per-person
+  // switches in Platform Control, the website menu switches included). The server only ever returns
+  // a complaint of the person's own company.
+  const page = (href: string, module: StaffModule) => { const o = menuOverride(organizationModules, href, staff?.id); return o === false ? false : o === true || hasModuleAccess(staff, module, organizationModules); };
+  const allowed = page("/complaint-dashboard", "complaint-dashboard") || page("/reports", "reports");
   useEffect(() => { if (staff && !allowed) setLocation("/dashboard"); }, [staff, allowed, setLocation]);
   return allowed ? <ComplaintPage /> : null;
 }

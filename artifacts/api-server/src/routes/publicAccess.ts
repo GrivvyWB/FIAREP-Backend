@@ -448,6 +448,11 @@ export async function deskPhotoConfirm(tenantId: string, reportId: string, grant
 }
 
 router.use("/v1/resident-report-photos", requireAuth);
+/** The client complaint behind FIAREP's copy (set when the client sends it to FIAREP). */
+function sentToFiarep(report: typeof entityRecords.$inferSelect): { tenantId: string; recordId: string } | null {
+  const c = report.state["fiarepClient"] as { tenantId?: unknown; recordId?: unknown } | undefined;
+  return c && typeof c.tenantId === "string" && typeof c.recordId === "string" && c.tenantId !== report.tenantId ? { tenantId: c.tenantId, recordId: c.recordId } : null;
+}
 function canReadReport(actor: ReturnType<typeof actorFrom>, report: typeof entityRecords.$inferSelect): boolean {
   const role = actor.role.toLowerCase();
   const isCanonicalAssignee =
@@ -472,6 +477,20 @@ router.get("/v1/resident-report-photos", async (req, res) => {
   )).limit(1);
   if (!report || !canReadReport(actor, report)) {
     res.status(404).json({ error: "Report not found" }); return;
+  }
+  // FIAREP's copy of a complaint a client sent to FIAREP: the resident's photos are on the
+  // client's complaint. Only that one complaint, only because the client sent it.
+  const src = sentToFiarep(report);
+  if (src) {
+    const theirs = await db.select({
+      id: residentReportPhotos.id, reportId: residentReportPhotos.reportId,
+      name: residentReportPhotos.name, size: residentReportPhotos.size,
+      contentType: residentReportPhotos.contentType, createdAt: residentReportPhotos.createdAt,
+    }).from(residentReportPhotos).where(and(eq(residentReportPhotos.tenantId, src.tenantId), eq(residentReportPhotos.reportId, src.recordId)));
+    const mine = await db.select({ id: residentReportPhotos.id, reportId: residentReportPhotos.reportId, name: residentReportPhotos.name, size: residentReportPhotos.size, contentType: residentReportPhotos.contentType, createdAt: residentReportPhotos.createdAt })
+      .from(residentReportPhotos).where(and(eq(residentReportPhotos.tenantId, actor.tenantId), eq(residentReportPhotos.reportId, reportId)));
+    res.json([...mine, ...theirs.map((p) => ({ ...p, reportId }))]);
+    return;
   }
   const photos = await db.select({
     id: residentReportPhotos.id, reportId: residentReportPhotos.reportId,
@@ -533,7 +552,19 @@ router.post("/v1/resident-report-photos/:id/download-url", async (req, res) => {
     eq(residentReportPhotos.id, req.params.id!),
     eq(residentReportPhotos.tenantId, actor.tenantId),
   )).limit(1);
-  if (!photo) { res.status(404).json({ error: "Photo not found" }); return; }
+  if (!photo) {
+    // A client's resident photo, opened from FIAREP's copy of the complaint the client sent to FIAREP.
+    const [theirs] = await db.select().from(residentReportPhotos).where(eq(residentReportPhotos.id, req.params.id!)).limit(1);
+    if (theirs) {
+      const copies = await db.select().from(entityRecords).where(and(
+        eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
+        sql`${entityRecords.state}->'fiarepClient'->>'recordId' = ${theirs.reportId}`,
+        sql`${entityRecords.state}->'fiarepClient'->>'tenantId' = ${theirs.tenantId}`,
+      )).limit(1);
+      if (copies[0] && canReadReport(actor, copies[0])) { res.json(await fileStorage.createDownload(theirs.tenantId, theirs.objectPath)); return; }
+    }
+    res.status(404).json({ error: "Photo not found" }); return;
+  }
   const [report] = await db.select().from(entityRecords).where(and(
     eq(entityRecords.id, photo.reportId), eq(entityRecords.tenantId, actor.tenantId),
     eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),

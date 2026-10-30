@@ -6,9 +6,9 @@
 // Assigning it (assign_work_order) books the member and tells the resident the visit time.
 // Automatic per organization (Command Center page → "Work orders from resident photos"),
 // and on demand with the complaint_to_work_order action.
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { db, entityRecords, organizations, residentReportPhotos } from "@workspace/db";
+import { db, entityRecords, organizations, residentReportPhotos, staffAccounts } from "@workspace/db";
 import { fileStorage } from "../fileStorage";
 import { smartRepairTicket, type SmartRepairTicket } from "../smartRepair";
 import { notify } from "../audit";
@@ -74,9 +74,22 @@ export async function residentPhotoToWorkOrder(tenantId: string, reportId: strin
     // Merge into the current state (the photo classifier may have written meanwhile).
     const add = JSON.stringify({ smartTicket: { ...ticket, at: new Date().toISOString(), by }, commandWorkOrderId: wo.id });
     await db.update(entityRecords).set({ state: sql`${entityRecords.state} || ${add}::jsonb`, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() }).where(eq(entityRecords.id, report.id));
+    // Sent to FIAREP: FIAREP's copy shows the same Smart Repair.
+    const copyId = typeof st["fiarepRecordId"] === "string" ? st["fiarepRecordId"] : "";
+    if (copyId) {
+      const toCopy = JSON.stringify({ smartTicket: { ...ticket, at: new Date().toISOString(), by } });
+      await db.update(entityRecords).set({ state: sql`${entityRecords.state} || ${toCopy}::jsonb`, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() }).where(eq(entityRecords.id, copyId)).catch(() => undefined);
+    }
     await commandAuditLog({ tenantId, actor: by, event: "work-order.from-resident-photo", detail: { complaint: st["complaintNo"], workOrder: wo.id, issue: ticket.issueFound, trade: ticket.trade, priority: ticket.priority } });
     const tell = await staffToTell(report);
-    for (const id of tell) await notify(officeActor(tenantId), id, `${wo.urgency === "urgent" ? "URGENT — " : ""}Work order ready: ${wo.title}`, `#${s(st["complaintNo"], 20)} at ${address} · ${ticket.trade || "trade?"} · ${ticket.estimatedTime || ""}`.trim(), report.id).catch(() => undefined);
+    // People outside this company (FIAREP's crew, when the complaint was sent to FIAREP) open FIAREP's copy.
+    const homes = tell.length ? await db.select({ id: staffAccounts.id, tenantId: staffAccounts.tenantId }).from(staffAccounts).where(inArray(staffAccounts.id, tell)) : [];
+    const homeOf = new Map(homes.map((h) => [h.id, h.tenantId]));
+    for (const id of tell) {
+      const outside = (homeOf.get(id) ?? tenantId) !== tenantId;
+      if (outside && !copyId) continue;
+      await notify(officeActor(tenantId), id, `${wo.urgency === "urgent" ? "URGENT — " : ""}Work order ready: ${wo.title}`, `#${s(st["complaintNo"], 20)} at ${address} · ${ticket.trade || "trade?"} · ${ticket.estimatedTime || ""}`.trim(), outside ? copyId : report.id).catch(() => undefined);
+    }
     return { workOrder: wo, created: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Smart Repair failed." };
