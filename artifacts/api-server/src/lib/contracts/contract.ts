@@ -27,6 +27,8 @@ export type ContractInput = {
   // Violation work from a job request: HPD apartments cited and DOB violations, at FIAREP's expediter rates.
   expediter: { address: string; apartments: number; hpdOpen: number; dob: number; hpd: number; dobFee: number; total: number } | null;
   notes: string;
+  /** Server only: a monthly fee FIAREP set by hand (e.g. a $1 test), instead of the pricing ladder. */
+  monthlyOverride?: number | null;
 };
 
 export const BRAND = { name: "FIAREP", long: "Field Infrastructure, Asset, Reporting and Evaluation Performance", site: "fiarep.com", email: "fiarep@outlook.com" };
@@ -43,6 +45,7 @@ const esc = (v: unknown) => String(v ?? "").replaceAll("&", "&amp;").replaceAll(
 const longDate = (iso: string) => (iso ? new Date(iso + "T12:00:00").toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "____________");
 
 export function monthlyFee(c: ContractInput): { monthly: number; basis: string; setup: number } {
+  if (c.monthlyOverride != null && c.monthlyOverride > 0) return { monthly: c.monthlyOverride, basis: `monthly fee set by FIAREP: ${money(c.monthlyOverride)}`, setup: 0 };
   if (c.kind === "work") return { monthly: 0, basis: "no monthly fee — this Agreement covers the work in Section 4 only", setup: 0 };
   // Per-unit plans price off the ladder band the client's unit count falls in (owner-set in Platform Control → Pricing ladder).
   const b = bandFor(c.units, bands());

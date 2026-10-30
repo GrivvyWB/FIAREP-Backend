@@ -41,6 +41,16 @@ router.post("/v1/public/contracts/:id/sign", rateLimit("contract-sign", 10), asy
   res.json(r);
 });
 
+// Platform Control: create a client's contract and send it to sign (a monthly fee typed here, e.g. a $1 test, replaces the ladder price).
+router.post("/v1/platform/contracts/send", requirePlatformOwner, async (req, res) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const { clientContract } = await import("../lib/command/siteControl");
+  const owner = res.locals["platformOwner"] as { name: string };
+  const r = await clientContract({ client: s(b["client"], 120), kind: s(b["kind"], 10) || undefined, email: s(b["email"], 200) || undefined, contact: s(b["contact"], 120) || undefined, monthly: Number(b["monthly"]) || undefined }, owner.name);
+  if ("error" in r && !("signingLink" in r)) { res.status(400).json(r); return; }
+  res.json(r);
+});
+
 // ── Monthly autopay (Square) ──
 router.get("/v1/public/contracts/:id/autopay", rateLimit("autopay-view", 60), async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
