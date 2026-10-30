@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
 import { customFetch, type ViolationClassification } from "@workspace/api-client-react";
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { Photos, SmartTicketBox } from "@/pages/reports";
 import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { useAuth } from "@/hooks/use-auth";
@@ -30,7 +30,6 @@ export default function ComplaintPage() {
   const scans = state.aiPhotoScans && typeof state.aiPhotoScans === "object" && !Array.isArray(state.aiPhotoScans) ? (state.aiPhotoScans as Record<string, ViolationClassification>) : undefined;
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <button type="button" onClick={() => history.back()} className="inline-flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground"><ArrowLeft className="h-4 w-4" />Back</button>
       {error && <p className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800">{error}</p>}
       {!report && !error && <div className="flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Opening the complaint…</div>}
       {report && (
