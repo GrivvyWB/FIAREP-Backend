@@ -22,7 +22,7 @@ import {
   getConfiguredDevelopmentNames,
 } from "../lib/organizationDevelopments";
 import { researchOrganization } from "../lib/organizationResearch";
-import { dofBuildingsByOwner, lookupBuildingUnits } from "../lib/dofCharges";
+import { dofBuildingsByOwner, dofOwnerOfBbl, lookupBuildingUnits } from "../lib/dofCharges";
 import { hasCityData, isUsCountry, normalizeAddress, regionValue } from "../lib/jurisdiction";
 import { COUNTRIES } from "../lib/countries";
 import { countryCode, countryOn } from "../lib/countrySwitches";
@@ -181,6 +181,18 @@ router.post("/v1/platform/organizations/:organizationId/properties", async (req,
       }
       return created;
     });
+    // The client's first building with a tax lot: its DOF owner name is kept on the company, so the
+    // client's whole DOF portfolio is listed (not added) on Buildings, to add any time.
+    if (bbl) {
+      try {
+        const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, organizationId)).limit(1);
+        const f = (org?.features ?? {}) as Record<string, unknown>;
+        if (!f["dofOwner"]) {
+          const dofOwner = await dofOwnerOfBbl(bbl);
+          if (dofOwner) await db.update(organizations).set({ features: { ...f, dofOwner }, updatedAt: new Date() }).where(eq(organizations.id, organizationId));
+        }
+      } catch { /* DOF unavailable: the owner name can still be typed on Buildings */ }
+    }
     const owner = res.locals["platformOwner"] as { name: string };
     await platformAudit(owner.name, "property.created", organizationId, null, property);
     res.status(201).json(property);

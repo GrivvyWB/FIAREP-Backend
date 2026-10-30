@@ -673,7 +673,7 @@ export function OrganizationDialog({ open, onOpenChange, organization, preset }:
                 {/* Add all buildings from DOF sits at the top, above the developments list. */}
                 {isEditing && organization && (
                   <div className="mb-3 space-y-3">
-                    <DofBulkAdd organizationId={organization.id} defaultOwner={organization.name} onAdded={refreshProperties} />
+                    <DofBulkAdd organizationId={organization.id} defaultOwner={organization.name} dofOwner={typeof organization.features?.dofOwner === "string" ? organization.features.dofOwner : null} onAdded={refreshProperties} />
                     <BuildingSwitchList organizationId={organization.id} clientName={organization.name} buildings={propertyRows.map((p) => ({ id: p.id, displayAddress: p.displayAddress, units: p.units ?? null, active: p.active }))} onChanged={refreshProperties} />
                   </div>
                 )}

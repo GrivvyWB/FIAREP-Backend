@@ -80,7 +80,7 @@ export async function siteCall(tenantId: string, staffId: string, method: string
  *  Makes the company the same way Platform Control does (with its administrator code and resident
  *  code), sets the units and buildings it is licensed for, sends the code to the person asking, and
  *  prices it from the pricing ladder: the platform, plus the FIAREP plan only when asked. */
-export async function createClient(tenantId: string, staffId: string, p: { name: string; contact?: string; email?: string; address?: string; buildings?: number; units?: number; plan?: boolean }) {
+export async function createClient(tenantId: string, staffId: string, p: { name: string; contact?: string; email?: string; address?: string; buildings?: number; units?: number; plan?: boolean; buildingAddresses?: string[] }) {
   const staff = await fiarepAdministrator(tenantId, staffId);
   if (!staff) return NOT_ADMIN;
   const name = p.name.trim();
@@ -94,6 +94,9 @@ export async function createClient(tenantId: string, staffId: string, p: { name:
   }) as { ok?: boolean; error?: string; result?: { organization?: { id: string; name: string; features?: Record<string, unknown> }; director?: { name: string; code: string } } };
   if (!made.ok || !made.result?.organization || !made.result.director) return { error: made.error || "The company wasn't created." };
   const org = made.result.organization; const director = made.result.director;
+  // Only the building addresses given are added; the rest of the client's DOF portfolio is listed, not added.
+  const added = await addBuildings(tenantId, staffId, org.id, p.buildingAddresses ?? []);
+  const portfolio = added.added.length ? await portfolioOf(org.id) : null;
   const residentCode = String((org.features?.["residentCode"] as string | undefined) ?? "") || null;
   const { quotePlans } = await import("./sales");
   const q = units > 0 ? await quotePlans(units) : null;
@@ -130,9 +133,64 @@ Resident code: ${residentCode}` : ""}`, `Licensed: ${units || "—"} units, ${bu
   return {
     emailedTo: sent, ...(notSent.length ? { emailFailed: notSent } : {}),
     company: org.name, companyId: org.id, address: p.address?.trim() || null,
+    buildingsAdded: added.added, ...(added.failed.length ? { buildingsNotAdded: added.failed } : {}),
+    dofPortfolio: portfolio,
     administrator: director.name, administratorCode: director.code, residentCode,
     licensedUnits: units || null, buildingsAllowed: buildings || null,
-    buildingsNote: "Each building is added with its street address in Platform Control → the company → Buildings (or tell me the addresses).",
+    buildingsNote: "Only the addresses given are added. The rest of the client's DOF portfolio is listed on Platform Control → the company → Buildings, to add any time (or ask me).",
     price,
   };
+}
+
+/** Add buildings to a client by street address (the same as Buildings → Add a building by address). */
+async function addBuildings(tenantId: string, staffId: string, orgId: string, addresses: string[]) {
+  const added: string[] = []; const failed: Array<{ address: string; reason: string }> = [];
+  for (const a of addresses.map((x) => String(x || "").trim()).filter((x) => x.length >= 3).slice(0, 50)) {
+    const r = await siteCall(tenantId, staffId, "POST", `/v1/platform/organizations/${encodeURIComponent(orgId)}/properties`, { displayAddress: a }) as { ok?: boolean; error?: string; result?: { displayAddress?: string } };
+    if (r.ok) added.push(r.result?.displayAddress || a); else failed.push({ address: a, reason: r.error || "Not added" });
+  }
+  return { added, failed };
+}
+
+/** The client's DOF portfolio (owner name taken from their first building): which buildings are added, which are not. */
+async function portfolioOf(orgId: string) {
+  const { organizations, organizationProperties } = await import("@workspace/db");
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, orgId)).limit(1);
+  const owner = String(((org?.features ?? {}) as Record<string, unknown>)["dofOwner"] ?? "");
+  if (!owner) return { owner: null, note: "No DOF owner found yet — add one of the client's NYC buildings by address first." };
+  const { dofBuildingsByOwner } = await import("../dofCharges");
+  const { year, buildings } = await dofBuildingsByOwner(owner);
+  const have = new Set((await db.select({ bbl: organizationProperties.bbl }).from(organizationProperties).where(eq(organizationProperties.organizationId, orgId))).map((x) => x.bbl).filter(Boolean) as string[]);
+  const notAdded = buildings.filter((b) => !have.has(b.bbl));
+  return {
+    owner, rollYear: year, total: buildings.length, added: buildings.length - notAdded.length,
+    notAdded: notAdded.length, notAddedUnits: notAdded.reduce((n, b) => n + b.units, 0),
+    list: notAdded.slice(0, 60).map((b) => `${b.displayAddress} · ${b.units} units`),
+    source: "NYC Department of Finance assessment roll (8y4t-faws)",
+  };
+}
+
+async function clientByName(name: string) {
+  const { organizations } = await import("@workspace/db");
+  const { ilike } = await import("drizzle-orm");
+  const rows = await db.select({ id: organizations.id, name: organizations.name }).from(organizations).where(ilike(organizations.name, `%${name.trim()}%`)).limit(5);
+  const exact = rows.find((o) => o.name.toLowerCase() === name.trim().toLowerCase());
+  return exact ?? (rows.length === 1 ? rows[0]! : rows.length ? { many: rows.map((o) => o.name) } : null);
+}
+
+export async function clientPortfolio(tenantId: string, staffId: string, client: string) {
+  if (!(await fiarepAdministrator(tenantId, staffId))) return NOT_ADMIN;
+  const c = await clientByName(client);
+  if (!c) return { error: `No client named ${client}.` };
+  if ("many" in c) return { error: `Which one: ${c.many.join(", ")}?` };
+  return { client: c.name, ...(await portfolioOf(c.id)) };
+}
+
+export async function addClientBuildings(tenantId: string, staffId: string, client: string, addresses: string[]) {
+  if (!(await fiarepAdministrator(tenantId, staffId))) return NOT_ADMIN;
+  const c = await clientByName(client);
+  if (!c) return { error: `No client named ${client}.` };
+  if ("many" in c) return { error: `Which one: ${c.many.join(", ")}?` };
+  const r = await addBuildings(tenantId, staffId, c.id, addresses);
+  return { client: c.name, added: r.added, ...(r.failed.length ? { notAdded: r.failed } : {}) };
 }

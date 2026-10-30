@@ -248,6 +248,15 @@ export async function lookupBuildingUnits(address: string): Promise<{ displayAdd
   return { displayAddress, bbl, units: 0, source: null };
 }
 
+/** The owner name on the latest DOF roll for one tax lot (BBL) — the name the client's whole portfolio is under. */
+export async function dofOwnerOfBbl(bbl: string): Promise<string | null> {
+  const id = bbl.replace(/\D/g, "");
+  if (!id) return null;
+  const rows = (await fetchJson(soql(PROPERTY_VALUATION, { $select: "owner,year", $where: `parid='${id}'`, $order: "year DESC", $limit: "1" }))) as Record<string, unknown>[];
+  const owner = text(rows[0]?.["owner"]).trim();
+  return owner || null;
+}
+
 export type DofOwnerBuilding = { bbl: string; displayAddress: string; owner: string; units: number; buildings: number; buildingClass: string };
 
 /**

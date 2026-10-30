@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { customFetch } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,8 +15,10 @@ type DofResult = { year: string; buildings: DofBuilding[] };
 type BulkResult = { added: number; on: number; off: number; skipped: number; stoppedAtPropertyLimit: boolean; propertyLimit: number | null; licensedUnits: number | null };
 const errText = (e: any, fallback: string) => e?.data?.error || e?.message || fallback;
 
-export function DofBulkAdd({ organizationId, defaultOwner, onAdded }: { organizationId: string; defaultOwner: string; onAdded: () => void | Promise<void> }) {
-  const [owner, setOwner] = useState(defaultOwner);
+export function DofBulkAdd({ organizationId, defaultOwner, dofOwner, onAdded }: { organizationId: string; defaultOwner: string; dofOwner?: string | null; onAdded: () => void | Promise<void> }) {
+  // The owner name DOF has for the client's first building, when there is one: the whole portfolio shows right away.
+  const [owner, setOwner] = useState(dofOwner || defaultOwner);
+  const [addingBbl, setAddingBbl] = useState("");
   const [busy, setBusy] = useState<"" | "find" | "add">("");
   const [result, setResult] = useState<DofResult | null>(null);
   const [ownersOff, setOwnersOff] = useState<Set<string>>(new Set());
@@ -33,12 +35,28 @@ export function DofBulkAdd({ organizationId, defaultOwner, onAdded }: { organiza
   const atOtherClient = (result?.buildings ?? []).filter((b) => b.otherClient).length;
   const unitsToAdd = toAdd.reduce((n, b) => n + b.units, 0);
 
-  async function find() {
-    if (owner.trim().length < 3) return;
+  async function find(name = owner) {
+    if (name.trim().length < 3) return;
     setBusy("find"); setError(""); setMessage(""); setResult(null); setOwnersOff(new Set());
     try {
-      setResult(await customFetch<DofResult>(`/api/v1/platform/organizations/${encodeURIComponent(organizationId)}/dof-owner?owner=${encodeURIComponent(owner.trim())}`, { responseType: "json" } as never));
+      setResult(await customFetch<DofResult>(`/api/v1/platform/organizations/${encodeURIComponent(organizationId)}/dof-owner?owner=${encodeURIComponent(name.trim())}`, { responseType: "json" } as never));
     } catch (e) { setError(errText(e, "Could not reach the DOF roll.")); } finally { setBusy(""); }
+  }
+
+  useEffect(() => { if (dofOwner) { setOwner(dofOwner); void find(dofOwner); } }, [dofOwner]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  /** One building from the portfolio, any time. */
+  async function addOne(b: DofBuilding) {
+    setAddingBbl(b.bbl); setError(""); setMessage("");
+    try {
+      await customFetch<BulkResult>(`/api/v1/platform/organizations/${encodeURIComponent(organizationId)}/properties/bulk`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
+        body: JSON.stringify({ buildings: [{ displayAddress: b.displayAddress, bbl: b.bbl, units: b.units }] }),
+      } as never);
+      setResult((r) => (r ? { ...r, buildings: r.buildings.map((x) => (x.bbl === b.bbl ? { ...x, added: true } : x)) } : r));
+      setMessage(`Added ${b.displayAddress}.`);
+      await onAdded();
+    } catch (e) { setError(errText(e, "Could not add it.")); } finally { setAddingBbl(""); }
   }
 
   async function addAll() {
@@ -89,6 +107,17 @@ export function DofBulkAdd({ organizationId, defaultOwner, onAdded }: { organiza
               ))}
             </div>
           )}
+          {/* Every building in the portfolio: the ones given are added, the rest wait here to add any time. */}
+          <div className="max-h-72 divide-y divide-slate-100 overflow-y-auto rounded-md border border-slate-100">
+            {(result.buildings ?? []).map((b) => (
+              <div key={b.bbl} className="flex items-center justify-between gap-2 px-2 py-1.5 text-xs">
+                <span className="min-w-0 truncate text-slate-700">{b.displayAddress} <span className="text-slate-400">· {b.units.toLocaleString()} units</span></span>
+                {b.added ? <span className="shrink-0 font-semibold text-emerald-700">Added</span>
+                  : b.otherClient ? <span className="shrink-0 text-slate-400">Another client</span>
+                  : <Button type="button" variant="outline" size="sm" className="h-7 shrink-0 px-2 text-xs" disabled={!!addingBbl || busy !== ""} onClick={() => void addOne(b)}>{addingBbl === b.bbl ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Add"}</Button>}
+              </div>
+            ))}
+          </div>
           <Button type="button" className="h-9 bg-slate-900 text-white hover:bg-slate-800" disabled={busy !== "" || toAdd.length === 0} onClick={() => void addAll()}>
             {busy === "add" ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null}
             {busy === "add" ? "Adding…" : `Add all ${toAdd.length.toLocaleString()} buildings${unitsToAdd > 0 ? ` · ${unitsToAdd.toLocaleString()} units` : ""}`}

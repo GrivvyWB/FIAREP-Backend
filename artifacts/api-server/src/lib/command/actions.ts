@@ -31,7 +31,7 @@ import { createContract, quotePlans, type ContractRequest } from "./sales";
 import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
 import { commandFillForm } from "./forms";
 import { setLanguage } from "./language";
-import { createClient, siteCall, siteEndpoints } from "./siteControl";
+import { addClientBuildings, clientPortfolio, createClient, siteCall, siteEndpoints } from "./siteControl";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -602,9 +602,9 @@ export const ACTIONS: ActionDef[] = [
   },
   {
     name: "create_client", label: "Create a client (company, code and price)", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
-    description: "Create a new client company, e.g. \"create a client named John Doe at 151 Blake Ave., Brooklyn, NY 11212, five buildings, 36 units\". Makes the company with its administrator code (said back so they can hand it over, sent to the user's notifications, emailed to FIAREP's mailbox, and emailed to the client when their email is given — ask for it if not said), licenses the units and number of buildings, and prices it from the pricing ladder. Set plan=true ONLY if the user asked about the FIAREP plan; otherwise only the platform price is given. Say: the code, the monthly platform price (and setup), and the plan price only if asked. Never make up a price — if a rate isn't set, say so.",
-    schema: { type: "object", properties: { name: { type: "string" }, contact: { type: "string", description: "Who the administrator code is for, if different from the name" }, email: { type: "string", description: "The client's email: their code is emailed to them" }, address: { type: "string" }, buildings: { type: "number" }, units: { type: "number" }, plan: { type: "boolean" } }, required: ["name"], additionalProperties: false },
-    run: async (p, ctx) => createClient(ctx.tenantId, ctx.staffId, { name: str(p["name"], 120), contact: str(p["contact"], 120) || undefined, email: str(p["email"], 200) || undefined, address: str(p["address"], 200) || undefined, buildings: Number(p["buildings"]) || undefined, units: Number(p["units"]) || undefined, plan: p["plan"] === true }),
+    description: "Create a new client company, e.g. \"create a client named John Doe at 151 Blake Ave., Brooklyn, NY 11212, five buildings, 36 units\". Makes the company with its administrator code (said back so they can hand it over, sent to the user's notifications, emailed to FIAREP's mailbox, and emailed to the client when their email is given — ask for it if not said), licenses the units and number of buildings, and prices it from the pricing ladder. Building street addresses the user gives go in buildingAddresses — only those are added; the client's DOF portfolio (found from the first one) is listed as not added, to add later with add_client_buildings. Set plan=true ONLY if the user asked about the FIAREP plan; otherwise only the platform price is given. Say: the code, the monthly platform price (and setup), and the plan price only if asked. Never make up a price — if a rate isn't set, say so.",
+    schema: { type: "object", properties: { name: { type: "string" }, contact: { type: "string", description: "Who the administrator code is for, if different from the name" }, email: { type: "string", description: "The client's email: their code is emailed to them" }, buildingAddresses: { type: "array", items: { type: "string" }, description: "Street addresses of the client's buildings the user gave — only these are added" }, address: { type: "string" }, buildings: { type: "number" }, units: { type: "number" }, plan: { type: "boolean" } }, required: ["name"], additionalProperties: false },
+    run: async (p, ctx) => createClient(ctx.tenantId, ctx.staffId, { name: str(p["name"], 120), contact: str(p["contact"], 120) || undefined, email: str(p["email"], 200) || undefined, address: str(p["address"], 200) || undefined, buildings: Number(p["buildings"]) || undefined, units: Number(p["units"]) || undefined, plan: p["plan"] === true, buildingAddresses: Array.isArray(p["buildingAddresses"]) ? (p["buildingAddresses"] as unknown[]).map((x) => str(x, 200)) : undefined }),
     describe: (p) => `Create client ${str(p["name"], 80)}${str(p["address"]) ? ` at ${str(p["address"], 100)}` : ""}${Number(p["buildings"]) ? ` · ${Number(p["buildings"])} buildings` : ""}${Number(p["units"]) ? ` · ${Number(p["units"])} units` : ""}`,
     spoken: (r) => {
       const x = r as { company?: string; administratorCode?: string; price?: { platform?: { monthly?: number; setupFee?: number; notSet?: string }; plan?: { monthly?: number; notSet?: string } } | null; error?: string };
@@ -612,6 +612,20 @@ export const ACTIONS: ActionDef[] = [
       const pf = x.price?.platform; const pl = x.price?.plan;
       return `${x.company} is set up. Their code is ${x.administratorCode}.${pf ? (pf.notSet ? ` ${pf.notSet}` : ` Platform: $${pf.monthly?.toLocaleString("en-US")} a month${pf.setupFee ? `, $${pf.setupFee.toLocaleString("en-US")} setup` : ""}.`) : ""}${pl ? (pl.notSet ? ` ${pl.notSet}` : ` FIAREP plan: $${pl.monthly?.toLocaleString("en-US")} a month.`) : ""}`;
     },
+  },
+  {
+    name: "client_portfolio", label: "A client's DOF portfolio", risk: "read", confirmDefault: false, target: "server", platformOnly: true,
+    description: "Every building the client owns on the NYC Department of Finance roll (owner name from their first building), and which are not added yet.",
+    schema: { type: "object", properties: { client: { type: "string" } }, required: ["client"], additionalProperties: false },
+    run: async (p, ctx) => clientPortfolio(ctx.tenantId, ctx.staffId, str(p["client"], 120)),
+    describe: (p) => `Portfolio of ${str(p["client"], 80)}`,
+  },
+  {
+    name: "add_client_buildings", label: "Add buildings to a client", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
+    description: "Add buildings to an existing client by street address (from their DOF portfolio or typed). Only the addresses the user names.",
+    schema: { type: "object", properties: { client: { type: "string" }, addresses: { type: "array", items: { type: "string" } } }, required: ["client", "addresses"], additionalProperties: false },
+    run: async (p, ctx) => addClientBuildings(ctx.tenantId, ctx.staffId, str(p["client"], 120), Array.isArray(p["addresses"]) ? (p["addresses"] as unknown[]).map((x) => str(x, 200)) : []),
+    describe: (p) => `Add to ${str(p["client"], 80)}: ${Array.isArray(p["addresses"]) ? (p["addresses"] as unknown[]).map((x) => str(x, 80)).join("; ") : ""}`,
   },
   // ── Client access (FIAREP's own Command Center) ──────────────────────────
   {

@@ -404,7 +404,7 @@ export default function OwnerProperties() {
         </div>
       ) : (
         <>
-          {organization && <DofBulkAdd key={organization.id} organizationId={organization.id} defaultOwner={organization.name} onAdded={reload} />}
+          {organization && <DofBulkAdd key={organization.id} organizationId={organization.id} defaultOwner={organization.name} dofOwner={typeof (organization.features as Record<string, unknown> | undefined)?.dofOwner === "string" ? String((organization.features as Record<string, unknown>).dofOwner) : null} onAdded={reload} />}
           {organization && <BuildingSwitchList organizationId={organization.id} buildings={properties.map((p) => ({ id: p.id, displayAddress: p.displayAddress, units: p.units ?? null, active: p.active }))} onChanged={reload} />}
 
           {/* ── Portfolio pull ── */}
