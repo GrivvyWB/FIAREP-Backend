@@ -31,6 +31,9 @@ export async function autoWorkOrdersOn(tenantId: string): Promise<boolean> {
 /** Draft a work order from a resident complaint's photo. Returns the work order, or why not. Never throws. */
 export async function residentPhotoToWorkOrder(tenantId: string, reportId: string, by = "Command Center"): Promise<{ workOrder: typeof commandWorkOrders.$inferSelect; created: boolean } | { error: string }> {
   try {
+    // Nothing is started until FIAREP's baseline walk-through is done (Platform Control switch).
+    const { baselineWaiting, BASELINE_WAIT_MESSAGE } = await import("../baseline");
+    if (await baselineWaiting(tenantId)) return { error: BASELINE_WAIT_MESSAGE };
     const [existing] = await db.select().from(commandWorkOrders).where(eq(commandWorkOrders.alertId, `resident:${reportId}`)).limit(1);
     if (existing) return { workOrder: existing, created: false };
     const k = await keyFor(tenantId, "openai", (await effectiveSwitches(tenantId)).paysOwn);

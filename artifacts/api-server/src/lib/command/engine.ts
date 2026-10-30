@@ -7,6 +7,8 @@ import { db, organizations } from "@workspace/db";
 import { ACTION_MAP, actionsFor, agentCatalog, isPlatform, resolveAgent, type ActionContext, type ActionDef } from "./actions";
 import { commandActions, commandRuns } from "./tables";
 import { commandAuditLog } from "./audit";
+import { BASELINE_WAIT_MESSAGE, baselineWaiting } from "../baseline";
+const BASELINE_ACTIONS = new Set(["prepare_work_orders", "decide_work_order", "complaint_to_work_order", "assign_work_order", "write_scope_of_work"]);
 import { actionOn, confirmOn, effectiveSwitches, getSwitches, PLATFORM_TENANT, type CommandSwitches } from "./switches";
 import { costMicroUsd, monthUsage } from "./usage";
 import { geminiLoop } from "./gemini";
@@ -51,6 +53,8 @@ export async function executeAction(row: ActionRow, actor: string): Promise<Acti
   await commandAuditLog({ tenantId, actor, event: "action.executing", deviceId: row.deviceId, runId: row.runId, actionId: row.id, detail: { action: row.action, params: row.params } });
   try {
     if (def.platformOnly && !isPlatform(tenantId)) throw new Error("That action is only on FIAREP's own Command Center.");
+    // No work orders, assigning or approving until the baseline walk-through is done (Platform Control switch).
+    if (BASELINE_ACTIONS.has(row.action) && (await baselineWaiting(tenantId))) throw new Error(BASELINE_WAIT_MESSAGE);
     const result = await def.run!(row.params, { runId: row.runId, staffId: row.staffId, deviceId: row.deviceId, actorName: actor, tenantId });
     const failed = !!result && typeof result === "object" && "error" in (result as object) && typeof (result as { error: unknown }).error === "string";
     const done = await setStatus(row.id, { status: failed ? "failed" : "done", result: result as never, error: failed ? (result as { error: string }).error : null, finishedAt: new Date() });

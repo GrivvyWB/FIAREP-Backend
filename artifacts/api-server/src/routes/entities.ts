@@ -1,3 +1,4 @@
+import { BASELINE_WAIT_MESSAGE, baselineWaiting } from "../lib/baseline";
 import { Router, type IRouter } from "express";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -2459,6 +2460,11 @@ router.post(
     res.status(403).json({
       error: "Assignments must be changed through the dedicated assignment action",
     });
+    return;
+  }
+  // Complaints and violations are not handed out or worked until FIAREP's baseline walk-through is done.
+  if (["resident-reports", "building-violations"].includes(entity) && (await baselineWaiting(current.tenantId))) {
+    res.status(423).json({ error: BASELINE_WAIT_MESSAGE });
     return;
   }
   if (!canPerformAssignedWorkflowAction(actor, entity, action, current.state)) {

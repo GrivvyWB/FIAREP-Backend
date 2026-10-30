@@ -130,7 +130,8 @@ export default function Notifications() {
           ) : (
             <div className="divide-y divide-border">
               {items.map((notification) => {
-                const urgent = isUrgent(notification);
+                // Red only until it is opened; once read it looks like every other read alert.
+                const urgent = !notification.read && isUrgent(notification);
                 const pendingEmployee = notification.message === "Employee pending approval";
                 const content = (
                   <>

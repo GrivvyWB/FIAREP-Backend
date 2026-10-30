@@ -95,6 +95,15 @@ export async function baselineGate(clientOrgId: string): Promise<{ required: boo
   return { required, complete: list.some((a) => a.status === "complete") };
 }
 
+/** True while this company's complaint and violation work waits for FIAREP's baseline walk-through
+ *  (Platform Control → "Baseline assessment before complaint management" on, and no finished baseline). */
+export async function baselineWaiting(tenantId: string): Promise<boolean> {
+  if (!tenantId || tenantId === FIAREP_TENANT) return false;
+  const g = await baselineGate(tenantId).catch(() => ({ required: false, complete: true }));
+  return g.required && !g.complete;
+}
+export const BASELINE_WAIT_MESSAGE = "Building baseline assessment not done yet. Complaint and violation work starts once FIAREP completes the walk-through.";
+
 const tradeKey = (t: string) => {
   const s = t.toLowerCase();
   return /plumb/.test(s) ? "plumbing" : /electr/.test(s) ? "electrical" : /carpent|handrail|door|wood/.test(s) ? "carpentry" : /roof/.test(s) ? "roofing" : /mason|brick/.test(s) ? "masonry" : /paint/.test(s) ? "painting" : /hvac|heat|boiler/.test(s) ? "hvac" : "general";
