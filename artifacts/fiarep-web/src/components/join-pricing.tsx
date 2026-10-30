@@ -137,7 +137,7 @@ export function JoinPricing({ unlocked, pending, onUnlock }: { unlocked: boolean
         <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-6">
           <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Platform only — software, no FIAREP labor</p>
           <h3 className={`mt-1 text-2xl font-bold text-white ${hide}`}>{firstPlatform ? `${money(firstPlatform.platformRate!)} per unit per month` : "Rate on request"}</h3>
-          <p className={`text-sm text-slate-300 ${hide}`}>{firstPlatform?.platformMin != null ? `${money(firstPlatform.platformMin)} minimum. ` : ""}Units × the rate for your size. Setup and staff training $1,500 one time per organization — waived on any annual contract. Pay a year up front and get 2 months free.</p>
+          <p className={`text-sm text-slate-300 ${hide}`}>{firstPlatform?.platformMin != null ? `${money(firstPlatform.platformMin)} minimum. ` : ""}Units × the rate for your size.</p>
           <table className={`mt-3 w-full text-sm ${hide}`}>
             <thead><tr className="text-left text-xs uppercase tracking-wide text-slate-400"><th className="py-1">Units</th><th className="py-1 text-right">Per unit / month</th><th className="py-1 text-right">Example</th></tr></thead>
             <tbody>{bands.map((b) => b.platformRate == null

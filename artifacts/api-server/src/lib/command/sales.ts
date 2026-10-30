@@ -5,7 +5,7 @@
 // report so it can be opened, printed and attached to an email.
 import { and, eq } from "drizzle-orm";
 import { db, entityRecords } from "@workspace/db";
-import { bandFor, bandHours, SETUP_FEE, type Band } from "../contracts/ladder";
+import { bandFor, bandHours, type Band } from "../contracts/ladder";
 import { PLAN, EXPEDITER } from "../contracts/plans";
 import { setBands } from "../contracts/bands";
 import { buildContractHtml, contractNumber, monthlyFee, type ContractInput } from "../contracts/contract";
@@ -27,7 +27,6 @@ export async function quotePlans(units: number) {
   const notSet = (what: string) => `The ${what} rate for the ${band.label} units band isn't set yet (Platform Control → Pricing ladder).`;
   const platform = band.platformRate == null ? { notSet: notSet("platform") } : {
     ratePerUnit: band.platformRate, minimum: band.platformMin ?? 0, monthly: money(Math.max(u * band.platformRate, band.platformMin ?? 0)),
-    setupFee: PLAN.platform.setup, setupNote: `Setup ($${SETUP_FEE}) waived on any annual contract; pay a year up front and get 2 months free.`,
   };
   const hours = bandHours(band);
   const plan = band.planRate == null ? { notSet: notSet("FIAREP plan") } : {

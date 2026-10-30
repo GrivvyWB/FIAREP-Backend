@@ -2,7 +2,7 @@
 // FIAREP plans and per-job rates — shown on the Join page and written into contracts.
 export const PLAN = {
   fiarep: { name: "The FIAREP plan", perUnit: 20, minimum: 1000, pilotDays: 60 },
-  platform: { name: "Platform only", perUnit: 4, minimum: 400, setup: 1500 },
+  platform: { name: "Platform only", perUnit: 4, minimum: 400, setup: 0 }, // no setup fee
   agencyMinUnits: 2500,
   // Housing authorities / agencies: flat monthly fee, defaulted from units × rate.
   agencySmall: { perUnit: 15, minimum: 5000 },   // under 2,500 units

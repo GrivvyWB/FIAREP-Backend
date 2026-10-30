@@ -112,7 +112,7 @@ export async function createClient(tenantId: string, staffId: string, p: { name:
   const usd = (n?: number) => `$${(n ?? 0).toLocaleString("en-US")}`;
   const priceLines = price ? [
     `Pricing (${price.units} units, ${price.band} band — ${price.source}):`,
-    "notSet" in price.platform ? price.platform.notSet : `Platform: ${usd(price.platform.monthly)} a month, ${usd(price.platform.setupFee)} setup`,
+    "notSet" in price.platform ? price.platform.notSet : `Platform: ${usd(price.platform.monthly)} a month`,
     ...(price.plan ? ["notSet" in price.plan ? price.plan.notSet : `FIAREP plan: ${usd(price.plan.monthly)} a month`] : []),
   ] : [];
   const sent: string[] = []; const notSent: string[] = [];
