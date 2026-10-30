@@ -1,5 +1,6 @@
 import { notificationHref, notificationTitle } from "@/lib/notification-text";
 import { useAuth } from "@/hooks/use-auth";
+import { menuOverride } from "@/lib/website-menu";
 import { hasModuleAccess } from "@/lib/access-policy";
 import {
   customFetch, getListEntityRecordsQueryKey, getListNotificationsQueryKey,
@@ -76,6 +77,8 @@ export default function Dashboard() {
   const firstName = staff?.name?.split(" ")[0] || "User";
   const unread = notifications.filter((notification) => !notification.read).length;
 
+  const reportsMenu = menuOverride(organizationModules, "/reports", staff?.id);
+  const reportsPageOpen = reportsMenu === false ? false : reportsMenu === true || hasModuleAccess(staff, "reports", organizationModules);
   const metrics = [
     { label: "Active Projects", value: projects.filter((item) => !["completed", "closed", "cancelled"].includes(statusOf(item))).length, total: projects.length, icon: FolderKanban, query: projectsQuery, href: "/projects" },
     // The big number is what needs YOUR action: new complaints, and ones
@@ -86,6 +89,8 @@ export default function Dashboard() {
     { label: "Pending Leave", value: leave.filter((item) => String(item.state?.status || "Pending") === "Pending").length, total: leave.length, icon: Plane, query: leaveQuery, href: "/leave?view=team" },
     { label: "Unread Notifications", value: unread, total: notifications.length, icon: Bell, query: notificationsQuery, href: "/notifications" },
   ].filter((metric) => hasModuleAccess(staff, metric.href === "/emergency" ? "emergency" : metric.href.startsWith("/leave") ? "leave" : metric.href.slice(1) as Parameters<typeof hasModuleAccess>[1]))
+    // Resident Reports: hidden when the page is closed (Platform Control → Website menu), same rule as the page itself.
+    .filter((metric) => metric.href !== "/reports" || reportsPageOpen)
     // A card the server refuses for this role (403) is not this person's business — drop it rather than show "Unavailable".
     .filter((metric) => !(metric.query.isError && (metric.query.error as { status?: number } | null)?.status === 403));
   const activity = [
@@ -163,7 +168,7 @@ export default function Dashboard() {
 
       <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-[18px]">
         {hasModuleAccess(staff, "inspections") && <FeatureCard icon={ShieldCheck} title="Accurate Inspections" desc="Detailed field assessments" href="/inspections" />}
-        {hasModuleAccess(staff, "reports") && <FeatureCard icon={FileSearch} title="Resident Reports" desc="Resolve housing concerns" href="/reports" />}
+        {reportsPageOpen && <FeatureCard icon={FileSearch} title="Resident Reports" desc="Resolve housing concerns" href="/reports" />}
         {hasModuleAccess(staff, "repairs") && <FeatureCard icon={Wrench} title="Efficient Repairs" desc="Track and manage repairs" href="/repairs" />}
         {hasModuleAccess(staff, "calendar") && <FeatureCard icon={CalendarClock} title="Operational Control" desc="Keep teams coordinated" href="/calendar" />}
       </section>
