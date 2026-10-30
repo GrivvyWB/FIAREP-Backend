@@ -31,7 +31,7 @@ import { createContract, quotePlans, type ContractRequest } from "./sales";
 import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
 import { commandFillForm } from "./forms";
 import { setLanguage } from "./language";
-import { siteCall, siteEndpoints } from "./siteControl";
+import { createClient, siteCall, siteEndpoints } from "./siteControl";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -599,6 +599,19 @@ export const ACTIONS: ActionDef[] = [
     schema: { type: "object", properties: { method: { type: "string", enum: ["POST", "PUT", "PATCH", "DELETE"] }, path: { type: "string" }, body: { type: "string", description: "The JSON body, as text" }, what: { type: "string" } }, required: ["method", "path", "what"], additionalProperties: false },
     run: async (p, ctx) => siteCall(ctx.tenantId, ctx.staffId, str(p["method"], 10), str(p["path"], 500), (() => { const b = p["body"]; if (typeof b !== "string" || !b.trim()) return typeof b === "object" && b ? b : undefined; try { return JSON.parse(b) as unknown; } catch { return undefined; } })()),
     describe: (p) => `${str(p["what"], 160)} (${str(p["method"], 10)} ${str(p["path"], 100)})`,
+  },
+  {
+    name: "create_client", label: "Create a client (company, code and price)", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
+    description: "Create a new client company, e.g. \"create a client named John Doe at 151 Blake Ave., Brooklyn, NY 11212, five buildings, 36 units\". Makes the company with its administrator code (sent to the user and said back so they can hand it over), licenses the units and number of buildings, and prices it from the pricing ladder. Set plan=true ONLY if the user asked about the FIAREP plan; otherwise only the platform price is given. Say: the code, the monthly platform price (and setup), and the plan price only if asked. Never make up a price — if a rate isn't set, say so.",
+    schema: { type: "object", properties: { name: { type: "string" }, contact: { type: "string", description: "Who the administrator code is for, if different from the name" }, address: { type: "string" }, buildings: { type: "number" }, units: { type: "number" }, plan: { type: "boolean" } }, required: ["name"], additionalProperties: false },
+    run: async (p, ctx) => createClient(ctx.tenantId, ctx.staffId, { name: str(p["name"], 120), contact: str(p["contact"], 120) || undefined, address: str(p["address"], 200) || undefined, buildings: Number(p["buildings"]) || undefined, units: Number(p["units"]) || undefined, plan: p["plan"] === true }),
+    describe: (p) => `Create client ${str(p["name"], 80)}${str(p["address"]) ? ` at ${str(p["address"], 100)}` : ""}${Number(p["buildings"]) ? ` · ${Number(p["buildings"])} buildings` : ""}${Number(p["units"]) ? ` · ${Number(p["units"])} units` : ""}`,
+    spoken: (r) => {
+      const x = r as { company?: string; administratorCode?: string; price?: { platform?: { monthly?: number; setupFee?: number; notSet?: string }; plan?: { monthly?: number; notSet?: string } } | null; error?: string };
+      if (x.error) return x.error;
+      const pf = x.price?.platform; const pl = x.price?.plan;
+      return `${x.company} is set up. Their code is ${x.administratorCode}.${pf ? (pf.notSet ? ` ${pf.notSet}` : ` Platform: $${pf.monthly?.toLocaleString("en-US")} a month${pf.setupFee ? `, $${pf.setupFee.toLocaleString("en-US")} setup` : ""}.`) : ""}${pl ? (pl.notSet ? ` ${pl.notSet}` : ` FIAREP plan: $${pl.monthly?.toLocaleString("en-US")} a month.`) : ""}`;
+    },
   },
   // ── Client access (FIAREP's own Command Center) ──────────────────────────
   {

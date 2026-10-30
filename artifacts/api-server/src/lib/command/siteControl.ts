@@ -75,3 +75,37 @@ export async function siteCall(tenantId: string, staffId: string, method: string
     if (owner) await revokePlatformOwnerSession(owner.refreshToken).catch(() => undefined);
   }
 }
+
+/** "Create a client named John Doe at 151 Blake Ave., Brooklyn, NY 11212 — 5 buildings, 36 units."
+ *  Makes the company the same way Platform Control does (with its administrator code and resident
+ *  code), sets the units and buildings it is licensed for, sends the code to the person asking, and
+ *  prices it from the pricing ladder: the platform, plus the FIAREP plan only when asked. */
+export async function createClient(tenantId: string, staffId: string, p: { name: string; contact?: string; address?: string; buildings?: number; units?: number; plan?: boolean }) {
+  const staff = await fiarepAdministrator(tenantId, staffId);
+  if (!staff) return NOT_ADMIN;
+  const name = p.name.trim();
+  if (!name) return { error: "I need the client's name." };
+  const units = Math.round(Number(p.units) || 0);
+  const buildings = Math.round(Number(p.buildings) || 0);
+  const made = await siteCall(tenantId, staffId, "POST", "/v1/platform/organizations", {
+    name, directorName: (p.contact || name).trim(),
+    ...(units > 0 ? { licensedUnits: units } : {}), ...(buildings > 0 ? { propertyLimit: buildings } : {}),
+    ...(p.address?.trim() ? { features: { address: p.address.trim() } } : {}),
+  }) as { ok?: boolean; error?: string; result?: { organization?: { id: string; name: string; features?: Record<string, unknown> }; director?: { name: string; code: string } } };
+  if (!made.ok || !made.result?.organization || !made.result.director) return { error: made.error || "The company wasn't created." };
+  const org = made.result.organization; const director = made.result.director;
+  const residentCode = String((org.features?.["residentCode"] as string | undefined) ?? "") || null;
+  const { quotePlans } = await import("./sales");
+  const q = units > 0 ? await quotePlans(units) : null;
+  const price = q && !("error" in q) ? { units: q.units, band: q.band, platform: q.platform, ...(p.plan ? { plan: q.plan } : {}), source: q.source } : null;
+  // The code goes to the person who asked, too (their notifications and phone).
+  const { notify } = await import("../audit");
+  await notify(actorFromStaff(staff), staff.id, `Client code: ${org.name}`, `${director.name} — administrator code ${director.code}${residentCode ? ` · resident code ${residentCode}` : ""} · company ${org.id}`).catch(() => undefined);
+  return {
+    company: org.name, companyId: org.id, address: p.address?.trim() || null,
+    administrator: director.name, administratorCode: director.code, residentCode,
+    licensedUnits: units || null, buildingsAllowed: buildings || null,
+    buildingsNote: "Each building is added with its street address in Platform Control → the company → Buildings (or tell me the addresses).",
+    price,
+  };
+}
