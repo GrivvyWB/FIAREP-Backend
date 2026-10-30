@@ -149,6 +149,20 @@ async function membersFor(tenantId: string, trade: string) {
   const t = trade.trim().toLowerCase().replace(/(ers?|ing|s)$/, "");
   return (t ? field.filter((s) => String(s.position ?? "").toLowerCase().includes(t)) : field).map((s) => ({ id: s.id, name: s.name, position: s.position ?? "" }));
 }
+/** Who can be sent a work order: workers, trade workers and maintenance (no supervisors, managers or office).
+ *  Those whose title is the trade come first, then maintenance, then general workers with no other trade. */
+async function crewFor(tenantId: string, trade: string) {
+  const all = await db.select({ id: staffAccounts.id, name: staffAccounts.name, position: staffAccounts.position, role: staffAccounts.role }).from(staffAccounts)
+    .where(and(eq(staffAccounts.tenantId, tenantId), eq(staffAccounts.status, "approved")));
+  const boss = /supervisor|superintendent|manager|director|administrator|admin|coordinator|inspector|cpm|clerk|office|hr\b|procurement/i;
+  const crew = all.filter((m) => !["resident", "vendor", "procurement", "human_resources", "administrator", "management", "community_coordinator"].includes(String(m.role)) && !boss.test(String(m.position ?? "")));
+  const t = trade.trim().toLowerCase().replace(/(ers?|ing|ians?|s)$/, "");
+  const title = (m: { position: string | null }) => String(m.position ?? "").toLowerCase();
+  const tradeMatch = t ? crew.filter((m) => title(m).includes(t)) : [];
+  const maintenance = crew.filter((m) => /maint|handy|porter|custodian|general|caretaker/.test(title(m)) && !tradeMatch.includes(m));
+  const general = crew.filter((m) => (!title(m) || /^(worker|technician|tech|field worker|crew)$/.test(title(m))) && !tradeMatch.includes(m) && !maintenance.includes(m));
+  return [...tradeMatch, ...maintenance, ...general].map((m) => ({ id: m.id, name: m.name, position: m.position ?? "" }));
+}
 /** Who notifications from the Command Center come from, inside the organization. */
 const commandActor = (ctx: ActionContext): Actor => ({ id: ctx.staffId, tenantId: ctx.tenantId, name: ctx.actorName, role: "administrator", position: "", developments: [], sessionVersion: 0 });
 
@@ -415,7 +429,7 @@ export const ACTIONS: ActionDef[] = [
   },
   {
     name: "assign_work_order", label: "Assign a work order to a member", risk: "write", confirmDefault: true, target: "server",
-    description: "Assign an approved (or draft) work order: to the named member, or — with a trade (or the trade Smart Repair found) — to whichever member with that trade is free soonest. For a resident's complaint it also tells the resident the visit time. Books it on their calendar (no double booking, drive time counted) and notifies them. Approves a draft at the same time.",
+    description: "Assign an approved (or draft) work order: to the named member, or — with a trade (or the trade Smart Repair found) — to a worker, trade worker or maintenance member: whoever has that trade and is free soonest, else maintenance or a general worker. For a resident's complaint it also tells the resident the visit time. Books it on their calendar (no double booking, drive time counted) and notifies them. Approves a draft at the same time.",
     schema: { type: "object", properties: {
       workOrderId: { type: "string" }, member: { type: "string" }, trade: { type: "string" },
       minutes: { type: "integer", minimum: 15, maximum: 720 }, start: { type: "string" }, after: { type: "string" }, apartments: { type: "array", items: { type: "string" } },
@@ -428,7 +442,7 @@ export const ACTIONS: ActionDef[] = [
       const address = [w.address, w.borough].filter(Boolean).join(", ");
       const apartments = strList(p["apartments"], 50).length ? strList(p["apartments"], 50) : (/Apt\s+([\w-]+)/i.exec(`${w.title} ${w.detail}`)?.[1] ? [/Apt\s+([\w-]+)/i.exec(`${w.title} ${w.detail}`)![1]!] : []);
       const opts = { address, apartments, minutes: p["minutes"] === undefined ? undefined : num(p["minutes"], 120, 15, 720), at: parseWhen(p["start"]), after: parseWhen(p["after"]) };
-      let pick: { m: { id: string; name: string }; slot: Slot; wholeDay: boolean } | null = null;
+      let pick: { m: { id: string; name: string; position?: string }; slot: Slot; wholeDay: boolean } | null = null;
       if (str(p["member"], 80)) {
         const m = await findMember(ctx.tenantId, str(p["member"], 80));
         if ("error" in m) return m;
@@ -438,11 +452,14 @@ export const ACTIONS: ActionDef[] = [
       } else {
         const trade = str(p["trade"], 60) || w.trade || "";
         if (!trade) return { error: "Say who should do it, or which trade." };
-        const list = await membersFor(ctx.tenantId, trade);
-        if (!list.length) return { error: `No member's title matches "${trade}".` };
-        for (const m of list.slice(0, 25)) {
+        // Workers, trade workers and maintenance: the trade first; only if none of them is free, maintenance and general workers.
+        const list = await crewFor(ctx.tenantId, trade);
+        if (!list.length) return { error: `No worker, ${trade} or maintenance member to send it to.` };
+        const tier = (m: { position: string }) => (String(m.position).toLowerCase().includes(trade.toLowerCase().replace(/(ers?|ing|ians?|s)$/, "")) ? 0 : 1);
+        for (const m of list.slice(0, 40)) {
           const r = await findSlot(ctx.tenantId, m.id, opts);
-          if (r.slot && (!pick || r.slot.startAt < pick.slot.startAt)) pick = { m, slot: r.slot, wholeDay: r.wholeDay };
+          if (!r.slot) continue;
+          if (!pick || tier(m) < tier(pick.m as { position: string }) || (tier(m) === tier(pick.m as { position: string }) && r.slot.startAt < pick.slot.startAt)) pick = { m, slot: r.slot, wholeDay: r.wholeDay };
         }
         if (!pick) return { error: `No ${trade} is free${opts.at ? " then" : " in the next 3 weeks"}.` };
       }
