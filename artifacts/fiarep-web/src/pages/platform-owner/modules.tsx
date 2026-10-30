@@ -213,7 +213,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
     "+ Log a resident", "+ Add building / owner", "Inbox", "Messages", "Check HPD / DOB", "Translator",
   ] },
   // Residents and vendors use the app without a FIAREP sign-in: company switches only.
-  { id: "resident", screen: "Resident home (resident app)", tabs: ["Translator"] },
+  { id: "resident", screen: "Resident home (resident app and website)", tabs: ["Talk to us", "Translator"] },
   { id: "vendor", screen: "Vendor home", tabs: ["Translator"] },
 ];
 // Screens whose people have no staff account, so no per-person switches.

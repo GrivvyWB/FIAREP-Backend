@@ -21,9 +21,11 @@ export default function ResidentHome() {
   useFocusEffect(useCallback(() => { void getResidentCode().then(setSaved); }, []));
   // The company's switches (Platform Control): the Translator module and the Resident home's Translator button.
   const [translatorOn, setTranslatorOn] = useState(false);
+  // The resident line button: Platform Control → App tabs → Resident home → Talk to us.
+  const [lineOn, setLineOn] = useState(true);
   useFocusEffect(useCallback(() => {
     if (!saved?.code) return;
-    void customFetch<{ on: boolean }>(`/api/v1/public/translator-switch?residentCode=${encodeURIComponent(saved.code)}`, { responseType: 'json' } as never).then((r) => setTranslatorOn(!!r?.on)).catch(() => setTranslatorOn(false));
+    void customFetch<{ line: boolean; translator: boolean }>(`/api/v1/public/resident-switches?residentCode=${encodeURIComponent(saved.code)}`, { responseType: 'json' } as never).then((r) => { setTranslatorOn(!!r?.translator); setLineOn(r?.line !== false); }).catch(() => setTranslatorOn(false));
   }, [saved?.code]));
 
   async function keep(v: ResidentCode) {
@@ -97,10 +99,12 @@ export default function ResidentHome() {
         </View>
       )}
 
-      <Pressable style={ui.btn} onPress={() => router.push('/resident-desk')}>
-        <Text style={ui.btnText}>{saved?.organizationName || 'Talk to us'}</Text>
-      </Pressable>
-      <Text style={{ fontSize: 12, color: '#666', textAlign: 'center', marginTop: -4, marginBottom: 8 }}>Report a repair, check on a complaint, or set up a visit.</Text>
+      {lineOn && <>
+        <Pressable style={ui.btn} onPress={() => router.push('/resident-desk')}>
+          <Text style={ui.btnText}>{saved?.organizationName || 'Talk to us'}</Text>
+        </Pressable>
+        <Text style={{ fontSize: 12, color: '#666', textAlign: 'center', marginTop: -4, marginBottom: 8 }}>Report a repair, check on a complaint, or set up a visit.</Text>
+      </>}
 
       <Pressable style={[ui.btn, !saved && ui.btnMuted]} disabled={!saved} onPress={() => router.push('/resident')}>
         <Text style={ui.btnText}>Report an Issue</Text>

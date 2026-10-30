@@ -51,6 +51,21 @@ router.post("/v1/public/i18n/:lang", rateLimit("i18n-translate", 30), async (req
   res.json(await translateLines(lang, lines, process.env.OPENAI_API_KEY).catch(() => ({})));
 });
 
+/** The resident line ("Talk to us" / the company's name button) for a company: Platform Control →
+ *  Module Management → App tabs → Resident home → Talk to us. On unless switched off. */
+export async function residentLineOn(residentCode: string): Promise<boolean> {
+  const org = residentCode ? await organizationForResidentCode(residentCode) : null;
+  if (!org) return true; // no company yet: the line finds it
+  const [row] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, org.id)).limit(1);
+  const modules = ((row?.features as { modules?: Record<string, unknown> } | null)?.modules || {}) as Record<string, unknown>;
+  return modules["apptab.resident.talk-to-us"] !== false;
+}
+router.get("/v1/public/resident-switches", rateLimit("public-resident-switches", 60), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const code = typeof req.query["residentCode"] === "string" ? req.query["residentCode"] : "";
+  res.json({ line: await residentLineOn(code).catch(() => true), translator: await publicTranslatorAllowed({ residentCode: code }).catch(() => false) });
+});
+
 router.get("/v1/public/translator-switch", rateLimit("public-translator-switch", 60), async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
   res.json({ on: await publicTranslatorAllowed({ residentCode: req.query["residentCode"], vendorCode: req.query["vendorCode"] }).catch(() => false) });

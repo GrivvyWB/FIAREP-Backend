@@ -27,6 +27,7 @@ import { bookingView, getSchedule, saveSchedule, staffBookings } from "../lib/co
 import { recentConversations, residentAiOn, residentComplaint, residentView, residentWrites, staffWrites } from "../lib/command/residentChat";
 import { deskPhotoSent, deskView, deskWrites, loadDesk, startDesk } from "../lib/command/residentDesk";
 import { deskPhotoConfirm, deskPhotoUpload } from "./publicAccess";
+import { residentLineOn } from "./publicLanguage";
 import { entityRecords } from "@workspace/db";
 import { checkClientKey, checkKey, clientKeyStatus, geminiKeyStatus, KEY_ENV, keyFor, keyStatus, saveClientKey, saveKey, type ClientKeyName, type KeyName } from "../lib/command/keys";
 import { ONLINE_WINDOW_MS, signalResult, waitForEvent } from "../lib/command/agentBus";
@@ -746,6 +747,8 @@ router.post("/v1/public/resident-reports/:complaintNo/messages", rateLimit("resi
 // ── Resident line (lib/command/residentDesk.ts): residents with no code write to the Command Center ──
 router.post("/v1/public/resident-desk", rateLimit("resident-desk-start", 10), async (req, res) => {
   res.setHeader("Cache-Control", "no-store");
+  const code = str((req.body as Record<string, unknown> | undefined)?.["companyCode"], 12);
+  if (code && !(await residentLineOn(code).catch(() => true))) { res.status(403).json({ error: "Your management company's resident line is off. Use Report an Issue." }); return; }
   res.json(await startDesk(str((req.body as Record<string, unknown> | undefined)?.["companyCode"], 12)));
 });
 const deskAuth = (req: Request) => loadDesk(str(req.params["id"], 60), str(req.header("x-desk-token"), 200));

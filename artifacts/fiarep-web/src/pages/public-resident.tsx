@@ -57,6 +57,12 @@ export default function PublicResident() {
     try { const v = JSON.parse(localStorage.getItem('fiarep_resident_code') || 'null'); return v && /^\d{6}$/.test(String(v.code || '')) ? { code: String(v.code), organizationName: String(v.organizationName || '') } : null; } catch { return null; }
   };
   const [savedCode, setSavedCode] = useState<{ code: string; organizationName: string } | null>(readSavedCode);
+  // The resident line card: Platform Control → App tabs → Resident home → Talk to us.
+  const [lineOn, setLineOn] = useState(true);
+  useEffect(() => {
+    if (!savedCode?.code) { setLineOn(true); return; }
+    fetch(`/api/v1/public/resident-switches?residentCode=${encodeURIComponent(savedCode.code)}`).then((r) => (r.ok ? r.json() : null)).then((r) => setLineOn(r?.line !== false)).catch(() => undefined);
+  }, [savedCode?.code]);
   // The resident's building, once they've reported from this browser: it heads the page.
   const [building, setBuilding] = useState(() => { try { return localStorage.getItem('fiarep_resident_building') || ''; } catch { return ''; } });
   const keepBuilding = (address: string) => { const a = address.trim(); if (!a) return; try { localStorage.setItem('fiarep_resident_building', a); } catch { /* private mode */ } setBuilding(a); };
@@ -304,12 +310,12 @@ export default function PublicResident() {
                 </CardContent>
               </Card>
             )}
-            <Card className="transition-colors shadow-md border-[#185FA5]/50 hover:border-primary cursor-pointer" onClick={() => setView('desk')} data-testid="card-resident-desk">
+            {lineOn && <Card className="transition-colors shadow-md border-[#185FA5]/50 hover:border-primary cursor-pointer" onClick={() => setView('desk')} data-testid="card-resident-desk">
               <CardHeader>
                 <CardTitle>{savedCode?.organizationName || 'Talk to us'}</CardTitle>
                 <CardDescription>Report a repair, check on a complaint, or set up a visit.</CardDescription>
               </CardHeader>
-            </Card>
+            </Card>}
 
             <Card className={`transition-colors shadow-md ${savedCode ? 'hover:border-primary cursor-pointer' : 'opacity-60'}`} onClick={() => { if (savedCode) setView('submit'); }}>
               <CardHeader>
