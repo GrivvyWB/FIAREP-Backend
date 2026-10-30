@@ -7,13 +7,13 @@ import { photoUri, pickPhoto, takePhoto } from '../lib/photos';
 import { Stack, useFocusEffect } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { customFetch } from '@workspace/api-client-react';
-import { getResidentCode } from '../lib/store';
+import { getResidentCode, rememberResidentDetails, residentDetails } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 
 // The resident line: no code needed. The Command Center reports the repair,
 // checks a complaint, and sets up the visit. This phone keeps the conversation.
 type Msg = { id: string; from: 'you' | 'office'; text: string; at: string };
-type View_ = { messages: Msg[]; complaintNo: string | null; company: string | null; appointment: { label: string } | null };
+type View_ = { messages: Msg[]; complaintNo: string | null; company: string | null; appointment: { label: string } | null; resident?: { name?: string; address?: string; unit?: string } };
 const KEY = 'fiarep.residentDesk';
 
 export default function ResidentDesk() {
@@ -42,11 +42,13 @@ export default function ResidentDesk() {
   }, [load, start]);
   useFocusEffect(useCallback(() => { if (!desk) return; const t = setInterval(() => void load(desk), 15000); return () => clearInterval(t); }, [desk, load]));
   useEffect(() => { setTimeout(() => scroll.current?.scrollToEnd({ animated: true }), 50); }, [view?.messages.length]);
+  // Filed: keep the resident's name, building and apartment on this phone so the line doesn't ask next time.
+  useEffect(() => { if (view?.resident) void rememberResidentDetails(view.resident); }, [view?.resident?.address, view?.resident?.name, view?.resident?.unit]); // eslint-disable-line react-hooks/exhaustive-deps
   async function send() {
     const t = text.trim(); if (!t || !desk) return;
     setSending(true); setError(''); setText('');
     setView((v) => v && { ...v, messages: [...v.messages, { id: 'pending', from: 'you', text: t, at: new Date().toISOString() }] });
-    try { setView(await customFetch<View_>(`/api/v1/public/resident-desk/${desk.id}/messages`, { method: 'POST', responseType: 'json', headers: { 'Content-Type': 'application/json', 'x-desk-token': desk.token }, body: JSON.stringify({ text: t }) } as never)); }
+    try { setView(await customFetch<View_>(`/api/v1/public/resident-desk/${desk.id}/messages`, { method: 'POST', responseType: 'json', headers: { 'Content-Type': 'application/json', 'x-desk-token': desk.token }, body: JSON.stringify({ text: t, known: await residentDetails() }) } as never)); }
     catch (e: any) { setError(e?.data?.error || 'Could not send. Try again.'); setText(t); }
     finally { setSending(false); }
   }
@@ -79,7 +81,7 @@ export default function ResidentDesk() {
         // No complaint yet: keep it here, and tell the office a photo was taken.
         setPending((p) => [...p, stored!]);
         setView((v) => v && { ...v, messages: [...v.messages, { id: 'pending-photo', from: 'you', text: '📷 Photo taken', at: new Date().toISOString() }] });
-        setView(await customFetch<View_>(`/api/v1/public/resident-desk/${desk.id}/messages`, { method: 'POST', responseType: 'json', headers: { 'Content-Type': 'application/json', 'x-desk-token': desk.token }, body: JSON.stringify({ text: '📷 Photo taken' }) } as never));
+        setView(await customFetch<View_>(`/api/v1/public/resident-desk/${desk.id}/messages`, { method: 'POST', responseType: 'json', headers: { 'Content-Type': 'application/json', 'x-desk-token': desk.token }, body: JSON.stringify({ text: '📷 Photo taken', known: await residentDetails() }) } as never));
       }
     } catch (e: any) { setError(e?.data?.error || e?.message || 'Could not send the photo. Try again.'); }
     finally { setPhotoBusy(false); }

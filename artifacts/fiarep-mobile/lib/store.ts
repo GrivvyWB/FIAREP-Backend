@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { isCrewForTrade, isInspectionSupervisorTitle, isSupervisorTitle, supervisedTradeForPosition } from './titles';
 import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
@@ -691,6 +692,27 @@ export async function createResidentReport(unit: string, development: string, de
   } catch {}
   if (photoFailures.length) (r as any).photoUploadFailures = photoFailures;
   return r;
+}
+
+/** The resident on this phone, from their last complaint (resident line or Report an Issue): name, building, apartment. */
+export type ResidentDetails = { name?: string; address?: string; unit?: string };
+export async function residentDetails(): Promise<ResidentDetails> {
+  try {
+    const raw = await AsyncStorage.getItem('fiarep.residentDetails');
+    if (raw) { const v = JSON.parse(raw) as ResidentDetails; if (v.address || v.name) return v; }
+  } catch {}
+  try {
+    const d = await db();
+    await ensureResidentTable(d);
+    const row = await d.getFirstAsync<{ state: string }>('SELECT state FROM resident_reports ORDER BY rowid DESC LIMIT 1');
+    const r = row ? (JSON.parse(row.state) as ResidentReport) : null;
+    if (r) return { name: r.residentName || undefined, address: r.address || undefined, unit: r.unit || undefined };
+  } catch {}
+  return {};
+}
+export async function rememberResidentDetails(v: ResidentDetails): Promise<void> {
+  if (!v.address && !v.name) return;
+  await AsyncStorage.setItem('fiarep.residentDetails', JSON.stringify(v)).catch(() => undefined);
 }
 
 export async function saveResidentCredentials(credentials: SavedResidentReport): Promise<void> {

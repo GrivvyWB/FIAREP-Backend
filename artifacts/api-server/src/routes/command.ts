@@ -758,7 +758,9 @@ router.post("/v1/public/resident-desk/:id/messages", rateLimit("resident-desk", 
   if (!d) { res.status(404).json({ error: "Conversation not found" }); return; }
   const text = str((req.body as Record<string, unknown> | undefined)?.["text"], 2000);
   if (!text) { res.status(400).json({ error: "Write a message." }); return; }
-  res.json(await deskWrites(d, text));
+  // What the phone / browser already knows about the resident from their last complaint.
+  const k = ((req.body as Record<string, unknown> | undefined)?.["known"] ?? {}) as Record<string, unknown>;
+  res.json(await deskWrites(d, text, { name: str(k["name"], 120), address: str(k["address"], 300), unit: str(k["unit"], 20) }));
 });
 
 // The resident's photo of the problem, onto the complaint filed in this conversation.
