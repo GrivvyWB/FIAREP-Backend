@@ -474,12 +474,20 @@ export const ACTIONS: ActionDef[] = [
       if (w.alertId.startsWith("resident:")) {
         const reportId = w.alertId.slice("resident:".length);
         const appointment = { bookingId: b.id, startAt: b.startAt.toISOString(), endAt: b.endAt.toISOString(), staffId: pick.m.id, staffName: pick.m.name, bookedAt: new Date().toISOString(), by: ctx.actorName };
-        await db.update(entityRecords).set({ state: sql`${entityRecords.state} || ${JSON.stringify({ appointment, appointmentDate: appointment.startAt })}::jsonb`, updatedAt: new Date() }).where(eq(entityRecords.id, reportId));
+        // The complaint is assigned to the member too, so it is in their My Jobs and they finish it there:
+        // completion photo, note, and the resident signs off on the phone (inside the apartment).
+        const assigned = { assignedStaffId: pick.m.id, assignedTo: pick.m.name, assignedAt: new Date().toISOString(), assignedByName: ctx.actorName };
+        await db.update(entityRecords).set({
+          state: sql`${entityRecords.state} || ${JSON.stringify({ appointment, appointmentDate: appointment.startAt, ...assigned })}::jsonb || (case when ${entityRecords.state}->>'status' in ('submitted', 'assigned', '') or ${entityRecords.state}->>'status' is null then '{"status":"assigned"}'::jsonb else '{}'::jsonb end)`,
+          version: sql`${entityRecords.version} + 1`, updatedAt: new Date(),
+        }).where(eq(entityRecords.id, reportId));
         const [rep] = await db.select().from(entityRecords).where(eq(entityRecords.id, reportId)).limit(1);
         if (rep) await notifyResident(rep, "Visit scheduled", `Someone from maintenance is scheduled for ${nyLabel(b.startAt)}.`).catch(() => undefined);
       }
       const mold = apartments.length ? await activeMoldAt(ctx.tenantId, address, apartments[0]!).catch(() => []) : [];
-      await notify(commandActor(ctx), pick.m.id, `New job: ${w.urgency === "urgent" ? "URGENT — " : ""}${w.title}`, `${nyLabel(b.startAt)} at ${address}${apartments.length ? ` (${apartments.join(", ")})` : ""} · ${w.kind}${mold.length ? ` · ${moldLine(mold)}` : ""}`, b.id).catch(() => undefined);
+      // A resident's complaint opens the complaint on their phone (where the resident signs off); anything else, the booking.
+      const opens = w.alertId.startsWith("resident:") ? w.alertId.slice("resident:".length) : b.id;
+      await notify(commandActor(ctx), pick.m.id, `New job: ${w.urgency === "urgent" ? "URGENT — " : ""}${w.title}`, `${nyLabel(b.startAt)} at ${address}${apartments.length ? ` (${apartments.join(", ")})` : ""} · ${w.kind}${mold.length ? ` · ${moldLine(mold)}` : ""}`, opens).catch(() => undefined);
       return { assigned: pick.m.name, booked: bookingView(b), driveFromPreviousJob: pick.slot.travelDetail, workOrder: { id: w.id, address, title: w.title } };
     },
     describe: (p) => `Assign work order ${str(p["workOrderId"], 12)}… to ${str(p["member"]) || `the first free ${str(p["trade"]) || "member"}`}`,
