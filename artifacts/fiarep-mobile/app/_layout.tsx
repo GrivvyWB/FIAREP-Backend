@@ -1,6 +1,9 @@
 // Every screen in the language the person picked (swaps in the translating Text first).
 import { installScreenLanguage } from '../lib/screen-language';
 installScreenLanguage();
+// Always the newest copy of the app (never an older one built into a TestFlight install).
+import { stayCurrent } from '../lib/stay-current';
+stayCurrent();
 // Registers the background location task for the time clock before any screen renders.
 import '../lib/clock-location';
 import { createContext, useContext, useEffect, useState, useCallback } from 'react';
