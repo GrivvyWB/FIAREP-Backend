@@ -778,7 +778,7 @@ router.post("/v1/public/resident-desk/:id/photo/confirm", rateLimit("resident-de
   const b = (req.body ?? {}) as Record<string, unknown>;
   const photo = await deskPhotoConfirm(d.tenant_id, d.complaint_id, str(b["grantId"], 80), str(b["objectPath"], 400));
   if (!photo) { res.status(409).json({ error: "The photo didn't arrive. Try again." }); return; }
-  res.json(await deskPhotoSent(d));
+  res.json(await deskPhotoSent(d, b["taken"] === true));
 });
 
 // Staff: conversations on the Command Center page (FIAREP's own, or a client's).

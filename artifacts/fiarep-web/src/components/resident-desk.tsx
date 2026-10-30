@@ -39,21 +39,41 @@ export function ResidentDesk({ companyCode, onBuilding }: { companyCode?: string
     catch (e: any) { setError(e?.data?.error || "Could not send. Try again."); setText(t); }
     finally { setSending(false); }
   }
-  // The photo of the problem: once the complaint is filed, it goes onto it (Smart Repair reads it for the workers).
+  // The photo of the problem. Taken any time: before the complaint is filed it waits in this
+  // browser (the chat says "📷 Photo taken"), and goes onto the complaint the moment it has a number.
   const fileRef = useRef<HTMLInputElement>(null);
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [pending, setPending] = useState<File[]>([]);
+  async function upload(file: File, taken: boolean) {
+    if (!desk) return;
+    const headers = { "Content-Type": "application/json", "x-desk-token": desk.token };
+    const up = await customFetch<{ uploadUrl: string; grantId: string; file: { objectPath: string } }>(`/api/v1/public/resident-desk/${desk.id}/photo/upload-url`, { method: "POST", responseType: "json", headers, body: JSON.stringify({ name: file.name || "photo.jpg", size: file.size, contentType: file.type || "image/jpeg" }) } as never);
+    const put = await fetch(up.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
+    if (!put.ok) throw new Error("The photo did not upload. Try again.");
+    setView(await customFetch<View>(`/api/v1/public/resident-desk/${desk.id}/photo/confirm`, { method: "POST", responseType: "json", headers, body: JSON.stringify({ grantId: up.grantId, objectPath: up.file.objectPath, taken }) } as never));
+  }
   async function sendPhoto(file: File) {
     if (!desk) return;
     setPhotoBusy(true); setError("");
     try {
-      const headers = { "Content-Type": "application/json", "x-desk-token": desk.token };
-      const up = await customFetch<{ uploadUrl: string; grantId: string; file: { objectPath: string } }>(`/api/v1/public/resident-desk/${desk.id}/photo/upload-url`, { method: "POST", responseType: "json", headers, body: JSON.stringify({ name: file.name || "photo.jpg", size: file.size, contentType: file.type || "image/jpeg" }) } as never);
-      const put = await fetch(up.uploadUrl, { method: "PUT", body: file, headers: { "Content-Type": file.type || "image/jpeg" } });
-      if (!put.ok) throw new Error("The photo did not upload. Try again.");
-      setView(await customFetch<View>(`/api/v1/public/resident-desk/${desk.id}/photo/confirm`, { method: "POST", responseType: "json", headers, body: JSON.stringify({ grantId: up.grantId, objectPath: up.file.objectPath }) } as never));
+      if (view?.complaintNo) await upload(file, false);
+      else {
+        setPending((p) => [...p, file]);
+        setView((v) => v && { ...v, messages: [...v.messages, { id: "pending-photo", from: "you", text: "📷 Photo taken", at: new Date().toISOString() }] });
+        setView(await customFetch<View>(`/api/v1/public/resident-desk/${desk.id}/messages`, { method: "POST", responseType: "json", headers: { "Content-Type": "application/json", "x-desk-token": desk.token }, body: JSON.stringify({ text: "📷 Photo taken" }) } as never));
+      }
     } catch (e: any) { setError(e?.data?.error || e?.message || "Could not send the photo. Try again."); }
     finally { setPhotoBusy(false); if (fileRef.current) fileRef.current.value = ""; }
   }
+  // The complaint got its number: send the photos taken before it.
+  useEffect(() => {
+    if (!view?.complaintNo || !pending.length || photoBusy) return;
+    const list = pending; setPending([]); setPhotoBusy(true);
+    void (async () => {
+      for (const f of list) { try { await upload(f, true); } catch (e: any) { setError(e?.message || "A photo did not send. Tap the camera to send it again."); } }
+      setPhotoBusy(false);
+    })();
+  }, [view?.complaintNo, pending]); // eslint-disable-line react-hooks/exhaustive-deps
   const newConversation = () => { try { localStorage.removeItem(KEY); } catch { /* ignore */ } setDesk(null); setView(null); void start(); };
   return (
     <div className="space-y-3">
@@ -73,7 +93,7 @@ export function ResidentDesk({ companyCode, onBuilding }: { companyCode?: string
         <div ref={end} />
       </div>
       <div className="flex gap-2">
-        {view?.complaintNo && (
+        {view && (
           <>
             <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) void sendPhoto(f); }} />
             <Button type="button" variant="outline" onClick={() => fileRef.current?.click()} disabled={photoBusy} aria-label="Send a photo" title="Send a photo">

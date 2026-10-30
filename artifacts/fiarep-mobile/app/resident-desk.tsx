@@ -50,8 +50,22 @@ export default function ResidentDesk() {
     catch (e: any) { setError(e?.data?.error || 'Could not send. Try again.'); setText(t); }
     finally { setSending(false); }
   }
-  // The photo of the problem: once the complaint is filed, it goes onto it (Smart Repair reads it for the workers).
+  // The photo of the problem. Taken any time: before the complaint is filed it waits on this
+  // phone (the chat says "📷 Photo taken"), and goes onto the complaint the moment it has a number.
+  // Smart Repair reads it there for the supervisor and the workers.
   const [photoBusy, setPhotoBusy] = useState(false);
+  const [pending, setPending] = useState<string[]>([]);
+  async function upload(stored: string, taken: boolean) {
+    if (!desk) return;
+    const uri = photoUri(stored);
+    const info = await FileSystem.getInfoAsync(uri);
+    const size = info.exists && 'size' in info ? info.size : 0;
+    const headers = { 'Content-Type': 'application/json', 'x-desk-token': desk.token };
+    const up = await customFetch<{ uploadUrl: string; grantId: string; file: { objectPath: string } }>(`/api/v1/public/resident-desk/${desk.id}/photo/upload-url`, { method: 'POST', responseType: 'json', headers, body: JSON.stringify({ name: stored.split('/').pop() || 'photo.jpg', size, contentType: 'image/jpeg' }) } as never);
+    const put = await FileSystem.uploadAsync(up.uploadUrl, uri, { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, mimeType: 'image/jpeg' });
+    if (put.status < 200 || put.status >= 300) throw new Error('The photo did not upload. Try again.');
+    setView(await customFetch<View_>(`/api/v1/public/resident-desk/${desk.id}/photo/confirm`, { method: 'POST', responseType: 'json', headers, body: JSON.stringify({ grantId: up.grantId, objectPath: up.file.objectPath, taken }) } as never));
+  }
   async function sendPhoto(source: 'camera' | 'library') {
     if (!desk) return;
     setError('');
@@ -60,17 +74,25 @@ export default function ResidentDesk() {
     if (!stored) return;
     setPhotoBusy(true);
     try {
-      const uri = photoUri(stored);
-      const info = await FileSystem.getInfoAsync(uri);
-      const size = info.exists && 'size' in info ? info.size : 0;
-      const headers = { 'Content-Type': 'application/json', 'x-desk-token': desk.token };
-      const up = await customFetch<{ uploadUrl: string; grantId: string; file: { objectPath: string } }>(`/api/v1/public/resident-desk/${desk.id}/photo/upload-url`, { method: 'POST', responseType: 'json', headers, body: JSON.stringify({ name: stored.split('/').pop() || 'photo.jpg', size, contentType: 'image/jpeg' }) } as never);
-      const put = await FileSystem.uploadAsync(up.uploadUrl, uri, { httpMethod: 'PUT', uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT, mimeType: 'image/jpeg' });
-      if (put.status < 200 || put.status >= 300) throw new Error('The photo did not upload. Try again.');
-      setView(await customFetch<View_>(`/api/v1/public/resident-desk/${desk.id}/photo/confirm`, { method: 'POST', responseType: 'json', headers, body: JSON.stringify({ grantId: up.grantId, objectPath: up.file.objectPath }) } as never));
+      if (view?.complaintNo) await upload(stored, false);
+      else {
+        // No complaint yet: keep it here, and tell the office a photo was taken.
+        setPending((p) => [...p, stored!]);
+        setView((v) => v && { ...v, messages: [...v.messages, { id: 'pending-photo', from: 'you', text: '📷 Photo taken', at: new Date().toISOString() }] });
+        setView(await customFetch<View_>(`/api/v1/public/resident-desk/${desk.id}/messages`, { method: 'POST', responseType: 'json', headers: { 'Content-Type': 'application/json', 'x-desk-token': desk.token }, body: JSON.stringify({ text: '📷 Photo taken' }) } as never));
+      }
     } catch (e: any) { setError(e?.data?.error || e?.message || 'Could not send the photo. Try again.'); }
     finally { setPhotoBusy(false); }
   }
+  // The complaint got its number: send the photos taken before it.
+  useEffect(() => {
+    if (!view?.complaintNo || !pending.length || photoBusy) return;
+    const list = pending; setPending([]); setPhotoBusy(true);
+    void (async () => {
+      for (const p of list) { try { await upload(p, true); } catch (e: any) { setError(e?.message || 'A photo did not send. Tap the camera to send it again.'); } }
+      setPhotoBusy(false);
+    })();
+  }, [view?.complaintNo, pending]); // eslint-disable-line react-hooks/exhaustive-deps
   function photoMenu() {
     Alert.alert('Send a photo', 'A picture of the problem goes to management with your complaint.', [
       { text: 'Take a photo', onPress: () => void sendPhoto('camera') },
@@ -98,7 +120,7 @@ export default function ResidentDesk() {
         </ScrollView>
         {!!error && <Text style={{ color: '#c00', fontSize: 12 }}>{error}</Text>}
         <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-          {!!view?.complaintNo && (
+          {!!view && (
             <Pressable onPress={photoMenu} disabled={photoBusy} accessibilityRole="button" accessibilityLabel="Send a photo"
               style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: ACCENT, alignItems: 'center', justifyContent: 'center', opacity: photoBusy ? 0.6 : 1 }}>
               {photoBusy ? <ActivityIndicator color="#fff" /> : <Ionicons name="camera" size={24} color="#fff" />}
