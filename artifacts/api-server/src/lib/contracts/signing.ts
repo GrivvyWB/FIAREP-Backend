@@ -41,12 +41,12 @@ function signSide(html: string, side: 0 | 1, image: string, when: Date, note = "
 }
 
 export type Signing = {
-  token: string; number: string; company: string; contact: string; email: string; kind: string; monthly: number;
+  token: string; number: string; company: string; contact: string; email: string; kind: string; monthly: number; orgId?: string | null;
   html: string; status: "sent" | "signed"; sentAt: string; signedAt?: string; signedName?: string; ip?: string; userAgent?: string; agreed?: string;
 };
 
 /** Sign FIAREP's side and keep the agreement for the client to sign. */
-export async function startSigning(html: string, info: { number: string; company: string; contact: string; email: string; kind: string; monthly: number }, by: string) {
+export async function startSigning(html: string, info: { number: string; company: string; contact: string; email: string; kind: string; monthly: number; orgId?: string | null }, by: string) {
   const sig = await ownerSignature();
   if (!sig) return { error: "Your signature isn't saved yet. Draw it once in Platform Control → Repair prices → My signature, then ask again." };
   const id = randomUUID(); const token = randomBytes(24).toString("base64url");
@@ -63,10 +63,16 @@ async function load(id: string, token: string) {
   return a.length === b.length && timingSafeEqual(a, b) ? s : null;
 }
 
+/** What monthly autopay needs from a signed agreement (null unless the link is valid and it is signed). */
+export async function signedForAutopay(id: string, token: string) {
+  const s = await load(id, token);
+  return s && s.status === "signed" ? { id, orgId: s.orgId ?? null, company: s.company, contact: s.contact, email: s.email, number: s.number, monthly: s.monthly } : null;
+}
+
 export async function signingView(id: string, token: string) {
   const s = await load(id, token);
   if (!s) return null;
-  return { number: s.number, company: s.company, contact: s.contact, status: s.status, signedAt: s.signedAt ?? null, signedName: s.signedName ?? null, html: s.html };
+  return { number: s.number, company: s.company, contact: s.contact, status: s.status, signedAt: s.signedAt ?? null, signedName: s.signedName ?? null, monthly: s.monthly, html: s.html };
 }
 
 /** The client agreed and signed. */

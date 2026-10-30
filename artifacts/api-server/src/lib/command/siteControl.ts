@@ -233,7 +233,7 @@ export async function contractForClient(tenantId: string, staffId: string, p: { 
   const fee = monthlyFee(input);
   if (!fee.monthly) return { error: `${fee.basis}. Set it there, then ask again.` };
   const { startSigning } = await import("../contracts/signing");
-  const started = await startSigning(buildContractHtml(input), { number: input.number, company: org.name, contact, email, kind: input.kind, monthly: fee.monthly }, staff.name);
+  const started = await startSigning(buildContractHtml(input), { number: input.number, company: org.name, contact, email, kind: input.kind, monthly: fee.monthly, orgId: org.id }, staff.name);
   if ("error" in started) return started;
   const { sendEmail } = await import("./mail");
   const { BRAND } = await import("../contracts/contract");

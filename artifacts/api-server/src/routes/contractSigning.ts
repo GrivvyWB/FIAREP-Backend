@@ -2,7 +2,8 @@
 import { Router, type IRouter } from "express";
 import { requirePlatformOwner } from "../middlewares/auth";
 import { rateLimit } from "../lib/rateLimit";
-import { clientSigns, ownerSignature, saveOwnerSignature, signingView } from "../lib/contracts/signing";
+import { clientSigns, ownerSignature, saveOwnerSignature, signedForAutopay, signingView } from "../lib/contracts/signing";
+import { autopayList, enroll, enrolledFor, setAutopayOn, squareConfig, squareReady } from "../lib/billing";
 import { notify } from "../lib/audit";
 import type { Actor } from "../lib/auth";
 
@@ -38,6 +39,32 @@ router.post("/v1/public/contracts/:id/sign", rateLimit("contract-sign", 10), asy
   const system = { id: "contract-signing", tenantId: "default", name: "Contract signing", role: "administrator", position: "", developments: [], sessionVersion: 0 } as Actor;
   await notify(system, "administrator", `Contract signed: ${r.company}`, `Agreement ${r.number} signed — the signed copy is in FIAREP's mailbox.`).catch(() => undefined);
   res.json(r);
+});
+
+// ── Monthly autopay (Square) ──
+router.get("/v1/public/contracts/:id/autopay", rateLimit("autopay-view", 60), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const sg = await signedForAutopay(s(req.params["id"], 60), s(req.query["t"], 100));
+  if (!sg) { res.json({ available: false }); return; }
+  const c = squareConfig();
+  res.json({ available: squareReady(), appId: c.appId, locationId: c.locationId, sdk: c.sdk, monthly: sg.monthly, enrolled: await enrolledFor(sg.id) });
+});
+router.post("/v1/public/contracts/:id/autopay", rateLimit("autopay-enroll", 6), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const sg = await signedForAutopay(s(req.params["id"], 60), s(b["t"], 100));
+  if (!sg) { res.status(400).json({ error: "Sign the agreement first." }); return; }
+  const r = await enroll(sg, s(b["sourceId"], 500));
+  if ("error" in r && !("enrolled" in r)) { res.status(400).json(r); return; }
+  res.json(r);
+});
+router.get("/v1/platform/billing", requirePlatformOwner, async (_req, res) => {
+  res.json({ ready: squareReady(), sandbox: squareConfig().sandbox, clients: await autopayList() });
+});
+router.put("/v1/platform/billing/:id", requirePlatformOwner, async (req, res) => {
+  const r = await setAutopayOn(s(req.params["id"], 80), (req.body as Record<string, unknown> | undefined)?.["on"] === true);
+  if ("error" in r) { res.status(404).json(r); return; }
+  res.json({ ready: squareReady(), sandbox: squareConfig().sandbox, clients: await autopayList() });
 });
 
 export default router;

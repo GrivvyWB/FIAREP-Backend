@@ -3,7 +3,7 @@ import { LanguagePicker } from "@/components/language-picker";
 import { customFetch } from "@workspace/api-client-react";
 import { useOwnerAuth } from "@/hooks/use-owner-auth";
 import { Button } from "@/components/ui/button";
-import { ClipboardCheck, BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LayoutDashboard, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer, HardHat, UsersRound, Mic, MapPinned, Globe2 } from "lucide-react";
+import { ClipboardCheck, BellRing, Building2, ClipboardList, DollarSign, FileText, Landmark, LayoutDashboard, LogOut, PanelsTopLeft, Search, ShieldAlert, Hammer, HardHat, UsersRound, Mic, MapPinned, Globe2, CreditCard } from "lucide-react";
 import { Link, useLocation } from "wouter";
 
 export function OwnerShell({ children }: { children: ReactNode }) {
@@ -164,6 +164,17 @@ export function OwnerShell({ children }: { children: ReactNode }) {
           >
             <Globe2 className="h-4 w-4" />
             Countries
+          </Link>
+          <Link
+            href="/platform-owner/billing"
+            className={`flex items-center gap-2 py-2 border-b-2 lg:border-b-0 lg:border-l-2 lg:px-3 text-sm font-semibold transition-colors ${
+              location === "/platform-owner/billing"
+                ? "border-[#185FA5] text-slate-950"
+                : "border-transparent text-slate-500 hover:text-slate-900"
+            }`}
+          >
+            <CreditCard className="h-4 w-4" />
+            Billing
           </Link>
           <Link
             href="/platform-owner/repair-prices"

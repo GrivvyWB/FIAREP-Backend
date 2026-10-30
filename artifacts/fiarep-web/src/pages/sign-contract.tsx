@@ -5,6 +5,7 @@ import { CheckCircle2, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { SignaturePad, type SignaturePadHandle } from "@/components/signature-pad";
+import { SquareAutopay } from "@/components/square-autopay";
 
 type View = { number: string; company: string; contact: string; status: "sent" | "signed"; signedAt: string | null; signedName: string | null; html: string };
 
@@ -54,7 +55,8 @@ export default function SignContract() {
             <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0" />
             <div><b>Signed by {view.signedName}</b>{view.signedAt ? ` on ${new Date(view.signedAt).toLocaleString()}` : ""}. A signed copy was emailed to you.</div>
           </div>
-        ) : (
+        ) : null}
+        {view.status === "signed" ? <SquareAutopay id={id} token={t} /> : (
           <div className="space-y-3 rounded-lg border border-slate-200 bg-white p-4">
             <label className="flex items-start gap-2 text-sm text-slate-800">
               <input type="checkbox" className="mt-1 h-4 w-4" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
