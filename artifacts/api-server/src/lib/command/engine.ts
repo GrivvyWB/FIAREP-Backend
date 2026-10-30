@@ -82,7 +82,8 @@ async function proposeAction(def: ActionDef, params: Record<string, unknown>, ct
     if ("error" in resolved) return { refused: resolved.error };
     target = resolved.agentId; taskConfirm = resolved.taskConfirm;
   }
-  const needsConfirm = def.risk === "write" && (confirmOn(switches, def.name, def.confirmDefault) || taskConfirm);
+  // Changes to the site itself always wait for Face ID, whatever the switch says.
+  const needsConfirm = def.risk === "write" && (def.name === "site_change" || confirmOn(switches, def.name, def.confirmDefault) || taskConfirm);
   const [row] = await db.insert(commandActions).values({
     id: randomUUID(), tenantId: ctx.tenantId, runId: ctx.runId, staffId: ctx.staffId, deviceId: ctx.deviceId, action: def.name, params, target,
     risk: def.risk, needsConfirm, status: needsConfirm ? "proposed" : "approved", nonce: randomBytes(16).toString("base64url"),

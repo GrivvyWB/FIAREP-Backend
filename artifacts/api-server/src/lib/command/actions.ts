@@ -31,6 +31,7 @@ import { createContract, quotePlans, type ContractRequest } from "./sales";
 import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
 import { commandFillForm } from "./forms";
 import { setLanguage } from "./language";
+import { siteCall, siteEndpoints } from "./siteControl";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -576,6 +577,28 @@ export const ACTIONS: ActionDef[] = [
     run: async (p, ctx) => commandFillForm(ctx.tenantId, { form: str(p["form"], 120), address: str(p["address"], 200) || undefined, summons: str(p["summons"], 40) || undefined, apartment: str(p["apartment"], 20) || undefined }, { id: ctx.staffId, name: ctx.actorName }),
     describe: (p) => `Fill ${str(p["form"], 60)}${str(p["summons"]) ? ` for summons ${str(p["summons"], 30)}` : str(p["address"]) ? ` for ${str(p["address"], 80)}` : ""}`,
     spoken: (r) => { const x = r as { form?: string; saved?: string; error?: string }; return x.error ?? `${x.form} filled for ${x.saved}. It's on Company Forms to check and sign.`; },
+  },
+  // ── Anything on the site (FIAREP's administrators only, FIAREP's own Command Center) ──
+  {
+    name: "site_endpoints", label: "Find how the site does something", risk: "read", confirmDefault: false, target: "server", platformOnly: true,
+    description: "For anything on the FIAREP website or Platform Control that no other tool does (turn a country on, open a state's records, a company's switches, buildings, staff, settings…): search the site's own endpoints by keywords. Returns method, path and the start of each endpoint's code (to see what it reads from the body). Then use site_read (GET) or site_change.",
+    schema: { type: "object", properties: { keywords: { type: "string" } }, required: ["keywords"], additionalProperties: false },
+    run: async (p, ctx) => siteEndpoints(ctx.tenantId, ctx.staffId, str(p["keywords"], 200)),
+    describe: (p) => `Look up: ${str(p["keywords"], 80)}`,
+  },
+  {
+    name: "site_read", label: "Read anything on the site", risk: "read", confirmDefault: false, target: "server", platformOnly: true,
+    description: "GET one of the site's endpoints (path from site_endpoints, e.g. /v1/platform/countries, with any ?query). Use to see the current state before changing it.",
+    schema: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false },
+    run: async (p, ctx) => siteCall(ctx.tenantId, ctx.staffId, "GET", str(p["path"], 500), undefined),
+    describe: (p) => `Read ${str(p["path"], 100)}`,
+  },
+  {
+    name: "site_change", label: "Change anything on the site", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
+    description: "Make a change the user asked for, through the site's own endpoint (POST/PUT/PATCH/DELETE, path and JSON body as that endpoint's code expects — read it with site_endpoints first, and the current state with site_read). Always waits for Face ID approval. Say exactly what will change.",
+    schema: { type: "object", properties: { method: { type: "string", enum: ["POST", "PUT", "PATCH", "DELETE"] }, path: { type: "string" }, body: { type: "string", description: "The JSON body, as text" }, what: { type: "string" } }, required: ["method", "path", "what"], additionalProperties: false },
+    run: async (p, ctx) => siteCall(ctx.tenantId, ctx.staffId, str(p["method"], 10), str(p["path"], 500), (() => { const b = p["body"]; if (typeof b !== "string" || !b.trim()) return typeof b === "object" && b ? b : undefined; try { return JSON.parse(b) as unknown; } catch { return undefined; } })()),
+    describe: (p) => `${str(p["what"], 160)} (${str(p["method"], 10)} ${str(p["path"], 100)})`,
   },
   // ── Client access (FIAREP's own Command Center) ──────────────────────────
   {
