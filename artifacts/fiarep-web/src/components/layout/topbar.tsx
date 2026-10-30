@@ -60,6 +60,7 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
           <small className="block text-[10.5px] font-medium text-muted-foreground tracking-normal">
             Field Infrastructure, Asset Reporting &amp; Evaluation Performance
           </small>
+          <small className="block text-[10.5px] font-semibold text-[#b77900] tracking-normal">Building Intelligence. Compliance. Action.</small>
         </div>
       </div>
       

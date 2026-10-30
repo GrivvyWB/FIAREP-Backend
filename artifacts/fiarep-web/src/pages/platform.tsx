@@ -148,6 +148,7 @@ export default function Platform() {
             <div className="mt-1 text-[11px] sm:text-xs font-medium text-muted-foreground leading-tight" data-testid="text-brand-tagline">
               Field Infrastructure, Asset Reporting &amp; Evaluation Performance
             </div>
+            <div className="mt-0.5 text-[11px] sm:text-xs font-semibold text-[#b77900] leading-tight">Building Intelligence. Compliance. Action.</div>
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
             <LanguagePicker className="hidden sm:flex" />

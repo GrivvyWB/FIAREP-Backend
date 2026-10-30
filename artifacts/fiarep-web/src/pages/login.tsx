@@ -103,6 +103,7 @@ export default function Login() {
         <p className="mt-2 text-center text-sm text-muted-foreground">
           Field Infrastructure, Asset Reporting &amp; Evaluation Performance
         </p>
+        <p className="mt-1 text-center text-sm font-semibold text-[#b77900]">Building Intelligence. Compliance. Action.</p>
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">

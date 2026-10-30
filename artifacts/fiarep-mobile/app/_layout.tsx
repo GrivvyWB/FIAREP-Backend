@@ -212,9 +212,10 @@ function PersonaPicker({ onPick }: { onPick: (persona: InstallationPersona) => v
         resizeMode="contain"
         style={{ width: 300, height: 150, alignSelf: 'center', marginBottom: 2 }}
       />
-      <Text style={{ fontSize: 13, fontWeight: '500', color: '#555', textAlign: 'center', marginBottom: 10 }}>
+      <Text style={{ fontSize: 13, fontWeight: '500', color: '#555', textAlign: 'center', marginBottom: 2 }}>
         Field Infrastructure, Asset Reporting & Evaluation Performance
       </Text>
+      <Text style={{ fontSize: 13, fontWeight: '700', color: '#B77900', textAlign: 'center', marginBottom: 10 }}>Building Intelligence. Compliance. Action.</Text>
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Who's using this device?</Text>
       <Pressable style={ui.btn} onPress={() => onPick('resident')}>
         <Text style={ui.btnText}>Resident</Text>
@@ -249,9 +250,10 @@ function ModePicker({ onPick, notice }: { onPick: (m: AppMode) => void; notice?:
         resizeMode="contain"
         style={{ width: 300, height: 150, alignSelf: 'center', marginBottom: 2 }}
       />
-      <Text style={{ fontSize: 13, fontWeight: '500', color: '#555', textAlign: 'center', marginBottom: 10 }}>
+      <Text style={{ fontSize: 13, fontWeight: '500', color: '#555', textAlign: 'center', marginBottom: 2 }}>
         Field Infrastructure, Asset Reporting & Evaluation Performance
       </Text>
+      <Text style={{ fontSize: 13, fontWeight: '700', color: '#B77900', textAlign: 'center', marginBottom: 10 }}>Building Intelligence. Compliance. Action.</Text>
       <Text style={{ fontSize: 26, fontWeight: '600', textAlign: 'center' }}>Staff sign in</Text>
       {!!notice && <Text style={{ color: '#9a3412', textAlign: 'center', marginBottom: 8 }}>{notice}</Text>}
       <Pressable style={ui.btn} onPress={() => setGateFor(true)}>
