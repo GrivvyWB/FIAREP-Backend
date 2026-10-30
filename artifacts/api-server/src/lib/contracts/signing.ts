@@ -86,7 +86,8 @@ export async function clientSigns(id: string, token: string, input: { name: stri
   if (!PNG.test(input.image) || input.image.length > 400_000) return { error: "Sign in the box first." };
   const now = new Date();
   const agreed = `I have read and agree to FIAREP Agreement ${s.number}.`;
-  const html = signSide(s.html, 1, input.image, now, `signed electronically by ${name}`)
+  // FIAREP's side is already signed, so the client's is the one blank signature block left (the first match).
+  const html = signSide(s.html, 0, input.image, now, `signed electronically by ${name}`)
     .replace("</div></body></html>", `<p class="muted" style="margin-top:10px">Signed electronically by ${esc(name)} on ${esc(now.toLocaleString("en-US", { timeZone: "America/New_York" }))} ET from ${esc(input.ip)}. "${esc(agreed)}"</p></div></body></html>`);
   const next: Signing = { ...s, html, status: "signed", signedAt: now.toISOString(), signedName: name, ip: input.ip, userAgent: input.userAgent.slice(0, 300), agreed };
   await db.update(entityRecords).set({ state: next, updatedAt: now, version: 2 }).where(eq(entityRecords.id, id));

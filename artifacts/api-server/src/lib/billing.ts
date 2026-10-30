@@ -101,6 +101,8 @@ export async function enroll(signing: { id: string; orgId?: string | null; compa
     };
     const first = await charge(id, a, today.slice(0, 7));
     a.charges.push(first);
+    // First month didn't go through: due again now, so the hourly run tries it (then every 3 days) instead of waiting a month.
+    if (first.status !== "paid") a.nextChargeOn = today;
     await db.insert(entityRecords).values({ id, tenantId: TENANT, entity: ENTITY, state: a, createdBy: "Contract signing" });
     await tellAdministrators(`Autopay set up: ${a.company}`, `${a.card} · $${a.monthly.toLocaleString("en-US")} a month · first payment ${first.status}${first.error ? ` (${first.error})` : ""}`);
     return { enrolled: true, card: a.card, monthly: a.monthly, firstPayment: first.status, nextChargeOn: a.nextChargeOn, ...(first.error ? { error: `Card saved, but the first payment didn't go through: ${first.error}` } : {}) };
