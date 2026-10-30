@@ -7,6 +7,7 @@ import { FieldEvidenceDisplay } from "@/components/field-evidence-display";
 import { useAuth } from "@/hooks/use-auth";
 import { hasModuleAccess } from "@/lib/access-policy";
 import { menuOverride } from "@/lib/website-menu";
+import { knownComplaint, rememberComplaint } from "@/lib/complaint-cache";
 
 type Report = { id: string; development?: string | null; state?: Record<string, unknown>; createdAt: string };
 
@@ -14,17 +15,18 @@ type Report = { id: string; development?: string | null; state?: Record<string, 
  *  the details, the resident's photo and what Smart Repair found. */
 export default function ComplaintPage() {
   const { id = "" } = useParams<{ id: string }>();
-  const [report, setReport] = useState<Report | null>(null);
+  // Shown at once when the page that was pressed already had it; refreshed from the server below.
+  const [report, setReport] = useState<Report | null>(() => knownComplaint(id));
   // The link to Resident Reports only when that page is open to this person (Platform Control switches).
   const { staff, organizationModules } = useAuth();
   const reportsOverride = menuOverride(organizationModules, "/reports", staff?.id);
   const canOpenReports = reportsOverride === false ? false : reportsOverride === true || hasModuleAccess(staff, "reports", organizationModules);
   const [error, setError] = useState("");
   useEffect(() => {
-    setReport(null); setError("");
+    setReport(knownComplaint(id)); setError("");
     customFetch<Report>(`/api/v1/resident-reports/${encodeURIComponent(id)}`, { responseType: "json" } as never)
-      .then(setReport)
-      .catch(() => setError("This complaint couldn't be opened. It may have been deleted, or it's at a development you can't see."));
+      .then((r) => { rememberComplaint(id, r); setReport(r); })
+      .catch(() => { setReport(null); setError("This complaint couldn't be opened. It may have been deleted, or it's at a development you can't see."); });
   }, [id]);
   const state = (report?.state || {}) as Record<string, unknown>;
   const scans = state.aiPhotoScans && typeof state.aiPhotoScans === "object" && !Array.isArray(state.aiPhotoScans) ? (state.aiPhotoScans as Record<string, ViolationClassification>) : undefined;

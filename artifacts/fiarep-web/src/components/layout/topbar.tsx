@@ -42,8 +42,9 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
   };
 
   return (
-    <header className="bg-card border-b border-border px-4 md:px-[30px] h-[68px] flex items-center justify-between sticky top-0 z-20 shrink-0">
-      <div className="flex items-center gap-3.5">
+    <header className="bg-card border-b border-border px-4 md:px-[30px] sticky top-0 z-20 shrink-0">
+      <div className="h-[60px] md:h-[68px] flex items-center justify-between gap-3">
+      <div className="flex min-w-0 items-center gap-3.5">
         {!sidebarOpen && (
           <button
             type="button"
@@ -57,14 +58,15 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
         )}
         <div translate="no" className="text-[20px] font-extrabold tracking-[.3px] leading-tight">
           FIA<span className="text-[#F5B301]">REP</span>
-          <small className="block text-[10.5px] font-medium text-muted-foreground tracking-normal">
+          {/* Wide screens: under the name. Phones: on their own line below the bar (so nothing is squeezed). */}
+          <small className="hidden md:block text-[10.5px] font-medium text-muted-foreground tracking-normal">
             Field Infrastructure, Asset Reporting &amp; Evaluation Performance
           </small>
-          <small className="block text-[10.5px] font-semibold text-[#b77900] tracking-normal">Building Intelligence. Compliance. Action.</small>
+          <small className="hidden md:block text-[10.5px] font-semibold text-[#b77900] tracking-normal">Building Intelligence. Compliance. Action.</small>
         </div>
       </div>
       
-      <div className="flex items-center gap-5 md:gap-[22px]">
+      <div className="flex shrink-0 items-center gap-3 md:gap-[22px]">
         {languageOn && <LanguagePicker />}
         {isCoverageEligible(staff) && coverSiteOn && <CoverSiteButton />}
         <Link href="/notifications" aria-label={unreadCount ? `Notifications, ${unreadCount} unread` : "Notifications"} onClick={requestDesktopAlerts} className={`relative text-muted-foreground cursor-pointer hover:text-foreground transition-colors block ${ringing ? "notification-bell-ring" : unreadCount > 0 ? "notification-bell-unread" : ""}`}>
@@ -96,6 +98,11 @@ export function Topbar({ sidebarOpen, onMenuClick }: { sidebarOpen: boolean; onM
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+      </div>
+      </div>
+      <div translate="no" className="md:hidden -mt-1 pb-2 text-center leading-tight">
+        <div className="text-[10.5px] font-medium text-muted-foreground">Field Infrastructure, Asset Reporting &amp; Evaluation Performance</div>
+        <div className="text-[10.5px] font-semibold text-[#b77900]">Building Intelligence. Compliance. Action.</div>
       </div>
     </header>
   );

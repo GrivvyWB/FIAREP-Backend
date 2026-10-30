@@ -309,16 +309,31 @@ router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, 
     return;
   }
   const photoId = String(req.params["id"] ?? "");
-  const [photo] = await db.select().from(residentReportPhotos).where(and(
+  const [own] = await db.select().from(residentReportPhotos).where(and(
     eq(residentReportPhotos.id, photoId),
     eq(residentReportPhotos.tenantId, actor.tenantId),
   )).limit(1);
+  // FIAREP's copy of a complaint a client sent to FIAREP: the resident's photo is on the client's
+  // complaint. Analyzed for FIAREP's copy — only that photo, only because the client sent it.
+  let photo = own;
+  let copyId: string | null = null;
+  if (!photo) {
+    const [theirs] = await db.select().from(residentReportPhotos).where(eq(residentReportPhotos.id, photoId)).limit(1);
+    if (theirs && theirs.tenantId !== actor.tenantId) {
+      const [copy] = await db.select({ id: entityRecords.id }).from(entityRecords).where(and(
+        eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
+        sql`${entityRecords.state}->'fiarepClient'->>'recordId' = ${theirs.reportId}`,
+        sql`${entityRecords.state}->'fiarepClient'->>'tenantId' = ${theirs.tenantId}`,
+      )).limit(1);
+      if (copy) { photo = theirs; copyId = copy.id; }
+    }
+  }
   if (!photo || !["image/jpeg", "image/png", "image/webp"].includes(photo.contentType)) {
     res.status(photo ? 400 : 404).json({ error: photo ? "This photo format cannot be analyzed" : "Photo not found" });
     return;
   }
   const [report] = await db.select().from(entityRecords).where(and(
-    eq(entityRecords.id, photo.reportId),
+    eq(entityRecords.id, copyId ?? photo.reportId),
     eq(entityRecords.entity, "resident-reports"),
     eq(entityRecords.tenantId, actor.tenantId),
     eq(entityRecords.deleted, false),
@@ -343,7 +358,7 @@ router.post("/v1/resident-report-photos/:id/classify", requireAuth, async (req, 
     return;
   }
   try {
-    const { downloadUrl } = await fileStorage.createDownload(actor.tenantId, photo.objectPath);
+    const { downloadUrl } = await fileStorage.createDownload(photo.tenantId, photo.objectPath);
     const response = await fetch(downloadUrl);
     if (!response.ok) throw new Error("Photo download failed");
     const image = `data:${photo.contentType};base64,${Buffer.from(await response.arrayBuffer()).toString("base64")}`;
