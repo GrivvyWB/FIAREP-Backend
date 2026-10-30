@@ -90,6 +90,16 @@ export async function residentPhotoToWorkOrder(tenantId: string, reportId: strin
       if (outside && !copyId) continue;
       await notify(officeActor(tenantId), id, `${wo.urgency === "urgent" ? "URGENT — " : ""}Work order ready: ${wo.title}`, `#${s(st["complaintNo"], 20)} at ${address} · ${ticket.trade || "trade?"} · ${ticket.estimatedTime || ""}`.trim(), outside ? copyId : report.id).catch(() => undefined);
     }
+    // "Assign work orders automatically" on: the soonest-free member with this trade gets it now
+    // (booked on their calendar, told on their phone, the resident told the visit time).
+    const sw = await effectiveSwitches(tenantId).catch(() => null);
+    if (sw?.autoAssign && sw.enabled) {
+      try {
+        const { ACTION_MAP } = await import("./actions");
+        const r = (await ACTION_MAP.get("assign_work_order")!.run!({ workOrderId: wo.id }, { runId: `auto-${wo.id}`, staffId: "command-center", deviceId: "auto-assign", actorName: "Command Center (automatic)", tenantId })) as { error?: string; assigned?: string };
+        if (r?.error) for (const id of tell) if ((homeOf.get(id) ?? tenantId) === tenantId) await notify(officeActor(tenantId), id, `Couldn't assign automatically: ${wo.title}`, `${r.error} Assign it yourself.`, report.id).catch(() => undefined);
+      } catch { /* the supervisors were already told about the work order */ }
+    }
     return { workOrder: wo, created: true };
   } catch (err) {
     return { error: err instanceof Error ? err.message : "Smart Repair failed." };

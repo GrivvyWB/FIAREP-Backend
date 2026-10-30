@@ -454,6 +454,7 @@ router.put("/v1/platform/command/switches", async (req, res) => {
     provider: b["provider"] === "gemini" || b["provider"] === "claude" ? b["provider"] : before.provider,
     residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
     autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
+    autoAssign: typeof b["autoAssign"] === "boolean" ? b["autoAssign"] : before.autoAssign,
     mailFallback: typeof b["mailFallback"] === "boolean" ? b["mailFallback"] : before.mailFallback,
     geminiModel: typeof b["geminiModel"] === "string" && /^[a-z0-9.-]{3,60}$/.test(b["geminiModel"].trim()) ? b["geminiModel"].trim() : before.geminiModel,
     quickOn: typeof b["quickOn"] === "boolean" ? b["quickOn"] : before.quickOn !== false,
@@ -637,6 +638,7 @@ orgAndClient("put", "/switches", async (req, res) => {
     provider: (b["provider"] === "gemini" || b["provider"] === "claude") && (await effectiveSwitches(tenantId)).paysOwn ? b["provider"] : before.provider,
     residentChat: typeof b["residentChat"] === "boolean" ? b["residentChat"] : before.residentChat,
     autoWorkOrders: typeof b["autoWorkOrders"] === "boolean" ? b["autoWorkOrders"] : before.autoWorkOrders,
+    autoAssign: typeof b["autoAssign"] === "boolean" ? b["autoAssign"] : before.autoAssign,
     mailFallback: typeof b["mailFallback"] === "boolean" ? b["mailFallback"] : before.mailFallback,
   };
   await saveSwitches(next, tenantId);

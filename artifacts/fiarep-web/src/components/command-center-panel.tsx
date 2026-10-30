@@ -5,7 +5,7 @@ import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 
 type ActionMeta = { name: string; label: string; risk: "read" | "write"; confirmDefault: boolean; target: "server" | "agent" };
-type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; quickOn?: boolean; quickModel?: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; autoWorkOrders: boolean; mailFallback?: boolean; caps?: Record<string, number> };
+type Switches = { enabled: boolean; actions: Record<string, boolean>; confirm: Record<string, boolean>; model: string; quickOn?: boolean; quickModel?: string; provider: "claude" | "gemini"; geminiModel: string; residentChat: boolean; autoWorkOrders: boolean; autoAssign?: boolean; mailFallback?: boolean; caps?: Record<string, number> };
 type ChatMsg = { id: string; from: "resident" | "office" | "staff"; text: string; at: string; by?: string };
 type Conversation = { id: string; complaintNo: string; address: string; unit: string; description: string; human: boolean; handoff: { reason?: string; urgent?: boolean } | null; appointment: string | null; lastAt: string; waiting: boolean; messages: ChatMsg[] };
 type Device = { id: string; name: string; staffName: string; status: "pending" | "active" | "revoked"; confirmKey: string; createdAt: string; approvedAt: string | null; approvedBy: string | null; lastUsedAt: string | null };
@@ -449,6 +449,10 @@ export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "pl
             <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm" title="Smart Repair reads each resident photo and drafts a work order with repair instructions, then tells the supervisors">
               <span className="font-semibold text-slate-900">Work orders from resident photos</span>
               <Switch checked={data.switches.autoWorkOrders !== false} onCheckedChange={(v) => void saveSwitches({ autoWorkOrders: v })} />
+            </label>
+            <label className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 px-3 py-2 text-sm" title="Each work order goes straight to the soonest-free member whose title matches its trade: booked on their calendar, sent to their phone, and the resident is told the visit time. If nobody with that trade is free, the supervisors are told to assign it.">
+              <span className="font-semibold text-slate-900">Assign work orders automatically</span>
+              <Switch checked={data.switches.autoAssign === true} onCheckedChange={(v) => void saveSwitches({ autoAssign: v })} />
             </label>
           </div>)}
         </div>

@@ -25,6 +25,8 @@ export type CommandSwitches = {
   residentChat: boolean;
   /** Draft a work order (with Smart Repair instructions) from every resident complaint photo. On unless switched off. */
   autoWorkOrders: boolean;
+  /** Assign each drafted work order to the soonest-free member with its trade, with nobody pressing anything. OFF until switched on. */
+  autoAssign: boolean;
   /** A client with no mailbox of its own sends Command Center email from FIAREP's Outlook. */
   mailFallback: boolean;
   /** Platform row only: monthly Claude spending cap per client, in US dollars (absent = no cap). */
@@ -56,6 +58,7 @@ export async function getSwitches(tenantId: string = PLATFORM_TENANT): Promise<C
     provider: v.provider === "gemini" ? "gemini" : "claude",
     residentChat: v.residentChat !== false,
     autoWorkOrders: v.autoWorkOrders !== false,
+    autoAssign: v.autoAssign === true,
     mailFallback: v.mailFallback !== false,
     geminiModel: typeof v.geminiModel === "string" && v.geminiModel.trim() ? v.geminiModel.trim() : DEFAULT_GEMINI_MODEL,
     ...(tenantId === PLATFORM_TENANT ? { quickOn: v.quickOn !== false, quickModel: typeof v.quickModel === "string" && v.quickModel.trim() ? v.quickModel.trim() : DEFAULT_QUICK_MODEL, caps, ownKeys: v.ownKeys && typeof v.ownKeys === "object" ? Object.fromEntries(Object.entries(v.ownKeys).filter(([, x]) => x === true)) : {} } : {}),
@@ -101,6 +104,8 @@ export async function effectiveSwitches(tenantId: string): Promise<CommandSwitch
     provider: paysOwn ? own.provider : platform.provider,
     residentChat: platform.residentChat && own.residentChat,
     autoWorkOrders: platform.autoWorkOrders && own.autoWorkOrders,
+    // The company's own switch (FIAREP's for FIAREP).
+    autoAssign: own.autoAssign,
     mailFallback: platform.mailFallback && own.mailFallback,
     geminiModel: platform.geminiModel,
     moduleOn: on,
