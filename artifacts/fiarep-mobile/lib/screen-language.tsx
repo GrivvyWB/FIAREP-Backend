@@ -43,19 +43,31 @@ function eligible(s: string): boolean {
   return true;
 }
 
+const tries = new Map<string, number>();
 async function fetchMissing() {
   const want = lang;
-  const lines = [...pending].filter((l) => !(l in dict)).slice(0, 150);
+  const lines = [...pending].filter((l) => !(l in dict));
   pending.clear();
   if (!lines.length || want === 'en') return;
-  try {
-    const got = await customFetch<Record<string, string>>(`/api/v1/public/i18n/${encodeURIComponent(want)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines }), responseType: 'json' } as never);
-    if (want !== lang) return;
-    Object.assign(dict, got || {});
-    for (const l of lines) if (!(l in dict)) dict[l] = l; // not translatable: stop asking for it this session
-    bump();
-    void AsyncStorage.setItem(DICT_KEY(want), JSON.stringify(dict)).catch(() => undefined);
-  } catch { /* stays in English until the next screen */ }
+  // Every line on the screen, in small batches at the same time; a batch that fails is asked again.
+  const batches: string[][] = [];
+  for (let i = 0; i < lines.length; i += 25) batches.push(lines.slice(i, i + 25));
+  await Promise.all(batches.map(async (batch) => {
+    try {
+      const got = await customFetch<Record<string, string>>(`/api/v1/public/i18n/${encodeURIComponent(want)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ lines: batch }), responseType: 'json' } as never);
+      if (want !== lang) return;
+      Object.assign(dict, got || {});
+      // Lines the server kept in English (a name, a code): stop asking for them this session.
+      if (got && Object.keys(got).length) for (const l of batch) if (!(l in dict)) dict[l] = l;
+      bump();
+      void AsyncStorage.setItem(DICT_KEY(want), JSON.stringify(dict)).catch(() => undefined);
+    } catch {
+      if (want !== lang) return;
+      const again = batch.filter((l) => (tries.get(l) ?? 0) < 3);
+      for (const l of again) { tries.set(l, (tries.get(l) ?? 0) + 1); pending.add(l); }
+      if (again.length && !timer) timer = setTimeout(() => { timer = null; void fetchMissing(); }, 3000);
+    }
+  }));
 }
 
 /** The words in the picked language (the English while it is being translated). */
@@ -84,6 +96,8 @@ export async function setScreenLanguage(code: string, rtl = false) {
   await AsyncStorage.setItem(KEY, JSON.stringify({ code: lang, rtl })).catch(() => undefined);
   if (lang === 'en') { dict = {}; bump(); return; }
   try { dict = JSON.parse((await AsyncStorage.getItem(DICT_KEY(lang))) || '{}') as Record<string, string>; } catch { dict = {}; }
+  // Lines an earlier version kept in English after a slow answer: ask for them again.
+  for (const k of Object.keys(dict)) if (dict[k] === k) delete dict[k];
   bump();
   try {
     const all = await customFetch<Record<string, string>>(`/api/v1/public/i18n/${encodeURIComponent(lang)}`, { responseType: 'json' } as never);

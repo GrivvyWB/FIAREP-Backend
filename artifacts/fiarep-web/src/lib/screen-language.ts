@@ -52,18 +52,30 @@ function queue(s: string) {
   timer = setTimeout(() => { timer = null; void fetchMissing(); }, 250);
 }
 
+const tries = new Map<string, number>();
 async function fetchMissing() {
   const want = lang;
-  const lines = [...pending].filter((l) => !(l in dict)).slice(0, 150);
+  const lines = [...pending].filter((l) => !(l in dict));
   pending.clear();
   if (!lines.length || want === "en") return;
-  try {
-    const r = await fetch(`/api/v1/public/i18n/${encodeURIComponent(want)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines }) });
-    if (!r.ok || want !== lang) return;
-    Object.assign(dict, (await r.json()) as Record<string, string>);
-    safe(() => localStorage.setItem(DICT_KEY(want), JSON.stringify(dict)), undefined);
-    translateTree(document.body);
-  } catch { /* stays in English until the next screen */ }
+  // Every line on the screen, in small batches at the same time; a batch that fails is asked again.
+  const batches: string[][] = [];
+  for (let i = 0; i < lines.length; i += 25) batches.push(lines.slice(i, i + 25));
+  await Promise.all(batches.map(async (batch) => {
+    try {
+      const r = await fetch(`/api/v1/public/i18n/${encodeURIComponent(want)}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ lines: batch }) });
+      if (!r.ok) throw new Error(String(r.status));
+      if (want !== lang) return;
+      Object.assign(dict, (await r.json()) as Record<string, string>);
+      safe(() => localStorage.setItem(DICT_KEY(want), JSON.stringify(dict)), undefined);
+      translateTree(document.body);
+    } catch {
+      if (want !== lang) return;
+      const again = batch.filter((l) => (tries.get(l) ?? 0) < 3);
+      for (const l of again) { tries.set(l, (tries.get(l) ?? 0) + 1); pending.add(l); }
+      if (again.length && !timer) timer = setTimeout(() => { timer = null; void fetchMissing(); }, 3000);
+    }
+  }));
 }
 
 function doText(node: Text) {

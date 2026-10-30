@@ -60,8 +60,6 @@ async function aiTranslate(lines: string[], language: string, apiKey: string): P
   return out.map((x, i) => (typeof x === "string" && x.trim() ? x : lines[i]!));
 }
 
-// One translation run per language at a time, so two screens asking for the same words don't pay twice.
-const running = new Map<string, Promise<unknown>>();
 
 /** Translations for these lines: from the table, the rest translated now and kept. */
 export async function translateLines(lang: string, lines: string[], apiKey: string | undefined): Promise<Record<string, string>> {
@@ -69,7 +67,6 @@ export async function translateLines(lang: string, lines: string[], apiKey: stri
   if (!language || lang === "en") return {};
   const wanted = [...new Set(lines.map((l) => (typeof l === "string" ? l.trim() : "")).filter((l) => l && l.length <= MAX_LEN && /\p{L}/u.test(l)))].slice(0, 200);
   if (!wanted.length) return {};
-  const prior = running.get(lang); if (prior) await prior.catch(() => undefined);
   const lookup = async () => {
     const hashes = wanted.map(hash);
     const r = await db.execute(sql`select source, translation from ui_translations where lang = ${lang} and source_hash in (${sql.join(hashes.map((h) => sql`${h}`), sql`, `)})`);
@@ -79,19 +76,17 @@ export async function translateLines(lang: string, lines: string[], apiKey: stri
   const have = await lookup();
   const missing = wanted.filter((l) => !(l in have));
   if (!missing.length || !apiKey) return have;
-  const job = (async () => {
-    for (let i = 0; i < missing.length; i += 60) {
-      const chunk = missing.slice(i, i + 60);
-      try {
-        const done = await aiTranslate(chunk, language, apiKey);
-        for (let j = 0; j < chunk.length; j += 1) {
-          await db.execute(sql`insert into ui_translations (lang, source_hash, source, translation) values (${lang}, ${hash(chunk[j]!)}, ${chunk[j]!}, ${done[j]!}) on conflict (lang, source_hash) do nothing`);
-          have[chunk[j]!] = done[j]!;
-        }
-      } catch (err) { logger.warn({ err, lang }, "Screen translation failed"); }
-    }
-  })();
-  running.set(lang, job);
-  try { await job; } finally { if (running.get(lang) === job) running.delete(lang); }
+  // Small pieces translated at the same time, so a whole screen comes back in seconds, not minutes.
+  const chunks: string[][] = [];
+  for (let i = 0; i < missing.length; i += 20) chunks.push(missing.slice(i, i + 20));
+  await Promise.all(chunks.map(async (chunk) => {
+    try {
+      const done = await aiTranslate(chunk, language, apiKey);
+      for (let j = 0; j < chunk.length; j += 1) {
+        await db.execute(sql`insert into ui_translations (lang, source_hash, source, translation) values (${lang}, ${hash(chunk[j]!)}, ${chunk[j]!}, ${done[j]!}) on conflict (lang, source_hash) do nothing`);
+        have[chunk[j]!] = done[j]!;
+      }
+    } catch (err) { logger.warn({ err, lang }, "Screen translation failed"); }
+  }));
   return have;
 }

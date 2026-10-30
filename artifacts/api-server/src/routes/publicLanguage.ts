@@ -44,7 +44,7 @@ router.get("/v1/public/i18n/:lang", rateLimit("i18n-dictionary", 60), async (req
   res.setHeader("Cache-Control", "no-cache");
   res.json(lang === "en" ? {} : await dictionary(lang).catch(() => ({})));
 });
-router.post("/v1/public/i18n/:lang", rateLimit("i18n-translate", 30), async (req, res) => {
+router.post("/v1/public/i18n/:lang", rateLimit("i18n-translate", 120), async (req, res) => {
   const lang = String(req.params["lang"]);
   if (!UI_LANGUAGES[lang]) { res.status(404).json({ error: "Unknown language" }); return; }
   const lines = Array.isArray((req.body as { lines?: unknown })?.lines) ? ((req.body as { lines: unknown[] }).lines.filter((l) => typeof l === "string") as string[]) : [];
