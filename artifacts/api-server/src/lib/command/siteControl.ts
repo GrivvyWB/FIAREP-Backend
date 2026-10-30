@@ -80,7 +80,7 @@ export async function siteCall(tenantId: string, staffId: string, method: string
  *  Makes the company the same way Platform Control does (with its administrator code and resident
  *  code), sets the units and buildings it is licensed for, sends the code to the person asking, and
  *  prices it from the pricing ladder: the platform, plus the FIAREP plan only when asked. */
-export async function createClient(tenantId: string, staffId: string, p: { name: string; contact?: string; address?: string; buildings?: number; units?: number; plan?: boolean }) {
+export async function createClient(tenantId: string, staffId: string, p: { name: string; contact?: string; email?: string; address?: string; buildings?: number; units?: number; plan?: boolean }) {
   const staff = await fiarepAdministrator(tenantId, staffId);
   if (!staff) return NOT_ADMIN;
   const name = p.name.trim();
@@ -101,7 +101,34 @@ export async function createClient(tenantId: string, staffId: string, p: { name:
   // The code goes to the person who asked, too (their notifications and phone).
   const { notify } = await import("../audit");
   await notify(actorFromStaff(staff), staff.id, `Client code: ${org.name}`, `${director.name} — administrator code ${director.code}${residentCode ? ` · resident code ${residentCode}` : ""} · company ${org.id}`).catch(() => undefined);
+  // Emailed too: the client gets their code; FIAREP's mailbox gets the code and the price.
+  const { sendEmail } = await import("./mail");
+  const { BRAND } = await import("../contracts/contract");
+  const mine = (process.env["FIAREP_OWNER_EMAIL"] || BRAND.email).trim();
+  const usd = (n?: number) => `$${(n ?? 0).toLocaleString("en-US")}`;
+  const priceLines = price ? [
+    `Pricing (${price.units} units, ${price.band} band — ${price.source}):`,
+    "notSet" in price.platform ? price.platform.notSet : `Platform: ${usd(price.platform.monthly)} a month, ${usd(price.platform.setupFee)} setup`,
+    ...(price.plan ? ["notSet" in price.plan ? price.plan.notSet : `FIAREP plan: ${usd(price.plan.monthly)} a month`] : []),
+  ] : [];
+  const sent: string[] = []; const notSent: string[] = [];
+  const clientEmail = (p.email || "").trim();
+  if (clientEmail) {
+    const r = await sendEmail(tenantId, { to: [{ name: director.name, email: clientEmail, from: "" }], cc: [], attachments: [],
+      subject: `Your FIAREP code — ${org.name}`,
+      body: `Hello ${director.name},\n\nWelcome to FIAREP. Your administrator code is: ${director.code}\n\nOpen the FIAREP app or fiarep.com and sign in with this code.${residentCode ? `
+
+Your residents' code is: ${residentCode}` : ""}\n\nFIAREP\n${BRAND.site}` }, staff.name).catch((e: Error) => ({ error: e.message }));
+    ("error" in r ? notSent : sent).push(clientEmail);
+  }
+  const r2 = await sendEmail(tenantId, { to: [{ name: "FIAREP", email: mine, from: "" }], cc: [], attachments: [],
+    subject: `New client: ${org.name} — code ${director.code}`,
+    body: [`${org.name} (company ${org.id})${p.address?.trim() ? `
+${p.address.trim()}` : ""}`, `Administrator: ${director.name} — code ${director.code}${residentCode ? `
+Resident code: ${residentCode}` : ""}`, `Licensed: ${units || "—"} units, ${buildings || "—"} buildings`, ...(priceLines.length ? [priceLines.join("\n")] : []), clientEmail ? `Code emailed to ${clientEmail}.` : "No client email given."].join("\n\n") }, staff.name).catch((e: Error) => ({ error: e.message }));
+  ("error" in r2 ? notSent : sent).push(mine);
   return {
+    emailedTo: sent, ...(notSent.length ? { emailFailed: notSent } : {}),
     company: org.name, companyId: org.id, address: p.address?.trim() || null,
     administrator: director.name, administratorCode: director.code, residentCode,
     licensedUnits: units || null, buildingsAllowed: buildings || null,
