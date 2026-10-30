@@ -9,6 +9,7 @@ import { ENGINEER, ENGINEER_PER_DOB, REPAIR_ITEMS, REPAIR_SQFT, TYPE_TO_ITEM, TY
 import { usePricing, savePricing, defaultPrice } from "@/lib/pricing-overrides";
 import { DofLookupPanel, type ViolationCounts } from "@/components/dof-lookup";
 import { ContractBuilder } from "@/components/contract-builder";
+import { MySignature } from "@/components/platform-owner/my-signature";
 
 type JobRequest = { id: string; address: string; company: string; contact: string; email: string; phone: string; units: number; apartments?: number; hpdA: number; hpdB: number; hpdC: number; dob: number; hpdTypes?: Array<{ type: string; count: number; jobs: number }> };
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
@@ -298,6 +299,8 @@ export default function OwnerRepairPrices() {
           <p className="mt-2 text-xs text-slate-600">Rule of thumb: price = cost × 1.5 for a 33% margin, × 1.67 for 40%. If a job's cost × 1.5 comes out above the book price, charge cost × 1.5 and say why. Subbed work: the sub's invoice + 20%. The expediting fee ($600 / $400 per apartment) is on top of all of this and is not in these margins.</p>
         </section>
       )}
+
+      <MySignature />
 
       <ContractBuilder
         scope={lines.map(([key, label, price, unit]) => ({ label, qty: counts[key] || 0, unit, price }))}

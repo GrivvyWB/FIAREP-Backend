@@ -12,7 +12,7 @@ import { buildContractHtml, contractNumber, monthlyFee, type ContractInput } fro
 import { getPilotPrices } from "../pilot";
 import { saveReport } from "./scopes";
 
-async function savedBands(): Promise<Band[] | null> {
+export async function savedBands(): Promise<Band[] | null> {
   const [row] = await db.select().from(entityRecords).where(and(eq(entityRecords.id, "pricing-overrides"), eq(entityRecords.entity, "pricing-overrides"))).limit(1);
   const b = (row?.state as { bands?: unknown } | undefined)?.bands;
   return Array.isArray(b) ? (b as Band[]) : null;

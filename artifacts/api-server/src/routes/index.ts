@@ -35,6 +35,7 @@ import messagesRouter from "./messages";
 import quickQuoteRouter from "./quickQuote";
 import commandRouter from "./command";
 import publicLanguageRouter from "./publicLanguage";
+import contractSigningRouter from "./contractSigning";
 
 const router: IRouter = Router();
 
@@ -42,6 +43,7 @@ router.use(healthRouter);
 router.use(authRouter);
 // Before the staff routers: the desktop agent and Platform Control routes carry
 // their own auth and must not hit the staff routers' requireAuth.
+router.use(contractSigningRouter);
 router.use(commandRouter);
 router.use(organizationsRouter);
 router.use(publicAccessRouter);

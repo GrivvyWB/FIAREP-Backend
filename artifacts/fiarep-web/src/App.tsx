@@ -62,6 +62,7 @@ import CompanyForms from '@/pages/company-forms';
 import Access from '@/pages/access';
 import JoinFiarep from '@/pages/join';
 import PublicResident from '@/pages/public-resident';
+import SignContract from '@/pages/sign-contract';
 import PublicMessage from '@/pages/public-message';
 import Messages from '@/pages/messages';
 import QuickQuote from '@/pages/quick-quote';
@@ -157,6 +158,11 @@ function AppRouter() {
   }
   if (location === "/join") {
     return <RoutedErrorBoundary><JoinFiarep /></RoutedErrorBoundary>;
+  }
+
+  // A client signing a contract from the emailed link: open to anyone with the link.
+  if (location.startsWith('/sign/')) {
+    return <RoutedErrorBoundary><SignContract /></RoutedErrorBoundary>;
   }
 
   // Whoever this browser belongs to, fiarep.com itself is the landing page.

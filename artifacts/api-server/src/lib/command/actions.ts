@@ -31,7 +31,7 @@ import { createContract, quotePlans, type ContractRequest } from "./sales";
 import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
 import { commandFillForm } from "./forms";
 import { setLanguage } from "./language";
-import { addClientBuildings, clientPortfolio, createClient, siteCall, siteEndpoints } from "./siteControl";
+import { addClientBuildings, clientPortfolio, contractForClient, createClient, siteCall, siteEndpoints } from "./siteControl";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -626,6 +626,14 @@ export const ACTIONS: ActionDef[] = [
     schema: { type: "object", properties: { client: { type: "string" }, addresses: { type: "array", items: { type: "string" } } }, required: ["client", "addresses"], additionalProperties: false },
     run: async (p, ctx) => addClientBuildings(ctx.tenantId, ctx.staffId, str(p["client"], 120), Array.isArray(p["addresses"]) ? (p["addresses"] as unknown[]).map((x) => str(x, 200)) : []),
     describe: (p) => `Add to ${str(p["client"], 80)}: ${Array.isArray(p["addresses"]) ? (p["addresses"] as unknown[]).map((x) => str(x, 80)).join("; ") : ""}`,
+  },
+  {
+    name: "send_client_contract", label: "Create the client's contract and send it to sign", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
+    description: "\"Go ahead and create the contract\" for a client already set up: builds the agreement from the company's units, the buildings added and who signs, signs FIAREP's side with the owner's saved signature, and emails the client a link to tap \"I agree\" and sign. kind = platform unless the user said the FIAREP plan. Say the monthly price and that it was sent.",
+    schema: { type: "object", properties: { client: { type: "string" }, kind: { type: "string", enum: ["platform", "fiarep"] }, pilot: { type: "boolean" }, email: { type: "string" }, contact: { type: "string" }, title: { type: "string" }, termMonths: { type: "number" } }, required: ["client"], additionalProperties: false },
+    run: async (p, ctx) => contractForClient(ctx.tenantId, ctx.staffId, { client: str(p["client"], 120), kind: str(p["kind"], 10) || undefined, pilot: p["pilot"] === true, email: str(p["email"], 200) || undefined, contact: str(p["contact"], 120) || undefined, title: str(p["title"], 80) || undefined, termMonths: Number(p["termMonths"]) || undefined }),
+    describe: (p) => `Create and send ${str(p["kind"]) === "fiarep" ? "the FIAREP plan" : "the platform"} contract to ${str(p["client"], 80)} to sign`,
+    spoken: (r) => { const x = r as { company?: string; monthly?: number; emailedTo?: string | null; emailError?: string; error?: string }; return x.error ?? `Contract for ${x.company} is signed on our side, $${x.monthly?.toLocaleString("en-US")} a month${x.emailedTo ? `, and sent to ${x.emailedTo} to sign` : `, but the email didn't go out: ${x.emailError}`}.`; },
   },
   // ── Client access (FIAREP's own Command Center) ──────────────────────────
   {
