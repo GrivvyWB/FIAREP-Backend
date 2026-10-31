@@ -588,17 +588,17 @@ export const ACTIONS: ActionDef[] = [
   },
   {
     name: "site_read", label: "Read anything on the site", risk: "read", confirmDefault: false, target: "server", platformOnly: true,
-    description: "GET one of the site's endpoints (path from site_endpoints, e.g. /v1/platform/countries, with any ?query). Use to see the current state before changing it.",
-    schema: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false },
-    run: async (p, ctx) => siteCall(ctx.tenantId, ctx.staffId, "GET", str(p["path"], 500), undefined),
+    description: "GET one of the site's endpoints (path from site_endpoints, e.g. /v1/platform/countries, with any ?query). Use to see the current state before changing it. client = a client company's name to read inside that client's account (their complaints, staff, settings…).",
+    schema: { type: "object", properties: { path: { type: "string" }, client: { type: "string" } }, required: ["path"], additionalProperties: false },
+    run: async (p, ctx) => siteCall(ctx.tenantId, ctx.staffId, "GET", str(p["path"], 500), undefined, str(p["client"], 120) || undefined),
     describe: (p) => `Read ${str(p["path"], 100)}`,
   },
   {
     name: "site_change", label: "Change anything on the site", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
     description: "Make a change the user asked for, through the site's own endpoint (POST/PUT/PATCH/DELETE, path and JSON body as that endpoint's code expects — read it with site_endpoints first, and the current state with site_read). Always waits for Face ID approval. Say exactly what will change.",
-    schema: { type: "object", properties: { method: { type: "string", enum: ["POST", "PUT", "PATCH", "DELETE"] }, path: { type: "string" }, body: { type: "string", description: "The JSON body, as text" }, what: { type: "string" } }, required: ["method", "path", "what"], additionalProperties: false },
-    run: async (p, ctx) => siteCall(ctx.tenantId, ctx.staffId, str(p["method"], 10), str(p["path"], 500), (() => { const b = p["body"]; if (typeof b !== "string" || !b.trim()) return typeof b === "object" && b ? b : undefined; try { return JSON.parse(b) as unknown; } catch { return undefined; } })()),
-    describe: (p) => `${str(p["what"], 160)} (${str(p["method"], 10)} ${str(p["path"], 100)})`,
+    schema: { type: "object", properties: { method: { type: "string", enum: ["POST", "PUT", "PATCH", "DELETE"] }, path: { type: "string" }, body: { type: "string", description: "The JSON body, as text" }, what: { type: "string" }, client: { type: "string", description: "A client company's name to make the change inside that client's account" } }, required: ["method", "path", "what"], additionalProperties: false },
+    run: async (p, ctx) => siteCall(ctx.tenantId, ctx.staffId, str(p["method"], 10), str(p["path"], 500), (() => { const b = p["body"]; if (typeof b !== "string" || !b.trim()) return typeof b === "object" && b ? b : undefined; try { return JSON.parse(b) as unknown; } catch { return undefined; } })(), str(p["client"], 120) || undefined),
+    describe: (p) => `${str(p["what"], 160)}${str(p["client"]) ? ` — in ${str(p["client"], 80)}'s account` : ""} (${str(p["method"], 10)} ${str(p["path"], 100)})`,
   },
   {
     name: "create_client", label: "Create a client (company, code and price)", risk: "write", confirmDefault: true, target: "server", platformOnly: true,

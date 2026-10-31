@@ -50,9 +50,19 @@ export async function siteEndpoints(tenantId: string, staffId: string, words: st
 }
 
 /** Call one of the site's endpoints as this administrator (Platform Control endpoints as the platform owner). */
-export async function siteCall(tenantId: string, staffId: string, method: string, path: string, body: unknown) {
-  const staff = await fiarepAdministrator(tenantId, staffId);
-  if (!staff) return NOT_ADMIN;
+export async function siteCall(tenantId: string, staffId: string, method: string, path: string, body: unknown, client?: string) {
+  const admin = await fiarepAdministrator(tenantId, staffId);
+  if (!admin) return NOT_ADMIN;
+  // Inside a client's account: the call is made as that client's administrator (FIAREP's administrators only).
+  let staff = admin;
+  if (client?.trim()) {
+    const c = await clientByName(client);
+    if (!c) return { error: `No client named ${client}.` };
+    if ("many" in c) return { error: `Which one: ${c.many.join(", ")}?` };
+    const [theirs] = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, c.id), eq(staffAccounts.role, "administrator"), eq(staffAccounts.status, "approved"))).limit(1);
+    if (!theirs) return { error: `${c.name} has no administrator account to act as.` };
+    staff = theirs;
+  }
   const m = method.toUpperCase();
   if (!["GET", "POST", "PUT", "PATCH", "DELETE"].includes(m)) return { error: "Unknown method." };
   if (!path.startsWith("/v1/") || path.includes("..") || /^\/v1\/(platform\/)?auth\b/.test(path)) return { error: "That is not one of the site's endpoints." };
