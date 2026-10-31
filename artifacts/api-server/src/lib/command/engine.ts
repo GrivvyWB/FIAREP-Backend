@@ -19,7 +19,7 @@ import { getLanguage, languageRules, type CommandLanguage } from "./language";
 
 const CONFIRM_WINDOW_MS = 10 * 60_000;
 const AGENT_READ_WAIT_MS = 25_000;
-const MAX_TURNS = 8;
+const MAX_TURNS = 12; // room to check every place an answer could be before replying
 const MAX_RESULT_CHARS = 12_000;
 
 export type ActionRow = typeof commandActions.$inferSelect;
@@ -118,6 +118,8 @@ function systemPrompt(actorName: string, catalog: string, orgName: string, platf
     languageRules(lang, platform),
     `Be warm and personal with ${callName(actorName, platform)}, like a friendly assistant who knows them. On the first message of a conversation, greet them by name — e.g. "Hey ${callName(actorName, platform)}, how are you doing?" — then answer. Use their name naturally now and then, and answer greetings or small talk in kind. Stay short.`,
     "Use the tools to find out before answering; never guess numbers, statuses or names.",
+    "Check everything first, then answer once. Before you reply, think through every place the answer could be and every way the question could be meant (the building, the client, complaints, work orders, violations, alerts, crews, billing, the site itself through site_endpoints and site_read), and look all of them up — call the lookups together in one step, not one at a time. Reply only after you have checked them all.",
+    "Never apologize for not checking, never say \"let me check something else\" or \"I didn't look at that\", and never offer \"do you want me to check X\" — if X could matter to the question, you have already checked it. If you looked everywhere and found nothing, say so plainly and name what you checked.",
     "Reply in 1-3 short spoken sentences, plain text: no markdown, lists, ids or URLs unless asked. Lead with the answer (counts first, urgent before routine).",
     "Buildings: whenever the user asks about a building or an address (violations, complaints, what's going on there), look it up and talk them through it, every time — never stay quiet. Say the address and borough, then open HPD violations (how many, Class C first, then B and A), open DOB violations, and open or recent HPD complaints. When there are none, say so plainly: \"No open HPD or DOB violations.\" This building rundown may run up to 6 sentences.",
     "Mold: for anything about mold (how's the mold at a building, mold compliance, which apartments still have mold, is an inspection due), use mold_status and say: original count, how many removed, how many still active, percent remaining and completed, whether an inspection is recommended (60% or less remaining), and any Class B past its certification date (risk of Class C on reinspection).",
@@ -200,11 +202,11 @@ export async function modelTurn(opts: {
     reply = content.filter((b) => b.type === "text").map((b) => String(b["text"] ?? "")).join("\n").trim() || reply;
     if (res.stop_reason !== "tool_use") break;
     messages.push({ role: "assistant", content });
-    const results: Block[] = [];
-    for (const block of content.filter((b) => b.type === "tool_use")) {
+    // Every lookup asked for in this step runs at the same time (faster answers).
+    const results: Block[] = await Promise.all(content.filter((b) => b.type === "tool_use").map(async (block) => {
       const out = await opts.runTool(String(block["name"]), (block["input"] && typeof block["input"] === "object" ? block["input"] : {}) as Record<string, unknown>);
-      results.push({ type: "tool_result", tool_use_id: String(block["id"]), content: out.content, ...(out.isError ? { is_error: true } : {}) });
-    }
+      return { type: "tool_result", tool_use_id: String(block["id"]), content: out.content, ...(out.isError ? { is_error: true } : {}) } as Block;
+    }));
     messages.push({ role: "user", content: results });
   }
   return { reply, model };
@@ -271,12 +273,12 @@ export async function runCommand(input: { text: string; spoken?: boolean; thread
       reply = content.filter((b) => b.type === "text").map((b) => String(b["text"] ?? "")).join("\n").trim() || reply;
       if (res.stop_reason !== "tool_use") break;
       messages.push({ role: "assistant", content });
-      const results: Block[] = [];
-      for (const block of content.filter((b) => b.type === "tool_use")) {
+      // Every lookup asked for in this step runs at the same time (faster answers).
+      const results: Block[] = await Promise.all(content.filter((b) => b.type === "tool_use").map(async (block) => {
         const params = (block["input"] && typeof block["input"] === "object" ? block["input"] : {}) as Record<string, unknown>;
         const out = await runTool(String(block["name"]), params, ctx, switches);
-        results.push({ type: "tool_result", tool_use_id: String(block["id"]), content: out.content, ...(out.isError ? { is_error: true } : {}) });
-      }
+        return { type: "tool_result", tool_use_id: String(block["id"]), content: out.content, ...(out.isError ? { is_error: true } : {}) } as Block;
+      }));
       messages.push({ role: "user", content: results });
       if (turn === MAX_TURNS - 1) reply = reply || "I ran out of steps on that one. Try asking a narrower question.";
     }

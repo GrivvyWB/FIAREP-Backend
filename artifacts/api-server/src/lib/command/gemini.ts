@@ -71,12 +71,12 @@ export async function geminiLoop(opts: {
     const calls = parts.filter((p) => p.functionCall?.name);
     if (!calls.length) break;
     contents.push({ role: "model", parts }); // exactly as received: keeps the thought signatures
-    const responses: Part[] = [];
-    for (const p of calls) {
+    // Every lookup asked for in this step runs at the same time (faster answers).
+    const responses: Part[] = await Promise.all(calls.map(async (p) => {
       const call = p.functionCall!;
       const out = await opts.runTool(call.name, call.args && typeof call.args === "object" ? call.args : {});
-      responses.push({ functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: out.isError ? { error: out.content } : { result: out.content } } });
-    }
+      return { functionResponse: { name: call.name, ...(call.id ? { id: call.id } : {}), response: out.isError ? { error: out.content } : { result: out.content } } } as Part;
+    }));
     contents.push({ role: "user", parts: responses });
     if (turn === opts.maxTurns - 1) reply = reply || "I ran out of steps on that one. Try asking a narrower question.";
   }
