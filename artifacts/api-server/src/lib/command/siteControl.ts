@@ -253,3 +253,67 @@ export async function clientContract(p: ContractAsk, by: string) {
     signedByFiarep: true, signingLink: started.link, emailedTo: "error" in sent ? null : email, ...("error" in sent ? { emailError: sent.error } : {}),
   };
 }
+
+/** The job titles said out loud, and the account each one gets. */
+function titleAndRole(said: string): { position: string; role: string } {
+  const t = said.trim().toLowerCase().replace(/^(an?|the)\s+/, "");
+  if (/^tech(nician)?s?$/.test(t)) return { position: "Technician", role: "inspector" };
+  if (/maintenance/.test(t) && !/supervisor/.test(t)) return { position: "Maintenance Worker", role: "worker" };
+  if (/^c\.?p\.?m\.?$/.test(t)) return { position: "CPM", role: "inspector" };
+  if (/^inspectors?$/.test(t)) return { position: "Inspector", role: "inspector" };
+  if (/^admin(istrator)?$/.test(t)) return { position: "Administrator", role: "administrator" };
+  if (/(borough|bureau)\s+(chief|director)/.test(t)) return { position: "Borough Director", role: "administrator" };
+  const position = said.trim().replace(/\s+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+  const management = /supervisor|superintendent|director|property manager|housing assistant/i.test(position);
+  return { position, role: management ? "management" : "worker" };
+}
+
+/** Add a person to a client right there, with their sign-in code — no HR approval. */
+export async function addClientUser(tenantId: string, staffId: string, p: { client: string; name: string; title: string; development?: string; email?: string }) {
+  const me = await fiarepAdministrator(tenantId, staffId);
+  if (!me) return NOT_ADMIN;
+  const c = await clientByName(p.client);
+  if (!c) return { error: `No client named ${p.client}.` };
+  if ("many" in c) return { error: `Which one: ${c.many.join(", ")}?` };
+  const name = p.name.trim().replace(/\s+/g, " ").slice(0, 120);
+  if (name.length < 2) return { error: "I need the person's full name." };
+  const { position, role } = titleAndRole(p.title || "worker");
+  const { organizations } = await import("@workspace/db");
+  const { count, sql } = await import("drizzle-orm");
+  const { allocateStaffCode } = await import("../staffCodes");
+  const { randomUUID } = await import("node:crypto");
+  try {
+    const made = await db.transaction(async (tx) => {
+      const [org] = await tx.select().from(organizations).where(eq(organizations.id, c.id)).limit(1);
+      if (!org) throw Object.assign(new Error("Client not found."), { status: 404 });
+      if (org.staffLimit != null) {
+        await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${`staff-limit:${org.id}`}))`);
+        const [{ value }] = await tx.select({ value: count() }).from(staffAccounts).where(eq(staffAccounts.tenantId, org.id));
+        if (Number(value) >= org.staffLimit) throw Object.assign(new Error(`${org.name} is at its limit of ${org.staffLimit} people. Raise it in Platform Control first.`), { status: 403 });
+      }
+      const code = await allocateStaffCode(tx, org.id, name);
+      const [row] = await tx.insert(staffAccounts).values({
+        id: randomUUID(), tenantId: org.id, name, code, role, position, status: "approved",
+        developments: p.development?.trim() ? [p.development.trim()] : [], issuerName: `${me.name} (Command Center)`,
+      }).returning();
+      return { org, row: row!, code };
+    });
+    // The code goes to the person who asked (notifications and phone), FIAREP's mailbox, and the new person's email if given.
+    const { notify } = await import("../audit");
+    await notify(actorFromStaff(me), me.id, `New user: ${name} (${made.org.name})`, `${position} — code ${made.code} · company ${made.org.id}`).catch(() => undefined);
+    const { sendEmail } = await import("./mail");
+    const { BRAND } = await import("../contracts/contract");
+    const mine = (process.env["FIAREP_OWNER_EMAIL"] || BRAND.email).trim();
+    const how = `Sign in on the FIAREP app or fiarep.com with:\nCompany: ${made.org.id}\nName: ${name}\nCode: ${made.code}`;
+    const emailed: string[] = [];
+    if (p.email?.includes("@")) {
+      const r = await sendEmail(tenantId, { to: [{ name, email: p.email.trim(), from: "" }], cc: [], attachments: [], subject: `Your FIAREP sign-in — ${made.org.name}`, body: `Hello ${name},\n\nYou've been added to ${made.org.name} on FIAREP as ${position}.\n\n${how}\n\nFIAREP\n${BRAND.site}` }, me.name).catch(() => ({ error: "not sent" }));
+      if (!("error" in r)) emailed.push(p.email.trim());
+    }
+    const r2 = await sendEmail(tenantId, { to: [{ name: "FIAREP", email: mine, from: "" }], cc: [], attachments: [], subject: `New user at ${made.org.name}: ${name} — code ${made.code}`, body: `${name} — ${position} at ${made.org.name}.\n\n${how}` }, me.name).catch(() => ({ error: "not sent" }));
+    if (!("error" in r2)) emailed.push(mine);
+    return { client: made.org.name, companyId: made.org.id, name, title: position, account: role, code: made.code, development: p.development?.trim() || null, emailedTo: emailed, hrApproval: "skipped (added by a FIAREP administrator)" };
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "The person wasn't added." };
+  }
+}

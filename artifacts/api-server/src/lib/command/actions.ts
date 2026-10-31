@@ -31,7 +31,7 @@ import { createContract, quotePlans, type ContractRequest } from "./sales";
 import { clientAlertsStatus, setClientAlerts } from "./clientAccess";
 import { commandFillForm } from "./forms";
 import { setLanguage } from "./language";
-import { addClientBuildings, clientPortfolio, contractForClient, createClient, siteCall, siteEndpoints } from "./siteControl";
+import { addClientBuildings, addClientUser, clientPortfolio, contractForClient, createClient, siteCall, siteEndpoints } from "./siteControl";
 
 export type ActionContext = { runId: string; staffId: string; deviceId: string; actorName: string; tenantId: string };
 /** FIAREP's own Command Center (Platform Control): sees every client. */
@@ -634,6 +634,14 @@ export const ACTIONS: ActionDef[] = [
     run: async (p, ctx) => contractForClient(ctx.tenantId, ctx.staffId, { client: str(p["client"], 120), kind: str(p["kind"], 10) || undefined, pilot: p["pilot"] === true, email: str(p["email"], 200) || undefined, contact: str(p["contact"], 120) || undefined, title: str(p["title"], 80) || undefined, termMonths: Number(p["termMonths"]) || undefined }),
     describe: (p) => `Create and send ${str(p["kind"]) === "fiarep" ? "the FIAREP plan" : "the platform"} contract to ${str(p["client"], 80)} to sign`,
     spoken: (r) => { const x = r as { company?: string; monthly?: number; emailedTo?: string | null; emailError?: string; error?: string }; return x.error ?? `Contract for ${x.company} is signed on our side, $${x.monthly?.toLocaleString("en-US")} a month${x.emailedTo ? `, and sent to ${x.emailedTo} to sign` : `, but the email didn't go out: ${x.emailError}`}.`; },
+  },
+  {
+    name: "add_client_user", label: "Add a person to a client with their code (no HR)", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
+    description: "Add a person to a client right now, skipping HR approval — e.g. \"add John Smith as a technician to Sample Run\". title is what the user said: technician, maintenance worker, CPM, inspector, administrator, borough director / bureau chief, superintendent, or any other job title. Gives back their company ID, name and sign-in code; the code also goes to the user's notifications and FIAREP's mailbox, and to the person's email if given. Say the name, title and code.",
+    schema: { type: "object", properties: { client: { type: "string" }, name: { type: "string" }, title: { type: "string" }, development: { type: "string" }, email: { type: "string" } }, required: ["client", "name", "title"], additionalProperties: false },
+    run: async (p, ctx) => addClientUser(ctx.tenantId, ctx.staffId, { client: str(p["client"], 120), name: str(p["name"], 120), title: str(p["title"], 80), development: str(p["development"], 120) || undefined, email: str(p["email"], 200) || undefined }),
+    describe: (p) => `Add ${str(p["name"], 80)} as ${str(p["title"], 60)} to ${str(p["client"], 80)} (no HR)`,
+    spoken: (r) => { const x = r as { name?: string; title?: string; client?: string; code?: string; companyId?: string; error?: string }; return x.error ?? `${x.name} is added to ${x.client} as ${x.title}. Company ${x.companyId}, code ${x.code}.`; },
   },
   // ── Client access (FIAREP's own Command Center) ──────────────────────────
   {
