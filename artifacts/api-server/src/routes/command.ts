@@ -313,6 +313,17 @@ async function pushToStaff(staffId: string, message: string, detail: string) {
   if (staff) await notify(actorFromStaff(staff), staff.id, message, detail).catch(() => undefined);
 }
 
+// A computer tells its company's administrators something on their phones (e.g. a Command Center build finished).
+router.post("/v1/command/agent/notify", rateLimit("command-agent-notify", 30), requireAgent, async (req, res) => {
+  const agent = res.locals["agent"] as Agent;
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  const title = str(b["title"], 120); const detail = str(b["detail"], 1000);
+  if (!title) { res.status(400).json({ error: "title required" }); return; }
+  const admins = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, agent.tenantId), eq(staffAccounts.role, "administrator"), eq(staffAccounts.status, "approved")));
+  await Promise.all(admins.map((s) => notify(actorFromStaff(s), s.id, `${agent.name}: ${title}`, detail).catch(() => undefined)));
+  res.json({ ok: true, told: admins.length });
+});
+
 router.post("/v1/command/agent/jobs/:id/result", requireAgent, async (req, res) => {
   const agent = res.locals["agent"] as Agent;
   const b = (req.body ?? {}) as Record<string, unknown>;
