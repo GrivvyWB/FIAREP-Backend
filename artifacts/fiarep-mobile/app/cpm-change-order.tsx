@@ -1,3 +1,4 @@
+import { buttonSwitchedOn } from '../lib/all-buttons';
 import { useCallback, useState } from 'react';
 import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, Modal, Image, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
@@ -25,7 +26,7 @@ export default function CpmChangeOrder() {
   useFocusEffect(useCallback(() => {
     getCurrentPosition().then((position) => {
        // CPMs and Technicians (they work as CPMs).
-       const allowed = position.trim().toLowerCase() === 'cpm' || position.toLowerCase().includes('technician');
+       const allowed = buttonSwitchedOn('/cpm-change-order') || position.trim().toLowerCase() === 'cpm' || position.toLowerCase().includes('technician');
       if (!allowed) router.replace(mode === 'management' ? '/management-home' : '/cpm-home');
       setAuthorized(allowed);
     }).catch(() => router.replace(mode === 'management' ? '/management-home' : '/cpm-home'));

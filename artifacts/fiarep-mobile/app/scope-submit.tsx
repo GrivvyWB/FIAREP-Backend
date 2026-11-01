@@ -1,3 +1,4 @@
+import { buttonSwitchedOn } from '../lib/all-buttons';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
 import { useFocusEffect, useRouter, useLocalSearchParams } from 'expo-router';
@@ -44,7 +45,7 @@ export default function ScopeSubmit() {
   useFocusEffect(useCallback(() => {
     getCurrentPosition().then((position) => {
        // CPMs and Technicians (they work as CPMs).
-       const allowed = position.trim().toLowerCase() === 'cpm' || position.toLowerCase().includes('technician');
+       const allowed = buttonSwitchedOn('/scope-submit') || position.trim().toLowerCase() === 'cpm' || position.toLowerCase().includes('technician');
       if (!allowed) router.replace(mode === 'management' ? '/management-home' : '/cpm-home');
       setAuthorized(allowed);
     }).catch(() => router.replace(mode === 'management' ? '/management-home' : '/cpm-home'));

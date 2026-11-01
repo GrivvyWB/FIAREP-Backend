@@ -1,3 +1,4 @@
+import { cachedRawModules, signedInStaffId } from './module-access';
 // Every button there is on any home screen. Each person's home shows the buttons of their own
 // screen, plus every other button under "More" — Platform Control → App tabs switches any of them
 // off for the company or for one person. (Keep in step with ALL_APP_BUTTONS in Platform Control.)
@@ -32,6 +33,18 @@ export function personOpensRoute(pathname: string, raw: Record<string, boolean>,
   if (!labels.length) return false;
   const prefix = `p.${staffId}.apptab.`;
   return Object.entries(raw).some(([k, v]) => v === true && k.startsWith(prefix) && labels.includes(k.slice(k.lastIndexOf('.') + 1)));
+}
+
+/** True when Platform Control has switched on (company or this person) a button that opens this page:
+ *  the page then opens for them whatever their title or the module says. */
+export function buttonSwitchedOn(pathname: string, raw?: Record<string, boolean>, staffId?: string): boolean {
+  const map = raw ?? cachedRawModules();
+  const me = staffId ?? signedInStaffId();
+  const slug = (l: string) => plainLabel(l).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const labels = ALL_BUTTONS.filter((b) => b.route.split('?')[0] === pathname).map((b) => slug(b.label));
+  if (!labels.length) return false;
+  return Object.entries(map).some(([k, v]) => v === true && labels.includes(k.slice(k.lastIndexOf('.') + 1)) &&
+    (/^apptab\.[a-z]+\./.test(k) || (!!me && k.startsWith(`p.${me}.apptab.`))));
 }
 
 /** A button's name without its emoji or count, to compare buttons across screens. */

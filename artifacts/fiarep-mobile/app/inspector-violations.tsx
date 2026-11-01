@@ -1,3 +1,4 @@
+import { buttonSwitchedOn } from '../lib/all-buttons';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform } from 'react-native';
@@ -70,7 +71,7 @@ export default function InspectorViolations() {
       const pos = position.trim().toLowerCase();
       const inspector = actor.role === 'inspector' && pos === 'inspector';
       const cpm = pos === 'cpm';
-      const allowed = inspector || cpm || lookupMode;
+      const allowed = inspector || cpm || lookupMode || buttonSwitchedOn('/inspector-violations');
       if (!allowed) router.replace('/cpm-home');
       setLookupOnly(lookupMode || (!inspector && cpm));
       setAuthorized(allowed);

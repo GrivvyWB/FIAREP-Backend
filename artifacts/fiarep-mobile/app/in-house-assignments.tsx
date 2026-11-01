@@ -1,3 +1,4 @@
+import { buttonSwitchedOn } from '../lib/all-buttons';
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { isCrewForTrade, isSupervisorTitle } from '../lib/titles';
@@ -24,7 +25,7 @@ function InHouseAssignmentsScreen() {
       const p = position.trim().toLowerCase();
       // Any receiving supervisor (incl. CPM Supervisor). The list below only
       // shows requests addressed to this account; the server enforces the rest.
-      const allowed = actor.role === 'management' && isSupervisorTitle(p);
+      const allowed = buttonSwitchedOn('/in-house-assignments') || actor.role === 'management' && isSupervisorTitle(p);
       if (!allowed) { router.replace('/management-home'); return; }
       setAuthorized(true);
       void load();

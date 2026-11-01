@@ -1,3 +1,4 @@
+import { buttonSwitchedOn } from '../lib/all-buttons';
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle } from '../lib/titles';
@@ -29,7 +30,7 @@ export default function InspectionApprovals() {
   const [cpmSupervisors, setCpmSupervisors] = useState<StaffAccount[]>([]);
   useEffect(() => {
     Promise.all([getCurrentActor(), getCurrentPosition()]).then(([actor, position]) => {
-      if (actor.role === 'management' && isInspectionSupervisorTitle(position)) setAuthorized(true);
+      if (buttonSwitchedOn('/inspection-approvals') || (actor.role === 'management' && isInspectionSupervisorTitle(position))) setAuthorized(true);
       else router.replace('/management-home');
     }).catch(() => router.replace('/management-home'));
   }, [router]);

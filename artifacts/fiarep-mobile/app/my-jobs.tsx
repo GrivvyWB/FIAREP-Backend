@@ -1,3 +1,4 @@
+import { buttonSwitchedOn } from '../lib/all-buttons';
 import { useCallback, useState } from 'react';
 import PhraseHelper from '../components/PhraseHelper';
 import { View, Text, TextInput, Pressable, ScrollView, Image, Alert, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
@@ -35,7 +36,7 @@ export default function MyJobs() {
   useFocusEffect(useCallback(() => {
     getCurrentActor().then(async (actor) => {
       // FIAREP's administrators (Timothy Winn, Emily Winn) work jobs too.
-      const allowed = actor.role === 'worker' || actor.role === 'inspector' || actor.role === 'emergency' ||
+      const allowed = buttonSwitchedOn('/my-jobs') || actor.role === 'worker' || actor.role === 'inspector' || actor.role === 'emergency' ||
         await isFiarepAdministrator().catch(() => false);
       if (!allowed) { router.replace('/worker-home'); return; }
       setAuthorized(true);

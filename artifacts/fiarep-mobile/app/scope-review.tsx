@@ -1,3 +1,4 @@
+import { buttonSwitchedOn } from '../lib/all-buttons';
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle } from '../lib/titles';
@@ -57,7 +58,7 @@ export default function ScopeReview() {
     Promise.all([getCurrentActor(), getCurrentPosition(), isFiarepAdministrator().catch(() => false)]).then(([actor, position, fiarepAdmin]) => {
       if (!mounted) return;
        // FIAREP's administrators review every scope submitted inside FIAREP.
-       const allowed = fiarepAdmin || (actor?.role === 'management' &&
+       const allowed = fiarepAdmin || buttonSwitchedOn('/scope-review') || (actor?.role === 'management' &&
           isCpmSupervisorTitle(position));
       setAuthorized(allowed);
       if (!allowed) {
