@@ -292,10 +292,12 @@ export function tileEnabled(screen: AppTabScreen, label: string, raw: Record<str
   // Door Visits module (Platform Control → Modules) is the master switch over every screen's Door Visit button.
   if (label === 'Door Visit' && map['door-visits'] === false) return false;
   const value = map[appTabKey(screen, label)];
+  // A client that starts off: a button nobody has switched on yet stays off (Platform Control, or its criteria, turn it on).
+  const unset = map['startsOff'] !== true;
   // Technician switches not saved yet fall back to the CPM / Inspector ones
   // they were split from, so a technician's home does not change on its own.
-  if (screen === 'tech' && value === undefined) return map[appTabKey('cpm', label)] !== false;
-  return value !== false;
+  if (screen === 'tech' && value === undefined) { const cpm = map[appTabKey('cpm', label)]; return typeof cpm === 'boolean' ? cpm : unset; }
+  return typeof value === 'boolean' ? value : unset;
 }
 
 export function moduleForTile(label: string): ModuleId | null {

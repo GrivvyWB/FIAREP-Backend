@@ -245,7 +245,8 @@ function configuredAppTabs(organization: OrganizationWithUsage): Record<string, 
     // Until the Technician switches are first saved, they start from what the
     // CPM / Inspector switch said, so nothing a technician sees changes by itself.
     const value = group.id === "tech" && saved[key] === undefined ? saved[appTabKey("cpm", tab)] : saved[key];
-    result[key] = value !== false;
+    // A client that starts off: unset is off until switched on (or its criteria turn it on).
+    result[key] = typeof value === "boolean" ? value : saved["startsOff"] !== true;
   }
   // Each person's own switches (p.<staff id>.apptab.<screen>.<button>), as saved.
   for (const [k, v] of Object.entries(saved)) if (/^p\.[^.]+\.apptab\./.test(k) && typeof v === "boolean") result[k] = v;
@@ -326,7 +327,9 @@ export function newCompanyModules(): Record<string, boolean> {
   for (const m of MODULES) off[m.id] = false;
   for (const group of APP_TABS) for (const tab of group.tabs) off[appTabKey(group.id, tab)] = false;
   for (const trade of LOOKUP_TRADES) off[`lookup.${trade.key}`] = false;
-  for (const k of ["residentPhotoAiViolationReader", "communitySupervisorReview", "fiarepComplaintRouting", "fiarepMessaging", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "requireBaseline", "smartRepairEmailCopy", "smartRepairSync"]) off[k] = false;
+  for (const k of ["residentPhotoAiViolationReader", "communitySupervisorReview", "fiarepComplaintRouting", "fiarepMessaging", "smartRepair", "smartRepairComplaints", "smartRepairToManagement", "priorityEngine", "violationGuide", "outOfNetwork", "smartRepairEmailCopy", "smartRepairSync"]) off[k] = false;
+  // Complaint management starts off and turns on by itself when the baseline is done; every button and menu item starts off.
+  off["requireBaseline"] = true; off["startsOff"] = true;
   for (const x of HR_EXTRAS) off[`hr.${x.key}`] = false;
   return off;
 }
@@ -552,7 +555,15 @@ export default function OwnerModules() {
 
   const toggleSmartRepair = (enabled: boolean) => { setSmartRepairOn(enabled); setDirty(true); };
   const toggleSmartRepairComplaints = (enabled: boolean) => { setSmartRepairComplaints(enabled); setDirty(true); };
-  const toggleRequireBaseline = (enabled: boolean) => { setRequireBaseline(enabled); setDirty(true); };
+  // Complaint management: off waits for the baseline walk-through (it turns on by itself when the baseline is done);
+  // switching it on or off here also turns the complaint buttons on or off, on the app and the website.
+  const COMPLAINT_TAB_LABELS = new Set(["resident-reports", "manage-all-requests", "review-reports", "priority-queue"]);
+  const toggleComplaintManagement = (on: boolean) => {
+    setRequireBaseline(!on);
+    setAppTabs((c) => ({ ...c, ...Object.fromEntries(APP_TABS.flatMap((g) => g.tabs.map((t) => appTabKey(g.id, t))).filter((k) => COMPLAINT_TAB_LABELS.has(k.slice(k.lastIndexOf(".") + 1))).map((k) => [k, on])) }));
+    setMenuSwitches((c) => ({ ...c, [menuKey("/complaint-dashboard")]: on, [menuKey("/notifications")]: on }));
+    setDirty(true);
+  };
   const toggleLock = (key: string, on: boolean) => { setLocks((m) => ({ ...m, [`lock.${key}`]: on })); setDirty(true); };
   const togglePriorityEngine = (enabled: boolean) => { setPriorityEngineOn(enabled); setDirty(true); };
   const toggleViolationGuide = (enabled: boolean) => { setViolationGuideOn(enabled); setDirty(true); };
@@ -674,7 +685,7 @@ export default function OwnerModules() {
           features: {
             ...organization.features,
             // Kept as saved: the title-rules switch and person switches this page does not edit here.
-            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button|apptab)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...arrival, ...(isFiarep ? {} : { requireBaseline, fiarepWatch }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k === "startsOff" || k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button|apptab)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...arrival, ...(isFiarep ? {} : { requireBaseline, fiarepWatch }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -844,6 +855,7 @@ export default function OwnerModules() {
             const shown = (m: (typeof MENU_ITEMS)[number]) => {
               if (person) { const pv = menuSwitches[keyFor(m)]; if (typeof pv === "boolean") return pv; }
               const v = menuSwitches[menuKey(m.href)]; if (typeof v === "boolean") return v;
+              if (effective["startsOff"] === true) return false;
               const people = person ? [person] : orgAdmins.length ? orgAdmins : [adminStaff];
               return people.every((s) => hasModuleAccess(s as never, m.module, effective));
             };
@@ -1487,26 +1499,26 @@ export default function OwnerModules() {
                 )}
                 {!isFiarep && (
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
-                  requireBaseline ? "" : "opacity-60"
+                  !requireBaseline ? "" : "opacity-60"
                 }`}>
                   <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
-                    requireBaseline ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
+                    !requireBaseline ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"
                   }`}>
                     <ClipboardCheck className="h-4 w-4" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-slate-900">Baseline assessment before complaint management</p>
-                    <p className="text-xs text-slate-500">On: this client's complaint tools (Review Reports, Manage All Requests, Resident Reports, Priority Queue) wait until FIAREP completes the building baseline walk-through; residents can still send complaints. Off: no wait</p>
+                    <p className="text-sm font-semibold text-slate-900">Complaint management</p>
+                    <p className="text-xs text-slate-500">Starts off. Turns on by itself when FIAREP completes the building baseline walk-through, or switch it on yourself. On or off, this also turns Review Reports, Manage All Requests, Resident Reports, Priority Queue and the Complaint Dashboard on or off; residents can still send complaints</p>
                   </div>
                   <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${
-                    requireBaseline ? "text-emerald-700" : "text-slate-400"
+                    !requireBaseline ? "text-emerald-700" : "text-slate-400"
                   }`}>
-                    {requireBaseline ? "Enabled" : "Disabled"}
+                    {!requireBaseline ? "Enabled" : "Disabled"}
                   </span>
                   <Switch
-                    checked={requireBaseline}
-                    onCheckedChange={toggleRequireBaseline}
-                    aria-label={`${requireBaseline ? "Disable" : "Enable"} baseline assessment before complaint management`}
+                    checked={!requireBaseline}
+                    onCheckedChange={toggleComplaintManagement}
+                    aria-label={`${!requireBaseline ? "Turn off" : "Turn on"} complaint management`}
                   />
                 </div>
                 )}

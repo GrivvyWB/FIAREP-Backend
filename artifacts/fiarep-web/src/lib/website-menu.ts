@@ -68,7 +68,9 @@ export const personKey = (staffId: string, key: string) => `p.${staffId}.${key}`
 export function menuOverride(modules: Record<string, boolean> | null | undefined, href: string, staffId?: string | null): boolean | undefined {
   if (staffId) { const pv = modules?.[personKey(staffId, menuKey(href))]; if (typeof pv === "boolean") return pv; }
   const v = modules?.[menuKey(href)];
-  return typeof v === "boolean" ? v : undefined;
+  if (typeof v === "boolean") return v;
+  // A client that starts off: an item nobody has switched on yet stays off (Platform Control, or its criteria, turn it on).
+  return modules?.["startsOff"] === true ? false : undefined;
 }
 
 /** Buttons on pages, each with its own switch in Platform Control → Module Management → Website menu. */

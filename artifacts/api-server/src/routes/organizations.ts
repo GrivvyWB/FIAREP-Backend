@@ -1,3 +1,4 @@
+import { startOff } from "../lib/startsOff";
 import { Router, type IRouter } from "express";
 import { randomUUID, randomInt } from "node:crypto";
 import { and, asc, count, eq, inArray, desc, isNull, sql } from "drizzle-orm";
@@ -547,7 +548,7 @@ router.post("/v1/platform/organizations", async (req, res) => {
   }
    const requestedFeatures = typeof body["features"] === "object" && body["features"] !== null && !Array.isArray(body["features"]) ? body["features"] as Record<string, unknown> : {};
    const features = withResidentCode(addOrganizationNameForDevelopmentType(
-     mergeTimeClockConfig(requestedFeatures, { integrationEnabled: false, provider: null }),
+     mergeTimeClockConfig(startOff(requestedFeatures), { integrationEnabled: false, provider: null }),
      name,
    ), await newResidentCode());
   const unrestricted = body["unrestricted"] === true;

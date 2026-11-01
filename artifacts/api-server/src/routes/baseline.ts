@@ -127,6 +127,8 @@ router.put("/v1/baseline/:id", requireAuth, async (req, res) => {
   if (b["status"] === "complete" && cur.status !== "complete") { next["status"] = "complete"; next["completedAt"] = new Date().toISOString(); }
   if (b["status"] === "in_progress") next["status"] = "in_progress";
   const [updated] = await db.update(entityRecords).set({ state: next, version: sql`${entityRecords.version} + 1`, updatedAt: new Date() }).where(eq(entityRecords.id, row.id)).returning();
+  // Criteria done: the client's complaint buttons turn on by themselves (FIAREP can still switch them off).
+  if (next["status"] === "complete" && cur.status !== "complete") await import("../lib/startsOff").then((m) => m.turnOnComplaints(cur.clientOrgId)).catch(() => undefined);
   res.json(await forView(fromRow(updated!)));
 });
 

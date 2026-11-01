@@ -40,6 +40,8 @@ await db.execute(sql`alter table refresh_sessions add column if not exists sessi
 // Buildings in any country (an added column; harmless when it is already there).
 await db.execute(sql`alter table organization_properties add column if not exists country text`).catch((err) => console.error("Country column not added:", err));
 await import("./lib/uiTranslations").then((m) => m.ensureUiTranslationsTable()).catch((err) => console.error("Screen translations table:", err));
+// Every client starts with every app button and website menu item off (once); FIAREP switches them on.
+await import("./lib/startsOff").then(async (m) => { const b = await import("./lib/baseline"); await m.startEveryClientOff(async (id) => (await b.assessmentsForClient(id)).some((x) => x.status === "complete")); }).catch((err) => console.error("Starts off:", err));
 await ensureNychaCatalog();
 await ensureNotificationReadsTable();
 await ensureFiarepServiceTitles();
