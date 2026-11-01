@@ -67,7 +67,7 @@ import { rateLimit } from "../lib/rateLimit";
 import { getConfiguredDevelopmentNames } from "../lib/organizationDevelopments";
 import { supervisorTargetForReleasedWork } from "../lib/manpower-routing";
 import { routedComplaintRecipientIds } from "../lib/complaintRouting";
-import { CREW_OPTIONS, ETA_OPTIONS, recordEta, recordNotifiedStaff, recordOpened, tracksReceipts } from "../lib/complaintReceipts";
+import { CREW_OPTIONS, ETA_OPTIONS, arrivalAlertsOn, recordArrived, recordEta, recordNotifiedStaff, recordOpened, tracksReceipts } from "../lib/complaintReceipts";
 import { notifyResident, residentMessageForAction } from "../lib/residentNotify";
 import { reviewQuote, sendQuote, decideQuote, quoteBlocksStart, quoteOf } from "../lib/fiarepQuote";
 import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
@@ -2214,6 +2214,26 @@ router.post("/v1/:entity/:id/eta", async (req, res) => {
   await audit(actor, `${row.entity}.eta`, `${notice.eta}${notice.crew ? ` · ${notice.crew}` : ""}`, row.id);
   res.setHeader("Cache-Control", "no-store");
   res.json({ ok: true, eta: notice, options: { eta: ETA_OPTIONS, crew: CREW_OPTIONS } });
+});
+
+// "Arrived": the member is at the location (time stamped; the phone's location when it gives one).
+router.post("/v1/:entity/:id/arrived", async (req, res) => {
+  const found = await receiptRow(req, res); if (!found) return;
+  const { actor, row } = found;
+  if (!["management", "administrator", "worker", "inspector", "emergency"].includes(actor.role)) { res.status(403).json({ error: "Only staff on the complaint can mark arrived" }); return; }
+  if (!(await arrivalAlertsOn(row.tenantId, row.state).catch(() => false))) { res.status(403).json({ error: "Arrived alerts are off for this building (Platform Control → Module Management)." }); return; }
+  const body = (req.body || {}) as { latitude?: unknown; longitude?: unknown };
+  const arrival = await recordArrived(actor, row, { latitude: Number(body.latitude), longitude: Number(body.longitude) });
+  await audit(actor, `${row.entity}.arrived`, `Arrived ${arrival.at}`, row.id);
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ ok: true, arrived: arrival });
+});
+
+// Whether the "I've arrived" button shows for this complaint (the Platform Control switches).
+router.get("/v1/:entity/:id/arrival-switch", async (req, res) => {
+  const found = await receiptRow(req, res); if (!found) return;
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ on: await arrivalAlertsOn(found.row.tenantId, found.row.state).catch(() => false) });
 });
 
 router.get("/v1/eta-options", (_req, res) => {

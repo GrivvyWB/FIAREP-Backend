@@ -364,6 +364,9 @@ export default function OwnerModules() {
   const [violationGuideOn, setViolationGuideOn] = useState(true);
   // Paid add-on: OFF until switched on for the client.
   const [outOfNetworkOn, setOutOfNetworkOn] = useState(false);
+  // "On the way" / "Arrived" alerts: OFF until switched on for the client; then every building unless a building is switched off.
+  const [arrival, setArrival] = useState<Record<string, boolean>>({});
+  const [arrivalBuildings, setArrivalBuildings] = useState<Array<{ id: string; displayAddress: string }>>([]);
   // New client: complaint tools wait for the baseline walk-through. Off unless switched on.
   const [requireBaseline, setRequireBaseline] = useState(false);
   // Read-only locks: each one OFF unless switched on (features.modules["lock.<key>"]).
@@ -459,6 +462,7 @@ export default function OwnerModules() {
     setPriorityEngineOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).priorityEngine === false));
     setViolationGuideOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).violationGuide === false));
     setOutOfNetworkOn(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).outOfNetwork === true));
+    setArrival(Object.fromEntries(Object.entries((configured && typeof configured === "object" ? configured : {}) as Record<string, unknown>).filter(([k, v]) => (k === "arrivalAlerts" || k.startsWith("arrivalAlerts.bldg.")) && typeof v === "boolean")) as Record<string, boolean>);
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
     setSmartRepairSync(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairSync === true));
@@ -535,6 +539,15 @@ export default function OwnerModules() {
   const togglePriorityEngine = (enabled: boolean) => { setPriorityEngineOn(enabled); setDirty(true); };
   const toggleViolationGuide = (enabled: boolean) => { setViolationGuideOn(enabled); setDirty(true); };
   const toggleOutOfNetwork = (enabled: boolean) => { setOutOfNetworkOn(enabled); setDirty(true); };
+  const setArrivalSwitch = (key: string, enabled: boolean) => { setArrival((a) => ({ ...a, [key]: enabled })); setDirty(true); };
+  const arrivalOn = arrival["arrivalAlerts"] === true;
+  useEffect(() => {
+    setArrivalBuildings([]);
+    if (!organizationId || !arrivalOn) return;
+    void customFetch<Array<{ id: string; displayAddress: string }>>(`/api/v1/platform/organizations/${encodeURIComponent(organizationId)}/properties`, { responseType: "json" } as never)
+      .then((rows) => setArrivalBuildings((Array.isArray(rows) ? rows : []).map((b) => ({ id: b.id, displayAddress: b.displayAddress })).sort((a, b) => a.displayAddress.localeCompare(b.displayAddress))))
+      .catch(() => undefined);
+  }, [organizationId, arrivalOn]);
   const toggleSmartRepairToMgmt = (enabled: boolean) => { setSmartRepairToMgmt(enabled); setDirty(true); };
   const toggleSmartRepairEmailCopy = (enabled: boolean) => { setSmartRepairEmailCopy(enabled); setDirty(true); };
   const toggleSmartRepairSync = (enabled: boolean) => { setSmartRepairSync(enabled); setDirty(true); };
@@ -643,7 +656,7 @@ export default function OwnerModules() {
           features: {
             ...organization.features,
             // Kept as saved: the title-rules switch and person switches this page does not edit here.
-            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button|apptab)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button|apptab)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...arrival, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -1391,6 +1404,32 @@ export default function OwnerModules() {
                     onCheckedChange={toggleViolationGuide}
                     aria-label={`${violationGuideOn ? "Disable" : "Enable"} Take me there`}
                   />
+                </div>
+                <div className={`border-t border-slate-200 px-5 py-3 ${arrivalOn ? "" : "opacity-60"}`}>
+                  <div className="flex min-h-12 items-center gap-3">
+                    <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${arrivalOn ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"}`}>
+                      <MapPin className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-slate-900">"On the way" and "Arrived" alerts</p>
+                      <p className="text-xs text-slate-500">The member taps I've arrived: the resident's phone and this client's platform get it with the time. "On the way" with the arrival time also goes to this client's platform. OFF until switched on; then every building below unless you switch one off</p>
+                    </div>
+                    <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${arrivalOn ? "text-emerald-700" : "text-slate-400"}`}>{arrivalOn ? "Enabled" : "Disabled"}</span>
+                    <Switch checked={arrivalOn} onCheckedChange={(on) => setArrivalSwitch("arrivalAlerts", on)} aria-label={`${arrivalOn ? "Disable" : "Enable"} on the way and arrived alerts`} />
+                  </div>
+                  {arrivalOn && (
+                    <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
+                      {arrivalBuildings.length === 0 ? <p className="text-xs text-slate-500">No buildings on this client yet.</p> : arrivalBuildings.map((b) => {
+                        const on = arrival[`arrivalAlerts.bldg.${b.id}`] !== false;
+                        return (
+                          <label key={b.id} className="flex items-center justify-between gap-2 text-xs text-slate-700">
+                            <span className="truncate">{b.displayAddress}</span>
+                            <Switch checked={on} onCheckedChange={(v) => setArrivalSwitch(`arrivalAlerts.bldg.${b.id}`, v)} aria-label={`Alerts at ${b.displayAddress}`} />
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
                   outOfNetworkOn ? "" : "opacity-60"

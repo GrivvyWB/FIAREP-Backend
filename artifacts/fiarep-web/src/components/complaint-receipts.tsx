@@ -5,11 +5,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/hooks/use-auth";
-import { Clock, Eye } from "lucide-react";
+import { Clock, Eye, MapPin } from "lucide-react";
 
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 type Receipt = { id: string; name: string; position: string; at: string };
 type Eta = { eta: string; crew: string; note: string; byName: string; byPosition: string; at: string };
+type Arrived = { byName: string; byPosition: string; at: string; address: string };
 const list = (v: unknown): Receipt[] => (Array.isArray(v) ? v.filter((x) => x && typeof x === "object" && typeof x.id === "string") : []);
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 
@@ -29,6 +30,9 @@ export function ComplaintReceipts({ entity, reportId, state, canSendEta }: {
   const queryClient = useQueryClient();
   const [opens, setOpens] = useState<Receipt[]>(list(state.opens));
   const [eta, setEta] = useState<Eta | null>((state.eta as Eta) || null);
+  const [arrived, setArrived] = useState<Arrived | null>((state.arrived as Arrived) || null);
+  // The I've arrived button: Platform Control switch for this client and building.
+  const [arrivalOn, setArrivalOn] = useState(false);
   const [options, setOptions] = useState<{ eta: string[]; crew: string[] }>({ eta: [], crew: [] });
   const [pickEta, setPickEta] = useState("");
   const [pickCrew, setPickCrew] = useState("");
@@ -43,6 +47,7 @@ export function ComplaintReceipts({ entity, reportId, state, canSendEta }: {
     customFetch<{ opens: Receipt[] }>(`/api/v1/${entity}/${encodeURIComponent(reportId)}/opened`, { method: "POST", responseType: "json" } as never)
       .then((r) => { if (Array.isArray(r?.opens) && r.opens.length) setOpens(r.opens); })
       .catch(() => undefined);
+    if (canSendEta) customFetch<{ on: boolean }>(`/api/v1/${entity}/${encodeURIComponent(reportId)}/arrival-switch`, { responseType: "json" } as never).then((s) => setArrivalOn(!!s?.on)).catch(() => undefined);
     if (canSendEta) customFetch<{ eta: string[]; crew: string[] }>("/api/v1/eta-options", { responseType: "json" } as never).then(setOptions).catch(() => undefined);
   }, [entity, reportId, canSendEta]);
 
@@ -61,6 +66,18 @@ export function ComplaintReceipts({ entity, reportId, state, canSendEta }: {
     } finally { setBusy(false); }
   }
 
+  async function markArrived() {
+    setBusy(true);
+    try {
+      const r = await customFetch<{ arrived: Arrived }>(`/api/v1/${entity}/${encodeURIComponent(reportId)}/arrived`, { method: "POST", headers: { "Content-Type": "application/json" }, body: "{}", responseType: "json" } as never);
+      setArrived(r.arrived);
+      toast({ title: "Arrived", description: `Sent at ${when(r.arrived.at)} — the resident and the office were told.` });
+      await queryClient.invalidateQueries({ queryKey: getListEntityRecordsQueryKey(entity) });
+    } catch (error) {
+      toast({ variant: "destructive", title: "Could not send", description: error instanceof Error ? error.message : "Try again." });
+    } finally { setBusy(false); }
+  }
+
   const openedBy = (id: string) => opens.find((o) => o.id === id);
   // Everyone who should know about it: who it was sent to, plus anyone who opened it anyway.
   const people = [...notified, ...opens.filter((o) => !notified.some((n) => n.id === o.id)).map((o) => ({ ...o, at: "" }))];
@@ -72,6 +89,15 @@ export function ComplaintReceipts({ entity, reportId, state, canSendEta }: {
           <p className="font-semibold text-emerald-900 flex items-center gap-1"><Clock className="h-4 w-4" />{eta.eta}{eta.crew ? ` · ${eta.crew} on the way` : ""}</p>
           <p className="text-xs text-emerald-800">{eta.byName} ({eta.byPosition}) · {when(eta.at)}{eta.note ? ` · ${eta.note}` : ""}</p>
         </div>
+      )}
+      {arrived && (
+        <div className="rounded-md border border-blue-300 bg-blue-50 p-2 text-sm">
+          <p className="font-semibold text-blue-900 flex items-center gap-1"><MapPin className="h-4 w-4" />Arrived{arrived.address ? ` · ${arrived.address}` : ""}</p>
+          <p className="text-xs text-blue-800">{arrived.byName} ({arrived.byPosition}) · {when(arrived.at)}</p>
+        </div>
+      )}
+      {canSendEta && arrivalOn && !arrived && (
+        <Button className="w-full bg-blue-700 text-white hover:bg-blue-800" onClick={() => void markArrived()} disabled={busy}>{busy ? "Sending…" : "I've arrived"}</Button>
       )}
       {isManagement && (
         <div>

@@ -6,7 +6,8 @@
 // light for each person who opened it and a red one for each who never did.
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
-import { db, entityRecords, notifications, staffAccounts } from "@workspace/db";
+import { db, entityRecords, notifications, organizationProperties, organizations, staffAccounts } from "@workspace/db";
+import { normalizeAddress } from "./jurisdiction";
 import { deliverPushNotification } from "./push";
 import type { Actor } from "./auth";
 import { routedComplaintRecipientIds } from "./complaintRouting";
@@ -14,6 +15,32 @@ import { notifyResident } from "./residentNotify";
 
 export type Receipt = { id: string; name: string; position: string; at: string };
 export type EtaNotice = { eta: string; crew: string; note: string; byId: string; byName: string; byPosition: string; at: string };
+export type Arrival = { byId: string; byName: string; byPosition: string; at: string; address: string; latitude?: number; longitude?: number };
+
+/** The client's own people who follow this complaint on their platform: whoever routes it for the
+ *  development, and the company's administrators. */
+async function clientWatchers(row: Row): Promise<string[]> {
+  const dev = String(row.development || row.state["development"] || "").trim();
+  const routed = dev ? await routedComplaintRecipientIds(row.tenantId, dev, row.state, row.entity === "building-violations").catch(() => [] as string[]) : [];
+  const admins = await db.select({ id: staffAccounts.id }).from(staffAccounts)
+    .where(and(eq(staffAccounts.tenantId, row.tenantId), eq(staffAccounts.role, "administrator"), eq(staffAccounts.status, "approved")));
+  return [...new Set([...routed, ...admins.map((a) => a.id)])];
+}
+/** Platform Control → Module Management → "On the way" and "Arrived" alerts: on for this client, and
+ *  not switched off for the complaint's building. */
+export async function arrivalAlertsOn(tenantId: string, state: Record<string, unknown>): Promise<boolean> {
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  const modules = (((org?.features ?? {}) as Record<string, unknown>)["modules"] ?? {}) as Record<string, unknown>;
+  if (modules["arrivalAlerts"] !== true) return false;
+  const address = String(state["address"] || state["buildingAddress"] || "").trim();
+  if (!address) return true;
+  const key = normalizeAddress(address.split(",")[0]!, null, null);
+  const props = await db.select({ id: organizationProperties.id, normalizedAddress: organizationProperties.normalizedAddress, displayAddress: organizationProperties.displayAddress })
+    .from(organizationProperties).where(eq(organizationProperties.organizationId, tenantId));
+  const b = props.find((p) => p.normalizedAddress === key || normalizeAddress(p.displayAddress.split(",")[0]!, null, null) === key);
+  return !b || modules[`arrivalAlerts.bldg.${b.id}`] !== false;
+}
+const clock = (iso: string) => new Date(iso).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 const RECEIPT_ENTITIES = new Set(["resident-reports", "building-violations"]);
 export function tracksReceipts(entity: string): boolean {
@@ -134,6 +161,8 @@ export async function recordEta(actor: Actor, row: Row, input: { eta: string; cr
     const v = row.state[key];
     if (typeof v === "string" && v && v !== actor.id) targets.add(v);
   }
+  // The client's platform hears it too (their supervisors for the development and administrators) — when switched on.
+  if (await arrivalAlertsOn(row.tenantId, row.state).catch(() => false)) for (const id of await clientWatchers(row)) if (id !== actor.id) targets.add(id);
   if (targets.size) {
     const created = await db.insert(notifications).values([...targets].map((target) => ({
       id: randomUUID(),
@@ -146,4 +175,35 @@ export async function recordEta(actor: Actor, row: Row, input: { eta: string; cr
     for (const n of created) void deliverPushNotification(n).catch(() => undefined);
   }
   return notice;
+}
+
+/** "Arrived": the member is at the location — stamped with the time (and where the phone was),
+ *  told to the resident's phone and to the client's platform. */
+export async function recordArrived(actor: Actor, row: Row, input: { latitude?: number; longitude?: number }): Promise<Arrival> {
+  const at = new Date().toISOString();
+  const address = [String(row.state["address"] || row.state["buildingAddress"] || row.development || "").trim(), row.state["unit"] ? `Apt ${String(row.state["unit"]).replace(/^apt\.?\s*/i, "")}` : ""].filter(Boolean).join(" · ");
+  const arrival: Arrival = { byId: actor.id, byName: actor.name, byPosition: actor.position, at, address,
+    ...(Number.isFinite(input.latitude) && Number.isFinite(input.longitude) ? { latitude: input.latitude, longitude: input.longitude } : {}) };
+  const line = `Arrived${address ? ` at ${address}` : ""} — ${clock(at)}`;
+  const updates = Array.isArray(row.state["updates"]) ? row.state["updates"] as unknown[] : [];
+  await mergeState(row, { arrived: arrival, updates: [...updates, { at, by: actor.name, status: String(row.state["status"] || ""), note: line }] });
+  void notifyResident(row, "Arrived", `${actor.name} (${actor.position}) arrived — ${clock(at)}.`);
+  const targets = new Set<string>();
+  const sender = senderStaffId(row.state, row.createdBy);
+  if (sender && sender !== actor.id) targets.add(sender);
+  for (const key of ["assignedStaffId", "directedToStaffId"]) {
+    const v = row.state[key];
+    if (typeof v === "string" && v && v !== actor.id) targets.add(v);
+  }
+  for (const id of await clientWatchers(row)) if (id !== actor.id) targets.add(id);
+  if (targets.size) {
+    const created = await db.insert(notifications).values([...targets].map((target) => ({
+      id: randomUUID(), tenantId: row.tenantId, target,
+      message: `${refOf(row.state)}: arrived`,
+      detail: `${actor.name} (${actor.position}) arrived${address ? ` at ${address}` : ""} — ${clock(at)}`,
+      reportId: row.id,
+    }))).returning();
+    for (const n of created) void deliverPushNotification(n).catch(() => undefined);
+  }
+  return arrival;
 }

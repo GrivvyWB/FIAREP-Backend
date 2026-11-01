@@ -4,9 +4,11 @@ import { customFetch, getEntityRecord } from '@workspace/api-client-react';
 import { ui, ACCENT } from '../lib/ui';
 import { getCurrentActor } from '../lib/store';
 import { PickOne } from '../lib/community-ui';
+import * as Location from 'expo-location';
 
 type Receipt = { id: string; name: string; position: string; at: string };
 type Eta = { eta: string; crew: string; note: string; byName: string; byPosition: string; at: string };
+type Arrived = { byName: string; byPosition: string; at: string; address: string };
 const list = (v: unknown): Receipt[] => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object' && typeof x.id === 'string') : []);
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 
@@ -26,6 +28,9 @@ export default function ComplaintReceipts({ entity, reportId, canSendEta, readOn
   const [notified, setNotified] = useState<Receipt[]>([]);
   const [opens, setOpens] = useState<Receipt[]>([]);
   const [eta, setEta] = useState<Eta | null>(null);
+  const [arrived, setArrived] = useState<Arrived | null>(null);
+  // The I've arrived button: Platform Control switch for this client and building.
+  const [arrivalOn, setArrivalOn] = useState(false);
   const [options, setOptions] = useState<{ eta: string[]; crew: string[] }>({ eta: [], crew: [] });
   const [pickEta, setPickEta] = useState('');
   const [pickCrew, setPickCrew] = useState('');
@@ -46,12 +51,14 @@ export default function ComplaintReceipts({ entity, reportId, canSendEta, readOn
         setNotified(list(live?.state?.notifiedStaff));
         setOpens(list(live?.state?.opens));
         setEta((live?.state?.eta as Eta) || null);
+        setArrived((live?.state?.arrived as Arrived) || null);
       } catch { /* offline: nothing to show */ }
       try {
         const r = await customFetch<{ opens: Receipt[] }>(`/api/v1/${entity}/${encodeURIComponent(reportId)}/opened`, { method: 'POST', responseType: 'json' } as never);
         if (alive && Array.isArray(r?.opens) && r.opens.length) setOpens(r.opens);
       } catch { /* offline */ }
       if (canSendEta) {
+        try { const s = await customFetch<{ on: boolean }>(`/api/v1/${entity}/${encodeURIComponent(reportId)}/arrival-switch`, { responseType: 'json' } as never); if (alive) setArrivalOn(!!s?.on); } catch { /* offline */ }
         try { const o = await customFetch<{ eta: string[]; crew: string[] }>('/api/v1/eta-options', { responseType: 'json' } as never); if (alive) setOptions(o); } catch { /* offline */ }
       }
     })();
@@ -72,10 +79,29 @@ export default function ComplaintReceipts({ entity, reportId, canSendEta, readOn
     } finally { setBusy(false); }
   }
 
+  // "I've arrived": time stamped, with where the phone is when location is already allowed (no new prompt).
+  async function markArrived() {
+    setBusy(true);
+    try {
+      let pos: { latitude?: number; longitude?: number } = {};
+      try {
+        const perm = await Location.getForegroundPermissionsAsync();
+        if (perm.granted) { const p = await Location.getLastKnownPositionAsync(); if (p) pos = { latitude: p.coords.latitude, longitude: p.coords.longitude }; }
+      } catch { /* no location: the time is still stamped */ }
+      const r = await customFetch<{ arrived: Arrived }>(`/api/v1/${entity}/${encodeURIComponent(reportId)}/arrived`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(pos), responseType: 'json',
+      } as never);
+      setArrived(r.arrived);
+      Alert.alert('Arrived', `Sent at ${when(r.arrived.at)} — the resident and the office were told.`);
+    } catch (e: any) {
+      Alert.alert('Could not send', e?.message || 'Check your connection and try again.');
+    } finally { setBusy(false); }
+  }
+
   const isManagement = role === 'management' || role === 'administrator';
   const openedBy = (id: string) => opens.find((o) => o.id === id);
   const people = [...notified, ...opens.filter((o) => !notified.some((n) => n.id === o.id)).map((o) => ({ ...o, at: '' }))];
-  if (!isManagement && !canSendEta && !eta) return null;
+  if (!isManagement && !canSendEta && !eta && !arrived) return null;
 
   return (
     <View style={[ui.card, { gap: 10 }]}>
@@ -84,6 +110,17 @@ export default function ComplaintReceipts({ entity, reportId, canSendEta, readOn
           <Text style={{ fontWeight: '700', color: '#065f46' }}>⏱ {eta.eta}{eta.crew ? ` · ${eta.crew} on the way` : ''}</Text>
           <Text style={{ fontSize: 12, color: '#065f46' }}>{eta.byName} ({eta.byPosition}) · {when(eta.at)}{eta.note ? ` · ${eta.note}` : ''}</Text>
         </View>
+      )}
+      {arrived && (
+        <View style={{ borderWidth: 1, borderColor: '#93c5fd', backgroundColor: '#eff6ff', borderRadius: 8, padding: 8 }}>
+          <Text style={{ fontWeight: '700', color: '#1e3a8a' }}>📍 Arrived{arrived.address ? ` · ${arrived.address}` : ''}</Text>
+          <Text style={{ fontSize: 12, color: '#1e3a8a' }}>{arrived.byName} ({arrived.byPosition}) · {when(arrived.at)}</Text>
+        </View>
+      )}
+      {canSendEta && arrivalOn && !readOnly && !arrived && (
+        <Pressable style={[ui.btn, { backgroundColor: '#1d4ed8' }, busy && ui.btnMuted]} disabled={busy} onPress={() => void markArrived()}>
+          <Text style={ui.btnText}>{busy ? 'Sending…' : "I've arrived"}</Text>
+        </Pressable>
       )}
       {isManagement && (
         <View>
