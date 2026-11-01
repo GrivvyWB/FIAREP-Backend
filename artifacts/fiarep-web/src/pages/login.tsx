@@ -104,6 +104,9 @@ export default function Login() {
           Field Infrastructure, Asset Reporting &amp; Evaluation Performance
         </p>
         <p className="mt-1 text-center text-sm font-semibold text-[#b77900]">Building Intelligence. Compliance. Action.</p>
+        {(() => { try { return sessionStorage.getItem("fiarep_session_ended") === "1"; } catch { return false; } })() && (
+          <p className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-center text-sm font-semibold text-amber-900">Your sign-in ended. Type your code again.</p>
+        )}
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">

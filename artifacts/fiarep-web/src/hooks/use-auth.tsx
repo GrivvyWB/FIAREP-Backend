@@ -102,7 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         try {
           const response = await fetch("/api/v1/auth/refresh", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ refreshToken: token }) });
-          if (!response.ok) throw new Error("Staff session refresh failed");
+          if (!response.ok) {
+            // The server ended this sign-in (the code was changed): back to sign-in to retype it.
+            if (response.status === 401) { try { sessionStorage.setItem("fiarep_session_ended", "1"); } catch { /* private window */ } }
+            throw new Error("Staff session refresh failed");
+          }
           const session = await response.json() as { accessToken: string; refreshToken: string };
           localStorage.setItem("fiarep_access_token", session.accessToken);
           localStorage.setItem("fiarep_refresh_token", session.refreshToken);
@@ -207,6 +211,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!response.ok) throw new Error(payload?.error || "Invalid staff name or code");
     localStorage.setItem("fiarep_access_token", payload.accessToken);
     localStorage.setItem("fiarep_refresh_token", payload.refreshToken);
+    try { sessionStorage.removeItem("fiarep_session_ended"); } catch { /* private window */ }
     // Signed in: the website is now locked to this staff member.
     localStorage.setItem("fiarep_persona", "staff");
     queryClient.clear();

@@ -1462,6 +1462,10 @@ async function maybeRefresh(token: string): Promise<string | null> {
   return token;
 }
 
+// The sign-in was ended on the server (the code was changed, or the account removed): the app signs out.
+const sessionEndedListeners = new Set<() => void>();
+export function onSessionEnded(cb: () => void): () => void { sessionEndedListeners.add(cb); return () => { sessionEndedListeners.delete(cb); }; }
+
 export async function refreshAccessToken(): Promise<string | null> {
   if (_refreshInFlight) return _refreshInFlight;
   _refreshInFlight = (async () => {
@@ -1478,7 +1482,9 @@ export async function refreshAccessToken(): Promise<string | null> {
       const session = await refreshSession({ refreshToken });
       await persistServerSession(session);
       return session.accessToken;
-    } catch {
+    } catch (e) {
+      // The server said no (not just no signal): this sign-in is over — retype the code.
+      if ((e as { status?: number })?.status === 401) for (const cb of sessionEndedListeners) { try { cb(); } catch { /* next */ } }
       return null;
     } finally {
       _refreshing = false;

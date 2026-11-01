@@ -227,6 +227,7 @@ export async function issueSession(staff: StaffAccount) {
     id: randomUUID(),
     staffId: staff.id,
     tokenHash: tokenHash(refreshToken),
+    sessionVersion: staff.sessionVersion,
     expiresAt,
     createdAt: now,
     updatedAt: now,
@@ -252,6 +253,7 @@ export async function issueWebHandoff(staff: StaffAccount) {
     id: randomUUID(),
     staffId: staff.id,
     tokenHash: tokenHash(code),
+    sessionVersion: staff.sessionVersion,
     expiresAt: new Date(now.getTime() + WEB_HANDOFF_TTL_SECONDS * 1000),
     createdAt: now,
     updatedAt: now,
@@ -280,6 +282,8 @@ export async function rotateSession(refreshToken: string) {
     .where(eq(staffAccounts.id, session.staffId))
     .limit(1);
   if (!staff || staff.status !== "approved" || !licenseAllows(await evaluateLicense(staff.tenantId), staff.tenantId)) return null;
+  // A sign-in made with an old code (the code was reset since) can't be renewed: they must type the new one.
+  if (session.sessionVersion !== staff.sessionVersion) return null;
 
   const [claimed] = await db
     .update(refreshSessions)

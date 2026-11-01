@@ -272,6 +272,8 @@ export const refreshSessions = pgTable(
     tokenHash: text("token_hash").notNull(),
     expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
     revokedAt: timestamp("revoked_at", { withTimezone: true }),
+    // The account's session version when this sign-in was made: a new code ends it.
+    sessionVersion: integer("session_version"),
     ...timestamps,
   },
   (table) => [

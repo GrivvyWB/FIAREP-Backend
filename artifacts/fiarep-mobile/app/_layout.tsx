@@ -9,7 +9,7 @@ import { startJobWatch } from '../lib/job-tracking';
 startJobWatch();
 // Registers the background location task for the time clock before any screen renders.
 import '../lib/clock-location';
-import { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, AppState, Image, Linking } from 'react-native';
 import * as Location from 'expo-location';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,7 +18,7 @@ import {
   getAppMode, setAppMode,
   verifyStaffLogin,
   setRememberedStaff,
-   restoreServerSession, logout, clearAppMode, clearRememberedStaff,
+   restoreServerSession, logout, clearAppMode, clearRememberedStaff, onSessionEnded,
    getInstallationPersona, setInstallationPersona,
    inferInstallationPersona,
    type AppMode, type InstallationPersona } from '../lib/store';
@@ -608,6 +608,29 @@ export default function Layout() {
   const [booting, setBooting] = useState(true);
   const [notice, setNotice] = useState('');
   const [locationBlocked, setLocationBlocked] = useState(false);
+
+  // Signed in with a code that has since been changed: stopped right there — back to sign-in to retype it.
+  useEffect(() => onSessionEnded(() => {
+    void (async () => {
+      await logout().catch(() => undefined);
+      await clearAppMode().catch(() => undefined);
+      setNotice('Your sign-in ended. Type your code again.');
+      setMode(null);
+    })();
+  }), []);
+  // Every screen change and every return to the app checks the sign-in is still good (at most every 10 s).
+  const lastCheck = useRef(0);
+  useEffect(() => {
+    if (!mode || mode === 'resident' || mode === 'vendor') return;
+    const check = () => {
+      if (Date.now() - lastCheck.current < 10_000) return;
+      lastCheck.current = Date.now();
+      void customFetch('/api/v1/auth/me', { responseType: 'json' } as never).catch(() => undefined);
+    };
+    check();
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') check(); });
+    return () => sub.remove();
+  }, [mode, pathname]);
 
   useEffect(() => {
     let mounted = true;

@@ -35,6 +35,8 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
+// Sign-ins remember the account's session version, so a new code ends every older sign-in.
+await db.execute(sql`alter table refresh_sessions add column if not exists session_version integer`).catch((err) => console.error("Session version column not added:", err));
 // Buildings in any country (an added column; harmless when it is already there).
 await db.execute(sql`alter table organization_properties add column if not exists country text`).catch((err) => console.error("Country column not added:", err));
 await import("./lib/uiTranslations").then((m) => m.ensureUiTranslationsTable()).catch((err) => console.error("Screen translations table:", err));

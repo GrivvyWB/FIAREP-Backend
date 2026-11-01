@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { customFetch } from "@workspace/api-client-react";
 import { Sidebar } from "./sidebar";
 import { Topbar } from "./topbar";
 import { useAuth } from "@/hooks/use-auth";
@@ -16,6 +17,14 @@ export function Shell({ children }: { children: React.ReactNode }) {
   const { toast } = useToast();
   // A new message anywhere: chime, desktop notice, and a note on the screen.
   useMessageAlerts((who, body) => toast({ title: `New message from ${who}`, description: body }));
+  // Every page change checks the sign-in is still good (at most every 10 s): a sign-in made with a
+  // code that has since been changed is stopped right there and sent back to sign in.
+  const lastCheck = useRef(0);
+  useEffect(() => {
+    if (Date.now() - lastCheck.current < 10_000) return;
+    lastCheck.current = Date.now();
+    void customFetch("/api/v1/auth/me", { responseType: "json" } as never).catch(() => undefined);
+  }, [location]);
 
   if (isLoading) {
     return (
