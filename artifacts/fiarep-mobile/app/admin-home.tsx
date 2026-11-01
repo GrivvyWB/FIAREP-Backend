@@ -114,6 +114,8 @@ export default function AdminHome() {
       tiles: [
         { label: 'HUD Inspections', onPress: () => router.push(fiarepAdmin ? '/hud-inspections' : '/hud-review'), tone: 'solid' },
         { label: 'Building Baseline', onPress: () => router.push('/baseline'), tone: 'solid' },
+        // Client administrator: Smart Repair here (FIAREP administrators have it under My Work).
+        ...(!fiarepAdmin ? [{ label: 'Smart Repair', onPress: () => router.push('/smart-repair'), tone: 'solid' as Tone }] : []),
         { label: 'Projects / Inspections', onPress: () => router.push('/'), tone: 'outline' },
         { label: 'Send Violation', onPress: () => router.push('/violation-send'), tone: 'tint' },
         { label: 'Assign Route', onPress: () => router.push('/assign-route'), tone: 'tint' },
