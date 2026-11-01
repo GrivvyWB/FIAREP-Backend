@@ -1,4 +1,4 @@
-import { BASELINE_WAIT_MESSAGE, baselineWaiting } from "../lib/baseline";
+import { BASELINE_WAIT_MESSAGE, baselineWaitingFor } from "../lib/baseline";
 import { Router, type IRouter } from "express";
 import { and, desc, eq, inArray, or, sql } from "drizzle-orm";
 import { randomBytes, randomUUID } from "node:crypto";
@@ -2483,7 +2483,7 @@ router.post(
     return;
   }
   // Complaints and violations are not handed out or worked until FIAREP's baseline walk-through is done.
-  if (["resident-reports", "building-violations"].includes(entity) && (await baselineWaiting(current.tenantId))) {
+  if (["resident-reports", "building-violations"].includes(entity) && (await baselineWaitingFor(current.tenantId, actor.id))) {
     res.status(423).json({ error: BASELINE_WAIT_MESSAGE });
     return;
   }

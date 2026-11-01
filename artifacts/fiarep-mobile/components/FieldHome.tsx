@@ -13,6 +13,7 @@ import { cleanLabel, iconFor, sectionColor, taglineFor, tileArt } from '../lib/h
 import { useRouter } from 'expo-router';
 import { ALL_BUTTONS, plainLabel } from '../lib/all-buttons';
 import { moduleEnabled, moduleForTile, personTileOn, tileEnabled, useRawModules, type AppTabScreen } from '../lib/module-access';
+import { useBaselineWaiting, COMPLAINT_TILES } from '../lib/baseline';
 
 export type HomeTile = { label: string; onPress: () => void; badge?: number };
 export type HomeSection = { heading: string; tiles: HomeTile[]; viewAll?: () => void; color?: string };
@@ -84,10 +85,13 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections:
 }) {
   const router = useRouter();
   const rawModules = useRawModules();
+  const baselineWaiting = useBaselineWaiting();
   const present = new Set(ownSections.flatMap((s) => s.tiles.map((t) => plainLabel(t.label))));
   if (hero) present.add(plainLabel(hero.label));
   const more = screen ? ALL_BUTTONS.filter((b) => {
     if (present.has(b.label) || !tileEnabled(screen, b.label, rawModules)) return false;
+    // Complaint buttons wait for the baseline walk-through, unless this person's own switch is on.
+    if (baselineWaiting && COMPLAINT_TILES.has(b.label) && !personTileOn(screen, b.label, rawModules)) return false;
     // A module switched off in Module Management takes its buttons with it (unless this person's own switch is on).
     const m = moduleForTile(b.label);
     return !m || moduleEnabled(m) || personTileOn(screen, b.label, rawModules);

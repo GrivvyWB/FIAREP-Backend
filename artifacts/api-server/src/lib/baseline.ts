@@ -102,6 +102,15 @@ export async function baselineWaiting(tenantId: string): Promise<boolean> {
   const g = await baselineGate(tenantId).catch(() => ({ required: false, complete: true }));
   return g.required && !g.complete;
 }
+/** Same, for one person: a complaint button Platform Control turned on for this person (App tabs or Website menu) lets them work while the rest of the company waits. */
+export async function baselineWaitingFor(tenantId: string, staffId: string | undefined): Promise<boolean> {
+  if (!(await baselineWaiting(tenantId))) return false;
+  if (!staffId) return true;
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  const modules = ((org?.features as Record<string, unknown> | undefined)?.["modules"] ?? {}) as Record<string, unknown>;
+  const mine = new RegExp("^p\\." + staffId.replace(/[^a-zA-Z0-9_-]/g, "") + "\\.(apptab\\.[a-z]+\\.(resident-reports|manage-all-requests|review-reports|priority-queue)|menu\\.(complaint-dashboard|notifications)|module\\.complaint-dashboard)$");
+  return !Object.entries(modules).some(([k, v]) => v === true && mine.test(k));
+}
 export const BASELINE_WAIT_MESSAGE = "Building baseline assessment not done yet. Complaint and violation work starts once FIAREP completes the walk-through.";
 
 const tradeKey = (t: string) => {

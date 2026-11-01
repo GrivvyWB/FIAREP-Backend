@@ -45,11 +45,11 @@ export default function ManagementHome() {
   const actionTiles = new Set(['Send Violation', 'Inspection Approvals', 'HUD Inspections', 'In-house assignments', 'Assign a Job', 'Cover a Site', 'Create Report', '+ New Project', 'Manage Trucks', 'Add Job for Mgmt', 'Assign Route', 'Assign Emergency Unit', 'Staff Member Jobs', 'Review Reports', 'CPM Supervisor Scope Review', 'CPM Supervisor', 'Default rates']);
   const baselineWaiting = useBaselineWaiting();
   const enabledTiles = (tiles: Tile[]) => tiles.filter((tile) => {
-    if (baselineWaiting && COMPLAINT_TILES.has(tile.label.replace(/\s*\(\d+\)\s*$/, ''))) return false;
+    if (baselineWaiting && COMPLAINT_TILES.has(tile.label.replace(/\s*\(\d+\)\s*$/, '')) && !personTileOn('management', tile.label, rawModules)) return false;
     if (!tileEnabled('management', tile.label, rawModules)) return false;
     if (readOnly && actionTiles.has(tile.label)) return false;
     const module = moduleForTile(tile.label);
-    return !module || modules[module];
+    return !module || modules[module] || personTileOn('management', tile.label, rawModules);
   });
   const _pos = (position || '').trim().toLowerCase();
   const isSup = _pos.includes('supervisor') || _pos === 'superintendent';

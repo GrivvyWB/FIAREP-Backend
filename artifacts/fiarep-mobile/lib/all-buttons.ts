@@ -23,5 +23,16 @@ export const ALL_BUTTONS: Array<{ label: string; route: string }> = [
   { label: 'Translator', route: '/translator' }, { label: 'Command Center', route: '/command-center' }, { label: 'Check Report Status', route: '/resident-lookup' },
 ];
 
+/** True when one of this person's own App tabs switches is on for a button that opens this page,
+ *  so the page opens even where the company's module is off (Platform Control decides). */
+export function personOpensRoute(pathname: string, raw: Record<string, boolean>, staffId: string): boolean {
+  if (!staffId) return false;
+  const slug = (l: string) => plainLabel(l).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const labels = ALL_BUTTONS.filter((b) => b.route.split('?')[0] === pathname).map((b) => slug(b.label));
+  if (!labels.length) return false;
+  const prefix = `p.${staffId}.apptab.`;
+  return Object.entries(raw).some(([k, v]) => v === true && k.startsWith(prefix) && labels.includes(k.slice(k.lastIndexOf('.') + 1)));
+}
+
 /** A button's name without its emoji or count, to compare buttons across screens. */
 export const plainLabel = (label: string) => label.replace(/\s*\(\d+\)\s*$/, '').replace(/^[^\p{L}\p{N}+]+/u, '').trim();

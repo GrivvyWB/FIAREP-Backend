@@ -276,6 +276,9 @@ export function personTile(screen: AppTabScreen, label: string, raw: Record<stri
   return typeof v === 'boolean' ? v : undefined;
 }
 /** A button this person's own switch turns on: shown even where the company's switch or module is off. */
+/** The control-panel switches as last loaded, and who is signed in (for the page guard). */
+export const cachedRawModules = (): Record<string, boolean> => (cached?.features?.modules || {}) as Record<string, boolean>;
+export const signedInStaffId = (): string => cachedStaffId;
 export const personTileOn = (screen: AppTabScreen, label: string, raw: Record<string, boolean> | null | undefined): boolean => personTile(screen, label, raw) === true;
 
 export function tileEnabled(screen: AppTabScreen, label: string, raw: Record<string, boolean> | null | undefined): boolean {

@@ -25,7 +25,8 @@ import {
 import { ui, ACCENT } from '../lib/ui';
 import { syncAllEntities } from '../lib/sync';
 import { clearBadge } from '../lib/push';
-import { loadModuleConfig, refreshModuleConfig, moduleForRoute, moduleEnabled } from '../lib/module-access';
+import { loadModuleConfig, refreshModuleConfig, moduleForRoute, moduleEnabled, cachedRawModules, signedInStaffId } from '../lib/module-access';
+import { personOpensRoute } from '../lib/all-buttons';
 import { customFetch } from '@workspace/api-client-react';
 import * as SecureStore from 'expo-secure-store';
 import CodeMessage from '../components/CodeMessage';
@@ -721,7 +722,8 @@ export default function Layout() {
   useEffect(() => {
     if (booting || !mode || !pathname) return;
     const module = moduleForRoute(pathname);
-    if (module && !moduleEnabled(module)) {
+    // A button Platform Control turned on for this person opens its page, even where the company's module is off.
+    if (module && !moduleEnabled(module) && !personOpensRoute(pathname, cachedRawModules(), signedInStaffId())) {
       router.replace(HOME_FOR_MODE[mode] as never);
     }
   }, [booting, mode, pathname, router]);

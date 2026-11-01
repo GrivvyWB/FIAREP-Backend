@@ -171,7 +171,7 @@ export default function AdminHome() {
   ];
 
   // A client whose baseline is required but not done yet: complaint tools wait for it.
-  const keep = (t: Tile) => { if (baselineWaiting && COMPLAINT_TILES.has(t.label.replace(/\s*\(\d+\)\s*$/, ''))) return false; if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && !fiarepAdmin && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m] || personTileOn('admin', t.label, rawModules); };
+  const keep = (t: Tile) => { if (baselineWaiting && COMPLAINT_TILES.has(t.label.replace(/\s*\(\d+\)\s*$/, '')) && !personTileOn('admin', t.label, rawModules)) return false; if (!tileEnabled('admin', t.label, rawModules)) return false; if (readOnly && !fiarepAdmin && actionTiles.has(t.label)) return false; const m = moduleForTile(t.label); return !m || modules[m] || personTileOn('admin', t.label, rawModules); };
   const homeSections = sections.map((sec) => ({ heading: sec.heading, tiles: sec.tiles.filter(keep).filter((t) => t.label !== 'Attendance').map((t) => ({ label: t.label, onPress: t.onPress })) }));
   const hasAttendance = sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === 'Attendance'));
   const has = (label: string) => sections.some((sec) => sec.tiles.filter(keep).some((t) => t.label === label));
