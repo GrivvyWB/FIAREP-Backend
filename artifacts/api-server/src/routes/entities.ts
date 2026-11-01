@@ -1393,6 +1393,11 @@ router.post("/v1/:entity", async (req, res, next) => {
     return;
   }
   await audit(actor, `${entity}.created`, `Created ${entity} record`, id);
+  if (entity === "emergency-jobs") {
+    const em = await import("../lib/emergencyAlerts");
+    await em.alertNewEmergencyJob(actor, id, persistedCreatedState).catch((err) => logger.warn({ err, id }, "Emergency job alert failed"));
+    await em.alertEmergencyAssigned(actor, id, {}, persistedCreatedState).catch((err) => logger.warn({ err, id }, "Emergency assignment alert failed"));
+  }
   if (isCommunityEntity(entity) && (actor.tenantId === "default" || !isCommunityCoordinatorSupervisor(actor))) {
     // The coordinator's supervisor hears about every visit — nobody else.
     // Inside FIAREP it is the administrators (Timothy Winn, Emily Winn) who
@@ -1862,6 +1867,10 @@ router.patch("/v1/:entity/:id", async (req, res, next) => {
     return;
   }
   await audit(actor, `${entity}.updated`, `Updated ${entity} record`, current.id);
+  if (entity === "emergency-jobs") {
+    await import("../lib/emergencyAlerts").then((em) => em.alertEmergencyAssigned(actor, current.id, current.state as Record<string, unknown>, updated.state as Record<string, unknown>))
+      .catch((err) => logger.warn({ err, id: current.id }, "Emergency assignment alert failed"));
+  }
   // A vendor's change work order changed status (supervisor approved /
   // Procurement approved the cost / declined): the vendor gets an approved (or
   // declined) on their side — their page and app show it, and they are emailed

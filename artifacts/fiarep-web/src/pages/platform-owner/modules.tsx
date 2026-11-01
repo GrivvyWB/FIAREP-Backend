@@ -21,6 +21,7 @@ import {
   UsersRound,
   Wrench,
   type LucideIcon,
+  BellRing,
 } from "lucide-react";
 import {
   getListOrganizationsQueryKey,
@@ -483,7 +484,7 @@ export default function OwnerModules() {
     setPriorityEngineOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).priorityEngine === false));
     setViolationGuideOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).violationGuide === false));
     setOutOfNetworkOn(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).outOfNetwork === true));
-    setArrival(Object.fromEntries(Object.entries((configured && typeof configured === "object" ? configured : {}) as Record<string, unknown>).filter(([k, v]) => (k === "arrivalAlerts" || k.startsWith("arrivalAlerts.bldg.")) && typeof v === "boolean")) as Record<string, boolean>);
+    setArrival(Object.fromEntries(Object.entries((configured && typeof configured === "object" ? configured : {}) as Record<string, unknown>).filter(([k, v]) => (k === "arrivalAlerts" || k.startsWith("arrivalAlerts.bldg.") || k.startsWith("emergencyAlerts.")) && typeof v === "boolean")) as Record<string, boolean>);
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
     setSmartRepairSync(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairSync === true));
@@ -1461,6 +1462,25 @@ export default function OwnerModules() {
                     </div>
                   )}
                 </div>
+                {([
+                  ["emergencyAlerts.new", "Emergency alert: new emergency job", "A new emergency job goes right away to the emergency supervisor (Superintendent Ⓔ) and every emergency crew member. ON unless switched off"],
+                  ["emergencyAlerts.assigned", "Emergency alert: job assigned to you", "The crew member an emergency job is assigned (or reassigned) to gets it right away, with the address. ON unless switched off"],
+                ] as const).map(([key, title, desc]) => {
+                  const on = arrival[key] !== false;
+                  return (
+                    <div key={key} className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${on ? "" : "opacity-60"}`}>
+                      <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${on ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"}`}>
+                        <BellRing className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold text-slate-900">{title}</p>
+                        <p className="text-xs text-slate-500">{desc}</p>
+                      </div>
+                      <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${on ? "text-emerald-700" : "text-slate-400"}`}>{on ? "Enabled" : "Disabled"}</span>
+                      <Switch checked={on} onCheckedChange={(v) => setArrivalSwitch(key, v)} aria-label={`${on ? "Disable" : "Enable"} ${title}`} />
+                    </div>
+                  );
+                })}
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
                   outOfNetworkOn ? "" : "opacity-60"
                 }`}>
