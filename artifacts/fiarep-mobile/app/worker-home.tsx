@@ -133,6 +133,7 @@ export default function WorkerHome() {
 
   return (
     <FieldHome
+      screen="worker"
       title={title}
       hero={on('My Jobs') ? { label: 'My Jobs', onPress: () => router.push('/my-jobs'), badge: jobCount } : undefined}
       clock={on('Attendance') ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}

@@ -110,6 +110,7 @@ export default function ManagementHome() {
     ].slice(0, 3);
     return (
       <FieldHome
+      screen="management"
         title={title}
         banner={<>{showMessages ? <MessagesBar dark label="Message FIAREP" sub="FIAREP Services or the administrator" onPress={() => router.push('/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly ? <ReadOnlyBanner /> : null}{!restricted && !supervisorInspector && !cpmSupervisor && !tradeSupervisor ? <UpperManagementMuteToggle /> : null}{baselineWaiting ? <BaselineWaitingBanner /> : null}<PhoneComplaintsToggle dark /></>}
         clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}

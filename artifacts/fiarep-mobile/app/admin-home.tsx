@@ -183,6 +183,7 @@ export default function AdminHome() {
   ];
   return (
     <FieldHome
+      screen="admin"
       title={title}
       banner={<>{showMessages ? <MessagesBar dark label={fiarepAdmin ? 'Messages' : 'Message FIAREP'} sub={fiarepAdmin ? 'Clients writing to you, and the codes you hand out' : 'FIAREP Services or the administrator'} onPress={() => router.push(fiarepAdmin ? '/fiarep-messages' : '/client-messages')} /> : null}{unread > 0 ? <AlertBanner count={unread} /> : null}{readOnly && !fiarepAdmin ? <ReadOnlyBanner /> : null}{baselineWaiting ? <BaselineWaitingBanner /> : null}<UpperManagementMuteToggle /><PhoneComplaintsToggle dark /></>}
       clock={hasAttendance ? { onPress: () => router.push('/attendance'), label: 'Attendance' } : undefined}

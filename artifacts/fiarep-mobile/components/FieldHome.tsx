@@ -10,6 +10,9 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import LanguageButton from './LanguageButton';
 import { cleanLabel, iconFor, sectionColor, taglineFor, tileArt } from '../lib/home-catalog';
+import { useRouter } from 'expo-router';
+import { ALL_BUTTONS, plainLabel } from '../lib/all-buttons';
+import { moduleEnabled, moduleForTile, personTileOn, tileEnabled, useRawModules, type AppTabScreen } from '../lib/module-access';
 
 export type HomeTile = { label: string; onPress: () => void; badge?: number };
 export type HomeSection = { heading: string; tiles: HomeTile[]; viewAll?: () => void; color?: string };
@@ -62,7 +65,7 @@ function Tile({ t, color, width }: { t: HomeTile; color: string; width: number }
   );
 }
 
-export default function FieldHome({ title, tagline, icon, hero, clock, sections, tabs = [], banner, topGap = true }: {
+export default function FieldHome({ title, tagline, icon, hero, clock, sections: ownSections, tabs = [], banner, topGap = true, screen }: {
   title: string;
   tagline?: string;
   icon?: string;
@@ -76,7 +79,20 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections,
   /** Alert / read-only banners drawn under the header. */
   banner?: React.ReactNode;
   topGap?: boolean;
+  /** This home's screen: every other button there is shows under More (each with its App tabs switch). */
+  screen?: AppTabScreen;
 }) {
+  const router = useRouter();
+  const rawModules = useRawModules();
+  const present = new Set(ownSections.flatMap((s) => s.tiles.map((t) => plainLabel(t.label))));
+  if (hero) present.add(plainLabel(hero.label));
+  const more = screen ? ALL_BUTTONS.filter((b) => {
+    if (present.has(b.label) || !tileEnabled(screen, b.label, rawModules)) return false;
+    // A module switched off in Module Management takes its buttons with it (unless this person's own switch is on).
+    const m = moduleForTile(b.label);
+    return !m || moduleEnabled(m) || personTileOn(screen, b.label, rawModules);
+  }) : [];
+  const sections: HomeSection[] = more.length ? [...ownSections, { heading: 'More', tiles: more.map((b) => ({ label: b.label, onPress: () => router.push(b.route as never) })) }] : ownSections;
   const { width } = useWindowDimensions();
   const pad = 14; const gap = 10;
   const colW = (n: number) => Math.floor((width - pad * 2 - gap * (n - 1)) / n);

@@ -177,7 +177,21 @@ const measurementKey = (trade: string, material: string) => `meas.${trade}.${mat
 // Every tile on the app's home screens, by screen. A tab switched OFF here is
 // hidden in the app for everyone in this organization (features.modules
 // "apptab.<slug>" = false). Keep labels exactly as the app shows them.
-const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
+// Every button there is on any home (keep in step with the app's lib/all-buttons.ts): each staff
+// home shows its own buttons plus all of these under "More", each with its switch here.
+const ALL_APP_BUTTONS = [
+  "My Jobs", "Quick Quote", "Past quotes", "Price Quote", "Projects", "+ New Project", "Projects / Inspections", "Log Violations", "FIAREP Vision (AI)",
+  "Door Visit", "Building Check-In", "Smart Repair", "My Routes", "My Inspections", "Create Report", "Measurement", "Saved Measurements", "Submit Scope",
+  "CPM Supervisor Scope Review", "FIAREP Services", "Change Work Order", "Request Time Off", "Inbox", "HUD Inspections", "Building Baseline", "Send Violation",
+  "Inspection Approvals", "Assign Route", "Add Job for Mgmt", "Assign a Job", "In-house assignments", "Cover a Site", "Staff Member Jobs", "Assign Emergency Unit",
+  "Manage Trucks", "Truck Scores", "Emergency Activity", "Emergency Units", "Elevator Dashboard", "Elevator Jobs", "Leave Calendar", "Attendance", "Change Orders",
+  "Vendor Score", "Development Scores", "Building & Residential Scores", "Manage All Requests", "Resident Reports", "Review Reports", "Priority Queue",
+  "Default rates", "Check HPD / DOB", "Translator", "Command Center", "Check Report Status",
+];
+const STAFF_HOMES = new Set(["management", "admin", "cpm", "tech", "worker"]);
+const withAllButtons = (groups: Array<{ id: string; screen: string; tabs: string[] }>) =>
+  groups.map((g) => (STAFF_HOMES.has(g.id) ? { ...g, tabs: [...g.tabs, ...ALL_APP_BUTTONS.filter((b) => !g.tabs.includes(b))] } : g));
+const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = withAllButtons([
   { id: "management", screen: "Management / Supervisor home", tabs: [
     "Review Reports", "Send Violation", "Assign a Job", "In-house assignments", "Staff Member Jobs", "Cover a Site", "Create Report", "+ New Project",
     "HUD Inspections", "Inspection Approvals", "CPM Supervisor", "CPM Supervisor Scope Review", "Change Orders", "Elevator Dashboard",
@@ -216,7 +230,7 @@ const APP_TABS: Array<{ id: string; screen: string; tabs: string[] }> = [
   // Residents and vendors use the app without a FIAREP sign-in: company switches only.
   { id: "resident", screen: "Resident home (resident app and website)", tabs: ["Talk to us", "Translator"] },
   { id: "vendor", screen: "Vendor home", tabs: ["Translator"] },
-];
+]);
 // Screens whose people have no staff account, so no per-person switches.
 const NO_PERSON_SCREENS = new Set(["resident", "vendor"]);
 // Keyed per screen so the same label on two screens has two switches.

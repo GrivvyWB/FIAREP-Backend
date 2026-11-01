@@ -194,6 +194,7 @@ export default function CpmHome() {
 
   return (
     <FieldHome
+      screen={isTechHome ? 'tech' : 'cpm'}
       title={roleTitle}
       banner={unread > 0 ? <AlertBanner count={unread} /> : null}
       hero={showJobs ? { label: 'My Jobs', onPress: () => router.push('/my-jobs'), badge: jobCount } : undefined}
