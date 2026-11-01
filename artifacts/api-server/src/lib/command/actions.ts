@@ -498,6 +498,37 @@ export const ACTIONS: ActionDef[] = [
     },
     spoken: (r) => { const x = r as { assigned?: string; booked?: { when: string }; error?: string }; return x.error ?? `Assigned to ${x.assigned}, ${x.booked!.when}. They've been notified.`; },
   },
+  {
+    name: "send_job", label: "Send someone to check something out (quick job)", risk: "write", confirmDefault: false, target: "server",
+    description: "A quick job with no photo, e.g. \"have Bobby Jones go check the light switch at 1508 1 59th St, Bronx, apartment 3D\" or \"send Bobby to 150 81st St, no lights in 3D\". Needs: who (a member of this company), the address, and what to check; the apartment if said; urgent if the user says urgent / right away / a tenant just called. It becomes a complaint assigned to that person: it goes to their phone right away and is in their My Jobs, and the user is told on their phone when the person opens it, when they're on the way and when they arrive. If the name, address or problem is missing, ask for just that. Reply short: \"OK, sent to Bobby Jones — check the light switch at <address>, apt 3D. I'll let you know when he opens it.\"",
+    schema: { type: "object", properties: { member: { type: "string" }, address: { type: "string" }, apartment: { type: "string" }, problem: { type: "string" }, urgent: { type: "boolean" } }, required: ["member", "address", "problem"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const m = await findMember(ctx.tenantId, str(p["member"], 120));
+      if ("error" in m) return m;
+      const address = str(p["address"], 200); const problem = str(p["problem"], 500);
+      if (!address || !problem) return { error: "Say the address and what to check." };
+      const unit = str(p["apartment"], 20).replace(/^apt\.?\s*/i, "");
+      const urgent = p["urgent"] === true;
+      const { randomUUID } = await import("node:crypto");
+      const { generatedCode } = await import("../domain");
+      const { recordNotifiedStaff } = await import("../complaintReceipts");
+      const now = new Date().toISOString();
+      const id = randomUUID();
+      const complaintNo = generatedCode("resident-reports")!;
+      const title = problem.length > 80 ? `${problem.slice(0, 77)}…` : problem;
+      const state = {
+        complaintNo, title, description: problem, address, ...(unit ? { unit } : {}), status: "assigned", priority: urgent ? "Emergency" : "High", urgent,
+        source: "command-center", assignedStaffId: m.id, assignedTo: m.name, assignedAt: now, assignedByStaffId: ctx.staffId, assignedByName: ctx.actorName,
+        updates: [{ at: now, by: ctx.actorName, status: "assigned", note: `Sent to ${m.name} from the Command Center${urgent ? " — urgent" : ""}` }],
+      };
+      await db.insert(entityRecords).values({ id, tenantId: ctx.tenantId, entity: "resident-reports", development: null, state, createdBy: ctx.staffId });
+      await recordNotifiedStaff(ctx.tenantId, id, [m.id]).catch(() => undefined);
+      await notify(commandActor(ctx), m.id, `New job: ${urgent ? "URGENT — " : ""}${title}`, `${address}${unit ? ` · Apt ${unit}` : ""} · from ${ctx.actorName}`, id).catch(() => undefined);
+      return { sent: m.name, position: m.position, complaintNo, address, apartment: unit || null, problem, urgent, tellsYou: "when they open it, when they're on the way, and when they arrive" };
+    },
+    describe: (p) => `Send ${str(p["member"], 60)} to ${str(p["address"], 100)}${str(p["apartment"]) ? `, apt ${str(p["apartment"], 20)}` : ""}: ${str(p["problem"], 120)}${p["urgent"] === true ? " (urgent)" : ""}`,
+    spoken: (r) => { const x = r as { sent?: string; address?: string; apartment?: string | null; problem?: string; error?: string }; return x.error ?? `OK, sent to ${x.sent} — ${x.problem} at ${x.address}${x.apartment ? `, apartment ${x.apartment}` : ""}. I'll let you know when they open it.`; },
+  },
   // ── Scopes of work, contractors, reports ───────────────────────────────
   {
     name: "list_contractors", label: "Contractors on the vendor list", risk: "read", confirmDefault: false, target: "server",
