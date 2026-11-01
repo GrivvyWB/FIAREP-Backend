@@ -1,3 +1,4 @@
+import { watchedComplaint } from "../lib/fiarepWatch";
 import { autoSendComplaintToFiarep } from "../lib/fiarepDispatch";
 import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
@@ -475,6 +476,15 @@ router.get("/v1/resident-report-photos", async (req, res) => {
     eq(entityRecords.id, reportId), eq(entityRecords.tenantId, actor.tenantId),
     eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
   )).limit(1);
+  if (!report) {
+    // FIAREP watching a client quietly: that client's complaint photos, read-only.
+    const watched = await watchedComplaint(actor, reportId);
+    if (watched) {
+      res.json(await db.select({ id: residentReportPhotos.id, reportId: residentReportPhotos.reportId, name: residentReportPhotos.name, size: residentReportPhotos.size, contentType: residentReportPhotos.contentType, createdAt: residentReportPhotos.createdAt })
+        .from(residentReportPhotos).where(and(eq(residentReportPhotos.tenantId, watched.tenantId), eq(residentReportPhotos.reportId, watched.id))));
+      return;
+    }
+  }
   if (!report || !canReadReport(actor, report)) {
     res.status(404).json({ error: "Report not found" }); return;
   }
@@ -562,6 +572,8 @@ router.post("/v1/resident-report-photos/:id/download-url", async (req, res) => {
         sql`${entityRecords.state}->'fiarepClient'->>'tenantId' = ${theirs.tenantId}`,
       )).limit(1);
       if (copies[0] && canReadReport(actor, copies[0])) { res.json(await fileStorage.createDownload(theirs.tenantId, theirs.objectPath)); return; }
+      // FIAREP watching that client quietly.
+      if (await watchedComplaint(actor, theirs.reportId)) { res.json(await fileStorage.createDownload(theirs.tenantId, theirs.objectPath)); return; }
     }
     res.status(404).json({ error: "Photo not found" }); return;
   }

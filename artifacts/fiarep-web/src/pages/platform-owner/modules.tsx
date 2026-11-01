@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   MapPin,
+  Eye,
   AlertTriangle,
   Building2,
   Check,
@@ -369,6 +370,8 @@ export default function OwnerModules() {
   const [arrivalBuildings, setArrivalBuildings] = useState<Array<{ id: string; displayAddress: string }>>([]);
   // New client: complaint tools wait for the baseline walk-through. Off unless switched on.
   const [requireBaseline, setRequireBaseline] = useState(false);
+  // FIAREP sees every complaint at this client, quietly (pilots). OFF until switched on; the client is never told.
+  const [fiarepWatch, setFiarepWatch] = useState(false);
   // Read-only locks: each one OFF unless switched on (features.modules["lock.<key>"]).
   const [locks, setLocks] = useState<Record<string, boolean>>({});
   const [smartRepairEmailCopy, setSmartRepairEmailCopy] = useState(false);
@@ -458,6 +461,7 @@ export default function OwnerModules() {
     setSmartRepairOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepair === false));
     setSmartRepairComplaints(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairComplaints === false));
     setRequireBaseline(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).requireBaseline === true));
+    setFiarepWatch(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).fiarepWatch === true));
     setLocks(Object.fromEntries(READ_ONLY_LOCKS.map((l) => [`lock.${l.key}`, Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>)[`lock.${l.key}`] === true)])));
     setPriorityEngineOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).priorityEngine === false));
     setViolationGuideOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).violationGuide === false));
@@ -656,7 +660,7 @@ export default function OwnerModules() {
           features: {
             ...organization.features,
             // Kept as saved: the title-rules switch and person switches this page does not edit here.
-            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button|apptab)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...arrival, ...(isFiarep ? {} : { requireBaseline }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
+            modules: { ...Object.fromEntries(Object.entries((organization.features?.modules || {}) as Record<string, unknown>).filter(([k, v]) => typeof v === "boolean" && (k.startsWith("access.") || (k.startsWith("p.") && !/^p\.[^.]+\.(menu|button|apptab)\./.test(k))))), ...modules, ...projectTools, ...measurementAccess, ...projToolAccess, ...lookupAccess, ...appTabs, residentPhotoAiViolationReader: residentPhotoAiEnabled, communitySupervisorReview: communityReviewEnabled, fiarepComplaintRouting: fiarepRoutingEnabled, fiarepMessaging: fiarepMessagingEnabled, smartRepair: smartRepairOn, smartRepairComplaints, smartRepairToManagement: smartRepairToMgmt, priorityEngine: priorityEngineOn, violationGuide: violationGuideOn, outOfNetwork: outOfNetworkOn, ...arrival, ...(isFiarep ? {} : { requireBaseline, fiarepWatch }), ...locks, smartRepairEmailCopy, smartRepairSync, ...(isFiarep ? {} : hrExtras), ...settingsShown, ...menuSwitches, ...(isFiarep ? { fiarepMessagingOpen: messagingOpen } : {}) },
             deletionEnabled,
             smartRepairEmailTo: smartRepairEmailTo.trim(),
           },
@@ -1454,6 +1458,19 @@ export default function OwnerModules() {
                     aria-label={`${outOfNetworkOn ? "Disable" : "Enable"} Out of network complaint`}
                   />
                 </div>
+                {!isFiarep && (
+                <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${fiarepWatch ? "" : "opacity-60"}`}>
+                  <div className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${fiarepWatch ? "bg-blue-50 text-[#185FA5]" : "bg-slate-100 text-slate-500"}`}>
+                    <Eye className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-slate-900">FIAREP sees everything (quiet)</p>
+                    <p className="text-xs text-slate-500">Every complaint at this client shows on FIAREP's Complaint Dashboard and opens for FIAREP's office to look at — status, who it went to, on the way, arrived, photos, the whole history. Nothing changes for the client and they are never told. For pilots. OFF until switched on</p>
+                  </div>
+                  <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${fiarepWatch ? "text-emerald-700" : "text-slate-400"}`}>{fiarepWatch ? "Enabled" : "Disabled"}</span>
+                  <Switch checked={fiarepWatch} onCheckedChange={(on) => { setFiarepWatch(on); setDirty(true); }} aria-label={`${fiarepWatch ? "Disable" : "Enable"} FIAREP sees everything quietly`} />
+                </div>
+                )}
                 {!isFiarep && (
                 <div className={`flex min-h-18 items-center gap-3 border-t border-slate-200 px-5 py-3 transition-colors hover:bg-slate-50 ${
                   requireBaseline ? "" : "opacity-60"

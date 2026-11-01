@@ -68,9 +68,11 @@ export function SmartTicketBox({ state }: { state: Record<string, unknown> }) {
                   );
                 }
 
-export function Photos({ reportId, savedScans }: {
+export function Photos({ reportId, savedScans, readOnly = false }: {
   reportId: string;
   savedScans?: Record<string, ViolationClassification>;
+  /** Looking only (FIAREP watching a client quietly): no renaming, no analyzing. */
+  readOnly?: boolean;
 }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
@@ -199,6 +201,7 @@ export function Photos({ reportId, savedScans }: {
               <p className="mt-1 text-xs">{scan.trade} · {scan.priority}</p>
             </div>
           )}
+          {readOnly ? <p className="text-xs text-muted-foreground">{photo.name || "Report photo"}</p> : <>
           <label className="text-xs font-medium text-muted-foreground" htmlFor={`photo-name-${photo.id}`}>Photo name</label>
           <div className="flex gap-2">
             <Input
@@ -217,7 +220,8 @@ export function Photos({ reportId, savedScans }: {
               {renamePhoto.isPending ? "Saving…" : "Save"}
             </Button>
           </div>
-          {aiConfig?.enabled && (
+          </>}
+          {aiConfig?.enabled && !readOnly && (
             !scan && (
               <Button
                 type="button"
