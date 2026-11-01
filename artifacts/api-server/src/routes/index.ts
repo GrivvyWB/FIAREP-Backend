@@ -15,6 +15,7 @@ import publicAccessRouter from "./publicAccess";
 import organizationsRouter from "./organizations";
 import scoresRouter from "./scores";
 import timeClockRouter from "./timeClock";
+import jobTrackingRouter from "./jobTracking";
 import hrRouter from "./hr";
 import nychaRouter from "./nycha";
 import coverageRouter from "./coverage";
@@ -80,5 +81,6 @@ router.use(smartRepairsRouter);
 router.use(heatRouter);
 router.use(moldRouter);
 router.use(timeClockRouter);
+router.use(jobTrackingRouter);
 
 export default router;

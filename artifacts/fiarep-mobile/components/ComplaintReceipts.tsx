@@ -8,7 +8,7 @@ import * as Location from 'expo-location';
 
 type Receipt = { id: string; name: string; position: string; at: string };
 type Eta = { eta: string; crew: string; note: string; byName: string; byPosition: string; at: string };
-type Arrived = { byName: string; byPosition: string; at: string; address: string };
+type Arrived = { byName: string; byPosition: string; at: string; address: string; byGps?: boolean };
 const list = (v: unknown): Receipt[] => (Array.isArray(v) ? v.filter((x) => x && typeof x === 'object' && typeof x.id === 'string') : []);
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : '');
 
@@ -114,7 +114,7 @@ export default function ComplaintReceipts({ entity, reportId, canSendEta, readOn
       {arrived && (
         <View style={{ borderWidth: 1, borderColor: '#93c5fd', backgroundColor: '#eff6ff', borderRadius: 8, padding: 8 }}>
           <Text style={{ fontWeight: '700', color: '#1e3a8a' }}>📍 Arrived{arrived.address ? ` · ${arrived.address}` : ''}</Text>
-          <Text style={{ fontSize: 12, color: '#1e3a8a' }}>{arrived.byName} ({arrived.byPosition}) · {when(arrived.at)}</Text>
+          <Text style={{ fontSize: 12, color: '#1e3a8a' }}>{arrived.byName} ({arrived.byPosition}) · {when(arrived.at)}{arrived.byGps ? ' · by GPS' : ''}</Text>
         </View>
       )}
       {canSendEta && arrivalOn && !readOnly && !arrived && (

@@ -200,6 +200,8 @@ router.post("/v1/time-clock/locations", async (req, res) => {
   // Arriving somewhere new means the previous stop is over.
   await db.update(timeClockLocations).set({ leftAt: arrivedAt, updatedAt: now }).where(and(eq(timeClockLocations.tenantId, actor.tenantId), eq(timeClockLocations.staffId, actor.id), isNull(timeClockLocations.leftAt)));
   const [row] = await db.insert(timeClockLocations).values({ id: randomUUID(), tenantId: actor.tenantId, staffId: actor.id, latitude: loc.latitude, longitude: loc.longitude, accuracyM: loc.accuracyM, address, arrivedAt, leftAt: null, idempotencyKey, createdAt: now, updatedAt: now } as typeof timeClockLocations.$inferInsert).returning();
+  // At a complaint they're assigned to: marked arrived by GPS, even if they forgot to press anything.
+  void import("../lib/complaintReceipts").then((m) => m.autoArrivals(actor, { latitude: loc.latitude, longitude: loc.longitude, address: typeof address === "string" ? address : null, at: arrivedAt })).catch(() => undefined);
   res.status(201).json(serializeStop(row!));
 });
 

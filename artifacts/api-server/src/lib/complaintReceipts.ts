@@ -15,7 +15,7 @@ import { notifyResident } from "./residentNotify";
 
 export type Receipt = { id: string; name: string; position: string; at: string };
 export type EtaNotice = { eta: string; crew: string; note: string; byId: string; byName: string; byPosition: string; at: string };
-export type Arrival = { byId: string; byName: string; byPosition: string; at: string; address: string; latitude?: number; longitude?: number };
+export type Arrival = { byId: string; byName: string; byPosition: string; at: string; address: string; latitude?: number; longitude?: number; byGps?: boolean };
 
 /** The client's own people who follow this complaint on their platform: whoever routes it for the
  *  development, and the company's administrators. */
@@ -179,12 +179,12 @@ export async function recordEta(actor: Actor, row: Row, input: { eta: string; cr
 
 /** "Arrived": the member is at the location — stamped with the time (and where the phone was),
  *  told to the resident's phone and to the client's platform. */
-export async function recordArrived(actor: Actor, row: Row, input: { latitude?: number; longitude?: number }): Promise<Arrival> {
-  const at = new Date().toISOString();
+export async function recordArrived(actor: Actor, row: Row, input: { latitude?: number; longitude?: number; gps?: boolean; at?: Date }): Promise<Arrival> {
+  const at = (input.at ?? new Date()).toISOString();
   const address = [String(row.state["address"] || row.state["buildingAddress"] || row.development || "").trim(), row.state["unit"] ? `Apt ${String(row.state["unit"]).replace(/^apt\.?\s*/i, "")}` : ""].filter(Boolean).join(" · ");
   const arrival: Arrival = { byId: actor.id, byName: actor.name, byPosition: actor.position, at, address,
-    ...(Number.isFinite(input.latitude) && Number.isFinite(input.longitude) ? { latitude: input.latitude, longitude: input.longitude } : {}) };
-  const line = `Arrived${address ? ` at ${address}` : ""} — ${clock(at)}`;
+    ...(Number.isFinite(input.latitude) && Number.isFinite(input.longitude) ? { latitude: input.latitude, longitude: input.longitude } : {}), ...(input.gps ? { byGps: true } : {}) };
+  const line = `Arrived${address ? ` at ${address}` : ""} — ${clock(at)}${input.gps ? " (by GPS)" : ""}`;
   const updates = Array.isArray(row.state["updates"]) ? row.state["updates"] as unknown[] : [];
   await mergeState(row, { arrived: arrival, updates: [...updates, { at, by: actor.name, status: String(row.state["status"] || ""), note: line }] });
   void notifyResident(row, "Arrived", `${actor.name} (${actor.position}) arrived — ${clock(at)}.`);
@@ -200,10 +200,65 @@ export async function recordArrived(actor: Actor, row: Row, input: { latitude?: 
     const created = await db.insert(notifications).values([...targets].map((target) => ({
       id: randomUUID(), tenantId: row.tenantId, target,
       message: `${refOf(row.state)}: arrived`,
-      detail: `${actor.name} (${actor.position}) arrived${address ? ` at ${address}` : ""} — ${clock(at)}`,
+      detail: `${actor.name} (${actor.position}) arrived${address ? ` at ${address}` : ""} — ${clock(at)}${input.gps ? " (by GPS)" : ""}`,
       reportId: row.id,
     }))).returning();
     for (const n of created) void deliverPushNotification(n).catch(() => undefined);
   }
   return arrival;
+}
+
+/** GPS: the phone stopped somewhere while on the clock. Any open complaint assigned to this person at
+ *  that address is marked arrived — even when they forgot to press anything (where switched on). */
+/** Open complaints assigned to this person that aren't marked arrived yet. */
+async function openAssigned(actor: Actor) {
+  return db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
+    sql`${entityRecords.state}->>'assignedStaffId' = ${actor.id}`,
+    sql`${entityRecords.state}->'arrived' is null`,
+    sql`coalesce(${entityRecords.state}->>'status', '') not in ('done', 'resolved', 'closed', 'completed', 'work_approved', 'cancelled')`,
+  )).limit(50);
+}
+
+/** The jobs the phone should watch for: assigned to this person, not arrived, alerts switched on there. */
+export async function jobsToWatch(actor: Actor): Promise<Array<{ id: string; ref: string; address: string }>> {
+  const out: Array<{ id: string; ref: string; address: string }> = [];
+  for (const row of await openAssigned(actor)) {
+    const address = String(row.state["address"] || row.state["buildingAddress"] || "").trim();
+    if (address && (await arrivalAlertsOn(row.tenantId, row.state).catch(() => false))) out.push({ id: row.id, ref: refOf(row.state), address });
+  }
+  return out;
+}
+
+export async function autoArrivals(actor: Actor, stop: { latitude: number; longitude: number; address: string | null; at: Date }): Promise<number> {
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.tenantId, actor.tenantId), eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false),
+    sql`${entityRecords.state}->>'assignedStaffId' = ${actor.id}`,
+    sql`${entityRecords.state}->'arrived' is null`,
+    sql`coalesce(${entityRecords.state}->>'status', '') not in ('done', 'resolved', 'closed', 'completed', 'work_approved', 'cancelled')`,
+  )).limit(50);
+  if (!rows.length) return 0;
+  const { geocodePlace } = await import("./geocode");
+  const street = (a: string) => normalizeAddress(a.split(",")[0]!, null, null);
+  const here = stop.address ? street(stop.address) : "";
+  const metres = (a: { latitude: number; longitude: number }) => {
+    const R = 6371000, toRad = (d: number) => (d * Math.PI) / 180;
+    const dLat = toRad(a.latitude - stop.latitude), dLng = toRad(a.longitude - stop.longitude);
+    const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(stop.latitude)) * Math.cos(toRad(a.latitude)) * Math.sin(dLng / 2) ** 2;
+    return 2 * R * Math.asin(Math.sqrt(h));
+  };
+  let marked = 0;
+  for (const row of rows) {
+    const address = String(row.state["address"] || row.state["buildingAddress"] || "").trim();
+    if (!address) continue;
+    let there = !!here && street(address) === here;
+    if (!there) {
+      const p = await geocodePlace(address).catch(() => null);
+      there = !!p && p.latitude != null && p.longitude != null && metres({ latitude: p.latitude, longitude: p.longitude }) <= 150;
+    }
+    if (!there || !(await arrivalAlertsOn(row.tenantId, row.state).catch(() => false))) continue;
+    await recordArrived(actor, row as Row, { latitude: stop.latitude, longitude: stop.longitude, gps: true, at: stop.at });
+    marked += 1;
+  }
+  return marked;
 }

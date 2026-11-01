@@ -10,7 +10,7 @@ import { Clock, Eye, MapPin } from "lucide-react";
 const selectClass = "h-10 w-full rounded-md border border-input bg-background px-3 text-sm";
 type Receipt = { id: string; name: string; position: string; at: string };
 type Eta = { eta: string; crew: string; note: string; byName: string; byPosition: string; at: string };
-type Arrived = { byName: string; byPosition: string; at: string; address: string };
+type Arrived = { byName: string; byPosition: string; at: string; address: string; byGps?: boolean };
 const list = (v: unknown): Receipt[] => (Array.isArray(v) ? v.filter((x) => x && typeof x === "object" && typeof x.id === "string") : []);
 const when = (iso: string) => (iso ? new Date(iso).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "");
 
@@ -93,7 +93,7 @@ export function ComplaintReceipts({ entity, reportId, state, canSendEta }: {
       {arrived && (
         <div className="rounded-md border border-blue-300 bg-blue-50 p-2 text-sm">
           <p className="font-semibold text-blue-900 flex items-center gap-1"><MapPin className="h-4 w-4" />Arrived{arrived.address ? ` · ${arrived.address}` : ""}</p>
-          <p className="text-xs text-blue-800">{arrived.byName} ({arrived.byPosition}) · {when(arrived.at)}</p>
+          <p className="text-xs text-blue-800">{arrived.byName} ({arrived.byPosition}) · {when(arrived.at)}{arrived.byGps ? " · by GPS" : ""}</p>
         </div>
       )}
       {canSendEta && arrivalOn && !arrived && (

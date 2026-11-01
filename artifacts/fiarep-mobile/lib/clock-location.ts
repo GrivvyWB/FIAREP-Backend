@@ -113,6 +113,9 @@ TaskManager.defineTask(CLOCK_LOCATION_TASK, async ({ data, error }: { data?: { l
   // The time clock's stops only while clocked in; a building check-in alone does not make them.
   if (!(await siteTrackingOnly())) await handleFixes(fixes);
   for (const f of fixes) await handleSiteFix(f);
+  // An assigned job: the arrival at its address is marked by GPS (no time clock needed).
+  const { handleJobFix } = await import('./job-tracking');
+  await handleJobFix(fixes[fixes.length - 1]!);
 });
 
 /** Start the background location task if it is not running. Returns true if it already was. */

@@ -1412,7 +1412,7 @@ export default function OwnerModules() {
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-slate-900">"On the way" and "Arrived" alerts</p>
-                      <p className="text-xs text-slate-500">The member taps I've arrived: the resident's phone and this client's platform get it with the time. "On the way" with the arrival time also goes to this client's platform. OFF until switched on; then every building below unless you switch one off</p>
+                      <p className="text-xs text-slate-500">When the member gets there — by GPS on their phone while on the clock, even if they forgot to press anything, or by tapping I've arrived — the resident's phone and this client's platform get it with the time. "On the way" with the arrival time also goes to this client's platform. OFF until switched on; then every building below unless you switch one off</p>
                     </div>
                     <span className={`hidden w-16 text-[10px] font-bold uppercase tracking-wide sm:block ${arrivalOn ? "text-emerald-700" : "text-slate-400"}`}>{arrivalOn ? "Enabled" : "Disabled"}</span>
                     <Switch checked={arrivalOn} onCheckedChange={(on) => setArrivalSwitch("arrivalAlerts", on)} aria-label={`${arrivalOn ? "Disable" : "Enable"} on the way and arrived alerts`} />
