@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { RefreshControl } from 'react-native';
 import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
@@ -20,6 +20,7 @@ export default function Notifications() {
   const router = useRouter();
   async function openFor(n: Notification) {
     const msg = (n.message || '').toLowerCase();
+    for (const id of copies.current[n.id] ?? []) if (id !== n.id) await markNotificationRead(id).catch(() => undefined);
     // Supervisors / management read the whole message (and what it refers
     // to) right here, even with poor service; they act on fiarep.com.
     if (await isAppReadOnly().catch(() => false)) {
@@ -164,6 +165,8 @@ export default function Notifications() {
     router.push('/message?id=' + encodeURIComponent(n.id));
   }
   const [items, setItems] = useState<Notification[]>([]);
+  // Identical alerts show as one card; Delete removes every copy behind it.
+  const copies = useRef<Record<string, string[]>>({});
   const [priority, setPriority] = useState<PriorityViolation[]>([]);
   const [myName, setMyName] = useState('');
 
@@ -176,7 +179,8 @@ export default function Notifications() {
       if (actor.id) targets.push(actor.id);
       if (actor.name) targets.push(actor.name);
       const seen: Record<string, boolean> = {};
-      const seenWork: Record<string, boolean> = {};
+      const seenWork: Record<string, string> = {};
+      const groups: Record<string, string[]> = {};
       const all: Notification[] = [];
       for (const t of targets) {
         const list = await listNotifications(t);
@@ -184,12 +188,14 @@ export default function Notifications() {
           if (seen[n.id]) continue;
           seen[n.id] = true;
           const workKey = `${(n.message || '').trim().toLowerCase()}|${(n.reportId || n.detail || '').trim().toLowerCase()}`;
-          if (seenWork[workKey]) continue;
-          seenWork[workKey] = true;
+          if (seenWork[workKey]) { (groups[seenWork[workKey]] ||= []).push(n.id); continue; }
+          seenWork[workKey] = n.id;
+          groups[n.id] = [n.id];
           all.push(n);
         }
       }
       all.sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+      copies.current = groups;
       setItems(all);
       await clearBadge();
       setMyName(actor.name || '');
@@ -312,7 +318,7 @@ export default function Notifications() {
                 Alert.alert('Can\'t remove this', 'Only management can clear notifications.');
                 return;
               }
-              Alert.alert('Delete notification?', n.message, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { await deleteNotification(n.id); load(); } }]);
+              Alert.alert('Delete notification?', n.message, [{ text: 'Cancel', style: 'cancel' }, { text: 'Delete', style: 'destructive', onPress: async () => { for (const id of copies.current[n.id] ?? [n.id]) await deleteNotification(id); load(); } }]);
             }}
           >
             {urgent && <Text style={{ fontSize: 12, fontWeight: '800', color: '#c0392b', letterSpacing: 1 }}>URGENT REQUEST</Text>}
