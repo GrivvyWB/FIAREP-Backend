@@ -293,7 +293,8 @@ export function tileEnabled(screen: AppTabScreen, label: string, raw: Record<str
   if (label === 'Door Visit' && map['door-visits'] === false) return false;
   const value = map[appTabKey(screen, label)];
   // A client that starts off: a button nobody has switched on yet stays off (Platform Control, or its criteria, turn it on).
-  const unset = map['startsOff'] !== true;
+  // Sign out is always there unless switched off by name.
+  const unset = map['startsOff'] !== true || /^sign out$/i.test(label.trim());
   // Technician switches not saved yet fall back to the CPM / Inspector ones
   // they were split from, so a technician's home does not change on its own.
   if (screen === 'tech' && value === undefined) { const cpm = map[appTabKey('cpm', label)]; return typeof cpm === 'boolean' ? cpm : unset; }
