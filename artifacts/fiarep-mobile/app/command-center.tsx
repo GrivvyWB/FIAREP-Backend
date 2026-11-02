@@ -503,7 +503,6 @@ export default function CommandCenter() {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
         <Text style={ui.cardTitle}>Set up this phone</Text>
-        <Text style={ui.label}>This makes two keys that never leave the phone: one signs every command, the other sits behind Face ID and signs each approval. Then the phone is approved on fiarep.com → Command Center → Phones.</Text>
         {device?.status === 'revoked' && <Text style={{ color: '#C0392B' }}>This phone was revoked. Set it up again to request a new approval.</Text>}
         <Pressable style={[ui.btn, !!busy && ui.btnMuted]} disabled={!!busy} onPress={() => void (device?.status === 'revoked' ? forgetDevice().then(setUp) : setUp())}>
           <Text style={ui.btnText}>{busy || 'Set up this phone'}</Text>
