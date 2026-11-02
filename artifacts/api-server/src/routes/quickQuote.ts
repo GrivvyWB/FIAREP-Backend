@@ -24,6 +24,8 @@ export type QuickLine = {
   qty: number; unitPrice: number; amount: number; note: string; photo: string;
 };
 export type QuickQuote = {
+  /** Each quote is kept; several can be on one building. */
+  id?: string;
   lines: QuickLine[];
   total: number;
   /** admin_review: a technician priced it; FIAREP's administrator approves
@@ -41,6 +43,24 @@ export type QuickQuote = {
   sentById?: string;
   decidedAt: string;
 };
+
+/** Every quote on a building, oldest first (a building used to hold only its latest). */
+function quotesOf(state: Record<string, unknown>): QuickQuote[] {
+  const list = Array.isArray(state["quickQuotes"]) ? (state["quickQuotes"] as QuickQuote[]).filter((q) => q && Array.isArray(q.lines)) : [];
+  const latest = state["quickQuote"] as QuickQuote | undefined;
+  if (latest && Array.isArray(latest.lines) && !list.some((q) => (q.id && q.id === latest.id) || (!q.id && q.sentAt === latest.sentAt))) list.push(latest);
+  return list.map((q) => (q.id ? q : { ...q, id: `q-${q.sentAt}` }));
+}
+/** The building's quotes saved back, the newest as its "latest". */
+function withQuotes(state: Record<string, unknown>, list: QuickQuote[]): Record<string, unknown> {
+  const next: Record<string, unknown> = { ...state, quickQuotes: list };
+  if (list.length) next["quickQuote"] = list[list.length - 1]; else delete next["quickQuote"];
+  return next;
+}
+/** The quote asked for (by id), else the building's latest. */
+function pickQuote(list: QuickQuote[], id: string): QuickQuote | undefined {
+  return id ? list.find((q) => q.id === id) : list[list.length - 1];
+}
 
 /** The owner's management hear about a quote: asked when it needs approving. */
 async function tellOwner(clientTenantId: string, quote: QuickQuote, projectId: string): Promise<void> {
@@ -143,8 +163,7 @@ router.get("/v1/fiarep/quotes", requireAuth, async (_req, res) => {
     eq(entityRecords.deleted, false),
   )).limit(1000);
   const out = rows
-    .map((r) => ({ projectId: r.id, quote: r.state["quickQuote"] as QuickQuote | undefined }))
-    .filter((r): r is { projectId: string; quote: QuickQuote } => !!r.quote && Array.isArray(r.quote.lines))
+    .flatMap((r) => quotesOf(r.state).map((quote) => ({ projectId: r.id, quote })))
     .sort((a, b) => String(b.quote.sentAt || "").localeCompare(String(a.quote.sentAt || "")))
     .slice(0, 200);
   res.setHeader("Cache-Control", "no-store");
@@ -165,8 +184,8 @@ router.post("/v1/fiarep/quick-quote/start", requireAuth, async (req, res) => {
   // Hand back the quote already on this building so it reappears instead of
   // looking like nothing was ever priced here.
   if (match) {
-    const prior = match.state["quickQuote"] as QuickQuote | undefined;
-    res.json({ projectId: match.id, created: false, quote: prior && Array.isArray(prior.lines) ? prior : null });
+    const prior = quotesOf(match.state);
+    res.json({ projectId: match.id, created: false, quote: prior[prior.length - 1] ?? null });
     return;
   }
 
@@ -238,6 +257,7 @@ router.post("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res)
 
   const quote: QuickQuote = {
     lines, total,
+    id: randomUUID(),
     status: mode === "self" ? "approved" : mode === "admin" ? "admin_review" : "pending",
     decidedBy: mode === "self" ? actor.name : "",
     approvedBySelf: mode === "self",
@@ -251,7 +271,7 @@ router.post("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res)
   };
 
   await db.update(entityRecords)
-    .set({ state: { ...project.state, quickQuote: quote }, version: (project.version ?? 1) + 1, updatedAt: now })
+    .set({ state: withQuotes(project.state, [...quotesOf(project.state), quote]), version: (project.version ?? 1) + 1, updatedAt: now })
     .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
   await audit(actor, mode === "self" ? "projects.quick-quote-approved" : mode === "admin" ? "projects.quick-quote-to-admin" : "projects.quick-quote-sent",
     `${lines.length} item(s), $${total.toFixed(2)}${clientCompany ? ` · ${clientCompany}` : ""}`, project.id);
@@ -281,8 +301,9 @@ router.post("/v1/fiarep/projects/:id/quick-quote/review", requireAuth, async (re
     eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
   )).limit(1);
   if (!project) { res.status(404).json({ error: "No such project." }); return; }
-  const current = project.state["quickQuote"] as QuickQuote | undefined;
-  if (!current || !Array.isArray(current.lines)) { res.status(404).json({ error: "There is no quote on this one." }); return; }
+  const all = quotesOf(project.state);
+  const current = pickQuote(all, text(body["quoteId"], 80));
+  if (!current) { res.status(404).json({ error: "There is no quote on this one." }); return; }
   if (current.status !== "admin_review") { res.status(409).json({ error: `This one was already ${current.status === "pending" ? "sent to the owner" : current.status}.` }); return; }
 
   const now = new Date();
@@ -303,7 +324,7 @@ router.post("/v1/fiarep/projects/:id/quick-quote/review", requireAuth, async (re
     };
   }
   await db.update(entityRecords)
-    .set({ state: { ...project.state, quickQuote: quote }, version: (project.version ?? 1) + 1, updatedAt: now })
+    .set({ state: withQuotes(project.state, all.map((q) => (q.id === current.id ? quote : q))), version: (project.version ?? 1) + 1, updatedAt: now })
     .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
   await audit(actor, `projects.quick-quote-${decision === "send" ? "sent" : decision === "approve" ? "approved" : "turned-back"}`,
     `$${quote.total.toFixed(2)}${quote.clientCompany ? ` · ${quote.clientCompany}` : ""}`, project.id);
@@ -326,19 +347,21 @@ router.delete("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, re
     eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
   )).limit(1);
   if (!project) { res.status(404).json({ error: "No such project." }); return; }
-  const quote = project.state["quickQuote"] as QuickQuote | undefined;
+  const all = quotesOf(project.state);
+  const quote = pickQuote(all, text(req.query["quoteId"], 80));
   if (!quote) { res.status(404).json({ error: "There is no quote on this one." }); return; }
 
   const now = new Date();
-  const rest: Record<string, unknown> = { ...project.state };
-  delete rest["quickQuote"];
+  const left = all.filter((q) => q.id !== quote.id);
+  const rest: Record<string, unknown> = withQuotes(project.state, left);
+  if (!left.length) delete rest["quickQuotes"];
 
   // Was this project only ever a holder for the quote? Then it goes as well.
   const [{ value: children }] = await db.select({ value: count() }).from(entityRecords).where(and(
     eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
     sql`${entityRecords.state}->>'projectId' = ${project.id}`,
   ));
-  const bare = project.state["createdByQuickQuote"] === true && Number(children) === 0;
+  const bare = !left.length && project.state["createdByQuickQuote"] === true && Number(children) === 0;
 
   await db.update(entityRecords)
     .set({ state: rest, deleted: bare, version: (project.version ?? 1) + 1, updatedAt: now })

@@ -30,6 +30,7 @@ type Draft = { key: string; label: string; unit: string; price: number; qty: str
 const ROOMS = ['Kitchen', 'Bathroom', 'Bedroom', 'Living room', 'Hallway', 'Basement', 'Boiler room', 'Roof', 'Exterior', 'Common area', 'Whole building'];
 type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note: string };
 type QuickQuote = {
+  id?: string;
   lines: QuickLine[]; total: number; status: string; approvedBySelf: boolean; clientCompany: string; clientTenantId?: string;
   building: string; note: string; sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
 };
@@ -134,7 +135,7 @@ export default function QuickQuoteScreen() {
       { text: 'Delete', style: 'destructive', onPress: () => void (async () => {
         setBusy('delete');
         try {
-          await customFetch(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, { method: 'DELETE', responseType: 'json' } as never);
+          await customFetch(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote${sent?.id ? `?quoteId=${encodeURIComponent(sent.id)}` : ''}`, { method: 'DELETE', responseType: 'json' } as never);
           setSent(null); setDrafts([]); setProjectId(''); setPlace(''); setTyped('');
           await load();
         } catch (e: any) {
@@ -177,7 +178,7 @@ export default function QuickQuoteScreen() {
     setBusy(decision);
     try {
       const saved = await post<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote/review`, {
-        decision, clientTenantId: decision === 'send' ? clientId : '',
+        decision, clientTenantId: decision === 'send' ? clientId : '', quoteId: sent.id || '',
       });
       setSent(saved);
       await load();

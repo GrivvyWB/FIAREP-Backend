@@ -21,6 +21,7 @@ type Client = { id: string; name: string };
 type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
 type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note: string };
 type QuickQuote = {
+  id?: string;
   lines: QuickLine[]; total: number; status: "admin_review" | "approved" | "pending" | "declined";
   approvedBySelf: boolean; clientCompany: string; clientTenantId?: string; building: string; note: string;
   sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
@@ -168,7 +169,7 @@ export default function QuickQuote() {
     if (!window.confirm("Delete this quote? It goes for good, and if this building was only opened for the quote it goes too.")) return;
     setBusy("self");
     try {
-      await customFetch(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, { method: "DELETE", responseType: "json" } as never);
+      await customFetch(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote${lastQuote?.id ? `?quoteId=${encodeURIComponent(lastQuote.id)}` : ''}`, { method: "DELETE", responseType: "json" } as never);
       setLastQuote(null); setDrafts([]); setProjectId(""); setBuildingId(""); setTypedAddress("");
       toast({ title: "Deleted" });
     } catch (err: any) {
@@ -213,7 +214,7 @@ export default function QuickQuote() {
     try {
       const saved = await customFetch<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote/review`, {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
-        body: JSON.stringify({ decision, clientTenantId: decision === "send" ? clientId : "" }),
+        body: JSON.stringify({ decision, clientTenantId: decision === "send" ? clientId : "", quoteId: lastQuote?.id || "" }),
       } as never);
       setLastQuote(saved);
       try { setPast(await get<Array<{ projectId: string; quote: QuickQuote }>>("/api/v1/fiarep/quotes")); } catch { /* history is a convenience */ }
