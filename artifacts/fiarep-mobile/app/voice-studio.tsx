@@ -78,6 +78,7 @@ export default function VoiceStudio() {
       if (file.endsWith('.wav')) hz = voicePitch(await FileSystem.readAsStringAsync(file, { encoding: 'base64' as never }));
       await keep([...voices, { id, name: name.trim(), gender, hz, file, createdAt: new Date().toISOString() }]);
       setUri(''); setSeconds(0);
+      Alert.alert('Saved', `${name.trim()}'s voice is saved under Voices.`);
     } catch (e: any) { Alert.alert('Not saved', String(e?.message || e)); }
     finally { setBusy(''); }
   }
@@ -131,11 +132,9 @@ export default function VoiceStudio() {
       ) : (
         <Pressable style={[ui.btn, { backgroundColor: '#B91C1C' }]} onPress={() => void stop()}><Text style={ui.btnText}>Stop · {seconds}s</Text></Pressable>
       )}
-      {!!uri && !recording && (
-        <Pressable style={[ui.btnOutline, busy === 'save' && { opacity: 0.5 }]} disabled={!!busy} onPress={() => void save()}>
-          <Text style={ui.btnOutlineText}>{busy === 'save' ? 'Saving…' : `Save ${name.trim() || 'this'} voice (${seconds}s)`}</Text>
-        </Pressable>
-      )}
+      <Pressable style={[ui.btn, { backgroundColor: '#1a8f4c' }, (!uri || recording || !!busy) && ui.btnMuted]} disabled={!uri || recording || !!busy} onPress={() => void save()}>
+        <Text style={ui.btnText}>{busy === 'save' ? 'Saving…' : uri && !recording ? `Save ${name.trim() || 'this'} voice (${seconds}s)` : 'Save voice'}</Text>
+      </Pressable>
 
       <Text style={{ fontSize: 17, fontWeight: '800', marginTop: 18 }}>Voices</Text>
       {voices.length === 0 && <Text style={ui.listSub}>No voices yet.</Text>}
