@@ -334,6 +334,7 @@ function AdministratorStack() {
       <Stack.Screen name="my-jobs" options={{ title: 'My Jobs', headerBackTitle: 'Back' }} />
       <Stack.Screen name="quick-quote" options={{ title: 'Quick Quote', headerBackTitle: 'Back' }} />
       <Stack.Screen name="owner-quote" options={{ title: 'Quote from FIAREP', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="bills" options={{ title: 'Monthly bills', headerBackTitle: 'Back' }} />
       <Stack.Screen name="price-quote" options={{ title: 'Price Quote', headerBackTitle: 'Back' }} />
       <Stack.Screen name="fiarep-vision" options={{ title: 'FIAREP Vision', headerBackTitle: 'Back' }} />
       <Stack.Screen name="smart-repair" options={{ title: 'Smart Repair', headerBackTitle: 'Back' }} />
@@ -392,6 +393,7 @@ function InspectorStack() {
       <Stack.Screen name="price-quote" options={{ title: 'Price Quote' }} />
       <Stack.Screen name="quick-quote" options={{ title: 'Quick Quote' }} />
       <Stack.Screen name="owner-quote" options={{ title: 'Quote from FIAREP', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="bills" options={{ title: 'Monthly bills', headerBackTitle: 'Back' }} />
       <Stack.Screen name="index" options={{ title: 'Projects', headerRight: () => <ProjectsHome to="/cpm-home" /> }} />
       <Stack.Screen name="project/[id]" options={{ title: 'Project' }} />
       <Stack.Screen name="project/intake" options={{ title: 'Intake' }} />
@@ -420,6 +422,7 @@ function ManagementStack() {
       <Stack.Screen name="management-home" options={{ title: 'Management', headerBackVisible: false, headerShown: false }} />
       <Stack.Screen name="client-messages" options={{ title: 'Message FIAREP', headerBackTitle: 'Back' }} />
       <Stack.Screen name="owner-quote" options={{ title: 'Quote from FIAREP', headerBackTitle: 'Back' }} />
+      <Stack.Screen name="bills" options={{ title: 'Monthly bills', headerBackTitle: 'Back' }} />
       <Stack.Screen name="inspector-violations" options={{ title: 'HPD / DOB' }} />
       <Stack.Screen name="violation-guide" options={{ title: 'Take me there', headerBackTitle: 'Back' }} />
       <Stack.Screen name="translator" options={{ title: 'Translator' }} />

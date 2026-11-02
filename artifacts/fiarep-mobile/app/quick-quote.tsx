@@ -33,6 +33,7 @@ type QuickQuote = {
   id?: string;
   lines: QuickLine[]; total: number; status: string; approvedBySelf: boolean; clientCompany: string; clientTenantId?: string;
   building: string; note: string; sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
+  purchasedAt?: string; purchasedBy?: string; paidAt?: string; paidBy?: string;
 };
 
 /** Where a quote stands, in words. */
@@ -187,6 +188,21 @@ export default function QuickQuoteScreen() {
     } finally { setBusy(''); }
   }
 
+  /** Purchased: the client gets the receipt in the app by itself. Paid back: it comes off what they owe. */
+  async function purchase(kind: 'purchased' | 'paid' | 'unpaid') {
+    if (!projectId || !sent) return;
+    setBusy(kind);
+    try {
+      const saved = await post<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote/${kind === 'purchased' ? 'purchased' : 'paid'}`, {
+        quoteId: sent.id || '', paid: kind === 'paid',
+      });
+      setSent(saved);
+      await load();
+    } catch (e: any) {
+      Alert.alert('Not done', e?.data?.error || e?.message || 'Check your connection and try again.');
+    } finally { setBusy(''); }
+  }
+
   /** One line per past quote in the drop-down: building · total · date. */
   const pastLabel = (row: { projectId: string; quote: QuickQuote }) =>
     [row.quote.building || 'Quote', money(row.quote.total), row.quote.sentAt ? new Date(row.quote.sentAt).toLocaleDateString() : ''].filter(Boolean).join(' · ') + (past.filter((r) => (r.quote.building || 'Quote') === (row.quote.building || 'Quote') && r.quote.total === row.quote.total).length > 1 ? ` (#${row.projectId.slice(-4)})` : '');
@@ -246,6 +262,11 @@ export default function QuickQuoteScreen() {
       </Text>}
       {!!error && <Text style={{ color: '#991b1b' }}>{error}</Text>}
 
+      {pastMode && isAdmin && (
+        <Pressable style={[ui.btnOutline, { marginBottom: 10 }]} onPress={() => router.push('/bills' as never)}>
+          <Text style={ui.btnOutlineText}>Monthly bills</Text>
+        </Pressable>
+      )}
       {pastMode && past.length === 0 && !loading && <Text style={ui.listSub}>No past quotes yet.</Text>}
       {pastMode && past.length > 0 && (
         <View style={{ marginTop: 12 }}>
@@ -312,6 +333,19 @@ export default function QuickQuoteScreen() {
                 <Text style={{ color: '#991b1b', fontWeight: '700' }}>{busy === 'decline' ? 'Turning it back…' : 'Turn it back'}</Text>
               </Pressable>
             </View>
+          )}
+          {!!sent.purchasedAt && <Text style={{ fontWeight: '700', color: sent.paidAt ? '#047857' : '#b45309' }}>
+            Purchased {new Date(sent.purchasedAt).toLocaleDateString()}{sent.paidAt ? ` · Paid back ${new Date(sent.paidAt).toLocaleDateString()}` : ' · Not paid back'}
+          </Text>}
+          {isAdmin && sent.status === 'approved' && !!sent.clientTenantId && !sent.purchasedAt && (
+            <Pressable style={[ui.btn, { marginTop: 8 }, busy !== '' && ui.btnMuted]} disabled={busy !== ''} onPress={() => void purchase('purchased')}>
+              <Text style={ui.btnText}>{busy === 'purchased' ? 'Sending receipt…' : `Purchased ${money(sent.total)}`}</Text>
+            </Pressable>
+          )}
+          {isAdmin && !!sent.purchasedAt && (
+            <Pressable style={[ui.btnOutline, { marginTop: 8 }, busy !== '' && { opacity: 0.5 }]} disabled={busy !== ''} onPress={() => void purchase(sent.paidAt ? 'unpaid' : 'paid')}>
+              <Text style={ui.btnOutlineText}>{busy === 'paid' || busy === 'unpaid' ? 'Saving…' : sent.paidAt ? 'Not paid back' : 'Paid back'}</Text>
+            </Pressable>
           )}
           <Pressable onPress={() => void receipt('sent')} disabled={busy !== ''} style={[ui.btnOutline, { marginTop: 8 }]}>
             <Text style={ui.btnOutlineText}>{busy === 'receipt' ? 'Making it…' : 'Receipt'}</Text>

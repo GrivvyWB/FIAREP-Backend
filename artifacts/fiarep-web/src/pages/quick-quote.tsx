@@ -25,6 +25,7 @@ type QuickQuote = {
   lines: QuickLine[]; total: number; status: "admin_review" | "approved" | "pending" | "declined";
   approvedBySelf: boolean; clientCompany: string; clientTenantId?: string; building: string; note: string;
   sentBy: string; sentAt: string; decidedBy: string; decidedAt: string;
+  purchasedAt?: string; paidAt?: string;
 };
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(n);
@@ -66,7 +67,7 @@ export default function QuickQuote() {
   const [search, setSearch] = useState("");
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [note, setNote] = useState("");
-  const [busy, setBusy] = useState<"" | "self" | "client" | "admin" | "approve" | "send" | "decline">("");
+  const [busy, setBusy] = useState<"" | "self" | "client" | "admin" | "approve" | "send" | "decline" | "purchased" | "paid" | "unpaid">("");
 
   useEffect(() => {
     if (!mine) return;
@@ -224,6 +225,23 @@ export default function QuickQuote() {
     } finally { setBusy(""); }
   }, [projectId, clientId, toast]);
 
+  /** Purchased: the client gets the receipt in the app by itself. Paid back: it comes off what they owe. */
+  const purchase = useCallback(async (kind: "purchased" | "paid" | "unpaid") => {
+    if (!projectId) return;
+    setBusy(kind);
+    try {
+      const saved = await customFetch<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote/${kind === "purchased" ? "purchased" : "paid"}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
+        body: JSON.stringify({ quoteId: lastQuote?.id || "", paid: kind === "paid" }),
+      } as never);
+      setLastQuote(saved);
+      try { setPast(await get<Array<{ projectId: string; quote: QuickQuote }>>("/api/v1/fiarep/quotes")); } catch { /* history is a convenience */ }
+      toast({ title: kind === "purchased" ? "Purchased — receipt sent" : kind === "paid" ? "Paid back" : "Not paid back" });
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Not done", description: err?.data?.error || "Try again." });
+    } finally { setBusy(""); }
+  }, [projectId, lastQuote, toast]);
+
   if (!mine) {
     return <div className="mx-auto max-w-lg p-10 text-center text-sm text-muted-foreground">Quick quotes are FIAREP's own.</div>;
   }
@@ -333,6 +351,21 @@ export default function QuickQuote() {
                 {busy === "decline" ? "Turning it back…" : "Turn it back"}
               </Button>
             </div>
+          )}
+          {!!sent.purchasedAt && (
+            <p className={`text-sm font-semibold ${sent.paidAt ? "text-emerald-700" : "text-amber-700"}`}>
+              Purchased {when(sent.purchasedAt)}{sent.paidAt ? ` · Paid back ${when(sent.paidAt)}` : " · Not paid back"}
+            </p>
+          )}
+          {isAdmin && sent.status === "approved" && !!sent.clientTenantId && !sent.purchasedAt && (
+            <Button className="h-11 w-full" disabled={busy !== ""} onClick={() => void purchase("purchased")}>
+              {busy === "purchased" ? "Sending receipt…" : `Purchased ${money(sent.total)}`}
+            </Button>
+          )}
+          {isAdmin && !!sent.purchasedAt && (
+            <Button variant="outline" className="h-11 w-full" disabled={busy !== ""} onClick={() => void purchase(sent.paidAt ? "unpaid" : "paid")}>
+              {busy === "paid" || busy === "unpaid" ? "Saving…" : sent.paidAt ? "Not paid back" : "Paid back"}
+            </Button>
           )}
           <div className="flex flex-wrap gap-2 pt-1">
             <Button variant="outline" size="sm" onClick={() => receipt("sent")}>

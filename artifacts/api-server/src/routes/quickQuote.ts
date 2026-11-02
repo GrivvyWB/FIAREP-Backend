@@ -42,17 +42,25 @@ export type QuickQuote = {
   sentBy: string;
   sentById?: string;
   decidedAt: string;
+  /** FIAREP bought what the quote lists; the client got the receipt in the app. */
+  purchasedAt?: string;
+  purchasedBy?: string;
+  /** The client paid this receipt back. */
+  paidAt?: string;
+  paidBy?: string;
+  /** The monthly bill this receipt first went out on. */
+  statementId?: string;
 };
 
 /** Every quote on a building, oldest first (a building used to hold only its latest). */
-function quotesOf(state: Record<string, unknown>): QuickQuote[] {
+export function quotesOf(state: Record<string, unknown>): QuickQuote[] {
   const list = Array.isArray(state["quickQuotes"]) ? (state["quickQuotes"] as QuickQuote[]).filter((q) => q && Array.isArray(q.lines)) : [];
   const latest = state["quickQuote"] as QuickQuote | undefined;
   if (latest && Array.isArray(latest.lines) && !list.some((q) => (q.id && q.id === latest.id) || (!q.id && q.sentAt === latest.sentAt))) list.push(latest);
   return list.map((q) => (q.id ? q : { ...q, id: `q-${q.sentAt}` }));
 }
 /** The building's quotes saved back, the newest as its "latest". */
-function withQuotes(state: Record<string, unknown>, list: QuickQuote[]): Record<string, unknown> {
+export function withQuotes(state: Record<string, unknown>, list: QuickQuote[]): Record<string, unknown> {
   const next: Record<string, unknown> = { ...state, quickQuotes: list };
   if (list.length) next["quickQuote"] = list[list.length - 1]; else delete next["quickQuote"];
   return next;
@@ -373,6 +381,104 @@ router.post("/v1/fiarep/projects/:id/quick-quote/review", requireAuth, async (re
   const outcome = decision === "send" ? `sent your quote to ${quote.clientCompany}` : decision === "approve" ? "approved your quote — go ahead" : "turned your quote back";
   await tellFiarep([current.sentById || ""], `${actor.name} ${outcome}`, quote.building, project.id);
   res.json(quote);
+});
+
+/** FIAREP bought what an approved quote lists. The client's administrators and
+ *  management get the receipt straight away, in the app and by email; it is
+ *  then kept for the monthly bill. */
+async function tellOwnerReceipt(clientTenantId: string, quote: QuickQuote, projectId: string): Promise<void> {
+  const money = (n: number) => `$${n.toFixed(2)}`;
+  const staff = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+    eq(staffAccounts.tenantId, clientTenantId), eq(staffAccounts.status, "approved"),
+    inArray(staffAccounts.role, ["administrator", "management"]),
+  ));
+  if (staff.length) {
+    const rows = await db.insert(notifications).values(staff.map((s) => ({
+      id: randomUUID(), tenantId: clientTenantId, target: s.id,
+      message: `FIAREP receipt — ${money(quote.total)}`,
+      detail: [quote.building, quote.lines.map((l) => `${l.qty} × ${l.label}`).join(", ")].filter(Boolean).join(" · ").slice(0, 400),
+      reportId: `qq:${projectId}:${quote.id || ""}`,
+    }))).returning();
+    for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
+  }
+  const [org] = await db.select({ name: organizations.name, features: organizations.features }).from(organizations).where(eq(organizations.id, clientTenantId)).limit(1);
+  const email = String(((org?.features ?? {}) as Record<string, unknown>)["contactEmail"] ?? "").trim();
+  if (!org || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
+  const when = new Date(quote.purchasedAt || Date.now()).toLocaleDateString("en-US", { timeZone: "America/New_York" });
+  const body = [
+    `Receipt — ${quote.building}`, `Purchased ${when}`,
+    quote.lines.map((l) => `${l.qty} × ${l.label} — ${money(l.amount)}`).join("\n"),
+    `Total: ${money(quote.total)}`,
+    "This receipt is also in your FIAREP app. Anything not paid back within 30 days is on your monthly bill.", "FIAREP",
+  ].join("\n\n");
+  const { sendEmail } = await import("../lib/command/mail");
+  await sendEmail(FIAREP_TENANT, { to: [{ name: org.name, email, from: "" }], cc: [], attachments: [], subject: `FIAREP receipt — ${quote.building} — ${money(quote.total)}`, body }, "Quick Quote").catch(() => undefined);
+}
+
+async function fiarepProject(id: string) {
+  const [project] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, id), eq(entityRecords.entity, "projects"),
+    eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+  )).limit(1);
+  return project;
+}
+
+/** Purchased: the receipt goes to the client by itself. */
+router.post("/v1/fiarep/projects/:id/quick-quote/purchased", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT || actor.role !== "administrator") { res.status(403).json({ error: "Only FIAREP's administrator marks a quote purchased." }); return; }
+  const project = await fiarepProject(String(req.params["id"] || ""));
+  if (!project) { res.status(404).json({ error: "No such project." }); return; }
+  const all = quotesOf(project.state);
+  const current = pickQuote(all, text((req.body ?? {})["quoteId"], 80));
+  if (!current) { res.status(404).json({ error: "There is no quote on this one." }); return; }
+  if (current.status !== "approved") { res.status(409).json({ error: "Only an approved quote can be purchased." }); return; }
+  if (current.purchasedAt) { res.status(409).json({ error: "Already purchased." }); return; }
+  if (!current.clientTenantId || current.clientTenantId === FIAREP_TENANT) { res.status(400).json({ error: "This quote has no client company." }); return; }
+  const now = new Date();
+  const quote: QuickQuote = { ...current, purchasedAt: now.toISOString(), purchasedBy: actor.name };
+  await db.update(entityRecords)
+    .set({ state: withQuotes(project.state, all.map((q) => (q.id === current.id ? quote : q))), version: (project.version ?? 1) + 1, updatedAt: now })
+    .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
+  await audit(actor, "projects.quick-quote-purchased", `$${quote.total.toFixed(2)} · ${quote.clientCompany}`, project.id);
+  await tellOwnerReceipt(quote.clientTenantId, quote, project.id);
+  res.json(quote);
+});
+
+/** Paid back: the receipt comes off what the client owes. */
+router.post("/v1/fiarep/projects/:id/quick-quote/paid", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT || actor.role !== "administrator") { res.status(403).json({ error: "Only FIAREP's administrator marks a receipt paid." }); return; }
+  const project = await fiarepProject(String(req.params["id"] || ""));
+  if (!project) { res.status(404).json({ error: "No such project." }); return; }
+  const all = quotesOf(project.state);
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const current = pickQuote(all, text(body["quoteId"], 80));
+  if (!current || !current.purchasedAt) { res.status(404).json({ error: "This one was not purchased." }); return; }
+  const now = new Date();
+  const paid = body["paid"] !== false;
+  const quote: QuickQuote = { ...current, paidAt: paid ? now.toISOString() : "", paidBy: paid ? actor.name : "" };
+  await db.update(entityRecords)
+    .set({ state: withQuotes(project.state, all.map((q) => (q.id === current.id ? quote : q))), version: (project.version ?? 1) + 1, updatedAt: now })
+    .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
+  await audit(actor, paid ? "projects.quick-quote-paid" : "projects.quick-quote-unpaid", `$${quote.total.toFixed(2)} · ${quote.clientCompany}`, project.id);
+  res.json(quote);
+});
+
+/** Monthly bills: FIAREP sees every client's; a client sees its own. */
+router.get("/v1/fiarep/statements", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId !== FIAREP_TENANT) { res.status(403).json({ error: "FIAREP only." }); return; }
+  const { listStatements, openBalances } = await import("../lib/statements");
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ statements: await listStatements(), open: await openBalances() });
+});
+router.get("/v1/owner/statements", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId === FIAREP_TENANT || !ownerOk(actor.role)) { res.status(403).json({ error: "For the company's administrators and management." }); return; }
+  const { listStatements, openBalances } = await import("../lib/statements");
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ statements: await listStatements(actor.tenantId), open: (await openBalances(actor.tenantId))[0] ?? null });
 });
 
 /** Throw a quote away. The project it opened goes too when quick quote made

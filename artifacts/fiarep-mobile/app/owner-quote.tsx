@@ -7,7 +7,7 @@ import { ui, ACCENT, money } from '../lib/ui';
 // A quote FIAREP sent this company: every part, how many, the price, and
 // Approve / Turn down. Opened from the "FIAREP needs approval" alert.
 type Line = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note: string };
-type Quote = { id?: string; lines: Line[]; total: number; status: string; building: string; note: string; sentAt: string; sentBy: string; decidedBy: string; decidedAt: string };
+type Quote = { id?: string; lines: Line[]; total: number; status: string; building: string; note: string; sentAt: string; sentBy: string; decidedBy: string; decidedAt: string; purchasedAt?: string; paidAt?: string };
 type Row = { projectId: string; quote: Quote };
 
 const STATUS: Record<string, string> = { pending: 'Waiting for your approval', approved: 'Approved', declined: 'Turned down' };
@@ -63,6 +63,9 @@ export default function OwnerQuote() {
             <Text style={{ marginLeft: 'auto', fontWeight: '800', fontSize: 16 }}>{money(r.quote.total)}</Text>
           </View>
           {!!r.quote.note && <Text style={ui.listSub}>FIAREP: {r.quote.note}</Text>}
+          {!!r.quote.purchasedAt && <Text style={{ fontWeight: '700', color: r.quote.paidAt ? '#047857' : '#b45309' }}>
+            Receipt · purchased {new Date(r.quote.purchasedAt).toLocaleDateString()}{r.quote.paidAt ? ` · paid ${new Date(r.quote.paidAt).toLocaleDateString()}` : ' · on your monthly bill if not paid within 30 days'}
+          </Text>}
           {r.quote.status === 'pending' && r.quote.id ? (
             <>
               <TextInput style={ui.input} value={notes[r.quote.id] || ''} onChangeText={(v) => setNotes((n) => ({ ...n, [r.quote.id!]: v }))} placeholder="Note to FIAREP (optional)" />
@@ -76,6 +79,7 @@ export default function OwnerQuote() {
           ) : r.quote.decidedBy ? <Text style={ui.listSub}>{STATUS[r.quote.status]} by {r.quote.decidedBy}{r.quote.decidedAt ? ` · ${new Date(r.quote.decidedAt).toLocaleString()}` : ''}</Text> : null}
         </View>
       ))}
+      <Pressable style={ui.btnOutline} onPress={() => router.push('/bills' as never)}><Text style={ui.btnOutlineText}>Monthly bills</Text></Pressable>
       <Pressable onPress={() => router.back()} style={{ padding: 14 }}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Back</Text></Pressable>
     </ScrollView>
   );

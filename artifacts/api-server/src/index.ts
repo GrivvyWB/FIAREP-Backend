@@ -61,6 +61,7 @@ await Promise.all([ensureFilesTable(), ensureSmartRepairsTable(), ensureResident
 void syncRelayDevices();
 // Heat & hot water: one gathered alert per client (by building) to its Command Center phones, every 2 minutes.
 startHeatDigest();
+void import("./lib/statements").then((m) => m.startStatements()).catch((err) => console.error("Monthly bills not started:", err));
 // Monthly autopay: clients whose day has come are charged through Square (checked every hour).
 void import("./lib/billing").then((m) => m.startBilling()).catch((err) => console.error("Billing not started:", err));
 setInterval(() => { void expireStaleProposals().catch(() => undefined); }, 60_000).unref();
