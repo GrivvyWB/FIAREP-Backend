@@ -59,7 +59,9 @@ async function requireCommandAdmin(_req: Request, res: Response, next: NextFunct
 }
 /** A client's phones are approved by themselves when the client is on a plan (autopay on for their signed
  *  contract) or FIAREP switched "Approve Command Center phones" on for them (Platform Control). */
-async function autoApproves(tenantId: string): Promise<boolean> {
+async function autoApproves(tenantId: string, person?: { tenantId?: string | null; name?: string | null }): Promise<boolean> {
+  // FIAREP's administrators (Timothy Winn, Emily Winn): their phones are approved at once, every time.
+  if (person && isFiarepAdmin(person)) return true;
   if (isPlatform(tenantId)) return false;
   const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
   const modules = ((org?.features as Record<string, unknown> | undefined)?.["modules"] ?? {}) as Record<string, unknown>;
@@ -121,7 +123,7 @@ router.post("/v1/command/devices/enroll", ...phone, async (req, res) => {
   const id = randomUUID();
   await db.insert(commandDevices).values({ id, tenantId: actor.tenantId, staffId: actor.id, staffName: actor.name, name, deviceKey, confirmKey, status: "pending" });
   await commandAuditLog({ tenantId: actor.tenantId, actor: actor.name, event: "device.enrolled", deviceId: id, detail: { name } });
-  if (await autoApproves(actor.tenantId)) {
+  if (await autoApproves(actor.tenantId, actor)) {
     await decideDevice(actor.tenantId, id, "approve", "auto:plan-or-switch");
     res.status(201).json({ id, status: "active", approveWhere: approveWhere(actor.tenantId) }); return;
   }
@@ -136,9 +138,9 @@ router.post("/v1/command/devices/enroll", ...phone, async (req, res) => {
 
 router.get("/v1/command/devices/:id/status", ...phone, async (req, res) => {
   const [d] = await db.select().from(commandDevices).where(eq(commandDevices.id, String(req.params["id"]))).limit(1);
-  if (!d || d.staffId !== actorFrom(res).id) { res.status(404).json({ error: "Unknown device" }); return; }
+  if (!d || d.staffId !== actorFrom(res).id || d.status === "deleted") { res.status(404).json({ error: "Unknown device" }); return; }
   // On a plan now, or switched on since it asked: approved the next time the phone looks.
-  if (d.status === "pending" && (await autoApproves(d.tenantId))) { await decideDevice(d.tenantId, d.id, "approve", "auto:plan-or-switch"); d.status = "active"; }
+  if (d.status === "pending" && (await autoApproves(d.tenantId, { tenantId: d.tenantId, name: d.staffName }))) { await decideDevice(d.tenantId, d.id, "approve", "auto:plan-or-switch"); d.status = "active"; }
   // What the Command Center says when it opens, to the person by name.
   // In their language; on a client's first use it asks which language they want. languageCode: what the phone listens for ("" = any).
   const lang = await getLanguage(d.tenantId, d.staffId);
@@ -399,10 +401,10 @@ const bools = (v: unknown, tenantId: string) => Object.fromEntries(Object.entrie
 async function decideDevice(tenantId: string | null, id: string, decision: string, by: string) {
   const now = new Date();
   const [row] = await db.update(commandDevices)
-    .set(decision === "approve" ? { status: "active", approvedAt: now, approvedBy: by } : { status: "revoked", revokedAt: now })
+    .set(decision === "approve" ? { status: "active", approvedAt: now, approvedBy: by } : decision === "delete" ? { status: "deleted", revokedAt: now } : { status: "revoked", revokedAt: now })
     .where(and(eq(commandDevices.id, id), tenantId ? eq(commandDevices.tenantId, tenantId) : undefined, decision === "approve" ? eq(commandDevices.status, "pending") : undefined)).returning();
   if (!row) return null;
-  await commandAuditLog({ tenantId: row.tenantId, actor: by, event: `device.${decision === "approve" ? "approved" : "revoked"}`, deviceId: id, detail: { name: row.name, staffName: row.staffName } });
+  await commandAuditLog({ tenantId: row.tenantId, actor: by, event: `device.${decision === "approve" ? "approved" : decision === "delete" ? "deleted" : "revoked"}`, deviceId: id, detail: { name: row.name, staffName: row.staffName } });
   const relay = isPlatform(row.tenantId) ? await syncRelayDevices() : { ok: true as const, error: undefined };
   return { id: row.id, status: row.status, relaySynced: relay.ok, relayError: relay.error };
 }
@@ -443,7 +445,7 @@ const ownerName = (res: Response) => (res.locals["platformOwner"] as { name: str
 router.get("/v1/platform/command", async (req, res) => {
   const [switches, devices, agents, chain, orgs, usage, clientDevices, clientAgents, gemKey, mapsKey, schedule] = await Promise.all([
     getSwitches(PLATFORM_TENANT),
-    db.select().from(commandDevices).where(eq(commandDevices.tenantId, PLATFORM_TENANT)).orderBy(desc(commandDevices.createdAt)),
+    db.select().from(commandDevices).where(and(eq(commandDevices.tenantId, PLATFORM_TENANT), ne(commandDevices.status, "deleted"))).orderBy(desc(commandDevices.createdAt)),
     db.select().from(commandAgents).where(eq(commandAgents.tenantId, PLATFORM_TENANT)).orderBy(desc(commandAgents.createdAt)),
     verifyAuditChain(),
     db.select({ id: organizations.id, name: organizations.name, status: organizations.status, features: organizations.features }).from(organizations).where(ne(organizations.id, PLATFORM_TENANT)).orderBy(asc(organizations.name)),
@@ -538,7 +540,7 @@ router.put("/v1/platform/command/clients/:id", async (req, res) => {
 
 router.post("/v1/platform/command/devices/:id/:decision", async (req, res) => {
   const decision = String(req.params["decision"]);
-  if (decision !== "approve" && decision !== "revoke") { res.status(404).json({ error: "Not found" }); return; }
+  if (decision !== "approve" && decision !== "revoke" && decision !== "delete") { res.status(404).json({ error: "Not found" }); return; }
   const out = await decideDevice(null, String(req.params["id"]), decision, `owner:${ownerName(res)}`);
   if (!out) { res.status(404).json({ error: decision === "approve" ? "No pending device with that id" : "Unknown device" }); return; }
   res.json(out);
@@ -637,7 +639,7 @@ orgAndClient("get", "", async (req, res) => {
   const tenantId = actorFrom(res).tenantId;
   const [own, effective, platform, devices, agents, usage, chain, auditRows] = await Promise.all([
     getSwitches(tenantId), effectiveSwitches(tenantId), getSwitches(PLATFORM_TENANT),
-    db.select().from(commandDevices).where(eq(commandDevices.tenantId, tenantId)).orderBy(desc(commandDevices.createdAt)),
+    db.select().from(commandDevices).where(and(eq(commandDevices.tenantId, tenantId), ne(commandDevices.status, "deleted"))).orderBy(desc(commandDevices.createdAt)),
     db.select().from(commandAgents).where(eq(commandAgents.tenantId, tenantId)).orderBy(desc(commandAgents.createdAt)),
     monthUsage(tenantId), verifyAuditChain(), recentAudit(1000, tenantId),
   ]);
@@ -706,7 +708,7 @@ orgAndClient("delete", "/own-keys/:which", async (req, res) => {
 
 orgAndClient("post", "/devices/:id/:decision", async (req, res) => {
   const decision = String(req.params["decision"]);
-  if (decision !== "approve" && decision !== "revoke") { res.status(404).json({ error: "Not found" }); return; }
+  if (decision !== "approve" && decision !== "revoke" && decision !== "delete") { res.status(404).json({ error: "Not found" }); return; }
   const out = await decideDevice(actorFrom(res).tenantId, String(req.params["id"]), decision, by(res));
   if (!out) { res.status(404).json({ error: decision === "approve" ? "No phone waiting with that id" : "Unknown phone" }); return; }
   res.json(out);

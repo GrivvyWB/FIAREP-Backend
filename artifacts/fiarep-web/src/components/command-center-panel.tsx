@@ -179,8 +179,9 @@ export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "pl
   const on = (name: string) => !platformOff(name) && data?.switches.actions[name] !== false;
   const needsFaceId = (a: ActionMeta) => (typeof data?.switches.confirm[a.name] === "boolean" ? data.switches.confirm[a.name]! : a.confirmDefault);
 
-  async function device(d: Device, decision: "approve" | "revoke") {
+  async function device(d: Device, decision: "approve" | "revoke" | "delete") {
     if (decision === "revoke" && !window.confirm(`Revoke ${d.name}? It can't send commands until it's set up and approved again.`)) return;
+    if (decision === "delete" && !window.confirm(`Delete ${d.name} (${d.staffName}) from this list? If it is still in use it stops working.`)) return;
     try { await api(`${base}/devices/${encodeURIComponent(d.id)}/${decision}`, { method: "POST" }); await load(); } catch (err) { fail("Could not update the phone")(err); }
   }
   async function addAgent() {
@@ -317,7 +318,7 @@ export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "pl
                 <td className={`py-1.5 pr-3 text-xs font-semibold ${d.status === "active" ? "text-emerald-700" : "text-slate-400"}`}>{d.status}{d.approvedBy ? <span className="block font-normal text-slate-500">by {d.approvedBy}</span> : null}</td>
                 <td className="py-1.5 pr-3 text-xs text-slate-500">{when(d.lastUsedAt)}</td>
                 <td className="py-1.5 pr-3"><button type="button" onClick={() => copy(d.confirmKey, "Face ID key")} className="max-w-[16rem] truncate font-mono text-xs text-slate-600 hover:underline">{d.confirmKey}</button></td>
-                <td className="py-1.5 text-right">{d.status === "active" && <Button size="sm" variant="outline" className="text-rose-700" onClick={() => void device(d, "revoke")}>Revoke</Button>}</td>
+                <td className="py-1.5 text-right"><div className="flex justify-end gap-2">{d.status === "active" && <Button size="sm" variant="outline" className="text-rose-700" onClick={() => void device(d, "revoke")}>Revoke</Button>}<Button size="sm" variant="outline" className="text-rose-700" onClick={() => void device(d, "delete")}>Delete</Button></div></td>
               </tr>))}
             </tbody>
           </table></div>
