@@ -25,7 +25,9 @@ import { ui, ACCENT, money } from '../lib/ui';
 type CatalogLine = { key: string; label: string; price: number; unit: string; group: string; source?: string };
 type Building = { id: string; address: string; city: string | null; state: string | null; organizationId: string; company: string | null };
 type Client = { id: string; name: string };
-type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string };
+type Draft = { key: string; label: string; unit: string; price: number; qty: string; note: string; photo: string; area?: string };
+// Rooms a part can go in; parts are listed under their room and the room goes on the line.
+const ROOMS = ['Kitchen', 'Bathroom', 'Bedroom', 'Living room', 'Hallway', 'Basement', 'Boiler room', 'Roof', 'Exterior', 'Common area', 'Whole building'];
 type QuickLine = { id: string; label: string; unit: string; qty: number; unitPrice: number; amount: number; note: string };
 type QuickQuote = {
   lines: QuickLine[]; total: number; status: string; approvedBySelf: boolean; clientCompany: string; clientTenantId?: string;
@@ -55,6 +57,7 @@ export default function QuickQuoteScreen() {
   const [clientId, setClientId] = useState('');
   const [projectId, setProjectId] = useState('');
   const [search, setSearch] = useState('');
+  const [room, setRoom] = useState('');
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [note, setNote] = useState('');
   const [loading, setLoading] = useState(false);
@@ -217,7 +220,7 @@ export default function QuickQuoteScreen() {
           try { const f = await uploadPhoto(d.photo, 'room-photo', { entity: 'projects', recordId: projectId }); objectPath = f.objectPath; }
           catch { /* the line still goes; the photo can be added again */ }
         }
-        lines.push({ key: d.key, qty: Number(d.qty), note: d.note.trim(), photo: objectPath });
+        lines.push({ key: d.key, qty: Number(d.qty), note: [d.area || '', d.note.trim()].filter(Boolean).join(' — '), photo: objectPath });
       }
       const saved = await post<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, {
         mode, clientTenantId: mode === 'self' ? '' : clientId, note: note.trim(), building: place, lines,
@@ -320,21 +323,9 @@ export default function QuickQuoteScreen() {
 
       {!pastMode && !!projectId && (
         <>
-          <Text style={[ui.label, { marginTop: 14 }]}>Add what it needs</Text>
-          <TextInput style={ui.input} value={search} onChangeText={setSearch} placeholder="Flapper, GFCI, hinge, filter, wax ring…" autoCorrect={false} />
-          {matches.map((m) => (
-            <Pressable
-              key={m.key}
-              onPress={() => { setDrafts((d) => [...d, { key: m.key, label: m.label, unit: m.unit, price: m.price, qty: '1', note: '', photo: '' }]); setSearch(''); }}
-              style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }}
-            >
-              <Text style={{ fontWeight: '600' }}>{m.label}</Text>
-              <Text style={ui.listSub}>{money(m.price)} {m.unit} · {m.group}</Text>
-              {!!m.source && <Text style={[ui.listSub, { fontSize: 11, opacity: 0.7 }]}>{m.source}</Text>}
-            </Pressable>
-          ))}
-
-          {drafts.map((d, i) => (
+          {[...new Set(drafts.map((d) => d.area || ''))].flatMap((a) => [
+            ...(a || drafts.some((x) => x.area) ? [<Text key={`h-${a}`} style={{ fontWeight: '800', fontSize: 16, marginTop: 16 }}>{a || 'No room'}</Text>] : []),
+            ...drafts.map((d, i) => ({ d, i })).filter(({ d }) => (d.area || '') === a).map(({ d, i }) => (
             <View key={`${d.key}-${i}`} style={[ui.card, { marginTop: 12, gap: 8 }]}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <View style={{ flex: 1 }}>
@@ -357,7 +348,28 @@ export default function QuickQuoteScreen() {
                 {!!d.photo && <Image source={{ uri: photoUri(d.photo) }} style={{ width: 44, height: 44, borderRadius: 6 }} />}
               </View>
             </View>
+          ))])}
+          <Text style={[ui.label, { marginTop: 14 }]}>{drafts.length ? 'Add another part' : 'Add what it needs'}</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
+            {['', ...ROOMS].map((r) => (
+              <Pressable key={r || 'none'} onPress={() => setRoom(r)} style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: room === r ? ACCENT : '#ccc', backgroundColor: room === r ? ACCENT : '#fff' }}>
+                <Text style={{ color: room === r ? '#fff' : '#333', fontWeight: '600' }}>{r || 'No room'}</Text>
+              </Pressable>
+            ))}
+          </ScrollView>
+          <TextInput style={ui.input} value={search} onChangeText={setSearch} placeholder={room ? `Part for the ${room.toLowerCase()}: flapper, GFCI, hinge…` : "Flapper, GFCI, hinge, filter, wax ring…"} autoCorrect={false} />
+          {matches.map((m) => (
+            <Pressable
+              key={m.key}
+              onPress={() => { setDrafts((d) => [...d, { key: m.key, label: m.label, unit: m.unit, price: m.price, qty: '1', note: '', photo: '', area: room }]); setSearch(''); }}
+              style={{ paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#eee' }}
+            >
+              <Text style={{ fontWeight: '600' }}>{m.label}</Text>
+              <Text style={ui.listSub}>{money(m.price)} {m.unit} · {m.group}</Text>
+              {!!m.source && <Text style={[ui.listSub, { fontSize: 11, opacity: 0.7 }]}>{m.source}</Text>}
+            </Pressable>
           ))}
+
 
           {drafts.length > 0 && (
             <>
