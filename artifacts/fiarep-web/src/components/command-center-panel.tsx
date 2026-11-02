@@ -13,7 +13,7 @@ type AgentTask = { name: string; description: string; confirm: boolean; params: 
 type Agent = { id: string; name: string; status: string; online: boolean; lastSeenAt: string | null; info: Record<string, unknown>; tasks: AgentTask[]; folders: string[]; apps: string[]; createdAt: string };
 type Install = { windows: string; mac: string; linux: string };
 type Usage = { runs: number; inputTokens: number; outputTokens: number; costUsd: number; unpricedRuns: number };
-type Client = { id: string; name: string; status: string; on: boolean; cap: number | null; paysOwn?: boolean; usage: Usage | null; phones: { active: number; pending: number }; computers: { total: number; online: number } };
+type Client = { id: string; name: string; status: string; on: boolean; cap: number | null; paysOwn?: boolean; usage: Usage | null; phones: { active: number; pending: number; waiting?: Array<{ id: string; name: string; staffName: string }> }; computers: { total: number; online: number } };
 type Overview = {
   switches: Switches; schedule?: Schedule; mapsKey?: { set: boolean; source?: string | null; last4?: string | null }; actions: ActionMeta[]; devices: Device[]; agents: Agent[]; install: Install; usage: Usage | null; claudeKeyConfigured: boolean; audit: { ok: boolean; rows: number; brokenAt?: number | null };
   // A client paying for its own AI (Platform Control → Clients → AI paid by)
@@ -285,7 +285,12 @@ export function CommandCenterPanel({ scope, tenantId, tenantName }: { scope: "pl
                       {caps[c.id] !== undefined && caps[c.id] !== (c.cap === null ? "" : String(c.cap)) && <Button size="sm" variant="outline" onClick={() => { void saveClient(c, { cap: caps[c.id] === "" ? null : Number(caps[c.id]) }); setCaps(({ [c.id]: _, ...rest }) => rest); }}>Save</Button>}
                     </div>)}
                   </td>
-                  <td className="py-1.5 pr-3 text-xs text-slate-700">{c.phones.active}{c.phones.pending ? <span className="text-amber-700"> · {c.phones.pending} waiting</span> : null}</td>
+                  <td className="py-1.5 pr-3 text-xs text-slate-700">{c.phones.active}{c.phones.pending ? <span className="text-amber-700"> · {c.phones.pending} waiting</span> : null}
+                    {(c.phones.waiting ?? []).map((w) => (
+                      <div key={w.id} className="mt-1 flex items-center gap-2"><span className="text-slate-600">{w.staffName}</span>
+                        <Button size="sm" variant="outline" className="h-6 px-2 text-xs text-rose-700" onClick={() => { if (!window.confirm(`Delete ${w.staffName}'s request (${c.name})?`)) return; void api(`/v1/platform/command/devices/${encodeURIComponent(w.id)}/delete`, { method: "POST" }).then(load).catch(fail("Could not delete")); }}>Delete</Button>
+                      </div>))}
+                  </td>
                   <td className="py-1.5 text-xs text-slate-700">{c.computers.total ? `${c.computers.online}/${c.computers.total} online` : "—"}</td>
                 </tr>
               );

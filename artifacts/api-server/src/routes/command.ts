@@ -450,7 +450,7 @@ router.get("/v1/platform/command", async (req, res) => {
     verifyAuditChain(),
     db.select({ id: organizations.id, name: organizations.name, status: organizations.status, features: organizations.features }).from(organizations).where(ne(organizations.id, PLATFORM_TENANT)).orderBy(asc(organizations.name)),
     monthUsage(),
-    db.select({ tenantId: commandDevices.tenantId, status: commandDevices.status }).from(commandDevices).where(ne(commandDevices.tenantId, PLATFORM_TENANT)),
+    db.select({ id: commandDevices.id, name: commandDevices.name, staffName: commandDevices.staffName, tenantId: commandDevices.tenantId, status: commandDevices.status }).from(commandDevices).where(ne(commandDevices.tenantId, PLATFORM_TENANT)),
     db.select().from(commandAgents).where(and(ne(commandAgents.tenantId, PLATFORM_TENANT), eq(commandAgents.status, "active"))),
     geminiKeyStatus(),
     keyStatus("googleMaps"),
@@ -471,7 +471,7 @@ router.get("/v1/platform/command", async (req, res) => {
       const comps = clientAgents.filter((a) => a.tenantId === o.id);
       return {
         id: o.id, name: o.name, status: o.status, on, cap: switches.caps?.[o.id] ?? null, usage: usageOf.get(o.id) ?? null, paysOwn: switches.ownKeys?.[o.id] === true,
-        phones: { active: mine.filter((d) => d.status === "active").length, pending: mine.filter((d) => d.status === "pending").length },
+        phones: { active: mine.filter((d) => d.status === "active").length, pending: mine.filter((d) => d.status === "pending").length, waiting: mine.filter((d) => d.status === "pending").map((d) => ({ id: d.id, name: d.name, staffName: d.staffName })) },
         computers: { total: comps.length, online: comps.filter((a) => agentMeta(a).online).length },
       };
     }),
