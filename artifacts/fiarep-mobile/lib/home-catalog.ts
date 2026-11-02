@@ -24,6 +24,7 @@ const C: Record<string, TileArt> = {
   'Inbox': { lib: 'ion', icon: 'mail-outline', desc: 'View your messages and notifications.' },
   'Check HPD / DOB': { lib: 'mci', icon: 'office-building-outline', desc: 'Validate building records.' },
   'Translator': { lib: 'ion', icon: 'globe-outline', desc: 'Translate content and language.' },
+  'Voice Recorder': { lib: 'ion', icon: 'mic-outline', desc: 'Record a voice; it talks back in it.' },
   'Sign out': { lib: 'ion', icon: 'log-out-outline', desc: 'End your session securely.' },
   'HUD Inspections': { lib: 'mci', icon: 'home-search-outline', desc: 'HUD / NSPIRE inspections.' },
   'Log Violations': { lib: 'mci', icon: 'alert-octagon-outline', desc: 'Record violations on site.' },
