@@ -95,7 +95,7 @@ router.post("/ai/speak", requireAuth, async (req, res) => {
       const { getPrefs, voiceTone, ttsVoice } = await import("../lib/command/personalityPrefs");
       const prefs = actor ? await getPrefs(actor.tenantId, actor.id).catch(() => null) : null;
       const mode = prefs?.mode ?? "companion";
-      res.json(await synthesizeSpeech(text, apiKey, fetch, { voice: ttsVoice(prefs?.voice), instructions: `${voiceTone(mode)} Down to earth and natural, like a real person talking, never robotic or stiff.` }));
+      res.json(await synthesizeSpeech(text, apiKey, fetch, { voice: ttsVoice(prefs?.voice), instructions: `${voiceTone(mode)} Down to earth and natural, like a real person talking, never robotic or stiff. Talk at a normal, natural speaking pace — not slow, not drawn out, no long pauses.` }));
       return;
     }
     res.json(await synthesizeSpeech(text, apiKey));

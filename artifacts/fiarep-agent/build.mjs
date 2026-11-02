@@ -69,6 +69,9 @@ async function run(id) {
     write(id, { ...read(id), step: "installing packages" });
     r = await sh("pnpm", ["install", "--frozen-lockfile", "--prefer-offline"], { cwd: wt, timeoutMs: 1_200_000 });
     if (r.code) return fail(`pnpm install: ${(r.err || r.out).slice(-400)}`);
+    // The shared libraries (lib/db, lib/api-zod…) are built first, so the apps' typecheck can read them.
+    write(id, { ...read(id), step: "building the shared libraries" });
+    await sh("npx", ["tsc", "--build"], { cwd: wt, timeoutMs: 900_000 });
     write(id, { ...read(id), step: "Claude Code is making the change" });
     r = await sh(CLAUDE, ["-p", `${RULES}\n\nThe task:\n${s.request}`, "--permission-mode", "acceptEdits", "--output-format", "json",
       "--allowedTools", "Read,Edit,Write,Glob,Grep,Bash(npx tsc:*),Bash(pnpm run typecheck:*),Bash(git diff:*),Bash(git status:*)"], { cwd: wt, timeoutMs: 2_400_000 });
@@ -83,7 +86,7 @@ async function run(id) {
       if (!changed.some((f) => f.startsWith(`artifacts/${pkg}/`))) continue;
       const t = await sh("npx", ["tsc", "-p", "tsconfig.json", "--noEmit"], { cwd: path.join(wt, "artifacts", pkg), timeoutMs: 900_000 });
       // Only errors in the files this build changed (the repo has a few old ones elsewhere).
-      for (const line of (t.out + t.err).split("\n")) if (/error TS/.test(line) && changed.some((f) => line.startsWith(f.replace(`artifacts/${pkg}/`, "")))) errors.push(`${pkg}/${line}`);
+      for (const line of (t.out + t.err).split("\n")) if (/error TS/.test(line) && !/error TS6305/.test(line) && changed.some((f) => line.startsWith(f.replace(`artifacts/${pkg}/`, "")))) errors.push(`${pkg}/${line}`);
     }
     const diffstat = (await sh("git", ["diff", "--stat"], { cwd: wt })).out.trim();
     const done = { ...read(id), step: "", summary, changed, diffstat, typecheck: errors.length ? errors.slice(0, 30) : "clean", mobile: changed.some((f) => f.startsWith("artifacts/fiarep-mobile/")) };
