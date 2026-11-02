@@ -26,7 +26,7 @@ export type ContractInput = {
   // Violation work from a job request: HPD apartments cited and DOB violations, at FIAREP's expediter rates.
   expediter: { address: string; apartments: number; hpdOpen: number; dob: number; hpd: number; dobFee: number; total: number } | null;
   notes: string;
-  /** Plan contracts: the repair and materials allocation FIAREP draws on, in dollars (blank: set by the units). */
+  /** Plan contracts: what FIAREP may buy each month without approval, in dollars (blank: set by the units). */
   allocation?: number | null;
 };
 
@@ -88,7 +88,7 @@ export function contractNumber(date = new Date()): string {
 }
 
 /** Self-contained HTML: prints to Letter from the browser and reads the same in email. */
-/** The repair and materials allocation for a plan contract, set by the units (FIAREP can write any amount instead). */
+/** The monthly purchase limit without approval ($5,000 to $10,000), set by the units; FIAREP can write any amount instead. */
 export function allocationFor(units: number): number {
   return units >= 1000 ? 10000 : units >= 500 ? 7500 : 5000;
 }
@@ -149,7 +149,7 @@ ${c.kind === "work" ? `<p class="muted">No platform, app or monthly service is i
 <p>${planClause}</p>
 <p>City penalties, DOB re-inspection fees, HPD dismissal-request fees, DOB filing fees and any permit or agency charge pass through to Client at cost. ${c.kind === "work" ? "Invoices are due within 15 days." : "Fees are invoiced monthly in advance and due within 15 days of the invoice."}</p>
 ${c.kind === "fiarep" || c.kind === "agency-major" || c.kind === "agency-small" ? `<h2>3A. Work and appliances on the plan</h2>
-<p>From the start date, FIAREP performs all repairs, violation cures and appliance replacements the developments in Section 1 need. <b>Labor</b> up to the included pool${bandHours(bandFor(c.units, bands())) == null ? " (set with this band's labor pool, which is not set yet — Platform Control → Pricing ladder; pooled, not carried over)" : ` of <b>${bandHours(bandFor(c.units, bands()))} hours per unit per year</b> (${Math.round(bandHours(bandFor(c.units, bands()))! * c.units).toLocaleString()} hours a year across ${c.units.toLocaleString()} units, pooled, not carried over)`} is covered by the monthly fee; labor beyond the pool is billed at the Section 5 rates and the price-book unit prices. <b>Appliances, parts, materials and delivery</b> are purchased by FIAREP on Client's written approval of each purchase and reimbursed at cost plus ${Math.round(MATERIALS_HANDLING * 100)}% handling, invoiced on delivery and due within 15 days; title passes to Client on reimbursement. <b>Repair and materials allocation:</b> Client keeps an allocation of <b>${money(alloc)}</b> with FIAREP under the plan, set by the number of units in Section 1, which FIAREP draws on for building repairs and the purchase of materials. FIAREP gives Client the receipts for every purchase made from it, and Client replenishes the allocation by the amount of those receipts within 30 days of receiving them, so the full allocation is always available; for portfolios of 10,000 units or more, FIAREP orders on Client's own supplier accounts instead. Nothing is bought without the approval, and nothing bought is FIAREP's cost.</p>` : ""}
+<p>From the start date, FIAREP performs all repairs, violation cures and appliance replacements the developments in Section 1 need. <b>Labor</b> up to the included pool${bandHours(bandFor(c.units, bands())) == null ? " (set with this band's labor pool, which is not set yet — Platform Control → Pricing ladder; pooled, not carried over)" : ` of <b>${bandHours(bandFor(c.units, bands()))} hours per unit per year</b> (${Math.round(bandHours(bandFor(c.units, bands()))! * c.units).toLocaleString()} hours a year across ${c.units.toLocaleString()} units, pooled, not carried over)`} is covered by the monthly fee; labor beyond the pool is billed at the Section 5 rates and the price-book unit prices. <b>Appliances, parts, materials and delivery</b> are purchased by FIAREP and reimbursed at cost plus ${Math.round(MATERIALS_HANDLING * 100)}% handling; title passes to Client on reimbursement. <b>Monthly repair and materials allocation:</b> each month FIAREP may purchase supplies and materials for the buildings in Section 1 up to <b>${money(alloc)}</b>, set by the number of units, <b>without Client's prior approval</b>. Any purchase that would take the month over ${money(alloc)} needs Client's written approval before it is made. FIAREP gives Client the receipts for every purchase, and Client replenishes the allocation by the amount of those receipts within 30 days of receiving them; for portfolios of 10,000 units or more, FIAREP orders on Client's own supplier accounts instead. Nothing bought is FIAREP's cost.</p>` : ""}
 
 ${ex ? `<h2>4. Violation work — ${esc(ex.address)}</h2>
 <table><thead><tr><th>Item</th><th class="r">Qty</th><th>Unit</th><th class="r">Unit price</th><th class="r">Total</th></tr></thead><tbody>

@@ -132,7 +132,7 @@ export function ContractBuilder({ scope, engineering, expediter, onClearScope, o
         <label className="text-sm text-slate-700">Agreement no.<Input value={number} onChange={(e) => setNumber(e.target.value)} className="mt-1" /></label>
         <label className="text-sm text-slate-700">FIAREP signer<Input value={fiarepSigner} onChange={(e) => setFiarepSigner(e.target.value)} className="mt-1" /></label>
         <label className="text-sm text-slate-700 sm:col-span-2">FIAREP legal name<Input value={fiarepEntity} onChange={(e) => setFiarepEntity(e.target.value)} className="mt-1" /></label>
-        {(kind === "fiarep" || kind === "agency-major" || kind === "agency-small") && <label className="text-sm text-slate-700">Repair &amp; materials allocation ($)<Input type="number" inputMode="numeric" min={0} value={allocation} placeholder={String(allocationFor(units))} onChange={(e) => setAllocation(e.target.value === "" ? "" : Math.max(0, num(e.target.value)))} className="mt-1" /></label>}
+        {(kind === "fiarep" || kind === "agency-major" || kind === "agency-small") && <label className="text-sm text-slate-700">Monthly materials limit without approval ($)<Input type="number" inputMode="numeric" min={0} value={allocation} placeholder={String(allocationFor(units))} onChange={(e) => setAllocation(e.target.value === "" ? "" : Math.max(0, num(e.target.value)))} className="mt-1" /></label>}
         <label className="text-sm text-slate-700 sm:col-span-2">Additional terms<textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`mt-1 block w-full ${field}`} /></label>
       </div>
 
