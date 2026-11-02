@@ -608,6 +608,13 @@ export const ACTIONS: ActionDef[] = [
     describe: (p) => `Talk ${str(p["mode"], 20)}`,
   },
   {
+    name: "set_voice", label: "Change my Command Center voice", risk: "write", confirmDefault: false, target: "server",
+    description: "Switch the Command Center's speaking voice for this person to a man's voice or a woman's voice, when they ask.",
+    schema: { type: "object", properties: { voice: { type: "string", enum: ["man", "woman"] } }, required: ["voice"], additionalProperties: false },
+    run: async (p, ctx) => (await import("./personalityPrefs")).setVoice(ctx.tenantId, ctx.staffId, str(p["voice"], 10)),
+    describe: (p) => `${str(p["voice"], 10) === "man" ? "A man's" : "A woman's"} voice`,
+  },
+  {
     name: "remember_preference", label: "Remember how I like to be talked to", risk: "write", confirmDefault: false, target: "server",
     description: "Remember one short note about how this person likes the Command Center to talk to them (greeting, nickname, humor, answer length, what to skip). Never anything private or sensitive.",
     schema: { type: "object", properties: { note: { type: "string" } }, required: ["note"], additionalProperties: false },

@@ -92,9 +92,10 @@ router.post("/ai/speak", requireAuth, async (req, res) => {
     // The Command Center talks in a warm, friendly, down-to-earth voice, in the person's style.
     if (body.voice === "command") {
       const actor = res.locals["actor"] as { tenantId: string; id: string } | undefined;
-      const { getPrefs, voiceTone } = await import("../lib/command/personalityPrefs");
-      const mode = actor ? (await getPrefs(actor.tenantId, actor.id).catch(() => null))?.mode ?? "companion" : "companion";
-      res.json(await synthesizeSpeech(text, apiKey, fetch, { voice: "coral", instructions: `${voiceTone(mode)} Down to earth and natural, like a real person talking, never robotic or stiff.` }));
+      const { getPrefs, voiceTone, ttsVoice } = await import("../lib/command/personalityPrefs");
+      const prefs = actor ? await getPrefs(actor.tenantId, actor.id).catch(() => null) : null;
+      const mode = prefs?.mode ?? "companion";
+      res.json(await synthesizeSpeech(text, apiKey, fetch, { voice: ttsVoice(prefs?.voice), instructions: `${voiceTone(mode)} Down to earth and natural, like a real person talking, never robotic or stiff.` }));
       return;
     }
     res.json(await synthesizeSpeech(text, apiKey));

@@ -136,6 +136,21 @@ router.post("/v1/command/devices/enroll", ...phone, async (req, res) => {
   res.status(201).json({ id, status: "pending", approveWhere: approveWhere(actor.tenantId) });
 });
 
+// The Command Center voice: a man's or a woman's, asked the first time (null until picked).
+router.get("/v1/command/my-voice", requireAuth, async (_req, res) => {
+  const actor = actorFrom(res);
+  const { getPrefs } = await import("../lib/command/personalityPrefs");
+  res.setHeader("Cache-Control", "no-store");
+  res.json({ voice: (await getPrefs(actor.tenantId, actor.id)).voice ?? null });
+});
+router.put("/v1/command/my-voice", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  const { setVoice } = await import("../lib/command/personalityPrefs");
+  const out = await setVoice(actor.tenantId, actor.id, String((req.body as Record<string, unknown> | undefined)?.["voice"] ?? ""));
+  if ("error" in out) { res.status(400).json(out); return; }
+  res.json(out);
+});
+
 router.get("/v1/command/devices/:id/status", ...phone, async (req, res) => {
   const [d] = await db.select().from(commandDevices).where(eq(commandDevices.id, String(req.params["id"]))).limit(1);
   if (!d || d.staffId !== actorFrom(res).id || d.status === "deleted") { res.status(404).json({ error: "Unknown device" }); return; }

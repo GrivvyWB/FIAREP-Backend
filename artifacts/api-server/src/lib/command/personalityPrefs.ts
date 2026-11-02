@@ -9,14 +9,14 @@ import { db, entityRecords, settings } from "@workspace/db";
 import { commandActions, commandRuns, commandWorkOrders } from "./tables";
 
 export type Mode = "friendly" | "companion" | "professional";
-type Prefs = { mode: Mode; notes: string[] };
+type Prefs = { mode: Mode; notes: string[]; voice?: "man" | "woman" };
 const key = (staffId: string) => `command-personality:${staffId}`;
 const MODES: Mode[] = ["friendly", "companion", "professional"];
 
 export async function getPrefs(tenantId: string, staffId: string): Promise<Prefs> {
   const [row] = await db.select().from(settings).where(and(eq(settings.tenantId, tenantId), eq(settings.key, key(staffId)))).limit(1);
   const v = (row?.value ?? {}) as Partial<Prefs>;
-  return { mode: MODES.includes(v.mode as Mode) ? (v.mode as Mode) : "companion", notes: Array.isArray(v.notes) ? v.notes.filter((n) => typeof n === "string").slice(-25) : [] };
+  return { mode: MODES.includes(v.mode as Mode) ? (v.mode as Mode) : "companion", notes: Array.isArray(v.notes) ? v.notes.filter((n) => typeof n === "string").slice(-25) : [], ...(v.voice === "man" || v.voice === "woman" ? { voice: v.voice } : {}) };
 }
 async function save(tenantId: string, staffId: string, value: Prefs) {
   const now = new Date();
@@ -44,6 +44,16 @@ export async function forget(tenantId: string, staffId: string, note: string) {
   await save(tenantId, staffId, { ...p, notes: left });
   return { forgot: p.notes.length - left.length };
 }
+
+/** A man's or a woman's voice, picked the first time they open the Command Center (or by asking). */
+export async function setVoice(tenantId: string, staffId: string, voice: string) {
+  const v = voice.trim().toLowerCase().startsWith("w") || /female|lady/i.test(voice) ? "woman" : voice.trim().toLowerCase().startsWith("m") || /male|guy/i.test(voice) ? "man" : "";
+  if (!v) return { error: "A man's voice or a woman's voice?" };
+  await save(tenantId, staffId, { ...(await getPrefs(tenantId, staffId)), voice: v });
+  return { voice: v };
+}
+/** The speaking voice for this person: warm and friendly either way. */
+export const ttsVoice = (v?: "man" | "woman") => (v === "man" ? "ash" : "coral");
 
 /** What the voice should sound like for this style (the words are the AI's; this is the tone of voice). */
 export function voiceTone(mode: Mode): string {

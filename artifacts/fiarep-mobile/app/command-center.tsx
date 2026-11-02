@@ -151,6 +151,13 @@ export default function CommandCenter() {
   const greetKeys = async () => { const id = await who(); return { text: `cmd.greeting.text:${id}`, said: `cc.greeting.sayAs:${id}`, file: `${FileSystem.documentDirectory}cmd-greeting-${id}.mp3` }; };
   const greeted = useRef(false);
   const [savedGreeting, setSavedGreeting] = useState('');
+  // A man's or a woman's voice: asked the first time the Command Center is opened, changeable below.
+  const [voiceChoice, setVoiceChoice] = useState<'man' | 'woman' | null | undefined>(undefined);
+  useEffect(() => { void customFetch<{ voice: 'man' | 'woman' | null }>('/api/v1/command/my-voice', { responseType: 'json' } as never).then((r) => setVoiceChoice(r?.voice ?? null)).catch(() => setVoiceChoice('woman')); }, []);
+  async function pickVoice(v: 'man' | 'woman') {
+    setVoiceChoice(v);
+    await customFetch('/api/v1/command/my-voice', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: v }), responseType: 'json' } as never).catch(() => undefined);
+  }
   async function playGreetingFile() {
     const { file: greetFile } = await greetKeys();
     await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
@@ -179,14 +186,15 @@ export default function CommandCenter() {
         const haveFile = (await FileSystem.getInfoAsync(greetFile)).exists;
         const said = (await AsyncStorage.getItem(SAID)) || '';
         // The friendly voice (v2): a greeting recorded in the old voice is recorded again once.
-        if (stored === text && haveFile && said === sayAs + '|v2') return;
+        if (!voiceChoice) return;
+        if (stored === text && haveFile && said === `${sayAs}|v2|${voiceChoice}`) return;
         const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName(text, sayAs).slice(0, 600), voice: 'command' });
         await FileSystem.writeAsStringAsync(greetFile, audioBase64, { encoding: 'base64' as never });
-        await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem(SAID, sayAs + '|v2'); setSavedGreeting(text);
+        await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem(SAID, `${sayAs}|v2|${voiceChoice}`); setSavedGreeting(text);
         if (!greeted.current && speakReplies) { greeted.current = true; await playGreetingFile(); }
       } catch { /* try again next time it opens */ }
     })();
-  }, [device?.status, device?.greeting, sayAs]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [device?.status, device?.greeting, sayAs, voiceChoice]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Pressing Command Center sends the request to FIAREP at once; it opens once FIAREP approves.
   const asked = useRef(false);
@@ -505,6 +513,15 @@ export default function CommandCenter() {
   if (!support.ok) {
     return <View style={ui.wrap}><Text style={ui.cardTitle}>Command Center</Text><Text style={ui.label}>{support.reason}</Text></View>;
   }
+  if (voiceChoice === null) {
+    return (
+      <View style={[ui.wrap, { flex: 1, justifyContent: 'center', gap: 14 }]}>
+        <Text style={[ui.cardTitle, { textAlign: 'center' }]}>Pick your Command Center voice</Text>
+        <Pressable style={ui.btn} onPress={() => void pickVoice('man')}><Text style={ui.btnText}>Man's voice</Text></Pressable>
+        <Pressable style={ui.btn} onPress={() => void pickVoice('woman')}><Text style={ui.btnText}>Woman's voice</Text></Pressable>
+      </View>
+    );
+  }
   if (device === undefined) return <View style={[ui.wrap, { alignItems: 'center' }]}>{!!savedGreeting && <Text style={{ fontSize: 20, fontWeight: '700', color: '#111', marginBottom: 8, alignSelf: 'stretch' }}>{savedGreeting}</Text>}<ActivityIndicator /></View>;
   if (!device || device.status === 'revoked') {
     return (
@@ -696,6 +713,14 @@ export default function CommandCenter() {
           </View>
           <Text style={{ fontSize: 17, fontWeight: '700', marginTop: 4 }}>Talking</Text>
           {sw('Say replies out loud', speakReplies, setSpeakReplies)}
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6 }}>
+            <Text style={{ flex: 1, fontWeight: '600' }}>Voice</Text>
+            {(['man', 'woman'] as const).map((v) => (
+              <Pressable key={v} onPress={() => void pickVoice(v)} style={{ paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: voiceChoice === v ? ACCENT : '#ccc', backgroundColor: voiceChoice === v ? ACCENT : '#fff' }}>
+                <Text style={{ color: voiceChoice === v ? '#fff' : '#333', fontWeight: '600' }}>{v === 'man' ? 'Man' : 'Woman'}</Text>
+              </Pressable>
+            ))}
+          </View>
           {sw('Hands-free', handsFree, (v) => { setHandsFree(v); void AsyncStorage.setItem('cc.handsFree2', v ? '1' : '0'); if (!v) stopListening(); }, 'On: the screen listens as soon as it opens — no buttons. Just talk; when you stop, it answers.')}
           {handsFree && sw('Only after “Hey FIAREP” (not needed on this screen)', wakeOn, (v) => { setWakeOn(v); void AsyncStorage.setItem('cc.wake2', v ? '1' : '0'); })}
           {handsFree && sw('Show the conversation on screen', showConvo, (v) => { setShowConvo(v); void AsyncStorage.setItem('cc.showConvo', v ? '1' : '0'); }, 'Off: the screen stays blank while you talk.')}
