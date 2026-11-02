@@ -7,6 +7,8 @@ import RemotePhoto from '../components/RemotePhoto';
 import PhotoViewer from '../components/PhotoViewer';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
+import { Alert } from 'react-native';
+import { useHeatAlert, ackHeatAlert } from '../lib/heat-alert';
 
 function fmt(iso?: string): string { try { return iso ? new Date(iso).toLocaleString() : ''; } catch { return iso || ''; } }
 
@@ -15,6 +17,8 @@ export default function EmergencyActivity() {
   const [jobs, setJobs] = useState<EmergencyJob[]>([]);
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewer, setViewer] = useState<string | null>(null);
+  const [heat, reloadHeat] = useHeatAlert();
+  const [acking, setAcking] = useState(false);
 
   const load = useCallback(() => {
     (async () => {
@@ -31,7 +35,29 @@ export default function EmergencyActivity() {
   return (
     <ScrollView contentContainerStyle={ui.wrap}>
       <Text style={ui.h}>Emergency Activity</Text>
-      <Text style={ui.label}>Emergency units that responded at your development(s) — what happened and who was there. Read-only.</Text>
+
+      <Text style={{ fontSize: 17, fontWeight: '800', marginTop: 8 }}>Heat, hot water & high hazards</Text>
+      {!heat ? <Text style={ui.listSub}>Nothing open.</Text> : (
+        <View style={[ui.card, { borderWidth: 2, borderColor: '#FF2D2D', backgroundColor: '#FFF1F1', gap: 6, marginTop: 6 }]}>
+          <Text style={{ fontSize: 16, fontWeight: '800', color: '#B91C1C' }}>{heat.sentence}</Text>
+          {heat.items.map((h) => (
+            <View key={h.key} style={{ borderTopWidth: 1, borderTopColor: '#F5C2C2', paddingTop: 6 }}>
+              <Text style={{ fontWeight: '700' }}>{h.kind === 'hot water' ? 'Hot water' : h.kind === 'hazard' ? 'HAZARD' : 'Heat'} · {h.building}{h.apt ? ` · Apt ${h.apt}` : ''}</Text>
+              <Text style={ui.listSub}>{h.source} · {fmt(h.at)}</Text>
+              {!!h.what && <Text style={{ fontSize: 13 }}>{h.what}</Text>}
+            </View>
+          ))}
+          <Pressable style={[ui.btn, { backgroundColor: '#B91C1C', marginTop: 6 }, acking && ui.btnMuted]} disabled={acking} onPress={() => void (async () => {
+            setAcking(true);
+            try { await ackHeatAlert(heat.id); await reloadHeat(); } catch (e: any) { Alert.alert('Not done', e?.data?.error || e?.message || 'Try again.'); }
+            finally { setAcking(false); }
+          })()}>
+            <Text style={ui.btnText}>{acking ? 'Saving…' : 'Got it'}</Text>
+          </Pressable>
+        </View>
+      )}
+
+      <Text style={{ fontSize: 17, fontWeight: '800', marginTop: 18 }}>Development emergencies</Text>
 
       {jobs.length === 0 && <Text style={[ui.empty, { marginTop: 20 }]}>No emergency activity.</Text>}
 

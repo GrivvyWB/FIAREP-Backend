@@ -486,7 +486,7 @@ export default function OwnerModules() {
     setPriorityEngineOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).priorityEngine === false));
     setViolationGuideOn(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).violationGuide === false));
     setOutOfNetworkOn(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).outOfNetwork === true));
-    setArrival(Object.fromEntries(Object.entries((configured && typeof configured === "object" ? configured : {}) as Record<string, unknown>).filter(([k, v]) => (k === "arrivalAlerts" || k.startsWith("arrivalAlerts.bldg.") || k.startsWith("emergencyAlerts.")) && typeof v === "boolean")) as Record<string, boolean>);
+    setArrival(Object.fromEntries(Object.entries((configured && typeof configured === "object" ? configured : {}) as Record<string, unknown>).filter(([k, v]) => (k === "arrivalAlerts" || k.startsWith("arrivalAlerts.bldg.") || k.startsWith("emergencyAlerts.") || k === "heatAlerts") && typeof v === "boolean")) as Record<string, boolean>);
     setSmartRepairToMgmt(!(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairToManagement === false));
     setSmartRepairEmailCopy(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairEmailCopy === true));
     setSmartRepairSync(Boolean(configured && typeof configured === "object" && (configured as Record<string, unknown>).smartRepairSync === true));
@@ -1465,6 +1465,7 @@ export default function OwnerModules() {
                   )}
                 </div>
                 {([
+                  ["heatAlerts", "Heat, hot water & hazard alarm", "A heat or hot water violation or complaint, or any high hazard — gas leak, fire, smoke, electrical burning, carbon monoxide, flooding, collapse, someone trapped, HPD Class C, a tenant complaint marked urgent (HPD, DOB / OATH-ECB, or a tenant) — turns Emergency Activity flashing red on this client's app and alerts its administrators and management every 5 minutes until someone presses Got it. ON unless switched off"],
                   ["emergencyAlerts.new", "Emergency alert: new emergency job", "A new emergency job goes right away to the emergency supervisor (Superintendent Ⓔ) and every emergency crew member. ON unless switched off"],
                   ["emergencyAlerts.assigned", "Emergency alert: job assigned to you", "The crew member an emergency job is assigned (or reassigned) to gets it right away, with the address. ON unless switched off"],
                 ] as const).map(([key, title, desc]) => {

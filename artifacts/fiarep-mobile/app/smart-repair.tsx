@@ -12,7 +12,7 @@ import { ResidentSignOffSheet, signOffLabel, type ResidentSignOff } from '../com
 import MoldPanel from '../components/MoldPanel';
 import RemotePhoto from '../components/RemotePhoto';
 import RepairReferenceImage from '../components/RepairReferenceImage';
-import { readHeading, facingLabel, gpsAddress, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, syncSavedRepairs, listTeamRepairs, type TeamRepair, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
+import { readHeading, facingLabel, requestSmartTicket, requestVerification, requestDrawings, saveRemotePhoto, ticketText, summaryCard, listSavedRepairs, syncSavedRepairs, listTeamRepairs, type TeamRepair, saveRepair, deleteSavedRepair, reportRepairComplete, type SmartTicket, type RepairVerification, type SmartDrawings, type SavedRepair } from '../lib/smartRepair';
 import { createManagementReport, getResidentReport, listResidentReportPhotoUrls, addResidentUpdate, getCurrentActor, signOffForServer, uploadDoorVideo } from '../lib/store';
 import { ui } from '../lib/ui';
 
@@ -146,7 +146,7 @@ export default function SmartRepair() {
 
   // From a resident complaint: its photo, address, apartment and words come along.
   useEffect(() => {
-    if (!reportId) { void gpsAddress().then((a) => { if (a) setAddress((cur) => cur || a); }); return; }
+    if (!reportId) return; // a new repair starts with the address blank
     void (async () => {
       const r = await getResidentReport(String(reportId));
       if (!r) return;
@@ -336,7 +336,7 @@ export default function SmartRepair() {
         <Panel n={2} title="Location (GPS & details)">
           <View style={{ flexDirection: 'row', gap: 10 }}>
             <View style={{ flex: 1, gap: 4 }}>
-              <TextInput style={ui.input} value={address} onChangeText={setAddress} placeholder="Address (from GPS)" />
+              <TextInput style={ui.input} value={address} onChangeText={setAddress} placeholder="Address" />
               <View style={{ flexDirection: 'row', gap: 6 }}>
                 <TextInput style={[ui.input, { flex: 1 }]} value={apt} onChangeText={setApt} placeholder="Apartment" />
                 <TextInput style={[ui.input, { flex: 1 }]} value={room} onChangeText={setRoom} placeholder="Room" />

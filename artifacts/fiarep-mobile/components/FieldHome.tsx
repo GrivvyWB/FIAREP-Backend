@@ -14,8 +14,9 @@ import { useRouter } from 'expo-router';
 import { ALL_BUTTONS, plainLabel } from '../lib/all-buttons';
 import { moduleEnabled, moduleForTile, personTileOn, tileEnabled, useRawModules, type AppTabScreen } from '../lib/module-access';
 import { useBaselineWaiting, COMPLAINT_TILES } from '../lib/baseline';
+import { useHeatAlert } from '../lib/heat-alert';
 
-export type HomeTile = { label: string; onPress: () => void; badge?: number };
+export type HomeTile = { label: string; onPress: () => void; badge?: number; alarm?: boolean };
 export type HomeSection = { heading: string; tiles: HomeTile[]; viewAll?: () => void; color?: string };
 export type HomeTab = { label: string; icon: string; onPress: () => void };
 
@@ -47,7 +48,15 @@ function Chevron({ color, size = 30 }: { color: string; size?: number }) {
   );
 }
 
-function Tile({ t, color, width }: { t: HomeTile; color: string; width: number }) {
+function Tile({ t, color: base, width }: { t: HomeTile; color: string; width: number }) {
+  // Alarm (a heat or hot water violation came in): the tile flashes red and blue until someone presses Got it.
+  const [flip, setFlip] = React.useState(false);
+  React.useEffect(() => {
+    if (!t.alarm) { setFlip(false); return undefined; }
+    const timer = setInterval(() => setFlip((f) => !f), 600);
+    return () => clearInterval(timer);
+  }, [t.alarm]);
+  const color = t.alarm && flip ? '#FF2D2D' : base;
   const { label, badge } = cleanLabel(t.label);
   const art = tileArt(label);
   const n = t.badge ?? badge;
@@ -86,6 +95,7 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections:
   const router = useRouter();
   const rawModules = useRawModules();
   const baselineWaiting = useBaselineWaiting();
+  const [heat] = useHeatAlert();
   const present = new Set(ownSections.flatMap((s) => s.tiles.map((t) => plainLabel(t.label))));
   if (hero) present.add(plainLabel(hero.label));
   const more = screen ? ALL_BUTTONS.filter((b) => {
@@ -97,6 +107,8 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections:
     return !m || moduleEnabled(m) || personTileOn(screen, b.label, rawModules);
   }) : [];
   const sections: HomeSection[] = more.length ? [...ownSections, { heading: 'More', tiles: more.map((b) => ({ label: b.label, onPress: () => router.push(b.route as never) })) }] : ownSections;
+  // Emergency Activity is the heat & hot water alarm: red and blue, with the count, while one is open.
+  const alarmed = (sec: HomeSection[]): HomeSection[] => !heat ? sec : sec.map((x) => ({ ...x, tiles: x.tiles.map((t) => (plainLabel(t.label) === 'Emergency Activity' ? { ...t, alarm: true, badge: heat.items.length } : t)) }));
   const { width } = useWindowDimensions();
   const pad = 14; const gap = 10;
   const colW = (n: number) => Math.floor((width - pad * 2 - gap * (n - 1)) / n);
@@ -107,7 +119,7 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections:
   const imgTop = topGap && Platform.OS === 'ios' ? 40 : 0;
   const imgH = Math.max(0, bannerH - imgTop);
   const sub = tagline ?? taglineFor(title);
-  const live = sections.filter((s) => s.tiles.length > 0);
+  const live = alarmed(sections).filter((s) => s.tiles.length > 0);
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>

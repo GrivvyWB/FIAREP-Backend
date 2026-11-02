@@ -11,7 +11,6 @@ import { db, entityRecords, organizations, settings, staffAccounts } from "@work
 import { notify } from "./audit";
 import { actorFromStaff } from "./auth";
 import { commandDevices } from "./command/tables";
-import { moduleOn } from "./command/switches";
 import { logger } from "./logger";
 import { requireAuth } from "../middlewares/auth";
 
@@ -19,12 +18,16 @@ const EVERY_MS = 2 * 60 * 1000;
 const REPEAT_MS = 5 * 60 * 1000;
 const KEY = "heat-digest-cursor";
 const ENTITY = "heat-alerts";
-const TITLE = "URGENT: Heat & hot water";
+const TITLE = "URGENT: Heat, hot water & hazards";
 const HEAT = /heat\/hot water|\bno heat\b|\bheat\b|\bheating\b|\bheater\b|\bradiator|\bboiler|\bfurnace|hot water/i;
+// Any high hazard goes to the same alarm: gas, fire, smoke, electrical burning or sparking, carbon monoxide,
+// flooding, sewage, collapse, people trapped, HPD Class C (immediately hazardous).
+const HAZARD = /gas (leak|smell|odor|odour)|smell(s|ing)? (of )?gas|\bgas\b.*\bleak|\bfire\b|\bsmoke\b|\bburning\b|\bspark(s|ing)?\b|electrical (fire|hazard|shock)|exposed wir|live wire|carbon monoxide|\bco detector (going off|alarm)|\bflood|burst pipe|water (pouring|gushing)|sewage|sewer back|ceiling (collapse|fell|falling|cave)|collapse|trapped|entrapment|class c\b|immediately hazardous|no water\b|explosion/i;
+const URGENT = (v: unknown) => /^(urgent|emergency|high|critical|immediate)/i.test(str(v));
 const DONE = new Set(["done", "resolved", "work_approved", "approved", "completed", "in_house_completed", "closed"]);
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 
-export type HeatItem = { key: string; building: string; apt: string; kind: "heat" | "hot water"; source: string; what: string; at: string };
+export type HeatItem = { key: string; building: string; apt: string; kind: "heat" | "hot water" | "hazard"; source: string; what: string; at: string };
 type HeatState = { items: HeatItem[]; openedAt: string; lastPushAt: string | null; ackAt: string | null; ackBy: string | null };
 
 async function cursorFor(tenantId: string): Promise<Date | null> {
@@ -45,10 +48,11 @@ async function newItems(tenantId: string, since: Date): Promise<HeatItem[]> {
     if (DONE.has(str(s["status"]).toLowerCase())) continue;
     const a = (s["assessment"] && typeof s["assessment"] === "object" ? s["assessment"] : {}) as Record<string, unknown>;
     const text = [s["category"], s["type"], s["complaintType"], s["title"], s["issue"], s["description"], s["details"], a["trade"], a["summary"]].map(str).join(" ");
-    if (!HEAT.test(text)) continue;
+    const hazard = HAZARD.test(text) || URGENT(s["priority"]) || URGENT(s["severity"]) || URGENT(a["priority"]) || s["urgent"] === true || s["emergency"] === true;
+    if (!HEAT.test(text) && !hazard) continue;
     const hot = /hot water|water heater/i.test(text) && !/\bno heat\b/i.test(text);
     items.push({ key: `r:${r.id}`, building: str(s["address"]) || str(s["buildingAddress"]) || r.development || "Building not given", apt: str(s["unit"]) || str(s["apartment"]),
-      kind: hot ? "hot water" : "heat", source: "Resident", what: (str(s["description"]) || str(s["title"])).slice(0, 120), at: r.createdAt.toISOString() });
+      kind: HEAT.test(text) && !(HAZARD.test(text)) ? (hot ? "hot water" : "heat") : "hazard", source: "Resident", what: (str(s["description"]) || str(s["title"])).slice(0, 120), at: r.createdAt.toISOString() });
   }
   const watched = await db.select({ id: entityRecords.id }).from(entityRecords).where(and(eq(entityRecords.entity, "watch-buildings"), eq(entityRecords.deleted, false), sql`${entityRecords.state}->>'organizationId' = ${tenantId}`));
   if (watched.length) {
@@ -57,10 +61,10 @@ async function newItems(tenantId: string, since: Date): Promise<HeatItem[]> {
     for (const r of alerts) {
       const s = (r.state ?? {}) as Record<string, unknown>;
       const t = `${str(s["title"])} ${str(s["detail"])}`;
-      if (!HEAT.test(t)) continue;
+      if (!HEAT.test(t) && !HAZARD.test(t)) continue;
       if (str(s["kind"]) === "HPD complaint" && /·\s*CLOSE/i.test(str(s["detail"]))) continue;
       const apt = (t.match(/\bApt\.?\s*([A-Z0-9-]+)/i) || [])[1] || "";
-      items.push({ key: `c:${r.id}`, building: str(s["address"]) || "Building", apt, kind: /hot water/i.test(t) && !/\bheat\b(?!\/)/i.test(t) ? "hot water" : "heat",
+      items.push({ key: `c:${r.id}`, building: str(s["address"]) || "Building", apt, kind: HAZARD.test(t) && !HEAT.test(t) ? "hazard" : /hot water/i.test(t) && !/\bheat\b(?!\/)/i.test(t) ? "hot water" : "heat",
         source: `City · ${str(s["kind"])}`, what: str(s["title"]).slice(0, 120), at: r.createdAt.toISOString() });
     }
   }
@@ -71,11 +75,12 @@ async function newItems(tenantId: string, since: Date): Promise<HeatItem[]> {
 export function heatCounts(items: HeatItem[]) {
   const buildings = new Set(items.map((i) => i.building.toLowerCase()));
   const apartments = new Set(items.filter((i) => i.apt).map((i) => `${i.building.toLowerCase()}|${i.apt.toLowerCase()}`));
-  return { buildings: buildings.size, apartments: apartments.size, heat: items.filter((i) => i.kind === "heat").length, hotWater: items.filter((i) => i.kind === "hot water").length };
+  return { buildings: buildings.size, apartments: apartments.size, heat: items.filter((i) => i.kind === "heat").length, hotWater: items.filter((i) => i.kind === "hot water").length, hazard: items.filter((i) => i.kind === "hazard").length };
 }
 export function heatSentence(items: HeatItem[]): string {
   const c = heatCounts(items);
-  const what = c.heat && c.hotWater ? "heat and hot water violations" : c.hotWater ? "hot water violations" : "heat violations";
+  const parts = [c.hazard ? "high-hazard emergencies" : "", c.heat && c.hotWater ? "heat and hot water violations" : c.hotWater ? "hot water violations" : c.heat ? "heat violations" : ""].filter(Boolean);
+  const what = parts.join(" and ");
   return `You have ${what} at ${c.buildings} building${c.buildings === 1 ? "" : "s"}${c.apartments ? `, ${c.apartments} apartment${c.apartments === 1 ? "" : "s"}` : ""}.`;
 }
 
@@ -86,12 +91,21 @@ async function openAlert(tenantId: string) {
 }
 
 async function push(tenantId: string, alertId: string, items: HeatItem[]) {
+  // The company's administrators and management, and anyone with a Command Center phone.
   const phones = await db.selectDistinct({ staffId: commandDevices.staffId }).from(commandDevices).where(and(eq(commandDevices.tenantId, tenantId), eq(commandDevices.status, "active")));
-  if (!phones.length) return 0;
-  const staff = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, tenantId), eq(staffAccounts.status, "approved"), inArray(staffAccounts.id, phones.map((p) => p.staffId))));
+  const people = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, tenantId), eq(staffAccounts.status, "approved")));
+  const phoneIds = new Set(phones.map((p) => p.staffId));
+  const staff = people.filter((s) => phoneIds.has(s.id) || s.role === "administrator" || s.role === "management");
+  if (!staff.length) return 0;
   // Same title and alert id each time: the Inbox keeps one line (refreshed), the phone gets the push again.
-  for (const s of staff) await notify(actorFromStaff(s), s.id, TITLE, `${heatSentence(items)} Open the Command Center and press Got it.`, alertId).catch(() => undefined);
+  for (const s of staff) await notify(actorFromStaff(s), s.id, TITLE, `${heatSentence(items)} Open Emergency Activity and press Got it.`, alertId).catch(() => undefined);
   return staff.length;
+}
+
+async function heatOn(tenantId: string): Promise<boolean> {
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  const modules = ((org?.features as Record<string, unknown> | undefined)?.["modules"] ?? {}) as Record<string, unknown>;
+  return modules["heatAlerts"] !== false;
 }
 
 export async function runHeatDigest(): Promise<void> {
@@ -100,7 +114,8 @@ export async function runHeatDigest(): Promise<void> {
   for (const o of orgs) {
     if (o.id === "default") continue;
     try {
-      if (!(await moduleOn(o.id))) continue;
+      // On for every client unless switched off (Platform Control → Heat & hot water alarm).
+      if (!(await heatOn(o.id))) continue;
       const since = await cursorFor(o.id);
       if (!since) { await saveCursor(o.id, now); continue; } // first time: start from now
       const fresh = await newItems(o.id, since);
