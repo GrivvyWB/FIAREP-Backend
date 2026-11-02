@@ -32,13 +32,18 @@ export async function setCommandVoice(id: string | null, k = 1): Promise<void> {
 async function phoneVoice(g: 'man' | 'woman'): Promise<string | undefined> {
   const all = await Speech.getAvailableVoicesAsync().catch(() => []);
   const want = g === 'man' ? MALE : FEMALE;
-  const match = all.filter((v) => /^en/i.test(v.language) && want.test(v.name || v.identifier));
-  return (match.find((v) => String(v.quality).toLowerCase().includes('enhanced')) || match[0])?.identifier;
+  // The most natural voice on the phone first: Premium, then Enhanced (free downloads from Apple),
+  // then the basic one. US English before other English.
+  const rank = (v: { identifier: string; quality?: unknown; language: string }) =>
+    (/premium/i.test(v.identifier) ? 0 : /enhanced/i.test(v.identifier) || String(v.quality).toLowerCase().includes('enhanced') ? 1 : 2) * 2 + (/en-us/i.test(v.language) ? 0 : 1);
+  const match = all.filter((v) => /^en/i.test(v.language) && want.test(v.name || v.identifier)).sort((a, b) => rank(a) - rank(b));
+  return match[0]?.identifier;
 }
 /** Says the words in this saved voice; resolves when it has finished (or was stopped). */
 export async function speakIn(v: SavedVoice, words: string, k = 1): Promise<void> {
-  const base = v.hz ? Math.min(1.4, Math.max(0.7, v.hz / TYPICAL[v.gender])) : 1;
-  const pitch = Math.min(2, Math.max(0.5, base * k));
+  // Small pitch moves only: big ones make a phone voice sound artificial.
+  const base = v.hz ? Math.min(1.1, Math.max(0.9, v.hz / TYPICAL[v.gender])) : 1;
+  const pitch = Math.min(1.25, Math.max(0.8, base * (1 + (k - 1) * 0.6)));
   const voice = await phoneVoice(v.gender);
   await new Promise<void>((resolve) => {
     Speech.speak(words, { voice, pitch, rate: 1, onDone: () => resolve(), onStopped: () => resolve(), onError: () => resolve() });
