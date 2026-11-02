@@ -34,7 +34,7 @@ if [ -z "$NODE" ] || ! "$NODE" -e 'process.exit(Number(process.versions.node.spl
 fi
 
 mkdir -p "$DIR"; chmod 700 "$DIR"
-echo "Downloading the agent from $API…"
+echo "Downloading the agent from ${API}…"
 curl -fsSL "$API/v1/command/agent-files/agent.mjs" -o "$DIR/agent.new.mjs"
 "$NODE" --check "$DIR/agent.new.mjs"
 mv "$DIR/agent.new.mjs" "$DIR/agent.mjs"
