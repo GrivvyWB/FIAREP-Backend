@@ -121,7 +121,6 @@ export default function WorkerHome() {
         ...(!isTradeWorker && on('Check Report Status') ? [{ label: 'Check Report Status', onPress: () => router.push('/resident-lookup') }] : []),
         ...(modules['property-lookup'] && on('Check HPD / DOB') ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
         ...((modules['translator'] || personTileOn('worker', 'Translator', rawModules)) && on('Translator') ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
-        ...(on('Voice Recorder') ? [{ label: 'Voice Recorder', onPress: () => router.push('/voice-studio' as never) }] : []),
         { label: 'Sign out', onPress: onSignOut },
       ],
     },

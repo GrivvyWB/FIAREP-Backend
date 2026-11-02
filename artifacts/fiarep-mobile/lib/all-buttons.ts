@@ -21,7 +21,7 @@ export const ALL_BUTTONS: Array<{ label: string; route: string }> = [
   { label: 'Development Scores', route: '/dev-scores' }, { label: 'Building & Residential Scores', route: '/property-scores' },
   { label: 'Manage All Requests', route: '/manage-requests' }, { label: 'Resident Reports', route: '/management' }, { label: 'Review Reports', route: '/management' },
   { label: 'Priority Queue', route: '/priority-queue' }, { label: 'Default rates', route: '/settings' }, { label: 'Check HPD / DOB', route: '/inspector-violations?lookup=1' },
-  { label: 'Translator', route: '/translator' }, { label: 'Voice Recorder', route: '/voice-studio' }, { label: 'Command Center', route: '/command-center' }, { label: 'Check Report Status', route: '/resident-lookup' },
+  { label: 'Translator', route: '/translator' }, { label: 'Command Center', route: '/command-center' }, { label: 'Check Report Status', route: '/resident-lookup' },
 ];
 
 /** True when one of this person's own App tabs switches is on for a button that opens this page,

@@ -187,7 +187,7 @@ const ALL_APP_BUTTONS = [
   "Inspection Approvals", "Assign Route", "Add Job for Mgmt", "Assign a Job", "In-house assignments", "Cover a Site", "Staff Member Jobs", "Assign Emergency Unit",
   "Manage Trucks", "Truck Scores", "Emergency Activity", "Emergency Units", "Elevator Dashboard", "Elevator Jobs", "Leave Calendar", "Attendance", "Change Orders",
   "Vendor Score", "Development Scores", "Building & Residential Scores", "Manage All Requests", "Resident Reports", "Review Reports", "Priority Queue",
-  "Default rates", "Check HPD / DOB", "Translator", "Voice Recorder", "Command Center", "Check Report Status",
+  "Default rates", "Check HPD / DOB", "Translator", "Command Center", "Check Report Status",
 ];
 const STAFF_HOMES = new Set(["management", "admin", "cpm", "tech", "worker"]);
 const withAllButtons = (groups: Array<{ id: string; screen: string; tabs: string[] }>) =>
