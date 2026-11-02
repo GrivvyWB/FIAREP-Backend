@@ -153,7 +153,7 @@ export default function CommandCenter() {
   const [savedGreeting, setSavedGreeting] = useState('');
   // A man's or a woman's voice: asked the first time the Command Center is opened, changeable below.
   const [voiceChoice, setVoiceChoice] = useState<'man' | 'woman' | null | undefined>(undefined);
-  useEffect(() => { void customFetch<{ voice: 'man' | 'woman' | null }>('/api/v1/command/my-voice', { responseType: 'json' } as never).then((r) => setVoiceChoice(r?.voice ?? null)).catch(() => setVoiceChoice('woman')); }, []);
+  useEffect(() => { void customFetch<{ voice: 'man' | 'woman' | null }>('/api/v1/command/my-voice', { responseType: 'json' } as never).then((r) => setVoiceChoice(r?.voice ?? null)).catch(() => undefined); }, []);
   async function pickVoice(v: 'man' | 'woman') {
     setVoiceChoice(v);
     await customFetch('/api/v1/command/my-voice', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ voice: v }), responseType: 'json' } as never).catch(() => undefined);
@@ -167,15 +167,17 @@ export default function CommandCenter() {
   useFocusEffect(useCallback(() => {
     (async () => {
       try {
-        const { text: GREET_TEXT, file: greetFile } = await greetKeys();
+        const { text: GREET_TEXT, said: SAID, file: greetFile } = await greetKeys();
         const text = (await AsyncStorage.getItem(GREET_TEXT)) || '';
         setSavedGreeting(text);
         if (!text || greeted.current || !speakReplies) return;
+        // Only a greeting recorded in this person's voice plays; otherwise it is recorded again first (one voice, always).
+        if (!voiceChoice || (await AsyncStorage.getItem(SAID)) !== `${sayAs}|v2|${voiceChoice}`) return;
         if ((await FileSystem.getInfoAsync(greetFile)).exists) { greeted.current = true; await playGreetingFile(); }
       } catch { /* the greeting is on screen either way */ }
     })();
     return () => { greeted.current = false; };
-  }, [])); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [voiceChoice, sayAs])); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     const text = device?.status === 'active' ? device.greeting : '';
     if (!text) return;
@@ -435,7 +437,7 @@ export default function CommandCenter() {
   }
   async function playSayAs() {
     try {
-      const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName('Hey, this is FIAREP.', sayAsDraft) });
+      const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName('Hey, this is FIAREP.', sayAsDraft), voice: 'command' });
       const uri = `${FileSystem.cacheDirectory}cmd-sayas-${Date.now()}.mp3`;
       await FileSystem.writeAsStringAsync(uri, audioBase64, { encoding: 'base64' as never });
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
