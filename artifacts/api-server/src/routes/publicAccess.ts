@@ -287,10 +287,23 @@ router.post("/v1/public/resident-reports", async (req, res) => {
   res.status(out.status).json(out.body);
 });
 
+/** A complaint number as typed ("rc_46799", "RC 46799", "rc46799", "46799") → "RC-46799". */
+const complaintNumber = (raw: string) => {
+  const t = raw.trim().toUpperCase();
+  const m = t.match(/^(?:RC)?[\s_\-.]*(\d{4,8})$/);
+  return m ? `RC-${m[1]}` : t;
+};
+
 router.get("/v1/public/resident-reports/:complaintNo", async (req, res) => {
-  const [access] = await db.select().from(publicAccessCodes).where(and(
-    eq(publicAccessCodes.kind, "resident"), eq(publicAccessCodes.code, req.params.complaintNo!.toUpperCase()),
+  const no = complaintNumber(String(req.params.complaintNo || ""));
+  const [code] = await db.select().from(publicAccessCodes).where(and(
+    eq(publicAccessCodes.kind, "resident"), eq(publicAccessCodes.code, no),
   )).limit(1);
+  // A complaint staff entered (no resident code issued): found by its complaint number.
+  const [byNumber] = code ? [] : await db.select({ id: entityRecords.id, tenantId: entityRecords.tenantId }).from(entityRecords).where(and(
+    eq(entityRecords.entity, "resident-reports"), eq(entityRecords.deleted, false), sql`${entityRecords.state}->>'complaintNo' = ${no}`,
+  )).limit(1);
+  const access = code ? { recordId: code.recordId, tenantId: code.tenantId } : byNumber ? { recordId: byNumber.id, tenantId: byNumber.tenantId } : null;
   if (!access) {
     res.status(404).json({ error: "Report not found" }); return;
   }
