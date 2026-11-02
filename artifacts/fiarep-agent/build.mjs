@@ -40,11 +40,11 @@ const write = (id, s) => { mkdirSync(path.join(BUILDS, id), { recursive: true })
 const latest = () => readdirSync(BUILDS).filter((d) => existsSync(statusFile(d))).sort().pop() || null;
 const say = (o) => { console.log(JSON.stringify(o, null, 2)); };
 
-async function tell(title, detail) {
+async function tell(title, detail, url) {
   if (!AGENT_CFG.apiBase || !AGENT_CFG.token) return;
   await fetch(`${AGENT_CFG.apiBase.replace(/\/$/, "")}/v1/command/agent/notify`, {
     method: "POST", headers: { authorization: `Bearer ${AGENT_CFG.token}`, "content-type": "application/json" },
-    body: JSON.stringify({ title, detail: detail.slice(0, 1000) }), signal: AbortSignal.timeout(20_000),
+    body: JSON.stringify({ title, detail: detail.slice(0, 1000), ...(url ? { url } : {}) }), signal: AbortSignal.timeout(20_000),
   }).catch(() => undefined);
 }
 
@@ -115,8 +115,10 @@ async function ship(id) {
   if (process.platform === "darwin" && !(await sh("git", ["status", "--porcelain", "--untracked-files=no"], { cwd: REPO })).out.trim()) {
     if (!(await sh("git", ["pull", "--ff-only", "origin", "main"], { cwd: REPO, timeoutMs: 180_000 })).code) steps.push("Mac folder updated");
   }
-  const rp = await sh(process.execPath, [path.join(DIR, "republish.mjs"), "--run"], { cwd: DIR, timeoutMs: 1_200_000 });
-  steps.push(rp.code ? `Republish didn't finish (${(rp.err || rp.out).trim().slice(-200)}) — press Republish in Replit` : "Republished on Replit");
+  // Replit won't let an automated browser press Republish (its human check), so you press it: an alert that opens the page.
+  let publishUrl = "https://replit.com";
+  try { const rc = JSON.parse(readFileSync(path.join(DIR, "replit.json"), "utf8")); publishUrl = rc.sites?.FIAREP?.deploymentUrl || rc.deploymentUrl || publishUrl; } catch { /* the Replit home page */ }
+  steps.push("ready for you to press Republish in Replit");
   if (s.mobile) {
     if (STANDALONE && existsSync(STANDALONE)) {
       for (const f of s.changed.filter((x) => x.startsWith("artifacts/fiarep-mobile/") && !x.endsWith("/"))) {
@@ -130,6 +132,7 @@ async function ship(id) {
   await sh("git", ["-C", REPO, "worktree", "remove", "--force", wt]);
   write(id, { ...s, state: "shipped", shipped: steps, shippedAt: new Date().toISOString() });
   await tell(`Shipped build ${id}`, steps.join(" · "));
+  await tell("Ready: press Republish", `${s.request.slice(0, 160)} — it's on GitHub. In Replit: Shell: git fetch origin && git reset --hard origin/main, then Republish.`, publishUrl);
   say({ ok: true, id, steps });
 }
 

@@ -4,7 +4,7 @@ import { View, Text, Pressable, ScrollView } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { getCurrentActor, listNotifications, markNotificationRead, findReportByRef, getResidentReport, outstandingPriorityFor, acknowledgePriorityViolation, getViolationLookup, getBuildingViolation, getCurrentPosition, deleteNotification, type Notification, type PriorityViolation, listElevatorJobsForMechanic } from '../lib/store';
 import { syncAllEntities, getLastSync, clearRefusedChanges, type LastSync } from '../lib/sync';
-import { Alert } from 'react-native';
+import { Alert, Linking } from 'react-native';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
 import { clearBadge } from '../lib/push';
@@ -37,6 +37,8 @@ export default function Notifications() {
       return;
     }
     await markNotificationRead(n.id);
+    // An alert with a link (e.g. "Ready: press Republish") opens it.
+    if (n.reportId && n.reportId.startsWith('url:https://')) { void Linking.openURL(n.reportId.slice(4)); return; }
     // A quote FIAREP sent for approval opens the quote, with Approve / Turn down.
     if (msg.startsWith('fiarep needs approval') && n.reportId) {
       const m = n.reportId.match(/^qq:([^:]+):?(.*)$/);

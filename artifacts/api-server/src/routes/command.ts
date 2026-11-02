@@ -358,8 +358,11 @@ router.post("/v1/command/agent/notify", rateLimit("command-agent-notify", 30), r
   const b = (req.body ?? {}) as Record<string, unknown>;
   const title = str(b["title"], 120); const detail = str(b["detail"], 1000);
   if (!title) { res.status(400).json({ error: "title required" }); return; }
+  // A link the alert opens when tapped (Replit's publishing page): https on replit.com only.
+  const url = str(b["url"], 400);
+  const link = /^https:\/\/([a-z0-9-]+\.)*replit\.com(\/|$)/i.test(url) ? `url:${url}` : undefined;
   const admins = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, agent.tenantId), eq(staffAccounts.role, "administrator"), eq(staffAccounts.status, "approved")));
-  await Promise.all(admins.map((s) => notify(actorFromStaff(s), s.id, `${agent.name}: ${title}`, detail).catch(() => undefined)));
+  await Promise.all(admins.map((s) => notify(actorFromStaff(s), s.id, `${agent.name}: ${title}`, detail, link).catch(() => undefined)));
   res.json({ ok: true, told: admins.length });
 });
 
