@@ -1,24 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, Pressable, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, Pressable, ScrollView, Alert, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
-import { AudioModule, RecordingPresets, createAudioPlayer, setAudioModeAsync, useAudioRecorder, type AudioPlayer } from 'expo-audio';
-import { customFetch } from '@workspace/api-client-react';
+import * as Speech from 'expo-speech';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { AudioModule, AudioQuality, IOSOutputFormat, RecordingPresets, createAudioPlayer, setAudioModeAsync, useAudioRecorder, type AudioPlayer, type RecordingOptions } from 'expo-audio';
+import { getSessionIdentity } from '../lib/store';
+import { voicePitch } from '../lib/voice-pitch';
 import { ui, ACCENT } from '../lib/ui';
 
-// Voice Recorder: record a voice (yours, or someone else's with their consent said at the start),
-// then type anything and hear it said back in that voice, higher or lower.
-type Voice = { id: string; name: string; speaker: string; createdAt: string };
-const PITCH = [{ label: 'Much lower', rate: 0.82 }, { label: 'Lower', rate: 0.91 }, { label: 'Normal', rate: 1 }, { label: 'Higher', rate: 1.09 }, { label: 'Much higher', rate: 1.18 }];
-const api = <T,>(url: string, init: Record<string, unknown> = {}) => customFetch<T>(url, { responseType: 'json', ...init } as never);
-const json = (method: string, body: unknown) => ({ method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+// Voice Recorder: record a voice; the phone measures how high or deep it is and talks back with its own
+// speech engine tuned to sound close to it, higher or lower as you like. Everything stays on the phone.
+type Voice = { id: string; name: string; gender: 'man' | 'woman'; hz: number | null; file: string; createdAt: string };
+const PITCH = [{ label: 'Much lower', k: 0.8 }, { label: 'Lower', k: 0.9 }, { label: 'Normal', k: 1 }, { label: 'Higher', k: 1.1 }, { label: 'Much higher', k: 1.25 }];
+// Average speaking pitch of adult voices, to tune the phone voice toward this person's.
+const TYPICAL = { man: 120, woman: 210 };
+const MALE = /aaron|fred|alex|tom|nathan|evan|daniel|rishi|arthur|oliver|gordon|reed|rocko|grandpa|eddy|ralph|albert/i;
+const FEMALE = /samantha|nicky|allison|ava|susan|victoria|karen|moira|tessa|zoe|serena|kate|martha|catherine|fiona|veena|flo|shelley|sandy|grandma|kathy|joelle|noelle/i;
+
+// iPhone records WAV so the pitch can be measured on the phone.
+const REC: RecordingOptions = Platform.OS === 'ios'
+  ? { ...RecordingPresets.HIGH_QUALITY, extension: '.wav', sampleRate: 16000, numberOfChannels: 1, bitRate: 256000,
+      ios: { outputFormat: IOSOutputFormat.LINEARPCM, audioQuality: AudioQuality.HIGH, sampleRate: 16000, linearPCMBitDepth: 16, linearPCMIsBigEndian: false, linearPCMIsFloat: false } }
+  : RecordingPresets.HIGH_QUALITY;
 
 export default function VoiceStudio() {
-  const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
+  const recorder = useAudioRecorder(REC);
   const player = useRef<AudioPlayer | null>(null);
-  const [ready, setReady] = useState<boolean | null>(null);
+  const [store, setStore] = useState('');
   const [voices, setVoices] = useState<Voice[]>([]);
-  const [speaker, setSpeaker] = useState('');
+  const [name, setName] = useState('');
+  const [gender, setGender] = useState<'man' | 'woman'>('man');
   const [recording, setRecording] = useState(false);
   const [seconds, setSeconds] = useState(0);
   const [uri, setUri] = useState('');
@@ -27,19 +39,21 @@ export default function VoiceStudio() {
   const [pitch, setPitch] = useState<Record<string, number>>({});
 
   const load = useCallback(async () => {
-    try { const r = await api<{ ready: boolean; voices: Voice[] }>('/api/ai/voices'); setReady(r.ready); setVoices(r.voices); }
-    catch { setReady(false); }
+    const id = (await getSessionIdentity().catch(() => null))?.staffId || 'me';
+    const k = `voice-studio:${id}`; setStore(k);
+    try { setVoices(JSON.parse((await AsyncStorage.getItem(k)) || '[]')); } catch { setVoices([]); }
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
-  useEffect(() => () => { player.current?.remove(); }, []);
+  useEffect(() => () => { player.current?.remove(); void Speech.stop(); }, []);
   useEffect(() => {
     if (!recording) return undefined;
     const t = setInterval(() => setSeconds((s) => s + 1), 1000);
     return () => clearInterval(t);
   }, [recording]);
+  const keep = async (list: Voice[]) => { setVoices(list); await AsyncStorage.setItem(store, JSON.stringify(list)); };
 
   async function start() {
-    if (!speaker.trim()) { Alert.alert('Whose voice is it?', 'Type the name of the person recording.'); return; }
+    if (!name.trim()) { Alert.alert('Whose voice is it?', 'Type the name first.'); return; }
     const perm = await AudioModule.requestRecordingPermissionsAsync();
     if (!perm.granted) { Alert.alert('Microphone needed', 'Allow the microphone in Settings.'); return; }
     await setAudioModeAsync({ allowsRecording: true, playsInSilentMode: true });
@@ -54,61 +68,72 @@ export default function VoiceStudio() {
   }
   async function save() {
     if (!uri) return;
-    if (seconds < 30) { Alert.alert('A little longer', 'Record at least 30 seconds so the copy sounds right.'); return; }
+    if (seconds < 10) { Alert.alert('A little longer', 'Record at least 10 seconds of talking.'); return; }
     setBusy('save');
     try {
-      const audio = await FileSystem.readAsStringAsync(uri, { encoding: 'base64' as never });
-      await api('/api/ai/voices', json('POST', { audio, mimeType: 'audio/mp4', speaker: speaker.trim(), name: speaker.trim() }));
-      setUri(''); setSeconds(0); await load();
-      Alert.alert('Voice saved', `Type something under ${speaker.trim()} and press Say it.`);
-    } catch (e: any) { Alert.alert('Not saved', e?.data?.error || e?.message || 'Try again.'); }
+      const id = `${Date.now()}`;
+      const file = `${FileSystem.documentDirectory}voice-${id}${uri.endsWith('.wav') ? '.wav' : '.m4a'}`;
+      await FileSystem.copyAsync({ from: uri, to: file });
+      let hz: number | null = null;
+      if (file.endsWith('.wav')) hz = voicePitch(await FileSystem.readAsStringAsync(file, { encoding: 'base64' as never }));
+      await keep([...voices, { id, name: name.trim(), gender, hz, file, createdAt: new Date().toISOString() }]);
+      setUri(''); setSeconds(0);
+    } catch (e: any) { Alert.alert('Not saved', String(e?.message || e)); }
     finally { setBusy(''); }
+  }
+  async function pickVoice(g: 'man' | 'woman'): Promise<string | undefined> {
+    const all = await Speech.getAvailableVoicesAsync().catch(() => []);
+    const en = all.filter((v) => /^en/i.test(v.language));
+    const want = (g === 'man' ? MALE : FEMALE);
+    const match = en.filter((v) => want.test(v.name || v.identifier));
+    const best = match.find((v) => String(v.quality).toLowerCase().includes('enhanced')) || match[0];
+    return best?.identifier;
   }
   async function say(v: Voice) {
     const words = (text[v.id] || '').trim();
     if (!words) { Alert.alert('What should it say?'); return; }
-    setBusy(v.id);
-    try {
-      const { audioBase64 } = await api<{ audioBase64: string }>(`/api/ai/voices/${encodeURIComponent(v.id)}/speak`, json('POST', { text: words }));
-      const file = `${FileSystem.cacheDirectory}voice-${Date.now()}.mp3`;
-      await FileSystem.writeAsStringAsync(file, audioBase64, { encoding: 'base64' as never });
-      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
-      player.current?.remove();
-      const p = createAudioPlayer({ uri: file }); player.current = p;
-      // Higher or lower: the pitch moves with the speed (no pitch correction).
-      p.shouldCorrectPitch = false;
-      p.setPlaybackRate(pitch[v.id] ?? 1);
-      p.play();
-    } catch (e: any) { Alert.alert('Not said', e?.data?.error || e?.message || 'Try again.'); }
-    finally { setBusy(''); }
+    await Speech.stop();
+    player.current?.remove();
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+    // Tuned toward this person's own pitch, then higher or lower as picked.
+    const base = v.hz ? Math.min(1.4, Math.max(0.7, v.hz / TYPICAL[v.gender])) : 1;
+    const p = Math.min(2, Math.max(0.5, base * (pitch[v.id] ?? 1)));
+    Speech.speak(words, { voice: await pickVoice(v.gender), pitch: p, rate: 1 });
+  }
+  async function listen(v: Voice) {
+    await Speech.stop();
+    await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+    player.current?.remove();
+    const pl = createAudioPlayer({ uri: v.file }); player.current = pl;
+    pl.shouldCorrectPitch = false; pl.setPlaybackRate(pitch[v.id] ?? 1); pl.play();
   }
   function remove(v: Voice) {
-    Alert.alert(`Delete ${v.name}'s voice?`, 'The copy is removed and can’t be used again.', [
+    Alert.alert(`Delete ${v.name}'s voice?`, undefined, [
       { text: 'Keep it', style: 'cancel' },
-      { text: 'Delete', style: 'destructive', onPress: () => void api(`/api/ai/voices/${encodeURIComponent(v.id)}`, { method: 'DELETE' }).then(load).catch(() => Alert.alert('Not deleted', 'Try again.')) },
+      { text: 'Delete', style: 'destructive', onPress: () => void (async () => { await FileSystem.deleteAsync(v.file, { idempotent: true }).catch(() => undefined); await keep(voices.filter((x) => x.id !== v.id)); })() },
     ]);
   }
 
-  if (ready === null) return <View style={[ui.wrap, { alignItems: 'center' }]}><ActivityIndicator /></View>;
+  const chip = (on: boolean, label: string, onPress: () => void) => (
+    <Pressable key={label} onPress={onPress} style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: on ? ACCENT : '#ccc', backgroundColor: on ? ACCENT : '#fff' }}>
+      <Text style={{ color: on ? '#fff' : '#333', fontWeight: '600', fontSize: 13 }}>{label}</Text>
+    </Pressable>
+  );
+
   return (
     <ScrollView contentContainerStyle={ui.wrap} keyboardShouldPersistTaps="handled">
-      {!ready && <Text style={{ color: '#991b1b', fontWeight: '700' }}>Voice copying isn't switched on yet.</Text>}
-
       <Text style={{ fontSize: 17, fontWeight: '800' }}>Record a voice</Text>
-      <TextInput style={ui.input} value={speaker} onChangeText={setSpeaker} placeholder="Name only (e.g. Tim)" editable={!recording} />
-      <View style={[ui.card, { gap: 4 }]}>
-        <Text style={{ fontWeight: '700' }}>Start by saying:</Text>
-        <Text style={{ fontSize: 16 }}>"I, {speaker.trim() || '(name)'}, agree to have my voice copied by FIAREP."</Text>
-        <Text style={ui.listSub}>Then keep talking for 30 seconds or more, naturally.</Text>
-      </View>
+      <TextInput style={ui.input} value={name} onChangeText={setName} placeholder="Name only (e.g. Tim)" editable={!recording} />
+      <View style={{ flexDirection: 'row', gap: 6 }}>{chip(gender === 'man', 'Man', () => setGender('man'))}{chip(gender === 'woman', 'Woman', () => setGender('woman'))}</View>
+      <Text style={ui.listSub}>Talk naturally for 10 seconds or more.</Text>
       {!recording ? (
-        <Pressable style={[ui.btn, !ready && ui.btnMuted]} disabled={!ready || !!busy} onPress={() => void start()}><Text style={ui.btnText}>{uri ? 'Record again' : 'Start recording'}</Text></Pressable>
+        <Pressable style={[ui.btn, !!busy && ui.btnMuted]} disabled={!!busy} onPress={() => void start()}><Text style={ui.btnText}>{uri ? 'Record again' : 'Start recording'}</Text></Pressable>
       ) : (
         <Pressable style={[ui.btn, { backgroundColor: '#B91C1C' }]} onPress={() => void stop()}><Text style={ui.btnText}>Stop · {seconds}s</Text></Pressable>
       )}
       {!!uri && !recording && (
         <Pressable style={[ui.btnOutline, busy === 'save' && { opacity: 0.5 }]} disabled={!!busy} onPress={() => void save()}>
-          <Text style={ui.btnOutlineText}>{busy === 'save' ? 'Copying the voice…' : `Save ${speaker.trim() || 'this'} voice (${seconds}s)`}</Text>
+          <Text style={ui.btnOutlineText}>{busy === 'save' ? 'Saving…' : `Save ${name.trim() || 'this'} voice (${seconds}s)`}</Text>
         </Pressable>
       )}
 
@@ -122,16 +147,10 @@ export default function VoiceStudio() {
           </View>
           <TextInput style={[ui.input, { minHeight: 70 }]} multiline value={text[v.id] || ''} onChangeText={(t) => setText((x) => ({ ...x, [v.id]: t }))} placeholder="Type what it should say" />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {PITCH.map((p) => {
-              const on = (pitch[v.id] ?? 1) === p.rate;
-              return (
-                <Pressable key={p.label} onPress={() => setPitch((x) => ({ ...x, [v.id]: p.rate }))} style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 16, borderWidth: 1, borderColor: on ? ACCENT : '#ccc', backgroundColor: on ? ACCENT : '#fff' }}>
-                  <Text style={{ color: on ? '#fff' : '#333', fontWeight: '600', fontSize: 13 }}>{p.label}</Text>
-                </Pressable>
-              );
-            })}
+            {PITCH.map((p) => chip((pitch[v.id] ?? 1) === p.k, p.label, () => setPitch((x) => ({ ...x, [v.id]: p.k }))))}
           </View>
-          <Pressable style={[ui.btn, !!busy && ui.btnMuted]} disabled={!!busy} onPress={() => void say(v)}><Text style={ui.btnText}>{busy === v.id ? 'Getting it…' : 'Say it'}</Text></Pressable>
+          <Pressable style={ui.btn} onPress={() => void say(v)}><Text style={ui.btnText}>Say it</Text></Pressable>
+          <Pressable style={{ paddingVertical: 6 }} onPress={() => void listen(v)}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Play the recording</Text></Pressable>
         </View>
       ))}
     </ScrollView>
