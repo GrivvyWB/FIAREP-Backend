@@ -187,8 +187,14 @@ export default function CommandCenter() {
     })();
   }, [device?.status, device?.greeting, sayAs]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Pressing Command Center sends the request to FIAREP at once; it opens once FIAREP approves.
+  const asked = useRef(false);
+  useEffect(() => {
+    if (asked.current || busy) return;
+    if (device === null || device?.status === 'revoked') { asked.current = true; void (device?.status === 'revoked' ? forgetDevice().then(setUp) : setUp()); }
+  }, [device]); // eslint-disable-line react-hooks/exhaustive-deps
   async function setUp() {
-    setBusy('Setting up this phone…');
+    setBusy('Sending to FIAREP…');
     try {
       const actor = await getCurrentActor();
       if (!actor.id) throw new Error('Sign in first.');
@@ -502,19 +508,20 @@ export default function CommandCenter() {
   if (!device || device.status === 'revoked') {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
-        <Text style={ui.cardTitle}>Set up this phone</Text>
-        {device?.status === 'revoked' && <Text style={{ color: '#C0392B' }}>This phone was revoked. Set it up again to request a new approval.</Text>}
-        <Pressable style={[ui.btn, !!busy && ui.btnMuted]} disabled={!!busy} onPress={() => void (device?.status === 'revoked' ? forgetDevice().then(setUp) : setUp())}>
-          <Text style={ui.btnText}>{busy || 'Set up this phone'}</Text>
-        </Pressable>
+        <Text style={ui.cardTitle}>Command Center</Text>
+        {busy ? <ActivityIndicator /> : (
+          <Pressable style={ui.btn} onPress={() => void (device?.status === 'revoked' ? forgetDevice().then(setUp) : setUp())}>
+            <Text style={ui.btnText}>Send to FIAREP for approval</Text>
+          </Pressable>
+        )}
       </ScrollView>
     );
   }
   if (device.status === 'pending') {
     return (
       <ScrollView contentContainerStyle={ui.wrap}>
-        <Text style={ui.cardTitle}>Waiting for approval</Text>
-        <Text style={ui.label}>Approve this phone on {device.approveWhere || 'fiarep.com → Command Center → Phones'}. Nothing can be sent from it until then.</Text>
+        <Text style={ui.cardTitle}>Command Center</Text>
+        <Text style={ui.label}>Sent to FIAREP for approval. It opens here as soon as FIAREP approves it.</Text>
         <Pressable style={ui.btnOutline} onPress={() => void loadDevice()}><Text style={ui.btnOutlineText}>Check again</Text></Pressable>
       </ScrollView>
     );

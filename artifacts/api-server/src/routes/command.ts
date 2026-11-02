@@ -57,6 +57,16 @@ async function requireCommandAdmin(_req: Request, res: Response, next: NextFunct
   if (problem) { res.status(403).json({ error: problem }); return; }
   next();
 }
+/** A client's phones are approved by themselves when the client is on a plan (autopay on for their signed
+ *  contract) or FIAREP switched "Approve Command Center phones" on for them (Platform Control). */
+async function autoApproves(tenantId: string): Promise<boolean> {
+  if (isPlatform(tenantId)) return false;
+  const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
+  const modules = ((org?.features as Record<string, unknown> | undefined)?.["modules"] ?? {}) as Record<string, unknown>;
+  if (modules["commandAutoApprove"] === true) return true;
+  const plans = await db.select({ state: entityRecords.state }).from(entityRecords).where(and(eq(entityRecords.tenantId, PLATFORM_TENANT), eq(entityRecords.entity, "autopay"), eq(entityRecords.deleted, false)));
+  return plans.some((r) => { const a = r.state as Record<string, unknown>; return a["orgId"] === tenantId && a["on"] === true; });
+}
 /** Where this phone gets approved, in words for the phone. */
 const approveWhere = (tenantId: string) => isPlatform(tenantId) ? "fiarep.com → Platform Control → Command Center → Phones" : "fiarep.com → Command Center (in your menu) → Phones";
 
@@ -111,12 +121,24 @@ router.post("/v1/command/devices/enroll", ...phone, async (req, res) => {
   const id = randomUUID();
   await db.insert(commandDevices).values({ id, tenantId: actor.tenantId, staffId: actor.id, staffName: actor.name, name, deviceKey, confirmKey, status: "pending" });
   await commandAuditLog({ tenantId: actor.tenantId, actor: actor.name, event: "device.enrolled", deviceId: id, detail: { name } });
+  if (await autoApproves(actor.tenantId)) {
+    await decideDevice(actor.tenantId, id, "approve", "auto:plan-or-switch");
+    res.status(201).json({ id, status: "active", approveWhere: approveWhere(actor.tenantId) }); return;
+  }
+  // A client's person pressed Command Center: FIAREP's administrators are told, to approve it in Platform Control.
+  if (!isPlatform(actor.tenantId)) {
+    const [org] = await db.select({ name: organizations.name }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
+    const admins = await db.select().from(staffAccounts).where(and(eq(staffAccounts.tenantId, PLATFORM_TENANT), eq(staffAccounts.role, "administrator"), eq(staffAccounts.status, "approved")));
+    await Promise.all(admins.map((s) => notify(actorFromStaff(s), s.id, `Command Center request: ${actor.name}`, `${org?.name || actor.tenantId} · approve in Platform Control → Command Center`).catch(() => undefined)));
+  }
   res.status(201).json({ id, status: "pending", approveWhere: approveWhere(actor.tenantId) });
 });
 
 router.get("/v1/command/devices/:id/status", ...phone, async (req, res) => {
   const [d] = await db.select().from(commandDevices).where(eq(commandDevices.id, String(req.params["id"]))).limit(1);
   if (!d || d.staffId !== actorFrom(res).id) { res.status(404).json({ error: "Unknown device" }); return; }
+  // On a plan now, or switched on since it asked: approved the next time the phone looks.
+  if (d.status === "pending" && (await autoApproves(d.tenantId))) { await decideDevice(d.tenantId, d.id, "approve", "auto:plan-or-switch"); d.status = "active"; }
   // What the Command Center says when it opens, to the person by name.
   // In their language; on a client's first use it asks which language they want. languageCode: what the phone listens for ("" = any).
   const lang = await getLanguage(d.tenantId, d.staffId);
