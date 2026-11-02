@@ -190,7 +190,7 @@ export default function QuickQuote() {
       const saved = await customFetch<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, {
         method: "POST", headers: { "Content-Type": "application/json" }, responseType: "json",
         body: JSON.stringify({
-          mode, clientTenantId: mode === "self" ? "" : clientId, note: note.trim(),
+          mode, clientTenantId: clientId, note: note.trim(),
           building: place,
           lines: drafts.map((d) => ({ key: d.key, qty: Number(d.qty), note: d.note.trim(), photo: d.photo })),
         }),

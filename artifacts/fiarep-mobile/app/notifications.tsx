@@ -40,7 +40,7 @@ export default function Notifications() {
     // An alert with a link (e.g. "Ready: press Republish") opens it.
     if (n.reportId && n.reportId.startsWith('url:https://')) { void Linking.openURL(n.reportId.slice(4)); return; }
     // A quote FIAREP sent for approval opens the quote, with Approve / Turn down.
-    if (msg.startsWith('fiarep needs approval') && n.reportId) {
+    if ((msg.startsWith('fiarep needs approval') || msg.startsWith('fiarep approved')) && n.reportId) {
       const m = n.reportId.match(/^qq:([^:]+):?(.*)$/);
       if (m) { router.push(`/owner-quote?project=${encodeURIComponent(m[1])}&quote=${encodeURIComponent(m[2] || '')}` as never); return; }
       // Older alerts: a complaint quote opens the complaint; a quick quote opens the building's quotes.

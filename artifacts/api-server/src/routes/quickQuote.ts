@@ -76,6 +76,41 @@ async function tellOwner(clientTenantId: string, quote: QuickQuote, projectId: s
     reportId: `qq:${projectId}:${quote.id || ""}`,
   }))).returning();
   for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
+  await emailOwner(clientTenantId, quote, "approve");
+}
+
+/** FIAREP approved it on its own: the building's company still gets a copy, in the app and by email. */
+async function tellOwnerCopy(clientTenantId: string, quote: QuickQuote, projectId: string): Promise<void> {
+  const staff = await db.select({ id: staffAccounts.id }).from(staffAccounts).where(and(
+    eq(staffAccounts.tenantId, clientTenantId), eq(staffAccounts.status, "approved"),
+    inArray(staffAccounts.role, ["administrator", "management"]),
+  ));
+  if (staff.length) {
+    const rows = await db.insert(notifications).values(staff.map((s) => ({
+      id: randomUUID(), tenantId: clientTenantId, target: s.id,
+      message: `FIAREP approved — $${quote.total.toFixed(2)} (your copy)`,
+      detail: [quote.building, quote.lines.map((l) => `${l.qty} × ${l.label}`).join(", ")].filter(Boolean).join(" · ").slice(0, 400),
+      reportId: `qq:${projectId}:${quote.id || ""}`,
+    }))).returning();
+    for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
+  }
+  await emailOwner(clientTenantId, quote, "copy");
+}
+
+/** The company's contact email gets the quote: to approve, or as its copy of one FIAREP approved. */
+async function emailOwner(clientTenantId: string, quote: QuickQuote, kind: "approve" | "copy"): Promise<void> {
+  const [org] = await db.select({ name: organizations.name, features: organizations.features }).from(organizations).where(eq(organizations.id, clientTenantId)).limit(1);
+  const email = String(((org?.features ?? {}) as Record<string, unknown>)["contactEmail"] ?? "").trim();
+  if (!org || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return;
+  const money = (n: number) => `$${n.toFixed(2)}`;
+  const lines = quote.lines.map((l) => `${l.qty} × ${l.label} — ${money(l.amount)}`).join("\n");
+  const subject = kind === "copy" ? `FIAREP approved work at ${quote.building} — ${money(quote.total)} (your copy)` : `FIAREP needs your approval — ${quote.building} — ${money(quote.total)}`;
+  const body = [
+    kind === "copy" ? `FIAREP approved this work at ${quote.building}. This is your copy.` : `FIAREP priced this work at ${quote.building}. Open the FIAREP app or fiarep.com to approve or turn it down.`,
+    lines, `Total: ${money(quote.total)}`, quote.note ? `Note: ${quote.note}` : "", "FIAREP",
+  ].filter(Boolean).join("\n\n");
+  const { sendEmail } = await import("../lib/command/mail");
+  await sendEmail(FIAREP_TENANT, { to: [{ name: org.name, email, from: "" }], cc: [], attachments: [], subject, body }, "Quick Quote").catch(() => undefined);
 }
 
 /** Tell people on FIAREP's own side. */
@@ -252,7 +287,9 @@ router.post("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res)
     const name = await companyName(clientTenantId);
     if (name) clientCompany = name; else clientTenantId = "";
   } else {
-    clientTenantId = "";
+    // Approved by FIAREP itself: the building's company still gets a copy.
+    const name = clientTenantId && clientTenantId !== FIAREP_TENANT ? await companyName(clientTenantId) : null;
+    if (name) clientCompany = name; else clientTenantId = "";
   }
 
   const quote: QuickQuote = {
@@ -279,6 +316,8 @@ router.post("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, res)
   if (mode === "admin") {
     await tellFiarep(await fiarepAdministrators(), `Quote to approve — $${total.toFixed(2)} from ${actor.name}`,
       [quote.building, lines.map((l) => `${l.qty} × ${l.label}`).join(", ")].filter(Boolean).join(" · "), project.id);
+  } else if (mode === "self" && clientTenantId) {
+    await tellOwnerCopy(clientTenantId, quote, project.id);
   } else if (clientTenantId) {
     await tellOwner(clientTenantId, quote, project.id);
   }
@@ -330,6 +369,7 @@ router.post("/v1/fiarep/projects/:id/quick-quote/review", requireAuth, async (re
     `$${quote.total.toFixed(2)}${quote.clientCompany ? ` · ${quote.clientCompany}` : ""}`, project.id);
 
   if (decision === "send") await tellOwner(quote.clientTenantId, quote, project.id);
+  if (decision === "approve" && quote.clientTenantId && quote.clientTenantId !== FIAREP_TENANT) await tellOwnerCopy(quote.clientTenantId, quote, project.id);
   const outcome = decision === "send" ? `sent your quote to ${quote.clientCompany}` : decision === "approve" ? "approved your quote — go ahead" : "turned your quote back";
   await tellFiarep([current.sentById || ""], `${actor.name} ${outcome}`, quote.building, project.id);
   res.json(quote);

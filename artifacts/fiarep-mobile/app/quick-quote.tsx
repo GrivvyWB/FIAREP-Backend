@@ -224,7 +224,7 @@ export default function QuickQuoteScreen() {
         lines.push({ key: d.key, qty: Number(d.qty), note: [d.area || '', d.note.trim()].filter(Boolean).join(' — '), photo: objectPath });
       }
       const saved = await post<QuickQuote>(`/api/v1/fiarep/projects/${encodeURIComponent(projectId)}/quick-quote`, {
-        mode, clientTenantId: mode === 'self' ? '' : clientId, note: note.trim(), building: place, lines,
+        mode, clientTenantId: clientId, note: note.trim(), building: place, lines,
       });
       setDrafts([]); setNote(''); setSent(saved);
       Alert.alert(mode === 'self' ? 'Approved — go ahead' : mode === 'admin' ? 'Sent to the administrator' : 'Sent to the owner',
