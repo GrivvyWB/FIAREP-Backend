@@ -30,7 +30,12 @@ export async function setCommandVoice(id: string | null, k = 1): Promise<void> {
 }
 
 async function phoneVoice(g: 'man' | 'woman'): Promise<string | undefined> {
-  const all = await Speech.getAvailableVoicesAsync().catch(() => []);
+  // Right after the app opens the phone can still be loading its voices (empty list → its default voice): wait for them.
+  let all: Speech.Voice[] = [];
+  for (let i = 0; i < 10 && !all.length; i += 1) {
+    if (i) await new Promise((r) => setTimeout(r, 200));
+    all = await Speech.getAvailableVoicesAsync().catch(() => []);
+  }
   const want = g === 'man' ? MALE : FEMALE;
   // The most natural voice on the phone first: Premium, then Enhanced (free downloads from Apple),
   // then the basic one. US English before other English.
