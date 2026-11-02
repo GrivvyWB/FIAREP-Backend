@@ -40,8 +40,6 @@ export default function Notifications() {
     // An alert with a link (e.g. "Ready: press Republish") opens it.
     if (n.reportId && n.reportId.startsWith('url:https://')) { void Linking.openURL(n.reportId.slice(4)); return; }
     // A quote FIAREP sent for approval opens the quote, with Approve / Turn down.
-    // A monthly bill opens the bill.
-    if (n.reportId && n.reportId.startsWith('bill:')) { router.push(`/bills?id=${encodeURIComponent(n.reportId.slice(5))}` as never); return; }
     if ((msg.startsWith('fiarep needs approval') || msg.startsWith('fiarep approved') || msg.startsWith('fiarep receipt')) && n.reportId) {
       const m = n.reportId.match(/^qq:([^:]+):?(.*)$/);
       if (m) { router.push(`/owner-quote?project=${encodeURIComponent(m[1])}&quote=${encodeURIComponent(m[2] || '')}` as never); return; }

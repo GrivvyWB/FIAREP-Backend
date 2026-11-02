@@ -262,11 +262,6 @@ export default function QuickQuoteScreen() {
       </Text>}
       {!!error && <Text style={{ color: '#991b1b' }}>{error}</Text>}
 
-      {pastMode && isAdmin && (
-        <Pressable style={[ui.btnOutline, { marginBottom: 10 }]} onPress={() => router.push('/bills' as never)}>
-          <Text style={ui.btnOutlineText}>Monthly bills</Text>
-        </Pressable>
-      )}
       {pastMode && past.length === 0 && !loading && <Text style={ui.listSub}>No past quotes yet.</Text>}
       {pastMode && past.length > 0 && (
         <View style={{ marginTop: 12 }}>

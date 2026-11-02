@@ -79,7 +79,6 @@ export default function OwnerQuote() {
           ) : r.quote.decidedBy ? <Text style={ui.listSub}>{STATUS[r.quote.status]} by {r.quote.decidedBy}{r.quote.decidedAt ? ` · ${new Date(r.quote.decidedAt).toLocaleString()}` : ''}</Text> : null}
         </View>
       ))}
-      <Pressable style={ui.btnOutline} onPress={() => router.push('/bills' as never)}><Text style={ui.btnOutlineText}>Monthly bills</Text></Pressable>
       <Pressable onPress={() => router.back()} style={{ padding: 14 }}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Back</Text></Pressable>
     </ScrollView>
   );
