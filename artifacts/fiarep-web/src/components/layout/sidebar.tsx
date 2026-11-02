@@ -1,6 +1,8 @@
 import { isCpmSupervisorTitle } from "@/lib/titles";
 import { useBaselineWaiting } from "@/components/baseline-waiting";
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "wouter";
+import { customFetch } from "@workspace/api-client-react";
 import { useAuth } from "@/hooks/use-auth";
 import { MENU_ITEMS, menuOverride } from "@/lib/website-menu";
 import { communityUnitPlural, hasModuleAccess, isCommunityCoordinator, isFiarepAdministrator, isProcurementDesk } from "@/lib/access-policy";
@@ -28,11 +30,20 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap, MapPin, History, Mic , Droplets, DoorOpen, Receipt } from "lucide-react";
+  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap, MapPin, History, Mic , Droplets, DoorOpen, Receipt, ChevronUp, ChevronDown, GripVertical, ArrowUpDown } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
   const { staff, organizationModules } = useAuth();
+  // This person's own menu order, moved right here in the menu (kept on the server, same on every device).
+  const [myOrder, setMyOrder] = useState<string[] | null>(null);
+  const [arranging, setArranging] = useState(false);
+  const [dragging, setDragging] = useState("");
+  useEffect(() => {
+    if (!staff?.id) return;
+    customFetch<{ web?: string[] }>("/api/v1/me/layout", { responseType: "json" } as never)
+      .then((r) => setMyOrder(Array.isArray(r?.web) && r.web.length ? r.web : null)).catch(() => undefined);
+  }, [staff?.id]);
   const closeOnMobile = () => {
     if (window.matchMedia("(max-width: 767px)").matches) setOpen(false);
   };
@@ -127,6 +138,22 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
   if (byTitle) for (const m of MENU_ITEMS) if (!m.quick && ov(m.href) === true && !menuItems.some((i) => i.href === m.href)) menuItems.push({ name: m.name, href: m.href, icon: m.icon, module: m.module as never });
   const order = (href: string) => { const i = MENU_ITEMS.findIndex((m) => m.href === href); return i < 0 ? 999 : i; };
   menuItems.sort((a, b) => order(a.href) - order(b.href));
+  if (myOrder) {
+    const rank = (href: string) => { const i = myOrder.indexOf(href); return i < 0 ? 1000 + order(href) : i; };
+    menuItems.sort((a, b) => rank(a.href) - rank(b.href));
+  }
+  const saveOrder = (hrefs: string[]) => {
+    const next = [...hrefs, ...(myOrder ?? []).filter((h) => !hrefs.includes(h))];
+    setMyOrder(next);
+    void customFetch("/api/v1/me/layout", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ web: next }), responseType: "json" } as never).catch(() => undefined);
+  };
+  const move = (from: number, to: number) => {
+    if (to < 0 || to >= menuItems.length || from === to) return;
+    const hrefs = menuItems.map((m) => m.href);
+    const [h] = hrefs.splice(from, 1);
+    hrefs.splice(to, 0, h!);
+    saveOrder(hrefs);
+  };
   const quickShown = (href: string, module: Parameters<typeof hasModuleAccess>[1]) => ov(href) === false ? false : ov(href) === true || hasModuleAccess(staff, module, organizationModules);
 
   return (
@@ -154,7 +181,26 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
         </div>
 
         <nav className="p-[14px_12px] flex-1 overflow-y-auto overflow-x-hidden space-y-[3px]">
-          {menuItems.map((item) => {
+          {arranging && menuItems.map((item, i) => {
+            const Icon = item.icon;
+            return (
+              <div
+                key={item.href}
+                draggable
+                onDragStart={() => setDragging(item.href)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => { const from = menuItems.findIndex((m) => m.href === dragging); if (from >= 0) move(from, i); setDragging(""); }}
+                className={`flex items-center gap-2 p-[8px_8px_8px_10px] rounded-[9px] text-[14px] font-medium border border-dashed ${dragging === item.href ? "border-primary bg-sidebar-accent" : "border-[#2a323e]"} text-[#d5dbe3] cursor-grab`}
+              >
+                <GripVertical className="w-4 h-4 shrink-0 opacity-60" />
+                <Icon className="w-[18px] h-[18px] shrink-0 opacity-85" />
+                <span className="flex-1 truncate">{item.name}</span>
+                <button type="button" aria-label={`Move ${item.name} up`} disabled={i === 0} onClick={() => move(i, i - 1)} className="grid h-7 w-7 place-items-center rounded hover:bg-sidebar-accent disabled:opacity-30"><ChevronUp className="h-4 w-4" /></button>
+                <button type="button" aria-label={`Move ${item.name} down`} disabled={i === menuItems.length - 1} onClick={() => move(i, i + 1)} className="grid h-7 w-7 place-items-center rounded hover:bg-sidebar-accent disabled:opacity-30"><ChevronDown className="h-4 w-4" /></button>
+              </div>
+            );
+          })}
+          {!arranging && menuItems.map((item) => {
             const isActive = location === item.href;
             const Icon = item.icon;
             return (
@@ -174,6 +220,14 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
               </Link>
             );
           })}
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={() => setArranging((a) => !a)} className={`flex flex-1 items-center justify-center gap-2 rounded-[9px] p-[8px] text-[13px] font-semibold ${arranging ? "bg-primary text-sidebar" : "text-[#8b94a1] hover:bg-sidebar-accent hover:text-white"}`}>
+              <ArrowUpDown className="h-4 w-4" />{arranging ? "Done" : "Move menu items"}
+            </button>
+            {arranging && myOrder && (
+              <button type="button" onClick={() => { setMyOrder(null); void customFetch("/api/v1/me/layout", { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ web: null }), responseType: "json" } as never).catch(() => undefined); }} className="rounded-[9px] p-[8px] text-[13px] font-semibold text-[#8b94a1] hover:bg-sidebar-accent hover:text-white">Reset</button>
+            )}
+          </div>
         </nav>
 
         <div className="m-[8px_16px_18px] p-[16px] bg-[#12161d] border border-sidebar-border rounded-xl shrink-0">

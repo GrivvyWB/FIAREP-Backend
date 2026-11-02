@@ -34,6 +34,7 @@ import fiarepComplaintsRouter from "./fiarepComplaints";
 import crewRouter from "./crew";
 import messagesRouter from "./messages";
 import quickQuoteRouter from "./quickQuote";
+import myLayoutRouter from "./myLayout";
 import commandRouter from "./command";
 import publicLanguageRouter from "./publicLanguage";
 import contractSigningRouter from "./contractSigning";
@@ -61,6 +62,7 @@ router.use(fiarepComplaintsRouter);
 router.use(crewRouter);
 router.use(messagesRouter);
 router.use(quickQuoteRouter);
+router.use(myLayoutRouter);
 // Before the staff routers: its public DOF lookup must not hit their requireAuth.
 router.use(propertyRouter);
 // Before the staff routers: each person's language and the residents' Translator need no sign-in.

@@ -15,6 +15,42 @@ import { ALL_BUTTONS, plainLabel } from '../lib/all-buttons';
 import { moduleEnabled, moduleForTile, personTileOn, tileEnabled, useRawModules, type AppTabScreen } from '../lib/module-access';
 import { useBaselineWaiting, COMPLAINT_TILES } from '../lib/baseline';
 import { useHeatAlert } from '../lib/heat-alert';
+import { customFetch } from '@workspace/api-client-react';
+
+// Each person's own arrangement of this home: sections and tiles in the order they put them.
+type Arranged = Array<{ heading: string; tiles: string[] }>;
+let layoutCache: Record<string, Arranged> | null = null;
+async function loadLayout(): Promise<Record<string, Arranged>> {
+  if (layoutCache) return layoutCache;
+  try { const r = await customFetch<{ app?: Record<string, Arranged> }>('/api/v1/me/layout', { responseType: 'json' } as never); layoutCache = r?.app ?? {}; }
+  catch { layoutCache = {}; }
+  return layoutCache;
+}
+function saveLayout(key: string, value: Arranged | null) {
+  layoutCache = { ...(layoutCache ?? {}) };
+  if (value) layoutCache[key] = value; else delete layoutCache[key];
+  void customFetch('/api/v1/me/layout', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ app: { [key]: value } }), responseType: 'json' } as never).catch(() => undefined);
+}
+/** Put the sections and tiles in this person's order; anything new stays where the screen put it. */
+function arrange(live: HomeSection[], saved?: Arranged): HomeSection[] {
+  if (!saved?.length) return live;
+  const pool = new Map<string, HomeTile>();
+  for (const sec of live) for (const t of sec.tiles) if (!pool.has(plainLabel(t.label))) pool.set(plainLabel(t.label), t);
+  const used = new Set<string>();
+  const out: HomeSection[] = saved.map((sv) => {
+    const orig = live.find((x) => x.heading === sv.heading);
+    const tiles = sv.tiles.filter((l) => pool.has(l) && !used.has(l)).map((l) => { used.add(l); return pool.get(l)!; });
+    return { ...(orig ?? { heading: sv.heading, tiles: [] }), heading: sv.heading, tiles };
+  });
+  for (const sec of live) {
+    const rest = sec.tiles.filter((t) => !used.has(plainLabel(t.label)));
+    rest.forEach((t) => used.add(plainLabel(t.label)));
+    if (!rest.length) continue;
+    const at = out.find((x) => x.heading === sec.heading);
+    if (at) at.tiles = [...at.tiles, ...rest]; else out.push({ ...sec, tiles: rest });
+  }
+  return out;
+}
 
 export type HomeTile = { label: string; onPress: () => void; badge?: number; alarm?: boolean };
 export type HomeSection = { heading: string; tiles: HomeTile[]; viewAll?: () => void; color?: string };
@@ -48,7 +84,7 @@ function Chevron({ color, size = 30 }: { color: string; size?: number }) {
   );
 }
 
-function Tile({ t, color: base, width }: { t: HomeTile; color: string; width: number }) {
+function Tile({ t, color: base, width, arranging, onLongPress, onLeft, onRight }: { t: HomeTile; color: string; width: number; arranging?: boolean; onLongPress?: () => void; onLeft?: () => void; onRight?: () => void }) {
   // Alarm (a heat or hot water violation came in): the tile flashes red and blue until someone presses Got it.
   const [flip, setFlip] = React.useState(false);
   React.useEffect(() => {
@@ -62,7 +98,7 @@ function Tile({ t, color: base, width }: { t: HomeTile; color: string; width: nu
   const n = t.badge ?? badge;
   const small = width < 110;
   return (
-    <Pressable onPress={t.onPress} style={({ pressed }) => [st.tile, { width, borderColor: color, shadowColor: color, opacity: pressed ? 0.8 : 1 }]}>
+    <Pressable onPress={arranging ? undefined : t.onPress} onLongPress={onLongPress} style={({ pressed }) => [st.tile, { width, borderColor: color, shadowColor: color, opacity: pressed ? 0.8 : 1 }, arranging && { borderStyle: 'dashed' }]}>
       <LinearGradient colors={[color + '55', '#0B1326EE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
       <View style={{ alignSelf: 'flex-start' }}>
         <Glow color={color} size={small ? 50 : 58}><Icon lib={art.lib} name={art.icon} size={art.icon === 'add' ? 32 : 26} color="#fff" /></Glow>
@@ -70,7 +106,12 @@ function Tile({ t, color: base, width }: { t: HomeTile; color: string; width: nu
       </View>
       <Text style={[st.tileTitle, small && { fontSize: 13, lineHeight: 16 }]} numberOfLines={small ? 3 : 2}>{label}</Text>
       {art.desc ? <Text style={[st.tileDesc, small && { fontSize: 10.5 }]} numberOfLines={2}>{art.desc}</Text> : null}
-      <View style={{ position: 'absolute', right: 8, bottom: 8 }}><Chevron color={color} size={small ? 24 : 28} /></View>
+      {arranging ? (
+        <View style={{ position: 'absolute', left: 8, right: 8, bottom: 6, flexDirection: 'row', justifyContent: 'space-between' }}>
+          <Pressable onPress={onLeft} hitSlop={8} style={st.move}><Ionicons name="chevron-back" size={18} color="#fff" /></Pressable>
+          <Pressable onPress={onRight} hitSlop={8} style={st.move}><Ionicons name="chevron-forward" size={18} color="#fff" /></Pressable>
+        </View>
+      ) : <View style={{ position: 'absolute', right: 8, bottom: 8 }}><Chevron color={color} size={small ? 24 : 28} /></View>}
     </Pressable>
   );
 }
@@ -119,7 +160,36 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections:
   const imgTop = topGap && Platform.OS === 'ios' ? 40 : 0;
   const imgH = Math.max(0, bannerH - imgTop);
   const sub = tagline ?? taglineFor(title);
-  const live = alarmed(sections).filter((s) => s.tiles.length > 0);
+  const layoutKey = String(screen || title);
+  const [saved, setSaved] = React.useState<Arranged | undefined>(() => layoutCache?.[layoutKey]);
+  const [arranging, setArranging] = React.useState(false);
+  React.useEffect(() => { void loadLayout().then((all) => setSaved(all[layoutKey])); }, [layoutKey]);
+  const live = arrange(alarmed(sections), saved).filter((s) => s.tiles.length > 0);
+  const store = (next: HomeSection[]) => {
+    const value = next.filter((x) => x.tiles.length > 0).map((x) => ({ heading: x.heading, tiles: x.tiles.map((t) => plainLabel(t.label)) }));
+    setSaved(value); saveLayout(layoutKey, value);
+  };
+  /** A tile one place back or on; past the end of its section it goes into the next one. */
+  const moveTile = (si: number, ti: number, dir: -1 | 1) => {
+    const next = live.map((x) => ({ ...x, tiles: [...x.tiles] }));
+    const sec = next[si]!;
+    const to = ti + dir;
+    if (to >= 0 && to < sec.tiles.length) { [sec.tiles[ti], sec.tiles[to]] = [sec.tiles[to]!, sec.tiles[ti]!]; }
+    else {
+      const other = next[si + dir];
+      if (!other) return;
+      const [t] = sec.tiles.splice(ti, 1);
+      if (dir === -1) other.tiles.push(t!); else other.tiles.unshift(t!);
+    }
+    store(next);
+  };
+  const moveSection = (si: number, dir: -1 | 1) => {
+    const to = si + dir;
+    if (to < 0 || to >= live.length) return;
+    const next = [...live];
+    [next[si], next[to]] = [next[to]!, next[si]!];
+    store(next);
+  };
 
   return (
     <View style={{ flex: 1, backgroundColor: BG }}>
@@ -174,20 +244,38 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections:
           </View>
         )}
 
-        {live.map((sec) => {
+        {arranging && (
+          <View style={{ paddingHorizontal: pad, marginTop: 16, flexDirection: 'row', gap: 10 }}>
+            <Pressable onPress={() => setArranging(false)} style={[st.arrangeBtn, { flex: 1, backgroundColor: '#3B9BFF' }]}><Text style={st.arrangeText}>Done</Text></Pressable>
+            {saved ? <Pressable onPress={() => { setSaved(undefined); saveLayout(layoutKey, null); }} style={st.arrangeBtn}><Text style={st.arrangeText}>Reset</Text></Pressable> : null}
+          </View>
+        )}
+        {live.map((sec, si) => {
           const color = sec.color || sectionColor(sec.heading);
           // Four across on a tablet; on a phone three fit, bigger sections go two by two so nothing truncates.
           const n = width >= 600 ? (sec.tiles.length <= 3 ? 3 : 4) : sec.tiles.length <= 2 ? 2 : sec.tiles.length === 3 ? 3 : 2;
           const w = colW(n);
           return (
             <View key={sec.heading} style={{ paddingHorizontal: pad, marginTop: 18 }}>
-              <SectionHead title={sec.heading.toUpperCase()} color={color} onViewAll={sec.viewAll} />
+              <SectionHead title={sec.heading.toUpperCase()} color={color} onViewAll={arranging ? undefined : sec.viewAll}
+                onUp={arranging && si > 0 ? () => moveSection(si, -1) : undefined}
+                onDown={arranging && si < live.length - 1 ? () => moveSection(si, 1) : undefined} />
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
-                {sec.tiles.map((t, i) => <Tile key={`${t.label}-${i}`} t={t} color={color} width={w} />)}
+                {sec.tiles.map((t, i) => <Tile key={`${t.label}-${i}`} t={t} color={color} width={w}
+                  arranging={arranging} onLongPress={() => setArranging(true)}
+                  onLeft={() => moveTile(si, i, -1)} onRight={() => moveTile(si, i, 1)} />)}
               </View>
             </View>
           );
         })}
+        {live.length > 0 && (
+          <View style={{ paddingHorizontal: pad, marginTop: 18 }}>
+            <Pressable onPress={() => setArranging((a) => !a)} style={[st.arrangeBtn, arranging && { backgroundColor: '#3B9BFF' }]}>
+              <Ionicons name="swap-vertical" size={18} color="#fff" />
+              <Text style={st.arrangeText}>{arranging ? 'Done' : 'Move tiles'}</Text>
+            </Pressable>
+          </View>
+        )}
       </ScrollView>
 
       {tabs.length > 0 && (
@@ -200,11 +288,13 @@ export default function FieldHome({ title, tagline, icon, hero, clock, sections:
   );
 }
 
-function SectionHead({ title, color, onViewAll }: { title: string; color: string; onViewAll?: () => void }) {
+function SectionHead({ title, color, onViewAll, onUp, onDown }: { title: string; color: string; onViewAll?: () => void; onUp?: () => void; onDown?: () => void }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
       <View style={{ width: 6, height: 22, borderRadius: 3, backgroundColor: color, marginRight: 10, shadowColor: color, shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 } }} />
       <Text style={{ color: '#fff', fontWeight: '800', fontSize: 18, letterSpacing: 0.5, flex: 1 }}>{title}</Text>
+      {onUp ? <Pressable onPress={onUp} hitSlop={8} style={[st.move, { marginLeft: 6 }]}><Ionicons name="chevron-up" size={18} color="#fff" /></Pressable> : null}
+      {onDown ? <Pressable onPress={onDown} hitSlop={8} style={[st.move, { marginLeft: 6 }]}><Ionicons name="chevron-down" size={18} color="#fff" /></Pressable> : null}
       {onViewAll ? (
         <Pressable onPress={onViewAll} style={{ flexDirection: 'row', alignItems: 'center' }}>
           <Text style={{ color, fontWeight: '600', fontSize: 14 }}>View All</Text>
@@ -239,5 +329,8 @@ const st = StyleSheet.create({
   tileDesc: { color: '#B9C3D6', fontSize: 11.5, marginTop: 4, lineHeight: 15 },
   badge: { position: 'absolute', top: -4, right: -6, minWidth: 20, height: 20, borderRadius: 10, backgroundColor: '#FF4D4D', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 5 },
   badgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  move: { width: 30, height: 30, borderRadius: 15, backgroundColor: '#1C2740', borderWidth: 1, borderColor: '#3B9BFF', alignItems: 'center', justifyContent: 'center' },
+  arrangeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 12, borderWidth: 1, borderColor: '#2A3550', backgroundColor: '#0B1326' },
+  arrangeText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   tabbar: { position: 'absolute', left: 0, right: 0, bottom: 0, flexDirection: 'row', backgroundColor: '#070B16F2', borderTopWidth: 1, borderTopColor: '#1C2740', paddingBottom: Platform.OS === 'ios' ? 22 : 8 },
 });
