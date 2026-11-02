@@ -8,7 +8,7 @@ import { AudioModule, RecordingPresets, createAudioPlayer, setAudioModeAsync, us
 import { customFetch } from '@workspace/api-client-react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ui, ACCENT } from '../lib/ui';
-import { getCurrentActor } from '../lib/store';
+import { getCurrentActor, getSessionIdentity } from '../lib/store';
 import {
   approveAction, commandFetch, commandSupport, confirmPublicKey, deviceStatus, enrollDevice, forgetDevice,
   relayApprove, relayDeny, relayRegisterPush, relaySetAutoFix, relayState, relayUrl,
@@ -146,11 +146,13 @@ export default function CommandCenter() {
   // Each time the Command Center opens it greets the person by name, out loud, at once: the greeting
   // and its recording are kept on the phone, so nothing waits for fiarep.com. A new greeting (another
   // name or language) is recorded once when fiarep.com sends it, and played then if it hasn't been yet.
-  const GREET_TEXT = 'cmd.greeting.text';
-  const greetFile = `${FileSystem.documentDirectory}cmd-greeting.mp3`;
+  // Kept per person, so one person's greeting is never played for someone else signed in on this phone.
+  const who = async () => String((await getSessionIdentity().catch(() => null))?.staffId || 'me').replace(/[^a-zA-Z0-9_-]/g, '');
+  const greetKeys = async () => { const id = await who(); return { text: `cmd.greeting.text:${id}`, said: `cc.greeting.sayAs:${id}`, file: `${FileSystem.documentDirectory}cmd-greeting-${id}.mp3` }; };
   const greeted = useRef(false);
   const [savedGreeting, setSavedGreeting] = useState('');
   async function playGreetingFile() {
+    const { file: greetFile } = await greetKeys();
     await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     playerRef.current?.remove();
     const player = createAudioPlayer({ uri: greetFile }); playerRef.current = player; player.play();
@@ -158,6 +160,7 @@ export default function CommandCenter() {
   useFocusEffect(useCallback(() => {
     (async () => {
       try {
+        const { text: GREET_TEXT, file: greetFile } = await greetKeys();
         const text = (await AsyncStorage.getItem(GREET_TEXT)) || '';
         setSavedGreeting(text);
         if (!text || greeted.current || !speakReplies) return;
@@ -171,13 +174,14 @@ export default function CommandCenter() {
     if (!text) return;
     (async () => {
       try {
+        const { text: GREET_TEXT, said: SAID, file: greetFile } = await greetKeys();
         const stored = (await AsyncStorage.getItem(GREET_TEXT)) || '';
         const haveFile = (await FileSystem.getInfoAsync(greetFile)).exists;
-        const said = (await AsyncStorage.getItem('cc.greeting.sayAs')) || '';
+        const said = (await AsyncStorage.getItem(SAID)) || '';
         if (stored === text && haveFile && said === sayAs) return;
         const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName(text, sayAs).slice(0, 600) });
         await FileSystem.writeAsStringAsync(greetFile, audioBase64, { encoding: 'base64' as never });
-        await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem('cc.greeting.sayAs', sayAs); setSavedGreeting(text);
+        await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem(SAID, sayAs); setSavedGreeting(text);
         if (!greeted.current && speakReplies) { greeted.current = true; await playGreetingFile(); }
       } catch { /* try again next time it opens */ }
     })();
