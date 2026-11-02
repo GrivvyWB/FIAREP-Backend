@@ -36,6 +36,8 @@ export default function Notifications() {
       return;
     }
     await markNotificationRead(n.id);
+    // Alerts about the Command Center, computers and builds, contracts and autopay open as themselves.
+    if (/^(command center request|done on |tim's mac|aws server|build |contract signed|autopay)/.test(msg) || / build (failed|ready|done)/.test(msg)) { router.push('/message?id=' + encodeURIComponent(n.id)); return; }
     if (n.reportId && n.reportId.startsWith('hud:')) { router.push('/hud-view?id=' + n.reportId.slice(4)); return; }
     if (n.reportId && n.reportId.startsWith('proj:')) { router.push('/project/' + n.reportId.slice(5)); return; }
     // Scope-flow notifications carry the procurement id (no prefix).
@@ -158,8 +160,8 @@ export default function Notifications() {
       const r = await findReportByRef(n.detail || '');
       if (r) { router.push('/report-detail?id=' + r.id); return; }
     }
-    if (mode === 'worker' || mode === 'inspector') { router.push('/worker'); return; }
-    if (mode === 'management' || mode === 'administrator') { router.push('/management'); return; }
+    // Anything else (Command Center requests, computer and build results, contracts, autopay…): open the alert itself.
+    router.push('/message?id=' + encodeURIComponent(n.id));
   }
   const [items, setItems] = useState<Notification[]>([]);
   const [priority, setPriority] = useState<PriorityViolation[]>([]);
