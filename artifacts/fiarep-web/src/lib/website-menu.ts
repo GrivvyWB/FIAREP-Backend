@@ -2,7 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard, Clock, Zap, ClipboardCheck, UsersRound, MapPin, DoorOpen, Languages, Building2, BellRing, Wrench, Droplets, Mic, Lock,
   FileText, Briefcase, FolderOpen, Ruler, CalendarDays, Users, UserCog, AlertTriangle, UserRoundCheck, ShoppingCart, Target, Trash2, FileCog,
-  ArrowUpToLine, Plane, MessageSquare, History, Database, Settings, Info, Plus, Upload,
+  ArrowUpToLine, Plane, Receipt, MessageSquare, History, Database, Settings, Info, Plus, Upload,
 } from "lucide-react";
 import type { StaffModule } from "./access-policy";
 
@@ -15,6 +15,7 @@ export const MENU_ITEMS: MenuItem[] = [
   { href: "/dashboard", name: "Dashboard", icon: LayoutDashboard, module: "dashboard" },
   { href: "/time-clock", name: "Time clock", icon: Clock, module: "dashboard" },
   { href: "/quick-quote", name: "Quick Quote", icon: Zap, module: "dashboard" },
+  { href: "/bills", name: "Monthly bills", icon: Receipt, module: "dashboard" },
   { href: "/complaint-dashboard", name: "Complaint Dashboard", icon: LayoutDashboard, module: "complaint-dashboard" },
   { href: "/baseline-report", name: "Building Baseline", icon: ClipboardCheck, module: "baseline-report" },
   { href: "/community", name: "Community Coordinators", icon: UsersRound, module: "community" },

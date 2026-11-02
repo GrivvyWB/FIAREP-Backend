@@ -28,7 +28,7 @@ import {
   Target,
   UserCog,
   UserRoundCheck,
-  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap, MapPin, History, Mic , Droplets, DoorOpen } from "lucide-react";
+  Info, Ruler, Trash2, Languages, Building2, Lock, Clock, MessageSquare, Zap, MapPin, History, Mic , Droplets, DoorOpen, Receipt } from "lucide-react";
 
 export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: boolean) => void }) {
   const [location] = useLocation();
@@ -44,6 +44,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     // Quick quote: FIAREP's own crew pricing a walk where they stand.
     ...((staff?.tenantId || "default") === "default"
       ? [{ name: "Quick Quote", href: "/quick-quote", icon: Zap, module: "dashboard" as const }] : []),
+    ...(["administrator", "management"].includes(String(staff?.role)) ? [{ name: "Monthly bills", href: "/bills", icon: Receipt, module: "dashboard" as const }] : []),
     ...(baselineWaiting ? [] : [{ name: "Complaint Dashboard", href: "/complaint-dashboard", icon: LayoutDashboard, module: "complaint-dashboard" as const }]),
     // The onboarding walk-through and its baseline report, for every building.
     { name: "Building Baseline", href: "/baseline-report", icon: ClipboardCheck, module: "baseline-report" as const },
@@ -116,6 +117,7 @@ export function Sidebar({ open, setOpen }: { open: boolean, setOpen: (open: bool
     href === "/smart-repairs" ? organizationModules["smartRepairSync"] === true
     : href === "/messages" ? (staff?.tenantId || "default") === "default" || organizationModules["fiarepMessaging"] !== false
     : href === "/quick-quote" ? (staff?.tenantId || "default") === "default"
+    : href === "/bills" ? ["administrator", "management"].includes(String(staff?.role))
     : href === "/complaint-dashboard" ? !baselineWaiting
     : true;
   const menuItems: MenuRow[] = byTitle

@@ -75,6 +75,9 @@ export function notificationHref(
 ): string {
   const id = encodeURIComponent(reportId);
   const m = message || "";
+  // A monthly bill, or a receipt for something FIAREP purchased, opens Monthly bills.
+  if (reportId.startsWith("bill:")) return `/bills?id=${encodeURIComponent(reportId.slice(5))}`;
+  if (/^fiarep receipt/i.test(m)) return "/bills";
   const inspector = opts?.inspector ?? (opts?.staff?.role === "inspector" && opts?.staff?.position === "Inspector");
   type Candidate = { module: StaffModule; href: string };
   let candidates: Candidate[];

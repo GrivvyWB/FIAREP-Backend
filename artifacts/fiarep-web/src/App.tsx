@@ -66,6 +66,7 @@ import SignContract from '@/pages/sign-contract';
 import PublicMessage from '@/pages/public-message';
 import Messages from '@/pages/messages';
 import QuickQuote from '@/pages/quick-quote';
+import Bills from '@/pages/bills';
 import PublicVendor from '@/pages/public-vendor';
 import OwnerLogin from '@/pages/platform-owner/login';
 import OwnerDashboard from '@/pages/platform-owner/index';
@@ -301,6 +302,7 @@ function AppRouter() {
           <Route path="/community" component={CommunityRoute} />
           <Route path="/messages" component={Messages} />
           <Route path="/quick-quote" component={QuickQuote} />
+          <Route path="/bills" component={Bills} />
           <Route path="/translator" component={TranslatorRoute} />
           <Route path="/property-lookup" component={PropertyLookupRoute} />
           <Route path="/violation-alerts" component={ViolationAlertsRoute} />
