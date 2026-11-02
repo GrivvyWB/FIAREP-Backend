@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/hooks/use-toast";
 import { FileText, Mail, Printer } from "lucide-react";
-import { BRAND, KIND_LABEL, agencyDefaultFee, buildContractHtml, contractNumber, expediterFor, grandTotal, monthlyFee, scopeTotal, type Building, type ContractInput, type ContractKind, type ScopeLine } from "@/lib/contract";
+import { BRAND, KIND_LABEL, agencyDefaultFee, allocationFor, buildContractHtml, contractNumber, expediterFor, grandTotal, monthlyFee, scopeTotal, type Building, type ContractInput, type ContractKind, type ScopeLine } from "@/lib/contract";
 
 const money = (n: number) => new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 const today = () => new Date().toISOString().slice(0, 10);
@@ -32,6 +32,7 @@ export function ContractBuilder({ scope, engineering, expediter, onClearScope, o
   const [fiarepSigner, setFiarepSigner] = useState("Tim Winn, Managing Member");
   const [fiarepEntity, setFiarepEntity] = useState("Grivvy Com LLC d/b/a FIAREP");
   const [notes, setNotes] = useState("");
+  const [allocation, setAllocation] = useState<number | "">("");
   const [busy, setBusy] = useState("");
 
   const units = buildings.reduce((n, b) => n + (b.units || 0), 0);
@@ -39,8 +40,8 @@ export function ContractBuilder({ scope, engineering, expediter, onClearScope, o
   const suggested = agencyDefaultFee(kind, units);
   useEffect(() => { if (!feeEdited) setFlatFee(suggested); }, [suggested, feeEdited]);
   const input: ContractInput = useMemo(() => ({
-    kind, number, date: today(), fiarepSigner, fiarepEntity, client, buildings: buildings.filter((b) => b.name || b.address || b.units), units, flatFee, pilot, startDate, termMonths, scope, engineering, expediter: expediter || null, notes,
-  }), [kind, number, fiarepSigner, fiarepEntity, client, buildings, units, flatFee, pilot, startDate, termMonths, scope, engineering, expediter, notes]);
+    kind, number, date: today(), fiarepSigner, fiarepEntity, client, buildings: buildings.filter((b) => b.name || b.address || b.units), units, flatFee, pilot, startDate, termMonths, scope, engineering, expediter: expediter || null, notes, allocation: allocation === "" ? null : allocation,
+  }), [kind, number, fiarepSigner, fiarepEntity, client, buildings, units, flatFee, pilot, startDate, termMonths, scope, engineering, expediter, notes, allocation]);
   const fee = monthlyFee(input);
   const isAgency = kind.startsWith("agency");
   const ready = client.company.trim() && client.contact.trim() && units > 0 && (!isAgency || flatFee > 0);
@@ -131,6 +132,7 @@ export function ContractBuilder({ scope, engineering, expediter, onClearScope, o
         <label className="text-sm text-slate-700">Agreement no.<Input value={number} onChange={(e) => setNumber(e.target.value)} className="mt-1" /></label>
         <label className="text-sm text-slate-700">FIAREP signer<Input value={fiarepSigner} onChange={(e) => setFiarepSigner(e.target.value)} className="mt-1" /></label>
         <label className="text-sm text-slate-700 sm:col-span-2">FIAREP legal name<Input value={fiarepEntity} onChange={(e) => setFiarepEntity(e.target.value)} className="mt-1" /></label>
+        {(kind === "fiarep" || kind === "agency-major" || kind === "agency-small") && <label className="text-sm text-slate-700">Repair &amp; materials allocation ($)<Input type="number" inputMode="numeric" min={0} value={allocation} placeholder={String(allocationFor(units))} onChange={(e) => setAllocation(e.target.value === "" ? "" : Math.max(0, num(e.target.value)))} className="mt-1" /></label>}
         <label className="text-sm text-slate-700 sm:col-span-2">Additional terms<textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} className={`mt-1 block w-full ${field}`} /></label>
       </div>
 

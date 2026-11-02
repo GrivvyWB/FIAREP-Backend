@@ -209,7 +209,7 @@ export async function addClientBuildings(tenantId: string, staffId: string, clie
 /** "Go ahead and create the contract": the client's agreement from what's on the company (units, the
  *  buildings added, who signs, their email), signed by FIAREP with the owner's saved signature, and
  *  sent to the client to agree and sign on their phone or computer. */
-type ContractAsk = { client: string; kind?: string; pilot?: boolean; email?: string; contact?: string; title?: string; termMonths?: number; monthly?: number; units?: number };
+type ContractAsk = { client: string; kind?: string; pilot?: boolean; email?: string; contact?: string; title?: string; termMonths?: number; monthly?: number; units?: number; allocation?: number };
 export async function contractForClient(tenantId: string, staffId: string, p: ContractAsk) {
   const staff = await fiarepAdministrator(tenantId, staffId);
   if (!staff) return NOT_ADMIN;
@@ -247,6 +247,7 @@ export async function clientContract(p: ContractAsk, by: string) {
     units, flatFee: 0, pilot: p.pilot === true, startDate: today, termMonths: Math.min(Math.max(Math.round(Number(p.termMonths) || 12), 1), 120),
     scope: [], engineering: null, expediter: null, notes: "",
     monthlyOverride: p.monthly && p.monthly > 0 ? Math.round(p.monthly * 100) / 100 : null,
+    allocation: p.allocation && p.allocation > 0 ? Math.round(p.allocation) : null,
   };
   const fee = monthlyFee(input);
   if (!fee.monthly) return { error: `${fee.basis}. Set it there, then ask again.` };
