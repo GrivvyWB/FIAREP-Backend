@@ -94,7 +94,9 @@ export default function QuickQuoteScreen() {
   const matches = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return [] as CatalogLine[];
-    return catalog.filter((c) => c.label.toLowerCase().includes(q) || c.group.toLowerCase().includes(q)).slice(0, 12);
+    // Every word typed, in any order ("3/4 plywood" finds "Plywood sheathing 3/4 in").
+    const words = q.split(/\s+/).filter(Boolean);
+    return catalog.filter((c) => { const t = (c.label + ' ' + c.group).toLowerCase(); return words.every((w) => t.includes(w)); }).slice(0, 12);
   }, [catalog, search]);
 
   /** Open a project for this building so the photographs have a home. */
