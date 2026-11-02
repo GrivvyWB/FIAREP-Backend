@@ -85,10 +85,18 @@ router.post("/ai/transcribe", requireAuth, async (req, res) => {
 
 router.post("/ai/speak", requireAuth, async (req, res) => {
   const apiKey = openAiKey(res); if (!apiKey) return;
-  const body = (req.body || {}) as { text?: unknown };
+  const body = (req.body || {}) as { text?: unknown; voice?: unknown };
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if (!text) { res.status(400).json({ error: "text is required" }); return; }
   try {
+    // The Command Center talks in a warm, friendly, down-to-earth voice, in the person's style.
+    if (body.voice === "command") {
+      const actor = res.locals["actor"] as { tenantId: string; id: string } | undefined;
+      const { getPrefs, voiceTone } = await import("../lib/command/personalityPrefs");
+      const mode = actor ? (await getPrefs(actor.tenantId, actor.id).catch(() => null))?.mode ?? "companion" : "companion";
+      res.json(await synthesizeSpeech(text, apiKey, fetch, { voice: "coral", instructions: `${voiceTone(mode)} Down to earth and natural, like a real person talking, never robotic or stiff.` }));
+      return;
+    }
     res.json(await synthesizeSpeech(text, apiKey));
   } catch (error) {
     req.log.warn({ err: error }, "Speech synthesis failed");

@@ -126,12 +126,13 @@ export async function synthesizeSpeech(
   text: string,
   apiKey: string,
   fetchImpl: FetchLike = fetch,
+  opts: { voice?: string; instructions?: string } = {},
 ): Promise<{ audioBase64: string; mimeType: string }> {
   const response = await withTimeout(60_000, (signal) => fetchImpl("https://api.openai.com/v1/audio/speech", {
     method: "POST",
     signal,
     headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ model: "gpt-4o-mini-tts", voice: "alloy", input: text.slice(0, 4000), response_format: "mp3" }),
+    body: JSON.stringify({ model: "gpt-4o-mini-tts", voice: opts.voice || "alloy", input: text.slice(0, 4000), response_format: "mp3", ...(opts.instructions ? { instructions: opts.instructions } : {}) }),
   }));
   if (!response.ok) throw new Error(`OpenAI speech failed (${response.status})`);
   const buffer = Buffer.from(await response.arrayBuffer());

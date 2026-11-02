@@ -4,6 +4,7 @@ import { keyFor } from "./keys";
 import { randomBytes, randomUUID } from "node:crypto";
 import { and, asc, desc, eq, lt, ne } from "drizzle-orm";
 import { createPersonalityEngine } from "./personality-engine";
+import { personalityContext } from "./personalityPrefs";
 import { db, organizations } from "@workspace/db";
 import { ACTION_MAP, actionsFor, agentCatalog, isPlatform, resolveAgent, type ActionContext, type ActionDef } from "./actions";
 import { commandActions, commandRuns } from "./tables";
@@ -253,16 +254,17 @@ export async function runCommand(input: { text: string; spoken?: boolean; thread
   // Personality engine: each person's name, their company as the project, whether they've used it before, what they last asked.
   const [lastRun] = await db.select({ text: commandRuns.text }).from(commandRuns)
     .where(and(eq(commandRuns.staffId, input.staffId), ne(commandRuns.id, runId))).orderBy(desc(commandRuns.createdAt)).limit(1);
+  const v2 = await personalityContext(input.tenantId, input.staffId, threadId, runId, messages.length <= 1);
   const personality = createPersonalityEngine({
     userName: callName(input.actorName, isPlatform(input.tenantId)),
     timezone: "America/New_York",
     returningUser: !!lastRun,
     activeProject: isPlatform(input.tenantId) ? "FIAREP" : org?.name || "FIAREP",
     previousTopic: lastRun?.text?.slice(0, 160) || undefined,
-    personality: "companion",
+    personality: v2.mode,
   });
   const system = systemPrompt(input.actorName, await agentCatalog(input.tenantId), org?.name || "your company", isPlatform(input.tenantId), await getLanguage(input.tenantId, input.staffId))
-    + "\n\n" + personality.systemPrompt.trim()
+    + "\n\n" + personality.systemPrompt.trim() + "\n\n" + v2.prompt
     // Hands-free: the reply is read out loud, so it is short.
     + (input.spoken ? "\n\nThis command was spoken hands-free and your reply is read out loud. Answer in one to three short sentences, plain words, no lists, tables or symbols, unless they ask for the detail." : "");
   const usage: Record<string, number> = { input_tokens: 0, output_tokens: 0 };

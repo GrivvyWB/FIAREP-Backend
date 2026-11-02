@@ -600,6 +600,27 @@ export const ACTIONS: ActionDef[] = [
     run: async (p, ctx) => setLanguage(ctx.tenantId, ctx.staffId, { language: str(p["language"], 40), code: str(p["code"], 8), greeting: str(p["greeting"], 200) }),
     describe: (p) => `Speak ${str(p["language"], 40)}`,
   },
+  {
+    name: "set_personality", label: "Set my Command Center personality", risk: "write", confirmDefault: false, target: "server",
+    description: "Change how the Command Center talks to this person: friendly (warm, relaxed), companion (expressive, humorous, familiar) or professional (polished, efficient). Use when they ask to be talked to differently.",
+    schema: { type: "object", properties: { mode: { type: "string", enum: ["friendly", "companion", "professional"] } }, required: ["mode"], additionalProperties: false },
+    run: async (p, ctx) => (await import("./personalityPrefs")).setMode(ctx.tenantId, ctx.staffId, str(p["mode"], 20)),
+    describe: (p) => `Talk ${str(p["mode"], 20)}`,
+  },
+  {
+    name: "remember_preference", label: "Remember how I like to be talked to", risk: "write", confirmDefault: false, target: "server",
+    description: "Remember one short note about how this person likes the Command Center to talk to them (greeting, nickname, humor, answer length, what to skip). Never anything private or sensitive.",
+    schema: { type: "object", properties: { note: { type: "string" } }, required: ["note"], additionalProperties: false },
+    run: async (p, ctx) => (await import("./personalityPrefs")).remember(ctx.tenantId, ctx.staffId, str(p["note"], 200)),
+    describe: (p) => `Remember: ${str(p["note"], 80)}`,
+  },
+  {
+    name: "forget_preference", label: "Forget a preference", risk: "write", confirmDefault: false, target: "server",
+    description: "Forget a remembered preference of this person (text matching it), or all of them when text is empty.",
+    schema: { type: "object", properties: { note: { type: "string" } }, required: ["note"], additionalProperties: false },
+    run: async (p, ctx) => (await import("./personalityPrefs")).forget(ctx.tenantId, ctx.staffId, str(p["note"], 200)),
+    describe: (p) => `Forget: ${str(p["note"], 80) || "all"}`,
+  },
   // ── Company Forms ───────────────────────────────────────────────────────
   {
     name: "fill_form", label: "Fill in a company form", risk: "write", confirmDefault: false, target: "server",

@@ -178,10 +178,11 @@ export default function CommandCenter() {
         const stored = (await AsyncStorage.getItem(GREET_TEXT)) || '';
         const haveFile = (await FileSystem.getInfoAsync(greetFile)).exists;
         const said = (await AsyncStorage.getItem(SAID)) || '';
-        if (stored === text && haveFile && said === sayAs) return;
-        const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName(text, sayAs).slice(0, 600) });
+        // The friendly voice (v2): a greeting recorded in the old voice is recorded again once.
+        if (stored === text && haveFile && said === sayAs + '|v2') return;
+        const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName(text, sayAs).slice(0, 600), voice: 'command' });
         await FileSystem.writeAsStringAsync(greetFile, audioBase64, { encoding: 'base64' as never });
-        await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem(SAID, sayAs); setSavedGreeting(text);
+        await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem(SAID, sayAs + '|v2'); setSavedGreeting(text);
         if (!greeted.current && speakReplies) { greeted.current = true; await playGreetingFile(); }
       } catch { /* try again next time it opens */ }
     })();
@@ -209,7 +210,7 @@ export default function CommandCenter() {
     if (!speakReplies || !line) return;
     try {
       const pieces = speechChunks(sayName(line, sayAs).slice(0, 2000));
-      const audio = pieces.map((t) => post<{ audioBase64: string }>('/api/ai/speak', { text: t }).catch(() => null));
+      const audio = pieces.map((t) => post<{ audioBase64: string }>('/api/ai/speak', { text: t, voice: 'command' }).catch(() => null));
       await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
       stopSpeaking.current = false;
       for (let i = 0; i < audio.length; i += 1) {
