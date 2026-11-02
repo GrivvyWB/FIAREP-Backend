@@ -88,6 +88,9 @@ export async function punchAttendance(direction: 'in' | 'out', idempotencyKey: s
   if (direction === 'out') await stopClockTracking();
   return row;
 }
+// Everything on this phone that belongs to the person signed in: cleared at sign-out and when someone
+// else signs in, so nobody ever sees another person's or another company's alerts, records or notes.
+const PERSON_TABLES = ['projects','rooms','checklists','roofplans','inspections','cost_estimates','intakes','elevators','resident_reports','violations','building_violations','priority_violations','route_assignments','procurement','manpower_requests','procurement_bids','vendor_contacts','vendor_quotes','change_orders','elevator_jobs','emergency_jobs','emergency_units','leave_requests','notifications','audit_log','hud_inspections','project_notes','project_reviews','project_scopes'];
 async function rotateActorCache(staff: Staff) {
   const d = await db();
   const fingerprint = `${staff.tenantId || ''}:${staff.id}:${[...(staff.developments || [])].sort().join('|')}`;
@@ -98,9 +101,20 @@ async function rotateActorCache(staff: Staff) {
   ) as { value: string } | null;
   const cacheChanged = Boolean(prior?.value && prior.value !== fingerprint);
   if (cacheChanged) {
-    for (const table of ['projects','rooms','checklists','roofplans','inspections','cost_estimates','intakes','elevators','resident_reports','violations','building_violations','priority_violations','route_assignments','procurement','manpower_requests','procurement_bids','vendor_contacts','vendor_quotes','change_orders','elevator_jobs','emergency_jobs','emergency_units','leave_requests']) {
+    for (const table of PERSON_TABLES) {
       try { await d.runAsync(`DELETE FROM ${table}`); } catch {}
     }
+    // The last person's changes still waiting to upload never go up under someone else's sign-in.
+    try { await d.runAsync('DELETE FROM sync_queue'); } catch {}
+  }
+  // Once per phone: alerts, notes and logs left by an earlier sign-in (before these were cleared) go; this person's come back from fiarep.com.
+  const personRepair = await d.getFirstAsync('SELECT value FROM settings WHERE key=?', 'person_tables_repair') as { value: string } | null;
+  if (personRepair?.value !== '1') {
+    for (const table of ['notifications','audit_log','hud_inspections','project_notes','project_reviews','project_scopes']) {
+      try { await d.runAsync(`DELETE FROM ${table}`); } catch {}
+    }
+    await d.runAsync("INSERT INTO settings(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value", 'person_tables_repair', '1');
+    await d.runAsync("DELETE FROM settings WHERE key LIKE 'sync_all_cursor:%'");
   }
   // A cleared identity-scoped cache must never keep a cursor that says those
   // now-empty tables are already hydrated. The repair marker also resets
@@ -2181,7 +2195,7 @@ export async function logout(): Promise<void> {
   await SecureStore.deleteItemAsync('fiarep.auth.refresh').catch(() => undefined);
   clearWebTokens();
   await d.runAsync("DELETE FROM settings WHERE key LIKE 'sync_%_cursor%'").catch(() => undefined);
-  for (const table of ['projects','rooms','checklists','roofplans','inspections','cost_estimates','intakes','elevators','resident_reports','violations','building_violations','priority_violations','route_assignments','procurement','procurement_bids','vendor_contacts','vendor_quotes','change_orders','elevator_jobs','emergency_jobs','emergency_units','leave_requests']) {
+  for (const table of PERSON_TABLES) {
     try { await d.runAsync(`DELETE FROM ${table}`); } catch {}
   }
   await clearCurrentActor();
