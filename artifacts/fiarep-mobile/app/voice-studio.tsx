@@ -95,7 +95,7 @@ export default function VoiceStudio() {
       {!ready && <Text style={{ color: '#991b1b', fontWeight: '700' }}>Voice copying isn't switched on yet.</Text>}
 
       <Text style={{ fontSize: 17, fontWeight: '800' }}>Record a voice</Text>
-      <TextInput style={ui.input} value={speaker} onChangeText={setSpeaker} placeholder="Whose voice (their name)" editable={!recording} />
+      <TextInput style={ui.input} value={speaker} onChangeText={setSpeaker} placeholder="Name only (e.g. Tim)" editable={!recording} />
       <View style={[ui.card, { gap: 4 }]}>
         <Text style={{ fontWeight: '700' }}>Start by saying:</Text>
         <Text style={{ fontSize: 16 }}>"I, {speaker.trim() || '(name)'}, agree to have my voice copied by FIAREP."</Text>
