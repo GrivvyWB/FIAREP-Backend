@@ -9,6 +9,7 @@ import { customFetch } from '@workspace/api-client-react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ui, ACCENT } from '../lib/ui';
 import { getCurrentActor, getSessionIdentity } from '../lib/store';
+import { commandVoice, speakIn, stopVoice } from '../lib/my-voice';
 import {
   approveAction, commandFetch, commandSupport, confirmPublicKey, deviceStatus, enrollDevice, forgetDevice,
   relayApprove, relayDeny, relayRegisterPush, relaySetAutoFix, relayState, relayUrl,
@@ -171,6 +172,9 @@ export default function CommandCenter() {
         const text = (await AsyncStorage.getItem(GREET_TEXT)) || '';
         setSavedGreeting(text);
         if (!text || greeted.current || !speakReplies) return;
+        // The greeting in the Voice Recorder voice, when one is picked for the Command Center.
+        const mine = await commandVoice();
+        if (mine) { greeted.current = true; await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true }); await speakIn(mine.voice, text, mine.k); return; }
         // Only a greeting recorded in this person's voice plays; otherwise it is recorded again first (one voice, always).
         if (!voiceChoice || (await AsyncStorage.getItem(SAID)) !== `${sayAs}|v2|${voiceChoice}`) return;
         if ((await FileSystem.getInfoAsync(greetFile)).exists) { greeted.current = true; await playGreetingFile(); }
@@ -189,6 +193,12 @@ export default function CommandCenter() {
         const said = (await AsyncStorage.getItem(SAID)) || '';
         // The friendly voice (v2): a greeting recorded in the old voice is recorded again once.
         if (!voiceChoice) return;
+        const mine = await commandVoice();
+        if (mine) {
+          await AsyncStorage.setItem(GREET_TEXT, text); setSavedGreeting(text);
+          if (!greeted.current && speakReplies) { greeted.current = true; await speakIn(mine.voice, text, mine.k); }
+          return;
+        }
         if (stored === text && haveFile && said === `${sayAs}|v2|${voiceChoice}`) return;
         const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName(text, sayAs).slice(0, 600), voice: 'command' });
         await FileSystem.writeAsStringAsync(greetFile, audioBase64, { encoding: 'base64' as never });
@@ -218,6 +228,16 @@ export default function CommandCenter() {
   /** Says the reply; resolves when it has finished playing. The first sentence starts while the rest are still being made. */
   async function speak(line: string): Promise<void> {
     if (!speakReplies || !line) return;
+    // A voice picked in Voice Recorder ("Use for the Command Center"): the replies are said in it.
+    const mine = await commandVoice();
+    if (mine) {
+      stopSpeaking.current = false;
+      await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
+      cancelPlay.current = () => { void stopVoice(); };
+      await speakIn(mine.voice, sayName(line, sayAs).slice(0, 2000), mine.k);
+      cancelPlay.current = null;
+      return;
+    }
     try {
       const pieces = speechChunks(sayName(line, sayAs).slice(0, 2000));
       const audio = pieces.map((t) => post<{ audioBase64: string }>('/api/ai/speak', { text: t, voice: 'command' }).catch(() => null));

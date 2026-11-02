@@ -7,16 +7,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { AudioModule, AudioQuality, IOSOutputFormat, RecordingPresets, createAudioPlayer, setAudioModeAsync, useAudioRecorder, type AudioPlayer, type RecordingOptions } from 'expo-audio';
 import { getSessionIdentity } from '../lib/store';
 import { voicePitch } from '../lib/voice-pitch';
+import { commandVoice, setCommandVoice, speakIn } from '../lib/my-voice';
 import { ui, ACCENT } from '../lib/ui';
 
 // Voice Recorder: record a voice; the phone measures how high or deep it is and talks back with its own
 // speech engine tuned to sound close to it, higher or lower as you like. Everything stays on the phone.
 type Voice = { id: string; name: string; gender: 'man' | 'woman'; hz: number | null; file: string; createdAt: string };
 const PITCH = [{ label: 'Much lower', k: 0.8 }, { label: 'Lower', k: 0.9 }, { label: 'Normal', k: 1 }, { label: 'Higher', k: 1.1 }, { label: 'Much higher', k: 1.25 }];
-// Average speaking pitch of adult voices, to tune the phone voice toward this person's.
-const TYPICAL = { man: 120, woman: 210 };
-const MALE = /aaron|fred|alex|tom|nathan|evan|daniel|rishi|arthur|oliver|gordon|reed|rocko|grandpa|eddy|ralph|albert/i;
-const FEMALE = /samantha|nicky|allison|ava|susan|victoria|karen|moira|tessa|zoe|serena|kate|martha|catherine|fiona|veena|flo|shelley|sandy|grandma|kathy|joelle|noelle/i;
 
 // iPhone records WAV so the pitch can be measured on the phone.
 const REC: RecordingOptions = Platform.OS === 'ios'
@@ -37,11 +34,13 @@ export default function VoiceStudio() {
   const [busy, setBusy] = useState('');
   const [text, setText] = useState<Record<string, string>>({});
   const [pitch, setPitch] = useState<Record<string, number>>({});
+  const [ccId, setCcId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     const id = (await getSessionIdentity().catch(() => null))?.staffId || 'me';
     const k = `voice-studio:${id}`; setStore(k);
     try { setVoices(JSON.parse((await AsyncStorage.getItem(k)) || '[]')); } catch { setVoices([]); }
+    const cc = await commandVoice(); setCcId(cc?.voice.id ?? null); if (cc) setPitch((x) => ({ ...x, [cc.voice.id]: cc.k }));
   }, []);
   useFocusEffect(useCallback(() => { void load(); }, [load]));
   useEffect(() => () => { player.current?.remove(); void Speech.stop(); }, []);
@@ -82,14 +81,6 @@ export default function VoiceStudio() {
     } catch (e: any) { Alert.alert('Not saved', String(e?.message || e)); }
     finally { setBusy(''); }
   }
-  async function pickVoice(g: 'man' | 'woman'): Promise<string | undefined> {
-    const all = await Speech.getAvailableVoicesAsync().catch(() => []);
-    const en = all.filter((v) => /^en/i.test(v.language));
-    const want = (g === 'man' ? MALE : FEMALE);
-    const match = en.filter((v) => want.test(v.name || v.identifier));
-    const best = match.find((v) => String(v.quality).toLowerCase().includes('enhanced')) || match[0];
-    return best?.identifier;
-  }
   async function say(v: Voice) {
     const words = (text[v.id] || '').trim();
     if (!words) { Alert.alert('What should it say?'); return; }
@@ -97,9 +88,7 @@ export default function VoiceStudio() {
     player.current?.remove();
     await setAudioModeAsync({ allowsRecording: false, playsInSilentMode: true });
     // Tuned toward this person's own pitch, then higher or lower as picked.
-    const base = v.hz ? Math.min(1.4, Math.max(0.7, v.hz / TYPICAL[v.gender])) : 1;
-    const p = Math.min(2, Math.max(0.5, base * (pitch[v.id] ?? 1)));
-    Speech.speak(words, { voice: await pickVoice(v.gender), pitch: p, rate: 1 });
+    await speakIn(v, words, pitch[v.id] ?? 1);
   }
   async function listen(v: Voice) {
     await Speech.stop();
@@ -146,9 +135,15 @@ export default function VoiceStudio() {
           </View>
           <TextInput style={[ui.input, { minHeight: 70 }]} multiline value={text[v.id] || ''} onChangeText={(t) => setText((x) => ({ ...x, [v.id]: t }))} placeholder="Type what it should say" />
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-            {PITCH.map((p) => chip((pitch[v.id] ?? 1) === p.k, p.label, () => setPitch((x) => ({ ...x, [v.id]: p.k }))))}
+            {PITCH.map((p) => chip((pitch[v.id] ?? 1) === p.k, p.label, () => { setPitch((x) => ({ ...x, [v.id]: p.k })); if (ccId === v.id) void setCommandVoice(v.id, p.k); }))}
           </View>
           <Pressable style={ui.btn} onPress={() => void say(v)}><Text style={ui.btnText}>Say it</Text></Pressable>
+          <Pressable style={[ccId === v.id ? ui.btn : ui.btnOutline, ccId === v.id && { backgroundColor: '#1a8f4c' }]} onPress={() => void (async () => {
+            if (ccId === v.id) { await setCommandVoice(null); setCcId(null); Alert.alert('Command Center', 'Back to its own voice.'); }
+            else { await setCommandVoice(v.id, pitch[v.id] ?? 1); setCcId(v.id); Alert.alert('Command Center', `The Command Center now talks in ${v.name}'s voice.`); }
+          })()}>
+            <Text style={ccId === v.id ? ui.btnText : ui.btnOutlineText}>{ccId === v.id ? 'Command Center voice ✓' : 'Use for the Command Center'}</Text>
+          </Pressable>
           <Pressable style={{ paddingVertical: 6 }} onPress={() => void listen(v)}><Text style={{ color: ACCENT, fontWeight: '700', textAlign: 'center' }}>Play the recording</Text></Pressable>
         </View>
       ))}
