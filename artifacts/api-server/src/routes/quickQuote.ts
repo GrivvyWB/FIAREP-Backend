@@ -73,7 +73,7 @@ async function tellOwner(clientTenantId: string, quote: QuickQuote, projectId: s
     id: randomUUID(), tenantId: clientTenantId, target: s.id,
     message: `FIAREP needs approval — $${quote.total.toFixed(2)}`,
     detail: [quote.building, quote.lines.map((l) => `${l.qty} × ${l.label}`).join(", ")].filter(Boolean).join(" · ").slice(0, 400),
-    reportId: projectId,
+    reportId: `qq:${projectId}:${quote.id || ""}`,
   }))).returning();
   for (const row of rows) void deliverPushNotification(row).catch(() => undefined);
 }
@@ -368,6 +368,59 @@ router.delete("/v1/fiarep/projects/:id/quick-quote", requireAuth, async (req, re
     .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
   await audit(actor, "projects.quick-quote-deleted", `$${(quote.total ?? 0).toFixed(2)}${bare ? " · project removed too" : ""}`, project.id);
   res.json({ ok: true, projectRemoved: bare });
+});
+
+// ── The owner's side: open a quote FIAREP sent, approve it or turn it down ──
+const ownerOk = (role: string) => role === "administrator" || role === "management";
+/** The quotes FIAREP sent this company: one project's, or every one. */
+async function ownerQuotes(tenantId: string, projectId?: string) {
+  const rows = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.entity, "projects"), eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+    ...(projectId ? [eq(entityRecords.id, projectId)] : []),
+  )).limit(projectId ? 1 : 1000);
+  return rows.flatMap((r) => quotesOf(r.state).filter((q) => q.clientTenantId === tenantId && q.status !== "admin_review")
+    .map((q) => ({ projectId: r.id, quote: { ...q, lines: q.lines.map((l) => ({ ...l, photo: "" })) } })))
+    .sort((a, b) => String(b.quote.sentAt).localeCompare(String(a.quote.sentAt)));
+}
+
+router.get("/v1/owner/quotes", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId === FIAREP_TENANT || !ownerOk(actor.role)) { res.status(403).json({ error: "For the company's administrators and management." }); return; }
+  const projectId = text(req.query["project"], 80);
+  res.setHeader("Cache-Control", "no-store");
+  res.json(await ownerQuotes(actor.tenantId, projectId || undefined));
+});
+
+router.post("/v1/owner/quotes/:projectId/:quoteId/decision", requireAuth, async (req, res) => {
+  const actor = actorFrom(res);
+  if (actor.tenantId === FIAREP_TENANT || !ownerOk(actor.role)) { res.status(403).json({ error: "For the company's administrators and management." }); return; }
+  const body = (req.body ?? {}) as Record<string, unknown>;
+  const decision = text(body["decision"]) === "approve" ? "approve" : text(body["decision"]) === "decline" ? "decline" : "";
+  if (!decision) { res.status(400).json({ error: "Approve or turn it down." }); return; }
+  const [project] = await db.select().from(entityRecords).where(and(
+    eq(entityRecords.id, String(req.params["projectId"] || "")), eq(entityRecords.entity, "projects"),
+    eq(entityRecords.tenantId, FIAREP_TENANT), eq(entityRecords.deleted, false),
+  )).limit(1);
+  if (!project) { res.status(404).json({ error: "This quote is gone." }); return; }
+  const all = quotesOf(project.state);
+  const current = all.find((q) => q.id === String(req.params["quoteId"] || ""));
+  if (!current || current.clientTenantId !== actor.tenantId) { res.status(404).json({ error: "This quote is gone." }); return; }
+  if (current.status !== "pending") { res.status(409).json({ error: `This one was already ${current.status}.` }); return; }
+  const now = new Date();
+  const company = (await companyName(actor.tenantId)) || "";
+  const quote: QuickQuote = {
+    ...current, status: decision === "approve" ? "approved" : "declined", approvedBySelf: false,
+    decidedBy: [actor.name, company].filter(Boolean).join(", "), decidedAt: now.toISOString(),
+    ...(text(body["note"], 500) ? { ownerNote: text(body["note"], 500) } : {}),
+  } as QuickQuote;
+  await db.update(entityRecords)
+    .set({ state: withQuotes(project.state, all.map((q) => (q.id === current.id ? quote : q))), version: (project.version ?? 1) + 1, updatedAt: now })
+    .where(and(eq(entityRecords.id, project.id), eq(entityRecords.tenantId, FIAREP_TENANT)));
+  await audit(actor, `projects.quick-quote-owner-${decision === "approve" ? "approved" : "declined"}`, `$${quote.total.toFixed(2)} · ${company}`, project.id);
+  await tellFiarep([...(await fiarepAdministrators()), current.sentById || ""],
+    `${company || actor.name} ${decision === "approve" ? "approved" : "turned down"} the quote — $${quote.total.toFixed(2)}`,
+    [quote.building, `by ${actor.name}`, text(body["note"], 300)].filter(Boolean).join(" · "), project.id);
+  res.json(quote);
 });
 
 export default router;

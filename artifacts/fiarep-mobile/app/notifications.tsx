@@ -37,6 +37,14 @@ export default function Notifications() {
       return;
     }
     await markNotificationRead(n.id);
+    // A quote FIAREP sent for approval opens the quote, with Approve / Turn down.
+    if (msg.startsWith('fiarep needs approval') && n.reportId) {
+      const m = n.reportId.match(/^qq:([^:]+):?(.*)$/);
+      if (m) { router.push(`/owner-quote?project=${encodeURIComponent(m[1])}&quote=${encodeURIComponent(m[2] || '')}` as never); return; }
+      // Older alerts: a complaint quote opens the complaint; a quick quote opens the building's quotes.
+      const report = await getResidentReport(n.reportId).catch(() => null);
+      if (!report) { router.push(`/owner-quote?project=${encodeURIComponent(n.reportId)}` as never); return; }
+    }
     // Alerts about the Command Center, computers and builds, contracts and autopay open as themselves.
     if (/^(command center request|done on |tim's mac|aws server|build |contract signed|autopay)/.test(msg) || / build (failed|ready|done)/.test(msg)) { router.push('/message?id=' + encodeURIComponent(n.id)); return; }
     if (n.reportId && n.reportId.startsWith('hud:')) { router.push('/hud-view?id=' + n.reportId.slice(4)); return; }
