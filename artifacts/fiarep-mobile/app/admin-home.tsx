@@ -161,6 +161,7 @@ export default function AdminHome() {
       tiles: [
         ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
         ...(modules['translator'] || personTileOn('admin', 'Translator', rawModules) ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
+        { label: 'Voice Recorder', onPress: () => router.push('/voice-studio' as never), tone: 'outline' as const },
         // Command Center: FIAREP's own administrators (FIAREP + the Mac), and each
         // client's administrators (their own buildings and computers) once the
         // platform owner has switched it on for the client — hidden until then.

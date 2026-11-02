@@ -132,6 +132,7 @@ export default function ManagementHome() {
     ], [
       ...(modules['property-lookup'] ? [{ label: 'Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1') }] : []),
       ...(modules['translator'] || personTileOn('management', 'Translator', rawModules) ? [{ label: 'Translator', onPress: () => router.push('/translator') }] : []),
+      { label: 'Voice Recorder', onPress: () => router.push('/voice-studio' as never) },
     ]);
   }
   if (cpmSupervisor || tradeSupervisor) {

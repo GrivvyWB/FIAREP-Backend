@@ -167,6 +167,7 @@ export default function CpmHome() {
         ...(messagingOpen === true && (isTechnician || rawModules['fiarepMessaging'] !== false) ? [{ label: 'Messages', onPress: () => router.push('/client-messages?member=1'), tone: 'outline' as const }] : []),
         ...(modules['property-lookup'] ? [{ label: '🏢 Check HPD / DOB', onPress: () => router.push('/inspector-violations?lookup=1'), tone: 'outline' as const }] : []),
         ...(modules['translator'] || personTileOn(isTechHome ? 'tech' : 'cpm', 'Translator', rawModules) ? [{ label: '🌐 Translator', onPress: () => router.push('/translator'), tone: 'outline' as const }] : []),
+        { label: 'Voice Recorder', onPress: () => router.push('/voice-studio' as never), tone: 'outline' as const },
         { label: 'Sign out', onPress: onSignOut, tone: 'outline' },
       ],
     },
