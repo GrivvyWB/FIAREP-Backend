@@ -27,6 +27,7 @@ import { syncAllEntities } from '../lib/sync';
 import { clearBadge } from '../lib/push';
 import { loadModuleConfig, refreshModuleConfig, moduleForRoute, moduleEnabled, cachedRawModules, signedInStaffId } from '../lib/module-access';
 import { personOpensRoute, buttonSwitchedOn } from '../lib/all-buttons';
+import { useKeyboardSpace } from '../lib/keyboard-space';
 import { customFetch } from '@workspace/api-client-react';
 import * as SecureStore from 'expo-secure-store';
 import CodeMessage from '../components/CodeMessage';
@@ -602,6 +603,8 @@ function VendorStack() {
 }
 
 export default function Layout() {
+  // The keyboard never covers a screen: every screen ends right above it while it is up.
+  const keyboardSpace = useKeyboardSpace();
   const router = useRouter();
   const pathname = usePathname();
   const [mode, setMode] = useState<AppMode | null>(null);
@@ -808,7 +811,7 @@ export default function Layout() {
 
   return (
     <ModeContext.Provider value={{ mode, loading: false, refresh }}>
-      <View key={mode ?? 'picker'} style={{ flex: 1 }}>
+      <View key={mode ?? 'picker'} style={{ flex: 1, paddingBottom: keyboardSpace }}>
       {content}
       </View>
     </ModeContext.Provider>
