@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import router from "./routes";
+import lottoRouter from "./routes/publicLotto";
 import { logger } from "./lib/logger";
 
 const app: Express = express();
@@ -25,6 +26,8 @@ app.use(
     },
   }),
 );
+// Lotto Generator app: public read-only draws, open to any origin (before the restricted CORS below).
+app.use("/api/v1/public/lotto", cors(), lottoRouter);
 const configuredOrigins = (process.env["CORS_ORIGINS"] ?? "").split(",").map((origin) => origin.trim()).filter(Boolean);
 app.use(cors({
   origin: (origin, callback) => {

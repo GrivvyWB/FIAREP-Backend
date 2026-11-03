@@ -315,6 +315,27 @@ export const ACTIONS: ActionDef[] = [
     describe: () => "Server status",
   },
   {
+    name: "update_lotto_states", label: "Update the lotto states", risk: "write", confirmDefault: false, target: "server", platformOnly: true,
+    description: "Lotto Generator app: pull the newest winning numbers for every state and area it covers (NY State Open Data for Powerball, Mega Millions, Millionaire for Life and NY games; lottery.net for the other states). Takes about 5 minutes; it keeps going in the background. Use when asked to update the lotto states, lotto numbers or the lotto app.",
+    schema: { type: "object", properties: {}, additionalProperties: false },
+    run: async () => {
+      const { updateLotto, lottoStatus, lottoUpdating } = await import("../lotto");
+      const already = lottoUpdating();
+      void updateLotto().catch(() => undefined);
+      const s = await lottoStatus();
+      return { started: !already, alreadyRunning: already, takesMinutes: 5, games: s.gamesCovered, previousRun: s.lastRun };
+    },
+    describe: () => "Update the lotto states",
+    spoken: (r) => ((r as { alreadyRunning?: boolean })?.alreadyRunning ? "A lotto update is already running. Ask for the lotto status in a few minutes." : "Updating every lotto state now. It takes about five minutes; ask for the lotto status after that."),
+  },
+  {
+    name: "lotto_status", label: "Lotto update status", risk: "read", confirmDefault: false, target: "server", platformOnly: true,
+    description: "Lotto Generator app: whether an update is running, the newest draw date the server has for each game, and the last update's results (draws added per game, and any game that could not be read).",
+    schema: { type: "object", properties: {}, additionalProperties: false },
+    run: async () => (await import("../lotto")).lottoStatus(),
+    describe: () => "Lotto update status",
+  },
+  {
     name: "restart_api", label: "Restart the FIAREP API", risk: "write", confirmDefault: true, target: "server", platformOnly: true,
     description: "Restart the FIAREP API process: it exits a few seconds after answering and its supervisor (Replit deployment / PM2) starts it again. Only when asked to restart or fix a stuck API.",
     schema: { type: "object", properties: {}, additionalProperties: false },
