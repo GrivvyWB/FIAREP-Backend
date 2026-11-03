@@ -95,7 +95,24 @@ export default function CommandCenter() {
   useEffect(() => { void AsyncStorage.multiGet(['cc.wakeWords', 'cc.sayAs']).then((kv) => { const m = Object.fromEntries(kv); try { const w = JSON.parse(m['cc.wakeWords'] || '[]'); if (Array.isArray(w)) setTaught(w.filter((x) => typeof x === 'string')); } catch { /* none yet */ } setSayAs(m['cc.sayAs'] || ''); setSayAsDraft(m['cc.sayAs'] || ''); }).catch(() => undefined); }, []);
   const [recording, setRecording] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({});
-  const [threadId, setThreadId] = useState(newThread);
+  // The conversation picks up where it left off (after another app, or the app reopening) until "New conversation".
+  const [threadId, setThreadIdState] = useState(newThread);
+  const threadRef = useRef(threadId);
+  const lastActive = useRef(0);
+  const threadKey = async () => `cc.thread:${String((await getSessionIdentity().catch(() => null))?.staffId || 'me').replace(/[^a-zA-Z0-9_-]/g, '')}`;
+  const saveThread = async (id: string) => { lastActive.current = Date.now(); await AsyncStorage.setItem(await threadKey(), JSON.stringify({ id, at: lastActive.current })).catch(() => undefined); };
+  const setThreadId = (id: string) => { threadRef.current = id; setThreadIdState(id); void saveThread(id); };
+  const threadLoaded = useRef<Promise<void> | null>(null);
+  if (!threadLoaded.current) threadLoaded.current = (async () => {
+    try {
+      const saved = JSON.parse((await AsyncStorage.getItem(await threadKey())) || 'null') as { id?: string; at?: number } | null;
+      if (saved?.id) { threadRef.current = saved.id; setThreadIdState(saved.id); lastActive.current = saved.at || 0; }
+    } catch { /* a new conversation */ }
+  })();
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (st) => { if (st !== 'active') void saveThread(threadRef.current); });
+    return () => sub.remove();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const recorder = useAudioRecorder({ ...RecordingPresets.HIGH_QUALITY, isMeteringEnabled: true });
   const playerRef = useRef<AudioPlayer | null>(null);
   // Backup relay: outage alerts and republish approvals that work when fiarep.com is down.
@@ -170,6 +187,9 @@ export default function CommandCenter() {
         const { text: GREET_TEXT, said: SAID, file: greetFile } = await greetKeys();
         const text = (await AsyncStorage.getItem(GREET_TEXT)) || '';
         setSavedGreeting(text);
+        // Coming back to a conversation in the last 30 minutes: it carries on, no greeting.
+        await threadLoaded.current;
+        if (Date.now() - lastActive.current < 30 * 60_000) { greeted.current = true; return; }
         if (!text || greeted.current || !speakReplies) return;
         // Only a greeting recorded in this person's voice plays; otherwise it is recorded again first (one voice, always).
         if (!voiceChoice || (await AsyncStorage.getItem(SAID)) !== `${sayAs}|v2|${voiceChoice}`) return;
@@ -193,7 +213,7 @@ export default function CommandCenter() {
         const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName(text, sayAs).slice(0, 600), voice: 'command' });
         await FileSystem.writeAsStringAsync(greetFile, audioBase64, { encoding: 'base64' as never });
         await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem(SAID, `${sayAs}|v2|${voiceChoice}`); setSavedGreeting(text);
-        if (!greeted.current && speakReplies) { greeted.current = true; await playGreetingFile(); }
+        if (!greeted.current && speakReplies && Date.now() - lastActive.current >= 30 * 60_000) { greeted.current = true; await playGreetingFile(); }
       } catch { /* try again next time it opens */ }
     })();
   }, [device?.status, device?.greeting, sayAs, voiceChoice]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -248,7 +268,9 @@ export default function CommandCenter() {
     setText(''); setBusy('Working…');
     let say = '';
     try {
-      const run = await commandFetch<CommandRun>('POST', '/v1/command/runs', { text: t, threadId, spoken });
+      await threadLoaded.current;
+      void saveThread(threadRef.current);
+      const run = await commandFetch<CommandRun>('POST', '/v1/command/runs', { text: t, threadId: threadRef.current, spoken });
       setRuns((rs) => [run, ...rs.filter((r) => r.id !== run.id)]);
       setPending((p) => [...p, ...run.actions.filter((a) => a.status === 'proposed' && !p.some((x) => x.id === a.id))]);
       say = run.reply || '';
