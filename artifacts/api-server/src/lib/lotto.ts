@@ -47,6 +47,8 @@ const LN: Record<string, [string[], number, number]> = {
   "VA|Bank a Million": [["virginia/bank-a-million"], 6, 1],
   "VA|Cash 5": [["virginia/cash-5"], 5, 0],
   "VA|Pick 5": [["virginia/pick-5-day", "virginia/pick-5-night"], 5, 1],
+  "CT|Play3": [["connecticut/play-3-day", "connecticut/play-3-night"], 3, 0],
+  "CT|Play4": [["connecticut/play-4-day", "connecticut/play-4-night"], 4, 0],
   "CT|Cash5": [["connecticut/cash-5"], 5, 0],
   "CT|Lotto!": [["connecticut/lotto"], 6, 0],
   "MD|Bonus Match 5": [["maryland/bonus-match-5"], 5, 1],
@@ -143,6 +145,7 @@ export function parseLotteryNet(html: string, main: number, bonus: number): Row[
     let b = first.filter((x) => !isMain(x.cls)).map((x) => x.n);
     if (m.length + b.length === main + bonus && (m.length !== main || b.length !== bonus)) { const all = [...m, ...b]; m = all.slice(0, main); b = all.slice(main); }
     if (bonus && !b.length && m.length === main && uls[1]?.length === bonus) b = uls[1].map((x) => x.n);
+    if (!bonus && m.length === main) b = []; // a Wild Ball or similar extra is not part of these games' numbers
     if (!first.some((x) => x.cls.includes("number-part-"))) m.sort((x, y) => x - y); // drawn-number games: lowest first, like the app's history
     if (m.length === main && b.length === bonus) out.push([date, m, b]);
   }
