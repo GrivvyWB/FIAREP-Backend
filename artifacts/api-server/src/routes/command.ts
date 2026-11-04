@@ -6,6 +6,7 @@
 //   Client  /v1/org/command/*        the client's own control panel: its phones, computers, switches, audit
 //   Owner   /v1/platform/command/*   Platform Control: FIAREP's own, plus every client's on/off, usage and cap
 import { randomBytes, randomUUID } from "node:crypto";
+import { lottoTick } from "../lib/lotto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
@@ -332,6 +333,7 @@ const jobView = (a: ActionRow) => ({ id: a.id, action: a.action, params: a.param
 
 router.post("/v1/command/agent/heartbeat", rateLimit("command-agent", 120), requireAgent, async (req, res) => {
   const agent = res.locals["agent"] as Agent;
+  lottoTick(); // Lotto Generator app: an update starts or carries on while a computer keeps the server busy
   const b = (req.body ?? {}) as Record<string, unknown>;
   const rawInfo = b["info"] && typeof b["info"] === "object" && !Array.isArray(b["info"]) ? (b["info"] as Record<string, unknown>) : {};
   const info = JSON.stringify(rawInfo).length <= 4000 ? rawInfo : { truncated: true };

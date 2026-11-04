@@ -17,7 +17,7 @@ type Row = [string, number[], number[]];
 type Store = {
   hist: Record<string, Row[]>;
   keno: Record<string, number[]>; // day → [draws, count of 1 … count of 80]
-  lastRun?: { startedAt: string; finishedAt?: string; added: Record<string, number>; failed: Record<string, string> };
+  lastRun?: { startedAt: string; finishedAt?: string; added: Record<string, number>; failed: Record<string, string>; nyDone?: boolean; next?: number; beat?: string };
 };
 
 // key → [state page path(s) on lottery.net, main balls, bonus balls]
@@ -172,13 +172,14 @@ function addRows(store: Store, key: string, rows: Row[]): number {
   return n;
 }
 
-async function pull(): Promise<Store> {
-  const store = await load();
-  const added: Record<string, number> = {};
-  const failed: Record<string, string> = {};
-  store.lastRun = { startedAt: new Date().toISOString(), added, failed };
-  const today = nyToday();
+const LN_KEYS = Object.keys(LN);
+/** A new update starts this long after the last one finished. */
+const EVERY_MS = 6 * 3_600_000;
+/** An unfinished update nobody has touched for this long is picked up again. */
+const STALE_MS = 90_000;
 
+async function pullNy(store: Store, run: NonNullable<Store["lastRun"]>) {
+  const today = nyToday();
   for (const f of NY) {
     const h = store.hist[f.key] || [];
     const since = h.length ? h[h.length - 1]![0] : FROM;
@@ -188,10 +189,9 @@ async function pull(): Promise<Store> {
       const rows = (await res.json()) as NyRow[];
       const out: Row[] = [];
       for (const r of rows) { const d = String(r["draw_date"] || "").slice(0, 10); for (const [m, b] of f.rows(r)) if (m.length && m.every(Number.isFinite)) out.push([d, m, b]); }
-      added[f.key] = addRows(store, f.key, out);
-    } catch (e) { failed[f.key] = e instanceof Error ? e.message : "failed"; }
+      run.added[f.key] = (run.added[f.key] || 0) + addRows(store, f.key, out);
+    } catch (e) { run.failed[f.key] = e instanceof Error ? e.message : "failed"; }
   }
-
   // Quick Draw: whole days only (yesterday and before, New York time).
   try {
     const days = Object.keys(store.keno).sort();
@@ -211,40 +211,68 @@ async function pull(): Promise<Store> {
       if (rows.length < 50000) break;
     }
     Object.assign(store.keno, fresh);
-    added["NY|Quick Draw (days)"] = Object.keys(fresh).length;
-  } catch (e) { failed["NY|Quick Draw"] = e instanceof Error ? e.message : "failed"; }
-  await save(store);
+    run.added["NY|Quick Draw (days)"] = Object.keys(fresh).length;
+  } catch (e) { run.failed["NY|Quick Draw"] = e instanceof Error ? e.message : "failed"; }
+}
 
-  const year = Number(today.slice(0, 4));
-  for (const [key, [paths, main, bonus]] of Object.entries(LN)) {
-    const h = store.hist[key] || [];
-    const lastYear = Number((h.length ? h[h.length - 1]![0] : FROM).slice(0, 4));
-    const rows: Row[] = [];
-    let err = "";
-    for (const p of paths) {
-      for (let y = Math.min(lastYear, year); y <= year; y++) {
-        try {
-          const res = await fetch(`https://www.lottery.net/${p}/numbers/${y}`, { headers: UA, signal: AbortSignal.timeout(30_000) });
-          if (!res.ok) throw new Error(`HTTP ${res.status}`);
-          const got = parseLotteryNet(await res.text(), main, bonus);
-          if (!got.length) err = "no draws on the page";
-          rows.push(...got);
-        } catch (e) { err = e instanceof Error ? e.message : "failed"; }
-        await sleep(GAP_MS);
-      }
+async function pullState(store: Store, run: NonNullable<Store["lastRun"]>, key: string) {
+  const [paths, main, bonus] = LN[key]!;
+  const year = Number(nyToday().slice(0, 4));
+  const h = store.hist[key] || [];
+  const lastYear = Number((h.length ? h[h.length - 1]![0] : FROM).slice(0, 4));
+  const rows: Row[] = [];
+  let err = "";
+  for (const p of paths) {
+    for (let y = Math.min(lastYear, year); y <= year; y++) {
+      try {
+        const res = await fetch(`https://www.lottery.net/${p}/numbers/${y}`, { headers: UA, signal: AbortSignal.timeout(30_000) });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const got = parseLotteryNet(await res.text(), main, bonus);
+        if (!got.length) err = "no draws on the page";
+        rows.push(...got);
+      } catch (e) { err = e instanceof Error ? e.message : "failed"; }
+      await sleep(GAP_MS);
     }
-    added[key] = addRows(store, key, rows);
-    if (err && !rows.length) failed[key] = err;
   }
-  store.lastRun.finishedAt = new Date().toISOString();
+  run.added[key] = (run.added[key] || 0) + addRows(store, key, rows);
+  if (err && !rows.length) run.failed[key] = err; else delete run.failed[key];
+}
+
+/** Runs (or carries on) an update, saving after every game, so a restart picks up where it stopped. */
+async function pull(fresh: boolean): Promise<Store> {
+  const store = await load();
+  let run = store.lastRun;
+  if (!run || (run.finishedAt && fresh)) run = store.lastRun = { startedAt: new Date().toISOString(), added: {}, failed: {}, nyDone: false, next: 0 };
+  if (run.finishedAt) return store;
+  const beat = async () => { run!.beat = new Date().toISOString(); await save(store); };
+  if (!run.nyDone) { await pullNy(store, run); run.nyDone = true; await beat(); }
+  for (let i = run.next ?? 0; i < LN_KEYS.length; i++) {
+    await pullState(store, run, LN_KEYS[i]!);
+    run.next = i + 1;
+    await beat();
+  }
+  run.finishedAt = new Date().toISOString();
   await save(store);
   return store;
 }
 
-/** Start an update (or join the one already running). */
-export function updateLotto(): Promise<Store> {
-  if (!running) running = pull().finally(() => { running = null; });
+/** Start an update, or carry on the one already started. */
+export function updateLotto(fresh = true): Promise<Store> {
+  if (!running) running = pull(fresh).finally(() => { running = null; });
   return running;
+}
+
+let lastTick = 0;
+/** Cheap check on any visit (the computer agent, the app, the timer): starts an update when one is due, or carries on one that stopped. */
+export function lottoTick() {
+  if (running || Date.now() - lastTick < 60_000) return;
+  lastTick = Date.now();
+  void (async () => {
+    const r = (await load()).lastRun;
+    const age = (t?: string) => (t ? Date.now() - Date.parse(t) : Infinity);
+    if (!r || (r.finishedAt && age(r.finishedAt) > EVERY_MS)) await updateLotto(true);
+    else if (!r.finishedAt && age(r.beat || r.startedAt) > STALE_MS) await updateLotto(false);
+  })().catch(() => undefined);
 }
 
 /** What the server has: the newest draw per game and the last update's results. */
@@ -253,8 +281,9 @@ export async function lottoStatus() {
   const games = Object.fromEntries(Object.entries(s.hist).map(([k, rows]) => [k, { draws: rows.length, newest: rows.length ? rows[rows.length - 1]![0] : null }]));
   const kenoDays = Object.keys(s.keno).sort();
   return {
-    updating: lottoUpdating(),
-    gamesCovered: NY.length + Object.keys(LN).length,
+    updating: lottoUpdating() || (!!s.lastRun && !s.lastRun.finishedAt),
+    gamesCovered: NY.length + LN_KEYS.length,
+    stateGamesDone: s.lastRun ? `${s.lastRun.finishedAt ? LN_KEYS.length : s.lastRun.next ?? 0} of ${LN_KEYS.length}` : null,
     games,
     quickDrawThrough: kenoDays.length ? kenoDays[kenoDays.length - 1] : KENO_AFTER,
     lastRun: s.lastRun ?? null,
@@ -270,9 +299,8 @@ export async function lottoSince(since: string) {
   return { hist, keno: s.keno, updatedAt: s.lastRun?.finishedAt ?? null };
 }
 
-/** Twice a day, a few minutes after start-up. */
+/** Checks every 10 minutes while the server is up (visits check too). */
 export function startLottoUpdates() {
-  const tick = () => { void updateLotto().catch(() => undefined); };
-  setTimeout(tick, 10 * 60_000).unref();
-  setInterval(tick, 12 * 3_600_000).unref();
+  setTimeout(lottoTick, 60_000).unref();
+  setInterval(lottoTick, 10 * 60_000).unref();
 }
