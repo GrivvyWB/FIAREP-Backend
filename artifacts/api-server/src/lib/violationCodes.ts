@@ -415,6 +415,34 @@ export function lookupViolationCode(code: string): ViolationCode | null {
   return CODE_INDEX[(code || "").trim().toUpperCase()] || null;
 }
 
+/** Find codes by number ("670") or by words ("heat", "hot water", "inadequate heat"). HPD and DOB. */
+const SKIP = new Set(["a", "an", "the", "and", "or", "for", "of", "to", "in", "on", "me", "my", "give", "get", "what", "whats", "is", "are", "code", "codes", "number", "numbers", "hpd", "dob", "violation", "violations", "pull", "find", "show", "tell", "about", "from", "with"]);
+export function searchViolationCodes(query: string, limit = 15): Array<ViolationCode & { agency: "HPD" | "DOB" }> {
+  const agency = (c: ViolationCode) => (DOB_VIOLATION_CODES.includes(c) ? "DOB" as const : "HPD" as const);
+  const q = (query || "").toLowerCase().replace(/\bin adequate\b/g, "inadequate");
+  const out = new Map<string, ViolationCode>();
+  // Code numbers asked for come back exactly.
+  for (const n of q.match(/\b\d{2,4}[a-z]?\b/g) ?? []) {
+    const hit = lookupViolationCode(n) ?? lookupViolationCode(n.padStart(3, "0"));
+    if (hit) out.set(hit.code, hit);
+  }
+  // "heat and hot water" is two things asked for: the best codes for each.
+  const wordsOf = (t: string) => t.replace(/[^a-z\s]/g, " ").split(/\s+/).filter((w) => w.length > 1 && !SKIP.has(w));
+  const has = (t: string, w: string) => new RegExp(`\\b${w}(s|es|ing)?\\b`).test(t);
+  const text = (c: ViolationCode) => `${c.desc} ${c.full ?? ""} ${c.abstract ?? ""}`.toLowerCase();
+  const all = wordsOf(q);
+  const score = (c: ViolationCode) => all.reduce((n, w) => n + (has((c.abstract ?? "").toLowerCase(), w) ? 3 : has(text(c), w) ? 1 : 0), 0);
+  const parts = q.split(/\band\b|,|&|\//).map(wordsOf).filter((ws) => ws.length);
+  const per = parts.map((ws) => ALL_VIOLATION_CODES.filter((c) => ws.every((w) => has(text(c), w))).sort((x, y) => score(y) - score(x)));
+  const firsts = Math.max(3, Math.ceil(limit / Math.max(1, parts.length)));
+  for (let i = 0; i < firsts; i += 1) for (const list of per) { const c = list[i]; if (c && out.size < limit) out.set(c.code, c); }
+  if (!out.size && all.length) {
+    // Nothing has every word: the codes with the most of them.
+    for (const c of ALL_VIOLATION_CODES.filter((c) => score(c) > 0).sort((x, y) => score(y) - score(x))) { if (out.size >= limit) break; out.set(c.code, c); }
+  }
+  return [...out.values()].slice(0, limit).map((c) => ({ ...c, agency: agency(c) }));
+}
+
 // A compact catalog string for prompting the model to pick a real code.
 export function violationCodeCatalog(): string {
   return ALL_VIOLATION_CODES.map((c) => c.code + ": " + (c.abstract || c.desc).slice(0, 80) + (c.hint ? " [" + c.hint + "]" : "")).join("\n");
