@@ -1,4 +1,6 @@
-export type ViolationCode = { code: string; desc: string; full?: string; abstract?: string; hint?: string };
+import { HPD_ORDER_BOOK } from "./hpdOrderBook";
+
+export type ViolationCode = { code: string; desc: string; full?: string; abstract?: string; hint?: string; instruction?: string };
 
 export const VIOLATION_CODES: ViolationCode[] = [
   { code: '004', desc: '§ 213, SUBD. 5 M/D LAW DISCONTINUE USE OF INTERIOR ROOM FOR LIVING OR PROVIDE A SINGLE OPENING OF AT LEAST 60 PERCENT OF AREA OF THE PARTITION TO ROOM HAVING WINDOW OPENING DIRECTLY TO STREET OR YARD', full: 'Discontinue use of interior room for living or provide a single opening of at least 60 percent of area of the partition to room having window opening directly to street or yard', abstract: 'Interior room in Old Law tenement.', hint: 'A' },
@@ -405,14 +407,23 @@ export const DOB_VIOLATION_CODES: ViolationCode[] = [
   { code: 'DOB-12', desc: 'DOB: Defective / illegal electrical work', abstract: 'Electrical hazard or unpermitted electrical work.', hint: 'C' },
 ];
 
-const ALL_VIOLATION_CODES: ViolationCode[] = [...VIOLATION_CODES, ...DOB_VIOLATION_CODES];
+// The HPD order book: every order in it is in the code book, each with the inspector's instruction.
+const bare = (code: string) => code.trim().toUpperCase().replace(/^0+(?=\d)/, "");
+const BOOK = new Map(HPD_ORDER_BOOK.map((b) => [bare(b.code), b]));
+const HPD_ALL: ViolationCode[] = [
+  ...VIOLATION_CODES.map((c) => { const b = BOOK.get(bare(c.code)); return b?.instruction ? { ...c, instruction: b.instruction } : c; }),
+  ...HPD_ORDER_BOOK.filter((b) => !VIOLATION_CODES.some((c) => bare(c.code) === bare(b.code)))
+    .map((b) => ({ code: b.code, desc: `${b.law}: ${b.order}`, full: b.order, abstract: b.abstract, hint: b.cls, instruction: b.instruction })),
+];
+const ALL_VIOLATION_CODES: ViolationCode[] = [...HPD_ALL, ...DOB_VIOLATION_CODES];
 
 const CODE_INDEX: Record<string, ViolationCode> = Object.fromEntries(
-  ALL_VIOLATION_CODES.map((c) => [c.code.trim().toUpperCase(), c]),
+  ALL_VIOLATION_CODES.flatMap((c) => [[bare(c.code), c] as const, [c.code.trim().toUpperCase(), c] as const]).reverse(),
 );
 
 export function lookupViolationCode(code: string): ViolationCode | null {
-  return CODE_INDEX[(code || "").trim().toUpperCase()] || null;
+  const c = (code || "").trim().toUpperCase();
+  return CODE_INDEX[c] || CODE_INDEX[bare(c)] || null;
 }
 
 /** Find codes by number ("670") or by words ("heat", "hot water", "inadequate heat"). HPD and DOB. */
@@ -422,7 +433,7 @@ export function searchViolationCodes(query: string, limit = 15): Array<Violation
   const q = (query || "").toLowerCase().replace(/\bin adequate\b/g, "inadequate");
   const out = new Map<string, ViolationCode>();
   // Code numbers asked for come back exactly.
-  for (const n of q.match(/\b\d{2,4}[a-z]?\b/g) ?? []) {
+  for (const n of q.match(/\b\d{1,4}[a-z]?\b/g) ?? []) {
     const hit = lookupViolationCode(n) ?? lookupViolationCode(n.padStart(3, "0"));
     if (hit) out.set(hit.code, hit);
   }
@@ -431,7 +442,15 @@ export function searchViolationCodes(query: string, limit = 15): Array<Violation
   const has = (t: string, w: string) => new RegExp(`\\b${w}(s|es|ing)?\\b`).test(t);
   const text = (c: ViolationCode) => `${c.desc} ${c.full ?? ""} ${c.abstract ?? ""}`.toLowerCase();
   const all = wordsOf(q);
-  const score = (c: ViolationCode) => all.reduce((n, w) => n + (has((c.abstract ?? "").toLowerCase(), w) ? 3 : has(text(c), w) ? 1 : 0), 0);
+  // Best first: the code whose short name is exactly what was asked (666 "inadequate heat"); repealed orders last.
+  const score = (c: ViolationCode) => {
+    const ab = (c.abstract ?? "").toLowerCase();
+    let n = all.reduce((t, w) => t + (has(ab, w) ? 3 : has(text(c), w) ? 1 : 0), 0);
+    const named = wordsOf(ab);
+    if (named.length && named.every((w) => all.some((x) => x === w || x === `${w}s` || w === `${x}s`))) n += 10;
+    if (/do not use/i.test(c.desc)) n -= 20;
+    return n;
+  };
   const parts = q.split(/\band\b|,|&|\//).map(wordsOf).filter((ws) => ws.length);
   const per = parts.map((ws) => ALL_VIOLATION_CODES.filter((c) => ws.every((w) => has(text(c), w))).sort((x, y) => score(y) - score(x)));
   const firsts = Math.max(3, Math.ceil(limit / Math.max(1, parts.length)));

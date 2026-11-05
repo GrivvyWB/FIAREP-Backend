@@ -227,12 +227,12 @@ export const ACTIONS: ActionDef[] = [
   },
   {
     name: "violation_codes", label: "HPD / DOB violation codes", risk: "read", confirmDefault: false, target: "server",
-    description: "FIAREP's built-in HPD and DOB violation code book. Look up a code by its number (e.g. 670) or find the code for a condition by words (e.g. \"inadequate heat\" → 666, \"hot water\" → 670). Returns code, agency, the law section and order text, and the usual class (A/B/C).",
+    description: "FIAREP's built-in HPD and DOB violation code book. Look up a code by its number (e.g. 670) or find the code for a condition by words (e.g. \"inadequate heat\" → 666, \"hot water\" → 670). Every order in HPD's Forms of Orders book is in it. Returns code, agency, the law section and order text, the usual class (A/B/C), and the book's instruction for when and how it is written (e.g. the heat-season temperatures for 666).",
     schema: { type: "object", properties: { query: { type: "string", description: "Code numbers and/or words, e.g. \"heat hot water\" or \"666 670\"" } }, required: ["query"], additionalProperties: false },
     run: async (p) => {
       const found = searchViolationCodes(str(p["query"], 200), 15);
       if (!found.length) return { codes: [], note: "No code in the code book matches that." };
-      return { codes: found.map((c) => ({ code: c.code, agency: c.agency, what: c.abstract || c.full || c.desc, order: c.desc, class: c.hint || "" })) };
+      return { codes: found.map((c) => ({ code: c.code, agency: c.agency, what: c.abstract || c.full || c.desc, order: c.desc, class: c.hint || "", instruction: c.instruction || "" })) };
     },
     describe: (p) => `Violation codes: ${str(p["query"], 80)}`,
   },
