@@ -72,8 +72,6 @@ setInterval(() => { void expirePilots().catch(() => undefined); }, 3_600_000).un
 const moldTick = () => { void autoCheckOn().then((on) => (on ? moldSweep() : undefined)).catch(() => undefined); };
 setTimeout(moldTick, 5 * 60_000).unref();
 setInterval(moldTick, 12 * 3_600_000).unref();
-// Lotto Generator app: new draws for every area, twice a day.
-void import("./lib/lotto").then((m) => m.startLottoUpdates()).catch((err) => console.error("Lotto updates not started:", err));
 
 app.listen(port, (err) => {
   if (err) {
