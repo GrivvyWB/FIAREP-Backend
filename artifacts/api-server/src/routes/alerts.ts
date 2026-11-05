@@ -157,6 +157,19 @@ router.post("/v1/platform/alerts/seen-all", async (_req, res) => {
   res.json({ ok: true, marked: rows.length });
 });
 
+/** Put a building on the watch list (no duplicate by BBL) and pull its violations right away. */
+export async function addWatchBuilding(input: { address: string; borough?: string; bbl: string; bin?: string; company?: string; organizationId?: string }, by: string): Promise<{ id: string; added: boolean }> {
+  const bbl = text(input.bbl).replace(/\D/g, "");
+  const dup = (await listWatch()).find((r) => text(r.state["bbl"]) === bbl);
+  if (dup) return { id: dup.id, added: false };
+  const now = new Date(); const id = randomUUID();
+  const state = { address: text(input.address).slice(0, 200), borough: text(input.borough).slice(0, 40), company: text(input.company).slice(0, 120), organizationId: text(input.organizationId).slice(0, 80), bbl, bin: text(input.bin).replace(/\D/g, ""), addedBy: by, lastCheckedAt: null, lastError: "" };
+  await db.insert(entityRecords).values({ id, tenantId: "default", entity: WATCH, development: state.company || null, state, createdBy: by, createdAt: now, updatedAt: now });
+  await platformAudit(by, "watch.added", id, null, state);
+  void checkBuilding({ id, state }).catch(() => undefined);
+  return { id, added: true };
+}
+
 // Watch list
 router.get("/v1/platform/watch", async (_req, res) => { res.json((await listWatch()).map((r) => watchView(r as never))); });
 router.post("/v1/platform/watch", async (req, res) => {

@@ -11,7 +11,7 @@ import { randomUUID } from "node:crypto";
 import os from "node:os";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { db, entityRecords, organizations } from "@workspace/db";
-import { checkAllWatched } from "../../routes/alerts";
+import { addWatchBuilding, checkAllWatched } from "../../routes/alerts";
 import { lookupNycPropertyData } from "../nycProperty";
 import { activeMoldAt, buildingSummaries, syncMoldFromHpd } from "../mold";
 import { moldLine } from "../moldWorkOrders";
@@ -210,6 +210,28 @@ export const ACTIONS: ActionDef[] = [
         openDob: r.dobViolations.filter((v) => v.status === "Open").slice(0, 10).map((v) => ({ type: v.type, description: v.description.slice(0, 160), date: v.issueDate })) };
     },
     describe: (p) => `Look up ${str(p["address"])}`,
+  },
+  {
+    name: "add_building", label: "Add a building to my list and pull its violations", risk: "write", confirmDefault: false, target: "server", platformOnly: true,
+    description: "Add an NYC address to FIAREP's building watch list (e.g. a prospect's building: \"add 71 Blake Ave, Brooklyn to my list\") and pull its violations live: open HPD violations by class, open DOB violations, HPD complaints. Optionally the company it belongs to. Already on the list: says so and still pulls the violations.",
+    schema: { type: "object", properties: { address: { type: "string" }, company: { type: "string", description: "Whose building it is, if said" } }, required: ["address"], additionalProperties: false },
+    run: async (p, ctx) => {
+      const r = await lookupNycPropertyData(str(p["address"], 200), 25, { openTotals: true });
+      if (!r) return { error: "That address could not be matched to an NYC property." };
+      const bbl = String(r.property.bbl ?? "").replace(/\D/g, "");
+      const watch = /^\d{10}$/.test(bbl)
+        ? await addWatchBuilding({ address: r.property.formattedAddress, borough: r.property.borough, bbl, bin: String(r.property.bin ?? ""), company: str(p["company"], 120) }, ctx.actorName)
+        : null;
+      const t = r.openTotals;
+      return {
+        list: watch ? (watch.added ? "Added to the watch list." : "Already on the watch list.") : "Could not add it: no BBL for that address.",
+        property: { address: r.property.formattedAddress, borough: r.property.borough },
+        open: t ? { hpdViolations: t.hpd, hpdByClass: t.hpdByClass, dobViolations: t.dob, openHpdComplaints: t.openComplaints, hpdComplaintsLastYear: t.complaintsLastYear, none: t.hpd === 0 && t.dob === 0 } : null,
+        openHpd: r.hpdViolations.filter((v) => !/close|resolved/i.test(v.status)).slice(0, 20).map((v) => ({ class: v.class, apt: v.apartment, description: v.description.slice(0, 160), date: v.inspectionDate })),
+        openDob: r.dobViolations.filter((v) => v.status === "Open").slice(0, 10).map((v) => ({ type: v.type, description: v.description.slice(0, 160), date: v.issueDate })),
+      };
+    },
+    describe: (p) => `Add ${str(p["address"], 120)} to the list and pull its violations`,
   },
   {
     name: "mold_status", label: "Mold compliance (active mold violations)", risk: "read", confirmDefault: false, target: "server",
