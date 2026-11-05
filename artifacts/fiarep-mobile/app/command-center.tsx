@@ -322,8 +322,10 @@ export default function CommandCenter() {
         const st = recorder.getStatus();
         const level = typeof st.metering === 'number' ? st.metering : -160;
         levelAnim.setValue(Math.max(0, Math.min(1, (level - (floor ?? level) - 4) / 28)));
+        if (level <= -159) continue; // the microphone is not giving a level yet
         if (floor === null) floor = level;
-        const threshold = Math.max(floor + 15, -42);
+        // Talking = clearly louder than the room; capped so a noisy room still counts as talking.
+        const threshold = Math.min(Math.max(floor + 10, -45), -28);
         if (!talkAt) {
           if (level > threshold) { loud += 1; if (loud >= 3) { talkAt = Date.now() - 2 * POLL_MS; setPhase('hearing'); } }
           else { loud = 0; floor = floor * 0.9 + level * 0.1; }
@@ -374,6 +376,8 @@ export default function CommandCenter() {
     awakeUntil.current = Date.now() + FOLLOW_UP_MS;
   }
 
+  const [heardNote, setHeardNote] = useState('');
+  const lastHearErr = useRef('');
   async function handsFreeLoop(gen: number) {
     keepAwake(true);
     // Let the greeting finish before listening (it would hear itself).
@@ -384,8 +388,18 @@ export default function CommandCenter() {
         if (!uri || gen !== loopGen.current) break;
         setPhase('thinking');
         let heard = '';
-        try { heard = await transcribe(uri); } catch { continue; }
+        try { heard = await transcribe(uri); }
+        catch (e) {
+          // Say why once (not on every try), and show it under the button.
+          const why = `I couldn't hear that. ${errText(e)}`;
+          setHeardNote(why);
+          if (lastHearErr.current !== why) { lastHearErr.current = why; setPhase('speaking'); await speak(why); }
+          continue;
+        }
+        lastHearErr.current = '';
         if (gen !== loopGen.current) break;
+        if (!heard || NOISE.test(heard)) { setHeardNote("Didn't catch that — say it again."); continue; }
+        setHeardNote(`Heard: “${heard}”`);
         await handleHeard(heard);
       }
     } finally { if (gen === loopGen.current) setPhase('off'); keepAwake(false); }
@@ -725,6 +739,7 @@ export default function CommandCenter() {
               disabled={(!!busy || phase === 'thinking') && !recording}
               onPress={() => { if (phase === 'speaking') { hush(); return; } if (recording) stopRecording(); else if (!handsFree) void startRecording(); }}
             />
+            {!!heardNote && <Text style={{ color: '#666', fontSize: 13, marginTop: 10, textAlign: 'center' }} numberOfLines={2}>{heardNote}</Text>}
           </View>
           <TextInput style={ui.input} value={text} onChangeText={setText} placeholder="Type a command" returnKeyType="send" onSubmitEditing={() => void send(text)} editable={!busy} />
         </View>
