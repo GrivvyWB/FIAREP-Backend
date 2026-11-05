@@ -313,7 +313,7 @@ export default function CommandCenter() {
       await recorder.prepareToRecordAsync(); recorder.record();
       setRecording(true); setPhase('waiting');
       const started = Date.now();
-      let floor: number | null = null; let loud = 0; let talkAt = 0; let quietSince = 0;
+      let floor: number | null = null; let loud = 0; let talkAt = 0; let quietSince = 0; let deadSince = 0;
       let outcome: 'said' | 'idle' | 'stopped' = 'idle';
       finishNow.current = false;
       while (gen === loopGen.current) {
@@ -322,7 +322,9 @@ export default function CommandCenter() {
         const st = recorder.getStatus();
         const level = typeof st.metering === 'number' ? st.metering : -160;
         levelAnim.setValue(Math.max(0, Math.min(1, (level - (floor ?? level) - 4) / 28)));
-        if (level <= -159) continue; // the microphone is not giving a level yet
+        // The microphone gives no level (it opened while something was playing): start it again.
+        if (level <= -159) { if (!deadSince) deadSince = Date.now(); if (Date.now() - deadSince > 1500) { outcome = 'idle'; break; } continue; }
+        deadSince = 0;
         if (floor === null) floor = level;
         // Talking = clearly louder than the room; capped so a noisy room still counts as talking.
         const threshold = Math.min(Math.max(floor + 10, -45), -28);
@@ -737,8 +739,17 @@ export default function CommandCenter() {
               level={levelAnim}
               size={76}
               disabled={(!!busy || phase === 'thinking') && !recording}
-              onPress={() => { if (phase === 'speaking') { hush(); return; } if (recording) stopRecording(); else if (!handsFree) void startRecording(); }}
+              onPress={() => {
+                if (phase === 'speaking') { hush(); return; }
+                // Hearing you: done talking now. Listening but nothing heard: start listening fresh. Off: start.
+                if (recording && phase === 'hearing') { stopRecording(); return; }
+                if (handsFree) { startHandsFree(); return; }
+                if (recording) stopRecording(); else void startRecording();
+              }}
             />
+            <Text style={{ color: '#333', fontSize: 13, fontWeight: '600', marginTop: 8 }}>
+              {phase === 'hearing' ? 'Hearing you — tap when done' : phase === 'thinking' ? 'Working…' : phase === 'speaking' ? 'Tap to stop' : recording || phase === 'waiting' ? 'Listening — tap if it isn’t hearing you' : 'Tap to talk'}
+            </Text>
             {!!heardNote && <Text style={{ color: '#666', fontSize: 13, marginTop: 10, textAlign: 'center' }} numberOfLines={2}>{heardNote}</Text>}
           </View>
           <TextInput style={ui.input} value={text} onChangeText={setText} placeholder="Type a command" returnKeyType="send" onSubmitEditing={() => void send(text)} editable={!busy} />
