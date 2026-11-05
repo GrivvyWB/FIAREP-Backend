@@ -6,7 +6,7 @@
 //   Client  /v1/org/command/*        the client's own control panel: its phones, computers, switches, audit
 //   Owner   /v1/platform/command/*   Platform Control: FIAREP's own, plus every client's on/off, usage and cap
 import { randomBytes, randomUUID } from "node:crypto";
-import { lottoTick } from "../lib/lotto";
+import { ingestLotto, lottoTick, saveCtKeno } from "../lib/lotto";
 import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { Router, type IRouter, type NextFunction, type Request, type Response } from "express";
@@ -355,6 +355,17 @@ async function pushToStaff(staffId: string, message: string, detail: string) {
 }
 
 // A computer tells its company's administrators something on their phones (e.g. a Command Center build finished).
+// Lotto Generator app: the AWS server's computer agent sends new draws and CT Keno results here.
+router.post("/v1/command/agent/lotto", rateLimit("command-agent-lotto", 60), requireAgent, async (req, res) => {
+  const b = (req.body ?? {}) as Record<string, unknown>;
+  try {
+    const out: Record<string, unknown> = {};
+    if (b["hist"] || b["keno"]) out["draws"] = await ingestLotto({ hist: b["hist"] as Record<string, unknown>, keno: b["keno"] as Record<string, unknown> });
+    if (b["ctKeno"]) out["ctKeno"] = await saveCtKeno(b["ctKeno"]);
+    res.json(out);
+  } catch { res.status(500).json({ error: "Could not save" }); }
+});
+
 router.post("/v1/command/agent/notify", rateLimit("command-agent-notify", 30), requireAgent, async (req, res) => {
   const agent = res.locals["agent"] as Agent;
   const b = (req.body ?? {}) as Record<string, unknown>;

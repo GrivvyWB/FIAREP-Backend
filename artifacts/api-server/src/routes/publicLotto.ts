@@ -1,6 +1,6 @@
 // Lotto Generator app: new draws since a date. Public and read-only, open to the app from any origin.
 import { Router } from "express";
-import { lottoSince, lottoTick } from "../lib/lotto";
+import { loadCtKeno, lottoSince, lottoTick } from "../lib/lotto";
 
 const router = Router();
 router.get("/", async (req, res) => {
@@ -16,6 +16,9 @@ router.get("/", async (req, res) => {
 let ctKeno: { at: number; body: unknown } | null = null;
 router.get("/ct-keno", async (_req, res) => {
   try {
+    // the AWS server keeps CT Keno current; this server only fetches it itself if that copy is more than 5 minutes old
+    const fed = await loadCtKeno().catch(() => null);
+    if (fed && Date.now() - Date.parse(fed.updatedAt) < 5 * 60_000) { res.set("cache-control", "public, max-age=60"); res.json(fed); return; }
     if (!ctKeno || Date.now() - ctKeno.at > 60_000) {
       const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
       const r = await fetch(`https://ctlottery.com/api/winning-numbers?game=keno&date=${today}&limit=400`, { headers: { "user-agent": "Mozilla/5.0 (compatible; FIAREP lotto updater)", accept: "application/json" }, signal: AbortSignal.timeout(20_000) });

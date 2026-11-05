@@ -17,6 +17,7 @@ type Row = [string, number[], number[]];
 type Store = {
   hist: Record<string, Row[]>;
   keno: Record<string, number[]>; // day → [draws, count of 1 … count of 80]
+  fedAt?: string;
   lastRun?: { startedAt: string; finishedAt?: string; added: Record<string, number>; failed: Record<string, string>; nyDone?: boolean; next?: number; beat?: string };
 };
 
@@ -109,7 +110,7 @@ const UA = { "user-agent": "Mozilla/5.0 (compatible; FIAREP lotto updater)", acc
 async function load(): Promise<Store> {
   const [row] = await db.select().from(settings).where(and(eq(settings.tenantId, PLATFORM), eq(settings.key, KEY))).limit(1);
   const v = (row?.value || {}) as Partial<Store>;
-  return { hist: v.hist || {}, keno: v.keno || {}, lastRun: v.lastRun };
+  return { hist: v.hist || {}, keno: v.keno || {}, lastRun: v.lastRun, fedAt: v.fedAt };
 }
 async function save(value: Store) {
   const now = new Date();
@@ -268,7 +269,10 @@ export function lottoTick() {
   if (running || Date.now() - lastTick < 60_000) return;
   lastTick = Date.now();
   void (async () => {
-    const r = (await load()).lastRun;
+    const st = await load();
+    // the AWS server feeds the draws; this server only pulls them itself if the feed has gone quiet for 8 hours
+    if (st.fedAt && Date.now() - Date.parse(st.fedAt) < 8 * 3_600_000) return;
+    const r = st.lastRun;
     const age = (t?: string) => (t ? Date.now() - Date.parse(t) : Infinity);
     if (!r || (r.finishedAt && age(r.finishedAt) > EVERY_MS)) await updateLotto(true);
     else if (!r.finishedAt && age(r.beat || r.startedAt) > STALE_MS) await updateLotto(false);
@@ -303,4 +307,48 @@ export async function lottoSince(since: string) {
 export function startLottoUpdates() {
   setTimeout(lottoTick, 60_000).unref();
   setInterval(lottoTick, 10 * 60_000).unref();
+}
+
+/** New draws sent by the AWS server (its own pulls from NY Open Data and lottery.net): added to what the app gets. */
+export async function ingestLotto(body: { hist?: Record<string, unknown>; keno?: Record<string, unknown> }) {
+  const store = await load();
+  const added: Record<string, number> = {};
+  for (const [key, rows] of Object.entries(body.hist || {})) {
+    if (!/^[\w|!+ .-]{1,60}$/.test(key) || !Array.isArray(rows)) continue;
+    const clean: Row[] = [];
+    for (const r of rows.slice(0, 2000)) {
+      if (!Array.isArray(r) || typeof r[0] !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(r[0]) || !Array.isArray(r[1]) || !Array.isArray(r[2])) continue;
+      const m = (r[1] as unknown[]).map(Number), b = (r[2] as unknown[]).map(Number);
+      if (!m.length || m.length > 20 || b.length > 3 || ![...m, ...b].every((x) => Number.isInteger(x) && x >= 0 && x <= 99)) continue;
+      clean.push([r[0], m, b]);
+    }
+    const n = addRows(store, key, clean);
+    if (n) added[key] = n;
+  }
+  for (const [day, arr] of Object.entries(body.keno || {})) {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(day) && day > KENO_AFTER && Array.isArray(arr) && arr.length === 81 && arr.every((x) => Number.isInteger(x) && x >= 0)) store.keno[day] = arr as number[];
+  }
+  store.fedAt = new Date().toISOString();
+  await save(store);
+  return { added, fedAt: store.fedAt };
+}
+
+const CT_KENO_KEY = "lotto-ct-keno";
+/** CT Keno latest draws, kept by the AWS server (every couple of minutes). */
+export async function saveCtKeno(draws: unknown) {
+  if (!Array.isArray(draws)) return 0;
+  const clean = draws.slice(0, 60).filter((d) => d && typeof d === "object").map((d) => {
+    const x = d as Record<string, unknown>;
+    const numbers = Array.isArray(x["numbers"]) ? (x["numbers"] as unknown[]).map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 80) : [];
+    return { id: String(x["id"] ?? "").slice(0, 20), date: String(x["date"] ?? "").slice(0, 10), numbers, multiplier: typeof x["multiplier"] === "number" ? x["multiplier"] : null };
+  }).filter((d) => d.numbers.length === 20);
+  const now = new Date();
+  const value = { draws: clean, updatedAt: now.toISOString() };
+  await db.insert(settings).values({ tenantId: PLATFORM, key: CT_KENO_KEY, value, createdAt: now, updatedAt: now })
+    .onConflictDoUpdate({ target: [settings.tenantId, settings.key], set: { value, updatedAt: now } });
+  return clean.length;
+}
+export async function loadCtKeno(): Promise<{ draws: unknown[]; updatedAt: string } | null> {
+  const [row] = await db.select().from(settings).where(and(eq(settings.tenantId, PLATFORM), eq(settings.key, CT_KENO_KEY))).limit(1);
+  return (row?.value as { draws: unknown[]; updatedAt: string }) || null;
 }
