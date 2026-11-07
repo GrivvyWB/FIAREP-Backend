@@ -2,6 +2,10 @@
 //   Organization ID  ORG-SAMPLE
 //   Name             App Review
 //   Code             Q382
+// and its worker:
+//   Organization ID  ORG-SAMPLE
+//   Name             App Review Worker
+//   Code             W725
 // Made once, at the first boot after this was added, with every module on. Change or
 // delete it in Platform Control like any company — a deleted one is not made again.
 import { randomUUID } from "node:crypto";
@@ -12,10 +16,38 @@ import { newResidentCode, withResidentCode } from "./residentRouting";
 
 export const SAMPLE_CLIENT = { id: "ORG-SAMPLE", name: "Sample Client", user: "App Review", code: "Q382" } as const;
 const MADE_KEY = "sample-client-made";
+export const SAMPLE_WORKER = { name: "App Review Worker", code: "W725", position: "Staff Worker" } as const;
+const WORKER_KEY = "sample-worker-made";
 const ON = ["proj-new", "proj-room", "proj-rates", "proj-checklist", "proj-inspection", "proj-estimate", "proj-scope", "proj-intake",
   "proj-elevator", "proj-photos", "proj-scans", "proj-roofplan", "proj-compass", "measurement"];
 
 export async function ensureSampleClient(): Promise<void> {
+  await makeSampleClient();
+  await ensureSampleWorker();
+}
+
+/** The sample client's worker, made once (a deleted one is not made again). */
+async function ensureSampleWorker(): Promise<void> {
+  const [made] = await db.select().from(settings).where(and(eq(settings.tenantId, "default"), eq(settings.key, WORKER_KEY))).limit(1);
+  if (made) return;
+  const [org] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, SAMPLE_CLIENT.id)).limit(1);
+  if (!org) return;
+  await db.transaction(async (tx) => {
+    const [has] = await tx.select({ id: staffAccounts.id }).from(staffAccounts)
+      .where(and(eq(staffAccounts.tenantId, SAMPLE_CLIENT.id), eq(staffAccounts.name, SAMPLE_WORKER.name))).limit(1);
+    if (!has) {
+      await tx.insert(staffAccounts).values({
+        id: randomUUID(), tenantId: SAMPLE_CLIENT.id, name: SAMPLE_WORKER.name, code: SAMPLE_WORKER.code,
+        role: "worker", position: SAMPLE_WORKER.position, status: "approved", developments: [], issuerName: "Platform owner",
+      });
+    }
+    const now = new Date();
+    await tx.insert(settings).values({ tenantId: "default", key: WORKER_KEY, value: { at: now.toISOString() }, createdAt: now, updatedAt: now }).onConflictDoNothing();
+  });
+  logger.info({ organization: SAMPLE_CLIENT.id }, "Sample worker ready");
+}
+
+async function makeSampleClient(): Promise<void> {
   const [made] = await db.select().from(settings).where(and(eq(settings.tenantId, "default"), eq(settings.key, MADE_KEY))).limit(1);
   if (made) return;
   await db.transaction(async (tx) => {
