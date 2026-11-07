@@ -8,6 +8,7 @@ import {
 } from "../lib/domain";
 import { canReadEntityRecordForActor } from "../lib/hrAuthorization";
 import { actorFrom, requireAuth } from "../middlewares/auth";
+import { switchGrants } from "../lib/switchGrants";
 import { visibleNotificationsFor } from "../lib/notificationVisibility";
 import { withPersonalReadState } from "../lib/notificationReads";
 
@@ -68,7 +69,11 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
           .filter((item) => ENTITIES.has(item))
       : [...ENTITIES];
   const cursor = new Date();
-  const readable = requested.filter((entity) => canReadEntity(actor, entity));
+  // Full control: a button switched on for this person opens its records for them (Platform Control).
+  const granted = new Set<string>();
+  for (const entity of requested) if (await switchGrants(actor, entity).catch(() => false)) granted.add(entity);
+  const asFor = (entity: string) => (granted.has(entity) ? { ...actor, role: "administrator" } : actor);
+  const readable = requested.filter((entity) => canReadEntity(asFor(entity), entity));
   const windows = readable.map((entity) =>
     and(
       eq(entityRecords.entity, entity),
@@ -112,7 +117,7 @@ router.get("/v1/sync", requireAuth, async (req, res) => {
     await Promise.all(
       records.map(async (row) => ({
         row,
-        allowed: await canReadEntityRecordForActor(actor, { ...row, deleted: false }),
+        allowed: await canReadEntityRecordForActor(asFor(row.entity), { ...row, deleted: false }),
       })),
     )
   )

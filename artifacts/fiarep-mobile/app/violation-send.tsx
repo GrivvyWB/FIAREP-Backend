@@ -1,3 +1,4 @@
+import { buttonSwitchedOn } from '../lib/all-buttons';
 import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyScreen } from '../components/ReadOnlyBanner';
 import { isCpmSupervisorTitle, isInspectionSupervisorTitle, isOfficeTradeSupervisorTitle } from '../lib/titles';
@@ -69,7 +70,8 @@ function ViolationSendScreen({ emergencyOnly }: { emergencyOnly: boolean }) {
       setCurrentPosition(position);
       // Complaints and violations may both be sent by management/administration
       // (development supervisors, Superintendent E, Supervisor Inspector, etc.).
-      if (actor.role === 'management' || actor.role === 'administrator') setAuthorized(true);
+      // Switched on in Platform Control for this person or their screen: it opens whatever their title.
+      if (actor.role === 'management' || actor.role === 'administrator' || buttonSwitchedOn('/violation-send')) setAuthorized(true);
       else router.replace('/management-home');
     }).catch(() => router.replace('/management-home'));
   }, [complaintMode, router]);

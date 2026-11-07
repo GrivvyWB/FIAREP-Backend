@@ -71,6 +71,7 @@ import { CREW_OPTIONS, ETA_OPTIONS, arrivalAlertsOn, recordArrived, recordEta, r
 import { notifyResident, residentMessageForAction } from "../lib/residentNotify";
 import { reviewQuote, sendQuote, decideQuote, quoteBlocksStart, quoteOf } from "../lib/fiarepQuote";
 import { isFiarepFieldAdmin } from "../lib/fiarepAdminNames";
+import { switchGrants } from "../lib/switchGrants";
 
 const router: IRouter = Router();
 router.use("/v1", requireAuth);
@@ -78,6 +79,17 @@ router.use("/v1", requireAuth);
 router.use("/v1", async (_req, res, next) => {
   const actor = res.locals["actor"] as Actor | undefined;
   if (actor && !(await lockOn(actor.tenantId, "tradeSupWaitForSend"))) actor.locksOff = [...(actor.locksOff || []), "tradeSupWaitForSend"];
+  next();
+});
+
+// Full control: a button switched on for this person in Platform Control opens its records for them,
+// whatever their title (inside their own company), for this request only.
+router.use("/v1/:entity", async (req, res, next) => {
+  const actor = res.locals["actor"] as Actor | undefined;
+  const entity = req.params["entity"] || "";
+  if (actor && validEntity(entity) && (await switchGrants(actor, entity).catch(() => false))) {
+    res.locals["actor"] = { ...actor, role: "administrator", switchGranted: true };
+  }
   next();
 });
 
