@@ -18,6 +18,7 @@ const ON = ["proj-new", "proj-room", "proj-rates", "proj-checklist", "proj-inspe
 
 export async function ensureSampleClient(): Promise<void> {
   await removeSampleWorker();
+  await import("./sampleData").then((m) => m.ensureSampleData()).catch((err) => logger.error({ err }, "Sample buildings not made"));
   const [made] = await db.select().from(settings).where(and(eq(settings.tenantId, "default"), eq(settings.key, MADE_KEY))).limit(1);
   if (made) return;
   await db.transaction(async (tx) => {
