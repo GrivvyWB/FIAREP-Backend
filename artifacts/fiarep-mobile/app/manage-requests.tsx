@@ -111,9 +111,11 @@ export default function ManageRequests() {
       {open['orders'] && orders.length === 0 && <Text style={ui.empty}>None.</Text>}
       {open['orders'] && orders.map((c) => (
         <View key={c.id} style={[ui.card, { gap: 4 }]}>
-          <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{c.reportRef || 'Change order'}</Text>
-          <Text style={{ fontSize: 14, color: '#333' }}>{c.targetName || c.targetPosition}{c.description ? ' \u00b7 ' + c.description : ''}</Text>
-          <Text style={{ fontSize: 12, color: '#999' }}>{c.status} · {fmt(c.createdAt)}</Text>
+          <Pressable onPress={() => router.push(('/change-orders?id=' + encodeURIComponent(c.id)) as never)}>
+            <Text style={{ fontSize: 15, fontWeight: '600', color: ACCENT }}>{c.reportRef || 'Change order'}</Text>
+            <Text style={{ fontSize: 14, color: '#333' }}>{c.targetName || c.targetPosition}{c.description ? ' \u00b7 ' + c.description : ''}</Text>
+            <Text style={{ fontSize: 12, color: '#999' }}>{c.status} · {fmt(c.createdAt)}</Text>
+          </Pressable>
           {canDelete && <Pressable style={[ui.btnOutline, { borderColor: '#c0392b', marginTop: 4 }]} onPress={() => confirmDelete('change order', () => deleteChangeOrder(c.id))}>
             <Text style={[ui.btnOutlineText, { color: '#c0392b' }]}>Delete</Text>
           </Pressable>}

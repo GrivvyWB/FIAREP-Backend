@@ -2,7 +2,7 @@ import { useAppReadOnly } from '../lib/useAppReadOnly';
 import { ReadOnlyBanner } from '../components/ReadOnlyBanner';
 import { useCallback, useState } from 'react';
 import { View, Text, TextInput, Pressable, ScrollView, Alert, KeyboardAvoidingView, Platform, Image, TouchableOpacity } from 'react-native';
-import { useFocusEffect, useRouter } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { getCurrentActor, isFiarepAdministrator, listChangeOrders, approveChangeOrderMgmt, approveChangeOrderProcurement, declineChangeOrder, resubmitChangeOrder, findScopeForChangeOrder, type ChangeOrder } from '../lib/store';
 import { useAppMode } from './_layout';
 import { ui, ACCENT } from '../lib/ui';
@@ -25,6 +25,8 @@ export default function ChangeOrders() {
   const readOnlyBanner = useAppReadOnly() === true;
   const { mode } = useAppMode();
   const router = useRouter();
+  // Opened from Manage All Requests: the change order pressed comes first.
+  const { id: openId } = useLocalSearchParams<{ id?: string }>();
   const [items, setItems] = useState<ChangeOrder[]>([]);
   const [fiarepAdmin, setFiarepAdmin] = useState(false);
   const [open, setOpen] = useState<Record<string, boolean>>({ action: true });
@@ -43,9 +45,10 @@ export default function ChangeOrders() {
       setMe(a);
       setFiarepAdmin(await isFiarepAdministrator().catch(() => false));
       const all = await listChangeOrders();
-      setItems(all.sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || '')));
+      const sorted = all.sort((x, y) => (y.createdAt || '').localeCompare(x.createdAt || ''));
+      setItems(openId ? [...sorted.filter((c) => c.id === openId), ...sorted.filter((c) => c.id !== openId)] : sorted);
     })();
-  }, [mode]);
+  }, [mode, openId]);
   useFocusEffect(load);
 
   const isMgmt = mode === 'management' || mode === 'administrator';
