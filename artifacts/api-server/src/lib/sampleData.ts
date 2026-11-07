@@ -2,7 +2,7 @@
 // three buildings, each with complaints, HPD violations, scopes, repairs and completions —
 // some finished, some still waiting to be answered. Clearly sample addresses.
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db, entityRecords, organizationProperties, settings, staffAccounts } from "@workspace/db";
 import { logger } from "./logger";
 import { normalizeAddress } from "./jurisdiction";
@@ -18,6 +18,40 @@ const BUILDINGS = [
 ];
 
 export async function ensureSampleData(): Promise<void> {
+  await makeSampleData();
+  await giveWorkToWorker();
+}
+
+/** The jobs done and under way belong to Sample Client's worker (the one added in Team), so they show on the worker's app.
+ *  Done once a worker exists; the complaint at 303 Sample Boulevard stays unanswered. */
+const WORKER_KEY = "sample-data-worker";
+async function giveWorkToWorker(): Promise<void> {
+  const [done] = await db.select().from(settings).where(and(eq(settings.tenantId, "default"), eq(settings.key, WORKER_KEY))).limit(1);
+  if (done) return;
+  const workers = await db.select({ id: staffAccounts.id, name: staffAccounts.name, position: staffAccounts.position }).from(staffAccounts)
+    .where(and(eq(staffAccounts.tenantId, ORG), eq(staffAccounts.role, "worker"), eq(staffAccounts.status, "approved")));
+  const w = workers.find((x) => x.name === "App Review Worker") ?? workers[0];
+  if (!w) return;
+  const rows = await db.select().from(entityRecords).where(and(eq(entityRecords.tenantId, ORG), inArray(entityRecords.entity, ["resident-reports", "building-violations", "change-orders"])));
+  const now = new Date();
+  for (const r of rows) {
+    const st = r.state as Record<string, unknown>;
+    let next: Record<string, unknown> | null = null;
+    if (r.entity === "resident-reports" && ["RC-10101", "RC-20202"].includes(String(st["complaintNo"]))) {
+      next = { ...st, assignedStaffId: w.id, assignedTo: w.name, ...(st["completedAt"] ? { completedByStaffId: w.id, completedBy: w.name } : {}),
+        updates: (Array.isArray(st["updates"]) ? st["updates"] as Array<Record<string, unknown>> : []).map((u) => (u["by"] === "resident" ? u : { ...u, by: w.name })) };
+    } else if (r.entity === "building-violations" && ["V-10101", "V-20202"].includes(String(st["violationNo"]))) {
+      next = { ...st, routedTo: w.name, assignedStaffId: w.id, routedToPosition: w.position || "Worker", ...(st["completedBy"] ? { completedBy: w.name } : {}) };
+    } else if (r.entity === "change-orders" && st["createdByName"] === "Sample Technician") {
+      next = { ...st, createdByName: w.name, createdById: w.id };
+    }
+    if (next) await db.update(entityRecords).set({ state: next, version: (r.version ?? 1) + 1, updatedAt: now }).where(eq(entityRecords.id, r.id));
+  }
+  await db.insert(settings).values({ tenantId: "default", key: WORKER_KEY, value: { at: now.toISOString(), worker: w.id }, createdAt: now, updatedAt: now }).onConflictDoNothing();
+  logger.info({ organization: ORG, worker: w.name }, "Sample work given to the worker");
+}
+
+async function makeSampleData(): Promise<void> {
   const [done] = await db.select().from(settings).where(and(eq(settings.tenantId, "default"), eq(settings.key, KEY))).limit(1);
   if (done) return;
   const [admin] = await db.select({ id: staffAccounts.id, name: staffAccounts.name }).from(staffAccounts)
