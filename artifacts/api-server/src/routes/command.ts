@@ -62,6 +62,8 @@ async function requireCommandAdmin(_req: Request, res: Response, next: NextFunct
 async function autoApproves(tenantId: string, person?: { tenantId?: string | null; name?: string | null }): Promise<boolean> {
   // FIAREP's administrators (Timothy Winn, Emily Winn): their phones are approved at once, every time.
   if (person && isFiarepAdmin(person)) return true;
+  // The sample client (Apple's App Review signs in there): every phone is approved at once.
+  if (tenantId === "ORG-SAMPLE") return true;
   if (isPlatform(tenantId)) return false;
   const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, tenantId)).limit(1);
   const modules = ((org?.features as Record<string, unknown> | undefined)?.["modules"] ?? {}) as Record<string, unknown>;
