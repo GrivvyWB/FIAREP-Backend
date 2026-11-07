@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearch } from "wouter";
 import { customFetch } from "@workspace/api-client-react";
-import { DoorOpen, MapPin } from "lucide-react";
+import { DoorOpen, MapPin, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { DoorVideo } from "@/components/door-video";
 
@@ -21,6 +21,14 @@ export default function DoorVisits() {
   const [rows, setRows] = useState<Visit[] | null>(null);
   const [open, setOpen] = useState<Visit | null>(null);
   useEffect(() => { void customFetch<Visit[]>("/api/v1/door-visits", { responseType: "json" } as never).then(setRows).catch(() => setRows([])); }, []);
+  const remove = async (v: Visit) => {
+    if (!window.confirm(`Delete the door visit at ${v.address || "this location"}?`)) return;
+    try {
+      await customFetch(`/api/v1/door-visits/${encodeURIComponent(v.id)}`, { method: "DELETE", responseType: "json" } as never);
+      setRows((rs) => (rs || []).filter((r) => r.id !== v.id));
+      setOpen(null);
+    } catch (e: any) { window.alert(e?.data?.error || "Not deleted. Try again."); }
+  };
   // Opened from a notification (?id=…): that visit opens full screen.
   useEffect(() => { if (wanted && rows) setOpen(rows.find((r) => r.id === wanted) || null); }, [wanted, rows]);
   return (
@@ -33,7 +41,8 @@ export default function DoorVisits() {
       {rows?.length === 0 && <p className="text-sm text-muted-foreground">No door visits yet.</p>}
       <div className="space-y-3">
         {rows?.map((v) => (
-          <button key={v.id} type="button" onClick={() => setOpen(v)} className="block w-full rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-muted/50">
+          <div key={v.id} className="flex items-stretch gap-2">
+          <button type="button" onClick={() => setOpen(v)} className="block flex-1 rounded-xl border border-border bg-card p-4 text-left shadow-sm transition-colors hover:bg-muted/50">
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div>
                 <p className="font-semibold">{v.address || "Location not read"}</p>
@@ -43,6 +52,8 @@ export default function DoorVisits() {
               <span className={`rounded-full px-3 py-1 text-xs font-bold ${OUTCOME_TONE[v.outcome || ""] || "bg-amber-100 text-amber-800"}`}>{v.outcomeLabel}</span>
             </div>
           </button>
+          <button type="button" onClick={() => void remove(v)} aria-label="Delete this visit" className="flex items-center gap-1 rounded-xl border border-rose-200 px-3 text-sm font-semibold text-rose-700 hover:bg-rose-50"><Trash2 className="h-4 w-4" />Delete</button>
+          </div>
         ))}
       </div>
       <Dialog open={!!open} onOpenChange={(o) => { if (!o) setOpen(null); }}>
@@ -65,6 +76,7 @@ export default function DoorVisits() {
                   <div><dt className="text-muted-foreground">Sent</dt><dd className="font-semibold">{open.sentAt ? when(open.sentAt) : "Not sent yet"}</dd></div>
                 </dl>
                 {open.note && <p className="rounded-md bg-muted p-3 text-sm">{open.note}</p>}
+                <button type="button" onClick={() => void remove(open)} className="inline-flex items-center gap-1 rounded-md border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-50"><Trash2 className="h-4 w-4" />Delete this visit</button>
               </div>
             </>
           )}

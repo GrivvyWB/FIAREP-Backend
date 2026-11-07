@@ -2,7 +2,7 @@
 // home screen. Where the phone is, the time (server clock), the direction the phone faces,
 // the floor and which door, then up to a minute of video at the door: access given, no
 // access, or nobody home. Sent to the administrator and management, and emailed if asked.
-// Kept for good: a visit cannot be changed or deleted once it is sent.
+// A visit can be deleted by the office or the member who made it (it goes to Deleted items).
 import { randomUUID } from "node:crypto";
 import { Router, type IRouter } from "express";
 import { and, desc, eq } from "drizzle-orm";
@@ -111,6 +111,16 @@ router.get("/v1/door-visits", async (_req, res) => {
     return { id: r.id, ...s, outcomeLabel: OUTCOMES[String(s["outcome"] || "")] || "Not sent yet", videoUrl };
   }));
   res.json(items);
+});
+
+/** Delete a visit: the office (administrators, management) or the member who made it. It goes to Deleted items. */
+router.delete("/v1/door-visits/:id", async (req, res) => {
+  const a = actorFrom(res);
+  const row = await load(String(req.params["id"] || ""), a.tenantId);
+  if (!row) { res.status(404).json({ error: "This visit is gone." }); return; }
+  if (!office(a.role) && row.createdBy !== a.id) { res.status(403).json({ error: "Only the office or the member who made it can delete this visit." }); return; }
+  await db.update(entityRecords).set({ deleted: true, updatedAt: new Date() }).where(eq(entityRecords.id, row.id));
+  res.json({ ok: true });
 });
 
 /** Email on file (to fill the email box on the phone). */
