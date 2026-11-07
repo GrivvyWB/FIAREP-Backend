@@ -239,10 +239,12 @@ router.post("/ai/smart-repair/complete", requireAuth, async (req, res) => {
 // FIAREP Multi-Complaint Priority Engine: open complaints per building, most critical first.
 router.post("/v1/priority-queue", requireAuth, async (req, res) => {
   const actor = actorFrom(res);
-  const allowed = actor.role === "management" || actor.role === "administrator" || isBoroughDirector(actor) || isSupervisorPosition(actor);
-  if (!allowed) { res.status(403).json({ error: "The priority queue is for management and administrators." }); return; }
   const [org] = await db.select({ features: organizations.features }).from(organizations).where(eq(organizations.id, actor.tenantId)).limit(1);
   const modules = (org?.features as Record<string, unknown> | undefined)?.["modules"] as Record<string, unknown> | undefined;
+  // Priority Queue switched on in Platform Control (for the company's home screens or for this person) opens it whatever the title.
+  const switchedOn = Object.entries(modules ?? {}).some(([k, v]) => v === true && /^(p\.[^.]+\.)?apptab\.[a-z]+\.priority-queue$/.test(k) && (!k.startsWith("p.") || k.startsWith(`p.${actor.id}.`)));
+  const allowed = switchedOn || actor.role === "management" || actor.role === "administrator" || isBoroughDirector(actor) || isSupervisorPosition(actor);
+  if (!allowed) { res.status(403).json({ error: "The priority queue is for management and administrators." }); return; }
   if (modules && modules["priorityEngine"] === false) { res.status(403).json({ error: "The Priority Engine is switched off for this organization." }); return; }
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) { res.status(503).json({ error: "The Priority Engine is unavailable (AI key not configured)" }); return; }

@@ -10,6 +10,7 @@ import {
 } from '../lib/store';
 import { ui, ACCENT } from '../lib/ui';
 import { useDeletionPolicy } from '../lib/useDeletionPolicy';
+import { buttonSwitchedOn } from '../lib/all-buttons';
 
 function fmt(iso: string): string {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
@@ -31,9 +32,10 @@ export default function ManageRequests() {
         ['borough director', 'regional director', 'superintendent'].includes(position.trim().toLowerCase()) ||
         (actor.role === 'management' && !position.trim().toLowerCase().includes('supervisor'));
       if (!active) return;
-      if (elevated) setAuthorized(true);
-      else router.replace('/management-home');
-    }).catch(() => router.replace('/management-home'));
+      // Switched on in Platform Control for this person or their screen: it opens whatever their title.
+      if (elevated || buttonSwitchedOn('/manage-requests')) setAuthorized(true);
+      else router.back();
+    }).catch(() => router.back());
     return () => { active = false; };
   }, [router]));
   const groupedNotifs = Object.values(notifs.reduce<Record<string, { notification: Notification; ids: string[] }>>((groups, notification) => {
