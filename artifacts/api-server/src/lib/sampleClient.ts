@@ -16,7 +16,7 @@ import { newResidentCode, withResidentCode } from "./residentRouting";
 
 export const SAMPLE_CLIENT = { id: "ORG-SAMPLE", name: "Sample Client", user: "App Review", code: "Q382" } as const;
 const MADE_KEY = "sample-client-made";
-export const SAMPLE_WORKER = { name: "App Review Worker", code: "W725", position: "Staff Worker" } as const;
+export const SAMPLE_WORKER = { name: "App Review Worker", code: "W725", position: "" } as const;
 const WORKER_KEY = "sample-worker-made";
 const ON = ["proj-new", "proj-room", "proj-rates", "proj-checklist", "proj-inspection", "proj-estimate", "proj-scope", "proj-intake",
   "proj-elevator", "proj-photos", "proj-scans", "proj-roofplan", "proj-compass", "measurement"];
@@ -29,7 +29,12 @@ export async function ensureSampleClient(): Promise<void> {
 /** The sample client's worker, made once (a deleted one is not made again). */
 async function ensureSampleWorker(): Promise<void> {
   const [made] = await db.select().from(settings).where(and(eq(settings.tenantId, "default"), eq(settings.key, WORKER_KEY))).limit(1);
-  if (made) return;
+  if (made) {
+    // It was first made as "Staff Worker": it is a plain worker.
+    await db.update(staffAccounts).set({ position: SAMPLE_WORKER.position })
+      .where(and(eq(staffAccounts.tenantId, SAMPLE_CLIENT.id), eq(staffAccounts.name, SAMPLE_WORKER.name), eq(staffAccounts.position, "Staff Worker")));
+    return;
+  }
   const [org] = await db.select({ id: organizations.id }).from(organizations).where(eq(organizations.id, SAMPLE_CLIENT.id)).limit(1);
   if (!org) return;
   await db.transaction(async (tx) => {
