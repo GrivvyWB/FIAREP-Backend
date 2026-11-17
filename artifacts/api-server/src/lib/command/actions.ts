@@ -17,7 +17,7 @@ import { activeMoldAt, buildingSummaries, syncMoldFromHpd } from "../mold";
 import { moldLine } from "../moldWorkOrders";
 import { searchViolationCodes } from "../violationCodes";
 import { commandAgents, commandWorkOrders, type AgentTask } from "./tables";
-import { onlineAgents, ONLINE_WINDOW_MS } from "./agentBus";
+import { FRESH_MS, onlineAgents, ONLINE_WINDOW_MS } from "./agentBus";
 import { recentAudit } from "./audit";
 import { notify } from "../audit";
 import type { Actor } from "../auth";
@@ -881,11 +881,29 @@ export const ACTION_MAP = new Map(ACTIONS.map((a) => [a.name, a]));
 export const actionsFor = (tenantId: string) => ACTIONS.filter((a) => (isPlatform(tenantId) || !a.platformOnly) && !(isPlatform(tenantId) && a.clientOnly));
 
 /** Which online agent a desktop_* action goes to, and is the request allowed by that agent's config? */
+type OnlineAgent = Awaited<ReturnType<typeof onlineAgents>>[number];
+const isFresh = (a: OnlineAgent) => Date.now() - new Date(a.lastSeenAt as unknown as string).getTime() < FRESH_MS;
+/** Can this computer do this job (has the task, or the app)? */
+export function agentCanDo(a: OnlineAgent, actionName: string, params: Record<string, unknown>): boolean {
+  if (actionName === "desktop_run_task") return (a.tasks as AgentTask[]).some((t) => t.name === str(params["task"], 80));
+  if (actionName === "desktop_open_app") return (a.apps as string[]).includes(str(params["app"], 120));
+  return true;
+}
+/** Another computer that is awake right now and can do the same job (the Mac asleep → the AWS server). */
+export async function awakeStandIn(tenantId: string, exceptAgentId: string, actionName: string, params: Record<string, unknown>): Promise<OnlineAgent | null> {
+  const agents = (await onlineAgents(tenantId)).filter((a) => a.id !== exceptAgentId && isFresh(a) && agentCanDo(a, actionName, params));
+  agents.sort((x, y) => new Date(y.lastSeenAt as unknown as string).getTime() - new Date(x.lastSeenAt as unknown as string).getTime());
+  return agents[0] ?? null;
+}
+
 export async function resolveAgent(action: ActionDef, params: Record<string, unknown>, tenantId: string): Promise<{ agentId: string; taskConfirm: boolean } | { error: string }> {
   const agents = await onlineAgents(tenantId);
   if (!agents.length) return { error: "No desktop agent is online. The computer may be asleep or the agent stopped." };
   const wanted = str(params["agent"], 80).toLowerCase();
-  const agent = wanted ? agents.find((a) => a.name.toLowerCase() === wanted) : agents.length === 1 ? agents[0] : undefined;
+  // Awake computers first. Not named: the awake one that can do it. Named but asleep: an awake one that can do the same job.
+  const byFresh = [...agents].sort((x, y) => new Date(y.lastSeenAt as unknown as string).getTime() - new Date(x.lastSeenAt as unknown as string).getTime());
+  let agent = wanted ? agents.find((a) => a.name.toLowerCase() === wanted) : agents.length === 1 ? agents[0] : byFresh.find((a) => isFresh(a) && agentCanDo(a, action.name, params));
+  if (agent && !isFresh(agent)) agent = byFresh.find((a) => isFresh(a) && agentCanDo(a, action.name, params)) ?? agent;
   if (!agent) return { error: wanted ? `No online agent named "${wanted}". Online: ${agents.map((a) => a.name).join(", ")}.` : `Several agents are online; say which: ${agents.map((a) => a.name).join(", ")}.` };
   if (action.name === "desktop_run_task") {
     const task = (agent.tasks as AgentTask[]).find((t) => t.name === str(params["task"], 80));

@@ -6,7 +6,7 @@ import { and, asc, desc, eq, lt, ne } from "drizzle-orm";
 import { createPersonalityEngine } from "./personality-engine";
 import { personalityContext } from "./personalityPrefs";
 import { db, organizations } from "@workspace/db";
-import { ACTION_MAP, actionsFor, agentCatalog, isPlatform, resolveAgent, type ActionContext, type ActionDef } from "./actions";
+import { ACTION_MAP, actionsFor, agentCatalog, awakeStandIn, isPlatform, resolveAgent, type ActionContext, type ActionDef } from "./actions";
 import { commandActions, commandRuns } from "./tables";
 import { commandAuditLog } from "./audit";
 import { BASELINE_WAIT_MESSAGE, baselineWaiting } from "../baseline";
@@ -175,7 +175,17 @@ async function runTool(name: string, input: Record<string, unknown>, ctx: Action
   }
   let final = row;
   if (row.status === "queued") {
-    final = (await waitForActionResult(row.id, AGENT_READ_WAIT_MS)) ?? row;
+    // Not picked up in 8 seconds (the computer went to sleep): hand it to another awake computer that can do it.
+    final = (await waitForActionResult(row.id, 8_000)) ?? row;
+    if (final.status === "queued" && !final.signature) {
+      const alt = await awakeStandIn(ctx.tenantId, final.target, final.action, (final.params ?? {}) as Record<string, unknown>);
+      if (alt) {
+        const moved = await db.update(commandActions).set({ target: alt.id, updatedAt: new Date() })
+          .where(and(eq(commandActions.id, final.id), eq(commandActions.status, "queued"))).returning();
+        if (moved.length) { signalAgent(alt.id); logger.info({ actionId: final.id, to: alt.name }, "Job moved to an awake computer"); }
+      }
+    }
+    if (final.status === "queued" || final.status === "running") final = (await waitForActionResult(row.id, AGENT_READ_WAIT_MS - 8_000)) ?? final;
     if (final.status === "queued" || final.status === "running") {
       return { content: `Sent to the computer; no answer within ${AGENT_READ_WAIT_MS / 1000} seconds. The result will show on the phone when it arrives.`, isError: false };
     }

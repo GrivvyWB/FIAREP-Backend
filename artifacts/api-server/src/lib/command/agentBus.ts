@@ -9,6 +9,9 @@ const bus = new EventEmitter();
 bus.setMaxListeners(0);
 
 export const ONLINE_WINDOW_MS = 90_000;
+/** A computer that checked in this recently is really awake (it checks in at least every 25 s).
+ *  One seen longer ago than this may have just gone to sleep. */
+export const FRESH_MS = 40_000;
 
 export function signalAgent(agentId: string): void { bus.emit(`agent:${agentId}`); }
 export function signalResult(actionId: string): void { bus.emit(`result:${actionId}`); }
