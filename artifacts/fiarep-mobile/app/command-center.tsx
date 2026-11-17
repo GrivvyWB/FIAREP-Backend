@@ -187,9 +187,8 @@ export default function CommandCenter() {
         const { text: GREET_TEXT, said: SAID, file: greetFile } = await greetKeys();
         const text = (await AsyncStorage.getItem(GREET_TEXT)) || '';
         setSavedGreeting(text);
-        // Coming back to a conversation in the last 30 minutes: it carries on, no greeting.
+        // Every time it opens it greets (the conversation still carries on).
         await threadLoaded.current;
-        if (Date.now() - lastActive.current < 30 * 60_000) { greeted.current = true; return; }
         if (!text || greeted.current || !speakReplies) return;
         // Only a greeting recorded in this person's voice plays; otherwise it is recorded again first (one voice, always).
         if (!voiceChoice || (await AsyncStorage.getItem(SAID)) !== `${sayAs}|v2|${voiceChoice}`) return;
@@ -213,7 +212,7 @@ export default function CommandCenter() {
         const { audioBase64 } = await post<{ audioBase64: string }>('/api/ai/speak', { text: sayName(text, sayAs).slice(0, 600), voice: 'command' });
         await FileSystem.writeAsStringAsync(greetFile, audioBase64, { encoding: 'base64' as never });
         await AsyncStorage.setItem(GREET_TEXT, text); await AsyncStorage.setItem(SAID, `${sayAs}|v2|${voiceChoice}`); setSavedGreeting(text);
-        if (!greeted.current && speakReplies && Date.now() - lastActive.current >= 30 * 60_000) { greeted.current = true; await playGreetingFile(); }
+        if (!greeted.current && speakReplies) { greeted.current = true; await playGreetingFile(); }
       } catch { /* try again next time it opens */ }
     })();
   }, [device?.status, device?.greeting, sayAs, voiceChoice]); // eslint-disable-line react-hooks/exhaustive-deps
