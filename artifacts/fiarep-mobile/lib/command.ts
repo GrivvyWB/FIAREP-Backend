@@ -124,16 +124,24 @@ export async function enrollDevice(staffId: string, name: string): Promise<strin
 export async function deviceStatus(): Promise<DeviceState> {
   const id = await storedDeviceId();
   if (!id) return null;
+  // A slow moment is not an outage: try three times (about 6 seconds) before saying fiarep.com is down.
+  let lastErr: any = null;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try { return await deviceStatusOnce(id); }
+    catch (e: any) { lastErr = e; if (e?.status === 404 || e?.status) break; await new Promise((r) => setTimeout(r, 2000 * (attempt + 1))); }
+  }
+  if (lastErr?.status === 404) { await forgetDevice(); return null; }
+  const last = await SecureStore.getItemAsync(K_STATUS, plain);
+  if (last === 'active' || last === 'pending') return { id, status: last, offline: true };
+  throw lastErr;
+}
+
+async function deviceStatusOnce(id: string): Promise<DeviceState> {
   try {
     const r = await customFetch<{ id: string; status: 'pending' | 'active' | 'revoked'; approveWhere?: string; platform?: boolean; greeting?: string; language?: string | null; languageCode?: string }>(`/api/v1/command/devices/${encodeURIComponent(id)}/status`, { responseType: 'json' } as never);
     await SecureStore.setItemAsync(K_STATUS, r.status, plain);
     return r;
   } catch (e: any) {
-    if (e?.status === 404) { await forgetDevice(); return null; }
-    // fiarep.com unreachable: keep working from the last known status so the
-    // backup relay (outage approvals) still opens.
-    const last = await SecureStore.getItemAsync(K_STATUS, plain);
-    if (last === 'active' || last === 'pending') return { id, status: last, offline: true };
     throw e;
   }
 }

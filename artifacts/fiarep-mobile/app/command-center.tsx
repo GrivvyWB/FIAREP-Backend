@@ -147,6 +147,12 @@ export default function CommandCenter() {
   }, [relayBase]);
 
   useEffect(() => { if (support.ok) void loadDevice(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // fiarep.com didn't answer: keep checking every 10 seconds and clear the notice the moment it answers.
+  useEffect(() => {
+    if (!device?.offline) return undefined;
+    const t = setInterval(() => { void deviceStatus().then((d) => { if (d && !d.offline) setDevice(d); }).catch(() => undefined); }, 10_000);
+    return () => clearInterval(t);
+  }, [device?.offline]);
   useFocusEffect(useCallback(() => {
     if (device?.status !== 'active') return undefined;
     void loadRelay();
