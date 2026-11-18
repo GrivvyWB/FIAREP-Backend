@@ -7,7 +7,23 @@
 import nacl from 'tweetnacl';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import { customFetch } from '@workspace/api-client-react';
+import { customFetch, setBaseUrl } from '@workspace/api-client-react';
+
+// The Command Center's stand-by server (AWS). When fiarep.com does not answer, the same call goes there.
+const MAIN = `https://${process.env.EXPO_PUBLIC_DOMAIN || 'fiarep.com'}`;
+const STANDBY = 'https://3-145-105-47.sslip.io';
+let onStandby = 0;
+export async function viaStandby<T>(call: () => Promise<T>): Promise<T> {
+  try { return await call(); }
+  catch (e: any) {
+    const status = Number(e?.status || 0);
+    // A real answer (even "no") stands. No answer at all, or the server down (502-504): the stand-by.
+    if (status && (status < 502 || status > 504)) throw e;
+    onStandby += 1; setBaseUrl(STANDBY);
+    try { return await call(); }
+    finally { onStandby -= 1; if (onStandby <= 0) { onStandby = 0; setBaseUrl(MAIN); } }
+  }
+}
 import { registerForPush } from './push';
 
 const K_DEVICE_ID = 'cmd.deviceId';
@@ -138,7 +154,7 @@ export async function deviceStatus(): Promise<DeviceState> {
 
 async function deviceStatusOnce(id: string): Promise<DeviceState> {
   try {
-    const r = await customFetch<{ id: string; status: 'pending' | 'active' | 'revoked'; approveWhere?: string; platform?: boolean; greeting?: string; language?: string | null; languageCode?: string }>(`/api/v1/command/devices/${encodeURIComponent(id)}/status`, { responseType: 'json' } as never);
+    const r = await viaStandby(() => customFetch<{ id: string; status: 'pending' | 'active' | 'revoked'; approveWhere?: string; platform?: boolean; greeting?: string; language?: string | null; languageCode?: string }>(`/api/v1/command/devices/${encodeURIComponent(id)}/status`, { responseType: 'json' } as never));
     await SecureStore.setItemAsync(K_STATUS, r.status, plain);
     return r;
   } catch (e: any) {
@@ -165,12 +181,12 @@ export async function commandFetch<T>(method: 'GET' | 'POST', path: string, body
   const bodyStr = body === undefined ? '' : JSON.stringify(body);
   const time = String(Date.now());
   const sig = signWithSeed(seed, `FIAREP-CMD-REQ\n${method}\n${fullPath}\n${time}\n${await sha256hex(bodyStr)}`);
-  return customFetch<T>(fullPath, {
+  return viaStandby(() => customFetch<T>(fullPath, {
     method,
     headers: { 'Content-Type': 'application/json', 'X-Command-Device': id, 'X-Command-Time': time, 'X-Command-Sig': sig },
     body: body === undefined ? undefined : bodyStr,
     responseType: 'json',
-  } as never);
+  } as never));
 }
 
 export type CommandAction = {

@@ -11,7 +11,7 @@ import { ui, ACCENT } from '../lib/ui';
 import { getCurrentActor, getSessionIdentity } from '../lib/store';
 import {
   approveAction, commandFetch, commandSupport, confirmPublicKey, deviceStatus, enrollDevice, forgetDevice,
-  relayApprove, relayDeny, relayRegisterPush, relaySetAutoFix, relayState, relayUrl,
+  relayApprove, relayDeny, relayRegisterPush, relaySetAutoFix, relayState, relayUrl, viaStandby,
   type CommandAction, type CommandRun, type DeviceState, type RelayIncident, type RelayState,
 } from '../lib/command';
 
@@ -19,7 +19,7 @@ const STATUS_COLOR: Record<string, string> = { done: '#1F5C45', failed: '#C0392B
 const newThread = () => `t-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
 async function post<T>(path: string, body: unknown): Promise<T> {
-  return customFetch<T>(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), responseType: 'json' } as never);
+  return viaStandby(() => customFetch<T>(path, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), responseType: 'json' } as never));
 }
 const errText = (e: any) => e?.data?.error || e?.message || 'Try again.';
 

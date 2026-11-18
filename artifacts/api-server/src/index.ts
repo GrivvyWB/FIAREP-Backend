@@ -58,6 +58,10 @@ await ensureBookingTable();
 // Tables otherwise made on first use: made at start, so the development database
 // has them too (Replit's Publish compares the two and offers to drop what's missing).
 await Promise.all([ensureFilesTable(), ensureSmartRepairsTable(), ensureResidentDeskTable(), ensureMoldTables()]).catch((err) => console.error("Table setup:", err));
+// The stand-by copy on the AWS server answers the Command Center when fiarep.com stalls. It shares the
+// database, so the timed jobs (bills, autopay, alarms, City checks) run only on the main server.
+const standby = process.env["FIAREP_STANDBY"] === "1";
+if (!standby) {
 void syncRelayDevices();
 // Heat & hot water: one gathered alert per client (by building) to its Command Center phones, every 2 minutes.
 startHeatDigest();
@@ -72,6 +76,7 @@ setInterval(() => { void expirePilots().catch(() => undefined); }, 3_600_000).un
 const moldTick = () => { void autoCheckOn().then((on) => (on ? moldSweep() : undefined)).catch(() => undefined); };
 setTimeout(moldTick, 5 * 60_000).unref();
 setInterval(moldTick, 12 * 3_600_000).unref();
+}
 
 app.listen(port, (err) => {
   if (err) {

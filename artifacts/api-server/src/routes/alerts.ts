@@ -117,8 +117,11 @@ export async function autoCheckOn(): Promise<boolean> {
 }
 async function scheduledCheck() { if (await autoCheckOn().catch(() => true)) await checkAllWatched(); }
 // Background sweep: first pass a minute after start, then every 30 minutes — when switched on.
-setTimeout(() => { void scheduledCheck().catch(() => undefined); }, 60_000);
-setInterval(() => { void scheduledCheck().catch(() => undefined); }, CHECK_EVERY_MS);
+// Not on the stand-by copy (AWS): the main server does the timed checks.
+if (process.env["FIAREP_STANDBY"] !== "1") {
+  setTimeout(() => { void scheduledCheck().catch(() => undefined); }, 60_000);
+  setInterval(() => { void scheduledCheck().catch(() => undefined); }, CHECK_EVERY_MS);
+}
 
 const router: IRouter = Router();
 router.use("/v1/platform/alerts", requirePlatformOwner);
