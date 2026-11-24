@@ -4,6 +4,7 @@
 // building: leaving it, every stop away from it (e.g. a supply store) and
 // coming back are sent with their times and places.
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import { customFetch } from '@workspace/api-client-react';
 import { db } from './store';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -114,8 +115,8 @@ export const mySiteCheckins = () => get<SiteCheckin[]>('/api/v1/site-checkins/mi
 /** Check in at a building: the phone's real position goes with it, then tracking starts. */
 export async function checkInAt(b: { propertyId?: string; address: string; outOfNetwork?: boolean; requestedBy?: string; clientId?: string }): Promise<SiteCheckin> {
   const fg = await Location.requestForegroundPermissionsAsync();
-  if (!fg.granted) throw new Error('Turn Location on for FIAREP (Settings → FIAREP → Location → Always) to check in.');
-  const bg = await Location.requestBackgroundPermissionsAsync();
+  if (!fg.granted) throw new Error(Platform.OS === 'ios' ? 'Turn Location on for FIAREP (Settings → FIAREP → Location) to check in.' : 'Turn Location on for FIAREP (Settings → FIAREP → Location → Always) to check in.');
+  const bg = Platform.OS === 'ios' ? { granted: true } : await Location.requestBackgroundPermissionsAsync();
   if (!bg.granted) throw new Error('FIAREP needs Location set to "Always" to check in — it records when you leave the building and when you come back.');
   const pos = await Promise.race([
     Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High }),

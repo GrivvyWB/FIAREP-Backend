@@ -81,7 +81,7 @@ export async function punchAttendance(direction: 'in' | 'out', idempotencyKey: s
   const { currentFix, startClockTracking, stopClockTracking, placeFor } = await import('./clock-location');
   const fix = await currentFix();
   if (direction === 'in') {
-    if (!fix) throw new Error('Turn on Location for FIAREP (Settings → FIAREP → Location → Always) to clock in. Where you work is part of the time record.');
+    if (!fix) throw new Error(Platform.OS === 'ios' ? 'Turn on Location for FIAREP (Settings → FIAREP → Location) to clock in. Where you work is part of the time record.' : 'Turn on Location for FIAREP (Settings → FIAREP → Location → Always) to clock in. Where you work is part of the time record.');
     if (!(await startClockTracking(fix))) throw new Error('FIAREP needs Location set to "Always" to clock in, so the places you work are recorded while you are on the clock.');
   }
   const row = await createTimeClockPunch({ direction, idempotencyKey, ...(fix ? { location: fix, address: await placeFor(fix) } : {}) } as never);

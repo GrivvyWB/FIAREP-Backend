@@ -5,6 +5,7 @@
 // on, the stop is closed (departure time). Nothing is sent while the phone sits
 // still, and nothing runs at all once the person punches out.
 import * as Location from 'expo-location';
+import { Platform } from 'react-native';
 import * as TaskManager from 'expo-task-manager';
 import { customFetch } from '@workspace/api-client-react';
 import { db } from './store';
@@ -160,8 +161,11 @@ export async function startClockTracking(first: Fix | null): Promise<boolean> {
   try {
     const fg = await Location.requestForegroundPermissionsAsync();
     if (!fg.granted) return false;
-    const bg = await Location.requestBackgroundPermissionsAsync();
-    if (!bg.granted) return false;
+    // iPhone/iPad: location only while the app is in use (no "Always").
+    if (Platform.OS !== 'ios') {
+      const bg = await Location.requestBackgroundPermissionsAsync();
+      if (!bg.granted) return false;
+    }
     const now = Date.now();
     // Clocking in: the clock's stops run again even if a check-in started the task.
     const { setSiteTrackingOnly } = await import('./site-checkin');

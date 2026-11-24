@@ -4,7 +4,7 @@
 //
 // Starts as soon as the app learns of the assignment: the "New job" alert arriving, the app being
 // opened, or coming back to the screen.
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import * as Location from 'expo-location';
 import { customFetch } from '@workspace/api-client-react';
 import { db } from './store';
@@ -35,7 +35,7 @@ export async function refreshJobTracking(): Promise<void> {
     if (r.jobs.length) {
       const fg = await Location.requestForegroundPermissionsAsync().catch(() => null);
       if (!fg?.granted) return;
-      await Location.requestBackgroundPermissionsAsync().catch(() => null);
+      if (Platform.OS !== 'ios') await Location.requestBackgroundPermissionsAsync().catch(() => null);
       const running = await Location.hasStartedLocationUpdatesAsync(CLOCK_LOCATION_TASK).catch(() => false);
       if (!running) await ensureLocationTracking();
       await write({ jobs: r.jobs.length, startedByJobs: prev?.startedByJobs || !running, lastSentAt: prev?.lastSentAt ?? 0 });

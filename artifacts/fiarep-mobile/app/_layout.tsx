@@ -116,8 +116,8 @@ function StaffGate(props: { onUnlock: (overrideMode?: AppMode) => void; onCancel
           return;
         }
         const modeRole = actualRole as AppMode;
-        // Location is part of using the app, for every staff role, no exceptions.
-        {
+        // Location is part of using the app for staff (not on iPhone/iPad: the App Store does not allow requiring it).
+        if (Platform.OS !== 'ios') {
           const { requireWorkerLocation } = await import('../lib/clock-location');
           const ok = await requireWorkerLocation();
           if (!ok) { setMsg('FIAREP needs your location to sign in — set Location to "Always" for FIAREP in your phone settings, then try again.'); return; }
@@ -758,7 +758,7 @@ export default function Layout() {
   // return to the app. Turned off, the app stops at this screen until it is back.
   const staffMode = !!mode && mode !== 'resident' && mode !== 'vendor';
   useEffect(() => {
-    if (!staffMode) { setLocationBlocked(false); return; }
+    if (!staffMode || Platform.OS === 'ios') { setLocationBlocked(false); return; }
     const check = async () => {
       try {
         const fg = await Location.getForegroundPermissionsAsync();
